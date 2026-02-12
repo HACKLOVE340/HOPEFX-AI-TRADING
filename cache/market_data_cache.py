@@ -11,7 +11,6 @@ This module provides a robust caching system for market data including:
 
 import json
 import logging
-import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
