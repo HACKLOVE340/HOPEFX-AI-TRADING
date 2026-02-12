@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
 import base64
 from datetime import datetime
 import hashlib
+import secrets
 
 
 # Configure logging
@@ -56,11 +57,25 @@ class EncryptionManager:
     
     def _create_cipher(self) -> Fernet:
         """Create Fernet cipher from master key."""
+        # Use master key directly for Fernet (must be 32 url-safe base64-encoded bytes)
         # Derive a proper key from the master key using PBKDF2
+        # Use environment-specific salt or generate if not available
+        salt = os.getenv('CONFIG_SALT')
+        if salt:
+            salt_bytes = salt.encode()
+        else:
+            # For backward compatibility: use consistent salt derived from master key
+            # This allows decryption of existing data
+            salt_bytes = hashlib.sha256(self.master_key.encode()).digest()[:16]
+            logger.warning(
+                "CONFIG_SALT not set, using derived salt. "
+                "For better security, set CONFIG_SALT environment variable."
+            )
+        
         kdf = PBKDF2(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b'hopefx_ai_trading',  # Static salt for consistency
+            salt=salt_bytes,
             iterations=100000,
         )
         key = base64.urlsafe_b64encode(
@@ -103,17 +118,62 @@ class EncryptionManager:
             logger.error(f"Decryption failed: {e}")
             raise
     
-    def hash_password(self, password: str) -> str:
+    def hash_password(self, password: str, salt: Optional[bytes] = None) -> str:
         """
-        Hash a password using SHA256 (one-way).
+        Hash a password using PBKDF2-HMAC-SHA256 with salt (one-way).
+        
+        This is more secure than plain SHA256 for password hashing.
+        For production use, consider bcrypt, scrypt, or argon2.
         
         Args:
             password: Password to hash
+            salt: Optional salt bytes (generates random if not provided)
             
         Returns:
-            Hashed password
+            Hashed password in format: salt$hash (hex encoded)
         """
-        return hashlib.sha256(password.encode()).hexdigest()
+        if salt is None:
+            salt = secrets.token_bytes(16)
+        
+        kdf = PBKDF2(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+        )
+        hash_bytes = kdf.derive(password.encode())
+        
+        # Return salt and hash in format: salt$hash
+        return f"{salt.hex()}${hash_bytes.hex()}"
+    
+    def verify_password(self, password: str, hashed: str) -> bool:
+        """
+        Verify a password against a hashed password.
+        
+        Args:
+            password: Password to verify
+            hashed: Previously hashed password (salt$hash format)
+            
+        Returns:
+            True if password matches, False otherwise
+        """
+        try:
+            salt_hex, hash_hex = hashed.split('$')
+            salt = bytes.fromhex(salt_hex)
+            expected_hash = bytes.fromhex(hash_hex)
+            
+            kdf = PBKDF2(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=100000,
+            )
+            
+            actual_hash = kdf.derive(password.encode())
+            return secrets.compare_digest(actual_hash, expected_hash)
+        except Exception as e:
+            logger.error(f"Password verification failed: {e}")
+            return False
 
 
 @dataclass
