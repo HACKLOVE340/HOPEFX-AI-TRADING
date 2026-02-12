@@ -65,8 +65,8 @@ class OHLCVData:
 
 
 @dataclass
-class TickData:
-    """Tick-level market data structure"""
+class CachedTickData:
+    """Tick-level market data structure for caching"""
     timestamp: int
     price: float
     volume: float
@@ -80,7 +80,7 @@ class TickData:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'TickData':
+    def from_dict(cls, data: Dict) -> 'CachedTickData':
         """Create tick data from dictionary"""
         return cls(**data)
 
@@ -383,7 +383,7 @@ class MarketDataCache:
     def cache_tick(
         self,
         symbol: str,
-        tick_data: TickData,
+        tick_data: CachedTickData,
         ttl: int = 300
     ) -> bool:
         """
@@ -413,7 +413,7 @@ class MarketDataCache:
             logger.error(f"Error caching tick data: {e}")
             return False
     
-    def get_tick(self, symbol: str) -> Optional[TickData]:
+    def get_tick(self, symbol: str) -> Optional[CachedTickData]:
         """
         Retrieve latest tick data from cache
         
@@ -421,7 +421,7 @@ class MarketDataCache:
             symbol: Trading symbol
         
         Returns:
-            TickData or None if not found
+            CachedTickData or None if not found
         """
         try:
             key = self._build_tick_key(symbol)
@@ -431,7 +431,7 @@ class MarketDataCache:
                 with self._stats_lock:
                     self.stats.total_hits += 1
                 data = json.loads(cached)
-                return TickData.from_dict(data['data'])
+                return CachedTickData.from_dict(data['data'])
             else:
                 with self._stats_lock:
                     self.stats.total_misses += 1
@@ -446,7 +446,7 @@ class MarketDataCache:
     def cache_ticks(
         self,
         symbol: str,
-        tick_data_list: List[TickData],
+        tick_data_list: List[CachedTickData],
         ttl: int = 300,
         max_size: int = 100
     ) -> bool:
@@ -482,7 +482,7 @@ class MarketDataCache:
             logger.error(f"Error caching tick data: {e}")
             return False
     
-    def get_ticks(self, symbol: str) -> Optional[List[TickData]]:
+    def get_ticks(self, symbol: str) -> Optional[List[CachedTickData]]:
         """
         Retrieve cached tick data
         
@@ -490,7 +490,7 @@ class MarketDataCache:
             symbol: Trading symbol
         
         Returns:
-            List of TickData or None if not found
+            List of CachedTickData or None if not found
         """
         try:
             key = self._build_tick_key(symbol)
@@ -500,7 +500,7 @@ class MarketDataCache:
                 with self._stats_lock:
                     self.stats.total_hits += 1
                 data = json.loads(cached)
-                return [TickData.from_dict(item) for item in data['data']]
+                return [CachedTickData.from_dict(item) for item in data['data']]
             else:
                 with self._stats_lock:
                     self.stats.total_misses += 1
