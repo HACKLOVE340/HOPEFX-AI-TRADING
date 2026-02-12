@@ -62,14 +62,19 @@ class EncryptionManager:
         # Use environment-specific salt or generate if not available
         salt = os.getenv('CONFIG_SALT')
         if salt:
-            salt_bytes = salt.encode()
+            # Decode salt from hex format for proper cryptographic randomness
+            try:
+                salt_bytes = bytes.fromhex(salt)
+            except ValueError:
+                logger.error("CONFIG_SALT must be hex-encoded. Generate with: python -c \"import secrets; print(secrets.token_hex(16))\"")
+                raise ValueError("Invalid CONFIG_SALT format. Expected hex-encoded string.")
         else:
             # For backward compatibility: use consistent salt derived from master key
             # This allows decryption of existing data
             salt_bytes = hashlib.sha256(self.master_key.encode()).digest()[:16]
             logger.warning(
                 "CONFIG_SALT not set, using derived salt. "
-                "For better security, set CONFIG_SALT environment variable."
+                "For better security, set CONFIG_SALT environment variable (hex-encoded)."
             )
         
         kdf = PBKDF2(
