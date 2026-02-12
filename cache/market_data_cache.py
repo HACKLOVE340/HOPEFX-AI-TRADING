@@ -617,7 +617,18 @@ class MarketDataCache:
         """
         try:
             pattern = f"market_data:{symbol}:*"
-            keys = self.redis_client.keys(pattern)
+            # Use SCAN instead of KEYS for non-blocking iteration
+            keys = []
+            cursor = 0
+            while True:
+                cursor, partial_keys = self.redis_client.scan(
+                    cursor=cursor,
+                    match=pattern,
+                    count=100
+                )
+                keys.extend(partial_keys)
+                if cursor == 0:
+                    break
             
             if keys:
                 self.redis_client.delete(*keys)
@@ -641,13 +652,40 @@ class MarketDataCache:
             True if clear succeeded
         """
         try:
-            # Clear market data
-            market_keys = self.redis_client.keys("market_data:*")
-            tick_keys = self.redis_client.keys("tick_data:*")
-            all_keys = market_keys + tick_keys
+            # Use SCAN instead of KEYS for non-blocking iteration
+            all_keys = []
+            
+            # Scan for market_data keys
+            cursor = 0
+            while True:
+                cursor, partial_keys = self.redis_client.scan(
+                    cursor=cursor,
+                    match="market_data:*",
+                    count=100
+                )
+                all_keys.extend(partial_keys)
+                if cursor == 0:
+                    break
+            
+            # Scan for tick_data keys
+            cursor = 0
+            while True:
+                cursor, partial_keys = self.redis_client.scan(
+                    cursor=cursor,
+                    match="tick_data:*",
+                    count=100
+                )
+                all_keys.extend(partial_keys)
+                if cursor == 0:
+                    break
             
             if all_keys:
-                self.redis_client.delete(*all_keys)
+                # Delete in batches to avoid blocking
+                batch_size = 1000
+                for i in range(0, len(all_keys), batch_size):
+                    batch = all_keys[i:i + batch_size]
+                    self.redis_client.delete(*batch)
+                
                 with self._stats_lock:
                     self.stats.total_evictions += len(all_keys)
             
@@ -666,12 +704,39 @@ class MarketDataCache:
             CacheStatistics object
         """
         try:
+            # Use SCAN to count keys instead of KEYS
+            key_count = 0
+            
+            # Count market_data keys
+            cursor = 0
+            while True:
+                cursor, partial_keys = self.redis_client.scan(
+                    cursor=cursor,
+                    match="market_data:*",
+                    count=100
+                )
+                key_count += len(partial_keys)
+                if cursor == 0:
+                    break
+            
+            # Count tick_data keys
+            cursor = 0
+            while True:
+                cursor, partial_keys = self.redis_client.scan(
+                    cursor=cursor,
+                    match="tick_data:*",
+                    count=100
+                )
+                key_count += len(partial_keys)
+                if cursor == 0:
+                    break
+            
             with self._stats_lock:
                 stats = CacheStatistics(
                     total_hits=self.stats.total_hits,
                     total_misses=self.stats.total_misses,
                     total_evictions=self.stats.total_evictions,
-                    total_keys=len(self.redis_client.keys("market_data:*") + self.redis_client.keys("tick_data:*")),
+                    total_keys=key_count,
                     memory_usage_bytes=int(self.redis_client.info('memory')['used_memory'])
                 )
             return stats
