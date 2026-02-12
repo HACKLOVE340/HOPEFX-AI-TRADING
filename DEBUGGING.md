@@ -77,16 +77,16 @@ with self._stats_lock:
 
 **Files Changed:** `cache/market_data_cache.py`
 
-**Locations Protected:**
-- Line ~262: `get_ohlcv()` - cache hits/misses
-- Line ~380: `get_tick()` - cache hits/misses  
-- Line ~450: `get_ticks()` - cache hits/misses
-- Line ~529: `invalidate_ohlcv()` - eviction count
-- Line ~549: `invalidate_tick()` - eviction count
-- Line ~572: `invalidate_symbol()` - eviction count
-- Line ~598: `clear_all()` - eviction count
-- Line ~618: `get_statistics()` - reading stats
-- Line ~640: `reset_statistics()` - resetting stats
+**Functions Protected with Thread Safety:**
+- `get_ohlcv()` - cache hits/misses tracking
+- `get_tick()` - cache hits/misses tracking
+- `get_ticks()` - cache hits/misses tracking
+- `invalidate_ohlcv()` - eviction count
+- `invalidate_tick()` - eviction count
+- `invalidate_symbol()` - eviction count
+- `clear_all()` - eviction count
+- `get_statistics()` - reading stats
+- `reset_statistics()` - resetting stats
 
 #### 4. Redis Connection Failure
 **Problem:** Single connection attempt with no retry logic
@@ -160,9 +160,9 @@ alembic revision --autogenerate -m "Initial migration"
 #### 2. Improved Error Handling
 **Issue:** Generic `except Exception` catches hide specific errors
 **Impact:** Harder to debug issues
-**Example locations:**
-- `cache/market_data_cache.py`: Lines 269, 388, 456
-- `config/config_manager.py`: Lines 84, 102, 327
+**Example locations in current code:**
+- `cache/market_data_cache.py`: Various exception handlers in cache operations
+- `config/config_manager.py`: Exception handlers in encryption and config loading
 
 **Recommendation:**
 ```python
