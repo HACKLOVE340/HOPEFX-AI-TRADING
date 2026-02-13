@@ -12,6 +12,14 @@ from .paper_trading import PaperTradingBroker
 from .oanda import OANDAConnector
 from .binance import BinanceConnector
 from .alpaca import AlpacaConnector
+from .mt5 import MT5Connector
+from .interactive_brokers import InteractiveBrokersConnector
+
+# Import prop firms
+from .prop_firms.ftmo import FTMOConnector
+from .prop_firms.topstep import TopstepTraderConnector
+from .prop_firms.the5ers import The5ersConnector
+from .prop_firms.myforexfunds import MyForexFundsConnector
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +33,12 @@ class BrokerFactory:
         - oanda: OANDA forex trading
         - binance: Binance cryptocurrency trading
         - alpaca: Alpaca US stock trading
+        - mt5: MetaTrader 5 (any broker/prop firm)
+        - ib: Interactive Brokers (all asset types)
+        - ftmo: FTMO prop firm
+        - topstep: TopstepTrader prop firm
+        - the5ers: The5ers prop firm
+        - myforexfunds: MyForexFunds prop firm
     """
     
     _brokers = {
@@ -32,6 +46,16 @@ class BrokerFactory:
         'oanda': OANDAConnector,
         'binance': BinanceConnector,
         'alpaca': AlpacaConnector,
+        'mt5': MT5Connector,
+        'ib': InteractiveBrokersConnector,
+        'interactive_brokers': InteractiveBrokersConnector,
+        # Prop firms
+        'ftmo': FTMOConnector,
+        'topstep': TopstepTraderConnector,
+        'topsteptrader': TopstepTraderConnector,
+        'the5ers': The5ersConnector,
+        'myforexfunds': MyForexFundsConnector,
+        'mff': MyForexFundsConnector,
     }
     
     @classmethod
@@ -50,14 +74,22 @@ class BrokerFactory:
         Returns:
             BrokerConnector instance or None if invalid type
         
-        Example:
-            >>> config = {
-            ...     'api_key': 'your-key',
-            ...     'api_secret': 'your-secret',
-            ...     'environment': 'practice'
-            ... }
+        Examples:
+            # OANDA
+            >>> config = {'api_key': 'key', 'account_id': 'id', 'environment': 'practice'}
             >>> broker = BrokerFactory.create_broker('oanda', config)
-            >>> broker.connect()
+            
+            # MT5 (any broker)
+            >>> config = {'server': 'ICMarkets-Demo', 'login': 12345, 'password': 'pass'}
+            >>> broker = BrokerFactory.create_broker('mt5', config)
+            
+            # FTMO prop firm
+            >>> config = {'login': 12345, 'password': 'pass', 'challenge_type': 'demo'}
+            >>> broker = BrokerFactory.create_broker('ftmo', config)
+            
+            # Interactive Brokers
+            >>> config = {'host': '127.0.0.1', 'port': 7497, 'paper': True}
+            >>> broker = BrokerFactory.create_broker('ib', config)
         """
         broker_type = broker_type.lower()
         
