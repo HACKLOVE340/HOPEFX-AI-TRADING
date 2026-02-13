@@ -50,6 +50,31 @@ from .compliance import (
     compliance_manager
 )
 
+# Crypto Payment Methods
+from .crypto import (
+    BitcoinClient,
+    bitcoin_client,
+    USDTClient,
+    USDTNetwork,
+    usdt_client,
+    EthereumClient,
+    ethereum_client,
+    CryptoWalletManager,
+    crypto_wallet_manager,
+    AddressGenerator,
+    address_generator
+)
+
+# Fintech Payment Methods
+from .fintech import (
+    PaystackClient,
+    paystack_client,
+    FlutterwaveClient,
+    flutterwave_client,
+    BankTransferClient,
+    bank_transfer_client
+)
+
 __all__ = [
     # Wallet
     'WalletManager', 'WalletType', 'WalletStatus', 'Wallet', 'wallet_manager',
@@ -60,5 +85,15 @@ __all__ = [
     # Security
     'SecurityManager', 'KYCLevel', 'KYCInfo', 'TransactionLimit', 'security_manager',
     # Compliance
-    'ComplianceManager', 'RiskLevel', 'AMLCheck', 'ComplianceReport', 'compliance_manager'
+    'ComplianceManager', 'RiskLevel', 'AMLCheck', 'ComplianceReport', 'compliance_manager',
+    # Crypto
+    'BitcoinClient', 'bitcoin_client',
+    'USDTClient', 'USDTNetwork', 'usdt_client',
+    'EthereumClient', 'ethereum_client',
+    'CryptoWalletManager', 'crypto_wallet_manager',
+    'AddressGenerator', 'address_generator',
+    # Fintech
+    'PaystackClient', 'paystack_client',
+    'FlutterwaveClient', 'flutterwave_client',
+    'BankTransferClient', 'bank_transfer_client'
 ]
