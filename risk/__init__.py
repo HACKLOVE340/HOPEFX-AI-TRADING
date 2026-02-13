@@ -13,4 +13,16 @@ Components:
 - Maximum Drawdown tracking
 """
 
-__all__ = []
+from .manager import (
+    RiskManager,
+    RiskConfig,
+    PositionSize,
+    PositionSizeMethod,
+)
+
+__all__ = [
+    'RiskManager',
+    'RiskConfig',
+    'PositionSize',
+    'PositionSizeMethod',
+]

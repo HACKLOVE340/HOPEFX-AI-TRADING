@@ -1,0 +1,66 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div style="font-size: 14px; color: #7f8c8d;">Total Strategies</div>
+        <div class="stat-value" id="total-strategies">0</div>
+    </div>
+    <div class="stat-card">
+        <div style="font-size: 14px; color: #7f8c8d;">Active Strategies</div>
+        <div class="stat-value" id="active-strategies">0</div>
+    </div>
+    <div class="stat-card">
+        <div style="font-size: 14px; color: #7f8c8d;">Total P&L</div>
+        <div class="stat-value" id="total-pnl">$0.00</div>
+    </div>
+    <div class="stat-card">
+        <div style="font-size: 14px; color: #7f8c8d;">Total Signals</div>
+        <div class="stat-value" id="total-signals">0</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Quick Actions</h2>
+    <button class="btn btn-primary" onclick="location.href='/admin/strategies'">Manage Strategies</button>
+    <button class="btn btn-success" onclick="startAllStrategies()">Start All</button>
+    <button class="btn btn-danger" onclick="stopAllStrategies()">Stop All</button>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Recent Activity</h2>
+    <div id="activity-log">
+        <p style="color: #7f8c8d;">No recent activity</p>
+    </div>
+</div>
+
+<script>
+async function loadDashboard() {
+    try {
+        const response = await fetch('/api/trading/performance/summary');
+        const data = await response.json();
+        document.getElementById('total-strategies').textContent = data.total_strategies || 0;
+        document.getElementById('active-strategies').textContent = data.active_strategies || 0;
+        document.getElementById('total-pnl').textContent = '$' + (data.total_pnl || 0).toFixed(2);
+        document.getElementById('total-signals').textContent = data.total_signals || 0;
+    } catch (error) {
+        console.error('Failed to load dashboard:', error);
+    }
+}
+
+async function startAllStrategies() {
+    if (confirm('Start all strategies?')) {
+        alert('Feature coming soon!');
+    }
+}
+
+async function stopAllStrategies() {
+    if (confirm('Stop all strategies?')) {
+        alert('Feature coming soon!');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadDashboard);
+setInterval(loadDashboard, 5000); // Refresh every 5 seconds
+</script>
+{% endblock %}

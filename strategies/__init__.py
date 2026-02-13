@@ -18,4 +18,22 @@ Each strategy implements:
 - Performance tracking
 """
 
-__all__ = []
+from .base import (
+    BaseStrategy,
+    Signal,
+    SignalType,
+    StrategyStatus,
+    StrategyConfig,
+)
+from .manager import StrategyManager
+from .ma_crossover import MovingAverageCrossover
+
+__all__ = [
+    'BaseStrategy',
+    'Signal',
+    'SignalType',
+    'StrategyStatus',
+    'StrategyConfig',
+    'StrategyManager',
+    'MovingAverageCrossover',
+]

@@ -9,6 +9,7 @@ Provides endpoints for:
 - Portfolio management
 - Backtesting
 - System status and health checks
+- Admin panel
 """
 
 import os
@@ -24,6 +25,7 @@ sys.path.insert(0, str(project_root))
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 
@@ -32,6 +34,10 @@ from cache import MarketDataCache
 from database.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+
+# Import routers
+from api.trading import router as trading_router
+from api.admin import router as admin_router
 
 # Setup logging
 logging.basicConfig(
@@ -48,6 +54,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Include routers
+app.include_router(trading_router)
+app.include_router(admin_router)
 
 # Global application state
 class AppState:
