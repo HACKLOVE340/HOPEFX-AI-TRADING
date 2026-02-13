@@ -282,7 +282,7 @@ class Position(Base):
     trailing_stop = Column(Numeric(20, 8))
     risk_amount = Column(Numeric(18, 2))
     leverage_used = Column(Float)
-    metadata = Column(JSON)  # Store additional data like tags, notes, etc.
+    position_metadata = Column(JSON)  # Store additional data like tags, notes, etc.
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
