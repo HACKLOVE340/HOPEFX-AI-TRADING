@@ -16,49 +16,39 @@ Main components:
 from .models import (
     Base,
     # Market Data Models
-    OHLCV,
+    MarketData,  # OHLCV data
     TickData,
     OrderBook,
     # Trading Models
     Trade,
     Order,
     Position,
-    Portfolio,
     Account,
     # Signal Models
-    Signal,
+    AISignal,
     Prediction,
     # News & Sentiment
-    NewsArticle,
-    SentimentAnalysis,
-    EconomicEvent,
-    # Backtest Models
-    BacktestRun,
-    BacktestTrade,
+    NewsData,
+    # Backtest Models - using generic PerformanceMetrics
     PerformanceMetrics,
 )
 
 __all__ = [
     'Base',
     # Market Data
-    'OHLCV',
+    'MarketData',
     'TickData',
     'OrderBook',
     # Trading
     'Trade',
     'Order',
     'Position',
-    'Portfolio',
     'Account',
     # Signals
-    'Signal',
+    'AISignal',
     'Prediction',
     # News
-    'NewsArticle',
-    'SentimentAnalysis',
-    'EconomicEvent',
+    'NewsData',
     # Backtesting
-    'BacktestRun',
-    'BacktestTrade',
     'PerformanceMetrics',
 ]
