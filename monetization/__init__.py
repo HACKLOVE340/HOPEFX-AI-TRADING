@@ -10,30 +10,104 @@ This module handles:
 - License validation
 """
 
-from .pricing import PricingTier, get_tier_by_price, get_tier_info
-from .subscription import SubscriptionManager, SubscriptionStatus
-from .commission import CommissionTracker, calculate_commission
-from .access_codes import AccessCodeGenerator, validate_access_code
-from .invoices import InvoiceGenerator, Invoice
-from .payment_processor import PaymentProcessor, process_payment
-from .license import LicenseValidator, check_feature_access
+# Pricing
+from .pricing import (
+    SubscriptionTier,
+    TierFeatures,
+    PricingTier,
+    PricingManager,
+    pricing_manager
+)
+
+# Subscription
+from .subscription import (
+    SubscriptionStatus,
+    Subscription,
+    SubscriptionManager,
+    subscription_manager
+)
+
+# Commission
+from .commission import (
+    CommissionStatus,
+    Commission,
+    CommissionTracker,
+    commission_tracker
+)
+
+# Access Codes
+from .access_codes import (
+    AccessCodeStatus,
+    AccessCode,
+    AccessCodeGenerator,
+    access_code_generator
+)
+
+# Invoices
+from .invoices import (
+    InvoiceStatus,
+    Invoice,
+    InvoiceGenerator,
+    invoice_generator
+)
+
+# Payment Processing
+from .payment_processor import (
+    PaymentStatus,
+    Payment,
+    PaymentProcessor,
+    payment_processor
+)
+
+# License Validation
+from .license import (
+    ValidationResult,
+    LicenseValidator,
+    license_validator
+)
 
 __all__ = [
+    # Pricing
+    'SubscriptionTier',
+    'TierFeatures',
     'PricingTier',
-    'get_tier_by_price',
-    'get_tier_info',
-    'SubscriptionManager',
+    'PricingManager',
+    'pricing_manager',
+    
+    # Subscription
     'SubscriptionStatus',
+    'Subscription',
+    'SubscriptionManager',
+    'subscription_manager',
+    
+    # Commission
+    'CommissionStatus',
+    'Commission',
     'CommissionTracker',
-    'calculate_commission',
+    'commission_tracker',
+    
+    # Access Codes
+    'AccessCodeStatus',
+    'AccessCode',
     'AccessCodeGenerator',
-    'validate_access_code',
-    'InvoiceGenerator',
+    'access_code_generator',
+    
+    # Invoices
+    'InvoiceStatus',
     'Invoice',
+    'InvoiceGenerator',
+    'invoice_generator',
+    
+    # Payment Processing
+    'PaymentStatus',
+    'Payment',
     'PaymentProcessor',
-    'process_payment',
+    'payment_processor',
+    
+    # License Validation
+    'ValidationResult',
     'LicenseValidator',
-    'check_feature_access',
+    'license_validator',
 ]
 
 __version__ = '1.0.0'
