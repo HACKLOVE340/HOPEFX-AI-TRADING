@@ -20,7 +20,7 @@ from pathlib import Path
 from functools import lru_cache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 from datetime import datetime
 import hashlib
@@ -77,7 +77,7 @@ class EncryptionManager:
                 "For better security, set CONFIG_SALT environment variable (hex-encoded)."
             )
         
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt_bytes,
@@ -140,7 +140,7 @@ class EncryptionManager:
         if salt is None:
             salt = secrets.token_bytes(16)
         
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
@@ -167,7 +167,7 @@ class EncryptionManager:
             salt = bytes.fromhex(salt_hex)
             expected_hash = bytes.fromhex(hash_hex)
             
-            kdf = PBKDF2(
+            kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
                 salt=salt,
