@@ -11,8 +11,11 @@ Endpoint categories:
 - System status and health
 - Configuration management
 - Performance metrics
+- Admin dashboard
 
 Uses FastAPI for modern async API development.
 """
 
-__all__ = []
+from . import trading, admin
+
+__all__ = ['trading', 'admin']

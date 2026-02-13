@@ -1,0 +1,64 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 15px;">System Metrics</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div style="font-size: 14px; color: #7f8c8d;">CPU Usage</div>
+            <div class="stat-value" id="cpu-usage">0%</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 14px; color: #7f8c8d;">Memory Usage</div>
+            <div class="stat-value" id="memory-usage">0 MB</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 14px; color: #7f8c8d;">Active Connections</div>
+            <div class="stat-value" id="connections">0</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size: 14px; color: #7f8c8d;">Uptime</div>
+            <div class="stat-value" id="uptime">0h 0m</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Risk Metrics</h2>
+    <div id="risk-metrics">
+        <p style="color: #7f8c8d;">Loading risk metrics...</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Recent Signals</h2>
+    <div id="recent-signals">
+        <p style="color: #7f8c8d;">No recent signals</p>
+    </div>
+</div>
+
+<script>
+async function loadRiskMetrics() {
+    try {
+        const response = await fetch('/api/trading/risk-metrics');
+        const metrics = await response.json();
+        const el = document.getElementById('risk-metrics');
+        
+        el.innerHTML = `
+            <table>
+                <tr><td>Current Balance:</td><td>$${metrics.current_balance || 0}</td></tr>
+                <tr><td>Total P&L:</td><td style="color: ${metrics.total_pnl >= 0 ? '#27ae60' : '#e74c3c'}">$${metrics.total_pnl || 0}</td></tr>
+                <tr><td>Daily P&L:</td><td>$${metrics.daily_pnl || 0}</td></tr>
+                <tr><td>Open Positions:</td><td>${metrics.open_positions || 0} / ${metrics.max_positions || 0}</td></tr>
+                <tr><td>Current Drawdown:</td><td>${metrics.current_drawdown || 0}%</td></tr>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Failed to load risk metrics:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadRiskMetrics);
+setInterval(loadRiskMetrics, 5000);
+</script>
+{% endblock %}
