@@ -18,4 +18,14 @@ Notification types:
 - Daily summaries
 """
 
-__all__ = []
+from .manager import (
+    NotificationManager,
+    NotificationLevel,
+    NotificationChannel,
+)
+
+__all__ = [
+    'NotificationManager',
+    'NotificationLevel',
+    'NotificationChannel',
+]
