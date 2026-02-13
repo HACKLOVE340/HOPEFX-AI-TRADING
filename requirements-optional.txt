@@ -7,3 +7,7 @@
 
 # Zipline (has Python version constraints)
 # zipline==1.4.1
+
+# MetaTrader5 (limited Python version support - check compatibility)
+# MetaTrader5==5.0.45  # Only supports Python 3.8-3.10
+
