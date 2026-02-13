@@ -39,8 +39,8 @@ redis==5.0.1
 # Broker Integration
 alpaca-trade-api==3.0.0
 python-binance==1.0.17
+oandapyV20==0.7.2
 ccxt==4.0.96
-Interactive-Brokers-API==10.80.0
 
 # Backtesting and Simulation
 backtrader==1.9.94.122

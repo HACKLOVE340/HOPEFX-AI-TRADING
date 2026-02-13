@@ -4,12 +4,10 @@ Broker Integration Module
 This module provides integration with various trading brokers and exchanges.
 
 Supported brokers:
-- OANDA
-- MetaTrader 5 (MT5)
-- Interactive Brokers (IB)
-- Binance
-- Alpaca
-- And more via CCXT
+- OANDA (Forex)
+- Binance (Crypto)
+- Alpaca (US Stocks)
+- Paper Trading (Simulation)
 
 Each broker module provides:
 - Connection management
@@ -28,8 +26,13 @@ from .base import (
     OrderStatus,
 )
 from .paper_trading import PaperTradingBroker
+from .oanda import OANDAConnector
+from .binance import BinanceConnector
+from .alpaca import AlpacaConnector
+from .factory import BrokerFactory
 
 __all__ = [
+    # Base classes and enums
     'BrokerConnector',
     'Order',
     'Position',
@@ -37,5 +40,11 @@ __all__ = [
     'OrderType',
     'OrderSide',
     'OrderStatus',
+    # Broker implementations
     'PaperTradingBroker',
+    'OANDAConnector',
+    'BinanceConnector',
+    'AlpacaConnector',
+    # Factory
+    'BrokerFactory',
 ]
