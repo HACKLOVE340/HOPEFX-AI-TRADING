@@ -15,26 +15,26 @@ class ReportGenerator:
     """
     Generate backtest reports in various formats.
     """
-    
+
     def __init__(self, results: Dict):
         """
         Initialize report generator.
-        
+
         Args:
             results: Backtest results dict
         """
         self.results = results
-        
+
     def generate_text_report(self) -> str:
         """Generate text report."""
         metrics = self.results['metrics']
-        
+
         report = []
         report.append("="*60)
         report.append("BACKTEST REPORT")
         report.append("="*60)
         report.append("")
-        
+
         report.append("PERFORMANCE METRICS")
         report.append("-" * 60)
         report.append(f"Total Return: {metrics['total_return']:.2f}%")
@@ -45,7 +45,7 @@ class ReportGenerator:
         report.append(f"Calmar Ratio: {metrics['calmar_ratio']:.2f}")
         report.append(f"Volatility: {metrics['volatility']:.2f}%")
         report.append("")
-        
+
         report.append("TRADE STATISTICS")
         report.append("-" * 60)
         report.append(f"Total Trades: {metrics['total_trades']}")
@@ -58,16 +58,16 @@ class ReportGenerator:
         report.append(f"Largest Win: ${metrics['largest_win']:.2f}")
         report.append(f"Largest Loss: ${metrics['largest_loss']:.2f}")
         report.append("")
-        
+
         report.append("="*60)
-        
+
         return "\n".join(report)
-        
+
     def save_to_file(self, filename: str):
         """Save report to file."""
         report = self.generate_text_report()
-        
+
         with open(filename, 'w') as f:
             f.write(report)
-            
+
         logger.info(f"Report saved to {filename}")

@@ -79,7 +79,7 @@ class PositionSizeResponse(BaseModel):
 async def create_strategy(request: StrategyCreateRequest):
     """
     Create and register a new trading strategy.
-    
+
     Supports strategy types:
     - ma_crossover: Moving Average Crossover strategy
     """
@@ -93,7 +93,7 @@ async def create_strategy(request: StrategyCreateRequest):
             risk_per_trade=request.risk_per_trade,
             parameters=request.parameters,
         )
-        
+
         # Create strategy based on type
         if request.strategy_type == "ma_crossover":
             strategy = MovingAverageCrossover(config)
@@ -102,16 +102,16 @@ async def create_strategy(request: StrategyCreateRequest):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unknown strategy type: {request.strategy_type}"
             )
-        
+
         # Register strategy
         strategy_manager.register_strategy(strategy)
-        
+
         return {
             "message": f"Strategy '{request.name}' created successfully",
             "name": request.name,
             "type": request.strategy_type,
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -141,13 +141,13 @@ async def get_strategy(strategy_name: str):
     """
     strategy_list = strategy_manager.list_strategies()
     strategy = next((s for s in strategy_list if s['name'] == strategy_name), None)
-    
+
     if not strategy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Strategy '{strategy_name}' not found"
         )
-    
+
     return strategy
 
 
@@ -209,7 +209,7 @@ async def calculate_position_size(request: PositionSizeRequest):
             stop_loss_price=request.stop_loss_price,
             confidence=request.confidence,
         )
-        
+
         return PositionSizeResponse(
             size=position_size.size,
             risk_amount=position_size.risk_amount,
@@ -217,7 +217,7 @@ async def calculate_position_size(request: PositionSizeRequest):
             take_profit_price=position_size.take_profit_price,
             notes=position_size.notes,
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -263,11 +263,11 @@ async def get_strategy_performance(strategy_name: str):
     Get performance metrics for a specific strategy.
     """
     performance = strategy_manager.get_strategy_performance(strategy_name)
-    
+
     if not performance:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Strategy '{strategy_name}' not found"
         )
-    
+
     return performance

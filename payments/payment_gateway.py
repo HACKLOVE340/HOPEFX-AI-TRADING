@@ -54,7 +54,7 @@ class PaymentInfo:
 
 class PaymentGateway:
     """Unified payment gateway for all payment methods"""
-    
+
     def __init__(self):
         self.payments: Dict[str, PaymentInfo] = {}
         self.exchange_rates = {
@@ -64,15 +64,15 @@ class PaymentGateway:
             'ETH_USD': Decimal('2400.00'),
             'USDT_USD': Decimal('1.00')
         }
-        
+
     def get_payment_fee(self, method: PaymentMethod, amount: Decimal) -> Decimal:
         """
         Calculate payment fee
-        
+
         Args:
             method: Payment method
             amount: Amount
-            
+
         Returns:
             Fee amount
         """
@@ -91,9 +91,9 @@ class PaymentGateway:
             return amount * Decimal('0.014')  # 1.4%
         elif method == PaymentMethod.BANK_TRANSFER:
             return Decimal('50.00') * self.exchange_rates['NGN_USD']  # ₦50 flat
-        
+
         return Decimal('0')
-    
+
     def convert_currency(
         self,
         amount: Decimal,
@@ -102,38 +102,38 @@ class PaymentGateway:
     ) -> Decimal:
         """
         Convert between currencies
-        
+
         Args:
             amount: Amount to convert
             from_currency: Source currency
             to_currency: Target currency
-            
+
         Returns:
             Converted amount
         """
         if from_currency == to_currency:
             return amount
-            
+
         rate_key = f"{from_currency}_{to_currency}"
         if rate_key in self.exchange_rates:
             return amount * self.exchange_rates[rate_key]
-            
+
         # Try reverse rate
         reverse_key = f"{to_currency}_{from_currency}"
         if reverse_key in self.exchange_rates:
             return amount / self.exchange_rates[reverse_key]
-            
+
         logger.warning(f"No exchange rate for {from_currency} to {to_currency}")
         return amount
-    
+
     def is_crypto_method(self, method: PaymentMethod) -> bool:
         """Check if method is crypto"""
         return method in [PaymentMethod.BITCOIN, PaymentMethod.USDT, PaymentMethod.ETHEREUM]
-    
+
     def is_fintech_method(self, method: PaymentMethod) -> bool:
         """Check if method is fintech"""
         return method in [PaymentMethod.PAYSTACK, PaymentMethod.FLUTTERWAVE, PaymentMethod.BANK_TRANSFER]
-    
+
     def initiate_deposit(
         self,
         user_id: str,
@@ -144,29 +144,29 @@ class PaymentGateway:
     ) -> PaymentInfo:
         """
         Initiate a deposit
-        
+
         Args:
             user_id: User ID
             amount: Deposit amount
             currency: Currency code
             method: Payment method
             wallet_type: Wallet type
-            
+
         Returns:
             Payment information
         """
         try:
             payment_id = f"PAY-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-            
+
             # Calculate fees
             fee = self.get_payment_fee(method, amount)
-            
+
             # Prepare payment details based on method
             payment_details = {
                 'fee': float(fee),
                 'net_amount': float(amount - fee)
             }
-            
+
             if self.is_crypto_method(method):
                 # Crypto payment details (address would be generated)
                 payment_details.update({
@@ -182,7 +182,7 @@ class PaymentGateway:
                     'provider': method.value,
                     'payment_link': f"https://{method.value}.example.com/pay/{payment_id}"
                 })
-            
+
             payment = PaymentInfo(
                 payment_id=payment_id,
                 user_id=user_id,
@@ -194,16 +194,16 @@ class PaymentGateway:
                 payment_details=payment_details,
                 created_at=datetime.utcnow()
             )
-            
+
             self.payments[payment_id] = payment
             logger.info(f"Deposit initiated: {payment_id} for {user_id}")
-            
+
             return payment
-            
+
         except Exception as e:
             logger.error(f"Error initiating deposit: {e}")
             raise
-    
+
     def process_withdrawal(
         self,
         user_id: str,
@@ -214,37 +214,37 @@ class PaymentGateway:
     ) -> PaymentInfo:
         """
         Process a withdrawal
-        
+
         Args:
             user_id: User ID
             amount: Withdrawal amount
             currency: Currency code
             method: Payment method
             destination: Destination details (address or bank account)
-            
+
         Returns:
             Payment information
         """
         try:
             payment_id = f"WD-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-            
+
             # Calculate fees
             fee = self.get_payment_fee(method, amount)
             net_amount = amount - fee
-            
+
             payment_details = {
                 'fee': float(fee),
                 'net_amount': float(net_amount),
                 'destination': destination
             }
-            
+
             if self.is_crypto_method(method):
                 payment_details['type'] = 'crypto'
                 payment_details['network'] = method.value
             else:
                 payment_details['type'] = 'fintech'
                 payment_details['provider'] = method.value
-            
+
             payment = PaymentInfo(
                 payment_id=payment_id,
                 user_id=user_id,
@@ -256,16 +256,16 @@ class PaymentGateway:
                 payment_details=payment_details,
                 created_at=datetime.utcnow()
             )
-            
+
             self.payments[payment_id] = payment
             logger.info(f"Withdrawal initiated: {payment_id} for {user_id}")
-            
+
             return payment
-            
+
         except Exception as e:
             logger.error(f"Error processing withdrawal: {e}")
             raise
-    
+
     def confirm_payment(
         self,
         payment_id: str,
@@ -274,12 +274,12 @@ class PaymentGateway:
     ) -> bool:
         """
         Confirm a payment
-        
+
         Args:
             payment_id: Payment ID
             external_reference: External transaction reference
             status: New status
-            
+
         Returns:
             Success boolean
         """
@@ -288,43 +288,43 @@ class PaymentGateway:
             if not payment:
                 logger.error(f"Payment not found: {payment_id}")
                 return False
-            
+
             payment.status = status
             payment.confirmed_at = datetime.utcnow()
             payment.external_reference = external_reference
-            
+
             logger.info(f"Payment confirmed: {payment_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error confirming payment: {e}")
             return False
-    
+
     def get_payment(self, payment_id: str) -> Optional[PaymentInfo]:
         """Get payment by ID"""
         return self.payments.get(payment_id)
-    
+
     def get_user_payments(self, user_id: str) -> List[PaymentInfo]:
         """Get all payments for a user"""
         return [p for p in self.payments.values() if p.user_id == user_id]
-    
+
     def get_available_methods(self, user_id: str) -> List[str]:
         """
         Get available payment methods for user
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             List of available method names
         """
         # In production, this would check user's KYC, region, etc.
         return [method.value for method in PaymentMethod]
-    
+
     def get_statistics(self) -> Dict:
         """Get payment statistics"""
         total_payments = len(self.payments)
-        
+
         if total_payments == 0:
             return {
                 'total_payments': 0,
@@ -332,24 +332,24 @@ class PaymentGateway:
                 'by_status': {},
                 'total_volume': 0.0
             }
-        
+
         by_method = {}
         by_status = {}
         total_volume = Decimal('0')
-        
+
         for payment in self.payments.values():
             # Count by method
             method_key = payment.method.value
             by_method[method_key] = by_method.get(method_key, 0) + 1
-            
+
             # Count by status
             status_key = payment.status.value
             by_status[status_key] = by_status.get(status_key, 0) + 1
-            
+
             # Sum volume
             if payment.status == PaymentStatus.CONFIRMED:
                 total_volume += payment.amount
-        
+
         return {
             'total_payments': total_payments,
             'by_method': by_method,

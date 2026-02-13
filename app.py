@@ -12,32 +12,29 @@ Provides endpoints for:
 - Admin panel
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
-import logging
+from typing import Dict, Optional
+
+from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+import uvicorn
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-import uvicorn
-
-from config import initialize_config, get_config_manager
-from cache import MarketDataCache
-from database.models import Base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-
-# Import routers
-from api.trading import router as trading_router
 from api.admin import router as admin_router
+from api.trading import router as trading_router
+from cache import MarketDataCache
+from config import initialize_config
+from database.models import Base
 
 # Setup logging
 logging.basicConfig(
@@ -106,7 +103,7 @@ def get_db() -> Session:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database not initialized"
         )
-    
+
     db = app_state.db_session_factory()
     try:
         yield db
@@ -118,7 +115,7 @@ def get_db() -> Session:
 def setup_cors(app: FastAPI):
     """Setup CORS middleware"""
     allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -135,7 +132,7 @@ async def startup_event():
     logger.info("=" * 70)
     logger.info("HOPEFX AI TRADING API - STARTING")
     logger.info("=" * 70)
-    
+
     try:
         # Initialize configuration
         logger.info("Loading configuration...")
@@ -143,10 +140,10 @@ async def startup_event():
         if not encryption_key:
             logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development.")
             os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
-        
+
         app_state.config = initialize_config()
         logger.info(f"✓ Configuration loaded: {app_state.config.environment}")
-        
+
         # Initialize database
         logger.info("Initializing database...")
         connection_string = app_state.config.database.get_connection_string()
@@ -158,7 +155,7 @@ async def startup_event():
         Base.metadata.create_all(app_state.db_engine)
         app_state.db_session_factory = sessionmaker(bind=app_state.db_engine)
         logger.info("✓ Database initialized")
-        
+
         # Initialize cache
         logger.info("Initializing cache...")
         try:
@@ -173,12 +170,12 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Cache initialization failed: {e}")
             app_state.cache = None
-        
+
         app_state.initialized = True
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)
-        
+
     except Exception as e:
         logger.error(f"Startup failed: {e}", exc_info=True)
         raise
@@ -189,15 +186,15 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down API server...")
-    
+
     if app_state.db_engine:
         app_state.db_engine.dispose()
         logger.info("✓ Database engine disposed")
-    
+
     if app_state.cache:
         app_state.cache.close()
         logger.info("✓ Cache connection closed")
-    
+
     logger.info("Shutdown complete.")
 
 
@@ -206,7 +203,7 @@ async def shutdown_event():
 async def health_check():
     """
     Health check endpoint
-    
+
     Returns the health status of all system components
     """
     components = {
@@ -215,9 +212,9 @@ async def health_check():
         "database": "healthy" if app_state.db_engine else "unavailable",
         "cache": "healthy" if app_state.cache and app_state.cache.health_check() else "unavailable",
     }
-    
+
     overall_status = "healthy" if all(v == "healthy" for v in components.values()) else "degraded"
-    
+
     return HealthResponse(
         status=overall_status,
         version="1.0.0",
@@ -231,7 +228,7 @@ async def health_check():
 async def get_status():
     """
     Get system status
-    
+
     Returns detailed information about the system state
     """
     if not app_state.initialized:
@@ -239,7 +236,7 @@ async def get_status():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="System not initialized"
         )
-    
+
     return StatusResponse(
         application="HOPEFX AI Trading",
         version="1.0.0",
@@ -256,7 +253,7 @@ async def get_status():
 async def root():
     """
     API root endpoint
-    
+
     Returns basic API information
     """
     return {
@@ -290,10 +287,10 @@ def run_server():
     port = int(os.getenv('API_PORT', 5000))
     workers = int(os.getenv('API_WORKERS', 4))
     reload = os.getenv('ENVIRONMENT', 'development') == 'development'
-    
+
     logger.info(f"Starting API server on {host}:{port}")
     logger.info(f"Workers: {workers}, Reload: {reload}")
-    
+
     uvicorn.run(
         "app:app",
         host=host,

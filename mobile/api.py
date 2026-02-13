@@ -8,10 +8,10 @@ from decimal import Decimal
 
 class MobileAPI:
     """Mobile-optimized API endpoints"""
-    
+
     def __init__(self):
         self.compression_enabled = True
-    
+
     def get_portfolio_mobile(
         self,
         user_id: str,
@@ -26,7 +26,7 @@ class MobileAPI:
             'compression': compression,
             'charts': include_charts
         }
-    
+
     def place_order_mobile(
         self,
         user_id: str,

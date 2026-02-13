@@ -25,11 +25,11 @@ class Strategy:
 
 class StrategyMarketplace:
     """Manages strategy publishing and subscriptions"""
-    
+
     def __init__(self):
         self.strategies: Dict[str, Strategy] = {}
         self.subscriptions: Dict[str, List[str]] = {}  # user_id -> strategy_ids
-    
+
     def publish_strategy(
         self,
         user_id: str,
@@ -42,32 +42,32 @@ class StrategyMarketplace:
         strategy = Strategy(user_id, name, description)
         strategy.subscription_fee = subscription_fee
         strategy.performance_fee = performance_fee
-        
+
         self.strategies[strategy.strategy_id] = strategy
         return strategy
-    
+
     def subscribe_to_strategy(self, user_id: str, strategy_id: str) -> bool:
         """Subscribe to a strategy"""
         if strategy_id not in self.strategies:
             return False
-        
+
         if user_id not in self.subscriptions:
             self.subscriptions[user_id] = []
-        
+
         if strategy_id not in self.subscriptions[user_id]:
             self.subscriptions[user_id].append(strategy_id)
             self.strategies[strategy_id].subscribers_count += 1
             return True
-        
+
         return False
-    
+
     def get_strategies(self, public_only: bool = True) -> List[Strategy]:
         """Get all available strategies"""
         strategies = list(self.strategies.values())
         if public_only:
             strategies = [s for s in strategies if s.is_public]
         return strategies
-    
+
     def get_user_subscriptions(self, user_id: str) -> List[Strategy]:
         """Get strategies a user is subscribed to"""
         strategy_ids = self.subscriptions.get(user_id, [])

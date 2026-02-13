@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 
 class MobileAuth:
     """Mobile authentication and biometric support"""
-    
+
     def __init__(self):
         self.tokens = {}
-    
+
     def authenticate_biometric(
         self,
         user_id: str,
@@ -27,7 +27,7 @@ class MobileAuth:
             'expires_at': datetime.utcnow() + timedelta(days=30)
         }
         return token
-    
+
     def verify_token(self, token: str) -> bool:
         """Verify mobile token"""
         if token in self.tokens:

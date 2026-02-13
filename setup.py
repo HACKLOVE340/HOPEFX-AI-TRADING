@@ -14,7 +14,7 @@ requirements_file = Path(__file__).parent / "requirements.txt"
 if requirements_file.exists():
     with open(requirements_file, 'r', encoding='utf-8') as f:
         requirements = [
-            line.strip() for line in f 
+            line.strip() for line in f
             if line.strip() and not line.startswith('#')
         ]
 else:

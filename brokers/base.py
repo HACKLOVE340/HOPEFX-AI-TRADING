@@ -81,7 +81,7 @@ class AccountInfo:
 class BrokerConnector(ABC):
     """
     Abstract base class for broker connectors.
-    
+
     All broker integrations must implement:
     - connect() / disconnect()
     - place_order() / cancel_order()
@@ -89,40 +89,40 @@ class BrokerConnector(ABC):
     - get_account_info()
     - get_market_data()
     """
-    
+
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize broker connector.
-        
+
         Args:
             config: Broker configuration dictionary
         """
         self.config = config
         self.connected = False
         self.name = self.__class__.__name__
-        
+
         logger.info(f"Initialized {self.name} broker connector")
-    
+
     @abstractmethod
     def connect(self) -> bool:
         """
         Connect to broker.
-        
+
         Returns:
             True if connection successful
         """
         pass
-    
+
     @abstractmethod
     def disconnect(self) -> bool:
         """
         Disconnect from broker.
-        
+
         Returns:
             True if disconnection successful
         """
         pass
-    
+
     @abstractmethod
     def place_order(
         self,
@@ -136,7 +136,7 @@ class BrokerConnector(ABC):
     ) -> Order:
         """
         Place an order.
-        
+
         Args:
             symbol: Trading symbol
             side: Buy or sell
@@ -145,71 +145,71 @@ class BrokerConnector(ABC):
             price: Limit price (for limit orders)
             stop_price: Stop price (for stop orders)
             **kwargs: Additional broker-specific parameters
-            
+
         Returns:
             Order object
         """
         pass
-    
+
     @abstractmethod
     def cancel_order(self, order_id: str) -> bool:
         """
         Cancel an order.
-        
+
         Args:
             order_id: Order identifier
-            
+
         Returns:
             True if cancellation successful
         """
         pass
-    
+
     @abstractmethod
     def get_order(self, order_id: str) -> Optional[Order]:
         """
         Get order by ID.
-        
+
         Args:
             order_id: Order identifier
-            
+
         Returns:
             Order object or None
         """
         pass
-    
+
     @abstractmethod
     def get_positions(self) -> List[Position]:
         """
         Get all open positions.
-        
+
         Returns:
             List of Position objects
         """
         pass
-    
+
     @abstractmethod
     def close_position(self, symbol: str) -> bool:
         """
         Close a position.
-        
+
         Args:
             symbol: Trading symbol
-            
+
         Returns:
             True if closure successful
         """
         pass
-    
+
     @abstractmethod
     def get_account_info(self) -> AccountInfo:
         """
         Get account information.
-        
+
         Returns:
             AccountInfo object
         """
         pass
-    
+
     @abstractmethod
     def get_market_data(
         self,
@@ -219,25 +219,25 @@ class BrokerConnector(ABC):
     ) -> List[Dict[str, Any]]:
         """
         Get market data (OHLCV).
-        
+
         Args:
             symbol: Trading symbol
             timeframe: Timeframe (e.g., "1h", "1d")
             limit: Number of candles
-            
+
         Returns:
             List of OHLCV dictionaries
         """
         pass
-    
+
     def is_connected(self) -> bool:
         """
         Check if connected to broker.
-        
+
         Returns:
             Connection status
         """
         return self.connected
-    
+
     def __repr__(self) -> str:
         return f"{self.name}(connected={self.connected})"

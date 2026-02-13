@@ -39,7 +39,7 @@ class TierFeatures:
 
 class PricingTier:
     """Pricing tier definition"""
-    
+
     def __init__(
         self,
         tier: SubscriptionTier,
@@ -53,7 +53,7 @@ class PricingTier:
         self.monthly_price = monthly_price
         self.commission_rate = commission_rate
         self.features = features
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
@@ -78,10 +78,10 @@ class PricingTier:
 
 class PricingManager:
     """Manage pricing tiers and features"""
-    
+
     def __init__(self):
         self._tiers = self._initialize_tiers()
-    
+
     def _initialize_tiers(self) -> Dict[SubscriptionTier, PricingTier]:
         """Initialize pricing tiers"""
         return {
@@ -158,11 +158,11 @@ class PricingManager:
                 )
             )
         }
-    
+
     def get_tier(self, tier: SubscriptionTier) -> Optional[PricingTier]:
         """Get pricing tier by tier enum"""
         return self._tiers.get(tier)
-    
+
     def get_tier_by_name(self, tier_name: str) -> Optional[PricingTier]:
         """Get pricing tier by name"""
         try:
@@ -170,48 +170,48 @@ class PricingManager:
             return self._tiers.get(tier_enum)
         except ValueError:
             return None
-    
+
     def get_all_tiers(self) -> List[PricingTier]:
         """Get all pricing tiers"""
         return list(self._tiers.values())
-    
+
     def get_tier_price(self, tier: SubscriptionTier) -> Decimal:
         """Get monthly price for a tier"""
         pricing_tier = self.get_tier(tier)
         return pricing_tier.monthly_price if pricing_tier else Decimal("0.00")
-    
+
     def get_commission_rate(self, tier: SubscriptionTier) -> Decimal:
         """Get commission rate for a tier"""
         pricing_tier = self.get_tier(tier)
         return pricing_tier.commission_rate if pricing_tier else Decimal("0.00")
-    
+
     def calculate_commission(self, tier: SubscriptionTier, trade_amount: Decimal) -> Decimal:
         """Calculate commission for a trade"""
         rate = self.get_commission_rate(tier)
         return trade_amount * rate
-    
+
     def has_feature(self, tier: SubscriptionTier, feature_name: str) -> bool:
         """Check if tier has a specific feature"""
         pricing_tier = self.get_tier(tier)
         if not pricing_tier:
             return False
         return getattr(pricing_tier.features, feature_name, False)
-    
+
     def compare_tiers(self, tier1: SubscriptionTier, tier2: SubscriptionTier) -> Dict:
         """Compare two pricing tiers"""
         t1 = self.get_tier(tier1)
         t2 = self.get_tier(tier2)
-        
+
         if not t1 or not t2:
             return {}
-        
+
         return {
             'tier1': t1.to_dict(),
             'tier2': t2.to_dict(),
             'price_difference': float(t1.monthly_price - t2.monthly_price),
             'commission_difference': float(t1.commission_rate - t2.commission_rate)
         }
-    
+
     def get_upgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
         """Get available upgrade options"""
         tier_order = [
@@ -220,13 +220,13 @@ class PricingManager:
             SubscriptionTier.ENTERPRISE,
             SubscriptionTier.ELITE
         ]
-        
+
         try:
             current_index = tier_order.index(current_tier)
             return tier_order[current_index + 1:]
         except (ValueError, IndexError):
             return []
-    
+
     def get_downgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
         """Get available downgrade options"""
         tier_order = [
@@ -235,7 +235,7 @@ class PricingManager:
             SubscriptionTier.ENTERPRISE,
             SubscriptionTier.ELITE
         ]
-        
+
         try:
             current_index = tier_order.index(current_tier)
             return tier_order[:current_index]

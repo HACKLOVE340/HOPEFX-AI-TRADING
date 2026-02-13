@@ -47,18 +47,18 @@ class PositionSize:
 class RiskManager:
     """
     Manages trading risk and position sizing.
-    
+
     Features:
     - Position sizing calculations
     - Risk per trade validation
     - Portfolio limits enforcement
     - Drawdown monitoring
     """
-    
+
     def __init__(self, config: RiskConfig, initial_balance: float = 10000.0):
         """
         Initialize risk manager.
-        
+
         Args:
             config: Risk configuration
             initial_balance: Starting account balance
@@ -70,11 +70,11 @@ class RiskManager:
         self.daily_pnl = 0.0
         self.total_pnl = 0.0
         self.peak_balance = initial_balance
-        
+
         logger.info(
             f"Risk Manager initialized with balance: ${initial_balance:,.2f}"
         )
-    
+
     def calculate_position_size(
         self,
         entry_price: float,
@@ -83,27 +83,27 @@ class RiskManager:
     ) -> PositionSize:
         """
         Calculate appropriate position size based on risk parameters.
-        
+
         Args:
             entry_price: Planned entry price
             stop_loss_price: Stop loss price (optional)
             confidence: Signal confidence (0.0 to 1.0)
-            
+
         Returns:
             PositionSize object with calculated values
         """
         # Calculate risk amount
         risk_pct = self.config.max_risk_per_trade * confidence
         risk_amount = self.current_balance * (risk_pct / 100.0)
-        
+
         # Calculate position size based on method
         if self.config.position_size_method == PositionSizeMethod.FIXED:
             size = min(self.config.max_position_size, risk_amount * 10)
-        
+
         elif self.config.position_size_method == PositionSizeMethod.PERCENT_BALANCE:
             size = risk_amount * 10  # Leverage factor
             size = min(size, self.config.max_position_size)
-        
+
         elif self.config.position_size_method == PositionSizeMethod.RISK_BASED:
             if stop_loss_price:
                 # Calculate size based on distance to stop loss
@@ -115,20 +115,20 @@ class RiskManager:
                     size = risk_amount * 10
             else:
                 size = risk_amount * 10
-        
+
         else:
             size = risk_amount * 10
-        
+
         # Calculate stop loss and take profit if not provided
         if not stop_loss_price:
             stop_loss_price = entry_price * (
                 1 - self.config.default_stop_loss_pct / 100.0
             )
-        
+
         take_profit_price = entry_price * (
             1 + self.config.default_take_profit_pct / 100.0
         )
-        
+
         return PositionSize(
             size=round(size, 2),
             risk_amount=round(risk_amount, 2),
@@ -136,41 +136,41 @@ class RiskManager:
             take_profit_price=round(take_profit_price, 2),
             notes=f"Risk: {risk_pct:.2f}%, Method: {self.config.position_size_method.value}"
         )
-    
+
     def can_open_position(self, position_size: float) -> tuple[bool, str]:
         """
         Check if a new position can be opened.
-        
+
         Args:
             position_size: Proposed position size
-            
+
         Returns:
             Tuple of (can_open, reason)
         """
         # Check max open positions
         if len(self.open_positions) >= self.config.max_open_positions:
             return False, f"Max open positions reached ({self.config.max_open_positions})"
-        
+
         # Check position size limit
         if position_size > self.config.max_position_size:
             return False, f"Position size exceeds maximum (${self.config.max_position_size:,.2f})"
-        
+
         # Check daily loss limit
         daily_loss_pct = abs(self.daily_pnl / self.current_balance * 100)
         if self.daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss:
             return False, f"Daily loss limit reached ({self.config.max_daily_loss}%)"
-        
+
         # Check drawdown
         current_drawdown = self._calculate_drawdown()
         if current_drawdown >= self.config.max_drawdown:
             return False, f"Max drawdown exceeded ({self.config.max_drawdown}%)"
-        
+
         return True, "Position approved"
-    
+
     def register_position(self, position: Dict[str, Any]):
         """
         Register a new open position.
-        
+
         Args:
             position: Position details
         """
@@ -179,11 +179,11 @@ class RiskManager:
             f"Registered position: {position.get('symbol')} "
             f"size={position.get('size')}"
         )
-    
+
     def close_position(self, position_id: str, pnl: float):
         """
         Close a position and update metrics.
-        
+
         Args:
             position_id: Position identifier
             pnl: Profit/Loss from position
@@ -193,30 +193,30 @@ class RiskManager:
             p for p in self.open_positions
             if p.get('id') != position_id
         ]
-        
+
         # Update balances
         self.current_balance += pnl
         self.daily_pnl += pnl
         self.total_pnl += pnl
-        
+
         # Update peak balance
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
-        
+
         logger.info(
             f"Closed position {position_id}: PnL=${pnl:.2f}, "
             f"Balance=${self.current_balance:.2f}"
         )
-    
+
     def reset_daily_pnl(self):
         """Reset daily P&L counter"""
         self.daily_pnl = 0.0
         logger.info("Daily P&L reset")
-    
+
     def _calculate_drawdown(self) -> float:
         """
         Calculate current drawdown percentage.
-        
+
         Returns:
             Drawdown percentage
         """
@@ -224,11 +224,11 @@ class RiskManager:
             drawdown = (self.peak_balance - self.current_balance) / self.peak_balance * 100
             return max(0.0, drawdown)
         return 0.0
-    
+
     def get_risk_metrics(self) -> Dict[str, Any]:
         """
         Get current risk metrics.
-        
+
         Returns:
             Dictionary of risk metrics
         """
@@ -244,11 +244,11 @@ class RiskManager:
             'daily_loss_pct': round(abs(self.daily_pnl / self.current_balance * 100), 2) if self.current_balance > 0 else 0.0,
             'max_daily_loss': self.config.max_daily_loss,
         }
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get risk manager status.
-        
+
         Returns:
             Status dictionary
         """

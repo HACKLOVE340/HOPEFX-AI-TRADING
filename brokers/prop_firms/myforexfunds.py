@@ -15,15 +15,15 @@ logger = logging.getLogger(__name__)
 class MyForexFundsConnector(MT5Connector):
     """
     MyForexFunds Proprietary Trading Firm Connector.
-    
+
     MyForexFunds provides forex funded accounts with rapid evaluation.
-    
+
     Configuration:
         login: MyForexFunds account number
         password: MyForexFunds account password
         server: MyForexFunds server
         account_size: Account size in dollars
-    
+
     Example:
         config = {
             'login': 12345678,
@@ -34,25 +34,25 @@ class MyForexFundsConnector(MT5Connector):
         mff = MyForexFundsConnector(config)
         mff.connect()
     """
-    
+
     MFF_SERVERS = [
         'MyForexFunds-Demo',
         'MyForexFunds-Live',
         'MyForexFunds-Server',
     ]
-    
+
     def __init__(self, config: Dict[str, Any]):
         """Initialize MyForexFunds connector."""
         if 'server' not in config:
             config['server'] = self.MFF_SERVERS[0]
             logger.info(f"Auto-selected MyForexFunds server: {config['server']}")
-        
+
         super().__init__(config)
-        
+
         self.account_size = config.get('account_size', 100000)
-        
+
         logger.info(f"MyForexFunds Connector initialized for ${self.account_size} account")
-    
+
     def get_myforexfunds_rules(self) -> Dict[str, Any]:
         """Get MyForexFunds rules and limits."""
         rules = {
@@ -64,5 +64,5 @@ class MyForexFundsConnector(MT5Connector):
             'evaluation_days': 'unlimited',
             'payouts': 'on-demand',
         }
-        
+
         return rules

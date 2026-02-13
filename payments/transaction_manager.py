@@ -54,7 +54,7 @@ class Transaction:
     updated_at: datetime = field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
     failed_reason: Optional[str] = None
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
@@ -78,11 +78,11 @@ class Transaction:
 
 class TransactionManager:
     """Manages transaction lifecycle and tracking"""
-    
+
     def __init__(self):
         self.transactions: Dict[str, Transaction] = {}
         self.user_transactions: Dict[str, List[str]] = {}  # user_id -> [transaction_ids]
-        
+
     def record_transaction(
         self,
         user_id: str,
@@ -97,7 +97,7 @@ class TransactionManager:
     ) -> Transaction:
         """
         Record a new transaction
-        
+
         Args:
             user_id: User ID
             wallet_id: Wallet ID
@@ -108,7 +108,7 @@ class TransactionManager:
             wallet_type: Wallet type (subscription or commission)
             reference: External reference
             metadata: Additional metadata
-            
+
         Returns:
             Transaction object
         """
@@ -116,10 +116,10 @@ class TransactionManager:
             # Validate amount
             if amount <= 0:
                 raise ValueError("Amount must be positive")
-                
+
             # Generate transaction ID
             transaction_id = f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
-            
+
             # Create transaction
             transaction = Transaction(
                 transaction_id=transaction_id,
@@ -133,22 +133,22 @@ class TransactionManager:
                 reference=reference,
                 metadata=metadata or {}
             )
-            
+
             # Store transaction
             self.transactions[transaction_id] = transaction
-            
+
             # Add to user transactions
             if user_id not in self.user_transactions:
                 self.user_transactions[user_id] = []
             self.user_transactions[user_id].append(transaction_id)
-            
+
             logger.info(f"Transaction recorded: {transaction_id} for user {user_id}")
             return transaction
-            
+
         except Exception as e:
             logger.error(f"Error recording transaction: {e}")
             raise
-    
+
     def update_transaction_status(
         self,
         transaction_id: str,
@@ -157,12 +157,12 @@ class TransactionManager:
     ) -> bool:
         """
         Update transaction status
-        
+
         Args:
             transaction_id: Transaction ID
             status: New status
             failed_reason: Reason if failed
-            
+
         Returns:
             Success boolean
         """
@@ -171,42 +171,42 @@ class TransactionManager:
             if not transaction:
                 logger.error(f"Transaction not found: {transaction_id}")
                 return False
-            
+
             transaction.status = status
             transaction.updated_at = datetime.utcnow()
-            
+
             if status == TransactionStatus.COMPLETED:
                 transaction.completed_at = datetime.utcnow()
             elif status == TransactionStatus.FAILED:
                 transaction.failed_reason = failed_reason
-                
+
             logger.info(f"Transaction {transaction_id} status updated to {status.value}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error updating transaction status: {e}")
             return False
-    
+
     def complete_transaction(self, transaction_id: str) -> bool:
         """Mark transaction as completed"""
         return self.update_transaction_status(transaction_id, TransactionStatus.COMPLETED)
-    
+
     def fail_transaction(self, transaction_id: str, reason: str) -> bool:
         """Mark transaction as failed"""
         return self.update_transaction_status(transaction_id, TransactionStatus.FAILED, reason)
-    
+
     def cancel_transaction(self, transaction_id: str) -> bool:
         """Cancel a pending transaction"""
         transaction = self.transactions.get(transaction_id)
         if not transaction:
             return False
-            
+
         if transaction.status != TransactionStatus.PENDING:
             logger.error(f"Cannot cancel non-pending transaction: {transaction_id}")
             return False
-            
+
         return self.update_transaction_status(transaction_id, TransactionStatus.CANCELLED)
-    
+
     def reverse_transaction(
         self,
         transaction_id: str,
@@ -214,13 +214,13 @@ class TransactionManager:
     ) -> Optional[Transaction]:
         """
         Reverse a completed transaction
-        
+
         Creates a new reversal transaction and marks the original as reversed.
-        
+
         Args:
             transaction_id: Original transaction ID
             reason: Reversal reason
-            
+
         Returns:
             Reversal transaction or None
         """
@@ -229,18 +229,18 @@ class TransactionManager:
             if not original:
                 logger.error(f"Transaction not found for reversal: {transaction_id}")
                 return None
-                
+
             if original.status != TransactionStatus.COMPLETED:
                 logger.error(f"Can only reverse completed transactions: {transaction_id}")
                 return None
-            
+
             # Create reversal transaction (opposite type)
             reversal_type = TransactionType.REFUND
             if original.type == TransactionType.DEPOSIT:
                 reversal_type = TransactionType.WITHDRAWAL
             elif original.type == TransactionType.WITHDRAWAL:
                 reversal_type = TransactionType.DEPOSIT
-                
+
             reversal = self.record_transaction(
                 user_id=original.user_id,
                 wallet_id=original.wallet_id,
@@ -256,24 +256,24 @@ class TransactionManager:
                     'reversed_at': datetime.utcnow().isoformat()
                 }
             )
-            
+
             # Mark original as reversed
             original.status = TransactionStatus.REVERSED
             original.updated_at = datetime.utcnow()
             original.metadata['reversed_by'] = reversal.transaction_id
             original.metadata['reversal_reason'] = reason
-            
+
             logger.info(f"Transaction {transaction_id} reversed with {reversal.transaction_id}")
             return reversal
-            
+
         except Exception as e:
             logger.error(f"Error reversing transaction: {e}")
             return None
-    
+
     def get_transaction(self, transaction_id: str) -> Optional[Transaction]:
         """Get transaction by ID"""
         return self.transactions.get(transaction_id)
-    
+
     def get_user_transactions(
         self,
         user_id: str,
@@ -283,30 +283,30 @@ class TransactionManager:
     ) -> List[Transaction]:
         """
         Get user's transactions
-        
+
         Args:
             user_id: User ID
             type: Filter by type
             status: Filter by status
             limit: Maximum results
-            
+
         Returns:
             List of transactions
         """
         transaction_ids = self.user_transactions.get(user_id, [])
         transactions = [self.transactions[tid] for tid in transaction_ids if tid in self.transactions]
-        
+
         # Apply filters
         if type:
             transactions = [t for t in transactions if t.type == type]
         if status:
             transactions = [t for t in transactions if t.status == status]
-            
+
         # Sort by created_at descending
         transactions.sort(key=lambda t: t.created_at, reverse=True)
-        
+
         return transactions[:limit]
-    
+
     def generate_statement(
         self,
         user_id: str,
@@ -315,12 +315,12 @@ class TransactionManager:
     ) -> Dict:
         """
         Generate transaction statement
-        
+
         Args:
             user_id: User ID
             start_date: Start date (default: 30 days ago)
             end_date: End date (default: now)
-            
+
         Returns:
             Statement dictionary
         """
@@ -328,20 +328,20 @@ class TransactionManager:
             start_date = datetime.utcnow() - timedelta(days=30)
         if not end_date:
             end_date = datetime.utcnow()
-            
+
         # Get all transactions in date range
         all_transactions = self.get_user_transactions(user_id, limit=10000)
         transactions = [
             t for t in all_transactions
             if start_date <= t.created_at <= end_date
         ]
-        
+
         # Calculate totals
         total_deposits = sum(t.amount for t in transactions if t.type == TransactionType.DEPOSIT and t.status == TransactionStatus.COMPLETED)
         total_withdrawals = sum(t.amount for t in transactions if t.type == TransactionType.WITHDRAWAL and t.status == TransactionStatus.COMPLETED)
         total_payments = sum(t.amount for t in transactions if t.type == TransactionType.PAYMENT and t.status == TransactionStatus.COMPLETED)
         total_commissions = sum(t.amount for t in transactions if t.type == TransactionType.COMMISSION and t.status == TransactionStatus.COMPLETED)
-        
+
         return {
             'user_id': user_id,
             'period': {
@@ -358,11 +358,11 @@ class TransactionManager:
             'transaction_count': len(transactions),
             'transactions': [t.to_dict() for t in transactions]
         }
-    
+
     def get_statistics(self) -> Dict:
         """Get overall transaction statistics"""
         total_transactions = len(self.transactions)
-        
+
         if total_transactions == 0:
             return {
                 'total_transactions': 0,
@@ -370,24 +370,24 @@ class TransactionManager:
                 'by_type': {},
                 'total_volume': 0.0
             }
-        
+
         by_status = {}
         by_type = {}
         total_volume = Decimal('0')
-        
+
         for txn in self.transactions.values():
             # Count by status
             status_key = txn.status.value
             by_status[status_key] = by_status.get(status_key, 0) + 1
-            
+
             # Count by type
             type_key = txn.type.value
             by_type[type_key] = by_type.get(type_key, 0) + 1
-            
+
             # Sum volume (completed only)
             if txn.status == TransactionStatus.COMPLETED:
                 total_volume += txn.amount
-        
+
         return {
             'total_transactions': total_transactions,
             'by_status': by_status,

@@ -47,17 +47,17 @@ __all__ = [
     'AlphaVantageNewsProvider',
     'RSSFeedProvider',
     'MultiSourceAggregator',
-    
+
     # Sentiment
     'SentimentAnalyzer',
     'FinancialSentimentAnalyzer',
     'SentimentScore',
-    
+
     # Impact Prediction
     'ImpactPredictor',
     'ImpactLevel',
     'MarketImpact',
-    
+
     # Economic Calendar
     'EconomicCalendar',
     'EconomicEvent',
