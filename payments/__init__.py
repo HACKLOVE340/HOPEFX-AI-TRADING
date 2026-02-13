@@ -1,27 +1,64 @@
 """
-Payments Module
+Payment System Module
 
-Handles wallet operations and payment processing for HOPEFX AI Trading Platform.
-
-Components:
-- Wallet management (subscription and commission wallets)
-- Crypto payments (Bitcoin, USDT, Ethereum)
-- Nigerian fintech (Paystack, Flutterwave)
-- Transaction processing and tracking
-- Security and compliance
-
-Important: This module handles ONLY subscription and commission payments.
-Trading capital is managed directly by brokers and prop firms.
+Complete wallet and payment system for handling subscriptions and commissions.
+Supports crypto (Bitcoin, USDT, Ethereum) and Nigerian fintech (Paystack, Flutterwave).
 """
 
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Team'
+# Wallet Management
+from .wallet import (
+    WalletManager,
+    WalletType,
+    WalletStatus,
+    Wallet,
+    wallet_manager
+)
 
-# Module will be fully implemented with:
-# - Wallet manager
-# - Transaction manager
-# - Payment gateway
-# - Crypto integrations (Bitcoin, USDT, Ethereum)
-# - Fintech integrations (Paystack, Flutterwave)
-# - Security module
-# - Compliance module
+# Transaction Management
+from .transaction_manager import (
+    TransactionManager,
+    Transaction,
+    TransactionType,
+    TransactionStatus,
+    transaction_manager
+)
+
+# Payment Gateway
+from .payment_gateway import (
+    PaymentGateway,
+    PaymentMethod,
+    PaymentStatus,
+    PaymentInfo,
+    payment_gateway
+)
+
+# Security
+from .security import (
+    SecurityManager,
+    KYCLevel,
+    KYCInfo,
+    TransactionLimit,
+    security_manager
+)
+
+# Compliance
+from .compliance import (
+    ComplianceManager,
+    RiskLevel,
+    AMLCheck,
+    ComplianceReport,
+    compliance_manager
+)
+
+__all__ = [
+    # Wallet
+    'WalletManager', 'WalletType', 'WalletStatus', 'Wallet', 'wallet_manager',
+    # Transactions
+    'TransactionManager', 'Transaction', 'TransactionType', 'TransactionStatus', 'transaction_manager',
+    # Payment Gateway
+    'PaymentGateway', 'PaymentMethod', 'PaymentStatus', 'PaymentInfo', 'payment_gateway',
+    # Security
+    'SecurityManager', 'KYCLevel', 'KYCInfo', 'TransactionLimit', 'security_manager',
+    # Compliance
+    'ComplianceManager', 'RiskLevel', 'AMLCheck', 'ComplianceReport', 'compliance_manager'
+]

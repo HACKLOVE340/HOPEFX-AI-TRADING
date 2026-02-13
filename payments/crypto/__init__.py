@@ -1,16 +1,19 @@
 """
-Crypto Payment Integration
+Crypto Payment Module
 
-Handles cryptocurrency payments including:
-- Bitcoin (BTC)
-- USDT (TRC20, ERC20)
-- Ethereum (ETH)
-
-Features:
-- HD wallet address generation
-- Deposit monitoring
-- Withdrawal processing
-- Network fee calculation
+Handles cryptocurrency payments including Bitcoin, USDT, and Ethereum.
 """
 
-__version__ = '1.0.0'
+from .bitcoin import BitcoinClient, bitcoin_client
+from .usdt import USDTClient, USDTNetwork, usdt_client
+from .ethereum import EthereumClient, ethereum_client
+from .wallet_manager import CryptoWalletManager, crypto_wallet_manager
+from .address_generator import AddressGenerator, address_generator
+
+__all__ = [
+    'BitcoinClient', 'bitcoin_client',
+    'USDTClient', 'USDTNetwork', 'usdt_client',
+    'EthereumClient', 'ethereum_client',
+    'CryptoWalletManager', 'crypto_wallet_manager',
+    'AddressGenerator', 'address_generator'
+]
