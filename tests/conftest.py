@@ -82,20 +82,16 @@ def risk_manager(test_config):
 @pytest.fixture
 def paper_broker(test_config):
     """Create a test paper trading broker."""
-    return PaperTradingBroker(
-        initial_balance=100000,
-        config=test_config
-    )
+    broker_config = {
+        'initial_balance': 100000
+    }
+    return PaperTradingBroker(config=broker_config)
 
 
 @pytest.fixture
 def strategy_manager(test_config, risk_manager, paper_broker):
     """Create a test strategy manager."""
-    return StrategyManager(
-        config=test_config,
-        risk_manager=risk_manager,
-        broker=paper_broker
-    )
+    return StrategyManager()
 
 
 @pytest.fixture
