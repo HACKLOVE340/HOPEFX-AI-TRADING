@@ -8,10 +8,10 @@ from decimal import Decimal
 
 class MobileTradingEngine:
     """Optimized trading for mobile devices"""
-    
+
     def __init__(self):
         self.quick_orders = {}
-    
+
     def quick_order(
         self,
         user_id: str,
@@ -24,7 +24,7 @@ class MobileTradingEngine:
             'status': 'submitted' if not confirm else 'pending_confirmation',
             'preset_id': preset_id
         }
-    
+
     def close_all_positions(
         self,
         user_id: str,

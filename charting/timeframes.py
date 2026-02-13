@@ -24,13 +24,13 @@ class Timeframe:
 
 class TimeframeManager:
     """Manages chart timeframes"""
-    
+
     def __init__(self):
         self.supported_timeframes = [
             Timeframe.M1, Timeframe.M5, Timeframe.M15, Timeframe.M30,
             Timeframe.H1, Timeframe.H4, Timeframe.D1, Timeframe.W1
         ]
-    
+
     def get_timeframe_seconds(self, timeframe: str) -> int:
         """Get seconds in a timeframe"""
         mapping = {
@@ -44,7 +44,7 @@ class TimeframeManager:
             '1w': 604800,
         }
         return mapping.get(timeframe, 60)
-    
+
     def list_timeframes(self) -> List[str]:
         """List supported timeframes"""
         return self.supported_timeframes

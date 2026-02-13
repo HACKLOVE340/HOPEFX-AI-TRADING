@@ -20,14 +20,14 @@ from strategies import MovingAverageCrossover, StrategyConfig
 
 def main():
     """Run a simple backtest example."""
-    
+
     print("="*60)
     print("BACKTEST EXAMPLE: Moving Average Crossover")
     print("="*60)
-    
+
     # 1. Setup data source
     data_source = YahooFinanceSource(interval='1d')
-    
+
     # 2. Create data handler
     data_handler = DataHandler(
         data_source=data_source,
@@ -35,7 +35,7 @@ def main():
         start_date='2020-01-01',
         end_date='2023-12-31'
     )
-    
+
     # 3. Create strategy
     strategy_config = StrategyConfig(
         name='MA_Crossover',
@@ -43,7 +43,7 @@ def main():
         timeframe='1D'
     )
     strategy = MovingAverageCrossover(strategy_config)
-    
+
     # 4. Create backtest engine
     engine = BacktestEngine(
         data_handler=data_handler,
@@ -52,20 +52,20 @@ def main():
         commission_pct=0.001,  # 0.1%
         slippage_pct=0.0005    # 0.05%
     )
-    
+
     # 5. Run backtest
     print("\nRunning backtest...")
     results = engine.run()
-    
+
     # 6. Print results
     engine.print_results()
-    
+
     # 7. Optional: Save detailed report
     from backtesting import ReportGenerator
     report_gen = ReportGenerator(results)
     report_gen.save_to_file('backtest_report.txt')
     print("Detailed report saved to: backtest_report.txt")
-    
+
     # 8. Optional: Plot equity curve
     try:
         from backtesting import PerformancePlotter

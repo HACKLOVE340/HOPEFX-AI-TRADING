@@ -24,10 +24,10 @@ class Drawing:
 
 class DrawingToolkit:
     """Toolkit for chart drawings"""
-    
+
     def __init__(self):
         self.drawings: Dict[str, Drawing] = {}
-    
+
     def draw_trendline(
         self,
         start_time: datetime,
@@ -45,11 +45,11 @@ class DrawingToolkit:
             'end_price': end_price,
             **kwargs
         }
-        
+
         drawing_id = f"TL_{start_time.timestamp()}"
         self.drawings[drawing_id] = drawing
         return drawing
-    
+
     def draw_fibonacci(
         self,
         start_time: datetime,
@@ -61,7 +61,7 @@ class DrawingToolkit:
         """Draw Fibonacci retracement"""
         if levels is None:
             levels = [0.236, 0.382, 0.5, 0.618, 0.786]
-        
+
         drawing = Drawing(DrawingType.FIBONACCI)
         drawing.properties = {
             'start_time': start_time,
@@ -70,11 +70,11 @@ class DrawingToolkit:
             'end_price': end_price,
             'levels': levels
         }
-        
+
         drawing_id = f"FIB_{start_time.timestamp()}"
         self.drawings[drawing_id] = drawing
         return drawing
-    
+
     def get_drawings(self) -> List[Drawing]:
         """Get all drawings"""
         return list(self.drawings.values())

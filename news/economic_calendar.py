@@ -54,7 +54,7 @@ class EconomicEvent:
     previous: Optional[float] = None
     currency: Optional[str] = None
     description: Optional[str] = None
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
@@ -69,24 +69,24 @@ class EconomicEvent:
             'currency': self.currency,
             'description': self.description
         }
-    
+
     def is_surprise(self, threshold: float = 0.1) -> bool:
         """Check if actual value significantly differs from forecast"""
         if self.actual is None or self.forecast is None:
             return False
-        
+
         # Calculate percentage difference
         if self.forecast == 0:
             return self.actual != 0
-        
+
         diff_pct = abs((self.actual - self.forecast) / self.forecast)
         return diff_pct > threshold
-    
+
     def get_impact_direction(self) -> Optional[str]:
         """Determine if event is bullish or bearish for currency"""
         if self.actual is None or self.forecast is None:
             return None
-        
+
         # For most economic indicators, higher than expected is bullish
         if self.actual > self.forecast:
             return 'bullish'
@@ -100,23 +100,23 @@ class EconomicCalendar:
     """
     Economic calendar manager
     """
-    
+
     # High-impact event keywords
     HIGH_IMPACT_EVENTS = {
         'interest rate', 'fomc', 'ecb rate', 'boj rate',
         'nonfarm payrolls', 'employment', 'gdp',
         'cpi', 'inflation', 'retail sales'
     }
-    
+
     def __init__(self):
         self.events: List[EconomicEvent] = []
         self.logger = logging.getLogger(self.__class__.__name__)
-    
+
     def add_event(self, event: EconomicEvent):
         """Add an event to the calendar"""
         self.events.append(event)
         self.events.sort(key=lambda x: x.scheduled_time)
-    
+
     def get_upcoming_events(
         self,
         hours_ahead: int = 24,
@@ -124,22 +124,22 @@ class EconomicCalendar:
     ) -> List[EconomicEvent]:
         """
         Get upcoming events
-        
+
         Args:
             hours_ahead: Look ahead this many hours
             min_importance: Minimum importance level
-            
+
         Returns:
             List of upcoming events
         """
         now = datetime.now()
         cutoff = now + timedelta(hours=hours_ahead)
-        
+
         upcoming = [
             event for event in self.events
             if now <= event.scheduled_time <= cutoff
         ]
-        
+
         # Filter by importance if specified
         if min_importance:
             importance_values = {
@@ -153,9 +153,9 @@ class EconomicCalendar:
                 event for event in upcoming
                 if importance_values[event.importance] >= min_value
             ]
-        
+
         return upcoming
-    
+
     def get_events_by_currency(
         self,
         currency: str,
@@ -164,13 +164,13 @@ class EconomicCalendar:
         """Get events for a specific currency"""
         now = datetime.now()
         cutoff = now + timedelta(days=days_ahead)
-        
+
         return [
             event for event in self.events
             if event.currency == currency
             and now <= event.scheduled_time <= cutoff
         ]
-    
+
     def get_high_impact_events(
         self,
         hours_ahead: int = 24
@@ -180,14 +180,14 @@ class EconomicCalendar:
             hours_ahead=hours_ahead,
             min_importance=EventImportance.HIGH
         )
-    
+
     def check_upcoming_events(
         self,
         warning_hours: int = 2
     ) -> Dict:
         """
         Check for upcoming high-impact events
-        
+
         Returns dictionary with warnings
         """
         warnings = {
@@ -196,13 +196,13 @@ class EconomicCalendar:
             'max_importance': None,
             'earliest_event': None
         }
-        
+
         upcoming = self.get_high_impact_events(hours_ahead=warning_hours)
-        
+
         if upcoming:
             warnings['has_upcoming_events'] = True
             warnings['events'] = [e.to_dict() for e in upcoming]
-            
+
             # Find highest importance
             importance_order = [
                 EventImportance.CRITICAL,
@@ -210,23 +210,23 @@ class EconomicCalendar:
                 EventImportance.MEDIUM,
                 EventImportance.LOW
             ]
-            
+
             for importance in importance_order:
                 if any(e.importance == importance for e in upcoming):
                     warnings['max_importance'] = importance.value
                     break
-            
+
             # Earliest event
             warnings['earliest_event'] = upcoming[0].to_dict()
-        
+
         return warnings
-    
+
     def create_sample_events(self, days_ahead: int = 7):
         """
         Create sample economic events for testing
         """
         now = datetime.now()
-        
+
         sample_events = [
             EconomicEvent(
                 title="US Nonfarm Payrolls",
@@ -284,13 +284,13 @@ class EconomicCalendar:
                 description="Gross Domestic Product"
             )
         ]
-        
+
         for event in sample_events:
             self.add_event(event)
-        
+
         self.logger.info(f"Created {len(sample_events)} sample events")
         return sample_events
-    
+
     def update_event_actual(
         self,
         title: str,
@@ -304,31 +304,31 @@ class EconomicCalendar:
                     event.actual = actual
                     self.logger.info(f"Updated {title}: actual={actual}")
                     return event
-        
+
         self.logger.warning(f"Event not found: {title}")
         return None
-    
+
     def get_event_summary(self, days_ahead: int = 7) -> Dict:
         """Get summary of upcoming events"""
         upcoming = self.get_upcoming_events(hours_ahead=days_ahead * 24)
-        
+
         # Count by importance
         importance_counts = {
             importance: sum(1 for e in upcoming if e.importance == importance)
             for importance in EventImportance
         }
-        
+
         # Count by type
         type_counts = {}
         for event in upcoming:
             type_counts[event.event_type.value] = type_counts.get(event.event_type.value, 0) + 1
-        
+
         # Count by currency
         currency_counts = {}
         for event in upcoming:
             if event.currency:
                 currency_counts[event.currency] = currency_counts.get(event.currency, 0) + 1
-        
+
         return {
             'total_events': len(upcoming),
             'by_importance': {k.value: v for k, v in importance_counts.items()},

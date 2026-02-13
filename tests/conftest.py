@@ -32,7 +32,7 @@ def test_config():
         os.environ['DATABASE_URL'] = f'sqlite:///{tmpdir}/test.db'
         os.environ['REDIS_URL'] = 'redis://localhost:6379/15'  # Test database
         os.environ['ENVIRONMENT'] = 'testing'
-        
+
         config = ConfigManager()
         yield config
 
@@ -42,15 +42,15 @@ def db_session(test_config):
     """Create a test database session."""
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    
+
     engine = create_engine(test_config.get('database.url'))
     Base.metadata.create_all(engine)
-    
+
     Session = sessionmaker(bind=engine)
     session = Session()
-    
+
     yield session
-    
+
     session.close()
     Base.metadata.drop_all(engine)
 
@@ -107,13 +107,13 @@ def notification_manager(test_config):
 def sample_market_data():
     """Generate sample market data for testing."""
     dates = pd.date_range(start='2023-01-01', periods=100, freq='1H')
-    
+
     # Generate realistic price data with trend and noise
     base_price = 1.1000
     trend = np.linspace(0, 0.01, 100)
     noise = np.random.normal(0, 0.0005, 100)
     prices = base_price + trend + noise
-    
+
     data = pd.DataFrame({
         'timestamp': dates,
         'open': prices * (1 + np.random.normal(0, 0.0001, 100)),
@@ -122,7 +122,7 @@ def sample_market_data():
         'close': prices,
         'volume': np.random.randint(1000, 10000, 100)
     })
-    
+
     return data
 
 
@@ -146,11 +146,11 @@ def mock_strategy(test_config):
             super().__init__(name, symbol, test_config)
             self.generate_signal_called = False
             self.signal_to_return = None
-        
+
         def generate_signal(self, market_data):
             self.generate_signal_called = True
             return self.signal_to_return
-    
+
     return MockStrategy
 
 

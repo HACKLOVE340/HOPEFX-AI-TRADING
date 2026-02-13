@@ -32,34 +32,34 @@ class NotificationChannel(Enum):
 class NotificationManager:
     """
     Manages notifications across multiple channels.
-    
+
     Features:
     - Multiple notification channels
     - Priority-based filtering
     - Rate limiting
     - Template support
     """
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize notification manager.
-        
+
         Args:
             config: Configuration dictionary
         """
         self.config = config or {}
         self.enabled_channels = self._get_enabled_channels()
         self.notification_history = []
-        
+
         logger.info(
             f"Notification Manager initialized with channels: "
             f"{', '.join(c.value for c in self.enabled_channels)}"
         )
-    
+
     def _get_enabled_channels(self) -> List[NotificationChannel]:
         """Get list of enabled notification channels"""
         channels = [NotificationChannel.CONSOLE]  # Always enabled
-        
+
         # Add other channels based on config
         if self.config.get('discord_enabled'):
             channels.append(NotificationChannel.DISCORD)
@@ -67,9 +67,9 @@ class NotificationManager:
             channels.append(NotificationChannel.TELEGRAM)
         if self.config.get('email_enabled'):
             channels.append(NotificationChannel.EMAIL)
-        
+
         return channels
-    
+
     def send(
         self,
         message: str,
@@ -79,7 +79,7 @@ class NotificationManager:
     ):
         """
         Send notification.
-        
+
         Args:
             message: Notification message
             level: Severity level
@@ -89,10 +89,10 @@ class NotificationManager:
         # Use all enabled channels if not specified
         if channels is None:
             channels = self.enabled_channels
-        
+
         # Filter to only enabled channels
         channels = [c for c in channels if c in self.enabled_channels]
-        
+
         # Create notification record
         notification = {
             'message': message,
@@ -101,10 +101,10 @@ class NotificationManager:
             'timestamp': datetime.utcnow().isoformat(),
             'metadata': metadata or {},
         }
-        
+
         # Store in history
         self.notification_history.append(notification)
-        
+
         # Send to each channel
         for channel in channels:
             try:
@@ -118,7 +118,7 @@ class NotificationManager:
                     self._send_email(message, level, metadata)
             except Exception as e:
                 logger.error(f"Failed to send notification via {channel.value}: {e}")
-    
+
     def _send_console(self, message: str, level: NotificationLevel):
         """Send notification to console/logs"""
         if level == NotificationLevel.INFO:
@@ -129,7 +129,7 @@ class NotificationManager:
             logger.error(f"[NOTIFICATION] {message}")
         elif level == NotificationLevel.CRITICAL:
             logger.critical(f"[NOTIFICATION] {message}")
-    
+
     def _send_discord(
         self,
         message: str,
@@ -140,7 +140,7 @@ class NotificationManager:
         # Placeholder - would integrate with Discord webhook
         logger.debug(f"Discord notification: {message}")
         # TODO: Implement Discord webhook integration
-    
+
     def _send_telegram(
         self,
         message: str,
@@ -151,7 +151,7 @@ class NotificationManager:
         # Placeholder - would integrate with Telegram bot API
         logger.debug(f"Telegram notification: {message}")
         # TODO: Implement Telegram bot API integration
-    
+
     def _send_email(
         self,
         message: str,
@@ -162,7 +162,7 @@ class NotificationManager:
         # Placeholder - would integrate with SMTP
         logger.debug(f"Email notification: {message}")
         # TODO: Implement SMTP email sending
-    
+
     def notify_trade(
         self,
         action: str,
@@ -173,7 +173,7 @@ class NotificationManager:
     ):
         """
         Send trade notification.
-        
+
         Args:
             action: Trade action (e.g., "BUY", "SELL")
             symbol: Trading symbol
@@ -182,10 +182,10 @@ class NotificationManager:
             pnl: Profit/Loss (if closing position)
         """
         message = f"Trade: {action} {quantity} {symbol} @ ${price:.2f}"
-        
+
         if pnl is not None:
             message += f" | P&L: ${pnl:.2f}"
-        
+
         self.send(
             message=message,
             level=NotificationLevel.INFO,
@@ -198,7 +198,7 @@ class NotificationManager:
                 'pnl': pnl,
             }
         )
-    
+
     def notify_signal(
         self,
         strategy: str,
@@ -209,7 +209,7 @@ class NotificationManager:
     ):
         """
         Send trading signal notification.
-        
+
         Args:
             strategy: Strategy name
             signal_type: Signal type (BUY/SELL)
@@ -221,7 +221,7 @@ class NotificationManager:
             f"Signal: {strategy} generated {signal_type} for {symbol} "
             f"@ ${price:.2f} (confidence: {confidence:.2%})"
         )
-        
+
         self.send(
             message=message,
             level=NotificationLevel.INFO,
@@ -234,7 +234,7 @@ class NotificationManager:
                 'confidence': confidence,
             }
         )
-    
+
     def notify_risk_alert(
         self,
         alert_type: str,
@@ -243,14 +243,14 @@ class NotificationManager:
     ):
         """
         Send risk management alert.
-        
+
         Args:
             alert_type: Type of alert
             message: Alert message
             severity: Severity level
         """
         level = NotificationLevel[severity]
-        
+
         self.send(
             message=f"RISK ALERT [{alert_type}]: {message}",
             level=level,
@@ -259,11 +259,11 @@ class NotificationManager:
                 'alert_type': alert_type,
             }
         )
-    
+
     def notify_error(self, error_type: str, message: str, details: Optional[str] = None):
         """
         Send error notification.
-        
+
         Args:
             error_type: Type of error
             message: Error message
@@ -272,7 +272,7 @@ class NotificationManager:
         full_message = f"ERROR [{error_type}]: {message}"
         if details:
             full_message += f"\nDetails: {details}"
-        
+
         self.send(
             message=full_message,
             level=NotificationLevel.ERROR,
@@ -282,19 +282,19 @@ class NotificationManager:
                 'details': details,
             }
         )
-    
+
     def get_recent_notifications(self, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Get recent notifications.
-        
+
         Args:
             limit: Maximum number to return
-            
+
         Returns:
             List of recent notifications
         """
         return self.notification_history[-limit:]
-    
+
     def clear_history(self):
         """Clear notification history"""
         self.notification_history = []

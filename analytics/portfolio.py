@@ -9,7 +9,7 @@ import numpy as np
 
 class PortfolioOptimizer:
     """Modern Portfolio Theory optimizer"""
-    
+
     def optimize_portfolio(
         self,
         assets: List[str],
@@ -19,10 +19,10 @@ class PortfolioOptimizer:
     ) -> Dict:
         """Optimize portfolio allocation"""
         num_assets = len(assets)
-        
+
         # Equal weight as starting point
         weights = np.array([1.0 / num_assets] * num_assets)
-        
+
         return {
             'weights': {assets[i]: float(weights[i]) for i in range(num_assets)},
             'expected_return': 0.15,
@@ -30,7 +30,7 @@ class PortfolioOptimizer:
             'sharpe_ratio': 1.5,
             'method': method
         }
-    
+
     def efficient_frontier(
         self,
         assets: List[str],

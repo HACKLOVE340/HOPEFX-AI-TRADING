@@ -8,11 +8,11 @@ from datetime import datetime
 
 class PushNotificationManager:
     """Manages push notifications for mobile devices"""
-    
+
     def __init__(self):
         self.fcm_enabled = False  # Firebase Cloud Messaging
         self.apns_enabled = False  # Apple Push Notification Service
-    
+
     def send_notification(
         self,
         user_id: str,
@@ -30,11 +30,11 @@ class PushNotificationManager:
             'data': data or {},
             'sent_at': datetime.utcnow()
         }
-        
+
         # Would send via FCM/APNs in production
         print(f"Notification sent: {title} to {user_id}")
         return True
-    
+
     def send_price_alert(
         self,
         user_id: str,

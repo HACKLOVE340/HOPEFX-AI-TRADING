@@ -16,14 +16,14 @@ logger = logging.getLogger(__name__)
 class StrategyManager:
     """
     Manages multiple trading strategies.
-    
+
     Responsibilities:
     - Load and register strategies
     - Start/stop strategy execution
     - Coordinate signal generation
     - Track performance across strategies
     """
-    
+
     def __init__(self):
         """Initialize strategy manager"""
         self.strategies: Dict[str, BaseStrategy] = {}
@@ -34,13 +34,13 @@ class StrategyManager:
             'total_signals': 0,
             'total_pnl': 0.0,
         }
-        
+
         logger.info("Strategy Manager initialized")
-    
+
     def register_strategy(self, strategy: BaseStrategy):
         """
         Register a new strategy.
-        
+
         Args:
             strategy: Strategy instance to register
         """
@@ -49,16 +49,16 @@ class StrategyManager:
                 f"Strategy {strategy.config.name} already registered. "
                 "Replacing existing strategy."
             )
-        
+
         self.strategies[strategy.config.name] = strategy
         self.performance_summary['total_strategies'] = len(self.strategies)
-        
+
         logger.info(f"Registered strategy: {strategy.config.name}")
-    
+
     def unregister_strategy(self, strategy_name: str):
         """
         Unregister a strategy.
-        
+
         Args:
             strategy_name: Name of strategy to remove
         """
@@ -67,29 +67,29 @@ class StrategyManager:
             strategy = self.strategies[strategy_name]
             if strategy.status == StrategyStatus.RUNNING:
                 strategy.stop()
-            
+
             del self.strategies[strategy_name]
             self.performance_summary['total_strategies'] = len(self.strategies)
             logger.info(f"Unregistered strategy: {strategy_name}")
         else:
             logger.warning(f"Strategy {strategy_name} not found")
-    
+
     def get_strategy(self, strategy_name: str) -> Optional[BaseStrategy]:
         """
         Get strategy by name.
-        
+
         Args:
             strategy_name: Name of strategy
-            
+
         Returns:
             Strategy instance or None if not found
         """
         return self.strategies.get(strategy_name)
-    
+
     def list_strategies(self) -> List[Dict[str, Any]]:
         """
         List all registered strategies.
-        
+
         Returns:
             List of strategy information dictionaries
         """
@@ -104,11 +104,11 @@ class StrategyManager:
             }
             for strategy in self.strategies.values()
         ]
-    
+
     def start_strategy(self, strategy_name: str):
         """
         Start a specific strategy.
-        
+
         Args:
             strategy_name: Name of strategy to start
         """
@@ -119,11 +119,11 @@ class StrategyManager:
             logger.info(f"Started strategy: {strategy_name}")
         else:
             logger.error(f"Strategy {strategy_name} not found")
-    
+
     def stop_strategy(self, strategy_name: str):
         """
         Stop a specific strategy.
-        
+
         Args:
             strategy_name: Name of strategy to stop
         """
@@ -134,78 +134,78 @@ class StrategyManager:
             logger.info(f"Stopped strategy: {strategy_name}")
         else:
             logger.error(f"Strategy {strategy_name} not found")
-    
+
     def start_all(self):
         """Start all enabled strategies"""
         for strategy in self.strategies.values():
             if strategy.config.enabled:
                 strategy.start()
-        
+
         self._update_active_count()
         logger.info(f"Started all enabled strategies")
-    
+
     def stop_all(self):
         """Stop all strategies"""
         for strategy in self.strategies.values():
             strategy.stop()
-        
+
         self._update_active_count()
         logger.info("Stopped all strategies")
-    
+
     def process_bar(self, symbol: str, bar: Dict[str, Any]) -> List[Signal]:
         """
         Process new bar data for all relevant strategies.
-        
+
         Args:
             symbol: Trading symbol
             bar: OHLCV bar data
-            
+
         Returns:
             List of generated signals
         """
         signals = []
-        
+
         for strategy in self.strategies.values():
             # Only process if strategy is running and matches symbol
-            if (strategy.status == StrategyStatus.RUNNING and 
+            if (strategy.status == StrategyStatus.RUNNING and
                 strategy.config.symbol == symbol and
                 strategy.config.enabled):
-                
+
                 signal = strategy.on_bar(bar)
                 if signal:
                     signals.append(signal)
                     self.active_signals.append(signal)
                     self.performance_summary['total_signals'] += 1
-        
+
         return signals
-    
+
     def get_performance_summary(self) -> Dict[str, Any]:
         """
         Get overall performance summary.
-        
+
         Returns:
             Performance summary dictionary
         """
         summary = self.performance_summary.copy()
-        
+
         # Aggregate metrics from all strategies
         total_pnl = sum(
             strategy.performance_metrics['total_pnl']
             for strategy in self.strategies.values()
         )
-        
+
         summary['total_pnl'] = total_pnl
         summary['timestamp'] = datetime.utcnow().isoformat()
-        
+
         return summary
-    
+
     def get_strategy_performance(self, strategy_name: str) -> Optional[Dict[str, Any]]:
         """
         Get performance metrics for specific strategy.
-        
+
         Args:
             strategy_name: Name of strategy
-            
+
         Returns:
             Performance metrics or None if not found
         """
@@ -213,7 +213,7 @@ class StrategyManager:
         if strategy:
             return strategy.get_performance_metrics()
         return None
-    
+
     def _update_active_count(self):
         """Update count of active strategies"""
         active_count = sum(
@@ -221,11 +221,11 @@ class StrategyManager:
             if strategy.status == StrategyStatus.RUNNING
         )
         self.performance_summary['active_strategies'] = active_count
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get manager status.
-        
+
         Returns:
             Status dictionary
         """

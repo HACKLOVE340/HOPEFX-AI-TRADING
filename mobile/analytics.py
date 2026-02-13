@@ -8,10 +8,10 @@ from datetime import datetime
 
 class MobileAnalytics:
     """Track mobile app usage and performance"""
-    
+
     def __init__(self):
         self.events = []
-    
+
     def track_event(
         self,
         user_id: str,
@@ -26,7 +26,7 @@ class MobileAnalytics:
             'timestamp': datetime.utcnow()
         }
         self.events.append(event)
-    
+
     def track_screen_view(self, user_id: str, screen_name: str) -> None:
         """Track screen view"""
         self.track_event(user_id, 'screen_view', {'screen': screen_name})

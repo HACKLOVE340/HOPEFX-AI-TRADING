@@ -25,10 +25,10 @@ class PerformanceMetric:
 
 class PerformanceTracker:
     """Tracks user performance metrics"""
-    
+
     def __init__(self):
         self.metrics: Dict[str, PerformanceMetric] = {}
-    
+
     def record_trade(
         self,
         user_id: str,
@@ -37,15 +37,15 @@ class PerformanceTracker:
     ) -> None:
         """Record a trade result"""
         key = f"{user_id}_{period}"
-        
+
         if key not in self.metrics:
             self.metrics[key] = PerformanceMetric(user_id, period)
-        
+
         metric = self.metrics[key]
         metric.total_trades += 1
         metric.total_return += profit
         metric.updated_at = datetime.utcnow()
-    
+
     def get_performance(
         self,
         user_id: str,
@@ -54,7 +54,7 @@ class PerformanceTracker:
         """Get performance metrics for a user"""
         key = f"{user_id}_{period}"
         return self.metrics.get(key, PerformanceMetric(user_id, period))
-    
+
     def calculate_win_rate(self, user_id: str, winning_trades: int, total_trades: int) -> Decimal:
         """Calculate win rate"""
         if total_trades == 0:
