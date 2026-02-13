@@ -69,13 +69,14 @@ def market_cache(test_config):
 @pytest.fixture
 def risk_manager(test_config):
     """Create a test risk manager."""
+    from risk.manager import RiskConfig
     risk_config = RiskConfig(
         max_position_size=10000,
-        max_positions=5,
+        max_open_positions=5,
         max_daily_loss=1000,
         max_drawdown=0.10
     )
-    return RiskManager(risk_config, test_config)
+    return RiskManager(risk_config, initial_balance=100000)
 
 
 @pytest.fixture
@@ -106,7 +107,7 @@ def notification_manager(test_config):
 @pytest.fixture
 def sample_market_data():
     """Generate sample market data for testing."""
-    dates = pd.date_range(start='2023-01-01', periods=100, freq='1H')
+    dates = pd.date_range(start='2023-01-01', periods=100, freq='h')
 
     # Generate realistic price data with trend and noise
     base_price = 1.1000
@@ -141,15 +142,69 @@ def sample_tick_data():
 @pytest.fixture
 def mock_strategy(test_config):
     """Create a mock strategy for testing."""
+    from strategies.base import StrategyConfig
+    
     class MockStrategy(BaseStrategy):
         def __init__(self, name="MockStrategy", symbol="EUR_USD"):
-            super().__init__(name, symbol, test_config)
+            # Create StrategyConfig from parameters
+            config = StrategyConfig(
+                name=name,
+                symbol=symbol,
+                timeframe="1H"
+            )
+            super().__init__(config)
             self.generate_signal_called = False
             self.signal_to_return = None
+            
+            # Add backward compatibility properties
+            self._name = name
+            self._symbol = symbol
+            self.performance = {
+                'total_signals': 0,
+                'winning_trades': 0,
+                'losing_trades': 0,
+                'total_pnl': 0,
+                'win_rate': 0.0
+            }
 
-        def generate_signal(self, market_data):
+        @property
+        def name(self):
+            return self.config.name
+        
+        @property
+        def symbol(self):
+            return self.config.symbol
+        
+        @property
+        def is_active(self):
+            from strategies.base import StrategyStatus
+            return self.status == StrategyStatus.RUNNING
+
+        def analyze(self, data):
+            """Implement required abstract method."""
+            return {'analyzed': True, 'data': data}
+
+        def generate_signal(self, analysis):
+            """Override to match test expectations."""
             self.generate_signal_called = True
             return self.signal_to_return
+        
+        def update_performance(self, profit_loss, signal_type):
+            """Update performance metrics (backward compatibility)."""
+            self.performance['total_signals'] += 1
+            self.performance['total_pnl'] += profit_loss
+            
+            if profit_loss > 0:
+                self.performance['winning_trades'] += 1
+            else:
+                self.performance['losing_trades'] += 1
+            
+            # Calculate win rate
+            if self.performance['total_signals'] > 0:
+                self.performance['win_rate'] = (
+                    self.performance['winning_trades'] / 
+                    self.performance['total_signals'] * 100
+                )
 
     return MockStrategy
 
