@@ -1,17 +1,15 @@
 """
-Nigerian Fintech Payment Integration
+Fintech Payment Module
 
-Handles Nigerian fintech payment providers:
-- Paystack
-- Flutterwave
-
-Features:
-- Payment link generation
-- Bank transfer handling
-- Card payments
-- USSD payments
-- Mobile money
-- Bank payouts
+Handles Nigerian fintech payments via Paystack, Flutterwave, and direct bank transfers.
 """
 
-__version__ = '1.0.0'
+from .paystack import PaystackClient, paystack_client
+from .flutterwave import FlutterwaveClient, flutterwave_client
+from .bank_transfer import BankTransferClient, bank_transfer_client
+
+__all__ = [
+    'PaystackClient', 'paystack_client',
+    'FlutterwaveClient', 'flutterwave_client',
+    'BankTransferClient', 'bank_transfer_client'
+]
