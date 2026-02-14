@@ -203,6 +203,10 @@ def mock_strategy(test_config):
                     self.performance['winning_trades'] / 
                     self.performance['total_signals'] * 100
                 )
+        
+        def get_performance_metrics(self):
+            """Override to return custom performance dict."""
+            return self.performance
 
     return MockStrategy
 
