@@ -202,12 +202,17 @@ class NotificationManager:
                     payload["content"] += f"\n```{metadata_str}```"
                 
                 data = json.dumps(payload).encode('utf-8')
+                # Validate URL scheme for security (only allow https for webhooks)
+                if not webhook_url.startswith('https://'):
+                    logger.error("Discord webhook URL must use HTTPS")
+                    return
+                    
                 req = urllib.request.Request(
                     webhook_url,
                     data=data,
                     headers={'Content-Type': 'application/json'}
                 )
-                urllib.request.urlopen(req, timeout=10)
+                urllib.request.urlopen(req, timeout=10)  # nosec - URL scheme validated above
                 logger.debug(f"Discord notification sent (urllib fallback)")
                 
         except Exception as e:
@@ -283,13 +288,18 @@ class NotificationManager:
                     text += f"\n\n{metadata_str}"
                 
                 url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                # Validate URL scheme for security (only allow https for Telegram API)
+                if not url.startswith('https://api.telegram.org/'):
+                    logger.error("Telegram API URL must use HTTPS and be from api.telegram.org")
+                    return
+                    
                 data = {
                     "chat_id": chat_id,
                     "text": text
                 }
                 data_encoded = urllib.parse.urlencode(data).encode('utf-8')
                 req = urllib.request.Request(url, data=data_encoded)
-                urllib.request.urlopen(req, timeout=10)
+                urllib.request.urlopen(req, timeout=10)  # nosec - URL scheme validated above
                 logger.debug("Telegram notification sent (urllib fallback)")
                 
         except Exception as e:

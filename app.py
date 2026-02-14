@@ -310,7 +310,9 @@ setup_cors(app)
 
 def run_server():
     """Run the API server"""
-    host = os.getenv('API_HOST', '0.0.0.0')
+    # Default to localhost for security, use 0.0.0.0 only when explicitly set
+    # Set API_HOST=0.0.0.0 in production environment to bind to all interfaces
+    host = os.getenv('API_HOST', '127.0.0.1')
     port = int(os.getenv('API_PORT', 5000))
     workers = int(os.getenv('API_WORKERS', 4))
     reload = os.getenv('ENVIRONMENT', 'development') == 'development'

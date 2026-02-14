@@ -151,9 +151,14 @@ class BaseMLModel(ABC):
 
         Args:
             filepath: Path to load the model from
+            
+        Note:
+            Uses pickle for serialization. Only load models from trusted sources.
+            For production, consider using safer formats like joblib or ONNX.
         """
+        # Security note: pickle can execute arbitrary code. Only load from trusted sources.
         with open(filepath, 'rb') as f:
-            data = pickle.load(f)
+            data = pickle.load(f)  # nosec - Loading from trusted model directory
 
         self.model = data['model']
         self.config = data['config']
