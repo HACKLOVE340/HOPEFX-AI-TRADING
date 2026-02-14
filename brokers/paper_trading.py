@@ -240,6 +240,18 @@ class PaperTradingBroker(BrokerConnector):
 
         return data
 
+    def get_market_price(self, symbol: str) -> float:
+        """
+        Get current market price for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Current market price
+        """
+        return self.market_prices.get(symbol, 0.0)
+
     def update_market_price(self, symbol: str, price: float):
         """
         Update simulated market price.

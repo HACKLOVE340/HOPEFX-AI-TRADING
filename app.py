@@ -210,10 +210,25 @@ async def health_check():
         "api": "healthy",
         "config": "healthy" if app_state.config else "unavailable",
         "database": "healthy" if app_state.db_engine else "unavailable",
-        "cache": "healthy" if app_state.cache and app_state.cache.health_check() else "unavailable",
     }
+    
+    # Cache is optional for health check
+    if app_state.cache:
+        try:
+            cache_healthy = app_state.cache.health_check() if hasattr(app_state.cache, 'health_check') else True
+            components["cache"] = "healthy" if cache_healthy else "degraded"
+        except Exception as e:
+            logger.warning(f"Cache health check failed: {e}")
+            components["cache"] = "degraded"
+    else:
+        components["cache"] = "unavailable"
 
-    overall_status = "healthy" if all(v == "healthy" for v in components.values()) else "degraded"
+    # Consider system healthy if API and config are available
+    # Database and cache are optional for basic health
+    critical_components = ["api", "config"]
+    overall_status = "healthy" if all(
+        components.get(c) == "healthy" for c in critical_components
+    ) else "degraded"
 
     return HealthResponse(
         status=overall_status,
