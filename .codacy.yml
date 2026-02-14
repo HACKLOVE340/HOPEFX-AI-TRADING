@@ -1,0 +1,41 @@
+---
+engines:
+  duplication:
+    enabled: true
+    exclude_paths:
+      - "tests/**"
+      - "**/__pycache__/**"
+  fixme:
+    enabled: true
+  radon:
+    enabled: true
+  bandit:
+    enabled: true
+  pylint:
+    enabled: true
+    python_version: 3
+  prospector:
+    enabled: true
+
+exclude_paths:
+  - "tests/**"
+  - "**/__pycache__/**"
+  - "**/venv/**"
+  - "**/.venv/**"
+  - "**/build/**"
+  - "**/dist/**"
+  - "**/*.egg-info/**"
+  - "migrations/**"
+  - "docs/**"
+  - "*.md"
+
+coverage:
+  enabled: true
+  minimum: 75
+
+quality:
+  minimum_grade: B
+  min_complexity: 10
+  max_line_length: 120
+  max_function_length: 50
+  max_file_length: 500

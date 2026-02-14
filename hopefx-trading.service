@@ -1,0 +1,32 @@
+[Unit]
+Description=HOPEFX AI Trading Framework
+After=network.target redis.service postgresql.service
+
+[Service]
+Type=simple
+User=hopefx
+WorkingDirectory=/opt/hopefx-ai-trading
+Environment="PATH=/opt/hopefx-ai-trading/venv/bin"
+Environment="APP_ENV=production"
+EnvironmentFile=/opt/hopefx-ai-trading/.env
+
+# Main application
+ExecStart=/opt/hopefx-ai-trading/venv/bin/python app.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/hopefx/app.log
+StandardError=append:/var/log/hopefx/error.log
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hopefx-ai-trading/logs /opt/hopefx-ai-trading/data
+
+[Install]
+WantedBy=multi-user.target
