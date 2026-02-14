@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Create New Strategy</h2>
+    <form id="create-strategy-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+            <label>Strategy Name:</label><br>
+            <input type="text" id="strategy-name" style="width: 100%; padding: 8px; margin-top: 5px;" required>
+        </div>
+        <div>
+            <label>Symbol:</label><br>
+            <input type="text" id="symbol" value="BTC/USD" style="width: 100%; padding: 8px; margin-top: 5px;" required>
+        </div>
+        <div>
+            <label>Timeframe:</label><br>
+            <select id="timeframe" style="width: 100%; padding: 8px; margin-top: 5px;">
+                <option value="1m">1 Minute</option>
+                <option value="5m">5 Minutes</option>
+                <option value="15m">15 Minutes</option>
+                <option value="1h" selected>1 Hour</option>
+                <option value="4h">4 Hours</option>
+                <option value="1d">1 Day</option>
+            </select>
+        </div>
+        <div>
+            <label>Strategy Type:</label><br>
+            <select id="strategy-type" style="width: 100%; padding: 8px; margin-top: 5px;">
+                <option value="ma_crossover">MA Crossover</option>
+            </select>
+        </div>
+        <div style="grid-column: span 2;">
+            <button type="submit" class="btn btn-primary">Create Strategy</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">Active Strategies</h2>
+    <div id="strategies-list">
+        <p style="color: #7f8c8d;">Loading strategies...</p>
+    </div>
+</div>
+
+<script>
+async function loadStrategies() {
+    try {
+        const response = await fetch('/api/trading/strategies');
+        const strategies = await response.json();
+        const listEl = document.getElementById('strategies-list');
+        
+        if (strategies.length === 0) {
+            listEl.innerHTML = '<p style="color: #7f8c8d;">No strategies found. Create one above!</p>';
+            return;
+        }
+        
+        let html = '<table><thead><tr><th>Name</th><th>Symbol</th><th>Status</th><th>Performance</th><th>Actions</th></tr></thead><tbody>';
+        
+        strategies.forEach(strategy => {
+            const perf = strategy.performance;
+            const statusClass = strategy.status === 'RUNNING' ? 'badge-success' : 'badge-warning';
+            html += `
+                <tr>
+                    <td>${strategy.name}</td>
+                    <td>${strategy.symbol}</td>
+                    <td><span class="badge ${statusClass}">${strategy.status}</span></td>
+                    <td>Signals: ${perf.total_signals}, Win Rate: ${perf.win_rate || 0}%</td>
+                    <td>
+                        <button class="btn btn-success" onclick="startStrategy('${strategy.name}')">Start</button>
+                        <button class="btn btn-danger" onclick="stopStrategy('${strategy.name}')">Stop</button>
+                        <button class="btn btn-danger" onclick="deleteStrategy('${strategy.name}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+    } catch (error) {
+        console.error('Failed to load strategies:', error);
+    }
+}
+
+document.getElementById('create-strategy-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        name: document.getElementById('strategy-name').value,
+        symbol: document.getElementById('symbol').value,
+        timeframe: document.getElementById('timeframe').value,
+        strategy_type: document.getElementById('strategy-type').value,
+    };
+    
+    try {
+        const response = await fetch('/api/trading/strategies', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            alert('Strategy created successfully!');
+            document.getElementById('create-strategy-form').reset();
+            loadStrategies();
+        } else {
+            alert('Failed to create strategy');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function startStrategy(name) {
+    try {
+        const response = await fetch(`/api/trading/strategies/${name}/start`, {method: 'POST'});
+        if (response.ok) {
+            loadStrategies();
+        }
+    } catch (error) {
+        alert('Error starting strategy: ' + error.message);
+    }
+}
+
+async function stopStrategy(name) {
+    try {
+        const response = await fetch(`/api/trading/strategies/${name}/stop`, {method: 'POST'});
+        if (response.ok) {
+            loadStrategies();
+        }
+    } catch (error) {
+        alert('Error stopping strategy: ' + error.message);
+    }
+}
+
+async function deleteStrategy(name) {
+    if (confirm(`Delete strategy "${name}"?`)) {
+        try {
+            const response = await fetch(`/api/trading/strategies/${name}`, {method: 'DELETE'});
+            if (response.ok) {
+                loadStrategies();
+            }
+        } catch (error) {
+            alert('Error deleting strategy: ' + error.message);
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadStrategies);
+setInterval(loadStrategies, 10000);
+</script>
+{% endblock %}

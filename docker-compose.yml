@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Trading Application
+  hopefx-app:
+    build: .
+    container_name: hopefx-trading
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - APP_ENV=production
+      - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY}
+      - CONFIG_SALT=${CONFIG_SALT}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_TYPE=postgresql
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=hopefx_trading
+      - POSTGRES_USER=${POSTGRES_USER:-hopefx_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./credentials:/app/credentials
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - hopefx-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: hopefx-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - hopefx-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: hopefx-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=hopefx_trading
+      - POSTGRES_USER=${POSTGRES_USER:-hopefx_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hopefx-network
+
+networks:
+  hopefx-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
