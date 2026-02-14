@@ -54,8 +54,8 @@ class TestNotificationManager:
             channels=[NotificationChannel.DISCORD]
         )
 
-    @patch('urllib.request.urlopen')
-    def test_discord_notification_with_config(self, mock_urlopen):
+    @patch('requests.post')
+    def test_discord_notification_with_config(self, mock_post):
         """Test Discord notification with webhook URL"""
         config = {
             'discord_enabled': True,
@@ -63,9 +63,10 @@ class TestNotificationManager:
         }
         manager = NotificationManager(config)
         
-        # Setup mock to return a MagicMock that can be used as a context manager
+        # Setup mock response
         mock_response = MagicMock()
-        mock_urlopen.return_value = mock_response
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
         
         manager.send(
             message="Test Discord message",
@@ -74,13 +75,17 @@ class TestNotificationManager:
             metadata={'trade': 'EUR_USD', 'action': 'BUY'}
         )
         
-        # Verify urlopen was called with correct arguments
-        assert mock_urlopen.called
-        call_args = mock_urlopen.call_args
+        # Verify requests.post was called
+        assert mock_post.called
+        call_args = mock_post.call_args
         assert call_args is not None
         # Check that the request was made to the webhook URL
-        request = call_args[0][0]
-        assert request.full_url == 'https://discord.com/api/webhooks/test'
+        assert call_args[0][0] == 'https://discord.com/api/webhooks/test'
+        # Verify the payload contains the message
+        payload = call_args[1]['json']
+        assert 'embeds' in payload
+        assert len(payload['embeds']) > 0
+        assert payload['embeds'][0]['description'] == "Test Discord message"
 
     def test_telegram_notification_without_config(self):
         """Test Telegram notification without bot token"""
