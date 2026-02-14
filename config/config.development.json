@@ -1,0 +1,47 @@
+{
+  "app_name": "HOPEFX AI Trading",
+  "version": "1.0.0",
+  "environment": "development",
+  "debug": true,
+  "api_configs": {
+    "binance": {
+      "api_key": "",
+      "api_secret": "",
+      "sandbox_mode": true,
+      "base_url": "https://testnet.binance.vision",
+      "timeout": 30,
+      "max_retries": 3,
+      "rate_limit": 100
+    }
+  },
+  "database": {
+    "db_type": "sqlite",
+    "host": "localhost",
+    "port": 5432,
+    "username": "",
+    "password": "",
+    "database": "hopefx.db",
+    "ssl_enabled": true,
+    "connection_pool_size": 10,
+    "max_overflow": 20,
+    "pool_timeout": 30
+  },
+  "trading": {
+    "max_position_size": 10000.0,
+    "max_leverage": 1.0,
+    "stop_loss_percent": 2.0,
+    "take_profit_percent": 5.0,
+    "max_open_orders": 10,
+    "risk_per_trade": 1.0,
+    "daily_loss_limit": 5.0,
+    "trading_enabled": false,
+    "paper_trading_mode": true
+  },
+  "logging": {
+    "level": "INFO",
+    "log_file": "logs/hopefx_ai.log",
+    "max_file_size_mb": 100,
+    "backup_count": 10,
+    "format_string": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}
