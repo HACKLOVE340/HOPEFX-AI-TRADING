@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime
 
 from brokers import PaperTradingBroker
-from brokers.base import OrderType, OrderSide
+from brokers.base import OrderType, OrderSide, OrderStatus
 
 
 @pytest.mark.unit
@@ -30,9 +30,9 @@ class TestPaperTradingBroker:
         )
 
         assert order is not None
-        assert order['symbol'] == "EUR_USD"
-        assert order['side'] == OrderSide.BUY
-        assert order['status'] == 'FILLED'
+        assert order.symbol == "EUR_USD"
+        assert order.side == OrderSide.BUY
+        assert order.status == OrderStatus.FILLED
 
     def test_place_market_order_sell(self, paper_broker):
         """Test placing a market SELL order."""
@@ -45,8 +45,8 @@ class TestPaperTradingBroker:
         )
 
         assert order is not None
-        assert order['side'] == OrderSide.SELL
-        assert order['status'] == 'FILLED'
+        assert order.side == OrderSide.SELL
+        assert order.status == OrderStatus.FILLED
 
     def test_place_limit_order(self, paper_broker):
         """Test placing a limit order."""
@@ -59,8 +59,8 @@ class TestPaperTradingBroker:
         )
 
         assert order is not None
-        assert order['type'] == OrderType.LIMIT
-        assert order['status'] == 'PENDING'
+        assert order.type == OrderType.LIMIT
+        assert order.status == OrderStatus.OPEN
 
     def test_cancel_order(self, paper_broker):
         """Test canceling an order."""
@@ -73,14 +73,14 @@ class TestPaperTradingBroker:
             price=1.0950
         )
 
-        order_id = order['id']
+        order_id = order.id
 
         # Cancel it
         result = paper_broker.cancel_order(order_id)
 
         assert result == True
         canceled_order = paper_broker.get_order(order_id)
-        assert canceled_order['status'] == 'CANCELLED'
+        assert canceled_order.status == OrderStatus.CANCELLED
 
     def test_get_positions(self, paper_broker):
         """Test getting open positions."""
@@ -96,7 +96,7 @@ class TestPaperTradingBroker:
         positions = paper_broker.get_positions()
 
         assert len(positions) > 0
-        assert positions[0]['symbol'] == "EUR_USD"
+        assert positions[0].symbol == "EUR_USD"
 
     def test_close_position(self, paper_broker):
         """Test closing a position."""
@@ -109,10 +109,8 @@ class TestPaperTradingBroker:
             price=1.1000
         )
 
-        position_id = f"EUR_USD_BUY"
-
-        # Close it
-        result = paper_broker.close_position(position_id, price=1.1010)
+        # Close it (using symbol, not position_id)
+        result = paper_broker.close_position("EUR_USD")
 
         assert result == True
 
