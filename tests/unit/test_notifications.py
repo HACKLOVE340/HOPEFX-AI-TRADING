@@ -63,8 +63,9 @@ class TestNotificationManager:
         }
         manager = NotificationManager(config)
         
-        mock_urlopen.return_value.__enter__ = Mock()
-        mock_urlopen.return_value.__exit__ = Mock()
+        # Setup mock to return a MagicMock that can be used as a context manager
+        mock_response = MagicMock()
+        mock_urlopen.return_value = mock_response
         
         manager.send(
             message="Test Discord message",
@@ -73,8 +74,13 @@ class TestNotificationManager:
             metadata={'trade': 'EUR_USD', 'action': 'BUY'}
         )
         
-        # Verify urlopen was called
+        # Verify urlopen was called with correct arguments
         assert mock_urlopen.called
+        call_args = mock_urlopen.call_args
+        assert call_args is not None
+        # Check that the request was made to the webhook URL
+        request = call_args[0][0]
+        assert request.full_url == 'https://discord.com/api/webhooks/test'
 
     def test_telegram_notification_without_config(self):
         """Test Telegram notification without bot token"""
