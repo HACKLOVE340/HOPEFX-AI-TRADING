@@ -73,8 +73,8 @@ def risk_manager(test_config):
     risk_config = RiskConfig(
         max_position_size=10000,
         max_open_positions=5,
-        max_daily_loss=1000,
-        max_drawdown=0.10
+        max_daily_loss=10.0,  # 10% as percentage
+        max_drawdown=10.0  # 10% as percentage
     )
     return RiskManager(risk_config, initial_balance=100000)
 
