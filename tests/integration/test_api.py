@@ -75,10 +75,9 @@ class TestTradingEndpoints:
     def test_calculate_position_size(self, client):
         """Test position size calculation."""
         request_data = {
-            "symbol": "EUR_USD",
-            "price": 1.1000,
-            "method": "fixed",
-            "amount": 10000
+            "entry_price": 1.1000,
+            "stop_loss_price": 1.0950,
+            "confidence": 0.8
         }
 
         response = client.post("/api/trading/position-size", json=request_data)
