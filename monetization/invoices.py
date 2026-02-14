@@ -301,15 +301,152 @@ class InvoiceGenerator:
         }
 
     def generate_pdf(self, invoice_id: str) -> Optional[bytes]:
-        """Generate PDF for invoice (placeholder)"""
+        """
+        Generate PDF for invoice.
+        
+        Returns:
+            PDF bytes or None if invoice not found
+        """
         invoice = self.get_invoice(invoice_id)
         if not invoice:
             return None
 
-        # TODO: Implement PDF generation using reportlab or similar
-        # For now, return placeholder
-        logger.info(f"PDF generation requested for invoice {invoice.invoice_number}")
-        return b"PDF placeholder"
+        try:
+            # Try to import reportlab if available
+            try:
+                from reportlab.lib.pagesizes import letter
+                from reportlab.lib.units import inch
+                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib import colors
+                from io import BytesIO
+                
+                # Create PDF buffer
+                buffer = BytesIO()
+                doc = SimpleDocTemplate(buffer, pagesize=letter)
+                
+                # Container for elements
+                elements = []
+                styles = getSampleStyleSheet()
+                
+                # Custom title style
+                title_style = ParagraphStyle(
+                    'CustomTitle',
+                    parent=styles['Heading1'],
+                    fontSize=24,
+                    textColor=colors.HexColor('#2C3E50'),
+                    spaceAfter=30,
+                    alignment=1  # Center
+                )
+                
+                # Add title
+                elements.append(Paragraph("INVOICE", title_style))
+                elements.append(Spacer(1, 0.2*inch))
+                
+                # Invoice header info
+                header_data = [
+                    ['Invoice Number:', invoice.invoice_number],
+                    ['Invoice ID:', invoice.invoice_id],
+                    ['Date:', invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')],
+                    ['Status:', invoice.status.value.upper()],
+                ]
+                
+                if invoice.paid_at:
+                    header_data.append(['Paid At:', invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')])
+                
+                header_table = Table(header_data, colWidths=[2*inch, 4*inch])
+                header_table.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                    ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                elements.append(header_table)
+                elements.append(Spacer(1, 0.3*inch))
+                
+                # Invoice details
+                details_data = [
+                    ['Description', 'Amount'],
+                    [f'{invoice.tier.value.upper()} Subscription', f'${invoice.amount:.2f}'],
+                ]
+                
+                if invoice.access_code:
+                    details_data.append(['Access Code', invoice.access_code])
+                
+                details_table = Table(details_data, colWidths=[4*inch, 2*inch])
+                details_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 11),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('TOPPADDING', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+                ]))
+                elements.append(details_table)
+                elements.append(Spacer(1, 0.3*inch))
+                
+                # Total
+                total_data = [
+                    ['TOTAL:', f'${invoice.amount:.2f} {invoice.currency}'],
+                ]
+                total_table = Table(total_data, colWidths=[4*inch, 2*inch])
+                total_table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 14),
+                    ('TOPPADDING', (0, 0), (-1, -1), 12),
+                ]))
+                elements.append(total_table)
+                
+                # Footer
+                elements.append(Spacer(1, 0.5*inch))
+                footer_text = "Thank you for your business!"
+                elements.append(Paragraph(footer_text, styles['Normal']))
+                
+                # Build PDF
+                doc.build(elements)
+                pdf_bytes = buffer.getvalue()
+                buffer.close()
+                
+                logger.info(f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)")
+                return pdf_bytes
+                
+            except ImportError:
+                # Fallback: Generate simple text-based PDF without reportlab
+                logger.warning("reportlab not available, generating simple text PDF")
+                
+                pdf_content = f"""
+INVOICE
+
+Invoice Number: {invoice.invoice_number}
+Invoice ID: {invoice.invoice_id}
+Date: {invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')}
+Status: {invoice.status.value.upper()}
+"""
+                if invoice.paid_at:
+                    pdf_content += f"Paid At: {invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                
+                pdf_content += f"""
+Description: {invoice.tier.value.upper()} Subscription
+Amount: ${invoice.amount:.2f} {invoice.currency}
+"""
+                if invoice.access_code:
+                    pdf_content += f"Access Code: {invoice.access_code}\n"
+                
+                pdf_content += f"\nTOTAL: ${invoice.amount:.2f} {invoice.currency}\n"
+                pdf_content += "\nThank you for your business!"
+                
+                return pdf_content.encode('utf-8')
+                
+        except Exception as e:
+            logger.error(f"Error generating PDF for invoice {invoice.invoice_number}: {e}")
+            return None
 
 
 # Global invoice generator instance
