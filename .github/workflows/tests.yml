@@ -15,7 +15,7 @@ jobs:
     
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.11", "3.12"]
     
     services:
       redis:
@@ -52,7 +52,7 @@ jobs:
     
     - name: Run tests
       env:
-        CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaa' }}
+        CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
         CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
