@@ -255,7 +255,7 @@ class NotificationManager:
                     text += "\n\n📊 *Details:*"
                     for key, value in metadata.items():
                         if value is not None:
-                            text += f"\n• {key.replace('_', ' ').title()}: '{{value}}'"
+                            text += f"\n• {key.replace('_', ' ').title()}: `{value}`"
                 
                 # Send via Telegram Bot API
                 url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -372,7 +372,7 @@ class NotificationManager:
                         html_content += f'<div class="metadata-item"><strong>{key.replace("_", " ").title()}:</strong> {value}</div>'
                 html_content += '</div>'
             
-            html_content += f"""
+            html_content += """
                 </div>
               </body>
             </html>
