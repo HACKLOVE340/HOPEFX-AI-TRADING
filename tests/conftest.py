@@ -85,7 +85,9 @@ def paper_broker(test_config):
     broker_config = {
         'initial_balance': 100000
     }
-    return PaperTradingBroker(config=broker_config)
+    broker = PaperTradingBroker(config=broker_config)
+    broker.connect()  # Connect the broker so it's ready for testing
+    return broker
 
 
 @pytest.fixture
