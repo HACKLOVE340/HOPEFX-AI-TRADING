@@ -190,7 +190,7 @@ class NotificationManager:
                 response.raise_for_status()
                 logger.debug(f"Discord notification sent successfully")
                 
-            except ImportError:
+            except (ImportError, AttributeError):
                 # Fallback without requests library
                 import urllib.request
                 import json
@@ -269,7 +269,7 @@ class NotificationManager:
                 response.raise_for_status()
                 logger.debug("Telegram notification sent successfully")
                 
-            except ImportError:
+            except (ImportError, AttributeError):
                 # Fallback without requests library
                 import urllib.request
                 import urllib.parse
