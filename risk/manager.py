@@ -68,6 +68,7 @@ class RiskManager:
         self.current_balance = initial_balance
         self.open_positions = []
         self.daily_pnl = 0.0
+        self.daily_trades = 0  # Track daily trades
         self.total_pnl = 0.0
         self.peak_balance = initial_balance
         # Aliases for backward compatibility
@@ -245,6 +246,7 @@ class RiskManager:
     def reset_daily_pnl(self):
         """Reset daily P&L counter"""
         self.daily_pnl = 0.0
+        self.daily_trades = 0  # Also reset daily trades
         logger.info("Daily P&L reset")
 
     def reset_daily_stats(self):
