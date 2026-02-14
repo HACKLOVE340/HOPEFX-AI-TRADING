@@ -99,8 +99,8 @@ class TestNotificationManager:
             channels=[NotificationChannel.TELEGRAM]
         )
 
-    @patch('urllib.request.urlopen')
-    def test_telegram_notification_with_config(self, mock_urlopen):
+    @patch('requests.post')
+    def test_telegram_notification_with_config(self, mock_post):
         """Test Telegram notification with bot token and chat ID"""
         config = {
             'telegram_enabled': True,
@@ -109,8 +109,10 @@ class TestNotificationManager:
         }
         manager = NotificationManager(config)
         
-        mock_urlopen.return_value.__enter__ = Mock()
-        mock_urlopen.return_value.__exit__ = Mock()
+        # Setup mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
         
         manager.send(
             message="Test Telegram message",
@@ -119,8 +121,22 @@ class TestNotificationManager:
             metadata={'symbol': 'BTC/USD', 'price': 50000}
         )
         
-        # Verify urlopen was called
-        assert mock_urlopen.called
+        # Verify requests.post was called
+        assert mock_post.called
+        
+        # Verify the call was made to Telegram API
+        call_args = mock_post.call_args
+        assert call_args is not None
+        url = call_args[0][0]
+        assert 'api.telegram.org' in url
+        assert 'test_bot_token' in url
+        
+        # Verify payload structure
+        payload = call_args[1]['json']
+        assert 'chat_id' in payload
+        assert payload['chat_id'] == 'test_chat_id'
+        assert 'text' in payload
+        assert 'Test Telegram message' in payload['text']
 
     def test_email_notification_without_config(self):
         """Test email notification without SMTP credentials"""
