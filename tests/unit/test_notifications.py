@@ -54,7 +54,7 @@ class TestNotificationManager:
             channels=[NotificationChannel.DISCORD]
         )
 
-    @patch('requests.post')
+    @patch('notifications.manager.requests.post')
     def test_discord_notification_with_config(self, mock_post):
         """Test Discord notification with webhook URL"""
         config = {
@@ -99,7 +99,7 @@ class TestNotificationManager:
             channels=[NotificationChannel.TELEGRAM]
         )
 
-    @patch('requests.post')
+    @patch('notifications.manager.requests.post')
     def test_telegram_notification_with_config(self, mock_post):
         """Test Telegram notification with bot token and chat ID"""
         config = {
