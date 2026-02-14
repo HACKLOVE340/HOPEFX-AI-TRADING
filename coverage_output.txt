@@ -1,0 +1,257 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-7.4.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/runner/work/HOPEFX-AI-TRADING/HOPEFX-AI-TRADING
+configfile: pytest.ini
+plugins: anyio-4.12.1, cov-4.1.0, dash-2.14.1, asyncio-0.23.2
+asyncio: mode=Mode.STRICT
+collecting ... collected 83 items
+
+tests/integration/test_api.py::TestHealthEndpoints::test_health_endpoint PASSED [  1%]
+tests/integration/test_api.py::TestHealthEndpoints::test_status_endpoint PASSED [  2%]
+tests/integration/test_api.py::TestTradingEndpoints::test_list_strategies PASSED [  3%]
+tests/integration/test_api.py::TestTradingEndpoints::test_create_strategy PASSED [  4%]
+tests/integration/test_api.py::TestTradingEndpoints::test_get_risk_metrics PASSED [  6%]
+tests/integration/test_api.py::TestTradingEndpoints::test_calculate_position_size PASSED [  7%]
+tests/integration/test_api.py::TestAdminEndpoints::test_admin_dashboard PASSED [  8%]
+tests/integration/test_api.py::TestAdminEndpoints::test_admin_strategies_page PASSED [  9%]
+tests/integration/test_api.py::TestAdminEndpoints::test_admin_settings_page PASSED [ 10%]
+tests/integration/test_api.py::TestAdminEndpoints::test_admin_monitoring_page PASSED [ 12%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_broker_initialization PASSED [ 13%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_place_market_order_buy PASSED [ 14%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_place_market_order_sell PASSED [ 15%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_place_limit_order PASSED [ 16%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_cancel_order PASSED [ 18%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_get_positions PASSED [ 19%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_close_position PASSED [ 20%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_calculate_pnl_profit PASSED [ 21%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_calculate_pnl_loss PASSED [ 22%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_get_account_info PASSED [ 24%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_insufficient_balance PASSED [ 25%]
+tests/unit/test_brokers.py::TestPaperTradingBroker::test_get_market_price PASSED [ 26%]
+tests/unit/test_invoices.py::TestInvoice::test_invoice_creation PASSED   [ 27%]
+tests/unit/test_invoices.py::TestInvoice::test_mark_invoice_paid PASSED  [ 28%]
+tests/unit/test_invoices.py::TestInvoice::test_mark_invoice_cancelled PASSED [ 30%]
+tests/unit/test_invoices.py::TestInvoice::test_mark_invoice_refunded PASSED [ 31%]
+tests/unit/test_invoices.py::TestInvoice::test_invoice_overdue PASSED    [ 32%]
+tests/unit/test_invoices.py::TestInvoice::test_invoice_not_overdue PASSED [ 33%]
+tests/unit/test_invoices.py::TestInvoice::test_paid_invoice_not_overdue PASSED [ 34%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_create_invoice PASSED [ 36%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_get_invoice PASSED [ 37%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_get_nonexistent_invoice PASSED [ 38%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_get_user_invoices PASSED [ 39%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_mark_invoice_paid PASSED [ 40%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_cancel_invoice PASSED [ 42%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_refund_invoice PASSED [ 43%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_get_invoice_stats PASSED [ 44%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_generate_pdf PASSED [ 45%]
+tests/unit/test_invoices.py::TestInvoiceGenerator::test_generate_pdf_nonexistent_invoice PASSED [ 46%]
+tests/unit/test_notifications.py::TestNotificationManager::test_manager_initialization PASSED [ 48%]
+tests/unit/test_notifications.py::TestNotificationManager::test_console_notification PASSED [ 49%]
+tests/unit/test_notifications.py::TestNotificationManager::test_discord_notification_without_config PASSED [ 50%]
+tests/unit/test_notifications.py::TestNotificationManager::test_discord_notification_with_config FAILED [ 51%]
+tests/unit/test_notifications.py::TestNotificationManager::test_telegram_notification_without_config PASSED [ 53%]
+tests/unit/test_notifications.py::TestNotificationManager::test_telegram_notification_with_config FAILED [ 54%]
+tests/unit/test_notifications.py::TestNotificationManager::test_email_notification_without_config PASSED [ 55%]
+tests/unit/test_notifications.py::TestNotificationManager::test_email_notification_with_config PASSED [ 56%]
+tests/unit/test_notifications.py::TestNotificationManager::test_trade_notification PASSED [ 57%]
+tests/unit/test_notifications.py::TestNotificationManager::test_signal_notification PASSED [ 59%]
+tests/unit/test_notifications.py::TestNotificationManager::test_notification_levels PASSED [ 60%]
+tests/unit/test_notifications.py::TestNotificationManager::test_notification_with_metadata PASSED [ 61%]
+tests/unit/test_notifications.py::TestNotificationManager::test_multiple_channels PASSED [ 62%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_risk_manager_initialization PASSED [ 63%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_calculate_position_size_fixed PASSED [ 65%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_calculate_position_size_percent PASSED [ 66%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_calculate_position_size_risk_based PASSED [ 67%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_validate_trade_within_limits PASSED [ 68%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_validate_trade_exceeds_position_limit PASSED [ 69%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_validate_trade_exceeds_size_limit PASSED [ 71%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_check_daily_loss_limit PASSED [ 72%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_check_drawdown_limit PASSED [ 73%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_calculate_stop_loss PASSED [ 74%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_calculate_take_profit PASSED [ 75%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_update_daily_pnl PASSED [ 77%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_reset_daily_stats PASSED [ 78%]
+tests/unit/test_risk_manager.py::TestRiskManager::test_get_risk_metrics PASSED [ 79%]
+tests/unit/test_strategies.py::TestBaseStrategy::test_strategy_initialization PASSED [ 80%]
+tests/unit/test_strategies.py::TestBaseStrategy::test_strategy_start_stop PASSED [ 81%]
+tests/unit/test_strategies.py::TestBaseStrategy::test_strategy_pause_resume PASSED [ 83%]
+tests/unit/test_strategies.py::TestBaseStrategy::test_update_performance PASSED [ 84%]
+tests/unit/test_strategies.py::TestBaseStrategy::test_performance_win_rate_calculation PASSED [ 85%]
+tests/unit/test_strategies.py::TestMovingAverageCrossover::test_ma_crossover_initialization PASSED [ 86%]
+tests/unit/test_strategies.py::TestMovingAverageCrossover::test_ma_crossover_bullish_signal PASSED [ 87%]
+tests/unit/test_strategies.py::TestMovingAverageCrossover::test_ma_crossover_bearish_signal PASSED [ 89%]
+tests/unit/test_strategies.py::TestMovingAverageCrossover::test_ma_crossover_insufficient_data PASSED [ 90%]
+tests/unit/test_strategies.py::TestStrategyManager::test_manager_initialization PASSED [ 91%]
+tests/unit/test_strategies.py::TestStrategyManager::test_register_strategy PASSED [ 92%]
+tests/unit/test_strategies.py::TestStrategyManager::test_unregister_strategy PASSED [ 93%]
+tests/unit/test_strategies.py::TestStrategyManager::test_start_strategy PASSED [ 95%]
+tests/unit/test_strategies.py::TestStrategyManager::test_stop_strategy PASSED [ 96%]
+tests/unit/test_strategies.py::TestStrategyManager::test_get_strategy_performance PASSED [ 97%]
+tests/unit/test_strategies.py::TestStrategyManager::test_start_all_strategies PASSED [ 98%]
+tests/unit/test_strategies.py::TestStrategyManager::test_stop_all_strategies PASSED [100%]
+
+=================================== FAILURES ===================================
+________ TestNotificationManager.test_discord_notification_with_config _________
+/usr/lib/python3.12/unittest/mock.py:1387: in patched
+    with self.decoration_helper(patched,
+/usr/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+/usr/lib/python3.12/unittest/mock.py:1369: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+/usr/lib/python3.12/contextlib.py:526: in enter_context
+    result = _enter(cm)
+/usr/lib/python3.12/unittest/mock.py:1442: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.12/pkgutil.py:528: in resolve_name
+    result = getattr(result, p)
+E   AttributeError: module 'notifications.manager' has no attribute 'requests'
+________ TestNotificationManager.test_telegram_notification_with_config ________
+/usr/lib/python3.12/unittest/mock.py:1387: in patched
+    with self.decoration_helper(patched,
+/usr/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+/usr/lib/python3.12/unittest/mock.py:1369: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+/usr/lib/python3.12/contextlib.py:526: in enter_context
+    result = _enter(cm)
+/usr/lib/python3.12/unittest/mock.py:1442: in __enter__
+    self.target = self.getter()
+/usr/lib/python3.12/pkgutil.py:528: in resolve_name
+    result = getattr(result, p)
+E   AttributeError: module 'notifications.manager' has no attribute 'requests'
+
+---------- coverage: platform linux, python 3.12.3-final-0 -----------
+Name                                   Stmts   Miss Branch BrPart   Cover   Missing
+-----------------------------------------------------------------------------------
+__init__.py                               11     11      0      0   0.00%   7-28
+analysis/__init__.py                       4      4      0      0   0.00%   10-14
+analysis/patterns/__init__.py              4      4      0      0   0.00%   7-11
+analytics/__init__.py                      9      9      0      0   0.00%   7-17
+analytics/options.py                      15     15      2      0   0.00%   5-55
+analytics/portfolio.py                    15     15      2      0   0.00%   5-46
+analytics/risk.py                         21     21      2      0   0.00%   5-50
+analytics/simulations.py                  22     22      8      0   0.00%   5-59
+api/__init__.py                            2      0      0      0 100.00%
+api/admin.py                              25      1      0      0  96.00%   72
+api/trading.py                           114     38      6      1  64.17%   101, 115-116, 130-131, 142-151, 159-163, 174-178, 189-193, 221-222, 236-237, 250-254, 265-273
+app.py                                   147     34     12      4  74.84%   101-111, 157, 175, 185-187, 196->200, 201-202, 223-228, 261-265, 286, 300-301, 315-323
+backtesting/__init__.py                   12     12      0      0   0.00%   7-19
+backtesting/data_handler.py               81     81     28      0   0.00%   7-164
+backtesting/data_sources.py               77     77     14      0   0.00%   7-176
+backtesting/engine.py                    102    102     28      0   0.00%   7-240
+backtesting/events.py                     38     38      0      0   0.00%   7-98
+backtesting/execution.py                  40     40     18      0   0.00%   7-104
+backtesting/metrics.py                   132    132     38      0   0.00%   7-226
+backtesting/optimizer.py                  36     36      4      0   0.00%   7-93
+backtesting/plots.py                      49     49     10      0   0.00%   7-84
+backtesting/portfolio.py                  80     80     28      0   0.00%   7-177
+backtesting/reports.py                    43     43      0      0   0.00%   7-73
+backtesting/walk_forward.py               16     16      0      0   0.00%   7-67
+brokers/__init__.py                       13      0      0      0 100.00%
+brokers/alpaca.py                        182    158     42      0  10.71%   52-65, 74-93, 102-110, 139-197, 209-224, 236-268, 277-305, 318-351, 360-383, 402-435, 447-473, 477-483, 487-494, 498-514
+brokers/base.py                           88     10      0      0  88.64%   114, 124, 152, 165, 178, 188, 201, 211, 231, 240
+brokers/binance.py                       227    200     48      0   9.82%   54-67, 76-106, 115-123, 148-210, 223-253, 266-313, 325-367, 380-431, 440-485, 504-538, 542-548, 552-558, 562-570, 574-583, 588
+brokers/factory.py                        40     18      4      0  50.00%   94-108, 119-123, 133
+brokers/interactive_brokers.py           178    158     60      0   8.40%   15-17, 64-79, 83-105, 109-116, 142-200, 204-220, 224-234, 238-272, 280-307, 311-345, 354-388, 392
+brokers/mt5.py                           209    186     80      0   7.96%   19, 79-99, 108-146, 150-157, 185-267, 271-285, 289-301, 305-339, 347-392, 396-415, 434-473, 477-487, 491
+brokers/oanda.py                         186    160     46      0  11.21%   54-72, 81-101, 110-118, 145-225, 237-252, 264-296, 305-328, 341-378, 387-412, 431-463, 467-473, 477-483, 487-493, 497-500
+brokers/paper_trading.py                 104     23     22      7  74.60%   65-67, 86, 142-143, 159, 170-171, 180, 225-241, 263-264, 278-288
+brokers/prop_firms/__init__.py             5      0      0      0 100.00%
+brokers/prop_firms/ftmo.py                28     19      4      0  28.12%   57-70, 80-91, 100-121
+brokers/prop_firms/myforexfunds.py        16      8      2      0  44.44%   46-54, 58-68
+brokers/prop_firms/the5ers.py             16      8      2      0  44.44%   46-54, 58-71
+brokers/prop_firms/topstep.py             16      8      2      0  44.44%   49-57, 66-76
+cache/__init__.py                          2      0      0      0 100.00%
+cache/market_data_cache.py               335    234     38      0  28.15%   59, 64, 80, 85, 100-103, 107, 180-181, 217-218, 240, 244, 266-290, 307-325, 348-380, 400-414, 426-444, 465-483, 495-513, 533-542, 559-562, 576-585, 597-606, 618-645, 654-696, 706-745, 749-756, 760-762, 772-777, 781-785, 789, 793
+charting/__init__.py                      11     11      0      0   0.00%   7-19
+charting/chart_engine.py                  30     30      0      0   0.00%   5-65
+charting/drawing_tools.py                 32     32      2      0   0.00%   5-80
+charting/indicators.py                    54     54     16      0   0.00%   5-95
+charting/templates.py                     21     21      0      0   0.00%   5-44
+charting/timeframes.py                    24     24      0      0   0.00%   5-50
+cli.py                                   164    164     32      0   0.00%   8-283
+config/__init__.py                         2      0      0      0 100.00%
+config/config_manager.py                 279     94     58     14  62.61%   50, 68-70, 101-106, 118-124, 140-152, 165-181, 202, 224-235, 240-241, 244-246, 268-269, 272-273, 276-277, 296-297, 336-337, 386->389, 392-394, 412-413, 475-490, 532, 538-542, 601-603, 614-627, 631-633, 638, 644-646, 650
+database/__init__.py                       2      0      0      0 100.00%
+database/models.py                       512      0      0      0 100.00%
+fix_code_quality.py                       36     36      4      0   0.00%   6-65
+main.py                                  235    235     22      0   0.00%   9-460
+ml/__init__.py                             3      3      0      0   0.00%   19-22
+ml/evaluation/__init__.py                  0      0      0      0 100.00%
+ml/features/__init__.py                    2      2      0      0   0.00%   8-10
+ml/features/technical.py                 174    174     40      0   0.00%   8-342
+ml/models/__init__.py                      4      4      0      0   0.00%   10-14
+ml/models/base.py                         75     75     10      0   0.00%   7-192
+ml/models/lstm.py                        114    114     22      0   0.00%   8-302
+ml/models/random_forest.py               122    122     28      0   0.00%   8-385
+ml/training/__init__.py                    0      0      0      0 100.00%
+mobile/__init__.py                        11     11      0      0   0.00%   7-19
+mobile/analytics.py                       10     10      0      0   0.00%   5-32
+mobile/api.py                              9      9      0      0   0.00%   5-40
+mobile/auth.py                            15     15      4      0   0.00%   5-37
+mobile/push_notifications.py              12     12      0      0   0.00%   5-46
+mobile/trading.py                          9      9      0      0   0.00%   5-34
+monetization/__init__.py                   9      0      0      0 100.00%
+monetization/access_codes.py             136     98     22      0  24.05%   43-52, 56-63, 67-78, 82-83, 87, 116-117, 121-123, 131-147, 151-168, 172, 181-190, 194-199, 203, 210, 217, 224-235, 244-250, 254-268
+monetization/commission.py               117     84     18      0  24.44%   44-55, 59-61, 65-66, 70-71, 75, 108-139, 143-153, 157, 161-162, 170-176, 180-184, 188-192, 196-216, 234-254, 265-286
+monetization/invoices.py                 196     71     32      6  60.09%   100, 187-212, 220-223, 231-234, 238-241, 245-248, 254, 263, 272, 282, 318-418, 433, 439->442, 447-449
+monetization/license.py                  126     92     54      0  18.89%   41-55, 59-76, 81-99, 103, 110-111, 115, 119-121, 125-127, 131-151, 156-165, 169-184, 201-206, 210-215, 219-228
+monetization/payment_processor.py        134     91     10      0  29.86%   47-59, 63-65, 69-72, 76, 117-154, 158-195, 199-200, 208-210, 217-218, 222-226, 230-240, 252-255, 259-276, 280, 284, 288-295
+monetization/pricing.py                   80     32      4      0  57.14%   59, 168-172, 176, 185-186, 190-191, 195-198, 202-208, 217-228, 232-243
+monetization/subscription.py             150    108     32      0  23.08%   44-53, 57-61, 65, 69-71, 75-80, 84-87, 91-93, 97-102, 106, 138-159, 163, 167-170, 174-187, 195-209, 217-231, 235-240, 244-249, 253-257, 261-274, 289, 293, 297
+news/__init__.py                           7      7      0      0   0.00%   17-69
+news/economic_calendar.py                119    119     34      0   0.00%   13-351
+news/impact_predictor.py                 125    125     40      0   0.00%   13-338
+news/providers.py                        179    179     50      0   0.00%   15-445
+news/sentiment.py                        142    142     30      0   0.00%   12-332
+notifications/__init__.py                  2      0      0      0 100.00%
+notifications/manager.py                 206     81     70      9  58.70%   117->109, 119-120, 130->exit, 147-219, 237-306, 339->346, 342->341, 367->374, 370->369, 395-396, 429, 494-496, 514-518, 538, 542-543
+payments/__init__.py                       8      8      0      0   0.00%   9-78
+payments/compliance.py                   143    143     46      0   0.00%   7-392
+payments/crypto/__init__.py                6      6      0      0   0.00%   7-13
+payments/crypto/address_generator.py      25     25      8      0   0.00%   7-48
+payments/crypto/bitcoin.py               104    104     20      0   0.00%   7-270
+payments/crypto/ethereum.py               48     48      4      0   0.00%   7-101
+payments/crypto/usdt.py                   56     56      6      0   0.00%   7-120
+payments/crypto/wallet_manager.py         34     34      4      0   0.00%   7-67
+payments/fintech/__init__.py               4      4      0      0   0.00%   7-11
+payments/fintech/bank_transfer.py         36     36      4      0   0.00%   7-90
+payments/fintech/flutterwave.py           36     36      2      0   0.00%   7-74
+payments/fintech/paystack.py              39     39      2      0   0.00%   7-82
+payments/payment_gateway.py              139    139     30      0   0.00%   8-362
+payments/security.py                     146    146     52      0   0.00%   7-369
+payments/transaction_manager.py          152    152     36      0   0.00%   8-401
+payments/wallet.py                       132    132     50      0   0.00%   11-416
+risk/__init__.py                           2      0      0      0 100.00%
+risk/manager.py                          156     35     54     12  72.86%   116, 150-155, 186-203, 212-213, 227-241, 296, 302, 317, 351, 358, 382, 389, 403, 432-438
+setup.py                                  10     10      2      0   0.00%   5-23
+social/__init__.py                        11     11      0      0   0.00%   7-19
+social/copy_trading.py                    43     43     12      0   0.00%   7-76
+social/leaderboards.py                    33     33     14      0   0.00%   7-67
+social/marketplace.py                     42     42      8      0   0.00%   7-74
+social/performance.py                     32     32      4      0   0.00%   7-62
+social/profiles.py                        50     50     20      0   0.00%   7-82
+strategies/__init__.py                    14      0      0      0 100.00%
+strategies/base.py                        91     26      8      0  65.66%   48-49, 105, 118, 130-149, 173-174, 183-192, 203-208
+strategies/bollinger_bands.py             80     72     24      0   7.69%   35-38, 53-179
+strategies/breakout.py                    81     71     22      0   9.71%   34-37, 52-59, 72-83, 95-201
+strategies/ema_crossover.py               65     57     24      0   8.99%   35-38, 53-152
+strategies/its_8_os.py                   304    284     96      0   5.00%   48-71, 83-139, 151-206, 214-261, 269-304, 312-348, 356-383, 391-426, 434-483, 491-526, 534-583, 587-626, 636-643
+strategies/ma_crossover.py                68      9     26      4  81.91%   102->106, 136, 143-164, 177
+strategies/macd_strategy.py               82     73     30      0   8.04%   35-39, 55-67, 79-196
+strategies/manager.py                     81     21     24      7  67.62%   48, 69, 75, 121, 136, 141->140, 166-180, 189-200, 215, 232
+strategies/mean_reversion.py              53     45     12      0  12.31%   36-39, 54-134
+strategies/rsi_strategy.py                64     55     20      0  10.71%   36-40, 55-61, 73-162
+strategies/smc_ict.py                    201    183     54      0   7.06%   42-61, 73-118, 130-235, 239-270, 274-297, 304-332, 339-360, 364-392, 396-423, 427-430, 434-437
+strategies/stochastic.py                  78     69     26      0   8.65%   36-41, 56-69, 81-192
+strategies/strategy_brain.py             150    134     54      0   7.84%   45-72, 81-97, 106-109, 121-182, 203-340, 360-377, 384-411, 420-425, 445-469
+-----------------------------------------------------------------------------------
+TOTAL                                   9329   7023   1982     64  21.80%
+Coverage HTML written to dir htmlcov
+Coverage XML written to file coverage.xml
+
+=========================== short test summary info ============================
+FAILED tests/unit/test_notifications.py::TestNotificationManager::test_discord_notification_with_config - AttributeError: module 'notifications.manager' has no attribute 'requests'
+FAILED tests/unit/test_notifications.py::TestNotificationManager::test_telegram_notification_with_config - AttributeError: module 'notifications.manager' has no attribute 'requests'
+================= 2 failed, 81 passed, 115 warnings in 30.47s ==================
