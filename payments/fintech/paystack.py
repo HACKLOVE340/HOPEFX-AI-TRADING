@@ -40,7 +40,8 @@ class PaystackClient:
                 'currency': currency,
                 'fee': float(fee_usd),
                 'authorization_url': f"https://checkout.paystack.com/{reference}",
-                'access_code': hashlib.md5(reference.encode()).hexdigest()[:10],
+                # Use SHA256 instead of MD5 for security, truncate to 10 chars for access code
+                'access_code': hashlib.sha256(reference.encode()).hexdigest()[:10],
                 'status': 'initiated'
             }
 
