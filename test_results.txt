@@ -1,0 +1,4 @@
+ImportError while loading conftest '/home/runner/work/HOPEFX-AI-TRADING/HOPEFX-AI-TRADING/tests/conftest.py'.
+tests/conftest.py:10: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
