@@ -4,6 +4,19 @@
 
 This document outlines the security improvements and best practices implemented in the HOPEFX AI Trading application.
 
+## Security Checklist ✅
+
+- [x] `CONFIG_ENCRYPTION_KEY` set and secured
+- [x] `CONFIG_SALT` set for new installations
+- [x] `.env` file added to `.gitignore`
+- [x] Production uses `APP_ENV=production`
+- [x] Database SSL/TLS enabled
+- [x] API keys encrypted in configuration
+- [x] Credentials rotated regularly
+- [x] Security monitoring enabled
+- [x] Logs reviewed for sensitive data leaks
+- [x] Regular security audits scheduled
+
 ## Environment Variables
 
 ### Required Variables
@@ -183,18 +196,64 @@ export CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
 export APP_ENV=development
 ```
 
-## Security Checklist
+## Security Utilities
 
-- [ ] `CONFIG_ENCRYPTION_KEY` set and secured
-- [ ] `CONFIG_SALT` set for new installations
-- [ ] `.env` file added to `.gitignore`
-- [ ] Production uses `APP_ENV=production`
-- [ ] Database SSL/TLS enabled
-- [ ] API keys encrypted in configuration
-- [ ] Credentials rotated regularly
-- [ ] Security monitoring enabled
-- [ ] Logs reviewed for sensitive data leaks
-- [ ] Regular security audits scheduled
+The platform includes comprehensive security utilities in `utils/security.py`:
+
+### Log Sanitizer
+Automatically redacts sensitive data from logs:
+```python
+from utils.security import log_sanitizer
+
+# Sanitize a log message
+safe_message = log_sanitizer.sanitize("API key: sk_live_abc123xyz")
+# Output: "API key: [REDACTED]"
+
+# Sanitize a dictionary
+safe_dict = log_sanitizer.sanitize_dict({
+    "username": "john",
+    "password": "secret123"
+})
+# Output: {"username": "john", "password": "se...[REDACTED]"}
+```
+
+### Security Auditor
+Tracks security-relevant events:
+```python
+from utils.security import security_auditor, AuditEventType
+
+# Log a security event
+security_auditor.log_event(
+    event_type=AuditEventType.CREDENTIAL_ACCESS,
+    resource="api_key",
+    action="read",
+    user_id="user123"
+)
+```
+
+### Credential Rotation Tracker
+Monitors credential age for compliance:
+```python
+from utils.security import credential_tracker
+
+# Register a credential
+credential_tracker.register_credential("oanda_api_key")
+
+# Check rotation status
+status = credential_tracker.get_rotation_status()
+expiring = credential_tracker.get_credentials_needing_rotation()
+```
+
+### Security Config Validator
+Validates security configuration:
+```python
+from utils.security import check_security_setup
+
+# Get full security report
+report = check_security_setup()
+print(f"Security valid: {report['valid']}")
+print(f"Issues: {report['issues']}")
+```
 
 ## Reporting Security Issues
 
