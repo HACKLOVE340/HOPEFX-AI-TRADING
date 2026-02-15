@@ -9,9 +9,13 @@ Components:
 - Sentiment Analysis: TextBlob, VADER, custom financial sentiment
 - Impact Prediction: News-to-price correlation, event scoring
 - Economic Calendar: Major economic events tracking
+- Geopolitical Risk: World Monitor integration for conflict/sanctions/risk intelligence
+  - Direct API access to World Monitor endpoints
+  - Self-hosting support for custom deployments
+  - Customizable data layers for trading strategies
 
 Author: HOPEFX Development Team
-Version: 1.0.0
+Version: 1.2.0
 """
 
 from .providers import (
@@ -40,6 +44,31 @@ from .economic_calendar import (
     EventImportance
 )
 
+from .geopolitical_risk import (
+    # Core Classes
+    GeopoliticalRiskProvider,
+    GeopoliticalEvent,
+    GeopoliticalRiskAssessment,
+    GeopoliticalEventType,
+    RiskSeverity,
+    GoldImpact,
+    CountryRisk,
+    
+    # World Monitor Integration
+    WorldMonitorIntegration,
+    WorldMonitorAPIClient,
+    WorldMonitorSelfHostConfig,
+    CustomDataLayerConfig,
+    
+    # Convenience Functions
+    get_geopolitical_provider,
+    get_gold_geopolitical_signal,
+    get_api_client,
+    get_gold_signal_from_api,
+    create_self_hosted_setup,
+    get_custom_layer_config,
+)
+
 __all__ = [
     # Providers
     'NewsProvider',
@@ -62,8 +91,27 @@ __all__ = [
     'EconomicCalendar',
     'EconomicEvent',
     'EventImportance',
+
+    # Geopolitical Risk (World Monitor Integration)
+    'GeopoliticalRiskProvider',
+    'GeopoliticalEvent',
+    'GeopoliticalRiskAssessment',
+    'GeopoliticalEventType',
+    'RiskSeverity',
+    'GoldImpact',
+    'CountryRisk',
+    'WorldMonitorIntegration',
+    'WorldMonitorAPIClient',
+    'WorldMonitorSelfHostConfig',
+    'CustomDataLayerConfig',
+    'get_geopolitical_provider',
+    'get_gold_geopolitical_signal',
+    'get_api_client',
+    'get_gold_signal_from_api',
+    'create_self_hosted_setup',
+    'get_custom_layer_config',
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = '1.2.0'
 __author__ = 'HOPEFX Development Team'
