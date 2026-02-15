@@ -175,12 +175,12 @@ class MarketplaceStrategy:
         """Add a rating (1-5 scale)"""
         if self.avg_rating is None:
             self.avg_rating = rating
+            self.total_ratings = 1
         else:
             total = self.avg_rating * self.total_ratings + rating
             self.total_ratings += 1
             self.avg_rating = total / self.total_ratings
         
-        self.total_ratings += 1
         self.updated_at = datetime.utcnow()
 
     def to_dict(self) -> Dict[str, Any]:
