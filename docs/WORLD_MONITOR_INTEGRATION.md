@@ -4,6 +4,162 @@
 
 This document describes the integration of **World Monitor** (https://worldmonitor.app/) geopolitical intelligence into the HOPEFX AI Trading platform, specifically for enhancing XAU/USD (Gold) trading decisions.
 
+## Four Ways to Use World Monitor
+
+### 1. Use the Existing Integration (Built-in)
+
+The simplest approach - use the pre-built integration:
+
+```python
+from news import get_gold_geopolitical_signal
+
+# Get trading signal based on geopolitical events
+signal = get_gold_geopolitical_signal()
+print(f"Direction: {signal['direction']}")  # BUY, SELL, or NEUTRAL
+print(f"Confidence: {signal['confidence']}")
+print(f"Risk Score: {signal['risk_score']}")
+```
+
+### 2. Pull Data Directly from World Monitor API
+
+Connect directly to World Monitor's REST API endpoints:
+
+```python
+from news import WorldMonitorAPIClient, get_api_client
+
+# Initialize API client
+client = get_api_client({
+    'base_url': 'https://worldmonitor.app',
+    'timeout': 30,
+    'enabled_layers': ['conflicts', 'country_intel', 'news', 'outages']
+})
+
+# Get specific data
+conflicts = client.get_conflicts(region='Middle East')
+country_risk = client.get_country_intel(country='RU')
+news = client.get_news_intel(topic='sanctions', hours=24)
+outages = client.get_outages()
+
+# Or get all enabled layers at once
+all_data = client.get_all_layers()
+
+# Calculate gold risk score from live data
+risk_score = client.calculate_gold_risk_score()
+print(f"Global Risk: {risk_score['global_risk_score']}")
+print(f"Gold Outlook: {risk_score['gold_outlook']}")
+```
+
+#### Available API Endpoints
+
+| Endpoint | Description | Method |
+|----------|-------------|--------|
+| `/api/acled` | Armed conflict events | `get_conflicts()` |
+| `/api/country-intel` | Country risk & sanctions | `get_country_intel()` |
+| `/api/firms-fires` | Satellite fire detection | `get_satellite_fires()` |
+| `/api/opensky` | Military flight tracking | `get_military_flights()` |
+| `/api/theater-posture` | Military force posture | `get_military_theater()` |
+| `/api/gdelt-doc` | Global news intelligence | `get_news_intel()` |
+| `/api/cloudflare-outages` | Internet outages | `get_outages()` |
+
+### 3. Self-Host World Monitor
+
+Run your own World Monitor instance for full control:
+
+```python
+from news import create_self_hosted_setup, WorldMonitorSelfHostConfig
+
+# Generate setup script
+setup_script = create_self_hosted_setup()
+with open('setup_worldmonitor.sh', 'w') as f:
+    f.write(setup_script)
+
+# Run: bash setup_worldmonitor.sh
+
+# Generate HOPEFX config for self-hosted instance
+config = WorldMonitorSelfHostConfig.generate_hopefx_config(
+    self_hosted_url='http://localhost:5173'
+)
+
+# Use with API client
+from news import get_api_client
+client = get_api_client(config)
+```
+
+#### Self-Hosting Requirements
+
+- Node.js 18+
+- Git
+- Optional: Redis (Upstash) for caching
+- Optional: API keys for enhanced data
+
+#### Docker Deployment
+
+```yaml
+version: '3.8'
+services:
+  worldmonitor:
+    image: node:18-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - NASA_FIRMS_API_KEY=${NASA_FIRMS_API_KEY:-}
+    volumes:
+      - ./worldmonitor:/app
+    command: sh -c "npm install && npm run dev"
+```
+
+### 4. Customize Data Layers
+
+Configure exactly which data layers to monitor and their weights:
+
+```python
+from news import get_custom_layer_config, CustomDataLayerConfig
+
+# Get gold-optimized configuration
+config = get_custom_layer_config(gold_optimized=True)
+print(f"Enabled: {config.get_enabled_layers()}")
+print(f"Weights: {config.get_layer_weights()}")
+
+# Or create custom configuration
+custom = CustomDataLayerConfig({
+    'conflicts': {'enabled': True, 'weight': 1.0},
+    'sanctions': {'enabled': True, 'weight': 0.9},
+    'military': {'enabled': True, 'weight': 0.8},
+    'nuclear': {'enabled': True, 'weight': 0.8},
+    'hotspots': {'enabled': True, 'weight': 0.7},
+    'pipelines': {'enabled': True, 'weight': 0.6},
+    'outages': {'enabled': True, 'weight': 0.5},
+    'weather': {'enabled': False, 'weight': 0.3},  # Disabled
+    'protests': {'enabled': False, 'weight': 0.4},  # Disabled
+})
+
+# Enable/disable layers dynamically
+custom.enable_layer('weather', weight=0.4)
+custom.disable_layer('protests')
+custom.set_weight('conflicts', 1.0)
+custom.set_alert_threshold('conflicts', 5)
+
+# Convert to provider config
+provider_config = custom.to_provider_config()
+```
+
+#### Layer Weight Reference
+
+| Layer | Default Weight | Gold Correlation |
+|-------|---------------|------------------|
+| conflicts | 1.0 | Strong Positive |
+| sanctions | 0.9 | Positive |
+| military | 0.8 | Strong Positive |
+| nuclear | 0.8 | Strong Positive |
+| hotspots | 0.7 | Positive |
+| pipelines | 0.6 | Positive |
+| outages | 0.5 | Moderate Positive |
+| natural | 0.5 | Moderate Positive |
+| weather | 0.3 | Weak Positive |
+| protests | 0.4 | Moderate Positive |
+
 ## What is World Monitor?
 
 World Monitor is a **real-time global intelligence dashboard** that provides:
