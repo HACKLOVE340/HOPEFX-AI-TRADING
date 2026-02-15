@@ -17,7 +17,7 @@ from cache.market_data_cache import (
 
 
 class TestTimeframe:
-    """Tests for Timeframe enum."""
+    """Tests for Timeframe Enum."""
     
     def test_timeframe_values(self):
         """Test timeframe enum values."""
@@ -93,7 +93,7 @@ class TestOHLCVData:
         assert ohlcv.open_price == 1.0850
     
     def test_ohlcv_roundtrip(self):
-        """Test OHLCV data dict roundtrip."""
+        """Test OHLCV data serialization and deserialization roundtrip."""
         original = OHLCVData(
             timestamp=1704067200,
             open_price=1.0850,
