@@ -1,15 +1,107 @@
 # HOPEFX-AI-TRADING
 
-ADVANCED AI POWER XAUUSD trading framework with machine learning, real time analysis, multi broker integration, and intelligent trade execution.
+<div align="center">
+
+![HOPEFX Logo](https://img.shields.io/badge/HOPEFX-AI%20Trading-26a69a?style=for-the-badge&logo=bitcoin&logoColor=white)
+
+**The Most Advanced Open-Source AI Trading Platform**
+
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/hopefx)
+
+[🚀 Quick Start](#-quick-start) • [📊 Features](#-key-features) • [📚 Docs](#-documentation) • [🎯 Why HOPEFX](#-why-choose-hopefx) • [🤝 Community](#-community)
+
+</div>
+
+---
+
+## 🎯 Why Choose HOPEFX?
+
+| Feature | HOPEFX | TradingView | MetaTrader | QuantConnect |
+|---------|:------:|:-----------:|:----------:|:------------:|
+| **AI/ML Built-in** | ✅ LSTM, XGBoost, RF | ❌ | ❌ | ✅ |
+| **Open Source** | ✅ 100% Free | ❌ | ❌ | ⚡ Partial |
+| **Multi-Broker** | ✅ 7+ Brokers | ⚡ Limited | ⚡ Limited | ✅ |
+| **Prop Firm Ready** | ✅ FTMO, The5ers | ❌ | ⚡ Via EAs | ❌ |
+| **Python Native** | ✅ | ❌ Pine Script | ❌ MQL | ✅ |
+| **Self-Hosted** | ✅ Your Data | ❌ Cloud Only | ✅ | ❌ |
+| **TradingView Charts** | ✅ Plotly + Lightweight | ✅ | ⚡ Basic | ❌ |
+
+### 💡 Key Advantages
+
+- **🧠 Native AI/ML** - LSTM, Random Forest, XGBoost models ready to use
+- **🔒 Self-Hosted Privacy** - Your data stays with you, not on third-party servers  
+- **💰 100% Free** - No subscriptions, no hidden fees, MIT licensed
+- **🏆 Prop Firm Support** - Pass FTMO, MyForexFunds, The5ers challenges
+- **📱 Mobile Ready** - PWA + REST API for trading on the go
+- **🐍 Python Native** - Use the world's most popular ML language
+
+---
+
+## 📊 Key Features
+
+### 🤖 Machine Learning & AI
+- **LSTM Neural Networks** for price prediction
+- **Random Forest** for pattern recognition
+- **XGBoost** for feature importance
+- **Ensemble Methods** for robust signals
+- Automated model training pipeline
+
+### 📈 TradingView-Style Charting
+- **Interactive Plotly Charts** with zoom/pan
+- **30+ Technical Indicators** (Ichimoku, Fibonacci, MACD, RSI, ADX...)
+- **Dark/Light Themes** for comfortable viewing
+- **Drawing Tools** (trendlines, support/resistance)
+- Real-time chart updates
+
+### 🔗 Multi-Broker Integration
+| Broker | Asset Types | Status |
+|--------|-------------|--------|
+| OANDA | Forex | ✅ |
+| MetaTrader 5 | Multi-asset | ✅ |
+| Interactive Brokers | Stocks/Forex/Options | ✅ |
+| Alpaca | Stocks/Crypto | ✅ |
+| Binance | Crypto | ✅ |
+| Paper Trading | All | ✅ |
+
+### 🏆 Prop Firm Integration
+- **FTMO** - Full challenge/verification support
+- **MyForexFunds** - Risk rule compliance
+- **The5ers** - Integrated monitoring
+- **TopStep** - Futures support
+
+### 📱 Mobile & API
+- Progressive Web App (PWA)
+- REST API with Swagger/OpenAPI docs
+- WebSocket real-time streaming
+- Push notifications (Discord, Telegram, Email)
+
+---
 
 ## 📚 Documentation
 
+### Getting Started
 - **[INSTALLATION.md](./INSTALLATION.md)** - Complete installation guide
+- **[docs/FAQ.md](./docs/FAQ.md)** - Frequently asked questions
+- **[docs/API_GUIDE.md](./docs/API_GUIDE.md)** - Developer API guide
+
+### Trading & Strategies
+- **[docs/SAMPLE_STRATEGIES.md](./docs/SAMPLE_STRATEGIES.md)** - Ready-to-use strategies
+- **[docs/ASSET_DIVERSIFICATION.md](./docs/ASSET_DIVERSIFICATION.md)** - Multi-asset trading
+- **[COMPETITIVE_ANALYSIS.md](./COMPETITIVE_ANALYSIS.md)** - Platform comparison
+
+### Development
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contributing guidelines
-- **[SECURITY.md](./SECURITY.md)** - Security configuration and best practices
-- **[DEBUGGING.md](./DEBUGGING.md)** - Debugging guide with solutions
-- **[COMPETITIVE_ANALYSIS.md](./COMPETITIVE_ANALYSIS.md)** - How we compare to MetaTrader, TradingView, QuantConnect & more
-- **[.env.example](./.env.example)** - Environment variable template
+- **[SECURITY.md](./SECURITY.md)** - Security best practices
+- **[DEBUGGING.md](./DEBUGGING.md)** - Troubleshooting guide
+
+### Community & Learning
+- **[docs/COMMUNITY.md](./docs/COMMUNITY.md)** - Join our community
+- **[docs/VIDEO_TUTORIALS.md](./docs/VIDEO_TUTORIALS.md)** - Video learning center
+- **[docs/MOBILE_GUIDE.md](./docs/MOBILE_GUIDE.md)** - Mobile development
+- **[docs/MONETIZATION.md](./docs/MONETIZATION.md)** - Business strategies
 
 ## 🚀 Quick Start
 
@@ -235,39 +327,90 @@ python cache/market_data_cache.py
 
 ## 📝 License
 
-See [LICENSE](./LICENSE) for details.
+MIT License - See [LICENSE](./LICENSE) for details. Use freely for personal or commercial trading.
+
+---
 
 ## 🌍 Community
 
 Join our growing community of traders and developers:
 
-- 💬 **Discord**: [Join HOPEFX Community](https://discord.gg/hopefx) *(Coming Soon)*
-- 📢 **Telegram**: [HOPEFX Announcements](https://t.me/hopefx) *(Coming Soon)*
-- 🐦 **Twitter/X**: [@HOPEFX_Trading](https://twitter.com/HOPEFX_Trading) *(Coming Soon)*
-- 📺 **YouTube**: [HOPEFX Tutorials](https://youtube.com/@hopefx) *(Coming Soon)*
+<div align="center">
 
-## 📚 Learning Resources
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/hopefx)
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20Channel-26a5e4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/hopefx)
+[![Twitter](https://img.shields.io/badge/Twitter-Follow%20Us-1da1f2?style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/HOPEFX_Trading)
+[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-ff0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtube.com/@hopefx)
 
-### Documentation
-- [Installation Guide](./INSTALLATION.md) - Getting started
-- [Competitive Analysis](./COMPETITIVE_ANALYSIS.md) - How we compare to MetaTrader, TradingView, QuantConnect
-- [Security Best Practices](./SECURITY.md) - Secure configuration
+</div>
 
-### Video Tutorials *(Coming Soon)*
-- 🎬 Getting Started with HOPEFX
-- 🎬 Building Your First Trading Strategy
-- 🎬 ML Model Training Tutorial
-- 🎬 Prop Firm Integration Guide
-- 🎬 Backtesting Masterclass
+### Why Join?
+- 💬 Real-time strategy discussions
+- 🎓 Learn from experienced traders
+- 🐛 Get help with technical issues
+- 🚀 Early access to new features
+- 🏆 Monthly trading challenges
+
+---
+
+## 📺 Learning Resources
+
+### Video Tutorials
+See [docs/VIDEO_TUTORIALS.md](./docs/VIDEO_TUTORIALS.md) for the complete video series:
+- 🎬 **Episode 1:** Introduction to HOPEFX
+- 🎬 **Episode 2:** Installation & Setup
+- 🎬 **Episode 3:** Your First Backtest
+- 🎬 **Episode 7:** Building Trading Strategies
+- 🎬 **Episode 11:** Machine Learning Trading
+
+### Sample Strategies
+Get started quickly with [ready-to-use strategies](./docs/SAMPLE_STRATEGIES.md):
+- MA Crossover (Beginner)
+- Bollinger Bands Mean Reversion (Intermediate)
+- SMC/ICT Smart Money (Advanced)
+- LSTM Price Prediction (Expert)
+
+---
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run security and syntax checks
-5. Submit a pull request
+We welcome contributions from the community!
 
-## 📧 Support
+1. 🍴 Fork the repository
+2. 🌿 Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. 💻 Make your changes
+4. ✅ Run tests and linting
+5. 📤 Submit a pull request
 
-For security issues, please see [SECURITY.md](./SECURITY.md) for reporting guidelines.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## ⭐ Show Your Support
+
+If HOPEFX helps your trading, please consider:
+- ⭐ **Star this repository** to help others discover it
+- 🐦 **Share on social media** with #HOPEFX
+- 💬 **Join our community** on Discord
+- 🤝 **Contribute** code, docs, or ideas
+
+---
+
+## 📧 Support & Contact
+
+| Type | Contact |
+|------|---------|
+| **General Questions** | [Discord](https://discord.gg/hopefx) or [GitHub Discussions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions) |
+| **Bug Reports** | [GitHub Issues](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues) |
+| **Security Issues** | See [SECURITY.md](./SECURITY.md) |
+| **Partnerships** | partners@hopefx.com |
+
+---
+
+<div align="center">
+
+**Built with ❤️ by the HOPEFX Community**
+
+[🚀 Get Started](./INSTALLATION.md) • [📊 Features](#-key-features) • [💬 Discord](https://discord.gg/hopefx) • [⭐ Star Us](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
+
+</div>
