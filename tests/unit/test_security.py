@@ -10,7 +10,7 @@ Tests for all security modules including:
 
 import pytest
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from utils.security import (
@@ -230,7 +230,7 @@ class TestCredentialRotationTracker:
         tracker = CredentialRotationTracker(rotation_days=90)
         
         # Register with past date
-        past_date = datetime.utcnow() - timedelta(days=100)
+        past_date = datetime.now(timezone.utc) - timedelta(days=100)
         tracker.register_credential("old_key", created_at=past_date)
         
         assert tracker.needs_rotation("old_key") is True
@@ -240,7 +240,7 @@ class TestCredentialRotationTracker:
         tracker = CredentialRotationTracker(rotation_days=30)
         
         tracker.register_credential("key1")
-        past_date = datetime.utcnow() - timedelta(days=35)
+        past_date = datetime.now(timezone.utc) - timedelta(days=35)
         tracker.register_credential("key2", created_at=past_date)
         
         status = tracker.get_rotation_status()
@@ -254,7 +254,7 @@ class TestCredentialRotationTracker:
         tracker = CredentialRotationTracker(rotation_days=30)
         
         tracker.register_credential("good_key")
-        past_date = datetime.utcnow() - timedelta(days=40)
+        past_date = datetime.now(timezone.utc) - timedelta(days=40)
         tracker.register_credential("expired_key", created_at=past_date)
         
         needing_rotation = tracker.get_credentials_needing_rotation()
