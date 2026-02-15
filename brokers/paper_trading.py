@@ -46,11 +46,40 @@ class PaperTradingBroker(BrokerConnector):
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
 
-        # Simulated market prices
+        # Simulated market prices - Multi-asset support
         self.market_prices = {
-            'BTC/USD': 50000.0,
-            'ETH/USD': 3000.0,
-            'XAUUSD': 2000.0,
+            # Precious Metals
+            'XAUUSD': 2050.0,     # Gold
+            'XAGUSD': 23.50,      # Silver
+            'XPTUSD': 900.0,      # Platinum
+            # Major Forex Pairs
+            'EURUSD': 1.0850,
+            'GBPUSD': 1.2650,
+            'USDJPY': 150.50,
+            'USDCHF': 0.8800,
+            'AUDUSD': 0.6550,
+            'USDCAD': 1.3550,
+            'NZDUSD': 0.6100,
+            # Cross Pairs
+            'EURGBP': 0.8580,
+            'EURJPY': 163.30,
+            'GBPJPY': 190.40,
+            # Crypto
+            'BTC/USD': 52000.0,
+            'ETH/USD': 2800.0,
+            'SOL/USD': 110.0,
+            'XRP/USD': 0.55,
+            # US Stocks/ETFs (for reference)
+            'SPY': 510.0,
+            'QQQ': 440.0,
+            'AAPL': 185.0,
+            'MSFT': 415.0,
+            'TSLA': 175.0,
+            'NVDA': 720.0,
+            # Indices
+            'US30': 38500.0,      # Dow Jones
+            'US500': 5100.0,      # S&P 500
+            'NAS100': 18200.0,    # Nasdaq 100
         }
 
     def connect(self) -> bool:
