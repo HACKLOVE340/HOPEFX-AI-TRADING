@@ -11,6 +11,8 @@ Components:
 - Risk-adjusted returns
 - Value at Risk (VaR)
 - Maximum Drawdown tracking
+- Monte Carlo simulations
+- Stress testing
 """
 
 from .manager import (
@@ -19,15 +21,29 @@ from .manager import (
     PositionSize,
     PositionSizeMethod,
 )
+from .advanced_analytics import (
+    AdvancedRiskAnalytics,
+    VaRResult,
+    MonteCarloResult,
+    StressTestResult,
+    DrawdownAnalysis,
+    RiskMetricType,
+)
 
 __all__ = [
     'RiskManager',
     'RiskConfig',
     'PositionSize',
     'PositionSizeMethod',
+    'AdvancedRiskAnalytics',
+    'VaRResult',
+    'MonteCarloResult',
+    'StressTestResult',
+    'DrawdownAnalysis',
+    'RiskMetricType',
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = '2.0.0'
 __author__ = 'HOPEFX Development Team'
-__description__ = 'Risk management with position sizing and drawdown monitoring'
+__description__ = 'Advanced risk management with VaR, Monte Carlo, and stress testing'
