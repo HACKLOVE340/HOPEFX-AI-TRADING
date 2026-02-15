@@ -17,7 +17,7 @@ from enum import Enum
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Boolean, Text, Numeric,
     ForeignKey, Table, Index, UniqueConstraint, CheckConstraint,
-    Enum as SQLEnum, Date, Time, ARRAY, JSON
+    Enum as SQLEnum, Date, Time, JSON
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -600,13 +600,13 @@ class OrderBook(Base):
     symbol = Column(String(20), nullable=False)
     timestamp = Column(DateTime, nullable=False)
 
-    # Bid side (top 10)
-    bid_prices = Column(ARRAY(Numeric(20, 8)))
-    bid_sizes = Column(ARRAY(Numeric(20, 8)))
+    # Bid side (top 10) - stored as JSON for SQLite compatibility
+    bid_prices = Column(JSON)
+    bid_sizes = Column(JSON)
 
-    # Ask side (top 10)
-    ask_prices = Column(ARRAY(Numeric(20, 8)))
-    ask_sizes = Column(ARRAY(Numeric(20, 8)))
+    # Ask side (top 10) - stored as JSON for SQLite compatibility
+    ask_prices = Column(JSON)
+    ask_sizes = Column(JSON)
 
     # Summary
     mid_price = Column(Numeric(20, 8))
@@ -636,7 +636,7 @@ class NewsData(Base):
 
     # Relevance
     relevance_score = Column(Float)  # 0-1
-    symbols_affected = Column(ARRAY(String(20)))
+    symbols_affected = Column(JSON)  # List of symbol strings
 
     published_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
@@ -882,7 +882,7 @@ class BacktestResult(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     initial_balance = Column(Numeric(20, 2), nullable=False)
-    symbols = Column(ARRAY(String(20)))
+    symbols = Column(JSON)  # List of symbol strings
 
     # Results
     final_balance = Column(Numeric(20, 2), nullable=False)
