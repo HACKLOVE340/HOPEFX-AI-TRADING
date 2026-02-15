@@ -10,9 +10,12 @@ Components:
 - Impact Prediction: News-to-price correlation, event scoring
 - Economic Calendar: Major economic events tracking
 - Geopolitical Risk: World Monitor integration for conflict/sanctions/risk intelligence
+  - Direct API access to World Monitor endpoints
+  - Self-hosting support for custom deployments
+  - Customizable data layers for trading strategies
 
 Author: HOPEFX Development Team
-Version: 1.1.0
+Version: 1.2.0
 """
 
 from .providers import (
@@ -42,6 +45,7 @@ from .economic_calendar import (
 )
 
 from .geopolitical_risk import (
+    # Core Classes
     GeopoliticalRiskProvider,
     GeopoliticalEvent,
     GeopoliticalRiskAssessment,
@@ -49,9 +53,20 @@ from .geopolitical_risk import (
     RiskSeverity,
     GoldImpact,
     CountryRisk,
+    
+    # World Monitor Integration
     WorldMonitorIntegration,
+    WorldMonitorAPIClient,
+    WorldMonitorSelfHostConfig,
+    CustomDataLayerConfig,
+    
+    # Convenience Functions
     get_geopolitical_provider,
-    get_gold_geopolitical_signal
+    get_gold_geopolitical_signal,
+    get_api_client,
+    get_gold_signal_from_api,
+    create_self_hosted_setup,
+    get_custom_layer_config,
 )
 
 __all__ = [
@@ -86,10 +101,17 @@ __all__ = [
     'GoldImpact',
     'CountryRisk',
     'WorldMonitorIntegration',
+    'WorldMonitorAPIClient',
+    'WorldMonitorSelfHostConfig',
+    'CustomDataLayerConfig',
     'get_geopolitical_provider',
     'get_gold_geopolitical_signal',
+    'get_api_client',
+    'get_gold_signal_from_api',
+    'create_self_hosted_setup',
+    'get_custom_layer_config',
 ]
 
 # Module metadata
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 __author__ = 'HOPEFX Development Team'

@@ -934,8 +934,732 @@ class WorldMonitorIntegration:
         return urls
 
 
+class WorldMonitorAPIClient:
+    """
+    Direct API client for World Monitor data.
+    
+    World Monitor exposes modular REST APIs under /api/ for each data layer:
+    - /api/acled.js - Armed Conflict Location & Event Data
+    - /api/country-intel.js - Country-level risk, sanctions, market status
+    - /api/firms-fires.js - NASA FIRMS satellite fire detection
+    - /api/opensky.js - Military aircraft tracking
+    - /api/theater-posture.js - Military force posture by region
+    - /api/gdelt-doc.js - Global news intelligence
+    - /api/cloudflare-outages.js - Internet outage monitoring
+    
+    Reference: https://github.com/koala73/worldmonitor/tree/main/api
+    
+    For self-hosting:
+    1. Clone: git clone https://github.com/koala73/worldmonitor.git
+    2. Install: npm install
+    3. Run: npm run dev (or deploy to Vercel)
+    4. Set self_hosted_url in config
+    """
+    
+    # World Monitor API endpoints (Vercel Edge Functions)
+    API_ENDPOINTS = {
+        'conflicts': '/api/acled',           # Armed conflict events
+        'country_intel': '/api/country-intel',  # Country risk & sanctions
+        'fires': '/api/firms-fires',         # Satellite fire detection
+        'flights': '/api/opensky',           # Military flight tracking
+        'theater': '/api/theater-posture',   # Military force posture
+        'news': '/api/gdelt-doc',            # Global news intelligence
+        'outages': '/api/cloudflare-outages', # Internet outages
+        'earthquakes': '/api/usgs',          # Earthquake data
+        'weather': '/api/weather-alerts',    # Severe weather
+        'pipelines': '/api/pipelines',       # Energy infrastructure
+        'cables': '/api/cables',             # Undersea cables
+        'nuclear': '/api/nuclear-sites',     # Nuclear facilities
+    }
+    
+    # Layer weights for gold trading (higher = more gold-relevant)
+    GOLD_LAYER_WEIGHTS = {
+        'conflicts': 1.0,
+        'country_intel': 0.9,
+        'theater': 0.8,
+        'fires': 0.4,
+        'news': 0.7,
+        'outages': 0.5,
+        'earthquakes': 0.3,
+        'weather': 0.3,
+        'pipelines': 0.6,
+        'cables': 0.4,
+        'nuclear': 0.7,
+        'flights': 0.5,
+    }
+    
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize World Monitor API client.
+        
+        Args:
+            config: Configuration dictionary with:
+                - base_url: API base URL (default: https://worldmonitor.app)
+                - self_hosted_url: URL for self-hosted instance
+                - api_key: Optional API key for rate limiting bypass
+                - timeout: Request timeout in seconds (default: 30)
+                - enabled_layers: List of layers to fetch
+                - custom_weights: Custom layer weights for gold impact
+        """
+        self.config = config or {}
+        
+        # Use self-hosted URL if provided, otherwise use public instance
+        self.base_url = self.config.get(
+            'self_hosted_url',
+            self.config.get('base_url', 'https://worldmonitor.app')
+        )
+        
+        self.api_key = self.config.get('api_key')
+        self.timeout = self.config.get('timeout', 30)
+        
+        # Configurable layers
+        self.enabled_layers = self.config.get('enabled_layers', [
+            'conflicts', 'country_intel', 'news', 'outages'
+        ])
+        
+        # Custom layer weights
+        self.layer_weights = {**self.GOLD_LAYER_WEIGHTS}
+        if 'custom_weights' in self.config:
+            self.layer_weights.update(self.config['custom_weights'])
+        
+        # Cache for API responses
+        self._cache: Dict[str, Any] = {}
+        self._cache_timestamps: Dict[str, datetime] = {}
+        self.cache_ttl = self.config.get('cache_ttl', 300)  # 5 minutes
+        
+        logger.info(f"WorldMonitorAPIClient initialized with base_url: {self.base_url}")
+    
+    def _make_request(
+        self,
+        endpoint: str,
+        params: Optional[Dict] = None
+    ) -> Optional[Dict]:
+        """
+        Make API request to World Monitor.
+        
+        Args:
+            endpoint: API endpoint path
+            params: Query parameters
+            
+        Returns:
+            JSON response or None if failed
+        """
+        url = f"{self.base_url}{endpoint}"
+        
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'HOPEFX-AI-Trading/1.0'
+        }
+        
+        if self.api_key:
+            headers['Authorization'] = f'Bearer {self.api_key}'
+        
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"World Monitor API request failed: {endpoint} - {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.warning(f"World Monitor API response not JSON: {endpoint} - {e}")
+            return None
+    
+    def _get_cached_or_fetch(
+        self,
+        layer: str,
+        params: Optional[Dict] = None
+    ) -> Optional[Dict]:
+        """Get data from cache or fetch from API."""
+        cache_key = f"{layer}:{json.dumps(params or {}, sort_keys=True)}"
+        
+        # Check cache
+        if cache_key in self._cache:
+            cache_time = self._cache_timestamps.get(cache_key)
+            if cache_time:
+                age = (datetime.now(timezone.utc) - cache_time).total_seconds()
+                if age < self.cache_ttl:
+                    return self._cache[cache_key]
+        
+        # Fetch from API
+        endpoint = self.API_ENDPOINTS.get(layer)
+        if not endpoint:
+            logger.warning(f"Unknown layer: {layer}")
+            return None
+        
+        data = self._make_request(endpoint, params)
+        
+        if data:
+            self._cache[cache_key] = data
+            self._cache_timestamps[cache_key] = datetime.now(timezone.utc)
+        
+        return data
+    
+    def get_conflicts(self, region: Optional[str] = None) -> List[Dict]:
+        """
+        Get active conflict events from ACLED.
+        
+        Args:
+            region: Filter by region (e.g., 'Middle East', 'Europe')
+            
+        Returns:
+            List of conflict events
+        """
+        params = {}
+        if region:
+            params['region'] = region
+        
+        data = self._get_cached_or_fetch('conflicts', params)
+        
+        if data and isinstance(data, dict):
+            return data.get('events', data.get('data', []))
+        return []
+    
+    def get_country_intel(self, country: Optional[str] = None) -> Dict:
+        """
+        Get country-level intelligence including risk scores and sanctions.
+        
+        Args:
+            country: ISO country code (e.g., 'US', 'RU', 'IR')
+            
+        Returns:
+            Country intelligence data
+        """
+        params = {}
+        if country:
+            params['country'] = country
+        
+        data = self._get_cached_or_fetch('country_intel', params)
+        return data or {}
+    
+    def get_military_theater(self, theater: Optional[str] = None) -> Dict:
+        """
+        Get military force posture by theater.
+        
+        Theaters: Middle East, Eastern Europe, Western Pacific, etc.
+        
+        Args:
+            theater: Theater name
+            
+        Returns:
+            Military posture data
+        """
+        params = {}
+        if theater:
+            params['theater'] = theater
+        
+        data = self._get_cached_or_fetch('theater', params)
+        return data or {}
+    
+    def get_news_intel(
+        self,
+        topic: Optional[str] = None,
+        hours: int = 24
+    ) -> List[Dict]:
+        """
+        Get global news intelligence from GDELT.
+        
+        Args:
+            topic: Filter by topic (e.g., 'sanctions', 'conflict', 'gold')
+            hours: Look back period in hours
+            
+        Returns:
+            List of news items
+        """
+        params = {'hours': hours}
+        if topic:
+            params['topic'] = topic
+        
+        data = self._get_cached_or_fetch('news', params)
+        
+        if data and isinstance(data, dict):
+            return data.get('articles', data.get('news', []))
+        return []
+    
+    def get_outages(self) -> List[Dict]:
+        """
+        Get current internet/infrastructure outages.
+        
+        Returns:
+            List of outage events
+        """
+        data = self._get_cached_or_fetch('outages')
+        
+        if data and isinstance(data, dict):
+            return data.get('outages', [])
+        return []
+    
+    def get_satellite_fires(
+        self,
+        region: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Get satellite fire detections from NASA FIRMS.
+        
+        Args:
+            region: Filter by region
+            
+        Returns:
+            List of fire detections
+        """
+        params = {}
+        if region:
+            params['region'] = region
+        
+        data = self._get_cached_or_fetch('fires', params)
+        
+        if data and isinstance(data, dict):
+            return data.get('fires', [])
+        return []
+    
+    def get_military_flights(
+        self,
+        region: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Get military flight tracking data from OpenSky.
+        
+        Args:
+            region: Filter by region
+            
+        Returns:
+            List of military flight tracks
+        """
+        params = {}
+        if region:
+            params['region'] = region
+        
+        data = self._get_cached_or_fetch('flights', params)
+        
+        if data and isinstance(data, dict):
+            return data.get('flights', data.get('aircraft', []))
+        return []
+    
+    def get_all_layers(self) -> Dict[str, Any]:
+        """
+        Fetch data from all enabled layers.
+        
+        Returns:
+            Dictionary with data from each layer
+        """
+        results = {}
+        
+        for layer in self.enabled_layers:
+            if layer in self.API_ENDPOINTS:
+                data = self._get_cached_or_fetch(layer)
+                if data:
+                    results[layer] = data
+        
+        return results
+    
+    def calculate_gold_risk_score(self) -> Dict[str, Any]:
+        """
+        Calculate gold-relevant risk score from all layers.
+        
+        Returns:
+            Risk assessment with weighted scores
+        """
+        all_data = self.get_all_layers()
+        
+        total_score = 0.0
+        total_weight = 0.0
+        layer_scores = {}
+        
+        for layer, data in all_data.items():
+            weight = self.layer_weights.get(layer, 0.5)
+            
+            # Calculate layer score based on data content
+            if isinstance(data, dict):
+                event_count = len(data.get('events', data.get('data', [])))
+            elif isinstance(data, list):
+                event_count = len(data)
+            else:
+                event_count = 0
+            
+            # Score scales with event count (with diminishing returns)
+            layer_score = min(100, event_count * 10)
+            
+            layer_scores[layer] = {
+                'score': layer_score,
+                'weight': weight,
+                'event_count': event_count
+            }
+            
+            total_score += layer_score * weight
+            total_weight += weight
+        
+        # Normalize score
+        final_score = total_score / total_weight if total_weight > 0 else 0
+        
+        # Determine gold outlook
+        if final_score >= 70:
+            outlook = GoldImpact.STRONGLY_BULLISH
+        elif final_score >= 50:
+            outlook = GoldImpact.BULLISH
+        elif final_score >= 30:
+            outlook = GoldImpact.NEUTRAL
+        else:
+            outlook = GoldImpact.BEARISH
+        
+        return {
+            'global_risk_score': round(final_score, 1),
+            'gold_outlook': outlook.value,
+            'layer_scores': layer_scores,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+    
+    def clear_cache(self):
+        """Clear the API response cache."""
+        self._cache.clear()
+        self._cache_timestamps.clear()
+        logger.info("World Monitor API cache cleared")
+
+
+class WorldMonitorSelfHostConfig:
+    """
+    Configuration helper for self-hosting World Monitor.
+    
+    World Monitor can be self-hosted for:
+    - Full control over data and privacy
+    - Custom API rate limits
+    - Extended data retention
+    - Custom integrations
+    
+    Requirements:
+    - Node.js 18+
+    - Vercel CLI (for local dev) or any Node.js hosting
+    - Optional: Redis for caching (Upstash recommended)
+    - Optional: API keys for external services
+    
+    Docker deployment is also supported.
+    """
+    
+    # Required environment variables for self-hosting
+    ENV_TEMPLATE = {
+        # AI/LLM Services (optional but recommended)
+        'GROQ_API_KEY': 'Your Groq API key for AI summarization',
+        
+        # Caching (optional)
+        'UPSTASH_REDIS_REST_URL': 'Redis URL for cross-user caching',
+        'UPSTASH_REDIS_REST_TOKEN': 'Redis auth token',
+        
+        # Flight tracking (optional)
+        'OPENSKY_USERNAME': 'OpenSky Network username',
+        'OPENSKY_PASSWORD': 'OpenSky Network password',
+        
+        # Ship tracking (optional)
+        'VESSELFINDER_API_KEY': 'VesselFinder API key',
+        
+        # Satellite fire detection (optional)
+        'NASA_FIRMS_API_KEY': 'NASA FIRMS API key',
+    }
+    
+    # Docker compose template
+    DOCKER_COMPOSE_TEMPLATE = '''
+version: '3.8'
+services:
+  worldmonitor:
+    image: node:18-alpine
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+      # Add your API keys here
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - NASA_FIRMS_API_KEY=${NASA_FIRMS_API_KEY:-}
+    volumes:
+      - ./worldmonitor:/app
+    command: sh -c "npm install && npm run dev"
+    
+  # Optional: Redis cache
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+'''
+    
+    @staticmethod
+    def generate_setup_script() -> str:
+        """Generate bash setup script for self-hosting."""
+        return '''#!/bin/bash
+# World Monitor Self-Hosting Setup Script
+# For HOPEFX AI Trading Integration
+
+set -e
+
+echo "=== World Monitor Self-Hosting Setup ==="
+
+# Clone repository
+if [ ! -d "worldmonitor" ]; then
+    echo "Cloning World Monitor..."
+    git clone https://github.com/koala73/worldmonitor.git
+    cd worldmonitor
+else
+    echo "Updating World Monitor..."
+    cd worldmonitor
+    git pull
+fi
+
+# Install dependencies
+echo "Installing dependencies..."
+npm install
+
+# Create .env.local if not exists
+if [ ! -f ".env.local" ]; then
+    echo "Creating .env.local template..."
+    cat > .env.local << 'EOF'
+# World Monitor Configuration
+# See: https://github.com/koala73/worldmonitor/blob/main/docs/DOCUMENTATION.md
+
+# AI Summarization (Groq - free tier available)
+GROQ_API_KEY=
+
+# Caching (Upstash Redis - free tier available)
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+
+# Flight tracking (OpenSky - free registration)
+OPENSKY_USERNAME=
+OPENSKY_PASSWORD=
+
+# Satellite fires (NASA FIRMS - free API key)
+NASA_FIRMS_API_KEY=
+EOF
+    echo "Please edit .env.local with your API keys"
+fi
+
+echo ""
+echo "=== Setup Complete ==="
+echo "To start World Monitor:"
+echo "  cd worldmonitor && npm run dev"
+echo ""
+echo "Dashboard will be available at: http://localhost:5173"
+echo "API endpoints at: http://localhost:5173/api/"
+'''
+    
+    @staticmethod
+    def generate_hopefx_config(self_hosted_url: str = 'http://localhost:5173') -> Dict:
+        """
+        Generate HOPEFX configuration for self-hosted World Monitor.
+        
+        Args:
+            self_hosted_url: URL of self-hosted instance
+            
+        Returns:
+            Configuration dictionary for GeopoliticalRiskProvider
+        """
+        return {
+            'self_hosted_url': self_hosted_url,
+            'timeout': 30,
+            'cache_ttl': 300,
+            'enabled_layers': [
+                'conflicts',
+                'country_intel',
+                'theater',
+                'news',
+                'outages'
+            ],
+            'custom_weights': {
+                # Customize layer weights for your trading strategy
+                'conflicts': 1.0,      # Military conflicts - highest gold impact
+                'theater': 0.9,        # Military posture
+                'news': 0.8,           # News intelligence
+                'country_intel': 0.7,  # Country risk/sanctions
+                'outages': 0.5,        # Infrastructure issues
+            }
+        }
+
+
+class CustomDataLayerConfig:
+    """
+    Configure custom data layers for your specific trading needs.
+    
+    This allows you to:
+    1. Enable/disable specific data layers
+    2. Customize weighting for gold trading
+    3. Add custom filters and regions
+    4. Set alert thresholds
+    """
+    
+    # Default layer configurations
+    LAYER_CONFIGS = {
+        'conflicts': {
+            'enabled': True,
+            'weight': 1.0,
+            'gold_correlation': 'strong_positive',
+            'description': 'Active armed conflicts from ACLED',
+            'alert_threshold': 5,  # Alert if >5 new events
+        },
+        'sanctions': {
+            'enabled': True,
+            'weight': 0.9,
+            'gold_correlation': 'positive',
+            'description': 'Economic sanctions and trade restrictions',
+            'alert_threshold': 3,
+        },
+        'military': {
+            'enabled': True,
+            'weight': 0.8,
+            'gold_correlation': 'strong_positive',
+            'description': 'Military activity, bases, flights, vessels',
+            'alert_threshold': 10,
+        },
+        'hotspots': {
+            'enabled': True,
+            'weight': 0.7,
+            'gold_correlation': 'positive',
+            'description': 'Intelligence hotspots with news correlation',
+            'alert_threshold': 5,
+        },
+        'natural': {
+            'enabled': True,
+            'weight': 0.5,
+            'gold_correlation': 'moderate_positive',
+            'description': 'Natural disasters, earthquakes, fires',
+            'alert_threshold': 10,
+        },
+        'outages': {
+            'enabled': True,
+            'weight': 0.5,
+            'gold_correlation': 'moderate_positive',
+            'description': 'Internet and infrastructure outages',
+            'alert_threshold': 5,
+        },
+        'weather': {
+            'enabled': False,
+            'weight': 0.3,
+            'gold_correlation': 'weak_positive',
+            'description': 'Severe weather alerts',
+            'alert_threshold': 20,
+        },
+        'nuclear': {
+            'enabled': True,
+            'weight': 0.8,
+            'gold_correlation': 'strong_positive',
+            'description': 'Nuclear facilities and radiation monitoring',
+            'alert_threshold': 1,
+        },
+        'pipelines': {
+            'enabled': True,
+            'weight': 0.6,
+            'gold_correlation': 'positive',
+            'description': 'Oil and gas infrastructure',
+            'alert_threshold': 3,
+        },
+        'protests': {
+            'enabled': False,
+            'weight': 0.4,
+            'gold_correlation': 'moderate_positive',
+            'description': 'Social unrest and protests',
+            'alert_threshold': 20,
+        },
+    }
+    
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialize custom layer configuration.
+        
+        Args:
+            config: Override default configurations
+        """
+        self.layers = {**self.LAYER_CONFIGS}
+        
+        if config:
+            for layer, settings in config.items():
+                if layer in self.layers:
+                    self.layers[layer].update(settings)
+                else:
+                    self.layers[layer] = settings
+    
+    def get_enabled_layers(self) -> List[str]:
+        """Get list of enabled layer names."""
+        return [name for name, cfg in self.layers.items() if cfg.get('enabled', False)]
+    
+    def get_layer_weights(self) -> Dict[str, float]:
+        """Get weight dictionary for enabled layers."""
+        return {
+            name: cfg['weight']
+            for name, cfg in self.layers.items()
+            if cfg.get('enabled', False)
+        }
+    
+    def enable_layer(self, layer: str, weight: Optional[float] = None):
+        """Enable a data layer."""
+        if layer in self.layers:
+            self.layers[layer]['enabled'] = True
+            if weight is not None:
+                self.layers[layer]['weight'] = weight
+        else:
+            self.layers[layer] = {
+                'enabled': True,
+                'weight': weight or 0.5,
+            }
+    
+    def disable_layer(self, layer: str):
+        """Disable a data layer."""
+        if layer in self.layers:
+            self.layers[layer]['enabled'] = False
+    
+    def set_weight(self, layer: str, weight: float):
+        """Set layer weight for gold impact calculation."""
+        if layer in self.layers:
+            self.layers[layer]['weight'] = max(0.0, min(1.0, weight))
+    
+    def set_alert_threshold(self, layer: str, threshold: int):
+        """Set alert threshold for a layer."""
+        if layer in self.layers:
+            self.layers[layer]['alert_threshold'] = threshold
+    
+    def get_gold_optimized_config(self) -> Dict:
+        """
+        Get configuration optimized for gold (XAU/USD) trading.
+        
+        Returns:
+            Layer configuration prioritizing gold-correlated events
+        """
+        gold_config = {}
+        
+        # Enable layers with strong gold correlation
+        for name, cfg in self.layers.items():
+            correlation = cfg.get('gold_correlation', 'unknown')
+            
+            if correlation in ['strong_positive', 'positive']:
+                gold_config[name] = {
+                    **cfg,
+                    'enabled': True
+                }
+            elif correlation == 'moderate_positive':
+                gold_config[name] = {
+                    **cfg,
+                    'enabled': True,
+                    'weight': cfg['weight'] * 0.7  # Reduce weight
+                }
+            else:
+                gold_config[name] = {
+                    **cfg,
+                    'enabled': False
+                }
+        
+        return gold_config
+    
+    def to_provider_config(self) -> Dict:
+        """Convert to GeopoliticalRiskProvider configuration format."""
+        return {
+            'data_layers': self.get_enabled_layers(),
+            'custom_weights': self.get_layer_weights(),
+        }
+
+
 # Global provider instance
 _geopolitical_provider = None
+_api_client = None
 
 
 def get_geopolitical_provider(config: Optional[Dict] = None) -> GeopoliticalRiskProvider:
@@ -944,6 +1668,22 @@ def get_geopolitical_provider(config: Optional[Dict] = None) -> GeopoliticalRisk
     if _geopolitical_provider is None:
         _geopolitical_provider = GeopoliticalRiskProvider(config)
     return _geopolitical_provider
+
+
+def get_api_client(config: Optional[Dict] = None) -> WorldMonitorAPIClient:
+    """
+    Get or create global World Monitor API client.
+    
+    Args:
+        config: API client configuration
+        
+    Returns:
+        WorldMonitorAPIClient instance
+    """
+    global _api_client
+    if _api_client is None:
+        _api_client = WorldMonitorAPIClient(config)
+    return _api_client
 
 
 def get_gold_geopolitical_signal() -> Dict[str, Any]:
@@ -955,3 +1695,52 @@ def get_gold_geopolitical_signal() -> Dict[str, Any]:
     """
     provider = get_geopolitical_provider()
     return provider.get_gold_trading_signal()
+
+
+def get_gold_signal_from_api(config: Optional[Dict] = None) -> Dict[str, Any]:
+    """
+    Get gold trading signal using direct World Monitor API.
+    
+    This uses the live API endpoints instead of sample data.
+    
+    Args:
+        config: API client configuration
+        
+    Returns:
+        Trading signal with real-time data
+    """
+    client = get_api_client(config)
+    return client.calculate_gold_risk_score()
+
+
+def create_self_hosted_setup() -> str:
+    """
+    Generate setup script for self-hosting World Monitor.
+    
+    Returns:
+        Bash script content
+    """
+    return WorldMonitorSelfHostConfig.generate_setup_script()
+
+
+def get_custom_layer_config(
+    gold_optimized: bool = True,
+    custom_layers: Optional[Dict] = None
+) -> CustomDataLayerConfig:
+    """
+    Get custom data layer configuration.
+    
+    Args:
+        gold_optimized: Use gold-optimized defaults
+        custom_layers: Custom layer overrides
+        
+    Returns:
+        CustomDataLayerConfig instance
+    """
+    config = CustomDataLayerConfig(custom_layers)
+    
+    if gold_optimized:
+        gold_cfg = config.get_gold_optimized_config()
+        return CustomDataLayerConfig(gold_cfg)
+    
+    return config
