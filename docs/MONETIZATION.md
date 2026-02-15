@@ -12,10 +12,7 @@ HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solut
 
 This guide covers:
 - **14-Day Free Trial** - Evaluate before subscribing
-- **Monthly Subscriptions** - $2,000 to $10,000/month
-- **Yearly Subscriptions** - Save 15% with annual billing
-- Premium subscription tiers ($2,000 - $10,000/month)
-- Annual subscription discounts
+- **Premium Subscription Tiers** - $2,000 to $10,000/month (15% discount for annual billing)
 - Strategy marketplace
 - Partnership opportunities
 
