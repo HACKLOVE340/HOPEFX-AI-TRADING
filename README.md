@@ -237,6 +237,29 @@ python cache/market_data_cache.py
 
 See [LICENSE](./LICENSE) for details.
 
+## 🌍 Community
+
+Join our growing community of traders and developers:
+
+- 💬 **Discord**: [Join HOPEFX Community](https://discord.gg/hopefx) *(Coming Soon)*
+- 📢 **Telegram**: [HOPEFX Announcements](https://t.me/hopefx) *(Coming Soon)*
+- 🐦 **Twitter/X**: [@HOPEFX_Trading](https://twitter.com/HOPEFX_Trading) *(Coming Soon)*
+- 📺 **YouTube**: [HOPEFX Tutorials](https://youtube.com/@hopefx) *(Coming Soon)*
+
+## 📚 Learning Resources
+
+### Documentation
+- [Installation Guide](./INSTALLATION.md) - Getting started
+- [Competitive Analysis](./COMPETITIVE_ANALYSIS.md) - How we compare to MetaTrader, TradingView, QuantConnect
+- [Security Best Practices](./SECURITY.md) - Secure configuration
+
+### Video Tutorials *(Coming Soon)*
+- 🎬 Getting Started with HOPEFX
+- 🎬 Building Your First Trading Strategy
+- 🎬 ML Model Training Tutorial
+- 🎬 Prop Firm Integration Guide
+- 🎬 Backtesting Masterclass
+
 ## 🤝 Contributing
 
 1. Fork the repository
