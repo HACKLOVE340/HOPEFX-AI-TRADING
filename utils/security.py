@@ -14,7 +14,7 @@ import re
 import logging
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Pattern
 from dataclasses import dataclass
 from enum import Enum
@@ -268,7 +268,7 @@ class SecurityAuditor:
             resource=resource,
             action=action,
             details=safe_details,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             success=success
         )
 
@@ -334,14 +334,14 @@ class CredentialRotationTracker:
         created_at: Optional[datetime] = None
     ) -> None:
         """Register a credential for rotation tracking"""
-        self._credentials[credential_name] = created_at or datetime.utcnow()
+        self._credentials[credential_name] = created_at or datetime.now(timezone.utc)
         logger.info(f"Registered credential for rotation tracking: {credential_name}")
 
     def get_credential_age(self, credential_name: str) -> Optional[timedelta]:
         """Get the age of a credential"""
         if credential_name not in self._credentials:
             return None
-        return datetime.utcnow() - self._credentials[credential_name]
+        return datetime.now(timezone.utc) - self._credentials[credential_name]
 
     def needs_rotation(self, credential_name: str) -> bool:
         """Check if a credential needs rotation"""
@@ -354,7 +354,7 @@ class CredentialRotationTracker:
         """Get rotation status for all tracked credentials"""
         status = {}
         for name, created_at in self._credentials.items():
-            age = datetime.utcnow() - created_at
+            age = datetime.now(timezone.utc) - created_at
             days_until_rotation = max(0, self.rotation_days - age.days)
             
             status[name] = {
