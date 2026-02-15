@@ -34,6 +34,7 @@ sys.path.insert(0, str(project_root))
 
 from api.admin import router as admin_router
 from api.trading import router as trading_router
+from api.monetization import router as monetization_router
 from cache import MarketDataCache
 from config import initialize_config
 from database.models import Base
@@ -49,7 +50,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="HOPEFX AI Trading API",
     description="REST API for HOPEFX AI Trading Framework",
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -57,6 +58,7 @@ app = FastAPI(
 # Include routers
 app.include_router(trading_router)
 app.include_router(admin_router)
+app.include_router(monetization_router)
 
 # Global application state
 class AppState:
@@ -287,13 +289,48 @@ async def root():
     """
     return {
         "application": "HOPEFX AI Trading API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "docs": "/docs",
         "redoc": "/redoc",
         "health": "/health",
         "status": "/status",
         "paper_trading": "/paper-trading",
+        "pricing": "/pricing",
+        "monetization_api": "/api/monetization",
     }
+
+
+# Pricing Page
+@app.get("/pricing", response_class=HTMLResponse, tags=["Monetization"])
+async def pricing_page():
+    """
+    Pricing Page
+
+    Display pricing tiers and subscription options.
+    Features:
+    - All subscription tiers (Free to Elite)
+    - Monthly and annual billing
+    - Feature comparison
+    - FAQ section
+    """
+    template_path = Path(__file__).parent / "templates" / "pricing.html"
+    if template_path.exists():
+        with open(template_path, 'r') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(
+            content="""
+            <html>
+            <head><title>HOPEFX Pricing</title></head>
+            <body style="background:#0a0f1c;color:#ffffff;font-family:sans-serif;padding:40px;text-align:center;">
+                <h1>💰 Pricing</h1>
+                <p>Pricing page template not found. Please ensure templates/pricing.html exists.</p>
+                <a href="/docs" style="color:#00d4aa;">Go to API Docs</a>
+            </body>
+            </html>
+            """,
+            status_code=200
+        )
 
 
 # Paper Trading Dashboard
