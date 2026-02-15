@@ -33,3 +33,8 @@ __all__ = [
     'ReportGenerator',
     'PerformancePlotter',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Comprehensive backtesting engine with optimization and walk-forward analysis'

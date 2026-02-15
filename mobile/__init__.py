@@ -28,3 +28,8 @@ __all__ = [
     'mobile_trading_engine',
     'mobile_analytics',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Mobile-optimized APIs with push notifications and trading features'

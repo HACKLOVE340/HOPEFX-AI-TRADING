@@ -64,3 +64,8 @@ __all__ = [
     'ITS8OSStrategy',
     'StrategyBrain',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Trading strategies with 11+ implementations including SMC ICT and Strategy Brain'

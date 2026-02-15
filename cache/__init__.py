@@ -26,3 +26,8 @@ __all__ = [
     'CachedTickData',
     'CacheStatistics',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Redis-based market data caching with multi-timeframe support'

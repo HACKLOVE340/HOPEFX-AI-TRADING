@@ -28,3 +28,8 @@ __all__ = [
     'timeframe_manager',
     'template_manager',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Professional charting with indicators, drawing tools, and templates'
