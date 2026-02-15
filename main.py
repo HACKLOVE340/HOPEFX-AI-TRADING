@@ -16,6 +16,8 @@ Integrated Components:
 - Social: Copy Trading, Strategy Marketplace, Leaderboards
 - Mobile: Mobile API, Push Notifications
 - Charting: Chart Engine, Indicator Library
+
+Version: 1.0.0
 """
 
 import sys
@@ -39,6 +41,13 @@ from strategies import StrategyManager
 from risk import RiskManager, RiskConfig
 from brokers import PaperTradingBroker
 from notifications import NotificationManager, NotificationLevel
+
+# Import component status utilities
+try:
+    from utils import get_all_component_statuses, get_framework_version, ComponentStatus
+    UTILS_AVAILABLE = True
+except ImportError:
+    UTILS_AVAILABLE = False
 
 # Import ML/AI components (optional - may not be available in all environments)
 try:
@@ -798,6 +807,10 @@ class HopeFXTradingApp:
         total_modules = len(self.available_modules)
         logger.info(f"\n📊 MODULES: {available_count}/{total_modules} available")
 
+        # Component Versions
+        if UTILS_AVAILABLE:
+            self._display_component_versions()
+
         # Configuration
         logger.info("\n⚙️ CONFIGURATION:")
         logger.info(f"  - Trading enabled: {self.config.trading.trading_enabled}")
@@ -805,6 +818,24 @@ class HopeFXTradingApp:
         logger.info(f"  - API configs: {len(self.config.api_configs)}")
 
         logger.info("=" * 70)
+
+    def _display_component_versions(self):
+        """Display component versions from the utils module"""
+        logger.info("\n📋 COMPONENT VERSIONS:")
+        logger.info(f"  Framework: v{get_framework_version()}")
+        
+        try:
+            statuses = get_all_component_statuses()
+            core_components = ['config', 'cache', 'database', 'brokers', 'strategies', 'risk', 'notifications']
+            
+            for name in core_components:
+                if name in statuses:
+                    status = statuses[name]
+                    icon = "✓" if status.available else "✗"
+                    logger.info(f"  {icon} {name}: v{status.version}")
+                    
+        except Exception as e:
+            logger.debug(f"Could not display component versions: {e}")
 
     def shutdown(self):
         """Gracefully shutdown the application"""
