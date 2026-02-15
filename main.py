@@ -213,7 +213,7 @@ class HopeFXTradingApp:
             # Create risk configuration
             risk_config = RiskConfig(
                 max_position_size=self.config.trading.max_position_size if hasattr(self.config.trading, 'max_position_size') else 10000,
-                max_positions=self.config.trading.max_positions if hasattr(self.config.trading, 'max_positions') else 5,
+                max_open_positions=self.config.trading.max_positions if hasattr(self.config.trading, 'max_positions') else 5,
                 max_daily_loss=self.config.trading.max_daily_loss if hasattr(self.config.trading, 'max_daily_loss') else 1000,
                 max_drawdown=self.config.trading.max_drawdown if hasattr(self.config.trading, 'max_drawdown') else 0.10,
                 default_stop_loss_pct=0.02,  # 2% default stop loss
@@ -223,7 +223,7 @@ class HopeFXTradingApp:
             self.risk_manager = RiskManager(config=risk_config)
 
             logger.info("✓ Risk manager initialized")
-            logger.info(f"  - Max positions: {risk_config.max_positions}")
+            logger.info(f"  - Max positions: {risk_config.max_open_positions}")
             logger.info(f"  - Max daily loss: ${risk_config.max_daily_loss}")
             logger.info(f"  - Max drawdown: {risk_config.max_drawdown * 100}%")
 
@@ -241,17 +241,21 @@ class HopeFXTradingApp:
 
             if paper_trading:
                 # Use paper trading broker
-                self.broker = PaperTradingBroker(
-                    initial_balance=100000.0,  # $100k default
-                    leverage=1.0
-                )
+                broker_config = {
+                    'initial_balance': 100000.0,  # $100k default
+                    'leverage': 1.0
+                }
+                self.broker = PaperTradingBroker(config=broker_config)
+                self.broker.connect()
                 logger.info("✓ Broker initialized: Paper Trading")
-                logger.info(f"  - Initial balance: ${self.broker.get_account_info().balance:,.2f}")
+                logger.info(f"  - Initial balance: ${self.broker.balance:,.2f}")
             else:
                 # In production, you would initialize a real broker here
                 logger.warning("⚠ Live trading mode selected but not implemented")
                 logger.warning("  Falling back to paper trading")
-                self.broker = PaperTradingBroker(initial_balance=100000.0, leverage=1.0)
+                broker_config = {'initial_balance': 100000.0, 'leverage': 1.0}
+                self.broker = PaperTradingBroker(config=broker_config)
+                self.broker.connect()
 
         except Exception as e:
             logger.error(f"✗ Broker initialization failed: {e}")
@@ -262,12 +266,7 @@ class HopeFXTradingApp:
         logger.info("[7/7] Initializing strategies...")
 
         try:
-            self.strategy_manager = StrategyManager(
-                broker=self.broker,
-                risk_manager=self.risk_manager,
-                cache=self.cache,
-                notification_manager=self.notification_manager
-            )
+            self.strategy_manager = StrategyManager()
 
             logger.info("✓ Strategy manager initialized")
             logger.info(f"  - Active strategies: {len(self.strategy_manager.strategies)}")
@@ -347,8 +346,8 @@ class HopeFXTradingApp:
         # Trading Components
         logger.info("\nTrading Components:")
         logger.info(f"  ✓ Notifications: {len(self.notification_manager.channels) if self.notification_manager else 0} channels active")
-        logger.info(f"  ✓ Risk Manager: {self.risk_manager.config.max_positions} max positions, {self.risk_manager.config.max_drawdown*100}% max drawdown")
-        logger.info(f"  ✓ Broker: {type(self.broker).__name__} (Balance: ${self.broker.get_account_info().balance:,.2f})")
+        logger.info(f"  ✓ Risk Manager: {self.risk_manager.config.max_open_positions} max positions, {self.risk_manager.config.max_drawdown*100}% max drawdown")
+        logger.info(f"  ✓ Broker: {type(self.broker).__name__} (Balance: ${self.broker.balance:,.2f})")
         logger.info(f"  ✓ Strategies: {len(self.strategy_manager.strategies)} loaded")
 
         # Configuration
