@@ -4,12 +4,12 @@ Tests for Notification Manager
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
+from urllib.parse import urlparse
 from notifications.manager import (
     NotificationManager,
     NotificationLevel,
     NotificationChannel
 )
-
 
 class TestNotificationManager:
     """Test notification manager functionality"""
@@ -128,7 +128,8 @@ class TestNotificationManager:
         call_args = mock_post.call_args
         assert call_args is not None
         url = call_args[0][0]
-        assert 'api.telegram.org' in url
+        parsed_url = urlparse(url)
+        assert parsed_url.hostname == 'api.telegram.org'
         assert 'test_bot_token' in url
         
         # Verify payload structure
