@@ -24,3 +24,8 @@ __all__ = [
     'simulation_engine',
     'risk_analyzer',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Advanced analytics with portfolio optimization, options, and simulations'

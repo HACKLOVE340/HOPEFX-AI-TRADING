@@ -80,8 +80,8 @@ class TechnicalFeatureEngineer:
         for period in [5, 10, 20, 50, 100, 200]:
             df[f'sma_{period}'] = close.rolling(window=period).mean()
 
-        # Exponential Moving Averages
-        for period in [5, 10, 20, 50, 100]:
+        # Exponential Moving Averages (including 12 and 26 for MACD crossover)
+        for period in [5, 10, 12, 20, 26, 50, 100]:
             df[f'ema_{period}'] = close.ewm(span=period, adjust=False).mean()
 
         # MACD

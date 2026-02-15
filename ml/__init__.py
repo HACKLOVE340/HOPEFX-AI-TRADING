@@ -25,3 +25,8 @@ __all__ = [
     'RandomForestTradingClassifier',
     'TechnicalFeatureEngineer',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Machine learning models for price prediction and signal classification'
