@@ -1,13 +1,22 @@
 """
 Advanced Analytics Module
 
-Portfolio optimization, options trading, and advanced simulations.
+Portfolio optimization, options trading, advanced simulations,
+and performance analytics.
 """
 
 from .portfolio import PortfolioOptimizer
 from .options import OptionsAnalyzer
 from .simulations import SimulationEngine
 from .risk import RiskAnalyzer
+from .performance import (
+    PerformanceAnalytics,
+    PerformanceReport,
+    StrategyPerformance,
+    TradeRecord,
+    EquityPoint,
+    MetricPeriod,
+)
 
 portfolio_optimizer = PortfolioOptimizer()
 options_analyzer = OptionsAnalyzer()
@@ -19,6 +28,12 @@ __all__ = [
     'OptionsAnalyzer',
     'SimulationEngine',
     'RiskAnalyzer',
+    'PerformanceAnalytics',
+    'PerformanceReport',
+    'StrategyPerformance',
+    'TradeRecord',
+    'EquityPoint',
+    'MetricPeriod',
     'portfolio_optimizer',
     'options_analyzer',
     'simulation_engine',
@@ -26,6 +41,6 @@ __all__ = [
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = '2.0.0'
 __author__ = 'HOPEFX Development Team'
-__description__ = 'Advanced analytics with portfolio optimization, options, and simulations'
+__description__ = 'Advanced analytics with portfolio optimization, options, simulations, and performance tracking'

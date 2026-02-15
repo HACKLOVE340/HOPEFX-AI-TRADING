@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOPEFX Paper Trading Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #131722;
+            --bg-secondary: #1e222d;
+            --bg-tertiary: #2a2e39;
+            --text-primary: #d1d4dc;
+            --text-secondary: #787b86;
+            --accent-green: #26a69a;
+            --accent-red: #ef5350;
+            --accent-blue: #2962ff;
+            --border-color: #363a45;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .logo-text span {
+            color: var(--accent-green);
+        }
+
+        .paper-badge {
+            background: var(--accent-blue);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1px;
+            background: var(--border-color);
+            height: calc(100vh - 57px);
+        }
+
+        .chart-section {
+            background: var(--bg-primary);
+            padding: 16px;
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Account Summary */
+        .account-summary {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .account-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .account-balance {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .account-pnl {
+            font-size: 14px;
+        }
+
+        .account-pnl.positive {
+            color: var(--accent-green);
+        }
+
+        .account-pnl.negative {
+            color: var(--accent-red);
+        }
+
+        .account-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .stat-item {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Order Form */
+        .order-form {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .order-form h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .order-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .order-tab {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .order-tab.buy {
+            background: transparent;
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+        }
+
+        .order-tab.buy.active,
+        .order-tab.buy:hover {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .order-tab.sell {
+            background: transparent;
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+        }
+
+        .order-tab.sell.active,
+        .order-tab.sell:hover {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .place-order-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .place-order-btn:hover {
+            opacity: 0.9;
+        }
+
+        .place-order-btn.buy {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .place-order-btn.sell {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        /* Positions */
+        .positions-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .positions-section h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .position-count {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        .position-card {
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .position-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .position-symbol {
+            font-weight: 600;
+        }
+
+        .position-side {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .position-side.long {
+            background: rgba(38, 166, 154, 0.2);
+            color: var(--accent-green);
+        }
+
+        .position-side.short {
+            background: rgba(239, 83, 80, 0.2);
+            color: var(--accent-red);
+        }
+
+        .position-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .position-detail-label {
+            color: var(--text-secondary);
+        }
+
+        .position-detail-value {
+            text-align: right;
+        }
+
+        .position-pnl {
+            text-align: right;
+            font-weight: 600;
+        }
+
+        .position-pnl.positive {
+            color: var(--accent-green);
+        }
+
+        .position-pnl.negative {
+            color: var(--accent-red);
+        }
+
+        .close-position-btn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 6px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .close-position-btn:hover {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            height: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Symbol Selector */
+        .symbol-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .symbol-btn {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .symbol-btn:hover,
+        .symbol-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        /* Trade History */
+        .trade-history {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .trade-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+        }
+
+        .trade-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: fixed;
+                right: -320px;
+                top: 57px;
+                width: 320px;
+                height: calc(100vh - 57px);
+                transition: right 0.3s;
+                z-index: 100;
+            }
+
+            .sidebar.open {
+                right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">HF</div>
+            <div class="logo-text">HOPE<span>FX</span></div>
+            <div class="paper-badge">📝 PAPER TRADING</div>
+        </div>
+        <div class="header-actions">
+            <span id="current-time"></span>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <section class="chart-section">
+            <div class="symbol-selector">
+                <button class="symbol-btn active" onclick="selectSymbol('XAUUSD')">XAU/USD</button>
+                <button class="symbol-btn" onclick="selectSymbol('EURUSD')">EUR/USD</button>
+                <button class="symbol-btn" onclick="selectSymbol('BTCUSD')">BTC/USD</button>
+                <button class="symbol-btn" onclick="selectSymbol('SPY')">SPY</button>
+            </div>
+            <div class="chart-container">
+                <div id="chart"></div>
+            </div>
+        </section>
+
+        <aside class="sidebar">
+            <div class="account-summary">
+                <div class="account-title">PAPER ACCOUNT</div>
+                <div class="account-balance" id="balance">$10,000.00</div>
+                <div class="account-pnl positive" id="total-pnl">+$0.00 (0.00%)</div>
+
+                <div class="account-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Equity</div>
+                        <div class="stat-value" id="equity">$10,000.00</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Open P&L</div>
+                        <div class="stat-value" id="open-pnl">$0.00</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Trades Today</div>
+                        <div class="stat-value" id="trades-today">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="win-rate">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-form">
+                <h3>Place Order</h3>
+                <div class="order-tabs">
+                    <button class="order-tab buy active" id="buy-tab" onclick="setOrderSide('buy')">BUY</button>
+                    <button class="order-tab sell" id="sell-tab" onclick="setOrderSide('sell')">SELL</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Symbol</label>
+                    <select id="order-symbol">
+                        <option value="XAUUSD">XAU/USD (Gold)</option>
+                        <option value="EURUSD">EUR/USD</option>
+                        <option value="BTCUSD">BTC/USD</option>
+                        <option value="SPY">SPY</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Order Type</label>
+                    <select id="order-type">
+                        <option value="market">Market</option>
+                        <option value="limit">Limit</option>
+                        <option value="stop">Stop</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="order-quantity" value="1" min="0.01" step="0.01">
+                </div>
+
+                <div class="form-group" id="price-group" style="display: none;">
+                    <label>Price</label>
+                    <input type="number" id="order-price" value="0" step="0.01">
+                </div>
+
+                <button class="place-order-btn buy" id="place-order-btn" onclick="placeOrder()">
+                    BUY XAUUSD
+                </button>
+            </div>
+
+            <div class="positions-section">
+                <h3>
+                    Open Positions
+                    <span class="position-count" id="position-count">0</span>
+                </h3>
+                <div id="positions-list">
+                    <p style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 20px;">
+                        No open positions
+                    </p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        // Paper Trading State
+        let state = {
+            balance: 10000,
+            equity: 10000,
+            positions: [],
+            trades: [],
+            currentSymbol: 'XAUUSD',
+            orderSide: 'buy',
+            marketPrices: {
+                XAUUSD: 2050.50,
+                EURUSD: 1.0850,
+                BTCUSD: 52000,
+                SPY: 510.25
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateChart();
+            updateTime();
+            setInterval(updateTime, 1000);
+            setInterval(updatePrices, 2000);
+            document.getElementById('order-type').addEventListener('change', togglePriceField);
+        });
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent =
+                now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function selectSymbol(symbol) {
+            state.currentSymbol = symbol;
+            document.querySelectorAll('.symbol-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.includes(symbol.substring(0, 3)));
+            });
+            document.getElementById('order-symbol').value = symbol;
+            updateOrderButton();
+            updateChart();
+        }
+
+        function setOrderSide(side) {
+            state.orderSide = side;
+            document.getElementById('buy-tab').classList.toggle('active', side === 'buy');
+            document.getElementById('sell-tab').classList.toggle('active', side === 'sell');
+            updateOrderButton();
+        }
+
+        function updateOrderButton() {
+            const btn = document.getElementById('place-order-btn');
+            const symbol = document.getElementById('order-symbol').value;
+            btn.textContent = `${state.orderSide.toUpperCase()} ${symbol}`;
+            btn.className = `place-order-btn ${state.orderSide}`;
+        }
+
+        function togglePriceField() {
+            const orderType = document.getElementById('order-type').value;
+            document.getElementById('price-group').style.display =
+                orderType === 'market' ? 'none' : 'block';
+        }
+
+        function placeOrder() {
+            const symbol = document.getElementById('order-symbol').value;
+            const quantity = parseFloat(document.getElementById('order-quantity').value);
+            const price = state.marketPrices[symbol];
+
+            const position = {
+                id: Date.now(),
+                symbol: symbol,
+                side: state.orderSide.toUpperCase(),
+                quantity: quantity,
+                entryPrice: price,
+                currentPrice: price,
+                pnl: 0
+            };
+
+            state.positions.push(position);
+            state.trades.push({
+                ...position,
+                time: new Date().toLocaleTimeString()
+            });
+
+            updatePositionsUI();
+            updateAccountUI();
+
+            alert(`✅ Order placed: ${state.orderSide.toUpperCase()} ${quantity} ${symbol} @ $${price.toFixed(2)}`);
+        }
+
+        function closePosition(positionId) {
+            const idx = state.positions.findIndex(p => p.id === positionId);
+            if (idx !== -1) {
+                const position = state.positions[idx];
+                state.balance += position.pnl;
+                state.positions.splice(idx, 1);
+                updatePositionsUI();
+                updateAccountUI();
+            }
+        }
+
+        function updatePrices() {
+            // Simulate price changes
+            Object.keys(state.marketPrices).forEach(symbol => {
+                const change = (Math.random() - 0.5) * 0.002;
+                state.marketPrices[symbol] *= (1 + change);
+            });
+
+            // Update position P&L
+            state.positions.forEach(pos => {
+                pos.currentPrice = state.marketPrices[pos.symbol];
+                if (pos.side === 'BUY') {
+                    pos.pnl = (pos.currentPrice - pos.entryPrice) * pos.quantity;
+                } else {
+                    pos.pnl = (pos.entryPrice - pos.currentPrice) * pos.quantity;
+                }
+            });
+
+            updatePositionsUI();
+            updateAccountUI();
+        }
+
+        function updatePositionsUI() {
+            const container = document.getElementById('positions-list');
+            document.getElementById('position-count').textContent = state.positions.length;
+
+            if (state.positions.length === 0) {
+                container.innerHTML = `
+                    <p style="color: var(--text-secondary); font-size: 13px; text-align: center; padding: 20px;">
+                        No open positions
+                    </p>
+                `;
+                return;
+            }
+
+            container.innerHTML = state.positions.map(pos => `
+                <div class="position-card">
+                    <div class="position-header">
+                        <span class="position-symbol">${pos.symbol}</span>
+                        <span class="position-side ${pos.side.toLowerCase()}">${pos.side}</span>
+                    </div>
+                    <div class="position-details">
+                        <span class="position-detail-label">Quantity</span>
+                        <span class="position-detail-value">${pos.quantity}</span>
+                        <span class="position-detail-label">Entry</span>
+                        <span class="position-detail-value">$${pos.entryPrice.toFixed(2)}</span>
+                        <span class="position-detail-label">Current</span>
+                        <span class="position-detail-value">$${pos.currentPrice.toFixed(2)}</span>
+                        <span class="position-detail-label">P&L</span>
+                        <span class="position-pnl ${pos.pnl >= 0 ? 'positive' : 'negative'}">
+                            ${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)}
+                        </span>
+                    </div>
+                    <button class="close-position-btn" onclick="closePosition(${pos.id})">
+                        Close Position
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateAccountUI() {
+            const openPnl = state.positions.reduce((sum, pos) => sum + pos.pnl, 0);
+            state.equity = state.balance + openPnl;
+
+            document.getElementById('balance').textContent = `$${state.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            document.getElementById('equity').textContent = `$${state.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            document.getElementById('open-pnl').textContent = `${openPnl >= 0 ? '+' : ''}$${openPnl.toFixed(2)}`;
+            document.getElementById('open-pnl').style.color = openPnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+
+            const totalPnl = state.equity - 10000;
+            const totalPnlPct = (totalPnl / 10000 * 100).toFixed(2);
+            const pnlElement = document.getElementById('total-pnl');
+            pnlElement.textContent = `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)} (${totalPnlPct}%)`;
+            pnlElement.className = `account-pnl ${totalPnl >= 0 ? 'positive' : 'negative'}`;
+
+            document.getElementById('trades-today').textContent = state.trades.length;
+
+            const wins = state.trades.filter(t => {
+                const pos = state.positions.find(p => p.id === t.id);
+                return pos ? pos.pnl > 0 : false;
+            }).length;
+            const winRate = state.trades.length > 0 ? (wins / state.trades.length * 100).toFixed(0) + '%' : '--';
+            document.getElementById('win-rate').textContent = winRate;
+        }
+
+        function updateChart() {
+            // Generate sample data
+            const symbol = state.currentSymbol;
+            const basePrice = state.marketPrices[symbol];
+            const data = [];
+
+            for (let i = 100; i >= 0; i--) {
+                const date = new Date();
+                date.setHours(date.getHours() - i);
+
+                const open = basePrice * (1 + (Math.random() - 0.5) * 0.02);
+                const close = open * (1 + (Math.random() - 0.5) * 0.01);
+                const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+                const low = Math.min(open, close) * (1 - Math.random() * 0.005);
+
+                data.push({
+                    x: date,
+                    open: open,
+                    high: high,
+                    low: low,
+                    close: close
+                });
+            }
+
+            const trace = {
+                x: data.map(d => d.x),
+                open: data.map(d => d.open),
+                high: data.map(d => d.high),
+                low: data.map(d => d.low),
+                close: data.map(d => d.close),
+                type: 'candlestick',
+                increasing: { line: { color: '#26a69a' } },
+                decreasing: { line: { color: '#ef5350' } }
+            };
+
+            const layout = {
+                title: `${symbol} - 1H`,
+                paper_bgcolor: '#131722',
+                plot_bgcolor: '#131722',
+                font: { color: '#d1d4dc' },
+                xaxis: {
+                    gridcolor: '#2a2e39',
+                    rangeslider: { visible: false }
+                },
+                yaxis: {
+                    gridcolor: '#2a2e39',
+                    side: 'right'
+                },
+                margin: { t: 40, r: 60, b: 40, l: 10 }
+            };
+
+            Plotly.newPlot('chart', [trace], layout, { responsive: true });
+        }
+    </script>
+</body>
+</html>

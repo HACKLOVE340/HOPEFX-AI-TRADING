@@ -10,6 +10,7 @@ Provides endpoints for:
 - Backtesting
 - System status and health checks
 - Admin panel
+- Paper Trading Dashboard
 """
 
 import logging
@@ -20,7 +21,8 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -290,7 +292,41 @@ async def root():
         "redoc": "/redoc",
         "health": "/health",
         "status": "/status",
+        "paper_trading": "/paper-trading",
     }
+
+
+# Paper Trading Dashboard
+@app.get("/paper-trading", response_class=HTMLResponse, tags=["Trading"])
+async def paper_trading_dashboard():
+    """
+    Paper Trading Dashboard
+
+    Interactive visual interface for paper trading simulation.
+    Features:
+    - Real-time chart visualization
+    - Order placement (buy/sell)
+    - Position tracking
+    - P&L monitoring
+    """
+    template_path = Path(__file__).parent / "templates" / "paper_trading.html"
+    if template_path.exists():
+        with open(template_path, 'r') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(
+            content="""
+            <html>
+            <head><title>Paper Trading</title></head>
+            <body style="background:#131722;color:#d1d4dc;font-family:sans-serif;padding:40px;text-align:center;">
+                <h1>📊 Paper Trading Dashboard</h1>
+                <p>Template not found. Please ensure templates/paper_trading.html exists.</p>
+                <a href="/docs" style="color:#26a69a;">Go to API Docs</a>
+            </body>
+            </html>
+            """,
+            status_code=200
+        )
 
 
 # Error handler

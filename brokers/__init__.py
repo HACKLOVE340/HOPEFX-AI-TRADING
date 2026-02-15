@@ -17,6 +17,13 @@ Supported prop firms:
 - The5ers
 - MyForexFunds
 
+Advanced order types:
+- OCO (One-Cancels-Other)
+- Bracket orders
+- Trailing stops
+- Conditional orders
+- Scaled orders
+
 Each broker module provides:
 - Connection management
 - Order execution
@@ -40,6 +47,15 @@ from .alpaca import AlpacaConnector
 from .mt5 import MT5Connector
 from .interactive_brokers import InteractiveBrokersConnector
 from .factory import BrokerFactory
+from .advanced_orders import (
+    AdvancedOrderManager,
+    OCOOrder,
+    BracketOrder,
+    TrailingStopOrder,
+    ConditionalOrder,
+    ScaledOrder,
+    TimeInForce,
+)
 
 # Prop firms
 from .prop_firms.ftmo import FTMOConnector
@@ -63,6 +79,14 @@ __all__ = [
     'AlpacaConnector',
     'MT5Connector',
     'InteractiveBrokersConnector',
+    # Advanced orders
+    'AdvancedOrderManager',
+    'OCOOrder',
+    'BracketOrder',
+    'TrailingStopOrder',
+    'ConditionalOrder',
+    'ScaledOrder',
+    'TimeInForce',
     # Prop firms
     'FTMOConnector',
     'TopstepTraderConnector',
@@ -73,6 +97,6 @@ __all__ = [
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = '2.0.0'
 __author__ = 'HOPEFX Development Team'
-__description__ = 'Multi-broker integration with prop firm support'
+__description__ = 'Multi-broker integration with prop firm support and advanced order types'
