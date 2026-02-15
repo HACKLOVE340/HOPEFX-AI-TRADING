@@ -318,6 +318,7 @@ def _check_news() -> ComponentStatus:
             available=True,
             version=__version__,
             health=ComponentHealth.HEALTHY,
+            dependencies=['feedparser', 'textblob'],
             features=['sentiment analysis', 'impact prediction', 'economic calendar']
         )
     except ImportError as e:
@@ -485,7 +486,8 @@ def print_component_status_report() -> None:
             print(f"     Features: {', '.join(status.features[:3])}")
         
         if status.error:
-            print(f"     Error: {status.error[:60]}...")
+            error_display = status.error[:60] + "..." if len(status.error) > 60 else status.error
+            print(f"     Error: {error_display}")
     
     print("-" * 70)
     print(f"Total: {available_count}/{total_count} components available")
