@@ -6,7 +6,14 @@
 
 ## 📋 Overview
 
-HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions. This guide covers:
+HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions. 
+
+> ⚠️ **IMPORTANT: This is NOT a free application.** Payment is required to access the full platform. After the 14-day free trial, you must subscribe to one of our paid plans to continue using HOPEFX.
+
+This guide covers:
+- **14-Day Free Trial** - Evaluate before subscribing
+- **Monthly Subscriptions** - $2,000 to $10,000/month
+- **Yearly Subscriptions** - Save 15% with annual billing
 - Premium subscription tiers ($2,000 - $10,000/month)
 - Annual subscription discounts
 - Strategy marketplace
@@ -18,7 +25,7 @@ HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solut
 
 ### Trial Period
 
-**Price:** FREE for 5 days only
+**Price:** FREE for 14 days only
 
 **Features:**
 - ✅ Paper trading only (limited to 50 trades)
@@ -31,9 +38,11 @@ HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solut
 - ❌ Advanced strategies
 - ❌ Full backtesting
 
-**Duration:** 5 days (no extensions)
+**Duration:** 14 days (no extensions)
 
 **Target:** Evaluation and testing only
+
+> ⚠️ **Important:** This is a **paid platform**. After the 14-day trial, payment is required to continue accessing the platform. No free tier is available beyond the trial period.
 
 ---
 
@@ -116,7 +125,7 @@ HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solut
 
 | Feature | Trial | Starter | Professional | Enterprise |
 |---------|:-----:|:-------:|:------------:|:----------:|
-| **Price (Monthly)** | Free (5 days) | $2,000 | $5,000 | $10,000 |
+| **Price (Monthly)** | Free (14 days) | $2,000 | $5,000 | $10,000 |
 | **Price (Yearly)** | - | $20,400 | $51,000 | $102,000 |
 | **Annual Savings** | - | $3,600 | $9,000 | $18,000 |
 | Paper Trading | Limited | ✅ | ✅ | ✅ |
@@ -383,6 +392,8 @@ manager.cancel(
 | Enterprise | $10,000 | $102,000 | $18,000 (15%) |
 
 **Payment Terms:**
+- **14-Day Free Trial**: Evaluate the platform before subscribing
+- **Payment Required**: After trial, subscription payment required for continued access
 - Monthly: Billed on the 1st of each month
 - Yearly: Full payment upfront (15% discount applied)
 - Auto-renewal enabled by default
@@ -396,7 +407,7 @@ manager.cancel(
 
 | Type | Duration | Transferable | Devices | Support |
 |------|----------|--------------|---------|---------|
-| Trial | 5 days | No | 1 | Email only |
+| Trial | 14 days | No | 1 | Email only |
 | Monthly | 30 days | No | 3 | Based on tier |
 | Annual | 365 days | No | 5 | Based on tier |
 
@@ -492,7 +503,7 @@ result = license_manager.apply_code(
 - [x] Subscription management system
 - [x] License validation & DRM
 - [x] Premium pricing page
-- [x] Trial limitations (5 days)
+- [x] Trial limitations (14 days)
 - [ ] Automated billing & invoicing
 
 ### Phase 2: Growth (Month 3-4)
@@ -571,6 +582,7 @@ result = license_manager.apply_code(
 
 ### Payment Terms
 
+- **14-day free trial** - Evaluate before subscribing (no payment required for trial)
 - **Upfront payment required** - No free tier beyond trial
 - **Auto-renewal** - All subscriptions auto-renew
 - **Grace period** - 7 days for failed payments
