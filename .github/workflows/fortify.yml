@@ -1,0 +1,125 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# This workflow will initiate a Fortify scan.
+# Once the workflow completes, it will upload the results to the GitHub Code Scanning API.
+# The results will be visible in the Security tab under Code Scanning.
+
+# For more information on getting started with Fortify scanning, please refer to:
+# https://www.microfocus.com/en-us/cyberres/application-security/static-code-analyzer
+
+name: Fortify AST Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  # Configure Fortify on Demand credentials
+  FOD_URL: https://api.emea.fortify.com
+  # FOD_CLIENT_ID: ${{ secrets.FOD_CLIENT_ID }}
+  # FOD_CLIENT_SECRET: ${{ secrets.FOD_CLIENT_SECRET }}
+  FOD_USER: ${{ secrets.FOD_USER }}
+  FOD_PAT: ${{ secrets.FOD_PAT }}
+  FOD_RELEASE_ID: ${{ secrets.FOD_RELEASE_ID }}
+  
+  # Configure Fortify SSC credentials  
+  SSC_URL: ${{ secrets.SSC_URL }}
+  SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
+  SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+
+jobs:
+  Fortify-SAST:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Check Out Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      ################################################################################
+      # Fortify on Demand (FoD) Configuration Section
+      # This section configures authentication for Fortify on Demand cloud service.
+      # FoD requires either:
+      #   - Client credentials (FOD_CLIENT_ID + FOD_CLIENT_SECRET), OR
+      #   - User credentials (FOD_USER + FOD_PAT)
+      # Currently FOD_USER and FOD_PAT are set but FOD_CLIENT_ID is commented out.
+      ################################################################################
+
+      - name: Download Fortify ScanCentral Client
+        uses: fortify/gha-setup-scancentral-client@v2.3.0
+        with:
+          version: 23.1.0
+
+      - name: Package Code
+        run: scancentral package -bt none -o package.zip
+
+      - name: Start FoD SAST Scan
+        uses: fortify/gha-fod-generate-sarif@v1.3.0
+        with:
+          base-url: ${{ env.FOD_URL }}
+          client-auth-token: ${{ env.FOD_CLIENT_ID }}:${{ env.FOD_CLIENT_SECRET }}
+          release-id: ${{ env.FOD_RELEASE_ID }}
+          entitlement: SubscriptionOnly
+          in-progress-scan-action-type: DoNotStartScan
+          package-file: package.zip
+          sarif-file: fortify-sast.sarif
+
+      - name: Upload FoD SARIF file to GitHub
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: fortify-sast.sarif
+
+      ################################################################################
+      # Fortify Software Security Center (SSC) Configuration Section
+      # This section configures authentication for on-premise Fortify SSC.
+      # SSC uses SSC_URL and SSC_TOKEN for authentication.
+      ################################################################################
+
+      - name: Download Fortify ScanCentral Client for SSC
+        uses: fortify/gha-setup-scancentral-client@v2.3.0
+        with:
+          version: 23.1.0
+
+      - name: Package Code for SSC
+        run: scancentral package -bt none -o package-ssc.zip
+
+      - name: Start SSC SAST Scan
+        uses: fortify/gha-ssc-generate-sarif@v1.3.0
+        with:
+          ssc-url: ${{ env.SSC_URL }}
+          ssc-token: ${{ env.SSC_TOKEN }}
+          application-version: HOPEFX-AI-TRADING:main
+          package-file: package-ssc.zip
+          sarif-file: fortify-ssc-sast.sarif
+
+      - name: Upload SSC SARIF file to GitHub
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: fortify-ssc-sast.sarif
+
+      - name: Import Debricked Results
+        if: always()
+        run: |
+          echo "Importing Debricked SCA results..."
+          # Add Debricked integration here if needed
+        env:
+          DEBRICKED_TOKEN: ${{ secrets.DEBRICKED_TOKEN }}
