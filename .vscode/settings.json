@@ -1,0 +1,7 @@
+{
+  "inlineChat.enableV2": true,
+  "inlineChat.finishOnType": true,
+  "inlineChat.notebookAgent": true,
+  "chat.viewProgressBadge.enabled": true,
+  "chat.unifiedAgentsBar.enabled": true
+}
