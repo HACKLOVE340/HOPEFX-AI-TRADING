@@ -71,3 +71,8 @@ __all__ = [
     # Factory
     'BrokerFactory',
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Multi-broker integration with prop firm support'
