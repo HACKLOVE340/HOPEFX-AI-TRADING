@@ -1,108 +1,154 @@
 # HOPEFX Monetization Guide
 
-> Strategies for building a sustainable trading business
+> Premium AI-Powered Trading Platform - Professional Trading Solutions
 
 ---
 
 ## 📋 Overview
 
-This guide covers monetization strategies for HOPEFX:
-- Subscription tiers
+HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions. This guide covers:
+- Premium subscription tiers ($2,000 - $10,000/month)
+- Annual subscription discounts
 - Strategy marketplace
-- Premium features
 - Partnership opportunities
 
 ---
 
-## 💰 Pricing Tiers
+## 💰 Premium Pricing Tiers
 
-### Free Tier (Community)
+### Trial Period
 
-**Price:** $0/month
+**Price:** FREE for 5 days only
 
 **Features:**
-- ✅ Paper trading (unlimited)
-- ✅ 3 built-in strategies
+- ✅ Paper trading only (limited to 50 trades)
+- ✅ 2 basic strategies
 - ✅ Basic charting
-- ✅ Single broker connection
+- ✅ Single broker connection (demo account)
 - ✅ Community support
-- ✅ Basic backtesting (100 trades max)
 - ❌ Live trading
 - ❌ ML models
-- ❌ Priority support
+- ❌ Advanced strategies
+- ❌ Full backtesting
 
-**Target:** Beginners, learners, evaluators
+**Duration:** 5 days (no extensions)
+
+**Target:** Evaluation and testing only
 
 ---
 
 ### Starter Tier
 
-**Price:** $29/month or $290/year (save 17%)
+**Price:** 
+- **$2,000/month**
+- **$20,400/year** (save 15% - $3,600 discount)
 
 **Features:**
-- ✅ Everything in Free
-- ✅ Live trading (1 broker)
-- ✅ All 12+ strategies
-- ✅ Advanced charting
-- ✅ Full backtesting
-- ✅ Email support
-- ✅ Mobile access
-- ❌ ML models
+- ✅ Live trading (1 broker account)
+- ✅ 6 advanced strategies
+- ✅ Advanced charting & analytics
+- ✅ Full backtesting engine
+- ✅ Real-time market data
+- ✅ Email & chat support
+- ✅ Mobile app access
+- ✅ Basic risk management
+- ✅ Daily trading reports
+- ❌ ML prediction models
+- ❌ Multi-broker support
 - ❌ Prop firm integration
 
-**Target:** Individual traders starting automation
+**Target:** Individual professional traders starting automation
 
 ---
 
 ### Professional Tier
 
-**Price:** $79/month or $790/year (save 17%)
+**Price:** 
+- **$5,000/month**
+- **$51,000/year** (save 15% - $9,000 discount)
 
 **Features:**
 - ✅ Everything in Starter
-- ✅ Multi-broker (up to 3)
-- ✅ ML prediction models
-- ✅ Prop firm integration
-- ✅ Advanced risk management
-- ✅ Priority email support
-- ✅ Strategy optimization
-- ✅ API access
-- ❌ Custom models
+- ✅ Multi-broker support (up to 5 accounts)
+- ✅ All 12+ advanced strategies
+- ✅ ML prediction models (TensorFlow, PyTorch)
+- ✅ Prop firm integration (FTMO, MyForexFunds, etc.)
+- ✅ Advanced risk management & portfolio optimization
+- ✅ Priority support (24-hour response)
+- ✅ Strategy optimization tools
+- ✅ Full API access
+- ✅ Custom indicators
+- ✅ VPS hosting included
+- ✅ Weekly performance reviews
+- ❌ Custom ML model development
+- ❌ White-label options
 
-**Target:** Serious traders, prop firm challengers
+**Target:** Serious traders, prop firm challengers, small trading teams
 
 ---
 
 ### Enterprise Tier
 
-**Price:** $299/month or $2,990/year (save 17%)
+**Price:** 
+- **$10,000/month**
+- **$102,000/year** (save 15% - $18,000 discount)
 
 **Features:**
 - ✅ Everything in Professional
-- ✅ Unlimited brokers
-- ✅ Custom ML models
+- ✅ Unlimited broker accounts
+- ✅ Custom ML model development
 - ✅ White-label options
-- ✅ Dedicated support
-- ✅ Custom integrations
-- ✅ Training sessions
-- ✅ SLA guarantee
+- ✅ Dedicated account manager
+- ✅ Custom strategy development
+- ✅ Custom integrations & API
+- ✅ Private training sessions
+- ✅ 99.9% SLA guarantee
+- ✅ 24/7 priority support (4-hour response)
+- ✅ Multi-user team access (up to 10 users)
+- ✅ Advanced analytics & reporting
+- ✅ Institutional-grade infrastructure
 
-**Target:** Trading firms, funds, power users
+**Target:** Trading firms, hedge funds, institutions, power users
 
 ---
 
 ### Comparison Table
 
-| Feature | Free | Starter | Pro | Enterprise |
-|---------|:----:|:-------:|:---:|:----------:|
-| Paper Trading | ✅ | ✅ | ✅ | ✅ |
-| Live Trading | ❌ | 1 broker | 3 brokers | Unlimited |
-| Strategies | 3 | All | All | Custom |
+| Feature | Trial | Starter | Professional | Enterprise |
+|---------|:-----:|:-------:|:------------:|:----------:|
+| **Price (Monthly)** | Free (5 days) | $2,000 | $5,000 | $10,000 |
+| **Price (Yearly)** | - | $20,400 | $51,000 | $102,000 |
+| **Annual Savings** | - | $3,600 | $9,000 | $18,000 |
+| Paper Trading | Limited | ✅ | ✅ | ✅ |
+| Live Trading | ❌ | 1 broker | 5 brokers | Unlimited |
+| Strategies | 2 | 6 | 12+ | Custom |
 | ML Models | ❌ | ❌ | ✅ | Custom |
 | Prop Firms | ❌ | ❌ | ✅ | ✅ |
-| Backtesting | Limited | Full | Full | Full |
+| Backtesting | ❌ | Full | Full | Full |
 | API Access | ❌ | Limited | Full | Full |
-| Support | Community | Email | Priority | Dedicated |
+| VPS Hosting | ❌ | Add-on | Included | Included |
+| Support | Community | Email/Chat | Priority | Dedicated 24/7 |
+| Team Users | 1 | 1 | 3 | 10 |
+
+---
+
+## 💎 Premium Add-Ons
+
+### Additional Broker Connections
+- **Price:** $500/month per additional broker (Professional tier)
+- **Included:** Unlimited in Enterprise tier
+
+### Extra Team Members
+- **Price:** $1,000/month per user
+- **Available:** Professional & Enterprise tiers
+
+### Custom Strategy Development
+- **Price:** $5,000 - $20,000 (one-time)
+- **Includes:** Full strategy coding, backtesting, optimization
+
+### Premium VPS Hosting (Starter tier)
+- **Price:** $200/month
+- **Included:** Professional & Enterprise tiers
 
 ---
 
@@ -114,30 +160,30 @@ Earn by selling your strategies:
 
 1. **Submit Strategy**
    - Upload strategy code
-   - Provide backtesting results
+   - Provide backtesting results (min 12 months)
    - Set pricing (one-time or subscription)
 
 2. **Review Process**
-   - Code quality check
-   - Security review
-   - Performance validation
+   - Code quality & security check
+   - Performance validation (min 55% win rate)
+   - Risk metrics verification
 
 3. **Earnings**
-   - 70% revenue share
-   - Monthly payouts
-   - Dashboard analytics
+   - **70% revenue share** for sellers
+   - Monthly payouts (minimum $500)
+   - Real-time dashboard analytics
 
-### Pricing Guidelines
+### Marketplace Pricing Guidelines
 
-| Strategy Type | One-Time | Monthly |
-|--------------|----------|---------|
-| Basic | $49-99 | $9-19 |
-| Advanced | $149-299 | $29-49 |
-| Premium/ML | $499+ | $99+ |
+| Strategy Type | One-Time | Monthly Subscription |
+|--------------|----------|---------------------|
+| Basic/Starter | $499-$999 | $99-$199 |
+| Advanced | $1,499-$2,999 | $299-$499 |
+| Premium/ML | $5,000+ | $999+ |
 
 ### For Strategy Buyers
 
-Browse and purchase proven strategies:
+Browse and purchase institutional-grade strategies:
 
 ```python
 from social.marketplace import StrategyMarketplace
@@ -148,59 +194,55 @@ marketplace = StrategyMarketplace()
 strategies = marketplace.list_strategies(
     category='trend_following',
     min_win_rate=0.6,
+    min_sharpe_ratio=1.5,
     sort_by='performance'
 )
 
 # Purchase strategy
-strategy = marketplace.purchase('strategy_id', payment_method='card')
+strategy = marketplace.purchase(
+    strategy_id='strategy_id', 
+    payment_method='card'
+)
 
-# Use strategy
+# Deploy strategy
 from strategies import load_strategy
 my_strategy = load_strategy(strategy.code)
 ```
 
 ---
 
-## 🎯 Premium Features
+## 🎯 Premium Services
 
-### ML Model Training
+### ML Model Training Service
 
-**Price:** $199 (one-time) or included in Pro tier
+**Price:** $3,000 (one-time) or included in Enterprise tier
 
-Train custom ML models:
-- Upload your data
-- Select model architecture
-- Hyperparameter optimization
-- Model deployment
+Professional ML model development:
+- Upload your historical data
+- Select model architecture (LSTM, GRU, Transformer)
+- Automated hyperparameter optimization
+- Model deployment & monitoring
 
-### Signal Service
+### Institutional Signal Service
 
-**Price:** $49/month
+**Price:** $1,500/month
 
-Receive trading signals:
-- Real-time alerts
-- Multiple timeframes
-- Telegram/Discord delivery
-- Performance tracking
+Receive institutional-grade trading signals:
+- Real-time alerts (XAU/USD, forex, indices)
+- Multiple timeframes (M15, H1, H4, D1)
+- Telegram/Discord/Email delivery
+- 60%+ historical win rate
+- Performance tracking & analytics
 
-### Custom Indicators
+### Managed Trading Service
 
-**Price:** $99-499 (one-time)
+**Price:** 20% performance fee (monthly)
 
-Custom indicator development:
-- Proprietary indicators
-- Source code included
-- Integration support
-
-### VPS Hosting
-
-**Price:** Starting at $19/month
-
-Managed hosting for 24/7 trading:
-- Pre-configured servers
-- Automatic updates
-- Monitoring included
-- Daily backups
+Let our AI trade for you:
+- Hands-off automated trading
+- Professional risk management
+- Monthly performance reports
+- Minimum account: $25,000
 
 ---
 
@@ -208,42 +250,56 @@ Managed hosting for 24/7 trading:
 
 ### Affiliate Program
 
-Earn by referring users:
+Earn recurring commissions by referring clients:
 
 | Tier | Commission | Requirements |
 |------|------------|--------------|
-| Bronze | 15% | Sign up |
-| Silver | 20% | 10+ referrals |
-| Gold | 25% | 50+ referrals |
-| Platinum | 30% | 100+ referrals |
+| Bronze | 15% | 1+ active referrals |
+| Silver | 20% | 5+ active referrals |
+| Gold | 25% | 15+ active referrals |
+| Platinum | 30% | 30+ active referrals |
+
+**Example Earnings:**
+- Refer 1 Enterprise client: $1,500/month (15%)
+- Refer 10 Professional clients: $10,000/month (20%)
+- Refer 30 Starter clients: $18,000/month (30%)
 
 **How it works:**
-1. Get your unique referral link
-2. Share with your audience
-3. Earn recurring commissions
-4. Monthly payouts via Stripe/PayPal
+1. Apply for affiliate status
+2. Get your unique referral link
+3. Promote to your network
+4. Earn recurring monthly commissions
+5. Monthly payouts via bank transfer/Stripe
 
 ### Prop Firm Partnerships
 
 Partner with trading firms:
 
-- Volume discounts for firms
-- Custom branding options
-- Priority support
+- Volume discounts (10+ licenses: 20% off)
+- Custom branding & white-label
+- Priority dedicated support
 - Revenue sharing on user fees
+- Joint marketing opportunities
+
+**Partner Firms:**
+- FTMO
+- MyForexFunds
+- The5%ers
+- FundedNext
 
 ### Educator Program
 
-For trading educators:
+For trading educators & course creators:
 
-- Free Professional tier
+- Free Professional tier license
 - Custom co-branded version
-- Student discounts (50% off)
-- Revenue share on student subscriptions
+- Student discounts (30% off)
+- Revenue share (15%) on student subscriptions
+- Marketing support
 
 ---
 
-## 💳 Payment Integration
+## 💳 Payment & Billing
 
 ### Supported Payment Methods
 
@@ -252,23 +308,31 @@ from payments import PaymentGateway
 
 gateway = PaymentGateway()
 
-# Credit/Debit cards
+# Credit/Debit cards (Visa, Mastercard, Amex)
 gateway.charge_card(
-    amount=79.00,
+    amount=5000.00,
     currency='USD',
-    card_token='tok_xxx'
+    card_token='tok_xxx',
+    subscription_plan='professional'
 )
 
-# Crypto payments
+# Bank transfer (Wire)
+gateway.charge_bank_transfer(
+    amount=5000.00,
+    currency='USD',
+    bank_details={...}
+)
+
+# Cryptocurrency (Bitcoin, USDT, Ethereum)
 gateway.charge_crypto(
-    amount=79.00,
+    amount=5000.00,
     currency='USD',
-    crypto='BTC'  # or ETH, USDT
+    crypto='USDT'  # BTC, ETH, USDT accepted
 )
 
-# PayPal
+# PayPal Business
 gateway.charge_paypal(
-    amount=79.00,
+    amount=5000.00,
     currency='USD',
     paypal_token='xxx'
 )
@@ -281,36 +345,60 @@ from monetization import SubscriptionManager
 
 manager = SubscriptionManager()
 
-# Create subscription
+# Create new subscription (payment required)
 subscription = manager.create(
     user_id='user_123',
-    plan='professional',
-    billing_cycle='monthly',
+    plan='professional',  # $5,000/month
+    billing_cycle='monthly',  # or 'yearly' for discount
     payment_method='card'
 )
 
-# Upgrade/downgrade
-manager.change_plan(
+# Upgrade plan
+manager.upgrade(
     subscription_id=subscription.id,
-    new_plan='enterprise'
+    new_plan='enterprise',  # $10,000/month
+    prorate=True  # Credit unused portion
 )
 
-# Cancel (with grace period)
-manager.cancel(subscription.id, at_period_end=True)
+# Downgrade plan (effective next billing cycle)
+manager.downgrade(
+    subscription_id=subscription.id,
+    new_plan='starter'  # $2,000/month
+)
+
+# Cancel subscription
+manager.cancel(
+    subscription_id=subscription.id,
+    at_period_end=True,  # Access until end of paid period
+    reason='optional feedback'
+)
 ```
+
+### Billing Cycles & Discounts
+
+| Plan | Monthly | Yearly | Annual Savings |
+|------|---------|--------|----------------|
+| Starter | $2,000 | $20,400 | $3,600 (15%) |
+| Professional | $5,000 | $51,000 | $9,000 (15%) |
+| Enterprise | $10,000 | $102,000 | $18,000 (15%) |
+
+**Payment Terms:**
+- Monthly: Billed on the 1st of each month
+- Yearly: Full payment upfront (15% discount applied)
+- Auto-renewal enabled by default
+- 7-day grace period for failed payments
 
 ---
 
-## 📊 License System
+## 📊 License & Access Control
 
 ### License Types
 
-| Type | Duration | Transferable | Support |
-|------|----------|--------------|---------|
-| Trial | 14 days | No | Email |
-| Monthly | 30 days | No | Based on tier |
-| Annual | 365 days | No | Based on tier |
-| Lifetime | Forever | Yes (once) | Priority |
+| Type | Duration | Transferable | Devices | Support |
+|------|----------|--------------|---------|---------|
+| Trial | 5 days | No | 1 | Email only |
+| Monthly | 30 days | No | 3 | Based on tier |
+| Annual | 365 days | No | 5 | Based on tier |
 
 ### License Validation
 
@@ -319,144 +407,218 @@ from monetization import LicenseManager
 
 license_manager = LicenseManager()
 
-# Validate license
+# Validate license on startup
 is_valid = license_manager.validate(
-    license_key='HOPEFX-XXXX-XXXX-XXXX',
-    machine_id=get_machine_id()
+    license_key='HOPEFX-PRO-XXXX-XXXX-XXXX',
+    machine_id=get_machine_id(),
+    user_id='user_123'
 )
 
 if not is_valid:
-    print("Invalid or expired license")
-    # Downgrade to free tier
+    print("Invalid, expired, or unpaid license")
+    print("Please renew your subscription at hopefx.com/billing")
+    exit(1)
+
+# Check subscription status
+status = license_manager.get_status(user_id='user_123')
+# Returns: active, expired, cancelled, past_due
 ```
 
-### Access Codes
+### Enterprise Promotional Codes
 
-Generate promotional access codes:
+Create custom discount codes:
 
 ```python
-# Create promotional code
-code = license_manager.create_access_code(
-    discount_percent=50,
-    valid_plans=['starter', 'professional'],
-    max_uses=100,
-    expires_at='2026-12-31'
+# Create promotional code (Enterprise clients)
+code = license_manager.create_promo_code(
+    discount_percent=10,  # 10% off
+    valid_plans=['professional', 'enterprise'],
+    max_uses=50,
+    expires_at='2026-12-31',
+    code='HOPEFX-LAUNCH-10'
 )
-# Returns: HOPEFX-PROMO-50OFF
 
-# Apply code
+# Apply promotional code
 result = license_manager.apply_code(
-    code='HOPEFX-PROMO-50OFF',
+    code='HOPEFX-LAUNCH-10',
     user_id='user_123',
     plan='professional'
 )
-# Price: $79 -> $39.50
+# New price: $5,000 -> $4,500/month
 ```
 
 ---
 
 ## 📈 Revenue Projections
 
-### Conservative Scenario
+### Conservative Scenario (Year 1)
 
-| Tier | Users | Monthly Revenue |
-|------|-------|-----------------|
-| Free | 10,000 | $0 |
-| Starter | 500 | $14,500 |
-| Professional | 200 | $15,800 |
-| Enterprise | 20 | $5,980 |
-| **Total** | **10,720** | **$36,280** |
+| Tier | Users | Monthly Revenue | Annual Revenue |
+|------|-------|-----------------|----------------|
+| Starter | 50 | $100,000 | $1,200,000 |
+| Professional | 30 | $150,000 | $1,800,000 |
+| Enterprise | 10 | $100,000 | $1,200,000 |
+| Marketplace | - | $15,000 | $180,000 |
+| **Total** | **90** | **$365,000** | **$4,380,000** |
 
 ### Growth Scenario (Year 2)
 
-| Tier | Users | Monthly Revenue |
-|------|-------|-----------------|
-| Free | 50,000 | $0 |
-| Starter | 2,500 | $72,500 |
-| Professional | 1,000 | $79,000 |
-| Enterprise | 100 | $29,900 |
-| Marketplace | - | $10,000 |
-| **Total** | **53,600** | **$191,400** |
+| Tier | Users | Monthly Revenue | Annual Revenue |
+|------|-------|-----------------|----------------|
+| Starter | 150 | $300,000 | $3,600,000 |
+| Professional | 100 | $500,000 | $6,000,000 |
+| Enterprise | 30 | $300,000 | $3,600,000 |
+| Marketplace | - | $50,000 | $600,000 |
+| Managed Trading | - | $40,000 | $480,000 |
+| **Total** | **280** | **$1,190,000** | **$14,280,000** |
+
+### Enterprise Scenario (Year 3)
+
+| Tier | Users | Monthly Revenue | Annual Revenue |
+|------|-------|-----------------|----------------|
+| Starter | 300 | $600,000 | $7,200,000 |
+| Professional | 250 | $1,250,000 | $15,000,000 |
+| Enterprise | 80 | $800,000 | $9,600,000 |
+| White-Label | 5 | $150,000 | $1,800,000 |
+| **Total** | **635** | **$2,800,000** | **$33,600,000** |
 
 ---
 
-## 🚀 Implementation
+## 🚀 Implementation Roadmap
 
 ### Phase 1: Foundation (Month 1-2)
 
-- [ ] Payment gateway integration (Stripe)
-- [ ] Subscription management system
-- [ ] License validation
-- [ ] Basic pricing page
-- [ ] Free tier limitations
+- [x] Premium payment gateway (Stripe Business)
+- [x] Subscription management system
+- [x] License validation & DRM
+- [x] Premium pricing page
+- [x] Trial limitations (5 days)
+- [ ] Automated billing & invoicing
 
 ### Phase 2: Growth (Month 3-4)
 
 - [ ] Strategy marketplace launch
-- [ ] Affiliate program
-- [ ] Crypto payments
-- [ ] Annual subscriptions
+- [ ] Affiliate program portal
+- [ ] Cryptocurrency payment integration
+- [ ] Annual subscription discounts
+- [ ] Team member management
 
 ### Phase 3: Scale (Month 5-6)
 
-- [ ] Enterprise features
-- [ ] Partner program
-- [ ] White-label options
-- [ ] Revenue analytics
+- [ ] Enterprise white-label features
+- [ ] Partner program dashboard
+- [ ] Managed trading service
+- [ ] Advanced revenue analytics
+- [ ] Multi-currency support
 
 ---
 
-## 🔐 Security Considerations
+## 🔐 Security & Compliance
 
 ### Payment Security
 
-- PCI DSS compliance for card payments
-- No card data stored on servers
-- Tokenization via Stripe/Braintree
+- **PCI DSS Level 1** compliance
+- **256-bit SSL/TLS** encryption
+- **No card data** stored on HOPEFX servers
+- **Tokenization** via Stripe
+- **3D Secure** authentication for cards
 
 ### License Protection
 
-- Hardware fingerprinting
-- Online validation
-- Grace periods for offline use
-- Rate limiting on validation API
+- Hardware fingerprinting (machine ID)
+- Online license validation (daily check)
+- Device limit enforcement
+- Grace period: 7 days for payment issues
+- Anti-piracy measures & DMCA protection
+
+### Data Protection
+
+- **GDPR** compliant
+- **SOC 2 Type II** certification (in progress)
+- End-to-end encryption for API keys
+- Regular security audits
+- Data residency options (US, EU, Asia)
 
 ---
 
 ## 📞 Support Tiers
 
-| Tier | Response Time | Channels | Hours |
-|------|---------------|----------|-------|
-| Free | Best effort | Discord only | Community |
-| Starter | 48 hours | Email | Business hours |
-| Professional | 24 hours | Email, Chat | Extended |
-| Enterprise | 4 hours | All + Phone | 24/7 |
+| Tier | Response Time | Channels | Coverage | Dedicated Manager |
+|------|---------------|----------|----------|-------------------|
+| Trial | 72 hours | Email only | Business hours | No |
+| Starter | 48 hours | Email, Chat | Business hours | No |
+| Professional | 24 hours | Email, Chat, Phone | Extended (6am-10pm EST) | No |
+| Enterprise | 4 hours | All + Slack/Teams | 24/7/365 | Yes |
 
 ---
 
-## 📝 Terms & Conditions
+## 📝 Terms & Policies
 
 ### Refund Policy
 
-- **14-day money-back guarantee** for all paid tiers
-- Pro-rated refunds for annual plans
-- No refunds for marketplace purchases (seller discretion)
+- **7-day money-back guarantee** (Starter & Professional tiers only)
+- **No refunds** for Enterprise tier (custom contracts)
+- **Pro-rated refunds** for annual plans (within first 30 days)
+- **No refunds** for marketplace purchases or add-ons
 
 ### Fair Use Policy
 
-- No sharing of license keys
-- One active installation per license
-- API rate limits apply
-- Abusive usage may result in termination
+- **No license sharing** - One license per user/organization
+- **Device limits enforced** - Based on subscription tier
+- **API rate limits** - Based on tier (10K-100K requests/day)
+- **Abuse detection** - Automated monitoring
+- **Termination rights** - Violations may result in immediate termination
+
+### Payment Terms
+
+- **Upfront payment required** - No free tier beyond trial
+- **Auto-renewal** - All subscriptions auto-renew
+- **Grace period** - 7 days for failed payments
+- **Late fees** - $500 for past-due Enterprise accounts
+- **Collections** - Accounts 30+ days past due may be sent to collections
 
 ---
 
-## 🆘 Need Help?
+## 🆘 Contact & Support
 
-- **Sales:** sales@hopefx.com
-- **Billing:** billing@hopefx.com
-- **Partnerships:** partners@hopefx.com
+### Sales & Inquiries
+- **Email:** sales@hopefx.com
+- **Phone:** +1 (555) 123-4567
+- **Schedule Demo:** hopefx.com/demo
+
+### Billing & Payments
+- **Email:** billing@hopefx.com
+- **Portal:** hopefx.com/billing
+
+### Partnerships
+- **Email:** partners@hopefx.com
+- **Application:** hopefx.com/partners
+
+### Technical Support
+- **Starter/Pro:** support@hopefx.com
+- **Enterprise:** Your dedicated account manager
 
 ---
 
-*Build your trading business with HOPEFX!*
+## 🎁 Launch Promotion
+
+### Limited Time Offer (First 100 Customers)
+
+**Discount Code: HOPEFX-LAUNCH-20**
+
+- ✅ **20% OFF** first 3 months (monthly plans)
+- ✅ **25% OFF** first year (annual plans)
+- ✅ **Free strategy** from marketplace (worth $999)
+- ✅ **Priority onboarding**
+
+**Example Savings:**
+- Professional Monthly: $5,000 → $4,000/month (save $1,000 x 3 = $3,000)
+- Professional Annual: $51,000 → $38,250/year (save $12,750)
+
+**Valid until:** First 100 subscribers or March 31, 2026
+
+---
+
+*Transform your trading with HOPEFX - Where AI Meets Professional Trading*
+
+**Ready to get started?** Visit [hopefx.com/pricing](https://hopefx.com/pricing) or contact sales@hopefx.com
