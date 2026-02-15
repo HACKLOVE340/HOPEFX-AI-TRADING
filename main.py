@@ -4,13 +4,25 @@ HOPEFX AI Trading Framework - Main Entry Point
 
 This is the main entry point for the HOPEFX AI Trading framework.
 It initializes the application, loads configuration, and starts the trading system.
+
+Integrated Components:
+- Core: Config, Database, Cache, Strategies, Risk, Brokers, Notifications
+- AI/ML: LSTM Price Predictor, Random Forest Classifier, Feature Engineering
+- Backtesting: Engine, Optimizer, Walk-Forward Analysis, Reports
+- News: Multi-source Aggregator, Impact Predictor, Economic Calendar
+- Analytics: Portfolio Optimizer, Risk Analyzer, Simulation Engine
+- Monetization: Subscription, Pricing, Commission, License Validation
+- Payments: Wallet, Payment Gateway, Transaction Manager, Compliance
+- Social: Copy Trading, Strategy Marketplace, Leaderboards
+- Mobile: Mobile API, Push Notifications
+- Charting: Chart Engine, Indicator Library
 """
 
 import sys
 import os
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -22,11 +34,98 @@ from database.models import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Import trading components
+# Import core trading components
 from strategies import StrategyManager
 from risk import RiskManager, RiskConfig
 from brokers import PaperTradingBroker
 from notifications import NotificationManager, NotificationLevel
+
+# Import ML/AI components (optional - may not be available in all environments)
+try:
+    from ml import LSTMPricePredictor, RandomForestTradingClassifier, TechnicalFeatureEngineer
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+
+# Import backtesting components
+try:
+    from backtesting import (
+        BacktestEngine, PerformanceMetrics, ParameterOptimizer,
+        WalkForwardAnalysis, ReportGenerator, DataHandler
+    )
+    BACKTESTING_AVAILABLE = True
+except ImportError:
+    BACKTESTING_AVAILABLE = False
+
+# Import news integration
+try:
+    from news import (
+        MultiSourceAggregator, ImpactPredictor, EconomicCalendar,
+        SentimentAnalyzer, FinancialSentimentAnalyzer
+    )
+    NEWS_AVAILABLE = True
+except ImportError:
+    NEWS_AVAILABLE = False
+
+# Import analytics
+try:
+    from analytics import (
+        portfolio_optimizer, risk_analyzer, simulation_engine,
+        PortfolioOptimizer, RiskAnalyzer, SimulationEngine
+    )
+    ANALYTICS_AVAILABLE = True
+except ImportError:
+    ANALYTICS_AVAILABLE = False
+
+# Import monetization
+try:
+    from monetization import (
+        PricingManager, SubscriptionManager, CommissionTracker,
+        AccessCodeGenerator, LicenseValidator
+    )
+    MONETIZATION_AVAILABLE = True
+except ImportError:
+    MONETIZATION_AVAILABLE = False
+
+# Import payments
+try:
+    from payments import (
+        WalletManager, PaymentGateway, TransactionManager,
+        SecurityManager, ComplianceManager
+    )
+    PAYMENTS_AVAILABLE = True
+except ImportError:
+    PAYMENTS_AVAILABLE = False
+
+# Import social trading
+try:
+    from social import (
+        copy_trading_engine, marketplace, leaderboard_manager,
+        CopyTradingEngine, StrategyMarketplace, LeaderboardManager
+    )
+    SOCIAL_AVAILABLE = True
+except ImportError:
+    SOCIAL_AVAILABLE = False
+
+# Import mobile
+try:
+    from mobile import (
+        mobile_api, push_notification_manager,
+        MobileAPI, PushNotificationManager
+    )
+    MOBILE_AVAILABLE = True
+except ImportError:
+    MOBILE_AVAILABLE = False
+
+# Import charting
+try:
+    from charting import (
+        chart_engine, indicator_library,
+        ChartEngine, IndicatorLibrary
+    )
+    CHARTING_AVAILABLE = True
+except ImportError:
+    CHARTING_AVAILABLE = False
 
 # Setup logging
 logging.basicConfig(
@@ -55,11 +154,61 @@ class HopeFXTradingApp:
         self.db_session = None
         self.cache = None
 
-        # Trading components
+        # Core trading components
         self.strategy_manager = None
         self.risk_manager = None
         self.broker = None
         self.notification_manager = None
+
+        # ML/AI components
+        self.ml_models: Dict[str, Any] = {}
+        self.feature_engineer = None
+
+        # Backtesting components
+        self.backtest_engine = None
+        self.optimizer = None
+        self.data_handler = None
+
+        # News & sentiment components
+        self.news_aggregator = None
+        self.impact_predictor = None
+        self.economic_calendar = None
+        self.sentiment_analyzer = None
+
+        # Analytics components
+        self.portfolio_optimizer = None
+        self.analytics_risk_analyzer = None
+        self.simulation_engine = None
+
+        # Monetization & payments
+        self.subscription_manager = None
+        self.pricing_manager = None
+        self.wallet_manager = None
+        self.payment_gateway = None
+        self.license_validator = None
+
+        # Social trading
+        self.copy_trading_engine = None
+        self.strategy_marketplace = None
+        self.leaderboard_manager = None
+
+        # Mobile & charting
+        self.mobile_api = None
+        self.chart_engine = None
+        self.indicator_library = None
+
+        # Track available modules
+        self.available_modules: Dict[str, bool] = {
+            'ml': ML_AVAILABLE,
+            'backtesting': BACKTESTING_AVAILABLE,
+            'news': NEWS_AVAILABLE,
+            'analytics': ANALYTICS_AVAILABLE,
+            'monetization': MONETIZATION_AVAILABLE,
+            'payments': PAYMENTS_AVAILABLE,
+            'social': SOCIAL_AVAILABLE,
+            'mobile': MOBILE_AVAILABLE,
+            'charting': CHARTING_AVAILABLE,
+        }
 
         logger.info("Initializing HOPEFX AI Trading Framework v1.0.0")
         logger.info(f"Environment: {self.environment}")
@@ -70,16 +219,58 @@ class HopeFXTradingApp:
         logger.info("HOPEFX AI TRADING FRAMEWORK - INITIALIZATION")
         logger.info("=" * 70)
 
+        # Count available modules for progress display
+        total_steps = 7 + sum(self.available_modules.values())
+
         # Infrastructure Components
         self._init_config()        # Step 1: Load configuration
         self._init_database()      # Step 2: Initialize database
         self._init_cache()         # Step 3: Initialize cache
 
-        # Trading Components
+        # Core Trading Components
         self._init_notifications() # Step 4: Initialize notifications
         self._init_risk_manager()  # Step 5: Initialize risk manager
         self._init_broker()        # Step 6: Initialize broker
         self._init_strategies()    # Step 7: Initialize strategy manager
+
+        # Extended Components (conditionally loaded)
+        current_step = 8
+
+        if self.available_modules['ml']:
+            self._init_ml_components(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['backtesting']:
+            self._init_backtesting(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['news']:
+            self._init_news_integration(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['analytics']:
+            self._init_analytics(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['monetization']:
+            self._init_monetization(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['payments']:
+            self._init_payments(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['social']:
+            self._init_social_trading(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['mobile']:
+            self._init_mobile(current_step, total_steps)
+            current_step += 1
+
+        if self.available_modules['charting']:
+            self._init_charting(current_step, total_steps)
+            current_step += 1
 
         logger.info("=" * 70)
         logger.info("INITIALIZATION COMPLETE - ALL SYSTEMS READY")
@@ -276,6 +467,210 @@ class HopeFXTradingApp:
             logger.error(f"✗ Strategy manager initialization failed: {e}")
             raise
 
+    # =========================================================================
+    # EXTENDED COMPONENT INITIALIZATION
+    # =========================================================================
+
+    def _init_ml_components(self, step: int, total: int):
+        """Initialize ML/AI components"""
+        logger.info(f"[{step}/{total}] Initializing ML/AI components...")
+
+        try:
+            # Initialize feature engineer
+            self.feature_engineer = TechnicalFeatureEngineer()
+
+            # Initialize ML models (lazy loading - models trained on demand)
+            self.ml_models = {
+                'lstm_predictor': None,  # LSTMPricePredictor - initialized when needed
+                'rf_classifier': None,   # RandomForestTradingClassifier - initialized when needed
+            }
+
+            logger.info("✓ ML/AI components initialized")
+            logger.info("  - Feature Engineer: Ready")
+            logger.info("  - LSTM Predictor: Available (lazy load)")
+            logger.info("  - RF Classifier: Available (lazy load)")
+
+        except Exception as e:
+            logger.warning(f"⚠ ML components initialization failed: {e}")
+            self.feature_engineer = None
+            self.ml_models = {}
+
+    def _init_backtesting(self, step: int, total: int):
+        """Initialize backtesting engine"""
+        logger.info(f"[{step}/{total}] Initializing backtesting engine...")
+
+        try:
+            # Initialize data handler
+            self.data_handler = DataHandler()
+
+            # Initialize backtest engine
+            self.backtest_engine = BacktestEngine()
+
+            # Initialize optimizer
+            self.optimizer = ParameterOptimizer()
+
+            logger.info("✓ Backtesting engine initialized")
+            logger.info("  - Data Handler: Ready")
+            logger.info("  - Backtest Engine: Ready")
+            logger.info("  - Parameter Optimizer: Ready")
+            logger.info("  - Walk-Forward Analysis: Available")
+
+        except Exception as e:
+            logger.warning(f"⚠ Backtesting initialization failed: {e}")
+            self.backtest_engine = None
+            self.optimizer = None
+            self.data_handler = None
+
+    def _init_news_integration(self, step: int, total: int):
+        """Initialize news and sentiment analysis"""
+        logger.info(f"[{step}/{total}] Initializing news integration...")
+
+        try:
+            # Initialize news aggregator
+            self.news_aggregator = MultiSourceAggregator()
+
+            # Initialize impact predictor
+            self.impact_predictor = ImpactPredictor()
+
+            # Initialize economic calendar
+            self.economic_calendar = EconomicCalendar()
+
+            # Initialize sentiment analyzer
+            self.sentiment_analyzer = FinancialSentimentAnalyzer()
+
+            logger.info("✓ News integration initialized")
+            logger.info("  - News Aggregator: Ready")
+            logger.info("  - Impact Predictor: Ready")
+            logger.info("  - Economic Calendar: Ready")
+            logger.info("  - Sentiment Analyzer: Ready")
+
+        except Exception as e:
+            logger.warning(f"⚠ News integration initialization failed: {e}")
+            self.news_aggregator = None
+            self.impact_predictor = None
+            self.economic_calendar = None
+            self.sentiment_analyzer = None
+
+    def _init_analytics(self, step: int, total: int):
+        """Initialize analytics components"""
+        logger.info(f"[{step}/{total}] Initializing analytics...")
+
+        try:
+            # Use pre-instantiated instances or create new ones
+            self.portfolio_optimizer = portfolio_optimizer if portfolio_optimizer else PortfolioOptimizer()
+            self.analytics_risk_analyzer = risk_analyzer if risk_analyzer else RiskAnalyzer()
+            self.simulation_engine = simulation_engine if simulation_engine else SimulationEngine()
+
+            logger.info("✓ Analytics initialized")
+            logger.info("  - Portfolio Optimizer: Ready")
+            logger.info("  - Risk Analyzer: Ready")
+            logger.info("  - Simulation Engine: Ready")
+
+        except Exception as e:
+            logger.warning(f"⚠ Analytics initialization failed: {e}")
+            self.portfolio_optimizer = None
+            self.analytics_risk_analyzer = None
+            self.simulation_engine = None
+
+    def _init_monetization(self, step: int, total: int):
+        """Initialize monetization and subscription management"""
+        logger.info(f"[{step}/{total}] Initializing monetization...")
+
+        try:
+            # Initialize pricing and subscription managers
+            self.pricing_manager = PricingManager()
+            self.subscription_manager = SubscriptionManager()
+            self.license_validator = LicenseValidator()
+
+            logger.info("✓ Monetization initialized")
+            logger.info("  - Pricing Manager: Ready")
+            logger.info("  - Subscription Manager: Ready")
+            logger.info("  - License Validator: Ready")
+
+        except Exception as e:
+            logger.warning(f"⚠ Monetization initialization failed: {e}")
+            self.pricing_manager = None
+            self.subscription_manager = None
+            self.license_validator = None
+
+    def _init_payments(self, step: int, total: int):
+        """Initialize payment processing"""
+        logger.info(f"[{step}/{total}] Initializing payments...")
+
+        try:
+            # Initialize payment components
+            self.wallet_manager = WalletManager()
+            self.payment_gateway = PaymentGateway()
+
+            logger.info("✓ Payments initialized")
+            logger.info("  - Wallet Manager: Ready")
+            logger.info("  - Payment Gateway: Ready")
+            logger.info("  - Compliance Manager: Available")
+
+        except Exception as e:
+            logger.warning(f"⚠ Payments initialization failed: {e}")
+            self.wallet_manager = None
+            self.payment_gateway = None
+
+    def _init_social_trading(self, step: int, total: int):
+        """Initialize social trading features"""
+        logger.info(f"[{step}/{total}] Initializing social trading...")
+
+        try:
+            # Use pre-instantiated instances or create new ones
+            self.copy_trading_engine = copy_trading_engine if copy_trading_engine else CopyTradingEngine()
+            self.strategy_marketplace = marketplace if marketplace else StrategyMarketplace()
+            self.leaderboard_manager = leaderboard_manager if leaderboard_manager else LeaderboardManager()
+
+            logger.info("✓ Social trading initialized")
+            logger.info("  - Copy Trading: Ready")
+            logger.info("  - Strategy Marketplace: Ready")
+            logger.info("  - Leaderboards: Ready")
+
+        except Exception as e:
+            logger.warning(f"⚠ Social trading initialization failed: {e}")
+            self.copy_trading_engine = None
+            self.strategy_marketplace = None
+            self.leaderboard_manager = None
+
+    def _init_mobile(self, step: int, total: int):
+        """Initialize mobile API and push notifications"""
+        logger.info(f"[{step}/{total}] Initializing mobile services...")
+
+        try:
+            # Use pre-instantiated instances or create new ones
+            self.mobile_api = mobile_api if mobile_api else MobileAPI()
+
+            logger.info("✓ Mobile services initialized")
+            logger.info("  - Mobile API: Ready")
+            logger.info("  - Push Notifications: Available")
+
+        except Exception as e:
+            logger.warning(f"⚠ Mobile services initialization failed: {e}")
+            self.mobile_api = None
+
+    def _init_charting(self, step: int, total: int):
+        """Initialize charting and technical analysis"""
+        logger.info(f"[{step}/{total}] Initializing charting...")
+
+        try:
+            # Use pre-instantiated instances or create new ones
+            self.chart_engine = chart_engine if chart_engine else ChartEngine()
+            self.indicator_library = indicator_library if indicator_library else IndicatorLibrary()
+
+            logger.info("✓ Charting initialized")
+            logger.info("  - Chart Engine: Ready")
+            logger.info("  - Indicator Library: Ready")
+
+        except Exception as e:
+            logger.warning(f"⚠ Charting initialization failed: {e}")
+            self.chart_engine = None
+            self.indicator_library = None
+
+    # =========================================================================
+    # APPLICATION RUNTIME
+    # =========================================================================
+
     def run(self):
         """Run the main application"""
         logger.info("\n" + "=" * 70)
@@ -338,20 +733,73 @@ class HopeFXTradingApp:
         logger.info("=" * 70)
 
         # Infrastructure
-        logger.info("\nInfrastructure:")
+        logger.info("\n📦 INFRASTRUCTURE:")
         logger.info(f"  ✓ Config: Loaded ({self.config.environment})")
         logger.info(f"  ✓ Database: Connected ({self.config.database.db_type})")
         logger.info(f"  {'✓' if self.cache else '⚠'} Cache: {'Connected' if self.cache else 'Not available'}")
 
-        # Trading Components
-        logger.info("\nTrading Components:")
+        # Core Trading Components
+        logger.info("\n💹 CORE TRADING:")
         logger.info(f"  ✓ Notifications: {len(self.notification_manager.channels) if self.notification_manager else 0} channels active")
         logger.info(f"  ✓ Risk Manager: {self.risk_manager.config.max_open_positions} max positions, {self.risk_manager.config.max_drawdown*100}% max drawdown")
         logger.info(f"  ✓ Broker: {type(self.broker).__name__} (Balance: ${self.broker.balance:,.2f})")
         logger.info(f"  ✓ Strategies: {len(self.strategy_manager.strategies)} loaded")
 
+        # Extended Components
+        logger.info("\n🔌 EXTENDED MODULES:")
+
+        # ML/AI
+        if self.available_modules['ml']:
+            ml_status = "✓" if self.feature_engineer else "⚠"
+            logger.info(f"  {ml_status} ML/AI: Feature Engineering + Models")
+
+        # Backtesting
+        if self.available_modules['backtesting']:
+            bt_status = "✓" if self.backtest_engine else "⚠"
+            logger.info(f"  {bt_status} Backtesting: Engine + Optimizer")
+
+        # News
+        if self.available_modules['news']:
+            news_status = "✓" if self.news_aggregator else "⚠"
+            logger.info(f"  {news_status} News: Aggregator + Sentiment + Calendar")
+
+        # Analytics
+        if self.available_modules['analytics']:
+            analytics_status = "✓" if self.portfolio_optimizer else "⚠"
+            logger.info(f"  {analytics_status} Analytics: Portfolio + Risk + Simulation")
+
+        # Monetization
+        if self.available_modules['monetization']:
+            monetization_status = "✓" if self.subscription_manager else "⚠"
+            logger.info(f"  {monetization_status} Monetization: Subscriptions + Pricing")
+
+        # Payments
+        if self.available_modules['payments']:
+            payments_status = "✓" if self.wallet_manager else "⚠"
+            logger.info(f"  {payments_status} Payments: Wallet + Gateway")
+
+        # Social
+        if self.available_modules['social']:
+            social_status = "✓" if self.copy_trading_engine else "⚠"
+            logger.info(f"  {social_status} Social: Copy Trading + Marketplace")
+
+        # Mobile
+        if self.available_modules['mobile']:
+            mobile_status = "✓" if self.mobile_api else "⚠"
+            logger.info(f"  {mobile_status} Mobile: API + Push Notifications")
+
+        # Charting
+        if self.available_modules['charting']:
+            charting_status = "✓" if self.chart_engine else "⚠"
+            logger.info(f"  {charting_status} Charting: Engine + Indicators")
+
+        # Module Summary
+        available_count = sum(1 for v in self.available_modules.values() if v)
+        total_modules = len(self.available_modules)
+        logger.info(f"\n📊 MODULES: {available_count}/{total_modules} available")
+
         # Configuration
-        logger.info("\nConfiguration:")
+        logger.info("\n⚙️ CONFIGURATION:")
         logger.info(f"  - Trading enabled: {self.config.trading.trading_enabled}")
         logger.info(f"  - Paper trading: {self.config.trading.paper_trading_mode}")
         logger.info(f"  - API configs: {len(self.config.api_configs)}")
