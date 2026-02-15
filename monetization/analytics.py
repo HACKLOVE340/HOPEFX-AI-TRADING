@@ -325,7 +325,8 @@ class RevenueAnalytics:
         churn_rate = (cancelled / total_subs * 100) if total_subs > 0 else 0.0
 
         # Estimate LTV (simplified)
-        avg_revenue_per_user = current_mrr / max(total_subs - cancelled, 1)
+        active_users = max(total_subs - cancelled, 1)
+        avg_revenue_per_user = current_mrr / Decimal(str(active_users))
         avg_lifetime_months = 12 / max(churn_rate / 100, 0.01)  # Avoid division by zero
         ltv = avg_revenue_per_user * Decimal(str(min(avg_lifetime_months, 60)))
 
