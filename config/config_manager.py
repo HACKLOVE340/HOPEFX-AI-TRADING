@@ -213,24 +213,50 @@ class DatabaseConfig:
     password: str
     database: str
     ssl_enabled: bool = True
+    ssl_mode: str = "require"  # disable, allow, prefer, require, verify-ca, verify-full
+    ssl_cert_path: Optional[str] = None
+    ssl_key_path: Optional[str] = None
+    ssl_ca_path: Optional[str] = None
     connection_pool_size: int = 10
     max_overflow: int = 20
     pool_timeout: int = 30
 
     def get_connection_string(self) -> str:
-        """Generate database connection string."""
+        """Generate database connection string with SSL options."""
         if self.db_type == 'sqlite':
             return f"sqlite:///{self.database}"
         elif self.db_type == 'postgresql':
-            return (
+            base_url = (
                 f"postgresql://{self.username}:{self.password}@"
                 f"{self.host}:{self.port}/{self.database}"
             )
+            # Add SSL parameters for PostgreSQL
+            if self.ssl_enabled and self.ssl_mode != 'disable':
+                ssl_params = f"?sslmode={self.ssl_mode}"
+                if self.ssl_cert_path:
+                    ssl_params += f"&sslcert={self.ssl_cert_path}"
+                if self.ssl_key_path:
+                    ssl_params += f"&sslkey={self.ssl_key_path}"
+                if self.ssl_ca_path:
+                    ssl_params += f"&sslrootcert={self.ssl_ca_path}"
+                base_url += ssl_params
+            return base_url
         elif self.db_type == 'mysql':
-            return (
+            base_url = (
                 f"mysql+pymysql://{self.username}:{self.password}@"
                 f"{self.host}:{self.port}/{self.database}"
             )
+            # Add SSL parameters for MySQL
+            if self.ssl_enabled:
+                ssl_params = "?ssl=true"
+                if self.ssl_ca_path:
+                    ssl_params += f"&ssl_ca={self.ssl_ca_path}"
+                if self.ssl_cert_path:
+                    ssl_params += f"&ssl_cert={self.ssl_cert_path}"
+                if self.ssl_key_path:
+                    ssl_params += f"&ssl_key={self.ssl_key_path}"
+                base_url += ssl_params
+            return base_url
         else:
             raise ValueError(f"Unsupported database type: {self.db_type}")
 
@@ -244,6 +270,11 @@ class DatabaseConfig:
             if not all([self.host, self.port, self.username, self.password, self.database]):
                 logger.warning("Invalid database config: missing required fields")
                 return False
+
+            # Warn if SSL is disabled in production
+            app_env = os.getenv('APP_ENV', 'development')
+            if app_env == 'production' and not self.ssl_enabled:
+                logger.warning("SSL is disabled for database connection in production!")
 
         return True
 
