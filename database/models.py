@@ -25,6 +25,12 @@ from sqlalchemy.sql import func
 
 Base = declarative_base()
 
+# Foreign key reference constants
+FK_USERS_ID = "users.id"
+FK_ACCOUNTS_ID = "accounts.id"
+ON_DELETE_SET_NULL = "SET NULL"
+CASCADE_DELETE_ORPHAN = "all, delete-orphan"
+
 
 # ============================================================================
 # ENUMS
@@ -116,8 +122,8 @@ class User(Base):
     last_login = Column(DateTime)
 
     # Relationships
-    accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
-    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    accounts = relationship("Account", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
+    sessions = relationship("Session", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
 
     __table_args__ = (
         Index("idx_user_email_status", "email", "status"),
@@ -129,7 +135,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
     token = Column(String(512), unique=True, nullable=False, index=True)
     ip_address = Column(String(45))  # Supports IPv4 and IPv6
     user_agent = Column(Text)
@@ -149,7 +155,7 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
     account_name = Column(String(255), nullable=False)
     account_type = Column(String(50), nullable=False)  # e.g., LIVE, DEMO, PAPER
     broker = Column(String(100), nullable=False)  # e.g., OANDA, ALPACA, IB
@@ -168,11 +174,11 @@ class Account(Base):
 
     # Relationships
     user = relationship("User", back_populates="accounts")
-    trades = relationship("Trade", back_populates="account", cascade="all, delete-orphan")
-    orders = relationship("Order", back_populates="account", cascade="all, delete-orphan")
-    positions = relationship("Position", back_populates="account", cascade="all, delete-orphan")
-    performance_metrics = relationship("PerformanceMetrics", back_populates="account", cascade="all, delete-orphan")
-    risk_parameters = relationship("RiskParameters", back_populates="account", uselist=False, cascade="all, delete-orphan")
+    trades = relationship("Trade", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
+    orders = relationship("Order", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
+    positions = relationship("Position", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
+    performance_metrics = relationship("PerformanceMetrics", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
+    risk_parameters = relationship("RiskParameters", back_populates="account", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
 
     __table_args__ = (
         UniqueConstraint("user_id", "account_name", name="uq_user_account_name"),
@@ -189,7 +195,7 @@ class Trade(Base):
     __tablename__ = "trades"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     symbol = Column(String(20), nullable=False)  # e.g., EUR/USD
     trade_type = Column(SQLEnum(TradeType), nullable=False)
     entry_price = Column(Numeric(20, 8), nullable=False)
@@ -226,8 +232,8 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
-    trade_id = Column(Integer, ForeignKey("trades.id", ondelete="SET NULL"))
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
+    trade_id = Column(Integer, ForeignKey("trades.id", ondelete=ON_DELETE_SET_NULL))
     symbol = Column(String(20), nullable=False)
     order_type = Column(SQLEnum(OrderType), nullable=False)
     side = Column(String(10), nullable=False)  # BUY or SELL
@@ -264,7 +270,7 @@ class Position(Base):
     __tablename__ = "positions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     symbol = Column(String(20), nullable=False)
     position_type = Column(SQLEnum(TradeType), nullable=False)
     quantity = Column(Numeric(18, 8), nullable=False)
@@ -304,7 +310,7 @@ class PerformanceMetrics(Base):
     __tablename__ = "performance_metrics"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     metric_date = Column(Date, nullable=False)
 
     # Return metrics
@@ -360,7 +366,7 @@ class DailySnapshot(Base):
     __tablename__ = "daily_snapshots"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     snapshot_date = Column(Date, nullable=False)
 
     # Account state
@@ -656,7 +662,7 @@ class RiskParameters(Base):
     __tablename__ = "risk_parameters"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"),
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"),
                        nullable=False, unique=True)
 
     # Risk limits
@@ -704,7 +710,7 @@ class RiskMetrics(Base):
     __tablename__ = "risk_metrics"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     symbol = Column(String(20), nullable=False)
 
     # Current exposure
@@ -744,7 +750,7 @@ class RiskEvent(Base):
     __tablename__ = "risk_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
 
     # Event details
     event_type = Column(String(100), nullable=False)  # e.g., MAX_LOSS, HIGH_LEVERAGE, CONCENTRATION
@@ -753,7 +759,7 @@ class RiskEvent(Base):
 
     # Context
     symbol = Column(String(20))
-    position_id = Column(Integer, ForeignKey("positions.id", ondelete="SET NULL"))
+    position_id = Column(Integer, ForeignKey("positions.id", ondelete=ON_DELETE_SET_NULL))
 
     # Metrics
     threshold = Column(Numeric(20, 8))
@@ -782,7 +788,7 @@ class StressTest(Base):
     __tablename__ = "stress_tests"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
     test_name = Column(String(255), nullable=False)
 
     # Scenario
@@ -821,8 +827,8 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"))
+    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete=ON_DELETE_SET_NULL))
+    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete=ON_DELETE_SET_NULL))
 
     # Action details
     action = Column(String(100), nullable=False)

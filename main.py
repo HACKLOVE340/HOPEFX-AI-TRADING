@@ -61,7 +61,7 @@ class HopeFXTradingApp:
         self.broker = None
         self.notification_manager = None
 
-        logger.info(f"Initializing HOPEFX AI Trading Framework v1.0.0")
+        logger.info("Initializing HOPEFX AI Trading Framework v1.0.0")
         logger.info(f"Environment: {self.environment}")
 
     def initialize(self):
@@ -137,8 +137,8 @@ class HopeFXTradingApp:
             Base.metadata.create_all(self.db_engine)
 
             # Create session factory
-            Session = sessionmaker(bind=self.db_engine)
-            self.db_session = Session()
+            session_factory = sessionmaker(bind=self.db_engine)
+            self.db_session = session_factory()
 
             logger.info(f"✓ Database initialized: {self.config.database.db_type}")
             logger.info(f"  - Connection: {connection_string.split('@')[-1] if '@' in connection_string else connection_string}")
@@ -270,7 +270,7 @@ class HopeFXTradingApp:
 
             logger.info("✓ Strategy manager initialized")
             logger.info(f"  - Active strategies: {len(self.strategy_manager.strategies)}")
-            logger.info(f"  - Ready to load and run trading strategies")
+            logger.info("  - Ready to load and run trading strategies")
 
         except Exception as e:
             logger.error(f"✗ Strategy manager initialization failed: {e}")
@@ -367,7 +367,7 @@ class HopeFXTradingApp:
         # Stop all strategies
         if self.strategy_manager:
             logger.info("Stopping all strategies...")
-            for strategy_name in list(self.strategy_manager.strategies.keys()):
+            for strategy_name in self.strategy_manager.strategies.keys():
                 try:
                     self.strategy_manager.stop_strategy(strategy_name)
                 except Exception as e:
