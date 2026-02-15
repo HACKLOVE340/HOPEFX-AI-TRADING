@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 import logging
+import uuid
 from collections import deque
 import threading
 
@@ -430,7 +431,6 @@ class RealTimeSignalService:
         notify_channels: List[str] = None
     ) -> SignalAlert:
         """Create a signal alert."""
-        import uuid
         alert = SignalAlert(
             id=str(uuid.uuid4()),
             symbol=symbol,
