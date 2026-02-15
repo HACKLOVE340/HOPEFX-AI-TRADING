@@ -67,6 +67,8 @@ class TestPerformanceMetrics:
     @pytest.fixture
     def sample_equity_curve(self):
         """Create sample equity curve data."""
+        # Use fixed seed for reproducible tests
+        np.random.seed(42)
         dates = pd.date_range(start='2024-01-01', periods=30, freq='D')
         equity_values = [100000 + i * 100 + np.random.randn() * 50 for i in range(30)]
         
@@ -79,12 +81,14 @@ class TestPerformanceMetrics:
     @pytest.fixture
     def sample_trade_history(self):
         """Create sample trade history."""
+        # Use fixed datetime values for reproducible tests
+        base_time = datetime(2024, 1, 15, 10, 0, 0)
         trades = [
-            {'symbol': 'EUR/USD', 'pnl': 150.0, 'entry_time': datetime.now(), 'exit_time': datetime.now() + timedelta(hours=2)},
-            {'symbol': 'EUR/USD', 'pnl': -50.0, 'entry_time': datetime.now(), 'exit_time': datetime.now() + timedelta(hours=1)},
-            {'symbol': 'GBP/USD', 'pnl': 200.0, 'entry_time': datetime.now(), 'exit_time': datetime.now() + timedelta(hours=3)},
-            {'symbol': 'USD/JPY', 'pnl': -100.0, 'entry_time': datetime.now(), 'exit_time': datetime.now() + timedelta(minutes=30)},
-            {'symbol': 'EUR/USD', 'pnl': 75.0, 'entry_time': datetime.now(), 'exit_time': datetime.now() + timedelta(hours=4)},
+            {'symbol': 'EUR/USD', 'pnl': 150.0, 'entry_time': base_time, 'exit_time': base_time + timedelta(hours=2)},
+            {'symbol': 'EUR/USD', 'pnl': -50.0, 'entry_time': base_time, 'exit_time': base_time + timedelta(hours=1)},
+            {'symbol': 'GBP/USD', 'pnl': 200.0, 'entry_time': base_time, 'exit_time': base_time + timedelta(hours=3)},
+            {'symbol': 'USD/JPY', 'pnl': -100.0, 'entry_time': base_time, 'exit_time': base_time + timedelta(minutes=30)},
+            {'symbol': 'EUR/USD', 'pnl': 75.0, 'entry_time': base_time, 'exit_time': base_time + timedelta(hours=4)},
         ]
         return pd.DataFrame(trades)
     
