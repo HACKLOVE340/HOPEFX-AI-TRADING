@@ -546,7 +546,7 @@ async def search_strategies(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     min_rating: Optional[float] = None,
-    sort_by: str = Query("popular", regex="^(popular|rating|newest|price_low|price_high)$"),
+    sort_by: str = Query("popular", pattern="^(popular|rating|newest|price_low|price_high)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0)
 ):
@@ -681,7 +681,7 @@ async def get_analytics_dashboard():
 
 @router.get("/analytics/report")
 async def get_analytics_report(
-    period: str = Query("monthly", regex="^(daily|weekly|monthly|quarterly|yearly)$"),
+    period: str = Query("monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$"),
     include_projections: bool = True
 ):
     """
