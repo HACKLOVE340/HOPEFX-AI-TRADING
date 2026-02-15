@@ -74,7 +74,10 @@ class ImpactPredictor:
         'central bank', 'fed', 'ecb', 'boj', 'interest rate', 'rate hike',
         'rate cut', 'quantitative easing', 'monetary policy', 'inflation',
         'gdp', 'employment', 'unemployment', 'nonfarm payrolls', 'cpi',
-        'war', 'crisis', 'pandemic', 'emergency', 'collapse', 'bankruptcy'
+        'war', 'crisis', 'pandemic', 'emergency', 'collapse', 'bankruptcy',
+        # Geopolitical keywords from World Monitor integration
+        'conflict', 'military', 'invasion', 'sanctions', 'nuclear',
+        'missile', 'strike', 'troops', 'escalation', 'terrorism'
     }
 
     # Category keywords
@@ -82,7 +85,14 @@ class ImpactPredictor:
         EventCategory.CENTRAL_BANK: ['fed', 'ecb', 'boj', 'central bank', 'fomc', 'rate decision'],
         EventCategory.ECONOMIC_DATA: ['gdp', 'cpi', 'inflation', 'employment', 'retail sales', 'pmi'],
         EventCategory.EARNINGS: ['earnings', 'profit', 'revenue', 'eps', 'quarterly results'],
-        EventCategory.GEOPOLITICAL: ['war', 'conflict', 'sanctions', 'election', 'trade war'],
+        EventCategory.GEOPOLITICAL: [
+            'war', 'conflict', 'sanctions', 'election', 'trade war',
+            # Extended geopolitical keywords from World Monitor
+            'military', 'invasion', 'nuclear', 'missile', 'terrorism',
+            'coup', 'assassination', 'civil unrest', 'protests', 'embargo',
+            'attack', 'bombing', 'troops', 'escalation', 'tension',
+            'hotspot', 'humanitarian', 'refugee', 'border'
+        ],
         EventCategory.REGULATORY: ['regulation', 'sec', 'fda', 'approval', 'ban', 'restriction'],
         EventCategory.CORPORATE: ['merger', 'acquisition', 'ceo', 'dividend', 'buyback'],
         EventCategory.MARKET_MOVE: ['surge', 'plunge', 'rally', 'crash', 'selloff']

@@ -9,9 +9,10 @@ Components:
 - Sentiment Analysis: TextBlob, VADER, custom financial sentiment
 - Impact Prediction: News-to-price correlation, event scoring
 - Economic Calendar: Major economic events tracking
+- Geopolitical Risk: World Monitor integration for conflict/sanctions/risk intelligence
 
 Author: HOPEFX Development Team
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from .providers import (
@@ -40,6 +41,19 @@ from .economic_calendar import (
     EventImportance
 )
 
+from .geopolitical_risk import (
+    GeopoliticalRiskProvider,
+    GeopoliticalEvent,
+    GeopoliticalRiskAssessment,
+    GeopoliticalEventType,
+    RiskSeverity,
+    GoldImpact,
+    CountryRisk,
+    WorldMonitorIntegration,
+    get_geopolitical_provider,
+    get_gold_geopolitical_signal
+)
+
 __all__ = [
     # Providers
     'NewsProvider',
@@ -62,8 +76,20 @@ __all__ = [
     'EconomicCalendar',
     'EconomicEvent',
     'EventImportance',
+
+    # Geopolitical Risk (World Monitor Integration)
+    'GeopoliticalRiskProvider',
+    'GeopoliticalEvent',
+    'GeopoliticalRiskAssessment',
+    'GeopoliticalEventType',
+    'RiskSeverity',
+    'GoldImpact',
+    'CountryRisk',
+    'WorldMonitorIntegration',
+    'get_geopolitical_provider',
+    'get_gold_geopolitical_signal',
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 __author__ = 'HOPEFX Development Team'
