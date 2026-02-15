@@ -97,3 +97,8 @@ __all__ = [
     'FlutterwaveClient', 'flutterwave_client',
     'BankTransferClient', 'bank_transfer_client'
 ]
+
+# Module metadata
+__version__ = '1.0.0'
+__author__ = 'HOPEFX Development Team'
+__description__ = 'Payment system with crypto and fintech support'
