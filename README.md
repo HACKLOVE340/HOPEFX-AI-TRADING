@@ -8,6 +8,7 @@ ADVANCED AI POWER XAUUSD trading framework with machine learning, real time anal
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contributing guidelines
 - **[SECURITY.md](./SECURITY.md)** - Security configuration and best practices
 - **[DEBUGGING.md](./DEBUGGING.md)** - Debugging guide with solutions
+- **[COMPETITIVE_ANALYSIS.md](./COMPETITIVE_ANALYSIS.md)** - How we compare to MetaTrader, TradingView, QuantConnect & more
 - **[.env.example](./.env.example)** - Environment variable template
 
 ## 🚀 Quick Start
