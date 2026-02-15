@@ -2,10 +2,13 @@
 Pricing Tier Definitions and Management
 
 This module defines the pricing tiers for the HOPEFX AI Trading platform:
+- Free: $0/month (1.0% commission) - Limited features for trial
 - Starter: $1,800/month (0.5% commission)
 - Professional: $4,500/month (0.3% commission)
 - Enterprise: $7,500/month (0.2% commission)
 - Elite: $10,000/month (0.1% commission)
+
+Annual subscriptions get 2 months free (16.67% discount).
 """
 
 from enum import Enum
@@ -16,10 +19,17 @@ from decimal import Decimal
 
 class SubscriptionTier(str, Enum):
     """Subscription tier enumeration"""
+    FREE = "free"
     STARTER = "starter"
     PROFESSIONAL = "professional"
     ENTERPRISE = "enterprise"
     ELITE = "elite"
+
+
+class BillingCycle(str, Enum):
+    """Billing cycle enumeration"""
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
 
 
 @dataclass
@@ -40,6 +50,9 @@ class TierFeatures:
 class PricingTier:
     """Pricing tier definition"""
 
+    # Annual discount: 2 months free = 10/12 = ~16.67% off
+    ANNUAL_DISCOUNT = Decimal("0.1667")
+
     def __init__(
         self,
         tier: SubscriptionTier,
@@ -54,12 +67,25 @@ class PricingTier:
         self.commission_rate = commission_rate
         self.features = features
 
+    def get_annual_price(self) -> Decimal:
+        """Calculate annual price (2 months free)"""
+        yearly = self.monthly_price * 12
+        discount = yearly * self.ANNUAL_DISCOUNT
+        return (yearly - discount).quantize(Decimal("0.01"))
+
+    def get_price(self, billing_cycle: BillingCycle = BillingCycle.MONTHLY) -> Decimal:
+        """Get price based on billing cycle"""
+        if billing_cycle == BillingCycle.ANNUAL:
+            return self.get_annual_price()
+        return self.monthly_price
+
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
             'tier': self.tier.value,
             'name': self.name,
             'monthly_price': float(self.monthly_price),
+            'annual_price': float(self.get_annual_price()),
             'commission_rate': float(self.commission_rate),
             'features': {
                 'max_strategies': self.features.max_strategies,
@@ -85,6 +111,24 @@ class PricingManager:
     def _initialize_tiers(self) -> Dict[SubscriptionTier, PricingTier]:
         """Initialize pricing tiers"""
         return {
+            SubscriptionTier.FREE: PricingTier(
+                tier=SubscriptionTier.FREE,
+                name="Free",
+                monthly_price=Decimal("0.00"),
+                commission_rate=Decimal("0.010"),  # 1.0%
+                features=TierFeatures(
+                    max_strategies=1,
+                    max_brokers=1,
+                    ml_features=False,
+                    priority_support=False,
+                    api_access=False,
+                    custom_development=False,
+                    dedicated_support=False,
+                    backtesting_unlimited=False,
+                    pattern_recognition=False,
+                    news_integration=False
+                )
+            ),
             SubscriptionTier.STARTER: PricingTier(
                 tier=SubscriptionTier.STARTER,
                 name="Starter",
@@ -215,6 +259,7 @@ class PricingManager:
     def get_upgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
         """Get available upgrade options"""
         tier_order = [
+            SubscriptionTier.FREE,
             SubscriptionTier.STARTER,
             SubscriptionTier.PROFESSIONAL,
             SubscriptionTier.ENTERPRISE,
@@ -230,6 +275,7 @@ class PricingManager:
     def get_downgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
         """Get available downgrade options"""
         tier_order = [
+            SubscriptionTier.FREE,
             SubscriptionTier.STARTER,
             SubscriptionTier.PROFESSIONAL,
             SubscriptionTier.ENTERPRISE,

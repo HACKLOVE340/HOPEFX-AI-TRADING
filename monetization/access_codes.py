@@ -105,6 +105,7 @@ class AccessCodeGenerator:
     def __init__(self):
         self._codes: Dict[str, AccessCode] = {}
         self._tier_prefixes = {
+            SubscriptionTier.FREE: "FRE",
             SubscriptionTier.STARTER: "STR",
             SubscriptionTier.PROFESSIONAL: "PRO",
             SubscriptionTier.ENTERPRISE: "ENT",
