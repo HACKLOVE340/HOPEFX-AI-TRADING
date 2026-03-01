@@ -32,7 +32,7 @@ import uvicorn
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from api.admin import router as admin_router
+from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from cache import MarketDataCache
@@ -188,8 +188,10 @@ async def startup_event():
             app.include_router(create_websocket_router(ws_manager))
             app_state.ws_manager = ws_manager
             logger.info("✓ WebSocket router registered")
+            log_activity("WebSocket router registered")
         except Exception as e:
             logger.warning(f"⚠ WebSocket router not available: {e}")
+            log_activity(f"WebSocket router unavailable: {e}")
 
         try:
             from notifications.alert_engine import AlertEngine, create_alert_router
@@ -197,8 +199,10 @@ async def startup_event():
             app.include_router(create_alert_router(alert_engine))
             app_state.alert_engine = alert_engine
             logger.info("✓ Alert router registered")
+            log_activity("Alert router registered")
         except Exception as e:
             logger.warning(f"⚠ Alert router not available: {e}")
+            log_activity(f"Alert router unavailable: {e}")
 
         try:
             from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
@@ -206,8 +210,10 @@ async def startup_event():
             app.include_router(create_order_flow_router(order_flow_analyzer))
             app_state.order_flow_analyzer = order_flow_analyzer
             logger.info("✓ Order Flow router registered")
+            log_activity("Order Flow router registered")
         except Exception as e:
             logger.warning(f"⚠ Order Flow router not available: {e}")
+            log_activity(f"Order Flow router unavailable: {e}")
 
         try:
             from analysis.market_scanner import MarketScanner, create_scanner_router
@@ -215,8 +221,10 @@ async def startup_event():
             app.include_router(create_scanner_router(market_scanner))
             app_state.market_scanner = market_scanner
             logger.info("✓ Market Scanner router registered")
+            log_activity("Market Scanner router registered")
         except Exception as e:
             logger.warning(f"⚠ Market Scanner router not available: {e}")
+            log_activity(f"Market Scanner router unavailable: {e}")
 
         try:
             from data.depth_of_market import DepthOfMarketService, create_dom_router
@@ -224,10 +232,16 @@ async def startup_event():
             app.include_router(create_dom_router(dom_service))
             app_state.dom_service = dom_service
             logger.info("✓ DOM router registered")
+            log_activity("DOM router registered")
         except Exception as e:
             logger.warning(f"⚠ DOM router not available: {e}")
+            log_activity(f"DOM router unavailable: {e}")
+
+        # Apply any risk settings persisted from a previous run
+        apply_persisted_risk_settings()
 
         app_state.initialized = True
+        log_activity("API server ready")
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)

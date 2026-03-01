@@ -53,6 +53,37 @@
 </div>
 
 <script>
+function _esc(s) {
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+async function loadActivity() {
+    try {
+        const resp = await fetch('/admin/api/activity');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        const events = data.events || [];
+        const log = document.getElementById('activity-log');
+        if (events.length === 0) {
+            log.innerHTML = '<p style="color:#7f8c8d;font-size:13px;">No recent activity.</p>';
+            return;
+        }
+        log.innerHTML = events.map(e =>
+            '<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #2d3748;font-size:13px;">' +
+            '<span style="color:#7f8c8d;white-space:nowrap;">' + _esc(e.time) + '</span>' +
+            '<span>' + _esc(e.message) + '</span>' +
+            '</div>'
+        ).join('');
+    } catch (err) {
+        const p = document.createElement('p');
+        p.style.cssText = 'color:#e74c3c;font-size:13px;';
+        p.textContent = '⚠ ' + err.message;
+        const log = document.getElementById('activity-log');
+        log.innerHTML = '';
+        log.appendChild(p);
+    }
+}
 async function loadDashboard() {
     try {
         const resp = await fetch('/admin/api/dashboard-data');
@@ -128,7 +159,8 @@ async function stopAllStrategies() {
     } catch (e) { alert('Error: ' + e.message); }
 }
 
-document.addEventListener('DOMContentLoaded', loadDashboard);
+document.addEventListener('DOMContentLoaded', () => { loadDashboard(); loadActivity(); });
 setInterval(loadDashboard, 5000);
+setInterval(loadActivity, 10000);
 </script>
 {% endblock %}
