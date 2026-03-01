@@ -39,6 +39,8 @@
             <ul class="nav-menu">
                 <li><a href="/admin/">📊 Dashboard</a></li>
                 <li><a href="/admin/strategies">📈 Strategies</a></li>
+                <li><a href="/paper-trading">📝 Paper Trading</a></li>
+                <li><a href="/pricing">💲 Pricing</a></li>
                 <li><a href="/admin/monitoring">📡 Monitoring</a></li>
                 <li><a href="/admin/settings">⚙️ Settings</a></li>
                 <li><a href="/paper-trading">📋 Paper Trading</a></li>
@@ -47,9 +49,12 @@
                 <li><a href="/admin/#alerts">🔔 Alerts</a></li>
                 <li><a href="/docs">📖 API Docs</a></li>
             </ul>
-            <div id="sidebar-status" style="padding:16px 20px;margin-top:auto;font-size:12px;color:#a0aec0;display:flex;align-items:center;gap:8px;">
-                <span id="status-dot" style="width:10px;height:10px;border-radius:50%;background:#68d391;display:inline-block;"></span>
-                <span id="status-label">System OK</span>
+            <div style="padding: 20px; margin-top: auto; border-top: 1px solid #34495e;">
+                <div style="font-size: 11px; color: #7f8c8d; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;">System Status</div>
+                <div id="sidebar-status" style="display:flex;align-items:center;gap:6px;font-size:13px;color:#ecf0f1;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:#27ae60;display:inline-block;" id="sidebar-status-dot"></span>
+                    <span id="sidebar-status-text">Operational</span>
+                </div>
             </div>
         </aside>
         <main class="main-content">
@@ -59,23 +64,28 @@
             {% block content %}{% endblock %}
         </main>
     </div>
-<script>
-(function() {
-    async function checkSystemStatus() {
-        try {
-            const r = await fetch('/admin/api/system-info');
-            const d = await r.json();
-            const ok = d.status === 'running';
-            document.getElementById('status-dot').style.background = ok ? '#68d391' : '#fc8181';
-            document.getElementById('status-label').textContent = ok ? 'System OK' : 'Degraded';
-        } catch (e) {
-            document.getElementById('status-dot').style.background = '#f6ad55';
-            document.getElementById('status-label').textContent = 'Checking...';
-        }
+    <script>
+    function updateSidebarStatus() {
+        fetch('/admin/api/system-info').then(r => r.json()).then(d => {
+            const dot  = document.getElementById('sidebar-status-dot');
+            const text = document.getElementById('sidebar-status-text');
+            if (!dot || !text) return;
+            if (d.status === 'running') {
+                dot.style.background  = '#27ae60';
+                text.textContent = 'Operational';
+            } else {
+                dot.style.background  = '#f39c12';
+                text.textContent = d.status || 'Unknown';
+            }
+        }).catch(() => {
+            const dot = document.getElementById('sidebar-status-dot');
+            if (dot) dot.style.background = '#e74c3c';
+            const text = document.getElementById('sidebar-status-text');
+            if (text) text.textContent = 'Offline';
+        });
     }
-    checkSystemStatus();
-    setInterval(checkSystemStatus, 30000);
-})();
-</script>
+    updateSidebarStatus();
+    setInterval(updateSidebarStatus, 30000);
+    </script>
 </body>
 </html>
