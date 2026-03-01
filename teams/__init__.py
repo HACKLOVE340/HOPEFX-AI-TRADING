@@ -7,7 +7,7 @@ for collaborative trading environments.
 
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import logging
 import hashlib
@@ -645,10 +645,6 @@ class TeamManager:
                 for m in team.members.values()
             ]
         }
-
-
-# Import timedelta
-from datetime import timedelta
 
 
 # Module exports

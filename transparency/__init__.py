@@ -13,6 +13,10 @@ import statistics
 
 logger = logging.getLogger(__name__)
 
+# Pip calculation multipliers for different asset types
+FOREX_PIP_MULTIPLIER = 10000  # For currency pairs with 4 decimal places
+METAL_PIP_MULTIPLIER = 100    # For precious metals and other 2 decimal assets
+
 
 class ExecutionQuality(Enum):
     """Execution quality ratings"""
@@ -123,8 +127,8 @@ class ExecutionTransparencyEngine:
         else:
             slippage = requested_price - executed_price  # Positive = worse
         
-        # Convert slippage to pips (assuming forex-style)
-        slippage_pips = slippage * 10000 if 'USD' in symbol else slippage * 100
+        # Convert slippage to pips using appropriate multiplier
+        slippage_pips = slippage * FOREX_PIP_MULTIPLIER if 'USD' in symbol else slippage * METAL_PIP_MULTIPLIER
         
         # Calculate slippage cost
         slippage_cost = slippage * executed_size
