@@ -216,3 +216,7 @@ config/*.json
 *.db-journal
 *.sqlite
 *.sqlite3
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
