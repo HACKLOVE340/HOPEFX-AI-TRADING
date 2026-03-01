@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import logging
 import hashlib
+import hmac
 import secrets
 
 logger = logging.getLogger(__name__)
@@ -563,9 +564,20 @@ class TeamManager:
             return None
 
         api_key = secrets.token_urlsafe(32)
-        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        # Use PBKDF2-HMAC for secure API key hashing (CodeQL compliant)
+        # Generate a random 32-byte salt per NIST recommendations
+        salt = secrets.token_bytes(32)
+        # Use PBKDF2 with SHA-256, 600000 iterations per OWASP 2023 recommendations
+        api_key_hash = hashlib.pbkdf2_hmac(
+            'sha256',
+            api_key.encode(),
+            salt,
+            600000
+        ).hex()
+        # Store salt:hash format for later verification
+        api_key_stored = f"{salt.hex()}:{api_key_hash}"
 
-        team.api_keys.append(api_key_hash)
+        team.api_keys.append(api_key_stored)
 
         self._log_activity(
             team_id, generated_by, 'generate_api_key',
@@ -579,6 +591,43 @@ class TeamManager:
             'name': name,
             'created_at': datetime.now().isoformat()
         }
+
+    def verify_api_key(self, team_id: str, api_key: str) -> bool:
+        """
+        Verify an API key against stored hashes.
+
+        Args:
+            team_id: Team ID
+            api_key: API key to verify
+
+        Returns:
+            True if API key is valid
+        """
+        team = self.teams.get(team_id)
+        if not team:
+            return False
+
+        for stored_key in team.api_keys:
+            if ':' in stored_key:
+                # New format: salt:hash (PBKDF2)
+                salt_hex, stored_hash = stored_key.split(':', 1)
+                salt = bytes.fromhex(salt_hex)
+                computed_hash = hashlib.pbkdf2_hmac(
+                    'sha256',
+                    api_key.encode(),
+                    salt,
+                    600000
+                ).hex()
+                if hmac.compare_digest(computed_hash, stored_hash):
+                    return True
+            else:
+                # Legacy format: plain SHA-256 hash (for backward compatibility)
+                # This branch handles old API keys that were hashed with SHA-256
+                legacy_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec
+                if hmac.compare_digest(legacy_hash, stored_key):
+                    return True
+
+        return False
 
     def _log_activity(
         self,
