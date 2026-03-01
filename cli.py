@@ -209,6 +209,53 @@ def cmd_db(args):
         return 1
 
 
+def cmd_start(args):
+    """Start the API server"""
+    import uvicorn
+
+    environment = os.getenv('ENVIRONMENT', 'development')
+
+    # Refuse to start in production without a real encryption key
+    if not os.getenv('CONFIG_ENCRYPTION_KEY'):
+        if environment == 'production':
+            logger.error(
+                "CONFIG_ENCRYPTION_KEY must be set for production. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+            return 1
+        logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development only.")
+        os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
+
+    host = args.host
+    port = args.port
+    workers = args.workers
+    reload = not args.no_reload
+
+    base_url = f"http://{host}:{port}"
+    logger.info("=" * 60)
+    logger.info("  HOPEFX AI TRADING - STARTING")
+    logger.info("=" * 60)
+    logger.info(f"  API:          {base_url}/")
+    logger.info(f"  Docs:         {base_url}/docs")
+    logger.info(f"  Paper Trade:  {base_url}/paper-trading")
+    logger.info(f"  Pricing:      {base_url}/pricing")
+    logger.info("=" * 60)
+
+    # uvicorn's --reload flag is incompatible with multiple workers;
+    # enforce single worker when hot-reload is enabled.
+    effective_workers = workers if not reload else 1
+
+    uvicorn.run(
+        "app:app",
+        host=host,
+        port=port,
+        workers=effective_workers,
+        reload=reload,
+        log_level="info",
+    )
+    return 0
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -267,6 +314,32 @@ def main():
     )
     parser_db.add_argument('--force', action='store_true', help='Force operation')
     parser_db.set_defaults(func=cmd_db)
+
+    # start command
+    parser_start = subparsers.add_parser('start', help='Start the API server')
+    parser_start.add_argument(
+        '--host',
+        default=os.getenv('API_HOST', '127.0.0.1'),
+        help='Host to bind (default: 127.0.0.1)',
+    )
+    parser_start.add_argument(
+        '--port',
+        type=int,
+        default=int(os.getenv('API_PORT', 5000)),
+        help='Port to listen on (default: 5000)',
+    )
+    parser_start.add_argument(
+        '--workers',
+        type=int,
+        default=int(os.getenv('API_WORKERS', 1)),
+        help='Number of worker processes (default: 1)',
+    )
+    parser_start.add_argument(
+        '--no-reload',
+        action='store_true',
+        help='Disable auto-reload (recommended for production)',
+    )
+    parser_start.set_defaults(func=cmd_start)
 
     # Parse arguments
     args = parser.parse_args()
