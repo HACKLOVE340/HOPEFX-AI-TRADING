@@ -250,19 +250,24 @@ THEN [BUY] [1% of portfolio]
 ### To Start Today
 
 ```bash
-# 1. Run full test suite with coverage
-cd /home/runner/work/HOPEFX-AI-TRADING/HOPEFX-AI-TRADING
+# 1. Navigate to your local repository clone
+cd HOPEFX-AI-TRADING
+
+# 2. Install dependencies and run tests with coverage
 pip install -r requirements.txt
 pytest tests/ --cov=. --cov-report=html
 
-# 2. Check current coverage gaps
-open htmlcov/index.html
+# 3. Check current coverage gaps
+open htmlcov/index.html  # macOS
+# xdg-open htmlcov/index.html  # Linux
+# start htmlcov/index.html  # Windows
 
-# 3. Start API server for testing
+# 4. Start FastAPI server for testing
 python app.py
 
-# 4. Access API docs
-# http://localhost:5000/docs
+# 5. Access FastAPI auto-generated docs
+# Swagger UI: http://localhost:5000/docs
+# ReDoc: http://localhost:5000/redoc
 ```
 
 ### To Add Tests
