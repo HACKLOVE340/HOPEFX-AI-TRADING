@@ -456,6 +456,10 @@ Show traders why AI made decisions:
 
 ### Long-Term Vision
 
+> **Current Version:** HOPEFX-AI-TRADING v1.0.0 (Production Ready)
+> 
+> The roadmap below outlines potential future enhancements based on features extracted from competitor platforms.
+
 | Milestone | Features | Timeline |
 |-----------|----------|----------|
 | **v2.1** | No-code builder, Chart replay | Q2 2026 |
