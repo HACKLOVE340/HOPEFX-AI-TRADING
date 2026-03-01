@@ -26,6 +26,9 @@ from notifications import NotificationManager
 @pytest.fixture(scope="session")
 def test_config():
     """Create a test configuration."""
+    _env_keys = ['CONFIG_ENCRYPTION_KEY', 'CONFIG_SALT', 'DATABASE_URL', 'REDIS_URL', 'ENVIRONMENT']
+    _originals = {k: os.environ.get(k) for k in _env_keys}
+
     with tempfile.TemporaryDirectory() as tmpdir:
         os.environ['CONFIG_ENCRYPTION_KEY'] = 'a' * 64
         os.environ['CONFIG_SALT'] = 'b' * 32
@@ -35,6 +38,12 @@ def test_config():
 
         config = ConfigManager()
         yield config
+
+    for k, v in _originals.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 @pytest.fixture
@@ -62,7 +71,7 @@ def market_cache(test_config):
     yield cache
     try:
         cache.clear_all()
-    except:
+    except Exception:
         pass  # Ignore if Redis not available
 
 
