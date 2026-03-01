@@ -621,11 +621,9 @@ class TeamManager:
                 if hmac.compare_digest(computed_hash, stored_hash):
                     return True
             else:
-                # Legacy format: plain SHA-256 hash (for backward compatibility)
-                # This branch handles old API keys that were hashed with SHA-256
-                legacy_hash = hashlib.sha256(api_key.encode()).hexdigest()  # nosec
-                if hmac.compare_digest(legacy_hash, stored_key):
-                    return True
+                # Legacy format entries using plain SHA-256 are no longer accepted.
+                # They are skipped here to enforce use of PBKDF2-based API keys only.
+                continue
 
         return False
 
