@@ -377,19 +377,14 @@ class HopeFXTradingApp:
         try:
             self.notification_manager = NotificationManager()
 
-            # Add console channel (always enabled)
-            from notifications.manager import ConsoleNotificationChannel
-            self.notification_manager.add_channel(ConsoleNotificationChannel())
-
-            # Send startup notification
-            self.notification_manager.send_notification(
-                title="🚀 HOPEFX Trading Started",
-                message=f"Trading framework initialized in {self.environment} mode",
+            # Send startup notification (CONSOLE channel is always enabled)
+            self.notification_manager.send(
+                message=f"🚀 HOPEFX Trading Started - initialized in {self.environment} mode",
                 level=NotificationLevel.INFO
             )
 
             logger.info("✓ Notifications initialized")
-            logger.info(f"  - Active channels: {len(self.notification_manager.channels)}")
+            logger.info(f"  - Active channels: {len(self.notification_manager.enabled_channels)}")
 
         except Exception as e:
             logger.warning(f"⚠ Notifications initialization failed: {e}")
@@ -500,19 +495,21 @@ class HopeFXTradingApp:
         logger.info(f"[{step}/{total}] Initializing backtesting engine...")
 
         try:
-            # Initialize data handler
-            self.data_handler = DataHandler()
+            # Verify backtesting modules are importable (instances require
+            # specific data/strategy arguments and are created on demand)
+            assert DataHandler is not None
+            assert BacktestEngine is not None
+            assert ParameterOptimizer is not None
 
-            # Initialize backtest engine
-            self.backtest_engine = BacktestEngine()
-
-            # Initialize optimizer
-            self.optimizer = ParameterOptimizer()
+            # Mark as available (not yet instantiated - created when running a backtest)
+            self.data_handler = None
+            self.backtest_engine = None
+            self.optimizer = None
 
             logger.info("✓ Backtesting engine initialized")
-            logger.info("  - Data Handler: Ready")
-            logger.info("  - Backtest Engine: Ready")
-            logger.info("  - Parameter Optimizer: Ready")
+            logger.info("  - Data Handler: Available")
+            logger.info("  - Backtest Engine: Available")
+            logger.info("  - Parameter Optimizer: Available")
             logger.info("  - Walk-Forward Analysis: Available")
 
         except Exception as e:
@@ -740,7 +737,7 @@ class HopeFXTradingApp:
 
         # Core Trading Components
         logger.info("\n💹 CORE TRADING:")
-        logger.info(f"  ✓ Notifications: {len(self.notification_manager.channels) if self.notification_manager else 0} channels active")
+        logger.info(f"  ✓ Notifications: {len(self.notification_manager.enabled_channels) if self.notification_manager else 0} channels active")
         logger.info(f"  ✓ Risk Manager: {self.risk_manager.config.max_open_positions} max positions, {self.risk_manager.config.max_drawdown*100}% max drawdown")
         logger.info(f"  ✓ Broker: {type(self.broker).__name__} (Balance: ${self.broker.balance:,.2f})")
         logger.info(f"  ✓ Strategies: {len(self.strategy_manager.strategies)} loaded")
@@ -825,9 +822,9 @@ class HopeFXTradingApp:
         # Send shutdown notification
         if self.notification_manager:
             try:
-                self.notification_manager.send_notification(
-                    title="🛑 HOPEFX Trading Stopped",
-                    message=f"Trading framework shutting down from {self.environment} mode",
+                self.notification_manager.send(
+                    message="🛑 HOPEFX Trading Stopped - shutting down from "
+                            f"{self.environment} mode",
                     level=NotificationLevel.INFO
                 )
             except Exception as e:
