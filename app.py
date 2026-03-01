@@ -181,6 +181,52 @@ async def startup_event():
             logger.warning(f"⚠ Cache initialization failed: {e}")
             app_state.cache = None
 
+        # Register optional routers with graceful degradation
+        try:
+            from api.websocket_server import WebSocketManager, create_websocket_router
+            ws_manager = WebSocketManager()
+            app.include_router(create_websocket_router(ws_manager))
+            app_state.ws_manager = ws_manager
+            logger.info("✓ WebSocket router registered")
+        except Exception as e:
+            logger.warning(f"⚠ WebSocket router not available: {e}")
+
+        try:
+            from notifications.alert_engine import AlertEngine, create_alert_router
+            alert_engine = AlertEngine()
+            app.include_router(create_alert_router(alert_engine))
+            app_state.alert_engine = alert_engine
+            logger.info("✓ Alert router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Alert router not available: {e}")
+
+        try:
+            from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
+            order_flow_analyzer = OrderFlowAnalyzer()
+            app.include_router(create_order_flow_router(order_flow_analyzer))
+            app_state.order_flow_analyzer = order_flow_analyzer
+            logger.info("✓ Order Flow router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Order Flow router not available: {e}")
+
+        try:
+            from analysis.market_scanner import MarketScanner, create_scanner_router
+            market_scanner = MarketScanner()
+            app.include_router(create_scanner_router(market_scanner))
+            app_state.market_scanner = market_scanner
+            logger.info("✓ Market Scanner router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Market Scanner router not available: {e}")
+
+        try:
+            from data.depth_of_market import DepthOfMarketService, create_dom_router
+            dom_service = DepthOfMarketService()
+            app.include_router(create_dom_router(dom_service))
+            app_state.dom_service = dom_service
+            logger.info("✓ DOM router registered")
+        except Exception as e:
+            logger.warning(f"⚠ DOM router not available: {e}")
+
         app_state.initialized = True
         logger.info("=" * 70)
         logger.info("API SERVER READY")
