@@ -32,7 +32,7 @@ import uvicorn
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from api.admin import router as admin_router
+from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from cache import MarketDataCache
