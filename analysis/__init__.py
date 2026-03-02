@@ -68,6 +68,33 @@ from analysis.market_scanner import (
     create_scanner_router,
 )
 
+# Institutional flow detection - NEW
+from analysis.institutional_flow import (
+    InstitutionalFlowDetector,
+    InstitutionalTrade,
+    FlowSignal,
+    SmartMoneyDirection,
+    get_institutional_detector,
+)
+
+# Advanced order flow - NEW
+from analysis.advanced_order_flow import (
+    AdvancedOrderFlowAnalyzer,
+    AggressionMetrics,
+    VolumeCluster,
+    DeltaDivergence,
+    OrderFlowOscillator,
+    StackedImbalance,
+    get_advanced_order_flow_analyzer,
+)
+
+# Order flow dashboard - NEW
+from analysis.order_flow_dashboard import (
+    OrderFlowDashboard,
+    get_order_flow_dashboard,
+    create_dashboard_router,
+)
+
 __all__ = [
     # Pattern detection (optional)
     'ChartPatternDetector',
@@ -100,4 +127,22 @@ __all__ = [
     'ScannerSignalDirection',
     'get_market_scanner',
     'create_scanner_router',
+    # Institutional flow (NEW)
+    'InstitutionalFlowDetector',
+    'InstitutionalTrade',
+    'FlowSignal',
+    'SmartMoneyDirection',
+    'get_institutional_detector',
+    # Advanced order flow (NEW)
+    'AdvancedOrderFlowAnalyzer',
+    'AggressionMetrics',
+    'VolumeCluster',
+    'DeltaDivergence',
+    'OrderFlowOscillator',
+    'StackedImbalance',
+    'get_advanced_order_flow_analyzer',
+    # Dashboard (NEW)
+    'OrderFlowDashboard',
+    'get_order_flow_dashboard',
+    'create_dashboard_router',
 ]

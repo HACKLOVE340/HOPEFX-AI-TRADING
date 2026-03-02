@@ -18,6 +18,26 @@ from .depth_of_market import (
     create_dom_router,
 )
 
+from .time_and_sales import (
+    TimeAndSalesService,
+    ExecutedTrade,
+    TradeVelocity,
+    AggressorStats,
+    get_time_and_sales_service,
+    create_time_and_sales_router,
+)
+
+from .streaming import (
+    StreamingService,
+    Tick,
+    AggregatedBar,
+    StreamEvent,
+    StreamStatus,
+    TickAggregator,
+    get_streaming_service,
+    create_streaming_router,
+)
+
 __all__ = [
     # Depth of Market
     'DepthOfMarketService',
@@ -27,6 +47,22 @@ __all__ = [
     'OrderBookSide',
     'get_dom_service',
     'create_dom_router',
+    # Time & Sales
+    'TimeAndSalesService',
+    'ExecutedTrade',
+    'TradeVelocity',
+    'AggressorStats',
+    'get_time_and_sales_service',
+    'create_time_and_sales_router',
+    # Streaming
+    'StreamingService',
+    'Tick',
+    'AggregatedBar',
+    'StreamEvent',
+    'StreamStatus',
+    'TickAggregator',
+    'get_streaming_service',
+    'create_streaming_router',
 ]
 
 # Module metadata
