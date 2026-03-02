@@ -3,25 +3,46 @@
 {% block content %}
 <div class="card">
     <h2 style="margin-bottom: 15px;">Risk Management Settings</h2>
-    <form style="display: grid; gap: 15px; max-width: 600px;">
+    <div id="settings-msg" style="display:none;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:13px;"></div>
+    <form id="risk-form" style="display: grid; gap: 15px; max-width: 600px;">
         <div>
             <label>Max Risk Per Trade (%):</label><br>
-            <input type="number" value="2.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="number" id="max_risk_per_trade" name="max_risk_per_trade" value="2.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div>
             <label>Max Open Positions:</label><br>
-            <input type="number" value="5" style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="number" id="max_open_positions" name="max_open_positions" value="5" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div>
             <label>Max Daily Loss (%):</label><br>
-            <input type="number" value="5.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="number" id="max_daily_loss" name="max_daily_loss" value="5.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
         <div>
             <label>Max Drawdown (%):</label><br>
-            <input type="number" value="20.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
+            <input type="number" id="max_drawdown" name="max_drawdown" value="20.0" step="0.1" style="width: 100%; padding: 8px; margin-top: 5px;">
         </div>
-        <div>
+        <div style="display:flex;gap:10px;align-items:center;">
             <button type="submit" class="btn btn-primary">Save Settings</button>
+            <span id="save-spinner" style="display:none;font-size:13px;color:#7f8c8d;">Saving...</span>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 15px;">System Settings</h2>
+    <form id="system-form" style="display:grid;gap:10px;max-width:600px;">
+        <label style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="paper_trading_mode" checked> Enable Paper Trading Mode
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="notifications_enabled" checked> Enable Notifications
+        </label>
+        <label style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="auto_trading_enabled"> Enable Auto-Trading
+        </label>
+        <div>
+            <button type="submit" class="btn btn-primary">Save System Settings</button>
+            <span id="sys-save-spinner" style="display:none;font-size:13px;color:#7f8c8d;">Saving...</span>
         </div>
     </form>
 </div>
@@ -29,21 +50,87 @@
 <div class="card">
     <h2 style="margin-bottom: 15px;">API Configuration</h2>
     <p style="color: #7f8c8d;">Configure broker API credentials and other integrations.</p>
-    <button class="btn btn-primary" style="margin-top: 15px;">Edit Configuration</button>
+    <button class="btn btn-primary" style="margin-top: 15px;" onclick="location.href='/docs'">View API Docs</button>
 </div>
 
-<div class="card">
-    <h2 style="margin-bottom: 15px;">System Settings</h2>
-    <div style="display: grid; gap: 10px;">
-        <label style="display: flex; align-items: center; gap: 10px;">
-            <input type="checkbox" checked> Enable Paper Trading Mode
-        </label>
-        <label style="display: flex; align-items: center; gap: 10px;">
-            <input type="checkbox" checked> Enable Notifications
-        </label>
-        <label style="display: flex; align-items: center; gap: 10px;">
-            <input type="checkbox"> Enable Auto-Trading
-        </label>
-    </div>
-</div>
+<script>
+async function loadSettings() {
+    try {
+        const resp = await fetch('/admin/api/settings');
+        if (!resp.ok) return;
+        const d = await resp.json();
+        if (d.max_risk_per_trade != null) document.getElementById('max_risk_per_trade').value = d.max_risk_per_trade;
+        if (d.max_open_positions != null) document.getElementById('max_open_positions').value = d.max_open_positions;
+        if (d.max_daily_loss != null) document.getElementById('max_daily_loss').value = d.max_daily_loss;
+        if (d.max_drawdown != null) document.getElementById('max_drawdown').value = d.max_drawdown;
+        document.getElementById('paper_trading_mode').checked = !!d.paper_trading_mode;
+        document.getElementById('notifications_enabled').checked = !!d.notifications_enabled;
+        document.getElementById('auto_trading_enabled').checked = !!d.auto_trading_enabled;
+    } catch (e) { console.error('Failed to load settings:', e); }
+}
+
+document.getElementById('risk-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const spinner = document.getElementById('save-spinner');
+    const msg = document.getElementById('settings-msg');
+    spinner.style.display = 'inline';
+    msg.style.display = 'none';
+    try {
+        const payload = {
+            max_risk_per_trade: parseFloat(document.getElementById('max_risk_per_trade').value),
+            max_open_positions: parseInt(document.getElementById('max_open_positions').value),
+            max_daily_loss: parseFloat(document.getElementById('max_daily_loss').value),
+            max_drawdown: parseFloat(document.getElementById('max_drawdown').value),
+            paper_trading_mode: document.getElementById('paper_trading_mode').checked,
+            notifications_enabled: document.getElementById('notifications_enabled').checked,
+            auto_trading_enabled: document.getElementById('auto_trading_enabled').checked,
+        };
+        const resp = await fetch('/admin/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const result = await resp.json();
+        msg.style.display = 'block';
+        if (result.status === 'ok') {
+            msg.style.background = '#d4edda'; msg.style.color = '#155724';
+            msg.textContent = '✓ ' + (result.message || 'Settings saved successfully');
+        } else {
+            msg.style.background = '#f8d7da'; msg.style.color = '#721c24';
+            msg.textContent = '✗ ' + (result.message || 'Failed to save settings');
+        }
+    } catch (err) {
+        msg.style.display = 'block';
+        msg.style.background = '#f8d7da'; msg.style.color = '#721c24';
+        msg.textContent = '✗ Error: ' + err.message;
+    } finally {
+        spinner.style.display = 'none';
+        setTimeout(() => { msg.style.display = 'none'; }, 4000);
+    }
+});
+
+document.getElementById('system-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const spinner = document.getElementById('sys-save-spinner');
+    spinner.style.display = 'inline';
+    try {
+        const payload = {
+            paper_trading_mode: document.getElementById('paper_trading_mode').checked,
+            notifications_enabled: document.getElementById('notifications_enabled').checked,
+            auto_trading_enabled: document.getElementById('auto_trading_enabled').checked,
+        };
+        await fetch('/admin/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+    } catch (err) {
+        console.error('Failed to save system settings:', err);
+    } finally {
+        spinner.style.display = 'none';
+    }
+});
+
+document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
 {% endblock %}
