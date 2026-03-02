@@ -80,6 +80,9 @@ pylint==3.0.3
 numba>=0.59.0  # Python 3.12 support
 cython==3.0.6
 
+# System Monitoring
+psutil>=5.9.0
+
 # Additional Utilities
 pydantic==2.5.2
 email-validator>=2.0.0  # Required by pydantic for email validation
