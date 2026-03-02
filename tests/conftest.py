@@ -5,6 +5,7 @@ Pytest configuration and shared fixtures for HOPEFX tests.
 import pytest
 import os
 import tempfile
+from collections import deque
 from pathlib import Path
 from datetime import datetime, timedelta
 import pandas as pd
