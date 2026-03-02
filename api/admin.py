@@ -4,7 +4,10 @@ Admin Panel API Endpoints
 REST API endpoints for admin dashboard and management.
 """
 
+import json
 import logging
+from collections import deque
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -96,8 +99,7 @@ templates = Jinja2Templates(directory=str(template_dir))
 # Shared instances for dashboard data
 _strategy_manager = StrategyManager()
 _risk_manager = RiskManager(RiskConfig(), initial_balance=10000.0)
-_start_time = time.time()
-_logger = logging.getLogger(__name__)
+_logger = logger
 
 
 def _check_module(module_name: str) -> bool:
@@ -303,97 +305,24 @@ async def get_dashboard_data():
     }
 
 
-@router.get("/api/dashboard-data")
-async def get_dashboard_data():
-    """
-    Get aggregated dashboard data from all available modules.
-    """
-    data: Dict[str, Any] = {
-        "system": {},
-        "trading": {},
-        "risk": {},
-        "modules": {},
-    }
-
-    # System info
-    uptime_seconds = int(time.time() - _start_time)
-    hours, remainder = divmod(uptime_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    data["system"] = {
-        "version": "2.0.0",
-        "environment": os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")),
-        "uptime": f"{hours}h {minutes}m {seconds}s",
-        "uptime_seconds": uptime_seconds,
-        "status": "running",
-    }
-
-    # Trading performance
-    try:
-        from api.trading import strategy_manager
-        data["trading"] = strategy_manager.get_performance_summary()
-    except Exception as e:
-        data["trading"] = {"error": str(e), "total_strategies": 0, "active_strategies": 0}
-
-    # Risk metrics
-    try:
-        from api.trading import risk_manager
-        data["risk"] = risk_manager.get_risk_metrics()
-    except Exception as e:
-        data["risk"] = {"error": str(e)}
-
-    # Module availability (cached to avoid repeated imports on every poll)
-    global _module_cache, _module_cache_time
-    now = time.time()
-    if not _module_cache or (now - _module_cache_time) > _MODULE_CACHE_TTL:
-        modules = [
-            ("config", "config"),
-            ("database", "database"),
-            ("cache", "cache"),
-            ("strategies", "strategies"),
-            ("risk", "risk"),
-            ("brokers", "brokers"),
-            ("ml", "ml"),
-            ("news", "news"),
-            ("analytics", "analytics"),
-            ("monetization", "monetization"),
-            ("notifications", "notifications"),
-            ("websocket", "api.websocket_server"),
-            ("charting", "charting"),
-            ("backtesting", "backtesting"),
-        ]
-        module_status: Dict[str, str] = {}
-        for name, module_path in modules:
-            try:
-                __import__(module_path)
-                module_status[name] = "available"
-            except Exception:
-                module_status[name] = "unavailable"
-        _module_cache = module_status
-        _module_cache_time = now
-    data["modules"] = _module_cache
-
-    return data
-
-
 @router.get("/api/settings")
 async def get_settings():
     """
     Get current risk management settings.
-
-    Returns in-memory values from risk_manager, merged with any values
-    persisted to disk so that restarted instances reflect saved settings.
     """
-    # Start with persisted-to-disk defaults
-    saved = _load_persisted_risk_settings()
-    defaults = {
-        "max_risk_per_trade": saved.get("max_risk_per_trade", 2.0),
-        "max_open_positions": saved.get("max_open_positions", 5),
-        "max_daily_loss": saved.get("max_daily_loss", 5.0),
-        "max_drawdown": saved.get("max_drawdown", 20.0),
-        "paper_trading_mode": saved.get("paper_trading_mode", True),
-        "notifications_enabled": saved.get("notifications_enabled", True),
-        "auto_trading_enabled": saved.get("auto_trading_enabled", False),
+    defaults: Dict[str, Any] = {
+        "max_risk_per_trade": 2.0,
+        "max_open_positions": 10,
+        "max_daily_loss": 5.0,
+        "max_drawdown": 20.0,
+        "paper_trading_mode": True,
+        "notifications_enabled": True,
+        "auto_trading_enabled": False,
     }
+    # Overlay persisted values
+    persisted = _load_persisted_risk_settings()
+    defaults.update(persisted)
+    # Overlay live values from risk_manager
     try:
         from api.trading import risk_manager
         config = risk_manager.config if hasattr(risk_manager, "config") else None
