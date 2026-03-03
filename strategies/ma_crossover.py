@@ -6,7 +6,7 @@ A simple trend-following strategy based on moving average crossovers.
 
 from typing import Dict, Optional, Any
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
 
@@ -151,7 +151,7 @@ class MovingAverageCrossover(BaseStrategy):
             signal_type=signal_type,
             symbol=self.config.symbol,
             price=close_price,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             confidence=confidence,
             metadata={
                 'fast_ma': fast_ma,

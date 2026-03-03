@@ -89,3 +89,4 @@ email-validator>=2.0.0  # Required by pydantic for email validation
 beautifulsoup4==4.12.2
 lxml==4.9.3
 feedparser>=6.0.10
+textblob>=0.17.1

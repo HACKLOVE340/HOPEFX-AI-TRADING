@@ -6,7 +6,7 @@ Tracks and analyzes trader performance metrics.
 
 from typing import Dict, List
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class PerformanceMetric:
@@ -20,7 +20,7 @@ class PerformanceMetric:
         self.sharpe_ratio = Decimal('0.0')
         self.max_drawdown = Decimal('0.0')
         self.total_trades = 0
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
 
 class PerformanceTracker:
@@ -44,7 +44,7 @@ class PerformanceTracker:
         metric = self.metrics[key]
         metric.total_trades += 1
         metric.total_return += profit
-        metric.updated_at = datetime.utcnow()
+        metric.updated_at = datetime.now(timezone.utc)
 
     def get_performance(
         self,

@@ -11,7 +11,7 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -98,7 +98,7 @@ class RevenueEntry:
         self.tier = tier
         self.description = description
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -171,7 +171,7 @@ class RevenueAnalytics:
             'billing_cycle': billing_cycle.value,
             'amount': float(amount),
             'previous_tier': previous_tier.value if previous_tier else None,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         self._subscription_events.append(event)
         
@@ -279,7 +279,7 @@ class RevenueAnalytics:
 
     def get_mrr(self, as_of: Optional[datetime] = None) -> Decimal:
         """Calculate Monthly Recurring Revenue"""
-        as_of = as_of or datetime.utcnow()
+        as_of = as_of or datetime.now(timezone.utc)
         
         # Get subscription revenue from last 30 days
         start_date = as_of - timedelta(days=30)
@@ -299,7 +299,7 @@ class RevenueAnalytics:
 
     def get_growth_metrics(self) -> GrowthMetrics:
         """Get comprehensive growth metrics"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Current MRR
         current_mrr = self.get_mrr(now)
@@ -532,7 +532,7 @@ class RevenueAnalytics:
         include_projections: bool = True
     ) -> Dict[str, Any]:
         """Generate comprehensive revenue report"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Determine date range based on period
         if period == TimePeriod.DAILY:
@@ -606,7 +606,7 @@ class RevenueAnalytics:
     def get_dashboard_data(self) -> Dict[str, Any]:
         """Get data for revenue dashboard"""
         growth = self.get_growth_metrics()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Get daily revenue for last 30 days
         daily_revenue = []

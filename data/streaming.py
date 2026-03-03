@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -208,7 +208,7 @@ class StreamingService:
         service.subscribe('XAUUSD', handler_fn)
 
         # Simulate/inject a tick (for testing or adapters)
-        service.publish_tick(Tick('XAUUSD', datetime.utcnow(), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick('XAUUSD', datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
     """
 
     def __init__(self, config: Optional[Dict] = None):
@@ -406,7 +406,7 @@ class StreamingService:
         event = StreamEvent(
             event_type="connected",
             symbol=None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         self._dispatch(event)
         logger.info("Streaming Service connected")
@@ -417,7 +417,7 @@ class StreamingService:
         event = StreamEvent(
             event_type="disconnected",
             symbol=None,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         self._dispatch(event)
         logger.info("Streaming Service disconnected")

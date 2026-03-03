@@ -15,7 +15,7 @@ Features:
 """
 
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import numpy as np
 
@@ -169,7 +169,7 @@ class StrategyBrain:
 
             # Record in history
             self.signal_history.append({
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'strategy_signals': strategy_signals,
                 'consensus': consensus_result,
                 'data_snapshot': data.get('prices', [])[-1] if data.get('prices') else {},
@@ -263,7 +263,7 @@ class StrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol=list(strategy_signals.values())[0].symbol,
                     price=avg_price,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     confidence=min(consensus_confidence, 1.0),
                     metadata={
                         'type': 'consensus',
@@ -295,7 +295,7 @@ class StrategyBrain:
                     signal_type=SignalType.SELL,
                     symbol=list(strategy_signals.values())[0].symbol,
                     price=avg_price,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     confidence=min(consensus_confidence, 1.0),
                     metadata={
                         'type': 'consensus',

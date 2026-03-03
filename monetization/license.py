@@ -6,7 +6,7 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from enum import Enum
 
@@ -81,7 +81,7 @@ class LicenseValidator:
         cache_key = f"{user_id}:{feature_name}"
         if cache_key in self._validation_cache:
             cache_entry = self._validation_cache[cache_key]
-            if (datetime.utcnow() - cache_entry['timestamp']).seconds < self._cache_duration:
+            if (datetime.now(timezone.utc) - cache_entry['timestamp']).seconds < self._cache_duration:
                 return cache_entry['has_access']
 
         # Validate subscription
@@ -102,7 +102,7 @@ class LicenseValidator:
         """Update validation cache"""
         self._validation_cache[cache_key] = {
             'has_access': has_access,
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(timezone.utc)
         }
 
     def get_user_tier(self, user_id: str) -> Optional[SubscriptionTier]:

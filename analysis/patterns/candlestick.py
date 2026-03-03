@@ -598,12 +598,17 @@ class CandlestickPatternDetector:
 
         Args:
             config: Optional dict with keys doji_threshold, wick_ratio,
-                    marubozu_threshold.
+                    marubozu_threshold, max_patterns_per_type.
         """
         cfg = config or {}
         self.doji_threshold: float = float(cfg.get("doji_threshold", 0.05))
         self.wick_ratio: float = float(cfg.get("wick_ratio", 2.0))
         self.marubozu_threshold: float = float(cfg.get("marubozu_threshold", 0.05))
+        self.max_patterns_per_type: Optional[int] = (
+            int(cfg["max_patterns_per_type"])
+            if cfg.get("max_patterns_per_type") is not None
+            else None
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

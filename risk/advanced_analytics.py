@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from enum import Enum
 
@@ -39,7 +39,7 @@ class VaRResult:
     confidence_level: float  # e.g., 0.95 for 95%
     time_horizon: int  # Days
     method: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -63,7 +63,7 @@ class MonteCarloResult:
     max_loss: float
     simulated_paths: Optional[np.ndarray] = None
     num_simulations: int = 10000
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -88,7 +88,7 @@ class StressTestResult:
     affected_positions: List[str]
     risk_level: str  # 'low', 'medium', 'high', 'severe'
     recommendation: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass

@@ -6,7 +6,7 @@ Enables users to automatically copy trades from successful traders.
 
 from typing import Dict, List, Optional
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class CopyRelationship:
@@ -18,7 +18,7 @@ class CopyRelationship:
         self.max_allocation = None
         self.max_per_trade = None
         self.is_active = True
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
 
 class CopyTradingEngine:

@@ -6,7 +6,7 @@ Invoices include access codes and are sent to users upon payment confirmation.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from decimal import Decimal
 from enum import Enum
@@ -51,8 +51,8 @@ class Invoice:
         self.currency = currency
         self.access_code = access_code
         self.status = status
-        self.created_at = datetime.utcnow()
-        self.due_date = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.due_date = datetime.now(timezone.utc)
         self.paid_at: Optional[datetime] = None
         self.cancelled_at: Optional[datetime] = None
         self.items: List[Dict] = []
@@ -75,13 +75,13 @@ class Invoice:
     def mark_paid(self) -> None:
         """Mark invoice as paid"""
         self.status = InvoiceStatus.PAID
-        self.paid_at = datetime.utcnow()
+        self.paid_at = datetime.now(timezone.utc)
         logger.info(f"Invoice {self.invoice_number} marked as paid")
 
     def mark_cancelled(self) -> None:
         """Mark invoice as cancelled"""
         self.status = InvoiceStatus.CANCELLED
-        self.cancelled_at = datetime.utcnow()
+        self.cancelled_at = datetime.now(timezone.utc)
         logger.info(f"Invoice {self.invoice_number} cancelled")
 
     def mark_refunded(self) -> None:
@@ -93,7 +93,7 @@ class Invoice:
         """Check if invoice is overdue"""
         if self.status == InvoiceStatus.PAID:
             return False
-        return datetime.utcnow() > self.due_date
+        return datetime.now(timezone.utc) > self.due_date
 
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
@@ -125,7 +125,7 @@ class InvoiceGenerator:
 
     def _generate_invoice_number(self) -> str:
         """Generate unique invoice number"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         number = f"INV-{now.year}-{self._invoice_counter:06d}"
         self._invoice_counter += 1
         return number

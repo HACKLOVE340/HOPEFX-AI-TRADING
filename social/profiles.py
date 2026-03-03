@@ -5,7 +5,7 @@ Handles user profiles, verification, and social connections.
 """
 
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class UserProfile:
@@ -18,7 +18,7 @@ class UserProfile:
         self.verification_level = "none"
         self.followers_count = 0
         self.following_count = 0
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
 
 class ProfileManager:

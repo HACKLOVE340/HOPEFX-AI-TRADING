@@ -4,7 +4,7 @@ Ethereum Payment Integration
 Handles Ethereum (ETH) deposits and withdrawals.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Optional
 import logging
@@ -32,7 +32,7 @@ class EthereumClient:
 
             self.addresses[address] = {
                 'user_id': user_id,
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             logger.info(f"Generated Ethereum address for user {user_id}")
@@ -63,7 +63,7 @@ class EthereumClient:
                 'amount': float(amount),
                 'confirmations': confirmations,
                 'status': status,
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             self.transactions[tx_hash] = transaction

@@ -6,7 +6,7 @@ Manages multiple trading strategies, execution, and coordination.
 
 from typing import Dict, List, Optional, Any
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .base import BaseStrategy, Signal, StrategyStatus
 
@@ -195,7 +195,7 @@ class StrategyManager:
         )
 
         summary['total_pnl'] = total_pnl
-        summary['timestamp'] = datetime.utcnow().isoformat()
+        summary['timestamp'] = datetime.now(timezone.utc).isoformat()
 
         return summary
 

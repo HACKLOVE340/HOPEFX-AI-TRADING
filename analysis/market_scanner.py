@@ -12,7 +12,7 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -101,7 +101,7 @@ class ScanResult:
     direction: SignalDirection
     signal_strength: float  # 0-100
     details: Dict[str, Any]
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -129,14 +129,14 @@ class MarketOpportunity:
     risk_reward: Optional[float]
     triggers: List[str]
     analysis: Dict[str, Any]
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
 
     @property
     def is_valid(self) -> bool:
         if not self.expires_at:
             return True
-        return datetime.utcnow() < self.expires_at
+        return datetime.now(timezone.utc) < self.expires_at
 
     def to_dict(self) -> Dict:
         return {
@@ -367,7 +367,7 @@ class MarketScanner:
 
             # Update stats
             self._stats['scans_performed'] += 1
-            self._stats['last_scan_time'] = datetime.utcnow().isoformat()
+            self._stats['last_scan_time'] = datetime.now(timezone.utc).isoformat()
 
         # Generate opportunities from results
         self._generate_opportunities(results)
@@ -800,7 +800,7 @@ class MarketScanner:
             risk_reward=risk_reward,
             triggers=result.criteria_met,
             analysis=result.details,
-            expires_at=datetime.utcnow() + timedelta(hours=4)
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4)
         )
 
     def _add_opportunity(self, opportunity: MarketOpportunity):

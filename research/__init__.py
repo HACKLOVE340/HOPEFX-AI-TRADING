@@ -636,6 +636,68 @@ def create_research_router(engine: 'ResearchNotebookEngine'):
     return router
 
 
+def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
+    """
+    Calculate the annualised Sharpe Ratio.
+
+    Args:
+        returns: List or array-like of periodic returns.
+        risk_free_rate: Annual risk-free rate (default 2%).
+
+    Returns:
+        Annualised Sharpe Ratio as a float.
+    """
+    import numpy as np
+    r = np.asarray(returns, dtype=float)
+    excess = r - risk_free_rate / 252
+    std = excess.std()
+    if std == 0:
+        return 0.0
+    return float(np.sqrt(252) * excess.mean() / std)
+
+
+def calculate_max_drawdown(equity_curve):
+    """
+    Calculate the Maximum Drawdown from an equity curve.
+
+    Args:
+        equity_curve: List or array-like of equity values.
+
+    Returns:
+        Maximum drawdown as a non-negative float (e.g. 0.10 = 10% drawdown).
+    """
+    import numpy as np
+    curve = np.asarray(equity_curve, dtype=float)
+    if len(curve) == 0:
+        return 0.0
+    peak = np.maximum.accumulate(curve)
+    drawdown = np.where(peak != 0, (curve - peak) / peak, 0.0)
+    return float(abs(drawdown.min()))
+
+
+def create_features(df):
+    """
+    Create basic technical features for ML model development.
+
+    Args:
+        df: pandas DataFrame with at least a 'close' column.
+
+    Returns:
+        DataFrame of engineered features.
+    """
+    import pandas as pd
+    features = pd.DataFrame(index=df.index)
+    features['returns'] = df['close'].pct_change()
+    features['volatility'] = features['returns'].rolling(20).std()
+    features['sma_10'] = df['close'].rolling(10).mean()
+    features['sma_50'] = df['close'].rolling(50).mean()
+    features['sma_ratio'] = features['sma_10'] / features['sma_50']
+    if 'volume' in df.columns:
+        features['volume_ma'] = df['volume'].rolling(20).mean()
+        features['volume_ratio'] = df['volume'] / features['volume_ma']
+    return features.dropna()
+
+
 # Module exports
 __all__ = [
     'ResearchNotebookEngine',
@@ -644,4 +706,7 @@ __all__ = [
     'CellType',
     'CellStatus',
     'create_research_router',
+    'calculate_sharpe_ratio',
+    'calculate_max_drawdown',
+    'create_features',
 ]

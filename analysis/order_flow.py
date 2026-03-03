@@ -14,7 +14,7 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from collections import defaultdict
@@ -282,7 +282,7 @@ class OrderFlowAnalyzer:
             trade_id: Optional trade ID
         """
         trade = Trade(
-            timestamp=timestamp or datetime.utcnow(),
+            timestamp=timestamp or datetime.now(timezone.utc),
             price=price,
             size=size,
             side=side.lower(),
@@ -512,7 +512,7 @@ class OrderFlowAnalyzer:
         Returns:
             OrderFlowAnalysis object
         """
-        start_time = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        start_time = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades(symbol, start_time=start_time)
 
         if not trades:
@@ -581,7 +581,7 @@ class OrderFlowAnalyzer:
 
         return OrderFlowAnalysis(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             total_volume=total_volume,
             buy_volume=buy_volume,
             sell_volume=sell_volume,

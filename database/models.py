@@ -19,8 +19,7 @@ from sqlalchemy import (
     ForeignKey, Table, Index, UniqueConstraint, CheckConstraint,
     Enum as SQLEnum, Date, Time, JSON
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
 
 Base = declarative_base()

@@ -76,9 +76,11 @@ class TechnicalFeatureEngineer:
         """Add trend-following indicators."""
         close = df['close']
 
-        # Simple Moving Averages
+        # Simple Moving Averages - min_periods=1 allows computation with fewer rows
+        # than the window size, which prevents all rows from being NaN-dropped on
+        # small datasets (e.g. sma_200 with n<200).
         for period in [5, 10, 20, 50, 100, 200]:
-            df[f'sma_{period}'] = close.rolling(window=period).mean()
+            df[f'sma_{period}'] = close.rolling(window=period, min_periods=1).mean()
 
         # Exponential Moving Averages (including 12 and 26 for MACD crossover)
         for period in [5, 10, 12, 20, 26, 50, 100]:
@@ -113,8 +115,14 @@ class TechnicalFeatureEngineer:
             delta = close.diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-            rs = gain / loss
-            df[f'rsi_{period}'] = 100 - (100 / (1 + rs))
+            rs = gain / loss.replace(0, np.nan)
+            rsi = 100 - (100 / (1 + rs))
+            # gain=0 & loss=0 (e.g. constant price) → neutral; loss=0 & gain>0 → overbought
+            df[f'rsi_{period}'] = np.where(
+                loss == 0,
+                np.where(gain == 0, 50.0, 100.0),
+                rsi,
+            )
 
         # Stochastic Oscillator
         for period in [14, 21]:
@@ -152,7 +160,11 @@ class TechnicalFeatureEngineer:
             df[f'bb_upper_{period}'] = sma + (std * 2)
             df[f'bb_lower_{period}'] = sma - (std * 2)
             df[f'bb_width_{period}'] = (df[f'bb_upper_{period}'] - df[f'bb_lower_{period}']) / sma
-            df[f'bb_position_{period}'] = (close - df[f'bb_lower_{period}']) / (df[f'bb_upper_{period}'] - df[f'bb_lower_{period}'])
+            bb_range = df[f'bb_upper_{period}'] - df[f'bb_lower_{period}']
+            df[f'bb_position_{period}'] = np.where(
+                bb_range == 0, 0.5,
+                (close - df[f'bb_lower_{period}']) / bb_range.replace(0, np.nan),
+            )
 
         # Average True Range (ATR)
         for period in [7, 14, 21]:
@@ -192,8 +204,14 @@ class TechnicalFeatureEngineer:
         for period in [14, 21]:
             positive_flow = money_flow.where(typical_price > typical_price.shift(), 0).rolling(window=period).sum()
             negative_flow = money_flow.where(typical_price < typical_price.shift(), 0).rolling(window=period).sum()
-            mfi_ratio = positive_flow / negative_flow
-            df[f'mfi_{period}'] = 100 - (100 / (1 + mfi_ratio))
+            mfi_ratio = positive_flow / negative_flow.replace(0, np.nan)
+            mfi = 100 - (100 / (1 + mfi_ratio))
+            # negative=0 & positive=0 → neutral; negative=0 & positive>0 → max buying pressure
+            df[f'mfi_{period}'] = np.where(
+                negative_flow == 0,
+                np.where(positive_flow == 0, 50.0, 100.0),
+                mfi,
+            )
 
         return df
 
@@ -253,7 +271,7 @@ class TechnicalFeatureEngineer:
         for period in [20, 50]:
             mean = close.rolling(window=period).mean()
             std = close.rolling(window=period).std()
-            df[f'zscore_{period}'] = (close - mean) / std
+            df[f'zscore_{period}'] = np.where(std == 0, 0.0, (close - mean) / std.replace(0, np.nan))
 
         # Percentile rank
         for period in [20, 50]:

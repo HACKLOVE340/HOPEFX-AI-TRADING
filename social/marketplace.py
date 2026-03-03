@@ -6,7 +6,7 @@ Allows users to publish and subscribe to trading strategies.
 
 from typing import Dict, List, Optional
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Strategy:
@@ -20,7 +20,7 @@ class Strategy:
         self.performance_fee = Decimal('0.0')
         self.is_public = True
         self.subscribers_count = 0
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
 
 class StrategyMarketplace:

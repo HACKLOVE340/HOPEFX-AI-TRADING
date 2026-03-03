@@ -10,7 +10,7 @@ This module handles:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -102,8 +102,8 @@ class MarketplaceStrategy:
         self.min_tier = min_tier
         self.tags = tags or []
         self.status = StrategyStatus.DRAFT
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.published_at: Optional[datetime] = None
         
         # Performance metrics
@@ -124,7 +124,7 @@ class MarketplaceStrategy:
     def set_performance(self, performance: StrategyPerformance) -> None:
         """Set strategy performance metrics"""
         self.performance = performance
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def submit_for_review(self) -> bool:
         """Submit strategy for review"""
@@ -132,33 +132,33 @@ class MarketplaceStrategy:
             return False
         
         self.status = StrategyStatus.PENDING_REVIEW
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Strategy {self.strategy_id} submitted for review")
         return True
 
     def approve(self) -> None:
         """Approve strategy for marketplace"""
         self.status = StrategyStatus.APPROVED
-        self.published_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.published_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Strategy {self.strategy_id} approved")
 
     def reject(self, reason: str) -> None:
         """Reject strategy"""
         self.status = StrategyStatus.REJECTED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Strategy {self.strategy_id} rejected: {reason}")
 
     def suspend(self) -> None:
         """Suspend strategy listing"""
         self.status = StrategyStatus.SUSPENDED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Strategy {self.strategy_id} suspended")
 
     def archive(self) -> None:
         """Archive strategy"""
         self.status = StrategyStatus.ARCHIVED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Strategy {self.strategy_id} archived")
 
     def is_available(self) -> bool:
@@ -169,7 +169,7 @@ class MarketplaceStrategy:
         """Record a purchase"""
         self.total_purchases += 1
         self.total_revenue += amount
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def add_rating(self, rating: float) -> None:
         """Add a rating (1-5 scale)"""
@@ -181,7 +181,7 @@ class MarketplaceStrategy:
             self.total_ratings += 1
             self.avg_rating = total / self.total_ratings
         
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -235,7 +235,7 @@ class StrategyPurchase:
         self.amount = amount
         self.license_type = license_type
         self.status = PurchaseStatus.PENDING
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.completed_at: Optional[datetime] = None
         self.expires_at: Optional[datetime] = None
         
@@ -246,7 +246,7 @@ class StrategyPurchase:
     def complete(self) -> None:
         """Complete purchase"""
         self.status = PurchaseStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         logger.info(f"Purchase {self.purchase_id} completed")
 
     def refund(self) -> None:
@@ -258,7 +258,7 @@ class StrategyPurchase:
         """Check if license is valid"""
         if self.status != PurchaseStatus.COMPLETED:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -298,8 +298,8 @@ class StrategyReview:
         self.rating = min(max(rating, 1), 5)  # 1-5 scale
         self.title = title
         self.content = content
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         self.helpful_votes = 0
         self.verified_purchase = False
 

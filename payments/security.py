@@ -4,7 +4,7 @@ Security Module
 Handles 2FA, KYC verification, transaction limits, and fraud detection.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, Optional, List, Tuple
@@ -49,7 +49,7 @@ class TransactionLimit:
 
     def __post_init__(self):
         if self.last_reset is None:
-            self.last_reset = datetime.utcnow()
+            self.last_reset = datetime.now(timezone.utc)
 
 
 class SecurityManager:
@@ -149,7 +149,7 @@ class SecurityManager:
         kyc = KYCInfo(
             user_id=user_id,
             level=level,
-            verified_at=datetime.utcnow() if level != KYCLevel.NONE else None,
+            verified_at=datetime.now(timezone.utc) if level != KYCLevel.NONE else None,
             documents=documents or {}
         )
 
@@ -232,7 +232,7 @@ class SecurityManager:
         if not limits:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Reset daily if day changed
         if limits.last_reset.date() != now.date():
@@ -309,7 +309,7 @@ class SecurityManager:
 
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
-        recent_failed = [f for f in failed if datetime.utcnow() - f < timedelta(hours=1)]
+        recent_failed = [f for f in failed if datetime.now(timezone.utc) - f < timedelta(hours=1)]
         if len(recent_failed) > 5:
             logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
             return True
@@ -327,7 +327,7 @@ class SecurityManager:
         if user_id not in self.failed_attempts:
             self.failed_attempts[user_id] = []
 
-        self.failed_attempts[user_id].append(datetime.utcnow())
+        self.failed_attempts[user_id].append(datetime.now(timezone.utc))
 
     def add_ip_to_whitelist(self, user_id: str, ip_address: str) -> None:
         """Add IP to user's whitelist"""

@@ -6,7 +6,7 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 from decimal import Decimal
 from enum import Enum
@@ -51,13 +51,13 @@ class Commission:
         self.commission_amount = commission_amount
         self.currency = currency
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.collected_at: Optional[datetime] = None
 
     def mark_collected(self) -> None:
         """Mark commission as collected"""
         self.status = CommissionStatus.COLLECTED
-        self.collected_at = datetime.utcnow()
+        self.collected_at = datetime.now(timezone.utc)
         logger.info(f"Commission {self.commission_id} marked as collected")
 
     def mark_failed(self) -> None:
@@ -231,7 +231,7 @@ class CommissionTracker:
         month: Optional[int] = None
     ) -> Dict:
         """Get monthly commission report"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         year = year or now.year
         month = month or now.month
 

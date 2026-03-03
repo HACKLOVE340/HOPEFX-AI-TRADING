@@ -10,7 +10,7 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -117,7 +117,7 @@ class Partner:
         self.contact_phone = contact_phone
         self.partner_type = partner_type
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.approved_at: Optional[datetime] = None
         
         # Commission settings
@@ -151,8 +151,8 @@ class Partner:
     def approve(self) -> None:
         """Approve partner application"""
         self.status = PartnerStatus.ACTIVE
-        self.approved_at = datetime.utcnow()
-        self.contract_start = datetime.utcnow()
+        self.approved_at = datetime.now(timezone.utc)
+        self.contract_start = datetime.now(timezone.utc)
         logger.info(f"Partner {self.partner_id} approved")
 
     def suspend(self) -> None:
@@ -163,7 +163,7 @@ class Partner:
     def terminate(self) -> None:
         """Terminate partnership"""
         self.status = PartnerStatus.TERMINATED
-        self.contract_end = datetime.utcnow()
+        self.contract_end = datetime.now(timezone.utc)
         logger.info(f"Partner {self.partner_id} terminated")
 
     def record_sale(self, amount: Decimal) -> Decimal:
@@ -212,7 +212,7 @@ class WhiteLabelInstance:
         self.name = name
         self.config = config
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.deployed_at: Optional[datetime] = None
         
         # Enterprise features
@@ -231,7 +231,7 @@ class WhiteLabelInstance:
     def deploy(self) -> None:
         """Mark instance as deployed"""
         self.status = WhiteLabelStatus.DEPLOYED
-        self.deployed_at = datetime.utcnow()
+        self.deployed_at = datetime.now(timezone.utc)
         logger.info(f"White-label instance {self.instance_id} deployed")
 
     def enter_maintenance(self) -> None:
@@ -306,7 +306,7 @@ class EnterpriseCustomer:
         self.contact_email = contact_email
         self.contact_name = contact_name
         self.tier = tier
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         
         # Enterprise features configuration
         self.features = EnterpriseFeatures()
@@ -514,8 +514,8 @@ class EnterpriseManager:
         
         if contract_value:
             customer.contract_value = contract_value
-            customer.contract_start = datetime.utcnow()
-            customer.contract_end = datetime.utcnow() + timedelta(days=30 * contract_months)
+            customer.contract_start = datetime.now(timezone.utc)
+            customer.contract_end = datetime.now(timezone.utc) + timedelta(days=30 * contract_months)
 
         self._enterprise_customers[customer_id] = customer
         logger.info(f"Registered enterprise customer {customer_id}: {company_name}")
@@ -617,7 +617,7 @@ class EnterpriseManager:
             'partner_id': partner_id,
             'amount': float(payout_amount),
             'status': 'processed',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
     def get_enterprise_stats(self) -> Dict[str, Any]:

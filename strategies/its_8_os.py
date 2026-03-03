@@ -14,7 +14,7 @@ Inner Circle Trader methodology:
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import logging
 import numpy as np
 
@@ -86,7 +86,7 @@ class ITS8OSStrategy(BaseStrategy):
                 return {'error': 'Insufficient data'}
 
             current_price = prices[-1].get('close', 0)
-            current_time = data.get('timestamp', datetime.utcnow())
+            current_time = data.get('timestamp', datetime.now(timezone.utc))
 
             # Run all 8 optimal setups
             setup_results = {}

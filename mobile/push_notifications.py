@@ -3,7 +3,7 @@ Push Notification System
 """
 
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class PushNotificationManager:
@@ -28,7 +28,7 @@ class PushNotificationManager:
             'body': body,
             'category': category,
             'data': data or {},
-            'sent_at': datetime.utcnow()
+            'sent_at': datetime.now(timezone.utc)
         }
 
         # Would send via FCM/APNs in production

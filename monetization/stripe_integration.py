@@ -13,7 +13,7 @@ import logging
 import os
 import hmac
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from enum import Enum
@@ -51,7 +51,7 @@ class StripeCustomer:
         self.email = email
         self.name = name
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -83,7 +83,7 @@ class StripePaymentIntent:
         self.currency = currency
         self.status = status
         self.metadata = metadata or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.client_secret: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -122,7 +122,7 @@ class StripeSubscription:
         self.current_period_start = current_period_start
         self.current_period_end = current_period_end
         self.cancel_at_period_end = cancel_at_period_end
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -455,7 +455,7 @@ class StripeIntegration:
                 from datetime import timedelta
                 
                 sub_id = f"sub_{uuid.uuid4().hex[:14]}"
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 
                 if billing_cycle == BillingCycle.ANNUAL:
                     period_end = now + timedelta(days=365)

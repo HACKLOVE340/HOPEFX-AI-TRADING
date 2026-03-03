@@ -6,7 +6,7 @@ Sends notifications via multiple channels (Discord, Telegram, Email, etc.)
 
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import requests
 
@@ -99,7 +99,7 @@ class NotificationManager:
             'message': message,
             'level': level.value,
             'channels': [c.value for c in channels],
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'metadata': metadata or {},
         }
 
@@ -161,7 +161,7 @@ class NotificationManager:
                     "title": f"{level.value} Notification",
                     "description": message,
                     "color": color_map.get(level, 0x95a5a6),
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "footer": {
                         "text": "HOPEFX AI Trading"
                     }

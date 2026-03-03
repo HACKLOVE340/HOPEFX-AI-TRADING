@@ -5,7 +5,7 @@ Unified interface for all payment methods (crypto and fintech).
 Handles routing, fee calculation, currency conversion, and confirmation.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, Optional, Any, List
@@ -156,7 +156,7 @@ class PaymentGateway:
             Payment information
         """
         try:
-            payment_id = f"PAY-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            payment_id = f"PAY-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
             # Calculate fees
             fee = self.get_payment_fee(method, amount)
@@ -192,7 +192,7 @@ class PaymentGateway:
                 status=PaymentStatus.INITIATED,
                 wallet_type=wallet_type,
                 payment_details=payment_details,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             self.payments[payment_id] = payment
@@ -226,7 +226,7 @@ class PaymentGateway:
             Payment information
         """
         try:
-            payment_id = f"WD-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            payment_id = f"WD-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
             # Calculate fees
             fee = self.get_payment_fee(method, amount)
@@ -254,7 +254,7 @@ class PaymentGateway:
                 status=PaymentStatus.PENDING,
                 wallet_type='subscription',  # Withdrawals from subscription wallet
                 payment_details=payment_details,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             self.payments[payment_id] = payment
@@ -290,7 +290,7 @@ class PaymentGateway:
                 return False
 
             payment.status = status
-            payment.confirmed_at = datetime.utcnow()
+            payment.confirmed_at = datetime.now(timezone.utc)
             payment.external_reference = external_reference
 
             logger.info(f"Payment confirmed: {payment_id}")

@@ -5,7 +5,7 @@ Simulated broker for testing strategies without real money.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import logging
 
@@ -133,7 +133,7 @@ class PaperTradingBroker(BrokerConnector):
             price=price,
             stop_price=stop_price,
             status=OrderStatus.PENDING,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         # Process order
@@ -237,7 +237,7 @@ class PaperTradingBroker(BrokerConnector):
             margin_used=0.0,  # Not used in paper trading
             margin_available=equity,
             positions_count=len(self.positions),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
     def get_market_data(
@@ -259,7 +259,7 @@ class PaperTradingBroker(BrokerConnector):
             # Simple price variation
             price = current_price * (1 + (i % 10 - 5) / 100)
             data.append({
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'open': price,
                 'high': price * 1.01,
                 'low': price * 0.99,
@@ -324,5 +324,5 @@ class PaperTradingBroker(BrokerConnector):
                 entry_price=price,
                 current_price=price,
                 unrealized_pnl=0.0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             )

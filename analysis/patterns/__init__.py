@@ -6,7 +6,7 @@ Includes chart patterns, candlestick patterns, and support/resistance detection.
 
 from analysis.patterns.chart_patterns import ChartPatternDetector, ChartPattern
 from analysis.patterns.candlestick import CandlestickPatternDetector, CandlestickPattern
-from analysis.patterns.support_resistance import SupportResistanceDetector
+from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
 
 __all__ = [
     'ChartPatternDetector',
@@ -14,4 +14,5 @@ __all__ = [
     'CandlestickPatternDetector',
     'CandlestickPattern',
     'SupportResistanceDetector',
+    'PriceLevel',
 ]

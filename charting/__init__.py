@@ -6,7 +6,7 @@ Provides professional-grade charting capabilities.
 
 from .chart_engine import ChartEngine
 from .indicators import IndicatorLibrary
-from .drawing_tools import DrawingToolkit
+from .drawing_tools import DrawingToolkit, Drawing, DrawingType
 from .timeframes import TimeframeManager
 from .templates import TemplateManager
 
@@ -20,6 +20,8 @@ __all__ = [
     'ChartEngine',
     'IndicatorLibrary',
     'DrawingToolkit',
+    'Drawing',
+    'DrawingType',
     'TimeframeManager',
     'TemplateManager',
     'chart_engine',

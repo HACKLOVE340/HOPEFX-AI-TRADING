@@ -12,7 +12,7 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -156,7 +156,7 @@ class InstitutionalFlowDetector:
         timestamp: Optional[datetime] = None,
     ) -> None:
         """Add a trade for analysis."""
-        ts = timestamp or datetime.utcnow()
+        ts = timestamp or datetime.now(timezone.utc)
         self._trades[symbol].append((ts, price, size, side.lower()))
         # Trim buffer
         if len(self._trades[symbol]) > self._max_trades:
@@ -181,7 +181,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of InstitutionalTrade objects above size threshold
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         results = []
         for ts, price, size, side in self._trades.get(symbol, []):
             if ts < cutoff:
@@ -217,7 +217,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for detected icebergs
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
             for ts, price, size, side in self._trades.get(symbol, [])
@@ -295,7 +295,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for detected volume spikes
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cutoff = now - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
@@ -384,7 +384,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for absorption levels
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
             for ts, price, size, side in self._trades.get(symbol, [])
@@ -496,7 +496,7 @@ class InstitutionalFlowDetector:
         )
 
         return InstitutionalTrade(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             symbol="",
             price=price,
             size=size,
@@ -572,7 +572,7 @@ class InstitutionalFlowDetector:
 
         return SmartMoneyDirection(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             direction=direction,
             institutional_buy_volume=buy_vol,
             institutional_sell_volume=sell_vol,

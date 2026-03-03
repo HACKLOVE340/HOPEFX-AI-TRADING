@@ -10,7 +10,7 @@ import logging
 import hashlib
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from enum import Enum
 
@@ -46,7 +46,7 @@ class AccessCode:
         self.user_id = user_id
         self.subscription_id = subscription_id
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.expires_at = self.created_at + timedelta(days=duration_days)
         self.activated_at: Optional[datetime] = None
         self.used_at: Optional[datetime] = None
@@ -56,7 +56,7 @@ class AccessCode:
         if self.status != AccessCodeStatus.ACTIVE:
             return False
 
-        if datetime.utcnow() > self.expires_at:
+        if datetime.now(timezone.utc) > self.expires_at:
             self.status = AccessCodeStatus.EXPIRED
             return False
 
@@ -71,8 +71,8 @@ class AccessCode:
         self.user_id = user_id
         self.subscription_id = subscription_id
         self.status = AccessCodeStatus.USED
-        self.activated_at = datetime.utcnow()
-        self.used_at = datetime.utcnow()
+        self.activated_at = datetime.now(timezone.utc)
+        self.used_at = datetime.now(timezone.utc)
 
         logger.info(f"Access code {self.code} activated for user {user_id}")
         return True

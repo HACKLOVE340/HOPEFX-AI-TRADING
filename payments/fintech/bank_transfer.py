@@ -4,7 +4,7 @@ Bank Transfer Integration
 Direct bank transfer handling for Nigerian banks.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict
 import logging
@@ -50,7 +50,7 @@ class BankTransferClient:
     def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> Dict:
         """Initiate bank transfer"""
         try:
-            transfer_id = f"BT-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            transfer_id = f"BT-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
             # Validate account
             validation = self.validate_account(bank_code, account_number)
@@ -71,7 +71,7 @@ class BankTransferClient:
                 'account_number': account_number,
                 'account_name': validation['account_name'],
                 'status': 'pending',
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             self.transfers[transfer_id] = transfer

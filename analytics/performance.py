@@ -11,7 +11,7 @@ Comprehensive performance analytics including:
 
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import numpy as np
 import logging
@@ -225,7 +225,7 @@ class PerformanceAnalytics:
         drawdown_pct = drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
         
         point = EquityPoint(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             equity=equity,
             cash=equity - open_pnl,
             open_pnl=open_pnl,
@@ -237,9 +237,9 @@ class PerformanceAnalytics:
         self.equity_curve.append(point)
         
         # Update daily equity for return calculations
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         if not self.daily_equity or self.daily_equity[-1][0].date() != today:
-            self.daily_equity.append((datetime.utcnow(), equity))
+            self.daily_equity.append((datetime.now(timezone.utc), equity))
             
             # Calculate daily return
             if len(self.daily_equity) >= 2:
@@ -258,7 +258,7 @@ class PerformanceAnalytics:
             PerformanceReport object
         """
         # Filter trades by period
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         start_date = self._get_period_start(period, now)
         filtered_trades = [t for t in self.trades if t.exit_time >= start_date]
         
@@ -601,7 +601,7 @@ class PerformanceAnalytics:
 
     def _calculate_max_drawdown(self, period: MetricPeriod) -> Tuple[float, float]:
         """Calculate max drawdown for period."""
-        start_date = self._get_period_start(period, datetime.utcnow())
+        start_date = self._get_period_start(period, datetime.now(timezone.utc))
         period_points = [p for p in self.equity_curve if p.timestamp >= start_date]
         
         if not period_points:

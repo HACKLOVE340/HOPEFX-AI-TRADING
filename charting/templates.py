@@ -3,17 +3,17 @@ Chart Template Management
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ChartTemplate:
     """Chart template"""
     def __init__(self, name: str, description: str):
-        self.template_id = f"TPL_{name}_{datetime.utcnow().timestamp()}"
+        self.template_id = f"TPL_{name}_{datetime.now(timezone.utc).timestamp()}"
         self.name = name
         self.description = description
         self.config = {}
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
 
 class TemplateManager:

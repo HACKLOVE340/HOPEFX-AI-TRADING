@@ -13,7 +13,7 @@ import logging
 import secrets
 import string
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -104,7 +104,7 @@ class Affiliate:
         self.level = level
         self.status = status
         self.payment_details = payment_details or {}
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.approved_at: Optional[datetime] = None
         self.total_referrals = 0
         self.total_revenue = Decimal("0.00")
@@ -121,7 +121,7 @@ class Affiliate:
     def approve(self) -> None:
         """Approve affiliate application"""
         self.status = AffiliateStatus.ACTIVE
-        self.approved_at = datetime.utcnow()
+        self.approved_at = datetime.now(timezone.utc)
         logger.info(f"Affiliate {self.affiliate_id} approved")
 
     def suspend(self) -> None:
@@ -185,15 +185,15 @@ class Referral:
         self.referred_user_id = referred_user_id
         self.status = status
         self.tier = tier
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.converted_at: Optional[datetime] = None
-        self.expires_at = datetime.utcnow() + timedelta(days=90)  # 90-day cookie
+        self.expires_at = datetime.now(timezone.utc) + timedelta(days=90)  # 90-day cookie
         self.subscription_amount: Optional[Decimal] = None
         self.commission_amount: Optional[Decimal] = None
 
     def is_expired(self) -> bool:
         """Check if referral tracking has expired"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def convert(
         self,
@@ -203,7 +203,7 @@ class Referral:
     ) -> Decimal:
         """Mark referral as converted and calculate commission"""
         self.status = ReferralStatus.CONVERTED
-        self.converted_at = datetime.utcnow()
+        self.converted_at = datetime.now(timezone.utc)
         self.tier = tier
         self.subscription_amount = subscription_amount
         self.commission_amount = subscription_amount * commission_rate
@@ -250,7 +250,7 @@ class Payout:
         self.amount = amount
         self.payment_method = payment_method
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.processed_at: Optional[datetime] = None
         self.transaction_id: Optional[str] = None
         self.notes: str = ""
@@ -264,7 +264,7 @@ class Payout:
     def complete(self) -> None:
         """Mark payout as completed"""
         self.status = PayoutStatus.COMPLETED
-        self.processed_at = datetime.utcnow()
+        self.processed_at = datetime.now(timezone.utc)
         logger.info(f"Payout {self.payout_id} completed")
 
     def fail(self, reason: str) -> None:

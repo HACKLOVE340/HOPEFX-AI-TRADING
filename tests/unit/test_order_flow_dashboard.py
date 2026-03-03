@@ -3,7 +3,7 @@ Tests for Order Flow Dashboard (analysis/order_flow_dashboard.py)
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 
@@ -29,7 +29,7 @@ class TestOrderFlowDashboard:
 
     def _populate_services(self, dashboard, symbol="XAUUSD", n=30):
         """Populate all services with test trade data."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for i in range(n):
             side = "buy" if i % 3 != 0 else "sell"
             price = 1950.0 + i * 0.05
@@ -96,7 +96,7 @@ class TestOrderFlowDashboard:
 
     def test_summary_bias_bullish(self):
         dashboard = self._make_dashboard()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         symbol = "XAUUSD"
 
         # Predominantly buy volume
@@ -120,7 +120,7 @@ class TestOrderFlowDashboard:
 
     def test_summary_bias_bearish(self):
         dashboard = self._make_dashboard()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         symbol = "XAUUSD"
 
         for _ in range(3):

@@ -4,7 +4,7 @@ Paystack Payment Integration
 Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Optional
 import logging
@@ -26,7 +26,7 @@ class PaystackClient:
     def initialize_payment(self, user_id: str, amount: Decimal, currency: str = 'USD', email: str = None) -> Dict:
         """Initialize Paystack payment"""
         try:
-            reference = f"PSK-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            reference = f"PSK-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
             # Calculate fee (in NGN if USD, convert first)
             ngn_amount = amount * Decimal('775.00') if currency == 'USD' else amount
@@ -64,7 +64,7 @@ class PaystackClient:
     def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> Dict:
         """Initiate bank transfer"""
         try:
-            transfer_code = f"TRF-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            transfer_code = f"TRF-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
             return {
                 'transfer_code': transfer_code,
@@ -72,7 +72,7 @@ class PaystackClient:
                 'bank_code': bank_code,
                 'account_number': account_number,
                 'status': 'pending',
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
         except Exception as e:
             logger.error(f"Error initiating Paystack transfer: {e}")

@@ -12,7 +12,7 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
@@ -95,7 +95,7 @@ class OrderFlowDashboard:
         """
         result: Dict = {
             "symbol": symbol,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "lookback_minutes": lookback_minutes,
             "order_flow": None,
             "institutional": None,
@@ -333,7 +333,7 @@ class OrderFlowDashboard:
         """
         result: Dict = {
             "symbol": symbol,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "bias": "neutral",
             "dom_imbalance": None,
             "buy_pressure": None,

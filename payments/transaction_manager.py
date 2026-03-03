@@ -5,7 +5,7 @@ Handles complete transaction lifecycle including recording, validation,
 status tracking, reversal, and reporting.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional, Any
@@ -50,8 +50,8 @@ class Transaction:
     status: TransactionStatus = TransactionStatus.PENDING
     reference: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     failed_reason: Optional[str] = None
 
@@ -118,7 +118,7 @@ class TransactionManager:
                 raise ValueError("Amount must be positive")
 
             # Generate transaction ID
-            transaction_id = f"TXN-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+            transaction_id = f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
             # Create transaction
             transaction = Transaction(
@@ -173,10 +173,10 @@ class TransactionManager:
                 return False
 
             transaction.status = status
-            transaction.updated_at = datetime.utcnow()
+            transaction.updated_at = datetime.now(timezone.utc)
 
             if status == TransactionStatus.COMPLETED:
-                transaction.completed_at = datetime.utcnow()
+                transaction.completed_at = datetime.now(timezone.utc)
             elif status == TransactionStatus.FAILED:
                 transaction.failed_reason = failed_reason
 
@@ -253,13 +253,13 @@ class TransactionManager:
                 metadata={
                     'original_transaction': transaction_id,
                     'reversal_reason': reason,
-                    'reversed_at': datetime.utcnow().isoformat()
+                    'reversed_at': datetime.now(timezone.utc).isoformat()
                 }
             )
 
             # Mark original as reversed
             original.status = TransactionStatus.REVERSED
-            original.updated_at = datetime.utcnow()
+            original.updated_at = datetime.now(timezone.utc)
             original.metadata['reversed_by'] = reversal.transaction_id
             original.metadata['reversal_reason'] = reason
 
@@ -325,9 +325,9 @@ class TransactionManager:
             Statement dictionary
         """
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
 
         # Get all transactions in date range
         all_transactions = self.get_user_transactions(user_id, limit=10000)

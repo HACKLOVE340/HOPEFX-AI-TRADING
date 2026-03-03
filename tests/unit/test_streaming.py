@@ -3,7 +3,7 @@ Tests for Real-Time Streaming Service (data/streaming.py)
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class TestTick:
@@ -14,7 +14,7 @@ class TestTick:
 
         tick = Tick(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=1950.0,
             ask=1950.1,
             last=1950.05,
@@ -30,7 +30,7 @@ class TestTick:
 
         tick = Tick(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=1950.0,
             ask=1950.1,
             last=1950.05,
@@ -43,7 +43,7 @@ class TestTick:
 
         tick = Tick(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=1950.0,
             ask=1950.1,
             last=1950.05,
@@ -56,7 +56,7 @@ class TestTick:
 
         tick = Tick(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=1950.0,
             ask=1950.1,
             last=1950.05,
@@ -78,7 +78,7 @@ class TestAggregatedBar:
         bar = AggregatedBar(
             symbol="XAUUSD",
             timeframe="1m",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             open=1950.0,
             high=1951.0,
             low=1949.5,
@@ -106,7 +106,7 @@ class TestTickAggregator:
         from data.streaming import Tick, TickAggregator
 
         agg = TickAggregator(1)
-        tick = Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05)
+        tick = Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05)
 
         bar = agg.add_tick(tick)
         assert bar is None  # No completed bar yet
@@ -158,7 +158,7 @@ class TestTickAggregator:
         from data.streaming import Tick, TickAggregator
 
         agg = TickAggregator(1)
-        tick = Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05)
+        tick = Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05)
         agg.add_tick(tick)
 
         open_bar = agg.get_open_bar("XAUUSD")
@@ -206,7 +206,7 @@ class TestStreamingService:
         events = []
         service.subscribe("XAUUSD", events.append)
 
-        tick = Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05, volume=100.0)
+        tick = Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05, volume=100.0)
         service.publish_tick(tick)
 
         assert len(events) == 1
@@ -219,8 +219,8 @@ class TestStreamingService:
         all_events = []
         service.subscribe("*", all_events.append)
 
-        service.publish_tick(Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05))
-        service.publish_tick(Tick("EURUSD", datetime.utcnow(), 1.08, 1.0801, 1.0800))
+        service.publish_tick(Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick("EURUSD", datetime.now(timezone.utc), 1.08, 1.0801, 1.0800))
 
         # At least one tick event per symbol
         tick_events = [e for e in all_events if e.event_type == "tick"]
@@ -232,7 +232,7 @@ class TestStreamingService:
         service = StreamingService()
         for i in range(20):
             service.publish_tick(
-                Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.0 + i)
+                Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.0 + i)
             )
 
         ticks = service.get_recent_ticks("XAUUSD", n=5)
@@ -248,8 +248,8 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.0))
-        service.publish_tick(Tick("XAUUSD", datetime.utcnow(), 1951.0, 1951.1, 1951.0))
+        service.publish_tick(Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.0))
+        service.publish_tick(Tick("XAUUSD", datetime.now(timezone.utc), 1951.0, 1951.1, 1951.0))
 
         latest = service.get_latest_tick("XAUUSD")
         assert latest is not None
@@ -300,7 +300,7 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
         service.clear_symbol("XAUUSD")
 
         assert service.get_recent_ticks("XAUUSD") == []
@@ -309,8 +309,8 @@ class TestStreamingService:
         from data.streaming import StreamingService, Tick
 
         service = StreamingService()
-        service.publish_tick(Tick("XAUUSD", datetime.utcnow(), 1950.0, 1950.1, 1950.05))
-        service.publish_tick(Tick("EURUSD", datetime.utcnow(), 1.08, 1.0801, 1.08))
+        service.publish_tick(Tick("XAUUSD", datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
+        service.publish_tick(Tick("EURUSD", datetime.now(timezone.utc), 1.08, 1.0801, 1.08))
         service.clear_all()
 
         assert service.get_recent_ticks("XAUUSD") == []

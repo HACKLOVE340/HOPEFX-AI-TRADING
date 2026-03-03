@@ -3,7 +3,7 @@ Tests for Advanced Order Flow Analyzer (analysis/advanced_order_flow.py)
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class TestAggressionMetrics:
@@ -14,7 +14,7 @@ class TestAggressionMetrics:
 
         m = AggressionMetrics(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             buy_aggression=60.0,
             sell_aggression=40.0,
             aggression_score=20.0,
@@ -57,7 +57,7 @@ class TestDeltaDivergence:
 
         div = DeltaDivergence(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             divergence_type="bullish",
             price_direction="down",
             delta_direction="up",
@@ -116,7 +116,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for _ in range(8):
             analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
                                timestamp=now - timedelta(minutes=5))
@@ -134,7 +134,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for _ in range(2):
             analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
                                timestamp=now - timedelta(minutes=5))
@@ -150,7 +150,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for i in range(20):
             analyzer.add_trade(
                 "XAUUSD", 1950.0 + i * 0.5, 100.0, "buy" if i % 2 == 0 else "sell",
@@ -171,7 +171,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer(config={"imbalance_threshold": 0.1})
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # Create consistently buy-dominated price levels
         for i in range(30):
             analyzer.add_trade(
@@ -199,7 +199,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # First half: high price, more sells → delta falling
         for i in range(10):
@@ -223,7 +223,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Concentrated volume at one price
         for _ in range(20):
@@ -264,7 +264,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for _ in range(6):
             analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
                                timestamp=now - timedelta(minutes=5))

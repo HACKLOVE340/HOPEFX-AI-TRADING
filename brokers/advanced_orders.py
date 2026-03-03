@@ -12,7 +12,7 @@ Professional order management system supporting:
 
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import uuid
 import logging
@@ -75,8 +75,8 @@ class Order:
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
     average_fill_price: float = 0.0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
     parent_id: Optional[str] = None
     child_orders: List[str] = field(default_factory=list)
@@ -124,7 +124,7 @@ class OCOOrder:
     status: OrderStatus = OrderStatus.PENDING
     triggered_order_id: Optional[str] = None
     cancelled_order_id: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -157,7 +157,7 @@ class BracketOrder:
     take_profit_order: Order
     status: OrderStatus = OrderStatus.PENDING
     position_filled: bool = False
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -191,7 +191,7 @@ class ConditionalOrder:
     status: OrderStatus = OrderStatus.PENDING
     evaluation_count: int = 0
     last_evaluated: Optional[datetime] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -224,7 +224,7 @@ class ScaledOrder:
     child_orders: List[Order] = field(default_factory=list)
     filled_levels: int = 0
     status: OrderStatus = OrderStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -675,7 +675,7 @@ class AdvancedOrderManager:
                         return None
 
                     order.stop_price = new_stop
-                    order.updated_at = datetime.utcnow()
+                    order.updated_at = datetime.now(timezone.utc)
                     logger.debug(f"Updated trailing stop {order_id}: {new_stop}")
                     return new_stop
 
@@ -691,7 +691,7 @@ class AdvancedOrderManager:
                         return None
 
                     order.stop_price = new_stop
-                    order.updated_at = datetime.utcnow()
+                    order.updated_at = datetime.now(timezone.utc)
                     logger.debug(f"Updated trailing stop {order_id}: {new_stop}")
                     return new_stop
 
@@ -718,7 +718,7 @@ class AdvancedOrderManager:
 
             conditional = self.conditional_orders[order_id]
             conditional.evaluation_count += 1
-            conditional.last_evaluated = datetime.utcnow()
+            conditional.last_evaluated = datetime.now(timezone.utc)
 
             results = []
             current_price = market_data.get('price', 0)
@@ -742,7 +742,7 @@ class AdvancedOrderManager:
                     elif operator == '==':
                         results.append(indicator_value == value)
                 elif cond_type == 'time_after':
-                    current_time = datetime.utcnow().time()
+                    current_time = datetime.now(timezone.utc).time()
                     target_time = datetime.strptime(str(value), '%H:%M').time()
                     results.append(current_time >= target_time)
 
@@ -770,7 +770,7 @@ class AdvancedOrderManager:
             order = self.orders[order_id]
             order.filled_quantity += fill_quantity
             order.average_fill_price = fill_price
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
 
             if order.filled_quantity >= order.quantity:
                 order.status = OrderStatus.FILLED
@@ -841,7 +841,7 @@ class AdvancedOrderManager:
                 return False
 
             order.status = OrderStatus.CANCELLED
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
             self.stats['cancelled_orders'] += 1
 
             logger.info(f"Order cancelled: {order_id}")

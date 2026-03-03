@@ -14,7 +14,7 @@ Inspired by top platforms: TradingView, cTrader, MT5
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Set, Optional, Any, List, Callable
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -40,7 +40,7 @@ class WebSocketMessage:
     event: str
     channel: str
     data: Dict[str, Any]
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     sequence: int = 0
 
     def to_json(self) -> str:
@@ -58,7 +58,7 @@ class ConnectionInfo:
     authenticated: bool = False
     messages_sent: int = 0
     messages_received: int = 0
-    last_heartbeat: datetime = field(default_factory=datetime.utcnow)
+    last_heartbeat: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class WebSocketManager:
@@ -152,12 +152,12 @@ class WebSocketManager:
             Connection ID
         """
         if connection_id is None:
-            connection_id = f"ws_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}"
+            connection_id = f"ws_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
         self._connections[connection_id] = websocket
         self._connection_info[connection_id] = ConnectionInfo(
             connection_id=connection_id,
-            connected_at=datetime.utcnow(),
+            connected_at=datetime.now(timezone.utc),
             user_id=user_id,
             authenticated=user_id is not None
         )
@@ -486,8 +486,8 @@ class WebSocketManager:
         elif action == 'ping':
             # Heartbeat response
             if connection_id in self._connection_info:
-                self._connection_info[connection_id].last_heartbeat = datetime.utcnow()
-            return {'action': 'pong', 'timestamp': datetime.utcnow().isoformat()}
+                self._connection_info[connection_id].last_heartbeat = datetime.now(timezone.utc)
+            return {'action': 'pong', 'timestamp': datetime.now(timezone.utc).isoformat()}
 
         elif action == 'auth':
             # Handle authentication
@@ -533,7 +533,7 @@ class WebSocketManager:
         while True:
             await asyncio.sleep(self._heartbeat_interval)
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             timeout = self._heartbeat_interval * 2
 
             dead_connections = []
@@ -574,7 +574,7 @@ class WebSocketManager:
             'bid': bid,
             'ask': ask,
             'spread': round(ask - bid, 5),
-            'timestamp': (timestamp or datetime.utcnow()).isoformat()
+            'timestamp': (timestamp or datetime.now(timezone.utc)).isoformat()
         }, event='price')
 
     async def broadcast_orderbook_update(
@@ -590,7 +590,7 @@ class WebSocketManager:
             'symbol': symbol,
             'bids': bids,
             'asks': asks,
-            'timestamp': (timestamp or datetime.utcnow()).isoformat()
+            'timestamp': (timestamp or datetime.now(timezone.utc)).isoformat()
         }, event='orderbook')
 
     async def broadcast_trade(
@@ -609,7 +609,7 @@ class WebSocketManager:
             'quantity': quantity,
             'side': side,
             'trade_id': trade_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }, event='trade')
 
     async def broadcast_signal(
@@ -699,7 +699,7 @@ def create_websocket_router(manager: WebSocketManager):
             await websocket.send_text(json.dumps({
                 'event': 'connected',
                 'connection_id': connection_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }))
 
             # Handle messages

@@ -12,7 +12,7 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field, asdict
 from collections import deque
@@ -34,7 +34,7 @@ class OrderBookLevel:
     price: float
     size: float
     order_count: int = 1
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -53,7 +53,7 @@ class OrderBook:
     symbol: str
     bids: List[OrderBookLevel] = field(default_factory=list)
     asks: List[OrderBookLevel] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     sequence: int = 0
 
     @property
@@ -293,7 +293,7 @@ class DepthOfMarketService:
                 symbol=symbol,
                 bids=bid_levels,
                 asks=ask_levels,
-                timestamp=timestamp or datetime.utcnow(),
+                timestamp=timestamp or datetime.now(timezone.utc),
                 sequence=self._sequence
             )
 
@@ -339,7 +339,7 @@ class DepthOfMarketService:
                     else:
                         # Update level
                         level.size = size
-                        level.timestamp = datetime.utcnow()
+                        level.timestamp = datetime.now(timezone.utc)
                     return
 
             # Add new level if size > 0

@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 import pandas as pd
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 
 from .base import BaseMLModel
@@ -33,7 +33,7 @@ class ModelPrediction:
     prediction: float
     confidence: float
     weight: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -45,7 +45,7 @@ class EnsemblePrediction:
     consensus: str  # 'strong', 'moderate', 'weak', 'divergent'
     direction: str  # 'bullish', 'bearish', 'neutral'
     volatility_factor: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {

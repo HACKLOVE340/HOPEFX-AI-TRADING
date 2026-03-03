@@ -4,7 +4,7 @@ Bitcoin Payment Integration
 Handles Bitcoin deposits and withdrawals with HD wallet support.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Optional, List
 from dataclasses import dataclass
@@ -77,7 +77,7 @@ class BitcoinClient:
                 address=address,
                 user_id=user_id,
                 derivation_path=derivation_path,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             self.addresses[address] = btc_address
@@ -150,14 +150,14 @@ class BitcoinClient:
                 amount=amount,
                 confirmations=confirmations,
                 status=status,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
 
             self.transactions[tx_hash] = transaction
 
             # Update address last used
             if address in self.addresses:
-                self.addresses[address].last_used = datetime.utcnow()
+                self.addresses[address].last_used = datetime.now(timezone.utc)
 
             logger.info(f"Bitcoin deposit processed: {tx_hash} - {amount} BTC - {confirmations} confirmations")
 
@@ -198,7 +198,7 @@ class BitcoinClient:
 
             # Generate transaction ID (in production, broadcast to network)
             tx_hash = hashlib.sha256(
-                f"{user_id}{amount}{destination_address}{datetime.utcnow()}".encode()
+                f"{user_id}{amount}{destination_address}{datetime.now(timezone.utc)}".encode()
             ).hexdigest()
 
             withdrawal = {
@@ -209,7 +209,7 @@ class BitcoinClient:
                 'net_amount': float(net_amount),
                 'destination': destination_address,
                 'status': 'broadcasting',
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             logger.info(f"Bitcoin withdrawal processed: {tx_hash} - {amount} BTC to {destination_address}")

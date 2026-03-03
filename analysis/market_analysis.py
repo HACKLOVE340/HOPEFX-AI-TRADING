@@ -50,7 +50,7 @@ class RegimeAnalysis:
     volume_state: str  # 'high', 'normal', 'low'
     regime_duration: int  # Bars in current regime
     transition_probability: Dict[str, float]
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -88,7 +88,7 @@ class ConfluenceAnalysis:
     key_confluence_levels: List[Dict]
     recommended_action: str
     risk_level: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -190,7 +190,7 @@ class MarketRegimeDetector:
             # Update history
             self.regime_history.append({
                 'regime': regime,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(timezone.utc)
             })
             self.regime_history = self.regime_history[-1000:]  # Keep last 1000
 
@@ -734,7 +734,7 @@ class SessionAnalyzer:
     def get_current_session(self, utc_time: datetime = None) -> List[TradingSession]:
         """Get currently active trading sessions."""
         if utc_time is None:
-            utc_time = datetime.utcnow()
+            utc_time = datetime.now(timezone.utc)
 
         current_time = utc_time.time()
         active_sessions = []
@@ -756,7 +756,7 @@ class SessionAnalyzer:
     ) -> SessionAnalysis:
         """Analyze a specific trading session."""
         if utc_time is None:
-            utc_time = datetime.utcnow()
+            utc_time = datetime.now(timezone.utc)
 
         start, end = self.SESSIONS[session]
         current_time = utc_time.time()

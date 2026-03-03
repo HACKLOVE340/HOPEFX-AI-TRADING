@@ -6,7 +6,7 @@ webhook handling, and automated access code generation.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Callable
 from decimal import Decimal
 from enum import Enum
@@ -52,7 +52,7 @@ class Payment:
         self.currency = currency
         self.payment_method = payment_method
         self.status = status
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.processed_at: Optional[datetime] = None
         self.stripe_payment_intent_id: Optional[str] = None
         self.stripe_customer_id: Optional[str] = None
@@ -61,13 +61,13 @@ class Payment:
     def mark_succeeded(self) -> None:
         """Mark payment as succeeded"""
         self.status = PaymentStatus.SUCCEEDED
-        self.processed_at = datetime.utcnow()
+        self.processed_at = datetime.now(timezone.utc)
         logger.info(f"Payment {self.payment_id} succeeded")
 
     def mark_failed(self, error_message: str) -> None:
         """Mark payment as failed"""
         self.status = PaymentStatus.FAILED
-        self.processed_at = datetime.utcnow()
+        self.processed_at = datetime.now(timezone.utc)
         self.error_message = error_message
         logger.error(f"Payment {self.payment_id} failed: {error_message}")
 

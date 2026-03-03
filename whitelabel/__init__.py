@@ -6,21 +6,36 @@ management for resellers and partners deploying the platform under
 their own brand.
 
 Key components:
-    - BrandColors / BrandAssets / BrandTheme: visual identity dataclasses
-    - TenantContact / TenantLinks / TenantFeatures: tenant sub-configs
-    - WhiteLabelConfig: composed tenant configuration
+    - BrandTheme: visual identity with CSS variable generation
+    - FeatureFlag: enumeration of available platform features
+    - TenantStatus / ResellerTier: lifecycle and tier enumerations
     - Tenant: a white-label deployment instance
-    - WhiteLabelManager: CRUD and lifecycle manager for tenants
+    - Reseller: a reseller partner with commission tracking
+    - WhiteLabelManager: full CRUD and lifecycle manager
 """
 
 import logging
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _generate_id(prefix: str) -> str:
+    """Generate a unique prefixed ID."""
+    return f"{prefix}-{uuid.uuid4().hex[:12].upper()}"
+
+
+def _generate_referral_code() -> str:
+    """Generate a short referral code."""
+    return uuid.uuid4().hex[:8].upper()
 
 
 # ---------------------------------------------------------------------------
@@ -33,193 +48,128 @@ class TenantStatus(str, Enum):
 
     PENDING = "pending"
     ACTIVE = "active"
+    TRIAL = "trial"
     SUSPENDED = "suspended"
     TERMINATED = "terminated"
 
 
-class DeploymentEnvironment(str, Enum):
-    """Target deployment environment for a tenant."""
+class FeatureFlag(str, Enum):
+    """Platform feature flags that can be enabled per tenant."""
 
-    PRODUCTION = "production"
-    STAGING = "staging"
-    DEVELOPMENT = "development"
+    TRADING = "trading"
+    BACKTESTING = "backtesting"
+    SOCIAL_TRADING = "social_trading"
+    ANALYTICS = "analytics"
+    NEWS = "news"
+    ALERTS = "alerts"
+    API_ACCESS = "api_access"
+    CUSTOM_BRANDING = "custom_branding"
+    WHITE_LABEL = "white_label"
+    RISK_MANAGEMENT = "risk_management"
+    PORTFOLIO = "portfolio"
+    REPORTING = "reporting"
+    MOBILE = "mobile"
+
+
+class ResellerTier(str, Enum):
+    """Reseller partnership tier."""
+
+    STANDARD = "standard"
+    SILVER = "silver"
+    GOLD = "gold"
+    PLATINUM = "platinum"
 
 
 # ---------------------------------------------------------------------------
-# Brand theme dataclasses (composed to keep attribute counts manageable)
+# Tier constants
+# ---------------------------------------------------------------------------
+
+TIER_COMMISSION_RATES: Dict[ResellerTier, float] = {
+    ResellerTier.STANDARD: 0.15,
+    ResellerTier.SILVER: 0.20,
+    ResellerTier.GOLD: 0.25,
+    ResellerTier.PLATINUM: 0.30,
+}
+
+TIER_TENANT_THRESHOLDS: Dict[ResellerTier, int] = {
+    ResellerTier.STANDARD: 0,
+    ResellerTier.SILVER: 5,
+    ResellerTier.GOLD: 15,
+    ResellerTier.PLATINUM: 30,
+}
+
+# Ordered from highest to lowest for upgrade logic
+_TIER_ORDER: List[ResellerTier] = [
+    ResellerTier.PLATINUM,
+    ResellerTier.GOLD,
+    ResellerTier.SILVER,
+    ResellerTier.STANDARD,
+]
+
+
+# ---------------------------------------------------------------------------
+# Brand theme
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class BrandColors:
-    """Colour palette for white-label branding."""
-
-    primary: str = "#1976D2"
-    secondary: str = "#424242"
-    accent: str = "#FF5722"
-    background: str = "#FAFAFA"
-    surface: str = "#FFFFFF"
-    error: str = "#D32F2F"
-    text_primary: str = "#212121"
-
-
-@dataclass
-class BrandAssets:
-    """Graphic asset URLs for white-label branding."""
-
-    logo_url: str = ""
-    favicon_url: str = ""
-    banner_url: str = ""
-    icon_url: str = ""
-
-
-@dataclass
 class BrandTheme:
-    """Complete brand theme composed from colour and asset sub-themes."""
-
-    colors: BrandColors = field(default_factory=BrandColors)
-    assets: BrandAssets = field(default_factory=BrandAssets)
-    font_family: str = "Roboto, sans-serif"
-    border_radius: str = "4px"
-    custom_css: str = ""
-
-    def is_configured(self) -> bool:
-        """Return True when the essential logo asset has been provided."""
-        return bool(self.assets.logo_url)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialise the theme to a plain dictionary."""
-        return {
-            "colors": {
-                "primary": self.colors.primary,
-                "secondary": self.colors.secondary,
-                "accent": self.colors.accent,
-                "background": self.colors.background,
-                "surface": self.colors.surface,
-                "error": self.colors.error,
-            },
-            "assets": {
-                "logo_url": self.assets.logo_url,
-                "favicon_url": self.assets.favicon_url,
-                "banner_url": self.assets.banner_url,
-            },
-            "font_family": self.font_family,
-            "border_radius": self.border_radius,
-        }
-
-
-# ---------------------------------------------------------------------------
-# Tenant contact, links and feature sub-dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class TenantContact:
-    """Contact and company information for a white-label tenant."""
-
-    company_name: str
-    support_email: str
-    admin_email: str
-    website_url: str = ""
-    support_phone: str = ""
-    address: str = ""
-
-
-@dataclass
-class TenantLinks:
-    """External URL overrides for a white-label tenant."""
-
-    terms_url: str = ""
-    privacy_url: str = ""
-    help_url: str = ""
-    blog_url: str = ""
-
-
-@dataclass
-class TenantFeatures:
-    """Feature-flag configuration for a white-label tenant."""
-
-    sso_enabled: bool = False
-    custom_domain: bool = False
-    api_access: bool = True
-    audit_logging: bool = True
-    email_branding: bool = True
-    max_users: int = 50
-
-
-# ---------------------------------------------------------------------------
-# Deployment settings sub-dataclass
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class TenantDeployment:
-    """Deployment settings for a white-label tenant."""
-
-    subdomain: str = ""
-    custom_domain: str = ""
-    environment: DeploymentEnvironment = DeploymentEnvironment.PRODUCTION
-    links: TenantLinks = field(default_factory=TenantLinks)
-
-
-# ---------------------------------------------------------------------------
-# Composed tenant configuration
-# ---------------------------------------------------------------------------
-
-
-class WhiteLabelConfig:
     """
-    Configuration bundle for a white-label tenant.
+    Visual identity settings for a white-label tenant.
 
-    Composes TenantContact, BrandTheme, TenantFeatures, and
-    TenantDeployment into a single object while keeping the number
-    of direct instance attributes manageable.
+    Attributes:
+        primary_color: Main brand colour (CSS hex value).
+        app_name: Branded application name.
+        font_family: CSS font-family string.
+        custom_css: Additional raw CSS injected into the platform.
+        tagline: Short marketing tagline.
     """
 
     def __init__(
         self,
-        contact: TenantContact,
-        theme: BrandTheme,
-        features: TenantFeatures,
-        deployment: Optional[TenantDeployment] = None,
+        primary_color: str = "#1976D2",
+        app_name: str = "Trading Platform",
+        font_family: str = "Inter, sans-serif",
+        custom_css: str = "",
+        tagline: str = "",
     ) -> None:
-        self.contact = contact
-        self.theme = theme
-        self.features = features
-        self.deployment = deployment or TenantDeployment()
-
-    @property
-    def primary_domain(self) -> str:
-        """Return the active domain (custom domain takes priority)."""
-        if self.deployment.custom_domain:
-            return self.deployment.custom_domain
-        if self.deployment.subdomain:
-            return f"{self.deployment.subdomain}.hopefx.ai"
-        return ""
+        self.primary_color = primary_color
+        self.app_name = app_name
+        self.font_family = font_family
+        self.custom_css = custom_css
+        self.tagline = tagline
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialise the configuration to a plain dictionary."""
+        """Serialise the theme to a plain dictionary."""
         return {
-            "company_name": self.contact.company_name,
-            "support_email": self.contact.support_email,
-            "website_url": self.contact.website_url,
-            "subdomain": self.deployment.subdomain,
-            "custom_domain": self.deployment.custom_domain,
-            "primary_domain": self.primary_domain,
-            "environment": self.deployment.environment.value,
-            "theme": self.theme.to_dict(),
-            "links": {
-                "terms_url": self.deployment.links.terms_url,
-                "privacy_url": self.deployment.links.privacy_url,
-                "help_url": self.deployment.links.help_url,
-            },
-            "features": {
-                "sso_enabled": self.features.sso_enabled,
-                "custom_domain": self.features.custom_domain,
-                "api_access": self.features.api_access,
-                "max_users": self.features.max_users,
-            },
+            "primary_color": self.primary_color,
+            "app_name": self.app_name,
+            "font_family": self.font_family,
+            "custom_css": self.custom_css,
+            "tagline": self.tagline,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BrandTheme":
+        """Deserialise a BrandTheme from a plain dictionary."""
+        return cls(
+            primary_color=data.get("primary_color", "#1976D2"),
+            app_name=data.get("app_name", "Trading Platform"),
+            font_family=data.get("font_family", "Inter, sans-serif"),
+            custom_css=data.get("custom_css", ""),
+            tagline=data.get("tagline", ""),
+        )
+
+    def to_css_variables(self) -> str:
+        """Generate a CSS string containing custom properties for this theme."""
+        css = (
+            ":root {\n"
+            f"    --color-primary: {self.primary_color};\n"
+            f"    --font-family: {self.font_family};\n"
+            "}\n"
+        )
+        if self.custom_css:
+            css += self.custom_css
+        return css
 
 
 # ---------------------------------------------------------------------------
@@ -233,56 +183,80 @@ class Tenant:
     def __init__(
         self,
         tenant_id: str,
-        config: WhiteLabelConfig,
-        status: TenantStatus = TenantStatus.PENDING,
+        name: str,
+        owner_email: str,
+        status: TenantStatus = TenantStatus.ACTIVE,
+        expires_at: Optional[datetime] = None,
+        features: Optional[List[FeatureFlag]] = None,
+        max_users: int = 50,
+        user_count: int = 0,
+        reseller_id: Optional[str] = None,
+        custom_domain: str = "",
+        theme: Optional[BrandTheme] = None,
     ) -> None:
         self.tenant_id = tenant_id
-        self.config = config
+        self.name = name
+        self.owner_email = owner_email
         self.status = status
-        self.created_at: datetime = datetime.utcnow()
-        self.activated_at: Optional[datetime] = None
-        self.suspended_at: Optional[datetime] = None
-
-    def activate(self) -> None:
-        """Mark this tenant as active."""
-        self.status = TenantStatus.ACTIVE
-        self.activated_at = datetime.utcnow()
-        _logger.info("Tenant %s activated", self.tenant_id)
-
-    def suspend(self, reason: str = "") -> None:
-        """Suspend this tenant."""
-        self.status = TenantStatus.SUSPENDED
-        self.suspended_at = datetime.utcnow()
-        _logger.warning("Tenant %s suspended: %s", self.tenant_id, reason)
-
-    def terminate(self) -> None:
-        """Permanently terminate this tenant."""
-        self.status = TenantStatus.TERMINATED
-        _logger.info("Tenant %s terminated", self.tenant_id)
+        self.expires_at = expires_at
+        self.features: List[FeatureFlag] = features if features is not None else []
+        self.max_users = max_users
+        self.user_count = user_count
+        self.reseller_id = reseller_id
+        self.custom_domain = custom_domain
+        self.theme: BrandTheme = theme if theme is not None else BrandTheme()
+        self.created_at: datetime = datetime.now(timezone.utc)
 
     def is_active(self) -> bool:
-        """Return True if the tenant is currently active."""
-        return self.status == TenantStatus.ACTIVE
+        """Return True if the tenant is currently active or in trial (and not expired)."""
+        if self.expires_at is not None and self.expires_at <= datetime.now(timezone.utc):
+            return False
+        return self.status in (TenantStatus.ACTIVE, TenantStatus.TRIAL)
 
-    def update_config(self, config: WhiteLabelConfig) -> None:
-        """Replace the tenant's configuration."""
-        self.config = config
-        _logger.info("Tenant %s configuration updated", self.tenant_id)
+    def has_feature(self, flag: FeatureFlag) -> bool:
+        """Return True if the given feature flag is enabled for this tenant."""
+        return flag in self.features
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialise the tenant to a plain dictionary."""
-        return {
-            "tenant_id": self.tenant_id,
-            "status": self.status.value,
-            "config": self.config.to_dict(),
-            "created_at": self.created_at.isoformat(),
-            "activated_at": (
-                self.activated_at.isoformat() if self.activated_at else None
-            ),
-            "suspended_at": (
-                self.suspended_at.isoformat() if self.suspended_at else None
-            ),
-        }
+    def can_add_user(self) -> bool:
+        """Return True if the tenant has not reached its maximum user count."""
+        return self.user_count < self.max_users
+
+
+# ---------------------------------------------------------------------------
+# Reseller
+# ---------------------------------------------------------------------------
+
+
+class Reseller:
+    """A reseller partner with commission tracking."""
+
+    def __init__(
+        self,
+        reseller_id: str,
+        company_name: str,
+        contact_email: str,
+        tier: ResellerTier = ResellerTier.STANDARD,
+        commission_rate: Optional[float] = None,
+        is_active: bool = True,
+        referral_code: Optional[str] = None,
+        total_revenue: float = 0.0,
+        total_tenants: int = 0,
+    ) -> None:
+        self.reseller_id = reseller_id
+        self.company_name = company_name
+        self.contact_email = contact_email
+        self.tier = tier
+        self.commission_rate = (
+            commission_rate
+            if commission_rate is not None
+            else TIER_COMMISSION_RATES[tier]
+        )
+        self.is_active = is_active
+        self.referral_code = (
+            referral_code if referral_code is not None else _generate_referral_code()
+        )
+        self.total_revenue = total_revenue
+        self.total_tenants = total_tenants
 
 
 # ---------------------------------------------------------------------------
@@ -292,75 +266,119 @@ class Tenant:
 
 class WhiteLabelManager:
     """
-    Central manager for white-label tenants.
+    Central manager for white-label tenants and resellers.
 
     Responsibilities:
-    - Create and provision new tenants
+    - Create and provision new tenants and resellers
     - Look up tenants by ID or domain
-    - Lifecycle management (activate, suspend, terminate)
-    - Reporting and statistics
+    - Lifecycle management (activate, suspend, delete)
+    - Feature flag management
+    - Commission calculation and tier upgrades
+    - Tenant config export/import
+    - Platform summary reporting
     """
 
     def __init__(self) -> None:
         self._tenants: Dict[str, Tenant] = {}
+        self._resellers: Dict[str, Reseller] = {}
+        self._domains: Dict[str, str] = {}  # domain -> tenant_id
 
     # ------------------------------------------------------------------
-    # Creation
+    # Properties
+    # ------------------------------------------------------------------
+
+    @property
+    def tenants(self) -> Dict[str, Tenant]:
+        """Return the internal tenants mapping."""
+        return self._tenants
+
+    # ------------------------------------------------------------------
+    # Tenant CRUD
     # ------------------------------------------------------------------
 
     def create_tenant(
         self,
-        contact: TenantContact,
-        theme: Optional[BrandTheme] = None,
-        features: Optional[TenantFeatures] = None,
-        deployment: Optional[TenantDeployment] = None,
+        name: str,
+        owner_email: str,
+        trial_days: int = 0,
+        features: Optional[List[FeatureFlag]] = None,
+        reseller_id: Optional[str] = None,
     ) -> Tenant:
         """
         Create a new white-label tenant.
 
         Args:
-            contact: Company and contact details.
-            theme: Optional brand theme; a default theme is used if omitted.
-            features: Optional feature flags; defaults used if omitted.
-            deployment: Optional deployment settings; defaults used if omitted.
+            name: Display name of the tenant organisation.
+            owner_email: Email address of the tenant owner.
+            trial_days: Number of trial days; 0 means permanent (ACTIVE).
+            features: Initial list of enabled feature flags.
+            reseller_id: Optional ID of the referring reseller.
 
         Returns:
             The newly created Tenant.
         """
-        tenant_id = f"WL-{uuid.uuid4().hex[:12].upper()}"
-        config = WhiteLabelConfig(
-            contact=contact,
-            theme=theme or BrandTheme(),
-            features=features or TenantFeatures(),
-            deployment=deployment or TenantDeployment(),
-        )
-        tenant = Tenant(tenant_id=tenant_id, config=config)
-        self._tenants[tenant_id] = tenant
-        _logger.info(
-            "Created white-label tenant %s for %s",
-            tenant_id,
-            contact.company_name,
-        )
-        return tenant
+        tenant_id = _generate_id("WL")
+        if trial_days > 0:
+            status = TenantStatus.TRIAL
+            expires_at: Optional[datetime] = datetime.now(timezone.utc) + timedelta(days=trial_days)
+        else:
+            status = TenantStatus.ACTIVE
+            expires_at = None
 
-    # ------------------------------------------------------------------
-    # Retrieval
-    # ------------------------------------------------------------------
+        tenant = Tenant(
+            tenant_id=tenant_id,
+            name=name,
+            owner_email=owner_email,
+            status=status,
+            expires_at=expires_at,
+            features=list(features) if features is not None else [],
+            reseller_id=reseller_id,
+        )
+        self._tenants[tenant_id] = tenant
+
+        if reseller_id is not None:
+            reseller = self._resellers.get(reseller_id)
+            if reseller is not None:
+                reseller.total_tenants += 1
+
+        _logger.info("Created white-label tenant %s (%s)", tenant_id, name)
+        return tenant
 
     def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
         """Return the tenant with the given ID, or None."""
         return self._tenants.get(tenant_id)
 
-    def find_by_domain(self, domain: str) -> Optional[Tenant]:
-        """Look up a tenant by its primary domain."""
-        for tenant in self._tenants.values():
-            if tenant.config.primary_domain == domain:
-                return tenant
-        return None
+    def activate_tenant(self, tenant_id: str) -> bool:
+        """Activate a tenant, clearing any trial expiry. Returns True on success."""
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return False
+        tenant.status = TenantStatus.ACTIVE
+        tenant.expires_at = None
+        _logger.info("Tenant %s activated", tenant_id)
+        return True
 
-    def get_all_tenants(
-        self,
-        status: Optional[TenantStatus] = None,
+    def suspend_tenant(self, tenant_id: str) -> bool:
+        """Suspend a tenant. Returns True on success."""
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return False
+        tenant.status = TenantStatus.SUSPENDED
+        _logger.warning("Tenant %s suspended", tenant_id)
+        return True
+
+    def delete_tenant(self, tenant_id: str) -> bool:
+        """Delete a tenant and remove any domain mapping. Returns True on success."""
+        tenant = self._tenants.pop(tenant_id, None)
+        if tenant is None:
+            return False
+        if tenant.custom_domain:
+            self._domains.pop(tenant.custom_domain, None)
+        _logger.info("Tenant %s deleted", tenant_id)
+        return True
+
+    def list_tenants(
+        self, status: Optional[TenantStatus] = None
     ) -> List[Tenant]:
         """Return all tenants, optionally filtered by status."""
         tenants = list(self._tenants.values())
@@ -369,104 +387,238 @@ class WhiteLabelManager:
         return tenants
 
     # ------------------------------------------------------------------
-    # Lifecycle
+    # Theme management
     # ------------------------------------------------------------------
 
-    def activate_tenant(self, tenant_id: str) -> bool:
-        """Activate a tenant. Returns True on success."""
+    def update_theme(self, tenant_id: str, theme_dict: Dict[str, Any]) -> bool:
+        """Update the brand theme for a tenant from a dictionary of attributes."""
         tenant = self.get_tenant(tenant_id)
         if tenant is None:
             return False
-        tenant.activate()
-        return True
-
-    def suspend_tenant(self, tenant_id: str, reason: str = "") -> bool:
-        """Suspend a tenant. Returns True on success."""
-        tenant = self.get_tenant(tenant_id)
-        if tenant is None:
-            return False
-        tenant.suspend(reason)
-        return True
-
-    def terminate_tenant(self, tenant_id: str) -> bool:
-        """Permanently terminate a tenant. Returns True on success."""
-        tenant = self.get_tenant(tenant_id)
-        if tenant is None:
-            return False
-        tenant.terminate()
-        return True
-
-    # ------------------------------------------------------------------
-    # Config helpers
-    # ------------------------------------------------------------------
-
-    def update_tenant_theme(
-        self, tenant_id: str, theme: BrandTheme
-    ) -> bool:
-        """Replace the brand theme for a tenant. Returns True on success."""
-        tenant = self.get_tenant(tenant_id)
-        if tenant is None:
-            return False
-        tenant.config.theme = theme
+        for key, value in theme_dict.items():
+            if hasattr(tenant.theme, key):
+                setattr(tenant.theme, key, value)
         _logger.info("Theme updated for tenant %s", tenant_id)
         return True
 
-    def update_tenant_features(
-        self, tenant_id: str, features: TenantFeatures
-    ) -> bool:
-        """Replace the feature flags for a tenant. Returns True on success."""
+    def get_theme(self, tenant_id: str) -> Optional[BrandTheme]:
+        """Return the BrandTheme for a tenant, or None if not found."""
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return None
+        return tenant.theme
+
+    # ------------------------------------------------------------------
+    # Feature flag management
+    # ------------------------------------------------------------------
+
+    def enable_feature(self, tenant_id: str, feature: FeatureFlag) -> bool:
+        """Enable a feature flag for a tenant (idempotent). Returns True on success."""
         tenant = self.get_tenant(tenant_id)
         if tenant is None:
             return False
-        tenant.config.features = features
-        _logger.info("Features updated for tenant %s", tenant_id)
+        if feature not in tenant.features:
+            tenant.features.append(feature)
         return True
 
+    def disable_feature(self, tenant_id: str, feature: FeatureFlag) -> bool:
+        """Disable a feature flag for a tenant (no-op if not present). Returns True on success."""
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return False
+        if feature in tenant.features:
+            tenant.features.remove(feature)
+        return True
+
+    def get_tenant_features(self, tenant_id: str) -> List[FeatureFlag]:
+        """Return the list of enabled feature flags for a tenant, or [] if not found."""
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return []
+        return list(tenant.features)
+
     # ------------------------------------------------------------------
-    # Statistics
+    # Domain management
     # ------------------------------------------------------------------
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Return a summary of tenant counts broken down by status."""
-        tenants = list(self._tenants.values())
+    def set_custom_domain(self, tenant_id: str, domain: str) -> bool:
+        """
+        Assign a custom domain to a tenant.
+
+        Returns False if the domain is already assigned to a different tenant.
+        Removes the old domain mapping when the tenant changes its domain.
+        """
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return False
+        existing_owner = self._domains.get(domain)
+        if existing_owner is not None and existing_owner != tenant_id:
+            return False
+        if tenant.custom_domain and tenant.custom_domain != domain:
+            self._domains.pop(tenant.custom_domain, None)
+        tenant.custom_domain = domain
+        self._domains[domain] = tenant_id
+        return True
+
+    def resolve_domain(self, domain: str) -> Optional[Tenant]:
+        """Return the tenant that owns the given domain, or None."""
+        tenant_id = self._domains.get(domain)
+        if tenant_id is None:
+            return None
+        return self._tenants.get(tenant_id)
+
+    # ------------------------------------------------------------------
+    # Reseller management
+    # ------------------------------------------------------------------
+
+    def create_reseller(
+        self,
+        company_name: str,
+        contact_email: str,
+        tier: ResellerTier = ResellerTier.STANDARD,
+    ) -> Reseller:
+        """
+        Create a new reseller partner.
+
+        Args:
+            company_name: Name of the reseller's company.
+            contact_email: Primary contact email.
+            tier: Starting reseller tier (default: STANDARD).
+
+        Returns:
+            The newly created Reseller.
+        """
+        reseller_id = _generate_id("RS")
+        reseller = Reseller(
+            reseller_id=reseller_id,
+            company_name=company_name,
+            contact_email=contact_email,
+            tier=tier,
+        )
+        self._resellers[reseller_id] = reseller
+        _logger.info("Created reseller %s (%s)", reseller_id, company_name)
+        return reseller
+
+    def get_reseller(self, reseller_id: str) -> Optional[Reseller]:
+        """Return the reseller with the given ID, or None."""
+        return self._resellers.get(reseller_id)
+
+    def calculate_commission(self, reseller_id: str, amount: float) -> float:
+        """
+        Calculate the commission owed to a reseller for a given transaction amount.
+
+        Returns 0.0 if the reseller is not found or is inactive.
+        Accumulates the commission amount in reseller.total_revenue.
+        """
+        reseller = self.get_reseller(reseller_id)
+        if reseller is None or not reseller.is_active:
+            return 0.0
+        commission = amount * reseller.commission_rate
+        reseller.total_revenue += amount
+        return commission
+
+    def upgrade_reseller_tier(self, reseller_id: str) -> Optional[ResellerTier]:
+        """
+        Upgrade a reseller's tier based on their total_tenants count.
+
+        Returns the new ResellerTier if upgraded, or None if no upgrade is needed
+        or the reseller does not exist.
+        """
+        reseller = self.get_reseller(reseller_id)
+        if reseller is None:
+            return None
+        best_tier = ResellerTier.STANDARD
+        for tier in _TIER_ORDER:
+            if reseller.total_tenants >= TIER_TENANT_THRESHOLDS[tier]:
+                best_tier = tier
+                break
+        if best_tier == reseller.tier:
+            return None
+        reseller.tier = best_tier
+        reseller.commission_rate = TIER_COMMISSION_RATES[best_tier]
+        _logger.info(
+            "Reseller %s upgraded to %s", reseller_id, best_tier.value
+        )
+        return best_tier
+
+    # ------------------------------------------------------------------
+    # Export / Import
+    # ------------------------------------------------------------------
+
+    def export_tenant_config(self, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Export a tenant's configuration as a serialisable dictionary.
+
+        Returns None if the tenant does not exist.
+        """
+        tenant = self.get_tenant(tenant_id)
+        if tenant is None:
+            return None
         return {
-            "total": len(tenants),
-            "active": sum(
-                1 for t in tenants if t.status == TenantStatus.ACTIVE
-            ),
-            "pending": sum(
-                1 for t in tenants if t.status == TenantStatus.PENDING
-            ),
-            "suspended": sum(
-                1 for t in tenants if t.status == TenantStatus.SUSPENDED
-            ),
-            "terminated": sum(
-                1 for t in tenants if t.status == TenantStatus.TERMINATED
-            ),
+            "name": tenant.name,
+            "owner_email": tenant.owner_email,
+            "theme": tenant.theme.to_dict(),
+            "features": [f.value for f in tenant.features],
+            "custom_domain": tenant.custom_domain,
         }
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialise all tenants to a dictionary keyed by tenant ID."""
-        return {tid: t.to_dict() for tid, t in self._tenants.items()}
+    def import_tenant_config(self, config: Dict[str, Any]) -> Tenant:
+        """
+        Import a tenant from a previously exported configuration dictionary.
+
+        Creates a new tenant in this manager instance.
+        """
+        features = [
+            FeatureFlag(v) for v in config.get("features", [])
+        ]
+        tenant = self.create_tenant(
+            name=config["name"],
+            owner_email=config.get("owner_email", ""),
+            features=features,
+        )
+        theme_data = config.get("theme")
+        if theme_data:
+            tenant.theme = BrandTheme.from_dict(theme_data)
+        custom_domain = config.get("custom_domain", "")
+        if custom_domain:
+            self.set_custom_domain(tenant.tenant_id, custom_domain)
+        return tenant
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+
+    def get_platform_summary(self) -> Dict[str, Any]:
+        """Return a high-level summary of the platform's tenants and resellers."""
+        tenants = list(self._tenants.values())
+        return {
+            "total_tenants": len(tenants),
+            "active_tenants": sum(
+                1 for t in tenants if t.status == TenantStatus.ACTIVE
+            ),
+            "trial_tenants": sum(
+                1 for t in tenants if t.status == TenantStatus.TRIAL
+            ),
+            "total_resellers": len(self._resellers),
+            "total_users": sum(t.user_count for t in tenants),
+        }
 
 
 # ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
-_white_label_manager = WhiteLabelManager()
+white_label_manager = WhiteLabelManager()
 
 __all__ = [
     "TenantStatus",
-    "DeploymentEnvironment",
-    "BrandColors",
-    "BrandAssets",
+    "FeatureFlag",
+    "ResellerTier",
+    "TIER_COMMISSION_RATES",
+    "TIER_TENANT_THRESHOLDS",
     "BrandTheme",
-    "TenantContact",
-    "TenantLinks",
-    "TenantFeatures",
-    "TenantDeployment",
-    "WhiteLabelConfig",
     "Tenant",
+    "Reseller",
     "WhiteLabelManager",
+    "white_label_manager",
 ]

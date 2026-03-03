@@ -4,7 +4,7 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional
@@ -31,7 +31,7 @@ class AMLCheck:
     check_type: str
     risk_level: RiskLevel
     reason: str
-    checked_at: datetime = field(default_factory=datetime.utcnow)
+    checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     resolved: bool = False
     resolution_notes: Optional[str] = None
 
@@ -45,7 +45,7 @@ class ComplianceReport:
     total_transactions: int
     flagged_transactions: int
     risk_breakdown: Dict[str, int]
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ComplianceManager:
@@ -80,7 +80,7 @@ class ComplianceManager:
         Returns:
             AMLCheck if flagged, None otherwise
         """
-        check_id = f"AML-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        check_id = f"AML-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         # Check if user is blacklisted
         if user_id in self.blacklist:
@@ -164,7 +164,7 @@ class ComplianceManager:
         recent_checks = [
             self.aml_checks[cid] for cid in user_checks
             if cid in self.aml_checks and
-            datetime.utcnow() - self.aml_checks[cid].checked_at < timedelta(days=1)
+            datetime.now(timezone.utc) - self.aml_checks[cid].checked_at < timedelta(days=1)
         ]
 
         # Count transactions just below threshold
@@ -181,7 +181,7 @@ class ComplianceManager:
         recent_checks = [
             cid for cid in user_checks
             if cid in self.aml_checks and
-            datetime.utcnow() - self.aml_checks[cid].checked_at < timedelta(hours=1)
+            datetime.now(timezone.utc) - self.aml_checks[cid].checked_at < timedelta(hours=1)
         ]
 
         return len(recent_checks) >= self.high_frequency_threshold
@@ -326,7 +326,7 @@ class ComplianceManager:
         Returns:
             Compliance report
         """
-        report_id = f"RPT-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        report_id = f"RPT-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
 
         # Get checks in period
         period_checks = [

@@ -3,7 +3,7 @@ Mobile Analytics Tracking
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class MobileAnalytics:
@@ -23,7 +23,7 @@ class MobileAnalytics:
             'user_id': user_id,
             'event_type': event_type,
             'properties': properties or {},
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(timezone.utc)
         }
         self.events.append(event)
 

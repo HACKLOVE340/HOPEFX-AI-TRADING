@@ -22,7 +22,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import secrets
 
@@ -411,7 +411,7 @@ class ConfigManager:
                 config_data = json.load(f)
 
             self.config = self._parse_config(config_data)
-            self._load_timestamp = datetime.utcnow()
+            self._load_timestamp = datetime.now(timezone.utc)
             self._config_hash = self._hash_config()
 
             if not self.config.validate():

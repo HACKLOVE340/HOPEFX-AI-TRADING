@@ -15,7 +15,7 @@ Enhances the base OrderFlowAnalyzer with:
 import logging
 import math
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -202,7 +202,7 @@ class AdvancedOrderFlowAnalyzer:
         timestamp: Optional[datetime] = None,
     ) -> None:
         """Add a trade for analysis."""
-        ts = timestamp or datetime.utcnow()
+        ts = timestamp or datetime.now(timezone.utc)
         s = side.lower()
         self._trades[symbol].append((ts, price, size, s))
         delta = size if s == "buy" else -size
@@ -237,7 +237,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             AggressionMetrics or None
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -262,7 +262,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return AggressionMetrics(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             buy_aggression=buy_aggression,
             sell_aggression=sell_aggression,
             aggression_score=score,
@@ -291,7 +291,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             List of dicts with price/imbalance info per level
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -383,7 +383,7 @@ class AdvancedOrderFlowAnalyzer:
             results.append(
                 StackedImbalance(
                     symbol=symbol,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     direction=direction,
                     levels=prices,
                     total_volume=total_vol,
@@ -439,7 +439,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             DeltaDivergence or None
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if len(trades) < 10:
@@ -480,7 +480,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return DeltaDivergence(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             divergence_type=divergence_type,
             price_direction=price_dir,
             delta_direction=delta_dir,
@@ -513,7 +513,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             List of VolumeCluster objects
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -618,7 +618,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return OrderFlowOscillator(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             value=value,
             signal=signal,
             overbought=value > 70,
@@ -644,7 +644,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             Dict with buy_pressure and sell_pressure (0-100 each)
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -662,7 +662,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return {
             "symbol": symbol,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "buy_pressure": buy_pressure,
             "sell_pressure": sell_pressure,
             "dominant": "buyers" if buy_pressure > sell_pressure else "sellers",

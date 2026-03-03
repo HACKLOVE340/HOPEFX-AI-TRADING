@@ -9,7 +9,7 @@ Tests for:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class TestAlertConditionType:
@@ -170,7 +170,7 @@ class TestAlert:
             name="Test",
             symbol="XAUUSD",
             conditions=[condition],
-            expires_at=datetime.utcnow() - timedelta(hours=1)  # Expired 1 hour ago
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1)  # Expired 1 hour ago
         )
         assert alert.is_active() is False
 
@@ -188,7 +188,7 @@ class TestAlert:
             symbol="XAUUSD",
             conditions=[condition],
             cooldown_minutes=5,
-            last_triggered_at=datetime.utcnow() - timedelta(minutes=2)  # 2 min ago
+            last_triggered_at=datetime.now(timezone.utc) - timedelta(minutes=2)  # 2 min ago
         )
 
         assert alert.is_in_cooldown() is True

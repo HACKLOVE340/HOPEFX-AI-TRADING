@@ -13,7 +13,7 @@ import json
 import logging
 import time
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -271,8 +271,8 @@ class MarketDataCache:
             data_list = [asdict(candle) for candle in ohlcv_data]
             cached_data = {
                 'data': data_list,
-                'cached_at': datetime.utcnow().isoformat(),
-                'expiry': (datetime.utcnow() + timedelta(seconds=ttl)).isoformat()
+                'cached_at': datetime.now(timezone.utc).isoformat(),
+                'expiry': (datetime.now(timezone.utc) + timedelta(seconds=ttl)).isoformat()
             }
 
             # Store in Redis with TTL
@@ -367,8 +367,8 @@ class MarketDataCache:
             # Update cache
             cached_data = {
                 'data': data_list,
-                'cached_at': datetime.utcnow().isoformat(),
-                'expiry': (datetime.utcnow() + timedelta(seconds=ttl)).isoformat()
+                'cached_at': datetime.now(timezone.utc).isoformat(),
+                'expiry': (datetime.now(timezone.utc) + timedelta(seconds=ttl)).isoformat()
             }
 
             self.redis_client.setex(key, ttl, json.dumps(cached_data))
@@ -402,7 +402,7 @@ class MarketDataCache:
 
             cached_data = {
                 'data': asdict(tick_data),
-                'cached_at': datetime.utcnow().isoformat()
+                'cached_at': datetime.now(timezone.utc).isoformat()
             }
 
             self.redis_client.setex(key, ttl, json.dumps(cached_data))
@@ -470,7 +470,7 @@ class MarketDataCache:
 
             cached_data = {
                 'data': [asdict(tick) for tick in ticks_to_cache],
-                'cached_at': datetime.utcnow().isoformat(),
+                'cached_at': datetime.now(timezone.utc).isoformat(),
                 'count': len(ticks_to_cache)
             }
 

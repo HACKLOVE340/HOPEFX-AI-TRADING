@@ -14,7 +14,7 @@ Real-time trade tape (time & sales) with:
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -177,7 +177,7 @@ class TimeAndSalesService:
             ExecutedTrade object
         """
         side = side.lower()
-        ts = timestamp or datetime.utcnow()
+        ts = timestamp or datetime.now(timezone.utc)
 
         # Determine aggressor flags
         is_aggressive_buy = False
@@ -266,7 +266,7 @@ class TimeAndSalesService:
         Returns:
             List of matching ExecutedTrade objects
         """
-        end = end_time or datetime.utcnow()
+        end = end_time or datetime.now(timezone.utc)
         with self._lock:
             buffer = self._trades.get(symbol)
             if buffer is None:
@@ -293,7 +293,7 @@ class TimeAndSalesService:
             List of large ExecutedTrade objects
         """
         threshold = min_size if min_size is not None else self._large_trade_threshold
-        start = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
         return [t for t in trades if t.size >= threshold]
 
@@ -317,7 +317,7 @@ class TimeAndSalesService:
             TradeVelocity or None if insufficient data
         """
         window = window_minutes or self._velocity_window_minutes
-        start = datetime.utcnow() - timedelta(minutes=window)
+        start = datetime.now(timezone.utc) - timedelta(minutes=window)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -358,7 +358,7 @@ class TimeAndSalesService:
         Returns:
             AggressorStats or None if no data
         """
-        start = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -405,7 +405,7 @@ class TimeAndSalesService:
         Returns:
             List of histogram buckets with price/volume info
         """
-        start = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -464,7 +464,7 @@ class TimeAndSalesService:
         Returns:
             Dict with trade statistics
         """
-        start = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:

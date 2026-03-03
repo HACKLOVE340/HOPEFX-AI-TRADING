@@ -10,7 +10,7 @@ Enhanced charting with:
 """
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class Chart:
         self.indicators = []
         self.drawings = []
         self.data = None
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
     def set_data(self, data):
         """
@@ -409,7 +409,7 @@ class ChartEngine:
             chart_type,
             theme=theme or self.default_theme
         )
-        chart_id = f"{symbol}_{timeframe}_{datetime.utcnow().timestamp()}"
+        chart_id = f"{symbol}_{timeframe}_{datetime.now(timezone.utc).timestamp()}"
         self.charts[chart_id] = chart
         return chart
 

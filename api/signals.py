@@ -11,7 +11,7 @@ Provides real-time trading signals with:
 
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 import logging
@@ -59,7 +59,7 @@ class TradingSignal:
     regime: str  # Market regime
     session: str  # Trading session
     expiry: datetime
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict:
@@ -88,7 +88,7 @@ class TradingSignal:
     @property
     def is_valid(self) -> bool:
         """Check if signal is still valid."""
-        return datetime.utcnow() < self.expiry
+        return datetime.now(timezone.utc) < self.expiry
 
     def to_json(self) -> str:
         """Convert to JSON string."""
@@ -107,7 +107,7 @@ class SignalAlert:
     active: bool = True
     triggered_count: int = 0
     last_triggered: Optional[datetime] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -286,7 +286,7 @@ class RealTimeSignalService:
 
         # Create signal
         signal = TradingSignal(
-            id=f"SIG-{symbol}-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
+            id=f"SIG-{symbol}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
             symbol=symbol,
             direction=direction,
             strength=strength,
@@ -301,7 +301,7 @@ class RealTimeSignalService:
             total_strategies=total_strategies,
             regime=regime,
             session=session,
-            expiry=datetime.utcnow() + timedelta(minutes=self.signal_expiry_minutes),
+            expiry=datetime.now(timezone.utc) + timedelta(minutes=self.signal_expiry_minutes),
             metadata=metadata or {}
         )
 
@@ -392,7 +392,7 @@ class RealTimeSignalService:
         with self._lock:
             if signal_id in self.active_signals:
                 signal = self.active_signals[signal_id]
-                signal.expiry = datetime.utcnow()
+                signal.expiry = datetime.now(timezone.utc)
                 del self.active_signals[signal_id]
                 self.analytics.record_outcome('expired')
                 self._publish_event('signal_expired', signal)
@@ -470,7 +470,7 @@ class RealTimeSignalService:
 
             # Alert triggered!
             alert.triggered_count += 1
-            alert.last_triggered = datetime.utcnow()
+            alert.last_triggered = datetime.now(timezone.utc)
 
             self._publish_event('alert_triggered', {
                 'alert': asdict(alert),
@@ -514,7 +514,7 @@ class RealTimeSignalService:
         """Publish event to all subscribers."""
         event = {
             'type': event_type,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'data': data.to_dict() if hasattr(data, 'to_dict') else data
         }
 
@@ -534,7 +534,7 @@ class RealTimeSignalService:
         hours: int = 24
     ) -> List[TradingSignal]:
         """Get signal history."""
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         signals = [s for s in self.signal_history if s.timestamp > cutoff]
 
         if symbol:
@@ -553,11 +553,11 @@ class RealTimeSignalService:
                 'active_signals': len(self.active_signals),
                 'signals_last_hour': len([
                     s for s in self.signal_history
-                    if s.timestamp > datetime.utcnow() - timedelta(hours=1)
+                    if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
                 ]),
                 'signals_last_24h': len([
                     s for s in self.signal_history
-                    if s.timestamp > datetime.utcnow() - timedelta(hours=24)
+                    if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=24)
                 ]),
                 'active_alerts': len([a for a in self.alerts.values() if a.active]),
                 'symbols_with_signals': list(set(s.symbol for s in self.active_signals.values())),

@@ -6,7 +6,7 @@ cancellations, and feature access control.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 from enum import Enum
 from decimal import Decimal
@@ -45,51 +45,51 @@ class Subscription:
         self.user_id = user_id
         self.tier = tier
         self.status = status
-        self.start_date = start_date or datetime.utcnow()
+        self.start_date = start_date or datetime.now(timezone.utc)
         self.end_date = end_date or (self.start_date + timedelta(days=30))
         self.access_code = access_code
         self.auto_renew = auto_renew
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
 
     def is_active(self) -> bool:
         """Check if subscription is active"""
         if self.status != SubscriptionStatus.ACTIVE:
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return self.start_date <= now <= self.end_date
 
     def is_expired(self) -> bool:
         """Check if subscription is expired"""
-        return datetime.utcnow() > self.end_date
+        return datetime.now(timezone.utc) > self.end_date
 
     def days_remaining(self) -> int:
         """Get days remaining in subscription"""
         if self.is_expired():
             return 0
-        return (self.end_date - datetime.utcnow()).days
+        return (self.end_date - datetime.now(timezone.utc)).days
 
     def renew(self, duration_days: int = 30) -> None:
         """Renew subscription"""
         if self.is_expired():
-            self.start_date = datetime.utcnow()
-        self.end_date = datetime.utcnow() + timedelta(days=duration_days)
+            self.start_date = datetime.now(timezone.utc)
+        self.end_date = datetime.now(timezone.utc) + timedelta(days=duration_days)
         self.status = SubscriptionStatus.ACTIVE
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Subscription {self.subscription_id} renewed until {self.end_date}")
 
     def cancel(self) -> None:
         """Cancel subscription"""
         self.status = SubscriptionStatus.CANCELLED
         self.auto_renew = False
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Subscription {self.subscription_id} cancelled")
 
     def suspend(self) -> None:
         """Suspend subscription"""
         self.status = SubscriptionStatus.SUSPENDED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Subscription {self.subscription_id} suspended")
 
     def reactivate(self) -> None:
@@ -98,7 +98,7 @@ class Subscription:
             self.renew()
         else:
             self.status = SubscriptionStatus.ACTIVE
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.info(f"Subscription {self.subscription_id} reactivated")
 
     def to_dict(self) -> Dict:
@@ -138,7 +138,7 @@ class SubscriptionManager:
         import uuid
 
         subscription_id = f"SUB-{uuid.uuid4().hex[:12].upper()}"
-        start_date = datetime.utcnow()
+        start_date = datetime.now(timezone.utc)
         end_date = start_date + timedelta(days=duration_days)
 
         subscription = Subscription(
@@ -181,7 +181,7 @@ class SubscriptionManager:
             return False
 
         subscription.status = SubscriptionStatus.ACTIVE
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(timezone.utc)
 
         logger.info(f"Activated subscription {subscription_id}")
         return True
@@ -203,7 +203,7 @@ class SubscriptionManager:
             return False
 
         subscription.tier = new_tier
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(timezone.utc)
 
         logger.info(f"Upgraded subscription {subscription_id} to {new_tier}")
         return True
@@ -225,7 +225,7 @@ class SubscriptionManager:
             return False
 
         subscription.tier = new_tier
-        subscription.updated_at = datetime.utcnow()
+        subscription.updated_at = datetime.now(timezone.utc)
 
         logger.info(f"Downgraded subscription {subscription_id} to {new_tier}")
         return True

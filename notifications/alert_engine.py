@@ -13,7 +13,7 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -124,7 +124,7 @@ class Alert:
     max_triggers: int = 0  # 0 = unlimited
 
     # State
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_triggered_at: Optional[datetime] = None
     trigger_count: int = 0
     last_value: Optional[float] = None
@@ -140,7 +140,7 @@ class Alert:
             return False
 
         # Check expiration
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
 
         # Check max triggers
@@ -155,7 +155,7 @@ class Alert:
             return False
 
         cooldown_end = self.last_triggered_at + timedelta(minutes=self.cooldown_minutes)
-        return datetime.utcnow() < cooldown_end
+        return datetime.now(timezone.utc) < cooldown_end
 
     def to_dict(self) -> Dict:
         return {
@@ -338,7 +338,7 @@ class AlertEngine:
 
             expires_at = None
             if expires_in_hours:
-                expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+                expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
             alert = Alert(
                 id=alert_id,
@@ -695,7 +695,7 @@ class AlertEngine:
         condition: AlertCondition
     ) -> AlertTrigger:
         """Create an alert trigger record."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Update alert state
         alert.last_triggered_at = now

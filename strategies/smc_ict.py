@@ -12,7 +12,7 @@ This strategy implements Smart Money Concepts including:
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import numpy as np
 
@@ -110,7 +110,7 @@ class SMCICTStrategy(BaseStrategy):
                 'liquidity_zones': liquidity_zones,
                 'premium_discount': premium_discount,
                 'ote_levels': ote_levels,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
             }
 
         except Exception as e:
