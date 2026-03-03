@@ -473,3 +473,52 @@ async def get_activity():
     Return the most-recent activity log entries (newest first, max 50).
     """
     return {"events": list(_activity_log)}
+
+
+@router.get("/api/component-map")
+async def get_admin_component_map():
+    """
+    Return a comprehensive map of every module, agent, strategy, and broker
+    available in the HOPEFX AI Trading framework.  Delegates to the trading
+    API's component-map endpoint so there is a single source of truth.
+    """
+    try:
+        from api.trading import get_component_map
+        return await get_component_map()
+    except Exception as e:
+        logger.warning(f"component-map delegation failed: {e}")
+        # Minimal inline fallback
+        def _ok(m):
+            try:
+                __import__(m)
+                return True
+            except ImportError:
+                return False
+
+        return {
+            "framework": "HOPEFX AI Trading",
+            "version": "1.0.0",
+            "modules": {
+                "config": _ok("config"),
+                "database": _ok("database"),
+                "cache": _ok("cache"),
+                "strategies": _ok("strategies"),
+                "risk": _ok("risk"),
+                "brokers": _ok("brokers"),
+                "ml": _ok("ml"),
+                "backtesting": _ok("backtesting"),
+                "news": _ok("news"),
+                "analytics": _ok("analytics"),
+                "monetization": _ok("monetization"),
+                "payments": _ok("payments"),
+                "social": _ok("social"),
+                "mobile": _ok("mobile"),
+                "charting": _ok("charting"),
+                "dashboard": _ok("dashboard"),
+                "notifications": _ok("notifications"),
+                "analysis": _ok("analysis"),
+                "data": _ok("data"),
+            },
+            "market_data_source": "Yahoo Finance (yfinance)",
+            "error": str(e),
+        }

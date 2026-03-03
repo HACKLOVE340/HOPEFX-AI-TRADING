@@ -541,7 +541,7 @@
     </main>
 
     <script>
-        // Paper Trading State
+        // Paper Trading State — prices are fetched from real API, fallbacks used until first fetch
         let state = {
             balance: 10000,
             equity: 10000,
@@ -559,10 +559,13 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Fetch real prices immediately, then poll every 10 seconds
+            updatePrices();
             updateChart();
             updateTime();
             setInterval(updateTime, 1000);
-            setInterval(updatePrices, 2000);
+            setInterval(updatePrices, 10000);
+            setInterval(() => updateChart(), 60000); // refresh chart every minute
             document.getElementById('order-type').addEventListener('change', togglePriceField);
         });
 
@@ -641,10 +644,17 @@
         }
 
         function updatePrices() {
-            // Simulate price changes
-            Object.keys(state.marketPrices).forEach(symbol => {
-                const change = (Math.random() - 0.5) * 0.002;
-                state.marketPrices[symbol] *= (1 + change);
+            // Fetch real market prices from the API
+            const symbols = Object.keys(state.marketPrices);
+            symbols.forEach(symbol => {
+                fetch(`/api/trading/market-price/${symbol}`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => {
+                        if (data && data.price) {
+                            state.marketPrices[symbol] = data.price;
+                        }
+                    })
+                    .catch(() => {}); // silently fall back to last known price
             });
 
             // Update position P&L
@@ -725,42 +735,63 @@
         }
 
         function updateChart() {
-            // Generate sample data
             const symbol = state.currentSymbol;
-            const basePrice = state.marketPrices[symbol];
-            const data = [];
+            // Fetch real OHLCV data from the API
+            fetch(`/api/trading/market-ohlcv/${symbol}?period=5d&interval=1h`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.bars && data.bars.length > 0) {
+                        _renderChart(symbol, data.bars);
+                    } else {
+                        _renderFallbackChart(symbol);
+                    }
+                })
+                .catch(() => _renderFallbackChart(symbol));
+        }
 
-            for (let i = 100; i >= 0; i--) {
-                const date = new Date();
-                date.setHours(date.getHours() - i);
-
-                const open = basePrice * (1 + (Math.random() - 0.5) * 0.02);
-                const close = open * (1 + (Math.random() - 0.5) * 0.01);
-                const high = Math.max(open, close) * (1 + Math.random() * 0.005);
-                const low = Math.min(open, close) * (1 - Math.random() * 0.005);
-
-                data.push({
-                    x: date,
-                    open: open,
-                    high: high,
-                    low: low,
-                    close: close
-                });
-            }
-
+        function _renderChart(symbol, bars) {
             const trace = {
-                x: data.map(d => d.x),
-                open: data.map(d => d.open),
-                high: data.map(d => d.high),
-                low: data.map(d => d.low),
-                close: data.map(d => d.close),
+                x: bars.map(d => d.time),
+                open: bars.map(d => d.open),
+                high: bars.map(d => d.high),
+                low: bars.map(d => d.low),
+                close: bars.map(d => d.close),
                 type: 'candlestick',
                 increasing: { line: { color: '#26a69a' } },
                 decreasing: { line: { color: '#ef5350' } }
             };
+            _applyChartLayout(symbol, [trace]);
+        }
 
+        function _renderFallbackChart(symbol) {
+            // Fallback: use last known price with minimal noise to show chart
+            const basePrice = state.marketPrices[symbol];
+            const bars = [];
+            for (let i = 50; i >= 0; i--) {
+                const date = new Date();
+                date.setHours(date.getHours() - i);
+                const open = basePrice * (1 + (Math.random() - 0.5) * 0.002);
+                const close = open * (1 + (Math.random() - 0.5) * 0.001);
+                const high = Math.max(open, close) * (1 + Math.random() * 0.001);
+                const low = Math.min(open, close) * (1 - Math.random() * 0.001);
+                bars.push({ x: date, open, high, low, close });
+            }
+            const trace = {
+                x: bars.map(d => d.x),
+                open: bars.map(d => d.open),
+                high: bars.map(d => d.high),
+                low: bars.map(d => d.low),
+                close: bars.map(d => d.close),
+                type: 'candlestick',
+                increasing: { line: { color: '#26a69a' } },
+                decreasing: { line: { color: '#ef5350' } }
+            };
+            _applyChartLayout(symbol + ' (offline)', [trace]);
+        }
+
+        function _applyChartLayout(title, traces) {
             const layout = {
-                title: `${symbol} - 1H`,
+                title: `${title} - 1H`,
                 paper_bgcolor: '#131722',
                 plot_bgcolor: '#131722',
                 font: { color: '#d1d4dc' },
@@ -775,7 +806,7 @@
                 margin: { t: 40, r: 60, b: 40, l: 10 }
             };
 
-            Plotly.newPlot('chart', [trace], layout, { responsive: true });
+            Plotly.newPlot('chart', traces, layout, { responsive: true });
         }
     </script>
 </body>

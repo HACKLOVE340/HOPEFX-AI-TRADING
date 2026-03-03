@@ -153,6 +153,14 @@
         <div style="font-size:16px;font-weight:600;" id="mkt-symbols">—</div>
       </div>
       <div>
+        <div class="kpi-label">XAU/USD (Gold)</div>
+        <div style="font-size:16px;font-weight:600;" id="mkt-xauusd">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">BTC/USD</div>
+        <div style="font-size:16px;font-weight:600;" id="mkt-btcusd">—</div>
+      </div>
+      <div>
         <div class="kpi-label">Last Update</div>
         <div style="font-size:13px;" id="mkt-last-update">—</div>
       </div>
@@ -189,6 +197,7 @@
       <a class="btn-sm btn-gray"   href="/admin/monitoring">📡 Monitoring</a>
       <a class="btn-sm btn-blue"   href="/admin/settings">⚙️ Settings</a>
       <a class="btn-sm btn-gray"   href="/docs">📚 API Docs</a>
+      <a class="btn-sm btn-purple" href="/admin/api/component-map" target="_blank">🗺️ Component Map</a>
       <button class="btn-sm btn-blue" onclick="loadDashboard()">🔄 Refresh</button>
     </div>
   </div>
@@ -272,12 +281,15 @@ async function loadDashboard() {
 
     // Market data
     const md = d.market_data || {};
-    document.getElementById('mkt-feed').textContent = md.data_feed || '—';
+    document.getElementById('mkt-feed').textContent = md.data_feed || 'Yahoo Finance';
     document.getElementById('mkt-symbols').textContent = md.cached_symbols ?? '—';
     document.getElementById('mkt-last-update').textContent = md.last_update || '—';
     const mktBadge = document.getElementById('mkt-status-badge');
     mktBadge.className = 'health-badge ' + (md.status === 'operational' ? 'health-ok' : 'health-warn');
     mktBadge.textContent = md.status === 'operational' ? 'Operational' : md.status || '—';
+
+    // Fetch live prices for key symbols
+    loadLivePrices();
 
     // Module status
     const ms = d.module_status || {};
@@ -329,5 +341,35 @@ async function stopAllStrategies() {
 
 document.addEventListener('DOMContentLoaded', loadDashboard);
 setInterval(loadDashboard, 5000);
+setInterval(loadLivePrices, 15000); // refresh live prices every 15 seconds
+
+async function loadLivePrices() {
+  const pairs = [
+    { id: 'mkt-xauusd', symbol: 'XAUUSD', prefix: '$' },
+    { id: 'mkt-btcusd', symbol: 'BTCUSD', prefix: '$' },
+  ];
+  for (const p of pairs) {
+    try {
+      const r = await fetch(`/api/trading/market-price/${p.symbol}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      const el = document.getElementById(p.id);
+      if (!el || !data.price) continue;
+      const price = Number(data.price);
+      const chgPct = Number(data.change_pct || 0);
+      const sign = chgPct >= 0 ? '+' : '';
+      const color = chgPct >= 0 ? '#27ae60' : '#e74c3c';
+      // Use textContent to avoid XSS — build elements safely
+      el.textContent = '';
+      const priceSpan = document.createElement('span');
+      priceSpan.textContent = `${p.prefix}${price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:5})}`;
+      const chgSpan = document.createElement('span');
+      chgSpan.style.cssText = `font-size:11px;color:${color};margin-left:4px;`;
+      chgSpan.textContent = `${sign}${chgPct.toFixed(2)}%`;
+      el.appendChild(priceSpan);
+      el.appendChild(chgSpan);
+    } catch (e) { /* ignore — price fetch failures should not break dashboard */ }
+  }
+}
 </script>
 {% endblock %}

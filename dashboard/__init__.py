@@ -255,13 +255,14 @@ class DashboardService:
         }
     
     def _get_market_overview(self) -> Dict[str, Any]:
-        """Get market overview data."""
+        """Get market overview data. Prices are fetched via /api/trading/market-price/{symbol}."""
         return {
             "markets": [
-                {"symbol": "XAUUSD", "price": 1955.00, "change": 0.5},
-                {"symbol": "EURUSD", "price": 1.0845, "change": -0.1},
-                {"symbol": "BTCUSD", "price": 45000.00, "change": 2.5},
-            ]
+                {"symbol": "XAUUSD", "price": None, "change": None, "source": "/api/trading/market-price/XAUUSD"},
+                {"symbol": "EURUSD", "price": None, "change": None, "source": "/api/trading/market-price/EURUSD"},
+                {"symbol": "BTCUSD", "price": None, "change": None, "source": "/api/trading/market-price/BTCUSD"},
+            ],
+            "note": "Live prices are served via /api/trading/market-price/{symbol} (yfinance)",
         }
     
     def _get_alerts(self) -> Dict[str, Any]:

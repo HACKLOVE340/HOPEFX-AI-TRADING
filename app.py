@@ -450,6 +450,8 @@ async def root():
         "status": "/status",
         "paper_trading": "/paper-trading",
         "pricing": "/pricing",
+        "admin_dashboard": "/admin",
+        "component_map": "/api/trading/component-map",
         "monetization_api": "/api/monetization",
     }
 
