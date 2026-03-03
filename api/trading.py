@@ -14,6 +14,16 @@ from strategies import (
     StrategyManager,
     StrategyConfig,
     MovingAverageCrossover,
+    MeanReversionStrategy,
+    RSIStrategy,
+    BollingerBandsStrategy,
+    MACDStrategy,
+    BreakoutStrategy,
+    EMAcrossoverStrategy,
+    StochasticStrategy,
+    SMCICTStrategy,
+    ITS8OSStrategy,
+    StrategyBrain,
     SignalType,
 )
 from risk import RiskManager, RiskConfig
@@ -38,6 +48,21 @@ router = APIRouter(prefix="/api/trading", tags=["Trading"])
 # Global instances (should be injected via dependency in production)
 strategy_manager = StrategyManager()
 risk_manager = RiskManager(RiskConfig(), initial_balance=10000.0)
+strategy_brain = StrategyBrain()
+
+# Map strategy_type string → class (all 10 implementations)
+_STRATEGY_TYPES: Dict[str, Any] = {
+    "ma_crossover": MovingAverageCrossover,
+    "mean_reversion": MeanReversionStrategy,
+    "rsi": RSIStrategy,
+    "bollinger_bands": BollingerBandsStrategy,
+    "macd": MACDStrategy,
+    "breakout": BreakoutStrategy,
+    "ema_crossover": EMAcrossoverStrategy,
+    "stochastic": StochasticStrategy,
+    "smc_ict": SMCICTStrategy,
+    "its_8_os": ITS8OSStrategy,
+}
 
 
 # Pydantic models
@@ -95,8 +120,17 @@ async def create_strategy(request: StrategyCreateRequest):
     """
     Create and register a new trading strategy.
 
-    Supports strategy types:
-    - ma_crossover: Moving Average Crossover strategy
+    Supported strategy types:
+    - ma_crossover: Moving Average Crossover
+    - mean_reversion: Mean Reversion
+    - rsi: RSI Oscillator
+    - bollinger_bands: Bollinger Bands
+    - macd: MACD Momentum
+    - breakout: Breakout Strategy
+    - ema_crossover: EMA Crossover
+    - stochastic: Stochastic Oscillator
+    - smc_ict: Smart Money Concepts (ICT)
+    - its_8_os: ICT 8 Optimal Setups
     """
     try:
         # Create strategy config
@@ -109,17 +143,21 @@ async def create_strategy(request: StrategyCreateRequest):
             parameters=request.parameters,
         )
 
-        # Create strategy based on type
-        if request.strategy_type == "ma_crossover":
-            strategy = MovingAverageCrossover(config)
-        else:
+        strategy_cls = _STRATEGY_TYPES.get(request.strategy_type)
+        if strategy_cls is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown strategy type: {request.strategy_type}"
+                detail=(
+                    f"Unknown strategy type: '{request.strategy_type}'. "
+                    f"Valid types: {list(_STRATEGY_TYPES.keys())}"
+                )
             )
 
-        # Register strategy
+        strategy = strategy_cls(config)
+
+        # Register with both manager and brain
         strategy_manager.register_strategy(strategy)
+        strategy_brain.register_strategy(strategy)
 
         return {
             "message": f"Strategy '{request.name}' created successfully",
@@ -127,6 +165,8 @@ async def create_strategy(request: StrategyCreateRequest):
             "type": request.strategy_type,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -557,6 +597,146 @@ async def get_component_map():
         "market_data_source": "Yahoo Finance (yfinance)",
         "paper_trading": True,
         "live_trading": False,
+        "strategy_types": list(_STRATEGY_TYPES.keys()),
     }
 
     return component_map
+
+
+# StrategyBrain Endpoints
+
+@router.get("/strategy-brain/stats")
+async def get_strategy_brain_stats():
+    """
+    Get StrategyBrain statistics — registered strategies and their weights.
+    """
+    return strategy_brain.get_statistics()
+
+
+@router.post("/strategy-brain/analyze")
+async def strategy_brain_analyze(request: Dict[str, Any]):
+    """
+    Run a joint analysis across all registered strategies using the StrategyBrain.
+
+    Request body: market data dict (prices list, symbol, timeframe).
+    Returns: consensus signal and per-strategy contributions.
+    """
+    try:
+        result = strategy_brain.analyze_joint(request)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"StrategyBrain analysis failed: {str(e)}"
+        )
+
+
+# Market Regime Endpoint
+
+@router.get("/market-regime/{symbol}")
+async def get_market_regime(symbol: str, period: str = "3mo", interval: str = "1d"):
+    """
+    Detect the current market regime for a symbol using MarketRegimeDetector.
+
+    Returns: regime (trending_up/trending_down/ranging/volatile/breakout/consolidation/choppy),
+    regime_strength, trend_direction, volatility_percentile, volume_state.
+    """
+    ticker = _SYMBOL_MAP.get(symbol.upper(), symbol)
+    try:
+        import yfinance as yf
+        import numpy as np
+        import pandas as pd
+
+        tk = yf.Ticker(ticker)
+        hist = tk.history(period=period, interval=interval)
+        if hist.empty or len(hist) < 20:
+            raise ValueError(
+                f"Insufficient market data for {symbol}. Markets may be closed or symbol invalid."
+            )
+
+        try:
+            from analysis.market_analysis import MarketRegimeDetector
+            detector = MarketRegimeDetector()
+            closes = hist["Close"].tolist()
+            highs = hist["High"].tolist()
+            lows = hist["Low"].tolist()
+            volumes = hist["Volume"].tolist()
+            prices = [
+                {"close": c, "high": h, "low": l, "volume": v, "open": o}
+                for c, h, l, v, o in zip(
+                    closes, highs, lows, volumes, hist["Open"].tolist()
+                )
+            ]
+            analysis = detector.detect_regime(prices)
+            return analysis.to_dict()
+        except Exception as detector_err:
+            # Fallback: simple regime classification without the full detector
+            logger.warning(f"MarketRegimeDetector unavailable ({detector_err}), using fallback")
+            closes = hist["Close"].values
+            returns = pd.Series(closes).pct_change().dropna()
+            vol = float(returns.std() * (252 ** 0.5))  # annualized
+            sma20 = float(closes[-20:].mean())
+            sma50 = float(closes[-50:].mean()) if len(closes) >= 50 else sma20
+            price_now = float(closes[-1])
+            if vol > 0.3:
+                regime = "volatile"
+            elif price_now > sma20 > sma50:
+                regime = "trending_up"
+            elif price_now < sma20 < sma50:
+                regime = "trending_down"
+            elif abs(price_now - sma20) / sma20 < 0.01:
+                regime = "consolidation"
+            else:
+                regime = "ranging"
+
+            high_52 = float(np.max(closes))
+            low_52 = float(np.min(closes))
+            vol_pct = round(
+                min(max((vol - 0.05) / 0.45, 0), 1) * 100, 1
+            )
+            return {
+                "symbol": symbol.upper(),
+                "ticker": ticker,
+                "current_regime": regime,
+                "regime_strength": round(float(abs(price_now - sma20) / sma20) * 10, 3),
+                "trend_direction": (
+                    "up" if price_now > sma50 else "down" if price_now < sma50 else "neutral"
+                ),
+                "volatility_percentile": vol_pct,
+                "volume_state": "normal",
+                "annualized_volatility": round(vol * 100, 2),
+                "sma_20": round(sma20, 5),
+                "sma_50": round(sma50, 5),
+                "price": round(price_now, 5),
+                "52w_high": round(high_52, 5),
+                "52w_low": round(low_52, 5),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "note": "Fallback calculation (MarketRegimeDetector unavailable)",
+            }
+
+    except Exception as e:
+        logger.warning(f"Failed to detect market regime for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not detect market regime for {symbol}: {str(e)}"
+        )
+
+
+# Strategy Types Discovery Endpoint
+
+@router.get("/strategy-types")
+async def list_strategy_types():
+    """
+    List all available strategy types that can be used in create_strategy.
+    """
+    return {
+        "strategy_types": [
+            {
+                "type": k,
+                "class": v.__name__,
+                "description": (v.__doc__.strip().split("\n")[0] if v.__doc__ else ""),
+            }
+            for k, v in _STRATEGY_TYPES.items()
+        ],
+        "total": len(_STRATEGY_TYPES),
+    }

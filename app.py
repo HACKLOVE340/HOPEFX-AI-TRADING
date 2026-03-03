@@ -246,6 +246,17 @@ async def startup_event():
             logger.warning(f"⚠ DOM router not available: {e}")
             log_activity(f"DOM router unavailable: {e}")
 
+        try:
+            from api.signals import create_signals_router
+            signals_router = create_signals_router()
+            if signals_router is not None:
+                app.include_router(signals_router)
+                logger.info("✓ Real-Time Signals router registered")
+                log_activity("Signals router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Signals router not available: {e}")
+            log_activity(f"Signals router unavailable: {e}")
+
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()
 

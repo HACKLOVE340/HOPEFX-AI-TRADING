@@ -590,3 +590,143 @@ class RealTimeSignalService:
         channels.append('signals:all')
         channels.append('alerts')
         return channels
+
+
+# ─────────────────────────────────────────────────────────────
+# FastAPI router — exposes RealTimeSignalService via REST
+# ─────────────────────────────────────────────────────────────
+
+_signal_service: Optional["RealTimeSignalService"] = None
+
+
+def _get_signal_service() -> "RealTimeSignalService":
+    """Lazily create / return the singleton signal service."""
+    global _signal_service
+    if _signal_service is None:
+        _signal_service = RealTimeSignalService()
+    return _signal_service
+
+
+def create_signals_router():
+    """
+    Build and return a FastAPI APIRouter with all signal endpoints.
+    Register this in app.py startup with: app.include_router(create_signals_router())
+    """
+    try:
+        from fastapi import APIRouter, HTTPException
+        from pydantic import BaseModel as _BaseModel
+    except ImportError:
+        logger.warning("FastAPI not available; signals router not created.")
+        return None
+
+    signals_router = APIRouter(prefix="/api/signals", tags=["Signals"])
+
+    class GenerateSignalRequest(_BaseModel):
+        symbol: str
+        price: float
+        timeframe: str = "1h"
+        regime: str = "ranging"
+        session: str = "new_york"
+        strategies: Optional[List[str]] = None
+        parameters: Optional[Dict[str, Any]] = None
+
+    class CreateAlertRequest(_BaseModel):
+        symbol: str
+        direction: str  # "buy" | "sell" | "both"
+        min_confidence: float = 0.7
+        notify_webhook: Optional[str] = None
+
+    @signals_router.get("/summary")
+    async def get_signal_summary():
+        """Get a quick summary of current signal state."""
+        return _get_signal_service().get_signal_summary()
+
+    @signals_router.get("/active")
+    async def get_active_signals(symbol: Optional[str] = None):
+        """List all currently active signals, optionally filtered by symbol."""
+        svc = _get_signal_service()
+        signals = svc.get_active_signals(symbol=symbol)
+        return {"signals": [s.to_dict() for s in signals], "count": len(signals)}
+
+    @signals_router.get("/history")
+    async def get_signal_history(symbol: Optional[str] = None, hours: int = 24):
+        """Get signal history for the past N hours."""
+        svc = _get_signal_service()
+        signals = svc.get_signal_history(symbol=symbol, hours=hours)
+        return {"signals": [s.to_dict() for s in signals], "count": len(signals)}
+
+    @signals_router.post("/generate")
+    async def generate_signal(req: GenerateSignalRequest):
+        """
+        Generate a trading signal from the current market price using the
+        registered strategies (via RealTimeSignalService).
+        """
+        try:
+            svc = _get_signal_service()
+            signal = svc.generate_signal(
+                symbol=req.symbol,
+                strategies=req.strategies or [],
+                price=req.price,
+                timeframe=req.timeframe,
+                regime=req.regime,
+                session=req.session,
+                parameters=req.parameters or {},
+            )
+            if signal is None:
+                return {"signal": None, "message": "No signal generated (insufficient consensus)"}
+            return {"signal": signal.to_dict()}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Signal generation failed: {e}")
+
+    @signals_router.get("/analytics")
+    async def get_signal_analytics():
+        """Get signal analytics (win rate, count, direction distribution)."""
+        return _get_signal_service().get_analytics()
+
+    @signals_router.post("/alerts")
+    async def create_alert(req: CreateAlertRequest):
+        """Create a price / signal alert for a symbol."""
+        try:
+            svc = _get_signal_service()
+            alert = svc.create_alert(
+                symbol=req.symbol,
+                direction=req.direction,
+                min_confidence=req.min_confidence,
+                notify_webhook=req.notify_webhook,
+            )
+            return {"alert_id": alert.id, "status": "created"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Alert creation failed: {e}")
+
+    @signals_router.get("/alerts")
+    async def list_alerts(symbol: Optional[str] = None):
+        """List active alerts."""
+        svc = _get_signal_service()
+        alerts = svc.get_alerts(symbol=symbol)
+        return {
+            "alerts": [
+                {
+                    "id": a.id,
+                    "symbol": a.symbol,
+                    "direction": a.direction,
+                    "min_confidence": a.min_confidence,
+                    "active": a.active,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in alerts
+            ],
+            "count": len(alerts),
+        }
+
+    @signals_router.delete("/alerts/{alert_id}")
+    async def delete_alert(alert_id: str):
+        """Delete an alert by ID."""
+        _get_signal_service().delete_alert(alert_id)
+        return {"status": "deleted", "alert_id": alert_id}
+
+    @signals_router.get("/channels")
+    async def get_websocket_channels():
+        """List available WebSocket channel names for signal subscriptions."""
+        return {"channels": _get_signal_service().get_websocket_channels()}
+
+    return signals_router

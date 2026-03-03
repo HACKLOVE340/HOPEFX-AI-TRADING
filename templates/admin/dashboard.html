@@ -183,6 +183,62 @@
   </div>
 </div>
 
+<!-- Row 3b: AI Bot + Market Regime -->
+<div class="dash-grid dash-row-2" style="margin-bottom:20px;">
+  <!-- AI Bot / Signals -->
+  <div class="card">
+    <div class="section-title">🤖 AI Bot &amp; Signals</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="ai-bot-panel">
+      <div>
+        <div class="kpi-label">Active Signals</div>
+        <div style="font-size:20px;font-weight:700;" id="ai-active-signals">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Signals (24h)</div>
+        <div style="font-size:20px;font-weight:700;" id="ai-signals-24h">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Buy / Sell</div>
+        <div style="font-size:14px;font-weight:600;" id="ai-direction">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Avg Confidence</div>
+        <div style="font-size:14px;font-weight:600;" id="ai-confidence">—</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn-sm btn-purple" href="/api/signals/summary" target="_blank">📡 Signal Summary</a>
+      <a class="btn-sm btn-blue" href="/api/signals/active" target="_blank">🔍 Active Signals</a>
+      <a class="btn-sm btn-gray" href="/api/trading/strategy-brain/stats" target="_blank">🧠 Strategy Brain</a>
+    </div>
+  </div>
+  <!-- Market Regime -->
+  <div class="card">
+    <div class="section-title">📊 Market Regime — XAU/USD</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="regime-panel">
+      <div>
+        <div class="kpi-label">Regime</div>
+        <div style="font-size:18px;font-weight:700;text-transform:capitalize;" id="regime-type">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Direction</div>
+        <div style="font-size:18px;font-weight:700;" id="regime-dir">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Volatility %ile</div>
+        <div style="font-size:14px;font-weight:600;" id="regime-vol">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Strength</div>
+        <div style="font-size:14px;font-weight:600;" id="regime-strength">—</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <a class="btn-sm btn-orange" href="/api/trading/market-regime/XAUUSD" target="_blank">🔍 Full Regime Analysis</a>
+    </div>
+  </div>
+</div>
+
 <!-- Row 4: Quick Actions + Activity Feed -->
 <div class="dash-grid dash-row-2">
   <!-- Quick Actions -->
@@ -226,6 +282,12 @@ function fmt(val, prefix='', suffix='', decimals=2) {
   const n = typeof val === 'number' ? val : parseFloat(val);
   if (isNaN(n)) return val;
   return prefix + n.toFixed(decimals) + suffix;
+}
+
+function formatPct(val, decimals=1) {
+  if (val === null || val === undefined) return '—';
+  const n = parseFloat(val);
+  return isNaN(n) ? '—' : n.toFixed(decimals) + '%';
 }
 
 function setBar(barId, pct, colorOk='#27ae60', colorWarn='#f39c12', colorErr='#e74c3c') {
@@ -339,10 +401,6 @@ async function stopAllStrategies() {
   loadDashboard();
 }
 
-document.addEventListener('DOMContentLoaded', loadDashboard);
-setInterval(loadDashboard, 5000);
-setInterval(loadLivePrices, 15000); // refresh live prices every 15 seconds
-
 async function loadLivePrices() {
   const pairs = [
     { id: 'mkt-xauusd', symbol: 'XAUUSD', prefix: '$' },
@@ -371,5 +429,47 @@ async function loadLivePrices() {
     } catch (e) { /* ignore — price fetch failures should not break dashboard */ }
   }
 }
+
+async function loadAIBotPanel() {
+  try {
+    const r = await fetch('/api/signals/summary');
+    if (!r.ok) return;
+    const d = await r.json();
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setText('ai-active-signals', d.active_signals ?? '—');
+    setText('ai-signals-24h', d.signals_last_24h ?? '—');
+    const dir = d.direction_distribution || {};
+    setText('ai-direction', `▲ ${dir.buy ?? 0} / ▼ ${dir.sell ?? 0}`);
+    const conf = d.avg_active_confidence;
+    setText('ai-confidence', conf != null ? formatPct(conf * 100) : '—');
+  } catch (e) { /* signals service not yet running */ }
+}
+
+async function loadMarketRegimePanel() {
+  try {
+    const r = await fetch('/api/trading/market-regime/XAUUSD');
+    if (!r.ok) return;
+    const d = await r.json();
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setText('regime-type', (d.current_regime || '—').replace(/_/g, ' '));
+    const dirEl = document.getElementById('regime-dir');
+    if (dirEl) {
+      dirEl.textContent = d.trend_direction || '—';
+      dirEl.style.color = d.trend_direction === 'up' ? '#27ae60' : d.trend_direction === 'down' ? '#e74c3c' : '#f39c12';
+    }
+    setText('regime-vol', d.volatility_percentile != null ? d.volatility_percentile + '%' : '—');
+    setText('regime-strength', d.regime_strength != null ? Number(d.regime_strength).toFixed(3) : '—');
+  } catch (e) { /* regime service not yet running */ }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboard();
+  loadAIBotPanel();
+  loadMarketRegimePanel();
+});
+setInterval(loadDashboard, 5000);
+setInterval(loadLivePrices, 15000);
+setInterval(loadAIBotPanel, 30000);
+setInterval(loadMarketRegimePanel, 60000);
 </script>
 {% endblock %}
