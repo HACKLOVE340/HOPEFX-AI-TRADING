@@ -130,17 +130,23 @@ SYMBOL = 'XAUUSD'
 TIMEFRAME = '1H'
 LOOKBACK_DAYS = 365
 
-# Sample data structure
+# NOTE: Replace the sample_data block below with a real data fetch, e.g.:
+#   from cache.market_data_cache import MarketDataCache
+#   cache = MarketDataCache()
+#   df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=100)
+# The placeholder uses a reproducible seed so notebook output is deterministic
+# during template preview — it must NOT be used for live trading.
+_rng = np.random.default_rng(seed=42)  # fixed seed — deterministic preview only
 sample_data = {
     'timestamp': pd.date_range(start='2023-01-01', periods=100, freq='h'),
-    'open': np.random.uniform(1940, 1960, 100),
-    'high': np.random.uniform(1950, 1970, 100),
-    'low': np.random.uniform(1930, 1950, 100),
-    'close': np.random.uniform(1940, 1960, 100),
-    'volume': np.random.randint(1000, 10000, 100)
+    'open':   _rng.uniform(1940, 1960, 100),
+    'high':   _rng.uniform(1950, 1970, 100),
+    'low':    _rng.uniform(1930, 1950, 100),
+    'close':  _rng.uniform(1940, 1960, 100),
+    'volume': _rng.integers(1000, 10000, 100).astype(float),
 }
 df = pd.DataFrame(sample_data)
-print(f"Loaded {len(df)} bars of data")
+print(f"Template preview: {len(df)} synthetic bars (replace with real data fetch)")
 df.head()
 """)
         

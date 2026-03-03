@@ -624,10 +624,16 @@ def create_signals_router():
     class GenerateSignalRequest(_BaseModel):
         symbol: str
         price: float
+        direction: str = "buy"           # "buy" | "sell"
+        confidence: float = 0.7          # 0-1
+        entry_price: Optional[float] = None
+        stop_loss: Optional[float] = None
+        take_profit: Optional[float] = None
         timeframe: str = "1h"
         regime: str = "ranging"
         session: str = "new_york"
-        strategies: Optional[List[str]] = None
+        strategies_agreeing: Optional[List[str]] = None
+        total_strategies: int = 1
         parameters: Optional[Dict[str, Any]] = None
 
     class CreateAlertRequest(_BaseModel):
@@ -658,23 +664,47 @@ def create_signals_router():
     @signals_router.post("/generate")
     async def generate_signal(req: GenerateSignalRequest):
         """
-        Generate a trading signal from the current market price using the
-        registered strategies (via RealTimeSignalService).
+        Generate a trading signal via RealTimeSignalService.
+
+        Provide symbol, current price, direction (buy/sell), confidence (0-1),
+        optional entry/SL/TP prices and list of agreeing strategies.
         """
         try:
             svc = _get_signal_service()
+            try:
+                direction = SignalDirection(req.direction.lower())
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.")
+
+            entry = req.entry_price if req.entry_price is not None else req.price
+            # Default SL/TP: 0.5% away (conservative if not provided)
+            if direction == SignalDirection.BUY:
+                sl = req.stop_loss if req.stop_loss is not None else round(entry * 0.995, 5)
+                tp = req.take_profit if req.take_profit is not None else round(entry * 1.015, 5)
+            else:
+                sl = req.stop_loss if req.stop_loss is not None else round(entry * 1.005, 5)
+                tp = req.take_profit if req.take_profit is not None else round(entry * 0.985, 5)
+
             signal = svc.generate_signal(
                 symbol=req.symbol,
-                strategies=req.strategies or [],
+                direction=direction,
+                confidence=req.confidence,
                 price=req.price,
+                entry_price=entry,
+                stop_loss=sl,
+                take_profit=tp,
                 timeframe=req.timeframe,
+                strategies_agreeing=req.strategies_agreeing or [],
+                total_strategies=req.total_strategies,
                 regime=req.regime,
                 session=req.session,
-                parameters=req.parameters or {},
+                metadata=req.parameters or {},
             )
             if signal is None:
-                return {"signal": None, "message": "No signal generated (insufficient consensus)"}
+                return {"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"}
             return {"signal": signal.to_dict()}
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Signal generation failed: {e}")
 

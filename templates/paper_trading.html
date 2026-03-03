@@ -764,29 +764,33 @@
         }
 
         function _renderFallbackChart(symbol) {
-            // Fallback: use last known price with minimal noise to show chart
-            const basePrice = state.marketPrices[symbol];
-            const bars = [];
-            for (let i = 50; i >= 0; i--) {
-                const date = new Date();
-                date.setHours(date.getHours() - i);
-                const open = basePrice * (1 + (Math.random() - 0.5) * 0.002);
-                const close = open * (1 + (Math.random() - 0.5) * 0.001);
-                const high = Math.max(open, close) * (1 + Math.random() * 0.001);
-                const low = Math.min(open, close) * (1 - Math.random() * 0.001);
-                bars.push({ x: date, open, high, low, close });
-            }
-            const trace = {
-                x: bars.map(d => d.x),
-                open: bars.map(d => d.open),
-                high: bars.map(d => d.high),
-                low: bars.map(d => d.low),
-                close: bars.map(d => d.close),
-                type: 'candlestick',
-                increasing: { line: { color: '#26a69a' } },
-                decreasing: { line: { color: '#ef5350' } }
-            };
-            _applyChartLayout(symbol + ' (offline)', [trace]);
+            // Real data unavailable — show an annotation instead of fake candles.
+            const lastPrice = state.marketPrices[symbol];
+            const priceNote = lastPrice
+                ? `Last known price: $${lastPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 5})}`
+                : 'No price data available';
+            Plotly.react('chart', [], {
+                paper_bgcolor: '#131722',
+                plot_bgcolor: '#131722',
+                font: { color: '#d1d4dc' },
+                annotations: [{
+                    text: `⚠ Chart data unavailable for ${symbol}`,
+                    xref: 'paper', yref: 'paper',
+                    x: 0.5, y: 0.6,
+                    xanchor: 'center', yanchor: 'middle',
+                    showarrow: false,
+                    font: { size: 16, color: '#f39c12' },
+                }, {
+                    text: priceNote,
+                    xref: 'paper', yref: 'paper',
+                    x: 0.5, y: 0.45,
+                    xanchor: 'center', yanchor: 'middle',
+                    showarrow: false,
+                    font: { size: 12, color: '#aaaaaa' },
+                }],
+                xaxis: { visible: false },
+                yaxis: { visible: false },
+            });
         }
 
         function _applyChartLayout(title, traces) {

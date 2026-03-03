@@ -1,0 +1,204 @@
+{
+  "project": {
+    "name": "HOPEFX-AI-TRADING",
+    "description": "Advanced AI-powered XAU/USD trading framework with machine learning, real-time analysis, multi-broker integration, and intelligent trade execution",
+    "language": "Python 3.8+",
+    "framework": "FastAPI + Jinja2",
+    "entry_points": {
+      "api": "app.py",
+      "cli": "main.py / cli.py"
+    },
+    "market_data_source": "Yahoo Finance (yfinance) — LIVE, no random prices",
+    "last_updated": "2026-03-03"
+  },
+  "api_routes": {
+    "admin": {
+      "prefix": "/admin",
+      "routes": [
+        {"method": "GET", "path": "/", "description": "Admin dashboard HTML"},
+        {"method": "GET", "path": "/strategies", "description": "Strategies page"},
+        {"method": "GET", "path": "/monitoring", "description": "Monitoring page"},
+        {"method": "GET", "path": "/settings", "description": "Settings page"},
+        {"method": "GET", "path": "/api/system-info", "description": "System health"},
+        {"method": "GET", "path": "/api/dashboard-data", "description": "Dashboard data"},
+        {"method": "GET", "path": "/api/settings", "description": "Get settings"},
+        {"method": "POST", "path": "/api/settings", "description": "Save settings"},
+        {"method": "GET", "path": "/api/system-metrics", "description": "CPU/memory/uptime"},
+        {"method": "GET", "path": "/api/widgets", "description": "Widget data"},
+        {"method": "GET", "path": "/api/activity", "description": "Activity log"},
+        {"method": "GET", "path": "/api/component-map", "description": "Component status"}
+      ]
+    },
+    "trading": {
+      "prefix": "/api/trading",
+      "routes": [
+        {"method": "POST", "path": "/strategies", "description": "Create strategy"},
+        {"method": "GET", "path": "/strategies", "description": "List strategies"},
+        {"method": "GET", "path": "/strategies/{name}", "description": "Get strategy"},
+        {"method": "POST", "path": "/strategies/{name}/start", "description": "Start strategy"},
+        {"method": "POST", "path": "/strategies/{name}/stop", "description": "Stop strategy"},
+        {"method": "DELETE", "path": "/strategies/{name}", "description": "Delete strategy"},
+        {"method": "POST", "path": "/strategies/start-all", "description": "Start all"},
+        {"method": "POST", "path": "/strategies/stop-all", "description": "Stop all"},
+        {"method": "POST", "path": "/position-size", "description": "Calculate position size"},
+        {"method": "GET", "path": "/risk-metrics", "description": "Risk metrics"},
+        {"method": "GET", "path": "/performance/summary", "description": "Performance summary"},
+        {"method": "GET", "path": "/performance/{name}", "description": "Per-strategy performance"},
+        {"method": "GET", "path": "/market-price/{symbol}", "description": "LIVE price via yfinance"},
+        {"method": "GET", "path": "/market-ohlcv/{symbol}", "description": "LIVE OHLCV via yfinance"},
+        {"method": "GET", "path": "/market-regime/{symbol}", "description": "LIVE market regime"},
+        {"method": "GET", "path": "/strategy-types", "description": "All strategy types"},
+        {"method": "GET", "path": "/strategy-brain/stats", "description": "StrategyBrain stats"},
+        {"method": "POST", "path": "/strategy-brain/analyze", "description": "Joint analysis"},
+        {"method": "GET", "path": "/component-map", "description": "Full component map"}
+      ]
+    },
+    "signals": {
+      "prefix": "/api/signals",
+      "routes": [
+        {"method": "GET", "path": "/summary", "description": "AI Bot signal summary"},
+        {"method": "GET", "path": "/active", "description": "Active signals"},
+        {"method": "GET", "path": "/history", "description": "Signal history"},
+        {"method": "POST", "path": "/generate", "description": "Generate signal"},
+        {"method": "GET", "path": "/analytics", "description": "Signal analytics"},
+        {"method": "POST", "path": "/alerts", "description": "Create alert"},
+        {"method": "GET", "path": "/alerts", "description": "List alerts"},
+        {"method": "DELETE", "path": "/alerts/{id}", "description": "Delete alert"},
+        {"method": "GET", "path": "/channels", "description": "WebSocket channels"}
+      ]
+    },
+    "monetization": {
+      "prefix": "/api/monetization",
+      "routes": [
+        {"method": "GET", "path": "/pricing", "description": "Pricing tiers"},
+        {"method": "POST", "path": "/subscribe", "description": "Subscribe"},
+        {"method": "POST", "path": "/activate-code", "description": "Activate access code"},
+        {"method": "GET", "path": "/analytics/dashboard", "description": "Revenue analytics"},
+        {"method": "POST", "path": "/affiliate/signup", "description": "Join affiliate"},
+        {"method": "GET", "path": "/marketplace/strategies", "description": "Strategy marketplace"}
+      ]
+    },
+    "system": {
+      "routes": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "GET", "path": "/status", "description": "System status"},
+        {"method": "GET", "path": "/docs", "description": "OpenAPI docs"},
+        {"method": "GET", "path": "/redoc", "description": "ReDoc docs"}
+      ]
+    }
+  },
+  "strategies": {
+    "total": 10,
+    "implementations": [
+      {"type": "ma_crossover", "class": "MovingAverageCrossover", "file": "strategies/ma_crossover.py", "category": "trend"},
+      {"type": "ema_crossover", "class": "EMAcrossoverStrategy", "file": "strategies/ema_crossover.py", "category": "trend"},
+      {"type": "mean_reversion", "class": "MeanReversionStrategy", "file": "strategies/mean_reversion.py", "category": "mean_reversion"},
+      {"type": "rsi", "class": "RSIStrategy", "file": "strategies/rsi_strategy.py", "category": "momentum"},
+      {"type": "bollinger_bands", "class": "BollingerBandsStrategy", "file": "strategies/bollinger_bands.py", "category": "mean_reversion"},
+      {"type": "macd", "class": "MACDStrategy", "file": "strategies/macd_strategy.py", "category": "momentum"},
+      {"type": "breakout", "class": "BreakoutStrategy", "file": "strategies/breakout.py", "category": "breakout"},
+      {"type": "stochastic", "class": "StochasticStrategy", "file": "strategies/stochastic.py", "category": "momentum"},
+      {"type": "smc_ict", "class": "SMCICTStrategy", "file": "strategies/smc_ict.py", "category": "smart_money"},
+      {"type": "its_8_os", "class": "ITS8OSStrategy", "file": "strategies/its_8_os.py", "category": "smart_money"}
+    ],
+    "intelligence": {
+      "class": "StrategyBrain",
+      "file": "strategies/strategy_brain.py",
+      "description": "Multi-strategy consensus with performance-weighted voting"
+    }
+  },
+  "agents": [
+    {"name": "StrategyBrain", "file": "strategies/strategy_brain.py", "api_path": "/api/trading/strategy-brain", "status": "active"},
+    {"name": "RealTimeSignalService", "file": "api/signals.py", "api_path": "/api/signals", "status": "active"},
+    {"name": "MarketRegimeDetector", "file": "analysis/market_analysis.py", "api_path": "/api/trading/market-regime/{symbol}", "status": "active"},
+    {"name": "OrderFlowAnalyzer", "file": "analysis/order_flow.py", "api_path": "/api/order-flow", "status": "active"},
+    {"name": "MarketScanner", "file": "analysis/market_scanner.py", "api_path": "/api/scanner", "status": "active"},
+    {"name": "InstitutionalFlowDetector", "file": "analysis/institutional_flow.py", "status": "active"},
+    {"name": "AdvancedOrderFlowAnalyzer", "file": "analysis/advanced_order_flow.py", "status": "active"},
+    {"name": "AlertEngine", "file": "notifications/alert_engine.py", "api_path": "/api/alerts", "status": "active"},
+    {"name": "RiskManager", "file": "risk/manager.py", "status": "active"},
+    {"name": "LSTMPricePredictor", "file": "ml/models/lstm.py", "status": "implemented"},
+    {"name": "RandomForestTradingClassifier", "file": "ml/models/random_forest.py", "status": "implemented"}
+  ],
+  "market_data": {
+    "source": "Yahoo Finance (yfinance)",
+    "cache": "MarketDataCache with TTL",
+    "symbol_map": {
+      "XAUUSD": "GC=F",
+      "EURUSD": "EURUSD=X",
+      "BTCUSD": "BTC-USD",
+      "SPY": "SPY",
+      "USDJPY": "USDJPY=X",
+      "GBPUSD": "GBPUSD=X",
+      "USDCHF": "USDCHF=X",
+      "AUDUSD": "AUDUSD=X"
+    },
+    "random_price_status": {
+      "production_ui": "ZERO — all prices from live API",
+      "paper_trading_chart_fallback": "FIXED — shows 'data unavailable' annotation",
+      "monte_carlo_simulations": "LEGITIMATE — statistical analysis by design",
+      "research_templates": "FIXED — seeded (42), documented as preview-only"
+    }
+  },
+  "brokers": [
+    {"name": "PaperTradingBroker", "file": "brokers/paper_trading.py", "type": "paper"},
+    {"name": "AlpacaBroker", "file": "brokers/alpaca.py", "type": "live", "sandbox": true},
+    {"name": "BinanceBroker", "file": "brokers/binance.py", "type": "live", "sandbox": true},
+    {"name": "OandaBroker", "file": "brokers/oanda.py", "type": "live", "sandbox": true},
+    {"name": "InteractiveBrokersBroker", "file": "brokers/interactive_brokers.py", "type": "live"},
+    {"name": "MT5Broker", "file": "brokers/mt5.py", "type": "live"},
+    {"name": "FTMOBroker", "file": "brokers/prop_firms/ftmo.py", "type": "prop"},
+    {"name": "MyForexFundsBroker", "file": "brokers/prop_firms/myforexfunds.py", "type": "prop"},
+    {"name": "The5ersBroker", "file": "brokers/prop_firms/the5ers.py", "type": "prop"},
+    {"name": "TopStepBroker", "file": "brokers/prop_firms/topstep.py", "type": "prop"}
+  ],
+  "dashboard": {
+    "admin": {
+      "url": "/admin/",
+      "panels": [
+        "SystemHealth",
+        "TradingKPIs",
+        "RiskGauges",
+        "LiveMarketPrices",
+        "AIBotSignals",
+        "MarketRegimeXAUUSD",
+        "ModuleStatusGrid",
+        "QuickActions",
+        "ActivityFeed"
+      ]
+    },
+    "paper_trading": {
+      "url": "/paper-trading",
+      "panels": [
+        "SymbolSelector",
+        "LivePriceDisplay",
+        "OrderEntry",
+        "OpenPositionsTable",
+        "AccountEquity",
+        "LiveCandlestickChart"
+      ],
+      "price_source": "LIVE via /api/trading/market-price/{symbol}"
+    }
+  },
+  "ml_models": [
+    {"name": "LSTMPricePredictor", "framework": "TensorFlow 2.15", "file": "ml/models/lstm.py"},
+    {"name": "RandomForestTradingClassifier", "framework": "scikit-learn 1.3", "file": "ml/models/random_forest.py"},
+    {"name": "EnsembleModel", "framework": "combined", "file": "ml/models/ensemble.py"},
+    {"name": "TechnicalFeatureEngineer", "features": "50+", "file": "ml/features/technical.py"}
+  ],
+  "testing": {
+    "framework": "pytest + pytest-asyncio",
+    "test_count": 701,
+    "test_modules": 30,
+    "run_command": "pytest tests/unit/"
+  },
+  "config": {
+    "encryption": "Fernet (cryptography library)",
+    "env_vars": [
+      "CONFIG_ENCRYPTION_KEY",
+      "ALPHA_VANTAGE_KEY",
+      "REDIS_URL",
+      "DATABASE_URL"
+    ]
+  }
+}
