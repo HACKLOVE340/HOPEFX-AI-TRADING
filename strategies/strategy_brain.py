@@ -181,7 +181,7 @@ class StrategyBrain:
             logger.error(f"Error in joint analysis: {e}")
             return {
                 'consensus_reached': False,
-                'reason': f'Analysis error: {str(e)}',
+                'reason': 'Analysis error',
                 'signal': None,
             }
 
@@ -339,7 +339,7 @@ class StrategyBrain:
             logger.error(f"Error calculating consensus: {e}")
             return {
                 'consensus_reached': False,
-                'reason': f'Consensus calculation error: {str(e)}',
+                'reason': 'Consensus calculation error',
                 'signal': None,
             }
 

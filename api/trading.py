@@ -627,7 +627,7 @@ async def strategy_brain_analyze(request: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"StrategyBrain analysis failed: {str(e)}"
+            detail="StrategyBrain analysis failed"
         )
 
 
