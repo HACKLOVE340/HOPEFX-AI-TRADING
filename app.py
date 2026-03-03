@@ -37,6 +37,7 @@ from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from cache import MarketDataCache
 from config import initialize_config
+from config.feature_flags import flags as feature_flags
 from database.models import Base
 
 # Setup logging
@@ -69,6 +70,14 @@ class AppState:
         self.db_session_factory = None
         self.cache = None
         self.initialized = False
+        # Experimental module instances (populated at startup when flags are on)
+        self.research_engine = None
+        self.explainer = None
+        self.transparency_engine = None
+        self.teams_manager = None
+        self.nocode_builder = None
+        self.replay_engine = None
+        self.ml_feature_engineer = None
 
 app_state = AppState()
 
@@ -239,6 +248,91 @@ async def startup_event():
 
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()
+
+        # ── Experimental modules (gated by feature flags) ────────────────────
+        if feature_flags.RESEARCH_MODULE:
+            try:
+                from research import ResearchNotebookEngine, create_research_router
+                research_engine = ResearchNotebookEngine()
+                app.include_router(create_research_router(research_engine))
+                app_state.research_engine = research_engine
+                logger.info("✓ Research Notebooks router registered")
+                log_activity("Research Notebooks router registered")
+            except Exception as e:
+                logger.warning(f"⚠ Research Notebooks router not available: {e}")
+                log_activity(f"Research Notebooks router unavailable: {e}")
+
+        if feature_flags.EXPLAINABILITY:
+            try:
+                from explainability import AIExplainer, create_explainability_router
+                explainer = AIExplainer()
+                app.include_router(create_explainability_router(explainer))
+                app_state.explainer = explainer
+                logger.info("✓ Explainability router registered")
+                log_activity("Explainability router registered")
+            except Exception as e:
+                logger.warning(f"⚠ Explainability router not available: {e}")
+                log_activity(f"Explainability router unavailable: {e}")
+
+        if feature_flags.TRANSPARENCY_REPORTS:
+            try:
+                from transparency import ExecutionTransparencyEngine, create_transparency_router
+                transparency_engine = ExecutionTransparencyEngine()
+                app.include_router(create_transparency_router(transparency_engine))
+                app_state.transparency_engine = transparency_engine
+                logger.info("✓ Transparency router registered")
+                log_activity("Transparency router registered")
+            except Exception as e:
+                logger.warning(f"⚠ Transparency router not available: {e}")
+                log_activity(f"Transparency router unavailable: {e}")
+
+        if feature_flags.TEAMS_MODULE:
+            try:
+                from teams import TeamManager, create_teams_router
+                teams_manager = TeamManager()
+                app.include_router(create_teams_router(teams_manager))
+                app_state.teams_manager = teams_manager
+                logger.info("✓ Teams router registered")
+                log_activity("Teams router registered")
+            except Exception as e:
+                logger.warning(f"⚠ Teams router not available: {e}")
+                log_activity(f"Teams router unavailable: {e}")
+
+        if feature_flags.NOCODE_BUILDER:
+            try:
+                from nocode import NoCodeStrategyBuilder, create_nocode_router
+                nocode_builder = NoCodeStrategyBuilder()
+                app.include_router(create_nocode_router(nocode_builder))
+                app_state.nocode_builder = nocode_builder
+                logger.info("✓ No-Code Builder router registered")
+                log_activity("No-Code Builder router registered")
+            except Exception as e:
+                logger.warning(f"⚠ No-Code Builder router not available: {e}")
+                log_activity(f"No-Code Builder router unavailable: {e}")
+
+        if feature_flags.REPLAY_ENGINE:
+            try:
+                from replay import ChartReplayEngine, create_replay_router
+                replay_engine = ChartReplayEngine()
+                app.include_router(create_replay_router(replay_engine))
+                app_state.replay_engine = replay_engine
+                logger.info("✓ Replay Engine router registered")
+                log_activity("Replay Engine router registered")
+            except Exception as e:
+                logger.warning(f"⚠ Replay Engine router not available: {e}")
+                log_activity(f"Replay Engine router unavailable: {e}")
+
+        if feature_flags.ML_PREDICTIONS:
+            try:
+                from ml import TechnicalFeatureEngineer, create_ml_router
+                ml_feature_engineer = TechnicalFeatureEngineer()
+                app.include_router(create_ml_router(ml_feature_engineer))
+                app_state.ml_feature_engineer = ml_feature_engineer
+                logger.info("✓ ML Predictions router registered")
+                log_activity("ML Predictions router registered")
+            except Exception as e:
+                logger.warning(f"⚠ ML Predictions router not available: {e}")
+                log_activity(f"ML Predictions router unavailable: {e}")
 
         app_state.initialized = True
         log_activity("API server ready")

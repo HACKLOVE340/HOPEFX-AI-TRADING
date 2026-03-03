@@ -21,6 +21,7 @@ from .config_manager import (
     get_config_manager,
     initialize_config,
 )
+from .feature_flags import FeatureFlags, FeatureStatus, flags
 
 __all__ = [
     'ConfigManager',
@@ -32,6 +33,9 @@ __all__ = [
     'AppConfig',
     'get_config_manager',
     'initialize_config',
+    'FeatureFlags',
+    'FeatureStatus',
+    'flags',
 ]
 
 # Module metadata
