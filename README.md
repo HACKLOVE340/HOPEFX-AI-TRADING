@@ -280,6 +280,38 @@ HOPEFX-AI-TRADING/
 └── requirements.txt     # Dependencies
 ```
 
+## 🚀 Application Entry Point (`main.py`)
+
+`main.py` hosts the `HopeFXTradingApp` class and is the central entry point for
+starting the full framework. Its initialization sequence is:
+
+1. **Config** – loads encrypted per-environment configuration (`_init_config`)
+2. **Database** – creates SQLAlchemy engine and all ORM tables (`_init_database`)
+3. **Cache** – connects to Redis with retry logic (`_init_cache`)
+4. **Notifications** – sets up alert channels (`_init_notifications`)
+5. **Risk Manager** – configures position limits and drawdown rules (`_init_risk_manager`)
+6. **Broker** – defaults to `PaperTradingBroker`; live broker wired here (`_init_broker`)
+7. **Strategies** – creates a `StrategyManager` ready to load strategies (`_init_strategies`)
+
+The following modules are loaded **conditionally** (only when the package is
+importable in the current environment):
+
+| Module | Initialized in | Components |
+|--------|---------------|------------|
+| ML/AI | `_init_ml_components` | `TechnicalFeatureEngineer`; LSTM & RF models lazy-loaded |
+| Backtesting | `_init_backtesting` | `BacktestEngine`, `ParameterOptimizer`, `DataHandler` |
+| News | `_init_news_integration` | `MultiSourceAggregator`, `ImpactPredictor`, `EconomicCalendar`, `FinancialSentimentAnalyzer` |
+| Analytics | `_init_analytics` | `PortfolioOptimizer`, `RiskAnalyzer`, `SimulationEngine` |
+| Monetization | `_init_monetization` | `PricingManager`, `SubscriptionManager`, `LicenseValidator` |
+| Payments | `_init_payments` | `WalletManager`, `PaymentGateway` |
+| Social | `_init_social_trading` | `CopyTradingEngine`, `StrategyMarketplace`, `LeaderboardManager` |
+| Mobile | `_init_mobile` | `MobileAPI` |
+| Charting | `_init_charting` | `ChartEngine`, `IndicatorLibrary` |
+
+After initialization `run()` displays a full system status, then blocks until
+interrupted (`Ctrl+C`), at which point `shutdown()` gracefully tears down all
+components.
+
 ## 💻 CLI Commands
 
 The framework includes a comprehensive CLI for easy management:

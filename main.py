@@ -20,9 +20,11 @@ Integrated Components:
 Version: 1.0.0
 """
 
+import argparse
 import sys
 import os
 import logging
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -59,8 +61,7 @@ except ImportError:
 # Import backtesting components
 try:
     from backtesting import (
-        BacktestEngine, PerformanceMetrics, ParameterOptimizer,
-        WalkForwardAnalysis, ReportGenerator, DataHandler
+        BacktestEngine, ParameterOptimizer, DataHandler
     )
     BACKTESTING_AVAILABLE = True
 except ImportError:
@@ -70,7 +71,7 @@ except ImportError:
 try:
     from news import (
         MultiSourceAggregator, ImpactPredictor, EconomicCalendar,
-        SentimentAnalyzer, FinancialSentimentAnalyzer
+        FinancialSentimentAnalyzer
     )
     NEWS_AVAILABLE = True
 except ImportError:
@@ -89,8 +90,7 @@ except ImportError:
 # Import monetization
 try:
     from monetization import (
-        PricingManager, SubscriptionManager, CommissionTracker,
-        AccessCodeGenerator, LicenseValidator
+        PricingManager, SubscriptionManager, LicenseValidator
     )
     MONETIZATION_AVAILABLE = True
 except ImportError:
@@ -99,8 +99,7 @@ except ImportError:
 # Import payments
 try:
     from payments import (
-        WalletManager, PaymentGateway, TransactionManager,
-        SecurityManager, ComplianceManager
+        WalletManager, PaymentGateway
     )
     PAYMENTS_AVAILABLE = True
 except ImportError:
@@ -119,8 +118,8 @@ except ImportError:
 # Import mobile
 try:
     from mobile import (
-        mobile_api, push_notification_manager,
-        MobileAPI, PushNotificationManager
+        mobile_api,
+        MobileAPI
     )
     MOBILE_AVAILABLE = True
 except ImportError:
@@ -720,7 +719,6 @@ class HopeFXTradingApp:
             logger.info("=" * 70)
 
             # Keep application running
-            import time
             while True:
                 time.sleep(1)
 
@@ -888,8 +886,6 @@ class HopeFXTradingApp:
 
 def main():
     """Main entry point"""
-    import argparse
-
     parser = argparse.ArgumentParser(
         description='HOPEFX AI Trading Framework',
         formatter_class=argparse.RawDescriptionHelpFormatter,
