@@ -1,0 +1,155 @@
+{
+  "document": {
+    "title": "WORLD MONITOR INTEGRATION — HOPEFX AI Trading",
+    "version": "1.2.0",
+    "last_updated": "2026-03-03",
+    "description": "Complete integration map of the World Monitor geopolitical intelligence system within the HOPEFX AI Trading framework. This is the machine-readable companion to docs/WORLD_MONITOR_INTEGRATION.md."
+  },
+  "world_monitor": {
+    "source": "https://worldmonitor.app/",
+    "github": "https://github.com/koala73/worldmonitor",
+    "description": "Real-time geopolitical intelligence platform covering conflicts, sanctions, country intel, outages, satellite data, and news.",
+    "gold_relevance": "Gold (XAU/USD) is a safe-haven asset — it rises during geopolitical crises, sanctions, conflicts, and currency instability."
+  },
+  "integration_points": {
+    "python_module": "news/",
+    "primary_class": "news.geopolitical_risk.GeopoliticalRiskProvider",
+    "api_client_class": "news.geopolitical_risk.WorldMonitorAPIClient",
+    "convenience_functions": [
+      "news.get_gold_geopolitical_signal()",
+      "news.get_gold_signal_from_api(config)",
+      "news.get_geopolitical_provider(config)",
+      "news.get_api_client(config)"
+    ],
+    "rest_api": {
+      "prefix": "/api/news",
+      "tag": "News & Geopolitical Intelligence",
+      "router_factory": "news.create_news_router()",
+      "registered_in": "app.py startup"
+    }
+  },
+  "rest_endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/news/geopolitical/signal",
+      "description": "Gold trading signal derived from live geopolitical intelligence",
+      "response_fields": ["direction", "confidence", "risk_score", "gold_outlook", "reasoning"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/news/geopolitical/events",
+      "query_params": [{"name": "force_refresh", "type": "bool", "default": false}],
+      "description": "Current geopolitical events list with severity and gold impact",
+      "response_fields": ["events", "count"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/news/geopolitical/assessment",
+      "description": "Full risk assessment: global score, outlook, regions, country risks, recommendations",
+      "response_fields": [
+        "global_risk_score", "gold_outlook", "high_risk_regions",
+        "country_risks", "trading_recommendations", "timestamp"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/news/geopolitical/world-monitor",
+      "description": "Curated World Monitor dashboard deep-links for XAU/USD trading",
+      "response_fields": ["gold_relevant_views", "base_url"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/news/economic/upcoming",
+      "query_params": [{"name": "hours_ahead", "type": "int", "default": 24, "min": 1, "max": 168}],
+      "description": "Upcoming high-impact economic events within N hours",
+      "response_fields": ["events", "count", "hours_ahead"]
+    },
+    {
+      "method": "GET",
+      "path": "/api/news/sentiment/{symbol}",
+      "path_params": [{"name": "symbol", "examples": ["XAUUSD", "BTCUSD", "EURUSD"]}],
+      "description": "Market sentiment score for a trading symbol (-1.0 bearish → +1.0 bullish)",
+      "response_fields": ["symbol", "sentiment_score", "label"]
+    }
+  ],
+  "data_layers": {
+    "conflicts": "Active military conflicts and war zones",
+    "country_intel": "Country-level political risk and instability scores",
+    "military_theater": "Military theater of operations analysis",
+    "news_intel": "Geopolitical news with topic filtering",
+    "outages": "Infrastructure and power grid disruptions",
+    "satellite_fires": "Satellite-detected fires (conflict indicators)"
+  },
+  "gold_risk_factors": {
+    "CONFLICT": {"impact": "bullish", "description": "Military conflicts drive safe-haven demand"},
+    "SANCTIONS": {"impact": "bullish", "description": "Sanctions disrupt supply chains, increase uncertainty"},
+    "POLITICAL_UNREST": {"impact": "bullish", "description": "Political instability increases safe-haven buying"},
+    "NATURAL_DISASTER": {"impact": "neutral_to_bullish", "description": "Major disasters can trigger risk-off moves"},
+    "INFRASTRUCTURE_OUTAGE": {"impact": "neutral", "description": "Regional impact, limited gold correlation"},
+    "CYBER_ATTACK": {"impact": "bullish", "description": "State-level cyber attacks increase geopolitical tension"},
+    "ECONOMIC_CRISIS": {"impact": "very_bullish", "description": "Currency/debt crises are strongest gold drivers"}
+  },
+  "self_hosting": {
+    "supported": true,
+    "class": "news.geopolitical_risk.WorldMonitorSelfHostConfig",
+    "generate_setup_script": "news.create_self_hosted_setup()",
+    "default_url": "http://localhost:5173"
+  },
+  "data_pipeline": {
+    "flow": [
+      {"step": 1, "component": "WorldMonitorAPIClient / GeopoliticalRiskProvider", "action": "Fetch live events from World Monitor API or built-in risk model"},
+      {"step": 2, "component": "GeopoliticalRiskProvider._assess_gold_impact()", "action": "Classify each event's gold impact (BULLISH / BEARISH / NEUTRAL)"},
+      {"step": 3, "component": "GeopoliticalRiskProvider._calculate_global_risk()", "action": "Aggregate individual event scores into a global risk score (0-100)"},
+      {"step": 4, "component": "GeopoliticalRiskProvider._determine_gold_outlook()", "action": "Map global risk to gold outlook (STRONGLY_BULLISH through STRONGLY_BEARISH)"},
+      {"step": 5, "component": "GeopoliticalRiskProvider.get_gold_trading_signal()", "action": "Emit BUY / SELL / HOLD signal with confidence and reasoning"},
+      {"step": 6, "component": "GET /api/news/geopolitical/signal", "action": "Serve signal to dashboard, strategy engine, and AI bot"},
+      {"step": 7, "component": "StrategyBrain / RealTimeSignalService", "action": "Incorporate geopolitical signal as one factor in consensus signal generation"}
+    ]
+  },
+  "modules": {
+    "news/geopolitical_risk.py": {
+      "classes": [
+        "GeopoliticalEventType", "RiskSeverity", "GoldImpact",
+        "GeopoliticalEvent", "CountryRisk", "GeopoliticalRiskAssessment",
+        "GeopoliticalRiskProvider", "WorldMonitorIntegration",
+        "WorldMonitorAPIClient", "WorldMonitorSelfHostConfig", "CustomDataLayerConfig"
+      ],
+      "line_count": 1740
+    },
+    "news/__init__.py": {
+      "exports": [
+        "create_news_router", "GeopoliticalRiskProvider", "WorldMonitorAPIClient",
+        "WorldMonitorIntegration", "get_gold_geopolitical_signal",
+        "get_gold_signal_from_api", "EconomicCalendar", "FinancialSentimentAnalyzer"
+      ]
+    },
+    "news/sentiment.py": {
+      "classes": ["SentimentAnalyzer", "FinancialSentimentAnalyzer", "SentimentScore"]
+    },
+    "news/economic_calendar.py": {
+      "classes": ["EconomicCalendar", "EconomicEvent", "EventImportance"]
+    },
+    "news/impact_predictor.py": {
+      "classes": ["ImpactPredictor", "ImpactLevel", "MarketImpact"]
+    },
+    "news/providers.py": {
+      "classes": [
+        "NewsProvider", "NewsAPIProvider", "AlphaVantageNewsProvider",
+        "RSSFeedProvider", "MultiSourceAggregator"
+      ]
+    }
+  },
+  "configuration": {
+    "env_vars": [
+      {"name": "WORLD_MONITOR_API_URL", "default": "https://worldmonitor.app", "description": "World Monitor API base URL"},
+      {"name": "WORLD_MONITOR_API_KEY", "default": null, "description": "API key if required by self-hosted instance"},
+      {"name": "NEWS_API_KEY", "default": null, "description": "NewsAPI.org API key for news providers"},
+      {"name": "ALPHA_VANTAGE_KEY", "default": null, "description": "Alpha Vantage key for news + market data"}
+    ]
+  },
+  "existing_docs": {
+    "integration_guide": "docs/WORLD_MONITOR_INTEGRATION.md",
+    "project_wordmap": "WORDMAP.md",
+    "project_wordmap_json": "WORDMAP.json"
+  }
+}

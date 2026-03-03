@@ -257,6 +257,17 @@ async def startup_event():
             logger.warning(f"⚠ Signals router not available: {e}")
             log_activity(f"Signals router unavailable: {e}")
 
+        try:
+            from news import create_news_router
+            news_router = create_news_router()
+            if news_router is not None:
+                app.include_router(news_router)
+                logger.info("✓ News & Geopolitical Intelligence router registered")
+                log_activity("News router registered")
+        except Exception as e:
+            logger.warning(f"⚠ News router not available: {e}")
+            log_activity(f"News router unavailable: {e}")
+
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()
 

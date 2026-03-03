@@ -657,3 +657,159 @@ class TestNewsAggregator:
 
         unique = aggregator._deduplicate(articles)
         assert len(unique) == 2
+
+
+
+# ============================================================
+# WORLD MONITOR INTEGRATION TESTS (news router)
+# ============================================================
+
+@pytest.mark.unit
+class TestCreateNewsRouter:
+    """Tests for the create_news_router() factory."""
+
+    def test_create_news_router_returns_router(self):
+        """create_news_router() returns a non-None FastAPI router."""
+        from news import create_news_router
+        router = create_news_router()
+        assert router is not None
+
+    def test_news_router_has_all_endpoints(self):
+        """Router exposes all 6 expected paths."""
+        from news import create_news_router
+        router = create_news_router()
+        paths = [route.path for route in router.routes]
+        expected_paths = [
+            "/api/news/geopolitical/signal",
+            "/api/news/geopolitical/events",
+            "/api/news/geopolitical/assessment",
+            "/api/news/geopolitical/world-monitor",
+            "/api/news/economic/upcoming",
+        ]
+        for path in expected_paths:
+            assert path in paths, f"Missing route: {path}"
+
+    def test_news_router_has_sentiment_endpoint(self):
+        """Router exposes sentiment/{symbol} endpoint."""
+        from news import create_news_router
+        router = create_news_router()
+        paths = [route.path for route in router.routes]
+        assert any("{symbol}" in p for p in paths), "Missing sentiment/{symbol} route"
+
+    def test_news_router_prefix(self):
+        """Router prefix is /api/news."""
+        from news import create_news_router
+        router = create_news_router()
+        assert router.prefix == "/api/news"
+
+
+@pytest.mark.unit
+class TestNewsModuleSingleton:
+    """Tests for the _get_risk_provider singleton."""
+
+    def setup_method(self):
+        """Reset the singleton before each test to ensure isolation."""
+        import news as news_module
+        news_module._risk_provider = None
+
+    def teardown_method(self):
+        """Reset the singleton after each test to avoid state leakage."""
+        import news as news_module
+        news_module._risk_provider = None
+
+    def test_singleton_returns_same_instance(self):
+        """_get_risk_provider returns the same object on repeated calls."""
+        from news import _get_risk_provider
+        p1 = _get_risk_provider()
+        p2 = _get_risk_provider()
+        assert p1 is p2
+
+    def test_singleton_is_geopolitical_risk_provider(self):
+        """Singleton is an instance of GeopoliticalRiskProvider."""
+        from news import _get_risk_provider, GeopoliticalRiskProvider
+        provider = _get_risk_provider()
+        assert isinstance(provider, GeopoliticalRiskProvider)
+
+
+@pytest.mark.unit
+class TestWorldMonitorIntegration:
+    """Tests for WorldMonitorIntegration class."""
+
+    def test_instantiation(self):
+        """WorldMonitorIntegration can be instantiated."""
+        from news import WorldMonitorIntegration
+        wm = WorldMonitorIntegration()
+        assert wm is not None
+
+    def test_get_gold_relevant_views_returns_dict(self):
+        """get_gold_relevant_views returns a non-empty dictionary."""
+        from news import WorldMonitorIntegration
+        wm = WorldMonitorIntegration()
+        views = wm.get_gold_relevant_views()
+        assert isinstance(views, dict)
+        assert len(views) > 0
+
+    def test_gold_relevant_views_are_urls(self):
+        """All gold relevant view values start with http."""
+        from news import WorldMonitorIntegration
+        wm = WorldMonitorIntegration()
+        views = wm.get_gold_relevant_views()
+        for key, url in views.items():
+            assert url.startswith("http"), f"View '{key}' URL is not an http URL: {url}"
+
+
+@pytest.mark.unit
+class TestGeopoliticalRiskProvider:
+    """Tests for GeopoliticalRiskProvider service."""
+
+    def test_instantiation(self):
+        """GeopoliticalRiskProvider can be instantiated with no args."""
+        from news import GeopoliticalRiskProvider
+        provider = GeopoliticalRiskProvider()
+        assert provider is not None
+
+    def test_get_current_events_returns_list(self):
+        """get_current_events returns a list."""
+        from news import GeopoliticalRiskProvider
+        provider = GeopoliticalRiskProvider()
+        events = provider.get_current_events()
+        assert isinstance(events, list)
+
+    def test_get_risk_assessment_returns_assessment(self):
+        """get_risk_assessment returns a GeopoliticalRiskAssessment."""
+        from news import GeopoliticalRiskProvider, GeopoliticalRiskAssessment
+        provider = GeopoliticalRiskProvider()
+        assessment = provider.get_risk_assessment()
+        assert isinstance(assessment, GeopoliticalRiskAssessment)
+
+    def test_risk_assessment_has_required_fields(self):
+        """Risk assessment has all required fields."""
+        from news import GeopoliticalRiskProvider
+        provider = GeopoliticalRiskProvider()
+        assessment = provider.get_risk_assessment()
+        data = assessment.to_dict()
+        for field in ["global_risk_score", "gold_outlook", "trading_recommendations"]:
+            assert field in data, f"Missing field: {field}"
+
+    def test_get_gold_trading_signal_structure(self):
+        """get_gold_trading_signal returns expected keys."""
+        from news import GeopoliticalRiskProvider
+        provider = GeopoliticalRiskProvider()
+        signal = provider.get_gold_trading_signal()
+        assert isinstance(signal, dict)
+        assert "direction" in signal
+        assert "confidence" in signal
+
+    def test_gold_trading_signal_direction_valid(self):
+        """Signal direction is one of the normalized uppercase values: BUY, SELL, HOLD."""
+        from news import GeopoliticalRiskProvider
+        provider = GeopoliticalRiskProvider()
+        signal = provider.get_gold_trading_signal()
+        # The provider always returns uppercase; normalize defensively just in case.
+        direction = signal["direction"].upper()
+        assert direction in ("BUY", "SELL", "HOLD")
+
+    def test_create_news_router_in_module_all(self):
+        """create_news_router is exported in news.__all__."""
+        import news
+        assert "create_news_router" in news.__all__
