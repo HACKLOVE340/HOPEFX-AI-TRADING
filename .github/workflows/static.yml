@@ -33,11 +33,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Check docs directory exists
+        run: |
+          if [ ! -d "docs" ]; then
+            echo "ERROR: docs/ directory not found. Please create a docs/ directory with static content before deploying to GitHub Pages."
+            exit 1
+          fi
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.'
+          # Only upload the docs directory, not the entire repo
+          path: './docs'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
