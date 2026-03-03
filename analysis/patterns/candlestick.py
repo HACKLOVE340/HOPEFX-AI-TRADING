@@ -1,5 +1,4 @@
-"""
-Candlestick Pattern Detection
+"""Candlestick Pattern Detection
 
 Identifies common single, dual, and multi-candlestick reversal and
 continuation patterns in OHLCV price data.
@@ -7,6 +6,7 @@ continuation patterns in OHLCV price data.
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 try:
@@ -23,21 +23,24 @@ logger = logging.getLogger(__name__)
 class CandlestickPattern:
     """Detected candlestick pattern."""
 
-    name: str
-    pattern_type: str          # 'bullish', 'bearish', 'neutral'
-    start_index: int
-    end_index: int
+    pattern_name: str          # Name of the pattern (e.g. 'Hammer', 'Doji')
+    pattern_type: str          # 'reversal', 'continuation', 'indecision'
+    direction: str             # 'bullish', 'bearish', 'neutral'
     confidence: float          # 0.0 – 1.0
+    index: int                 # Bar index where the pattern completes
+    candles_count: int         # Number of candles in pattern (1, 2, or 3)
     description: str = ""
 
     def to_dict(self) -> Dict:
         return {
-            "name": self.name,
+            "pattern_name": self.pattern_name,
             "pattern_type": self.pattern_type,
-            "start_index": self.start_index,
-            "end_index": self.end_index,
+            "direction": self.direction,
             "confidence": self.confidence,
+            "index": self.index,
+            "candles_count": self.candles_count,
             "description": self.description,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 
@@ -101,30 +104,42 @@ def _detect_hammer(
     lows: List[float],
     closes: List[float],
     i: int,
+    doji_threshold: float = 0.05,
+    wick_ratio: float = 2.0,
 ) -> Optional[CandlestickPattern]:
-    """Hammer / Hanging Man detection at index *i*."""
+    """Hammer / Hanging Man detection at index *i*.
+
+    Args:
+        doji_threshold: Maximum body/range ratio to still be considered a doji
+                        (candles at or below this ratio are excluded as dojis).
+        wick_ratio: Minimum ratio of lower shadow to body for a valid hammer.
+    """
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
         return None
 
+    # Must not be a doji
+    if body / total <= doji_threshold:
+        return None
+
     lower = _lower_shadow(opens[i], lows[i], closes[i])
     upper = _upper_shadow(opens[i], highs[i], closes[i])
 
-    long_lower = lower >= 2 * body
-    small_upper = upper <= body * 0.3
-    decent_body = 0.1 < body / total < 0.5
+    long_lower = lower >= wick_ratio * body
+    small_upper = upper <= body * 0.5
 
-    if not (long_lower and small_upper and decent_body):
+    if not (long_lower and small_upper):
         return None
 
-    pattern_type = "bullish" if _is_bullish(opens[i], closes[i]) else "neutral"
+    direction = "bullish" if _is_bullish(opens[i], closes[i]) else "neutral"
     return CandlestickPattern(
-        name="Hammer",
-        pattern_type=pattern_type,
-        start_index=i,
-        end_index=i,
+        pattern_name="Hammer",
+        pattern_type="reversal",
+        direction=direction,
         confidence=0.65,
+        index=i,
+        candles_count=1,
         description="Long lower shadow with small body near top of range",
     )
 
@@ -135,29 +150,41 @@ def _detect_shooting_star(
     lows: List[float],
     closes: List[float],
     i: int,
+    doji_threshold: float = 0.05,
+    wick_ratio: float = 2.0,
 ) -> Optional[CandlestickPattern]:
-    """Shooting Star detection at index *i*."""
+    """Shooting Star detection at index *i*.
+
+    Args:
+        doji_threshold: Maximum body/range ratio to still be considered a doji
+                        (candles at or below this ratio are excluded as dojis).
+        wick_ratio: Minimum ratio of upper shadow to body for a valid shooting star.
+    """
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
         return None
 
+    # Must not be a doji
+    if body / total <= doji_threshold:
+        return None
+
     upper = _upper_shadow(opens[i], highs[i], closes[i])
     lower = _lower_shadow(opens[i], lows[i], closes[i])
 
-    long_upper = upper >= 2 * body
-    small_lower = lower <= body * 0.3
-    decent_body = 0.1 < body / total < 0.5
+    long_upper = upper >= wick_ratio * body
+    small_lower = lower <= body * 0.5
 
-    if not (long_upper and small_lower and decent_body):
+    if not (long_upper and small_lower):
         return None
 
     return CandlestickPattern(
-        name="Shooting Star",
-        pattern_type="bearish",
-        start_index=i,
-        end_index=i,
+        pattern_name="Shooting Star",
+        pattern_type="reversal",
+        direction="bearish",
         confidence=0.65,
+        index=i,
+        candles_count=1,
         description="Long upper shadow with small body near bottom of range",
     )
 
@@ -168,32 +195,41 @@ def _detect_marubozu(
     lows: List[float],
     closes: List[float],
     i: int,
+    marubozu_threshold: float = 0.05,
 ) -> Optional[CandlestickPattern]:
-    """Marubozu (almost no shadows) detection at index *i*."""
+    """Marubozu (almost no shadows) detection at index *i*.
+
+    Args:
+        marubozu_threshold: Maximum allowed shadow fraction; the body must
+                            occupy at least (1 - marubozu_threshold) of the
+                            total candle range.
+    """
     body = _candle_body(opens[i], closes[i])
     total = _candle_range(highs[i], lows[i])
     if total == 0:
         return None
 
     ratio = body / total
-    if ratio < 0.9:
+    if ratio < (1.0 - marubozu_threshold):
         return None
 
     if _is_bullish(opens[i], closes[i]):
         return CandlestickPattern(
-            name="Bullish Marubozu",
-            pattern_type="bullish",
-            start_index=i,
-            end_index=i,
+            pattern_name="Bullish Marubozu",
+            pattern_type="continuation",
+            direction="bullish",
             confidence=0.75,
+            index=i,
+            candles_count=1,
             description="Full-range bullish candle with minimal shadows",
         )
     return CandlestickPattern(
-        name="Bearish Marubozu",
-        pattern_type="bearish",
-        start_index=i,
-        end_index=i,
+        pattern_name="Bearish Marubozu",
+        pattern_type="continuation",
+        direction="bearish",
         confidence=0.75,
+        index=i,
+        candles_count=1,
         description="Full-range bearish candle with minimal shadows",
     )
 
@@ -204,9 +240,16 @@ def _detect_doji_pattern(
     lows: List[float],
     closes: List[float],
     i: int,
+    doji_threshold: float = 0.05,
 ) -> Optional[CandlestickPattern]:
-    """Doji detection at index *i*."""
-    if not _is_doji(opens[i], closes[i], highs[i], lows[i]):
+    """Doji detection at index *i*.
+
+    Args:
+        doji_threshold: Maximum body/range ratio for a candle to be classified
+                        as a doji (body must be smaller than this fraction of
+                        the total high-to-low range).
+    """
+    if not _is_doji(opens[i], closes[i], highs[i], lows[i], doji_threshold):
         return None
 
     upper = _upper_shadow(opens[i], highs[i], closes[i])
@@ -222,31 +265,34 @@ def _detect_doji_pattern(
     # Dragonfly Doji: almost all range in lower shadow
     if lower_ratio > 0.8 and upper_ratio < 0.1:
         return CandlestickPattern(
-            name="Dragonfly Doji",
-            pattern_type="bullish",
-            start_index=i,
-            end_index=i,
+            pattern_name="Dragonfly Doji",
+            pattern_type="reversal",
+            direction="bullish",
             confidence=0.70,
+            index=i,
+            candles_count=1,
             description="Doji with very long lower shadow (bullish reversal signal)",
         )
 
     # Gravestone Doji: almost all range in upper shadow
     if upper_ratio > 0.8 and lower_ratio < 0.1:
         return CandlestickPattern(
-            name="Gravestone Doji",
-            pattern_type="bearish",
-            start_index=i,
-            end_index=i,
+            pattern_name="Gravestone Doji",
+            pattern_type="reversal",
+            direction="bearish",
             confidence=0.70,
+            index=i,
+            candles_count=1,
             description="Doji with very long upper shadow (bearish reversal signal)",
         )
 
     return CandlestickPattern(
-        name="Doji",
-        pattern_type="neutral",
-        start_index=i,
-        end_index=i,
+        pattern_name="Doji",
+        pattern_type="indecision",
+        direction="neutral",
         confidence=0.55,
+        index=i,
+        candles_count=1,
         description="Very small body indicating indecision",
     )
 
@@ -281,11 +327,12 @@ def _detect_engulfing(
     )
     if is_bullish_engulfing:
         return CandlestickPattern(
-            name="Bullish Engulfing",
-            pattern_type="bullish",
-            start_index=i - 1,
-            end_index=i,
+            pattern_name="Bullish Engulfing",
+            pattern_type="reversal",
+            direction="bullish",
             confidence=0.75,
+            index=i,
+            candles_count=2,
             description="Current bullish candle fully engulfs the previous bearish candle",
         )
 
@@ -300,11 +347,12 @@ def _detect_engulfing(
     )
     if is_bearish_engulfing:
         return CandlestickPattern(
-            name="Bearish Engulfing",
-            pattern_type="bearish",
-            start_index=i - 1,
-            end_index=i,
+            pattern_name="Bearish Engulfing",
+            pattern_type="reversal",
+            direction="bearish",
             confidence=0.75,
+            index=i,
+            candles_count=2,
             description="Current bearish candle fully engulfs the previous bullish candle",
         )
 
@@ -339,20 +387,22 @@ def _detect_harami(
     prev_bearish = _is_bearish(opens[i - 1], closes[i - 1])
     if prev_bearish:
         return CandlestickPattern(
-            name="Bullish Harami",
-            pattern_type="bullish",
-            start_index=i - 1,
-            end_index=i,
+            pattern_name="Bullish Harami",
+            pattern_type="reversal",
+            direction="bullish",
             confidence=0.60,
+            index=i,
+            candles_count=2,
             description="Small bullish candle contained within previous bearish candle",
         )
 
     return CandlestickPattern(
-        name="Bearish Harami",
-        pattern_type="bearish",
-        start_index=i - 1,
-        end_index=i,
+        pattern_name="Bearish Harami",
+        pattern_type="reversal",
+        direction="bearish",
         confidence=0.60,
+        index=i,
+        candles_count=2,
         description="Small bearish candle contained within previous bullish candle",
     )
 
@@ -377,11 +427,12 @@ def _detect_piercing_dark_cloud(
 
         if opens_below and closes_above_mid and closes_below_prev_open:
             return CandlestickPattern(
-                name="Piercing Line",
-                pattern_type="bullish",
-                start_index=i - 1,
-                end_index=i,
+                pattern_name="Piercing Line",
+                pattern_type="reversal",
+                direction="bullish",
                 confidence=0.65,
+                index=i,
+                candles_count=2,
                 description="Bullish candle closes above midpoint of previous bearish candle",
             )
 
@@ -396,11 +447,12 @@ def _detect_piercing_dark_cloud(
 
         if opens_above and closes_below_mid and closes_above_prev_open:
             return CandlestickPattern(
-                name="Dark Cloud Cover",
-                pattern_type="bearish",
-                start_index=i - 1,
-                end_index=i,
+                pattern_name="Dark Cloud Cover",
+                pattern_type="reversal",
+                direction="bearish",
                 confidence=0.65,
+                index=i,
+                candles_count=2,
                 description="Bearish candle closes below midpoint of previous bullish candle",
             )
 
@@ -443,21 +495,23 @@ def _detect_three_soldiers_crows(
 
     if all_bullish and rising:
         return CandlestickPattern(
-            name="Three White Soldiers",
-            pattern_type="bullish",
-            start_index=i - 2,
-            end_index=i,
+            pattern_name="Three White Soldiers",
+            pattern_type="continuation",
+            direction="bullish",
             confidence=0.80,
+            index=i,
+            candles_count=3,
             description="Three consecutive bullish candles with rising closes",
         )
 
     if all_bearish and falling:
         return CandlestickPattern(
-            name="Three Black Crows",
-            pattern_type="bearish",
-            start_index=i - 2,
-            end_index=i,
+            pattern_name="Three Black Crows",
+            pattern_type="continuation",
+            direction="bearish",
             confidence=0.80,
+            index=i,
+            candles_count=3,
             description="Three consecutive bearish candles with falling closes",
         )
 
@@ -492,11 +546,12 @@ def _detect_morning_evening_star(
 
     if first_bearish and last_bullish and last_close_deep:
         return CandlestickPattern(
-            name="Morning Star",
-            pattern_type="bullish",
-            start_index=i - 2,
-            end_index=i,
+            pattern_name="Morning Star",
+            pattern_type="reversal",
+            direction="bullish",
             confidence=0.80,
+            index=i,
+            candles_count=3,
             description="Bearish candle, indecision candle, then strong bullish candle",
         )
 
@@ -506,11 +561,12 @@ def _detect_morning_evening_star(
 
     if first_bullish and last_bearish and last_close_high:
         return CandlestickPattern(
-            name="Evening Star",
-            pattern_type="bearish",
-            start_index=i - 2,
-            end_index=i,
+            pattern_name="Evening Star",
+            pattern_type="reversal",
+            direction="bearish",
             confidence=0.80,
+            index=i,
+            candles_count=3,
             description="Bullish candle, indecision candle, then strong bearish candle",
         )
 
@@ -520,24 +576,6 @@ def _detect_morning_evening_star(
 # ---------------------------------------------------------------------------
 # Pattern detector
 # ---------------------------------------------------------------------------
-
-_SINGLE_DETECTORS = [
-    _detect_doji_pattern,
-    _detect_hammer,
-    _detect_shooting_star,
-    _detect_marubozu,
-]
-
-_TWO_CANDLE_DETECTORS = [
-    _detect_engulfing,
-    _detect_harami,
-    _detect_piercing_dark_cloud,
-]
-
-_THREE_CANDLE_DETECTORS = [
-    _detect_three_soldiers_crows,
-    _detect_morning_evening_star,
-]
 
 
 class CandlestickPatternDetector:
@@ -549,10 +587,217 @@ class CandlestickPatternDetector:
     Usage::
 
         detector = CandlestickPatternDetector()
-        patterns = detector.detect(opens, highs, lows, closes)
+        patterns = detector.detect_patterns(df)
         for p in patterns:
-            print(p.name, p.pattern_type, p.confidence)
+            print(p.pattern_name, p.direction, p.confidence)
     """
+
+    def __init__(self, config: Optional[Dict] = None):
+        """
+        Initialise detector.
+
+        Args:
+            config: Optional dict with keys doji_threshold, wick_ratio,
+                    marubozu_threshold.
+        """
+        cfg = config or {}
+        self.doji_threshold: float = float(cfg.get("doji_threshold", 0.05))
+        self.wick_ratio: float = float(cfg.get("wick_ratio", 2.0))
+        self.marubozu_threshold: float = float(cfg.get("marubozu_threshold", 0.05))
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_ohlc(self, df: "pd.DataFrame"):
+        """Extract OHLC lists from DataFrame; return None tuple on failure."""
+        if not HAS_PANDAS:
+            logger.warning(
+                "pandas is not available; DataFrame input cannot be processed."
+            )
+            return None, None, None, None
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return None, None, None, None
+        cols = {c.lower(): c for c in df.columns}
+        required = {"open", "high", "low", "close"}
+        if not required.issubset(cols):
+            return None, None, None, None
+        return (
+            df[cols["open"]].tolist(),
+            df[cols["high"]].tolist(),
+            df[cols["low"]].tolist(),
+            df[cols["close"]].tolist(),
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def detect_patterns(
+        self,
+        df: "pd.DataFrame",
+        min_confidence: float = 0.5,
+    ) -> List[CandlestickPattern]:
+        """
+        Detect all candlestick patterns in the given DataFrame.
+
+        Args:
+            df: OHLCV DataFrame with open, high, low, close columns.
+            min_confidence: Minimum confidence threshold for returned patterns.
+
+        Returns:
+            List of CandlestickPattern objects.
+        """
+        if not HAS_PANDAS:
+            logger.warning(
+                "pandas is not available; detect_patterns cannot process "
+                "DataFrame input."
+            )
+            return []
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return []
+        opens, highs, lows, closes = self._get_ohlc(df)
+        if opens is None:
+            return []
+
+        patterns: List[CandlestickPattern] = []
+        patterns.extend(self.detect_single_candle_patterns(df))
+        patterns.extend(self.detect_two_candle_patterns(df))
+        patterns.extend(self.detect_three_candle_patterns(df))
+
+        return [p for p in patterns if p.confidence >= min_confidence]
+
+    def detect_single_candle_patterns(
+        self, df: "pd.DataFrame"
+    ) -> List[CandlestickPattern]:
+        """
+        Detect single-candle patterns (Doji, Hammer, Shooting Star, Marubozu).
+
+        Args:
+            df: OHLCV DataFrame.
+
+        Returns:
+            List of detected CandlestickPattern objects.
+        """
+        opens, highs, lows, closes = self._get_ohlc(df)
+        if opens is None:
+            return []
+
+        patterns: List[CandlestickPattern] = []
+        n = len(closes)
+
+        for i in range(n):
+            p = _detect_doji_pattern(
+                opens, highs, lows, closes, i, self.doji_threshold
+            )
+            if p:
+                patterns.append(p)
+                continue
+
+            p = _detect_hammer(
+                opens, highs, lows, closes, i,
+                self.doji_threshold, self.wick_ratio,
+            )
+            if p:
+                patterns.append(p)
+                continue
+
+            p = _detect_shooting_star(
+                opens, highs, lows, closes, i,
+                self.doji_threshold, self.wick_ratio,
+            )
+            if p:
+                patterns.append(p)
+                continue
+
+            p = _detect_marubozu(
+                opens, highs, lows, closes, i, self.marubozu_threshold
+            )
+            if p:
+                patterns.append(p)
+
+        return patterns
+
+    def detect_two_candle_patterns(
+        self, df: "pd.DataFrame"
+    ) -> List[CandlestickPattern]:
+        """
+        Detect two-candle patterns (Engulfing, Harami, Piercing/Dark Cloud).
+
+        Args:
+            df: OHLCV DataFrame.
+
+        Returns:
+            List of detected CandlestickPattern objects.
+        """
+        opens, highs, lows, closes = self._get_ohlc(df)
+        if opens is None:
+            return []
+
+        patterns: List[CandlestickPattern] = []
+        n = len(closes)
+
+        for i in range(1, n):
+            for detector in (_detect_engulfing, _detect_harami,
+                             _detect_piercing_dark_cloud):
+                p = detector(opens, closes, i)
+                if p:
+                    patterns.append(p)
+                    break
+
+        return patterns
+
+    def detect_three_candle_patterns(
+        self, df: "pd.DataFrame"
+    ) -> List[CandlestickPattern]:
+        """
+        Detect three-candle patterns (Three Soldiers/Crows, Morning/Evening Star).
+
+        Args:
+            df: OHLCV DataFrame.
+
+        Returns:
+            List of detected CandlestickPattern objects.
+        """
+        opens, highs, lows, closes = self._get_ohlc(df)
+        if opens is None:
+            return []
+
+        patterns: List[CandlestickPattern] = []
+        n = len(closes)
+
+        for i in range(2, n):
+            for detector in (_detect_three_soldiers_crows,
+                             _detect_morning_evening_star):
+                p = detector(opens, closes, i)
+                if p:
+                    patterns.append(p)
+                    break
+
+        return patterns
+
+    def get_pattern_at_index(
+        self,
+        patterns: List[CandlestickPattern],
+        index: int,
+    ) -> List[CandlestickPattern]:
+        """
+        Return patterns at a specific bar index, sorted by confidence descending.
+
+        Args:
+            patterns: List of CandlestickPattern objects to filter.
+            index: Bar index to filter by.
+
+        Returns:
+            Filtered and sorted list of CandlestickPattern objects.
+        """
+        result = [p for p in patterns if p.index == index]
+        result.sort(key=lambda p: p.confidence, reverse=True)
+        return result
+
+    # ------------------------------------------------------------------
+    # Legacy helpers kept for backward compatibility
+    # ------------------------------------------------------------------
 
     def detect(
         self,
@@ -580,25 +825,47 @@ class CandlestickPatternDetector:
         patterns: List[CandlestickPattern] = []
 
         for i in range(n):
-            for detector in _SINGLE_DETECTORS:
-                p = detector(opens, highs, lows, closes, i)
+            p = _detect_doji_pattern(
+                opens, highs, lows, closes, i, self.doji_threshold
+            )
+            if p:
+                patterns.append(p)
+                continue
+            p = _detect_hammer(
+                opens, highs, lows, closes, i,
+                self.doji_threshold, self.wick_ratio,
+            )
+            if p:
+                patterns.append(p)
+                continue
+            p = _detect_shooting_star(
+                opens, highs, lows, closes, i,
+                self.doji_threshold, self.wick_ratio,
+            )
+            if p:
+                patterns.append(p)
+                continue
+            p = _detect_marubozu(
+                opens, highs, lows, closes, i, self.marubozu_threshold
+            )
+            if p:
+                patterns.append(p)
+
+        for i in range(1, n):
+            for detector in (_detect_engulfing, _detect_harami,
+                             _detect_piercing_dark_cloud):
+                p = detector(opens, closes, i)
                 if p:
                     patterns.append(p)
-                    break  # One pattern per candle for single-candle set
+                    break
 
-            if i >= 1:
-                for detector in _TWO_CANDLE_DETECTORS:
-                    p = detector(opens, closes, i)
-                    if p:
-                        patterns.append(p)
-                        break
-
-            if i >= 2:
-                for detector in _THREE_CANDLE_DETECTORS:
-                    p = detector(opens, closes, i)
-                    if p:
-                        patterns.append(p)
-                        break
+        for i in range(2, n):
+            for detector in (_detect_three_soldiers_crows,
+                             _detect_morning_evening_star):
+                p = detector(opens, closes, i)
+                if p:
+                    patterns.append(p)
+                    break
 
         return patterns
 
@@ -606,19 +873,15 @@ class CandlestickPatternDetector:
         """
         Detect patterns from a pandas DataFrame.
 
-        The DataFrame must have columns: open, high, low, close (case-insensitive).
-
         Args:
-            df: OHLC DataFrame.
+            df: OHLC DataFrame with open, high, low, close columns.
 
         Returns:
             List of detected CandlestickPattern objects.
         """
-        cols = {c.lower(): c for c in df.columns}
-        opens = df[cols["open"]].tolist()
-        highs = df[cols["high"]].tolist()
-        lows = df[cols["low"]].tolist()
-        closes = df[cols["close"]].tolist()
+        opens, highs, lows, closes = self._get_ohlc(df)
+        if opens is None:
+            return []
         return self.detect(opens, highs, lows, closes)
 
     def get_latest_signals(
@@ -644,4 +907,4 @@ class CandlestickPatternDetector:
         """
         all_patterns = self.detect(opens, highs, lows, closes)
         cutoff = len(closes) - lookback
-        return [p for p in all_patterns if p.end_index >= cutoff]
+        return [p for p in all_patterns if p.index >= cutoff]
