@@ -933,3 +933,16 @@ For more information, see README.md and SECURITY.md
 
 if __name__ == '__main__':
     main()
+
+from data.real_time_price_engine import RealTimePriceEngine
+engine = RealTimePriceEngine()
+engine.start()
+asyncio.create_task(engine._brain.dominate())  # brain runs too
+
+async def price_brain_loop():
+    while True:
+        await asyncio.sleep(5)
+        if engine._latest:
+            decision = engine._brain.command("tick")
+            await engine._brain.enforce(decision)
+asyncio.create_task(price_brain_loop())
