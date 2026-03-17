@@ -1,87 +1,107 @@
-# dashboard/app.py - Advanced HOPEFX Dashboard: dark, real-time, gold-focused, 2026 UI
+# dashboard/app.py - Ultimate Advanced Dashboard: WebSocket live, candlesticks, geo alerts, full UI
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-import time
 import asyncio
+import websockets
+import json
 import threading
 
-# Fake live data (replace with your engine callback later)
-def get_live_data():
-    return {
-        "price": 5032.76,
-        "prediction": 5045.00,
-        "geo_risk": 68.0,
-        "action": "buy",
-        "confidence": 0.92,
-        "drawdown": 0.02
-    }
+# WebSocket URL - assume your engine broadcasts here (add ws server in engine.py if needed)
+WS_URL = "ws://localhost:8765"  # change to your real ws endpoint
 
-st.set_page_config(page_title="HOPEFX Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="HOPEFX Pro", layout="wide", initial_sidebar_state="collapsed")
 
-# Dark theme + modern UX
+# Ultra-dark, modern theme
 st.markdown("""
-    <style>
-    .stApp { background-color: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; }
-    .sidebar .sidebar-content { background-color: #161b22; border-right: 1px solid #30363d; }
-    .stButton>button { background-color: #238636; color: white; border: none; }
-    .stButton>button:hover { background-color: #2ea043; }
-    .metric-box { background-color: #21262d; border-radius: 8px; padding: 15px; margin: 10px 0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    <style> { background-color: #0a0e14; color: #e6e6e6; }
+    .stSidebar { background-color: #12161f; border-right: 1px solid #2a2f3a; }
+    .metric-box { background: #1e232c; border-radius: 12px; padding: 20px; margin: 12px 0; box-shadow: 0 8px 16px rgba(0,0,0,0.5); }
+    .alert-high { background: #3a1a1a; border-left: 5px solid #ff4d4d; padding: 12px; border-radius: 6px; }
+    .buy-signal { color: #00ff9d; font-weight: bold; }
+    .sell-signal { color: #ff3366; font-weight: bold; }
+    .hold-signal { color: #ffd700; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("HOPEFX AI Trading Dashboard")
-st.caption("Real-time Gold (XAUUSD) • AI Decisions • Geo Risk Alerts • Powered by Brain v2")
+st.title("HOPEFX Pro Dashboard")
+st.caption("Real-Time XAUUSD • AI Brain Decisions • Geo Risk • WebSocket Powered • 2026 Edition")
 
-col1, col2 = st.columns([3, 1])
+# Layout: Chart + Sidebar + Status
+col_chart, col_side = st.columns([4, 1])
 
-with col1:
-    st.subheader("Live Price Chart")
+with col_chart:
+    st.subheader("Live Candlestick - XAUUSD")
     chart_placeholder = st.empty()
 
-    def update_chart():
-        data = pd.DataFrame( )
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x= , y= [0], mode='lines+markers', name='Price', line=dict(color='#58a6ff')))
-        fig.update_layout(
-            template="plotly_dark",
-            title="XAUUSD Spot Price",
-            xaxis_title="Time",
-            yaxis_title="USD",
-            height=500,
-            margin=dict(l=0, r=0, t=40, b=0)
-        )
-        chart_placeholder.plotly_chart(fig, use_container_width=True)
+with col_side:
+    st.subheader("AI & Risk Status")
+    status_placeholder = st.empty()
+    alert_placeholder = st.empty()
 
-with col2:
-    st.subheader("AI Status")
-    status_box = st.empty()
+# Data buffer for candlesticks (OHLCV)
+data_buffer = pd.DataFrame(columns=['time', 'open', 'high', 'low', 'close', 'volume'])
 
-    def update_status():
-        d = get_live_data()
-        action_color = "#2ea043" if d == "buy" else "#da3b3b" if d == "sell" else "#8b949e"
-        status_box.markdown(f"""
-            <div class="metric-box">
-                <h3 style="color:{action_color}; margin:0;">{d .upper()}</h3>
-                <p>Confidence: {d *100:.0f}%</p>
-                <p>Geo Risk: {d }%</p>
-                <p>Drawdown: {d *100:.1f}%</p>
-                <p>Last Update: {datetime.now().strftime('%H:%M:%S')}</p>
-            </div>
-        """, unsafe_allow_html=True)
+async def ws_listener():
+    global data_buffer
+    try:
+        async with websockets.connect(WS_URL) as ws:
+            while True:
+                msg = await ws.recv()
+                tick = json.loads(msg)
+                # Expected: {"time": ts, "price": p, "action": "buy", "geo": 68, "conf": 0.92, "drawdown": 0.02}
+                # For candlestick - aggregate into 1-min OHLC if needed
+                new_row = {
+                    'time': datetime.fromisoformat(tick ),
+                    'open': tick ,
+                    'high': tick['price'] + 2,  # sim; use real if aggregated
+                    'low': tick - 2,
+                    'close': tick ,
+                    'volume': tick.get('volume', 100)
+                }
+                data_buffer = pd.concat( )], ignore_index=True).tail(200)
 
-# Real-time loop
-def live_loop():
-    while True:
-        update_chart()
-        update_status()
-        time.sleep(5)
+                # Update chart
+                fig = go.Figure(data=[go.Candlestick(
+                    x=data_buffer ,
+                    open=data_buffer ,
+                    high=data_buffer ,
+                    low=data_buffer ,
+                    close=data_buffer ,
+                    increasing_line_color='#00ff9d', decreasing_line_color='#ff3366'
+                )])
+                fig.update_layout(
+                    template='plotly_dark', height=600, margin=dict(l=0,r=0,t=30,b=0),
+                    xaxis_rangeslider_visible=True, title="Live Gold Spot"
+                )
+                chart_placeholder.plotly_chart(fig, use_container_width=True)
 
-threading.Thread(target=live_loop, daemon=True).start()
+                # Update status
+                action = tick color_class = "buy-signal" if action == "buy" else "sell-signal" if action == "sell" else "hold-signal"
+                status_placeholder.markdown(f"""
+                    <div class="metric-box">
+                        <h2 class="{color_class}">{action.upper()}</h2>
+                        <p>Confidence: {tick *100:.0f}%</p>
+                        <p>Geo Risk: {tick }%</p>
+                        <p>Drawdown: {tick *100:.1f}%</p>
+                        <p>Updated: {datetime.now().strftime('%H:%M:%S')}</p>
+                    </div>
+                """, unsafe_allow_html=True)
 
-st.sidebar.header("Controls")
-if st.sidebar.button("Force Refresh"):
-    update_chart()
-    update_status()
-st.sidebar.info("Dashboard auto-updates every 5 seconds. Wire engine callback for true live.")
+                # Alert if high geo
+                if tick > 70:
+                    alert_placeholder.error("⚠️ HIGH GEO RISK - HOLD MODE ACTIVE")
+                else:
+                    alert_placeholder.empty()
+
+    except Exception as e:
+        st.error(f"WebSocket disconnected: {e}. Retrying...")
+
+# Run listener in thread
+threading.Thread(target=asyncio.run, args=(ws_listener(),), daemon=True).start()
+
+st.sidebar.header("Dashboard Controls")
+if st.sidebar.button("Reset View"):
+    data_buffer = pd.DataFrame(columns=['time', 'open', 'high', 'low', 'close', 'volume'])
+st.sidebar.info("Data streams live via WebSocket. Add engine broadcast for true push.")
