@@ -88,7 +88,7 @@ class HOPEFXBrain:
         if not self.state:
             return Decision("hold", 0, 0.1, "No state", "")
 
-        p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
+                p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
         risk_ok = self.state action = (
             "buy" if pred > p + 0.06 and risk_ok else
             "sell" if pred < p - 0.06 and risk_ok else
@@ -100,7 +100,7 @@ class HOPEFXBrain:
         reason = f"Pred {pred:.2f} vs {p:.2f} | Risk: {risk_ok} | Strats: {self.state }"
 
         # Emergency override: high drawdown → flatten
-        if self.state > 0.08:
+                if self.state > 0.08:
             return Decision("flatten", 0, 1.0, "Drawdown alert - flatten", "", override=True)
 
         return Decision(action, size, conf, reason, "")
