@@ -11,41 +11,6 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/hopefx)
 
-### 🏆 Perfect 5-Star Ratings Across ALL Categories
-
-| Category | Rating | Description |
-|----------|:------:|-------------|
-| **AI/ML Trading** | ⭐⭐⭐⭐⭐ | Native LSTM, XGBoost, Random Forest |
-| **Multi-Broker** | ⭐⭐⭐⭐⭐ | 7+ brokers integrated |
-| **Prop Firm Support** | ⭐⭐⭐⭐⭐ | FTMO, MFF, The5ers, TopStep |
-| **Backtesting** | ⭐⭐⭐⭐⭐ | Event-driven + Walk-forward |
-| **Charting** | ⭐⭐⭐⭐⭐ | 40+ indicators, TradingView-style |
-| **Copy/Social Trading** | ⭐⭐⭐⭐⭐ | Full engine + Marketplace |
-| **Mobile Support** | ⭐⭐⭐⭐⭐ | PWA + API + Push Notifications |
-| **Cost** | ⭐⭐⭐⭐⭐ | **100% FREE FOREVER** |
-| **Open Source** | ⭐⭐⭐⭐⭐ | Fully open, community-driven |
-
-[🚀 Quick Start](#-quick-start) • [📊 Features](#-key-features) • [📚 Docs](#-documentation) • [🎯 Why HOPEFX](#-why-choose-hopefx) • [🤝 Community](#-community)
-
-</div>
-
----
-
-## 🎯 Why Choose HOPEFX?
-
-| Feature | HOPEFX | TradingView | MetaTrader | QuantConnect | cTrader |
-|---------|:------:|:-----------:|:----------:|:------------:|:-------:|
-| **AI/ML Built-in** | ✅ LSTM, XGBoost, RF | ❌ | ❌ | ✅ | ❌ |
-| **Open Source** | ✅ 100% Free | ❌ $15-60/mo | ❌ | ⚡ Cloud fees | ❌ |
-| **Multi-Broker** | ✅ 7+ Brokers | ⚡ Limited | ⚡ Limited | ✅ | ⚡ Limited |
-| **Prop Firm Ready** | ✅ FTMO, MFF, The5ers, TopStep | ❌ | ⚡ Via EAs | ❌ | ⚡ Limited |
-| **Python Native** | ✅ | ❌ Pine Script | ❌ MQL | ✅ | ❌ C# |
-| **Self-Hosted** | ✅ Your Data | ❌ Cloud Only | ✅ | ❌ Cloud Only | ✅ |
-| **Charting** | ✅ 40+ Indicators | ✅ | ⚡ Basic | ⚡ Limited | ✅ |
-| **Copy Trading** | ✅ Full Engine | ✅ | ⚡ Limited | ❌ | ✅ |
-| **Backtesting** | ✅ Walk-forward | ⚡ Limited | ✅ | ✅ | ✅ |
-| **Monetization** | ✅ Strategy Marketplace | ❌ | ❌ | ❌ | ❌ |
-
 ### 💡 Key Advantages
 
 - **🧠 Native AI/ML** - LSTM, Random Forest, XGBoost models ready to use
