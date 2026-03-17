@@ -1,174 +1,268 @@
+# tests/unit/test_risk_manager.py
 """
-Unit tests for Risk Management system.
+Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
 import pytest
+import pytest_asyncio
+from datetime import datetime, timedelta
+from decimal import Decimal
+import asyncio
+
+from risk.manager import RiskManager, RiskCheckResult, RiskLevel
+from risk.advanced_analytics import RiskAnalytics
+from database.models import Trade, Position, Account
+
+class TestRiskManager:
+    """Test suite for risk management functionality"""
+    
+    @pytest.fixture
+    def risk_manager(self):
+        """Fresh risk manager instance"""
+        return RiskManager()
+    
+    @pytest.fixture
+    def sample_trade(self):
+        """Sample trade for testing"""
+        return Trade(
+            id=1,
+            symbol="EURUSD",
+            side="buy",
+            size=10000,
+            entry_price=1.0850,
+            timestamp=datetime.now()
+        )
+    
+    def test_position_size_limit_check(self, risk_manager, sample_trade):
+        """FIA 1.1: Maximum Order Size validation"""
+        # Test within limit
+        result = risk_manager.check_position_size(sample_trade, max_pct=0.05)
+        assert result.passed is True
+        assert result.risk_level == RiskLevel.LOW
+        
+        # Test exceeding limit
+        large_trade = Trade(
+            id=2, symbol="EURUSD", side="buy", size=1000000,
+            entry_price=1.0850, timestamp=datetime.now()
+        )
+        result = risk_manager.check_position_size(large_trade, max_pct=0.05)
+        assert result.passed is False
+        assert result.risk_level == RiskLevel.CRITICAL
+        assert "Position size" in result.message
+    
+    def test_price_tolerance_check(self, risk_manager):
+        """FIA 1.3: Price Tolerance validation"""
+        current_price = 1.0850
+        
+        # Valid price (within 2%)
+        valid_order = {"price": 1.0870}  # 0.18% deviation
+        result = risk_manager.check_price_tolerance(valid_order, current_price, tolerance=0.02)
+        assert result.passed is True
+        
+        # Invalid price (outside tolerance)
+        invalid_order = {"price": 1.1200}  # 3.2% deviation
+        result = risk_manager.check_price_tolerance(invalid_order, current_price, tolerance=0.02)
+        assert result.passed is False
+        assert "Price tolerance" in result.message
+    
+    def test_kill_switch_activation(self, risk_manager):
+        """FIA 1.5: Kill Switch functionality"""
+        # Simulate losses approaching limit
+        daily_pnl = -2800  # 2.8% of 100k account
+        account_value = 100000
+        
+        # Should not trigger at 2.8%
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is False
+        
+        # Should trigger at 3.1%
+        daily_pnl = -3100
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is True
+        assert risk_manager.kill_switch_active is True
+    
+    def test_max_drawdown_protection(self, risk_manager):
+        """Test max drawdown kill switch"""
+        equity_curve = [100000, 99000, 98000, 97000, 89000]  # 11% drawdown
+        
+        result = risk_manager.check_drawdown(equity_curve, max_dd=0.10)
+        assert result.passed is False
+        assert "Drawdown" in result.message
+    
+    def test_correlation_risk(self, risk_manager):
+        """Test portfolio correlation limits"""
+        positions = [
+            Position(symbol="EURUSD", size=10000),
+            Position(symbol="GBPUSD", size=10000),  # Highly correlated
+            Position(symbol="USDJPY", size=10000)    # Less correlated
+        ]
+        
+        result = risk_manager.check_correlation_risk(positions, max_correlation=0.80)
+        # EURUSD and GBPUSD typically >0.80 correlation
+        assert result.risk_level in [RiskLevel.MEDIUM, RiskLevel.HIGH]
+    
+    def test_concentration_risk(self, risk_manager):
+        """Test position concentration limits"""
+        account = Account(balance=100000)
+        positions = [
+            Position(symbol="EURUSD", size=40000, market_value=43400),  # 43.4%
+            Position(symbol="USDJPY", size=10000, market_value=10850)   # 10.9%
+        ]
+        
+        result = risk_manager.check_concentration(positions, account, max_single=0.40)
+        assert result.passed is False
+        assert "concentration" in result.message.lower()
+
+
+class TestRiskAnalytics:
+    """Test risk analytics calculations"""
+    
+    @pytest.fixture
+    def analytics(self):
+        return RiskAnalytics()
+    
+    def test_var_calculation(self, analytics):
+        """Test Value at Risk calculation"""
+        returns = [-0.02, 0.01, -0.015, 0.005, -0.01, 0.008, -0.025, 0.012, -0.018, 0.006]
+        
+        var_95 = analytics.calculate_var(returns, confidence=0.95)
+        # VaR should be negative (loss)
+        assert var_95 < 0
+        assert -0.03 < var_95 < -0.01  # Reasonable range
+    
+    def test_expected_shortfall(self, analytics):
+        """Test Conditional VaR (Expected Shortfall)"""
+        returns = [-0.05, -0.04, -0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.03, 0.04]
+        
+        cvar = analytics.calculate_cvar(returns, confidence=0.95)
+        # CVaR should be worse than VaR
+        var = analytics.calculate_var(returns, confidence=0.95)
+        assert cvar <= var
+    
+    def test_sharpe_ratio(self, analytics):
+        """Test Sharpe ratio calculation"""
+        returns = [0.001, -0.002, 0.003, 0.001, -0.001, 0.002, 0.001, -0.001, 0.002, 0.001]
+        
+        sharpe = analytics.calculate_sharpe(returns, risk_free_rate=0.02/252)
+        assert isinstance(sharpe, float)
+        assert sharpe > 0  # Positive returns in sample
+
+
+# tests/integration/test_broker_integration.py
+"""
+Integration tests for broker connectivity and order execution
+"""
+
+import pytest
+import asyncio
+from unittest.mock import Mock, patch
+
+from brokers.oanda import OandaBroker
+from brokers.paper_trading import PaperTradingBroker
+from brokers.factory import BrokerFactory
+
+class TestOandaIntegration:
+    """Test OANDA API integration with mock responses"""
+    
+    @pytest.fixture
+    def mock_oanda(self):
+        """Create broker with mocked API"""
+        with patch('brokers.oanda.OandaAPI') as mock_api:
+            broker = OandaBroker(api_key="test", account_id="test")
+            broker.api = mock_api.return_value
+            yield broker
+    
+    @pytest.mark.asyncio
+    async def test_connection_validation(self, mock_oanda):
+        """Test connection and authentication"""
+        mock_oanda.api.get_account.return_value = {"balance": 10000}
+        
+        connected = await mock_oanda.connect()
+        assert connected is True
+    
+    @pytest.mark.asyncio
+    async def test_order_placement_risk_checks(self, mock_oanda):
+        """Test that orders pass risk checks before placement"""
+        # Mock risk manager
+        mock_oanda.risk_manager = Mock()
+        mock_oanda.risk_manager.check_order.return_value = Mock(passed=True)
+        
+        order = {
+            "symbol": "EURUSD",
+            "side": "buy",
+            "size": 1000,
+            "type": "market"
+        }
+        
+        mock_oanda.api.place_order.return_value = {"id": "123", "status": "filled"}
+        
+        result = await mock_oanda.place_order(order)
+        assert result is not None
+        mock_oanda.risk_manager.check_order.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_order_rejection_on_risk_failure(self, mock_oanda):
+        """Test orders rejected when risk checks fail"""
+        mock_oanda.risk_manager = Mock()
+        mock_oanda.risk_manager.check_order.return_value = Mock(
+            passed=False, 
+            risk_level="CRITICAL",
+            message="Position limit exceeded"
+        )
+        
+        order = {"symbol": "EURUSD", "side": "buy", "size": 1000000}
+        
+        with pytest.raises(Exception) as exc_info:
+            await mock_oanda.place_order(order)
+        
+        assert "Position limit" in str(exc_info.value)
+
+
+# tests/e2e/test_trading_workflow.py
+"""
+End-to-end trading workflow tests
+"""
+
+import pytest
+import asyncio
 from datetime import datetime
 
-from risk import RiskManager, RiskConfig
-
-
-@pytest.mark.unit
-class TestRiskManager:
-    """Test the RiskManager class."""
-
-    def test_risk_manager_initialization(self, risk_manager):
-        """Test risk manager initialization."""
-        assert risk_manager is not None
-        assert risk_manager.max_positions == 5
-        assert risk_manager.max_drawdown == 0.10
-
-    def test_calculate_position_size_fixed(self, risk_manager):
-        """Test fixed position sizing."""
-        result = risk_manager.calculate_position_size(
-            symbol="EUR_USD",
-            price=1.1000,
-            method="fixed",
-            amount=10000
-        )
-
-        assert result.size > 0
-        assert result.size <= risk_manager.max_position_size
-
-    def test_calculate_position_size_percent(self, risk_manager):
-        """Test percentage-based position sizing."""
-        result = risk_manager.calculate_position_size(
-            symbol="EUR_USD",
-            price=1.1000,
-            method="percent",
-            percent=0.02  # 2% of account
-        )
-
-        assert result.size > 0
-
-    def test_calculate_position_size_risk_based(self, risk_manager):
-        """Test risk-based position sizing."""
-        result = risk_manager.calculate_position_size(
-            symbol="EUR_USD",
-            price=1.1000,
-            method="risk",
-            stop_loss=1.0950,  # 50 pips stop
-            risk_percent=0.01  # Risk 1% of account
-        )
-
-        assert result.size > 0
-
-    def test_validate_trade_within_limits(self, risk_manager):
-        """Test trade validation within limits."""
-        is_valid, reason = risk_manager.validate_trade(
-            symbol="EUR_USD",
-            size=5000,
-            side="BUY"
-        )
-
-        assert is_valid == True
-        assert reason == ""
-
-    def test_validate_trade_exceeds_position_limit(self, risk_manager):
-        """Test trade validation when position limit exceeded."""
-        # Fill up to max positions
-        for i in range(5):
-            risk_manager.open_positions.append({
-                'symbol': 'EUR_USD',
-                'size': 1000,
-                'side': 'BUY'
-            })
-
-        is_valid, reason = risk_manager.validate_trade(
-            symbol="GBP_USD",
-            size=1000,
-            side="BUY"
-        )
-
-        assert is_valid == False
-        assert "max" in reason.lower() and "position" in reason.lower()
-
-    def test_validate_trade_exceeds_size_limit(self, risk_manager):
-        """Test trade validation when size limit exceeded."""
-        is_valid, reason = risk_manager.validate_trade(
-            symbol="EUR_USD",
-            size=20000,  # Exceeds max_position_size of 10000
-            side="BUY"
-        )
-
-        assert is_valid == False
-        assert "position size" in reason.lower()
-
-    def test_check_daily_loss_limit(self, risk_manager):
-        """Test daily loss limit checking."""
-        # Simulate losing trades - exceed 10% loss
-        risk_manager.daily_pnl = -15000  # 15% loss on 100k balance
-
-        within_limit, violations = risk_manager.check_risk_limits()
-
-        assert within_limit == False
-        assert len(violations) > 0
-        assert any("daily loss" in str(v).lower() for v in violations)
-
-    def test_check_drawdown_limit(self, risk_manager):
-        """Test drawdown limit checking."""
-        # Simulate drawdown - more than 10%
-        risk_manager.peak_balance = 100000
-        risk_manager.current_balance = 85000  # 15% drawdown
-
-        within_limit, violations = risk_manager.check_risk_limits()
-
-        assert within_limit == False
-        assert len(violations) > 0
-        assert any("drawdown" in str(v).lower() for v in violations)
-
-    def test_calculate_stop_loss(self, risk_manager):
-        """Test stop loss calculation."""
-        # Using percentage-based stop loss (2%)
-        stop_loss = risk_manager.calculate_stop_loss(
-            entry_price=1.1000,
-            side="BUY",
-            percent=0.2  # 0.2% stop loss
-        )
-
-        assert stop_loss < 1.1000  # Stop below entry for BUY
-        # 0.2% of 1.1000 = 0.0022
-        assert abs(stop_loss - 1.1000) == pytest.approx(0.0022, rel=0.01)
-
-    def test_calculate_take_profit(self, risk_manager):
-        """Test take profit calculation."""
-        # Using percentage-based take profit (0.4%)
-        take_profit = risk_manager.calculate_take_profit(
-            entry_price=1.1000,
-            side="BUY",
-            percent=0.4  # 0.4% take profit
-        )
-
-        assert take_profit > 1.1000  # Target above entry for BUY
-        # 0.4% of 1.1000 = 0.0044
-        assert abs(take_profit - 1.1000) == pytest.approx(0.0044, rel=0.01)
-
-    def test_update_daily_pnl(self, risk_manager):
-        """Test daily P&L tracking."""
-        initial_pnl = risk_manager.daily_pnl
-
-        risk_manager.update_daily_pnl(100)
-        assert risk_manager.daily_pnl == initial_pnl + 100
-
-        risk_manager.update_daily_pnl(-50)
-        assert risk_manager.daily_pnl == initial_pnl + 50
-
-    def test_reset_daily_stats(self, risk_manager):
-        """Test resetting daily statistics."""
-        risk_manager.daily_pnl = 500
-        risk_manager.daily_trades = 10
-
-        risk_manager.reset_daily_stats()
-
-        assert risk_manager.daily_pnl == 0
-        assert risk_manager.daily_trades == 0
-
-    def test_get_risk_metrics(self, risk_manager):
-        """Test getting risk metrics."""
-        metrics = risk_manager.get_risk_metrics()
-
-        assert 'open_positions' in metrics
-        assert 'daily_pnl' in metrics
-        assert 'max_drawdown' in metrics
-        assert 'max_daily_loss' in metrics
-        assert isinstance(metrics, dict)
+class TestTradingWorkflow:
+    """Full system integration test"""
+    
+    @pytest.mark.e2e
+    @pytest.mark.asyncio
+    async def test_full_trading_cycle(self):
+        """
+        Test complete cycle:
+        1. Data ingestion
+        2. Signal generation
+        3. Risk validation
+        4. Order execution
+        5. Position tracking
+        6. P&L calculation
+        """
+        # This would require full system setup
+        # Simplified version for demonstration
+        
+        from main import HOPEFXTradingSystem
+        from config.config_manager import ConfigManager
+        
+        # Initialize system
+        config = ConfigManager()
+        config.settings.TRADING_MODE = "paper"
+        config.settings.INITIAL_CAPITAL = 10000
+        
+        system = HOPEFXTradingSystem(config)
+        
+        # Start system
+        await system.start()
+        
+        # Wait for initialization
+        await asyncio.sleep(2)
+        
+        # Verify components are running
+        assert system.data_engine.is_running
+        assert system.risk_manager.is_active
+        assert len(system.strategies) > 0
+        
+        # Stop system
+        await system.stop()
