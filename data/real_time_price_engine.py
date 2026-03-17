@@ -90,10 +90,7 @@ class RealTimePriceEngine:
                 'change': data.get('regularMarketChange', 0),
                 'timestamp': datetime.now(timezone.utc)
             }
-        except:
-            logger.warning("yfinance hiccup—mocking")
-            return {'last': 1950 + time.time() % 100, 'change': 0.5, 'timestamp': datetime.now(timezone.utc)}
-
+        
     def _store(self, tick):
         if self._redis:
             self._redis.set(f"live:{self.symbol}", json.dumps(tick))
