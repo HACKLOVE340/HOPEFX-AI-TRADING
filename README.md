@@ -4,7 +4,7 @@
 
 ![HOPEFX Logo](https://img.shields.io/badge/HOPEFX-AI%20Trading-26a69a?style=for-the-badge&logo=bitcoin&logoColor=white)
 
-**🏆 The Most Advanced Open-Source AI Trading Platform**
+**🏆 The Most Advanced Open-Source AI Trading Platform** COMING SOON
 
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
