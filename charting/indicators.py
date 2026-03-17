@@ -4,8 +4,6 @@ import os
 # Create charting directory
 os.makedirs('charting', exist_ok=True)
 
-# Phase 2: Comprehensive Indicator Library (40+ Indicators)
-
 code = '''"""
 HOPEFX Technical Indicator Library
 40+ Professional Trading Indicators
