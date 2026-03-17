@@ -226,6 +226,10 @@ if __name__ == "__main__":
 
     app.initialize()  # your original init call
 
+    asyncio.create_task(app.price_engine.start())
+asyncio.create_task(app.brain.dominate())
+logger.info("HOPEFX running - press Ctrl+C to stop")
+await asyncio.sleep(3600)  # 1 hour keep-alive
     try:
         asyncio.run(app.run())
     except KeyboardInterrupt:
