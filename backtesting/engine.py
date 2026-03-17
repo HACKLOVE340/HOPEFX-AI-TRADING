@@ -1,4 +1,3 @@
-
 # Phase 1.1: Event-Driven Backtesting Engine
 
 code = '''"""
