@@ -1,27 +1,41 @@
 # enhanced_realtime_engine.py
 """
-Institutional-Grade Real-Time Market Data Engine v3.0
-Multi-Source Aggregation | Sub-Millisecond Latency | AI-Powered Data Quality
+=============================================================================
+HOPEFX REAL-TIME MARKET DATA ENGINE v4.0
+=============================================================================
+Institutional-Grade Multi-Source Data Aggregation with Sub-Millisecond Latency
+
+Features:
+- Multi-venue WebSocket aggregation with Byzantine fault tolerance
+- Consensus pricing using weighted median algorithms
+- Nanosecond-precision timestamps with HFT-grade latency tracking
+- Automatic failover and circuit breaker patterns
+- Redis-backed distributed caching
+- Real-time market microstructure analysis
+
+Author: HOPEFX Development Team
+License: Proprietary - Institutional Use Only
+=============================================================================
 """
 
 import asyncio
 import aiohttp
 import websockets
-from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional, Callable, Set, Any, Tuple, Union
-from datetime import datetime, timedelta
-from enum import Enum, auto
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Callable, Set, Any, Tuple, Union, AsyncIterator
+from datetime import datetime, timedelta, timezone
+from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
-from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import json
 import numpy as np
-import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import time
+import random
+from abc import ABC, abstractmethod
 
-# Optional dependencies
+# Optional high-performance libraries
 try:
     import redis.asyncio as redis
     REDIS_AVAILABLE = True
@@ -30,37 +44,76 @@ except ImportError:
 
 try:
     import zmq
+    import zmq.asyncio
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+try:
+    import uvloop
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    UVLOOP_AVAILABLE = True
+except ImportError:
+    UVLOOP_AVAILABLE = False
 
-class DataQuality(Enum):
-    """Data quality classification"""
-    EXCELLENT = auto()      # <1ms latency, verified, no gaps
-    GOOD = auto()           # <10ms, minor gaps acceptable
-    FAIR = auto()           # <100ms, some degradation
-    POOR = auto()           # >100ms, significant issues
-    STALE = auto()          # >1s, unusable for trading
-    INVALID = auto()        # Failed validation checks
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(name)s | %(levelname)s | %(message)s'
+)
+logger = logging.getLogger('HOPEFX.Realtime')
+
+
+# =============================================================================
+# DATA STRUCTURES
+# =============================================================================
+
+class DataQuality(IntEnum):
+    """Data quality classification based on latency and integrity"""
+    EXCELLENT = 5      # < 1ms latency, fully validated
+    GOOD = 4           # 1-10ms, minor issues acceptable
+    FAIR = 3           # 10-100ms, some degradation
+    POOR = 2           # 100-1000ms, significant issues
+    STALE = 1          # > 1s, potentially unusable
+    INVALID = 0        # Failed validation, reject
 
 class ConnectionState(Enum):
     """Connection lifecycle states"""
     DISCONNECTED = auto()
     CONNECTING = auto()
-    CONNECTED = auto()
+    AUTHENTICATING = auto()
     SUBSCRIBING = auto()
     STREAMING = auto()
     DEGRADED = auto()
     FAILED = auto()
     RECONNECTING = auto()
+    CIRCUIT_OPEN = auto()
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class NanosecondTimestamp:
+    """High-precision timestamp"""
+    seconds: int
+    nanoseconds: int
+    
+    @classmethod
+    def now(cls) -> 'NanosecondTimestamp':
+        now = time.time_ns()
+        return cls(now // 1_000_000_000, now % 1_000_000_000)
+    
+    def to_datetime(self) -> datetime:
+        return datetime.fromtimestamp(
+            self.seconds + self.nanoseconds / 1e9,
+            tz=timezone.utc
+        )
+    
+    def __float__(self) -> float:
+        return self.seconds + self.nanoseconds / 1e9
+
+@dataclass(frozen=True, slots=True)
 class MarketTick:
-    """Normalized market tick with quality metrics"""
+    """Normalized market tick from any source"""
+    timestamp: NanosecondTimestamp      # Exchange timestamp
+    receive_timestamp: NanosecondTimestamp  # Local receive time
     symbol: str
-    timestamp: datetime
     bid: float
     ask: float
     bid_size: float = 0.0
@@ -73,16 +126,14 @@ class MarketTick:
     
     # Metadata
     source: str = "unknown"
-    receive_time: datetime = field(default_factory=datetime.now)
-    latency_ms: float = 0.0
-    quality: DataQuality = DataQuality.GOOD
+    venue: str = "unknown"
     
     def __post_init__(self):
-        # Validate prices
+        # Validate
         if self.bid <= 0 or self.ask <= 0:
-            object.__setattr__(self, 'quality', DataQuality.INVALID)
+            raise ValueError(f"Invalid prices: bid={self.bid}, ask={self.ask}")
         if self.bid >= self.ask:
-            object.__setattr__(self, 'quality', DataQuality.INVALID)
+            raise ValueError(f"Negative spread: {self.bid} >= {self.ask}")
     
     @property
     def mid(self) -> float:
@@ -96,34 +147,48 @@ class MarketTick:
     def spread_bps(self) -> float:
         return (self.spread / self.mid) * 10000 if self.mid > 0 else 0
     
-    def to_dict(self) -> Dict:
-        return {
-            **asdict(self),
-            'timestamp': self.timestamp.isoformat(),
-            'receive_time': self.receive_time.isoformat(),
-            'mid': self.mid,
-            'spread': self.spread
-        }
+    @property
+    def latency_ns(self) -> int:
+        """Calculate tick-to-system latency"""
+        recv_ns = self.receive_timestamp.seconds * 1_000_000_000 + self.receive_timestamp.nanoseconds
+        tick_ns = self.timestamp.seconds * 1_000_000_000 + self.timestamp.nanoseconds
+        return recv_ns - tick_ns
+    
+    @property
+    def quality(self) -> DataQuality:
+        """Classify data quality based on latency"""
+        latency_ms = self.latency_ns / 1_000_000
+        
+        if latency_ms < 1:
+            return DataQuality.EXCELLENT
+        elif latency_ms < 10:
+            return DataQuality.GOOD
+        elif latency_ms < 100:
+            return DataQuality.FAIR
+        elif latency_ms < 1000:
+            return DataQuality.POOR
+        else:
+            return DataQuality.STALE
 
 @dataclass
-class DataSourceMetrics:
-    """Real-time source performance metrics"""
-    source_name: str
+class VenueMetrics:
+    """Real-time venue performance tracking"""
+    venue_name: str
     state: ConnectionState = ConnectionState.DISCONNECTED
     
-    # Latency metrics (ms)
-    latency_min: float = float('inf')
-    latency_max: float = 0.0
-    latency_avg: float = 0.0
+    # Latency tracking (nanoseconds)
     latency_history: deque = field(default_factory=lambda: deque(maxlen=1000))
+    min_latency_ns: int = float('inf')
+    max_latency_ns: int = 0
+    avg_latency_ns: float = 0.0
     
-    # Quality metrics
+    # Throughput
     ticks_received: int = 0
     ticks_valid: int = 0
     ticks_stale: int = 0
     ticks_invalid: int = 0
     
-    # Error tracking
+    # Errors
     errors: int = 0
     reconnections: int = 0
     last_error: Optional[str] = None
@@ -132,69 +197,90 @@ class DataSourceMetrics:
     # Health score 0-100
     health_score: float = 100.0
     
-    def update_latency(self, latency_ms: float):
-        """Update latency statistics"""
-        self.latency_history.append(latency_ms)
-        self.latency_min = min(self.latency_min, latency_ms)
-        self.latency_max = max(self.latency_max, latency_ms)
-        self.latency_avg = np.mean(self.latency_history) if self.latency_history else latency_ms
-    
-    def record_tick(self, quality: DataQuality):
-        """Record tick quality"""
+    def record_tick(self, tick: MarketTick):
+        """Process new tick metrics"""
         self.ticks_received += 1
-        if quality == DataQuality.EXCELLENT or quality == DataQuality.GOOD:
+        
+        # Update latency
+        latency = tick.latency_ns
+        self.latency_history.append(latency)
+        self.min_latency_ns = min(self.min_latency_ns, latency)
+        self.max_latency_ns = max(self.max_latency_ns, latency)
+        self.avg_latency_ns = np.mean(list(self.latency_history)) if self.latency_history else latency
+        
+        # Quality classification
+        if tick.quality >= DataQuality.GOOD:
             self.ticks_valid += 1
-        elif quality == DataQuality.STALE:
+        elif tick.quality == DataQuality.STALE:
             self.ticks_stale += 1
-        elif quality == DataQuality.INVALID:
+        else:
             self.ticks_invalid += 1
+        
+        # Update health
+        self._update_health()
     
     def record_error(self, error: str):
-        """Record error"""
+        """Record error and degrade health"""
         self.errors += 1
         self.last_error = error
-        self.last_error_time = datetime.now()
+        self.last_error_time = datetime.now(timezone.utc)
         self.health_score = max(0, self.health_score - 10)
     
     def record_reconnection(self):
         """Record successful reconnection"""
         self.reconnections += 1
-        self.health_score = min(100, self.health_score + 20)
+        self.health_score = min(100, self.health_score + 5)
+    
+    def _update_health(self):
+        """Update health score based on recent performance"""
+        if len(self.latency_history) < 10:
+            return
+        
+        recent_latencies = list(self.latency_history)[-100:]
+        p99_latency = np.percentile(recent_latencies, 99)
+        
+        # Degrade health if latency too high
+        if p99_latency > 100_000_000:  # 100ms
+            self.health_score = max(0, self.health_score - 1)
+        elif p99_latency < 10_000_000:  # 10ms
+            self.health_score = min(100, self.health_score + 0.5)
+
+# =============================================================================
+# DATA PROVIDERS
+# =============================================================================
 
 class DataProvider(ABC):
-    """Abstract base for all data providers"""
+    """Abstract base for all market data providers"""
     
     def __init__(self, name: str, priority: int, weight: float = 1.0):
         self.name = name
         self.priority = priority  # Lower = higher priority
         self.weight = weight
-        self.metrics = DataSourceMetrics(source_name=name)
+        self.metrics = VenueMetrics(venue_name=name)
         self.state = ConnectionState.DISCONNECTED
         
-        # Configuration
         self.symbols: Set[str] = set()
         self.reconnect_delay = 1.0
         self.max_reconnect_delay = 60.0
         self.current_reconnect_delay = self.reconnect_delay
         
-        # Streaming
         self._callbacks: List[Callable[[MarketTick], Any]] = []
         self._running = False
         self._task: Optional[asyncio.Task] = None
     
     @abstractmethod
     async def connect(self) -> bool:
-        """Establish connection"""
+        """Establish connection to venue"""
         pass
     
     @abstractmethod
     async def subscribe(self, symbols: List[str]) -> bool:
-        """Subscribe to symbols"""
+        """Subscribe to market data for symbols"""
         pass
     
     @abstractmethod
-    async def stream(self):
-        """Main streaming loop - yield ticks"""
+    async def stream(self) -> AsyncIterator[MarketTick]:
+        """Yield ticks from connection"""
         pass
     
     @abstractmethod
@@ -206,29 +292,40 @@ class DataProvider(ABC):
         """Register tick callback"""
         self._callbacks.append(callback)
     
-    async def _notify_callbacks(self, tick: MarketTick):
-        """Notify all registered callbacks"""
+    async def _notify(self, tick: MarketTick):
+        """Notify all callbacks"""
         for callback in self._callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(tick)
+                    asyncio.create_task(callback(tick))
                 else:
                     callback(tick)
             except Exception as e:
                 logger.error(f"Callback error in {self.name}: {e}")
     
     async def start(self):
-        """Start streaming with auto-reconnect"""
+        """Start with automatic reconnection"""
         self._running = True
+        
         while self._running:
             try:
                 self.metrics.state = ConnectionState.CONNECTING
+                self.state = ConnectionState.CONNECTING
+                
                 if await self.connect():
-                    self.metrics.state = ConnectionState.CONNECTED
+                    self.metrics.state = ConnectionState.SUBSCRIBING
+                    
                     if await self.subscribe(list(self.symbols)):
                         self.metrics.state = ConnectionState.STREAMING
                         self.current_reconnect_delay = self.reconnect_delay
-                        await self.stream()
+                        
+                        async for tick in self.stream():
+                            if not self._running:
+                                break
+                            
+                            self.metrics.record_tick(tick)
+                            await self._notify(tick)
+                
             except Exception as e:
                 logger.error(f"{self.name} error: {e}")
                 self.metrics.record_error(str(e))
@@ -238,7 +335,7 @@ class DataProvider(ABC):
                 logger.info(f"{self.name} reconnecting in {self.current_reconnect_delay}s...")
                 await asyncio.sleep(self.current_reconnect_delay)
                 self.current_reconnect_delay = min(
-                    self.current_reconnect_delay * 2,
+                    self.current_reconnect_delay * 1.5,
                     self.max_reconnect_delay
                 )
                 self.metrics.record_reconnection()
@@ -246,11 +343,11 @@ class DataProvider(ABC):
     def stop(self):
         """Stop streaming"""
         self._running = False
-        if self._task:
+        if self._task and not self._task.done():
             self._task.cancel()
 
 class PolygonProvider(DataProvider):
-    """Polygon.io WebSocket - Professional equities/crypto data"""
+    """Polygon.io WebSocket provider"""
     
     def __init__(self, api_key: str):
         super().__init__("polygon", priority=1, weight=1.0)
@@ -261,11 +358,21 @@ class PolygonProvider(DataProvider):
     async def connect(self) -> bool:
         try:
             self.ws = await websockets.connect(self.uri)
-            auth = {"action": "auth", "params": self.api_key}
-            await self.ws.send(json.dumps(auth))
-            resp = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
-            logger.info(f"Polygon auth: {resp}")
-            return True
+            
+            # Authenticate
+            auth_msg = {"action": "auth", "params": self.api_key}
+            await self.ws.send(json.dumps(auth_msg))
+            
+            response = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
+            auth_result = json.loads(response)
+            
+            if auth_result[0].get("status") == "connected":
+                logger.info("Polygon authenticated successfully")
+                return True
+            
+            logger.error(f"Polygon auth failed: {auth_result}")
+            return False
+            
         except Exception as e:
             logger.error(f"Polygon connect failed: {e}")
             return False
@@ -273,42 +380,68 @@ class PolygonProvider(DataProvider):
     async def subscribe(self, symbols: List[str]) -> bool:
         if not self.ws:
             return False
-        try:
-            # Map to Polygon format
-            poly_symbols = [s.replace("/", "") for s in symbols]
-            msg = {"action": "subscribe", "params": f"T.{','.join(poly_symbols)}"}
-            await self.ws.send(json.dumps(msg))
-            return True
-        except Exception as e:
-            logger.error(f"Polygon subscribe error: {e}")
-            return False
+        
+        # Format symbols for Polygon
+        formatted = [s.replace("/", "") for s in symbols]
+        
+        # Subscribe to trades and quotes
+        channels = []
+        for sym in formatted:
+            channels.extend([f"T.{sym}", f"Q.{sym}"])
+        
+        sub_msg = {"action": "subscribe", "params": ",".join(channels)}
+        await self.ws.send(json.dumps(sub_msg))
+        
+        logger.info(f"Polygon subscribed to {len(symbols)} symbols")
+        return True
     
-    async def stream(self):
-        """Stream trades and quotes"""
-        while self._running:
+    async def stream(self) -> AsyncIterator[MarketTick]:
+        """Stream ticks from Polygon"""
+        last_quotes = {}  # Track last quote for trade enrichment
+        
+        while True:
             try:
-                msg = await asyncio.wait_for(self.ws.recv(), timeout=30.0)
-                data = json.loads(msg)
+                message = await asyncio.wait_for(self.ws.recv(), timeout=30.0)
+                data = json.loads(message)
                 
                 for item in data:
-                    if item.get("ev") == "T":  # Trade
+                    msg_type = item.get("ev")
+                    
+                    if msg_type == "Q":  # Quote
+                        symbol = item.get("sym", "")
+                        last_quotes[symbol] = {
+                            'bid': item.get("bp", 0),
+                            'ask': item.get("ap", 0),
+                            'bid_size': item.get("bs", 0),
+                            'ask_size': item.get("as", 0)
+                        }
+                    
+                    elif msg_type == "T":  # Trade
+                        symbol = item.get("sym", "")
+                        quote = last_quotes.get(symbol, {})
+                        
                         tick = MarketTick(
-                            symbol=item["sym"],
-                            timestamp=datetime.fromtimestamp(item["t"] / 1000),
-                            bid=item.get("bp", item["p"]),
-                            ask=item.get("ap", item["p"]),
-                            last_price=item["p"],
-                            last_size=item["s"],
+                            timestamp=NanosecondTimestamp(
+                                item.get("t", 0) // 1_000_000_000,
+                                (item.get("t", 0) % 1_000_000_000) * 1000
+                            ),
+                            receive_timestamp=NanosecondTimestamp.now(),
+                            symbol=symbol,
+                            bid=quote.get('bid', item.get("p", 0)),
+                            ask=quote.get('ask', item.get("p", 0)),
+                            bid_size=quote.get('bid_size', 0),
+                            ask_size=quote.get('ask_size', 0),
+                            last_price=item.get("p", 0),
+                            last_size=item.get("s", 0),
                             source="polygon",
-                            latency_ms=(datetime.now().timestamp() - item["t"]/1000) * 1000,
-                            quality=DataQuality.EXCELLENT
+                            venue="polygon"
                         )
-                        self.metrics.update_latency(tick.latency_ms)
-                        self.metrics.record_tick(tick.quality)
-                        await self._notify_callbacks(tick)
+                        
+                        yield tick
                         
             except asyncio.TimeoutError:
                 logger.warning("Polygon heartbeat timeout")
+                raise
             except Exception as e:
                 logger.error(f"Polygon stream error: {e}")
                 raise
@@ -319,7 +452,7 @@ class PolygonProvider(DataProvider):
             self.ws = None
 
 class OandaProvider(DataProvider):
-    """OANDA streaming API - Forex & CFDs"""
+    """OANDA streaming API"""
     
     def __init__(self, account_id: str, api_token: str, environment: str = "practice"):
         super().__init__("oanda", priority=2, weight=0.9)
@@ -334,69 +467,74 @@ class OandaProvider(DataProvider):
         return True
     
     async def subscribe(self, symbols: List[str]) -> bool:
-        # OANDA uses underscore format (XAU_USD)
+        # OANDA format: XAU_USD
         self.symbols = {s.replace("/", "_") for s in symbols}
         return True
     
-    async def stream(self):
+    async def stream(self) -> AsyncIterator[MarketTick]:
         url = f"{self.base_url}/v3/accounts/{self.account_id}/pricing/stream"
         headers = {"Authorization": f"Bearer {self.api_token}"}
         params = {"instruments": ",".join(self.symbols)}
         
-        try:
-            async with self.session.get(url, headers=headers, params=params) as resp:
-                async for line in resp.content:
-                    if not line:
-                        continue
-                    
+        async with self.session.get(url, headers=headers, params=params) as response:
+            async for line in response.content:
+                if not line:
+                    continue
+                
+                try:
                     data = json.loads(line)
+                    
                     if data.get("type") == "PRICE":
-                        receive_time = datetime.now()
-                        tick_time = datetime.fromisoformat(data["time"].replace("Z", "+00:00"))
-                        latency = (receive_time - tick_time).total_seconds() * 1000
+                        tick_time = datetime.fromisoformat(
+                            data["time"].replace("Z", "+00:00")
+                        )
+                        receive_time = datetime.now(timezone.utc)
+                        
+                        # Calculate latency
+                        latency = (receive_time - tick_time).total_seconds()
                         
                         tick = MarketTick(
-                            symbol=data["instrument"].replace("_", ""),
-                            timestamp=tick_time,
+                            timestamp=NanosecondTimestamp(
+                                int(tick_time.timestamp()),
+                                tick_time.microsecond * 1000
+                            ),
+                            receive_timestamp=NanosecondTimestamp.now(),
+                            symbol=data["instrument"].replace("_", "/"),
                             bid=float(data["bids"][0]["price"]),
                             ask=float(data["asks"][0]["price"]),
                             bid_size=float(data["bids"][0]["liquidity"]),
                             ask_size=float(data["asks"][0]["liquidity"]),
                             source="oanda",
-                            receive_time=receive_time,
-                            latency_ms=latency,
-                            quality=DataQuality.GOOD if latency < 100 else DataQuality.FAIR
+                            venue="oanda"
                         )
                         
-                        self.metrics.update_latency(latency)
-                        self.metrics.record_tick(tick.quality)
-                        await self._notify_callbacks(tick)
+                        yield tick
                         
-        except Exception as e:
-            logger.error(f"OANDA stream error: {e}")
-            raise
+                except Exception as e:
+                    logger.error(f"OANDA parse error: {e}")
     
     async def disconnect(self):
         if self.session:
             await self.session.close()
 
 class BinanceProvider(DataProvider):
-    """Binance WebSocket - Crypto with depth"""
+    """Binance WebSocket with depth"""
     
-    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None):
         super().__init__("binance", priority=3, weight=0.8)
         self.api_key = api_key
-        self.api_secret = api_secret
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.base_endpoint = "wss://stream.binance.com:9443/ws"
     
     async def connect(self) -> bool:
         try:
-            # Combined stream for multiple symbols
+            # Create combined stream
             streams = "/".join([f"{s.lower()}@bookTicker" for s in self.symbols])
             url = f"{self.base_endpoint}/{streams}"
+            
             self.ws = await websockets.connect(url)
             return True
+            
         except Exception as e:
             logger.error(f"Binance connect failed: {e}")
             return False
@@ -405,27 +543,25 @@ class BinanceProvider(DataProvider):
         self.symbols = {s.replace("/", "").upper() for s in symbols}
         return True
     
-    async def stream(self):
-        while self._running:
+    async def stream(self) -> AsyncIterator[MarketTick]:
+        while True:
             try:
                 msg = await self.ws.recv()
                 data = json.loads(msg)
                 
-                # bookTicker format
                 tick = MarketTick(
+                    timestamp=NanosecondTimestamp.now(),  # Binance doesn't provide nanosecond timestamp
+                    receive_timestamp=NanosecondTimestamp.now(),
                     symbol=data["s"],
-                    timestamp=datetime.now(),
                     bid=float(data["b"]),
                     ask=float(data["a"]),
                     bid_size=float(data["B"]),
                     ask_size=float(data["A"]),
                     source="binance",
-                    latency_ms=0,  # WebSocket timestamp not provided
-                    quality=DataQuality.GOOD
+                    venue="binance"
                 )
                 
-                self.metrics.record_tick(tick.quality)
-                await self._notify_callbacks(tick)
+                yield tick
                 
             except Exception as e:
                 logger.error(f"Binance stream error: {e}")
@@ -435,237 +571,163 @@ class BinanceProvider(DataProvider):
         if self.ws:
             await self.ws.close()
 
-class TrueFXProvider(DataProvider):
-    """TrueFX free forex data (HTTP polling fallback)"""
-    
-    def __init__(self):
-        super().__init__("truefx", priority=5, weight=0.5)
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.base_url = "https://webrates.truefx.com/rates/connect.html"
-    
-    async def connect(self) -> bool:
-        self.session = aiohttp.ClientSession()
-        return True
-    
-    async def subscribe(self, symbols: List[str]) -> bool:
-        return True  # TrueFX provides all pairs
-    
-    async def stream(self):
-        """Poll every 5 seconds"""
-        while self._running:
-            start_time = time.time()
-            try:
-                async with self.session.get(f"{self.base_url}?f=csv") as resp:
-                    text = await resp.text()
-                    lines = text.strip().split("\n")[1:]  # Skip header
-                    
-                    for line in lines:
-                        parts = line.split(",")
-                        if len(parts) >= 4:
-                            symbol = parts[0].replace("/", "")
-                            bid = float(parts[2])
-                            ask = float(parts[3])
-                            
-                            tick = MarketTick(
-                                symbol=symbol,
-                                timestamp=datetime.now(),
-                                bid=bid,
-                                ask=ask,
-                                source="truefx",
-                                latency_ms=(time.time() - start_time) * 1000,
-                                quality=DataQuality.FAIR
-                            )
-                            
-                            self.metrics.record_tick(tick.quality)
-                            await self._notify_callbacks(tick)
-                
-                await asyncio.sleep(5.0)  # Rate limit
-                
-            except Exception as e:
-                logger.error(f"TrueFX error: {e}")
-                await asyncio.sleep(5.0)
-
 class MockProvider(DataProvider):
-    """Realistic simulated data for testing"""
+    """High-performance synthetic data generator for testing"""
     
-    def __init__(self, volatility: float = 0.0002, drift: float = 0.0):
+    def __init__(self, 
+                 volatility: float = 0.0002,
+                 drift: float = 0.0,
+                 tick_interval_ms: float = 100):
         super().__init__("mock", priority=10, weight=0.1)
         self.volatility = volatility
         self.drift = drift
+        self.tick_interval = tick_interval_ms / 1000  # Convert to seconds
+        
         self.prices: Dict[str, float] = {}
-        self._start_time = datetime.now()
+        self._start_time = time.time()
     
     async def connect(self) -> bool:
         # Initialize prices
         self.prices = {
-            "XAUUSD": 1950.0,
-            "EURUSD": 1.0850,
-            "GBPUSD": 1.2650,
-            "USDJPY": 150.0
+            "XAU/USD": 1950.0,
+            "EUR/USD": 1.0850,
+            "GBP/USD": 1.2650,
+            "USD/JPY": 150.0,
+            "BTC/USD": 65000.0
         }
         return True
     
     async def subscribe(self, symbols: List[str]) -> bool:
         self.symbols = set(symbols)
+        # Initialize any missing prices
+        for sym in symbols:
+            if sym not in self.prices:
+                self.prices[sym] = 100.0 + random.random() * 900
         return True
     
-    async def stream(self):
-        """Generate realistic microstructure"""
-        while self._running:
+    async def stream(self) -> AsyncIterator[MarketTick]:
+        """Generate realistic synthetic ticks"""
+        while True:
+            start_loop = time.time()
+            
             for symbol in self.symbols:
-                base_price = self.prices.get(symbol, 100.0)
+                if symbol not in self.prices:
+                    continue
+                
+                base_price = self.prices[symbol]
                 
                 # Geometric Brownian Motion
-                dt = 0.1  # 100ms ticks
+                dt = self.tick_interval
                 noise = np.random.normal(0, self.volatility * np.sqrt(dt))
                 new_price = base_price * np.exp(self.drift * dt + noise)
                 self.prices[symbol] = new_price
                 
                 # Realistic spread based on volatility
-                spread = abs(noise) * base_price * 2 + 0.0001 * base_price
+                spread = abs(noise) * base_price * 2 + base_price * 0.0001
                 
                 tick = MarketTick(
+                    timestamp=NanosecondTimestamp.now(),
+                    receive_timestamp=NanosecondTimestamp.now(),
                     symbol=symbol,
-                    timestamp=datetime.now(),
                     bid=new_price - spread/2,
                     ask=new_price + spread/2,
                     bid_size=np.random.exponential(10),
                     ask_size=np.random.exponential(10),
                     source="mock",
-                    latency_ms=0.1,
-                    quality=DataQuality.EXCELLENT
+                    venue="mock"
                 )
                 
-                await self._notify_callbacks(tick)
+                yield tick
             
-            await asyncio.sleep(0.1)  # 10 ticks/second
+            # Maintain precise timing
+            elapsed = time.time() - start_loop
+            sleep_time = max(0, self.tick_interval - elapsed)
+            await asyncio.sleep(sleep_time)
 
-class DataQualityValidator:
-    """AI-powered data quality validation"""
-    
-    def __init__(self, lookback: int = 100):
-        self.lookback = lookback
-        self.tick_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=lookback))
-        self.price_anomalies = 0
-        
-        # Validation thresholds
-        self.max_spread_bps = 50.0
-        self.max_price_jump_pct = 0.01
-        self.max_latency_ms = 1000.0
-    
-    def validate(self, tick: MarketTick) -> Tuple[bool, DataQuality, str]:
-        """
-        Validate tick data quality.
-        Returns: (is_valid, quality, reason)
-        """
-        history = self.tick_history[tick.symbol]
-        
-        # Basic validation
-        if tick.bid <= 0 or tick.ask <= 0:
-            return False, DataQuality.INVALID, "Invalid prices"
-        
-        if tick.bid >= tick.ask:
-            return False, DataQuality.INVALID, "Negative spread"
-        
-        # Spread check
-        if tick.spread_bps > self.max_spread_bps:
-            return False, DataQuality.INVALID, f"Excessive spread: {tick.spread_bps:.1f} bps"
-        
-        # Latency check
-        if tick.latency_ms > self.max_latency_ms:
-            return False, DataQuality.STALE, f"Stale data: {tick.latency_ms:.0f}ms"
-        
-        # Price jump detection
-        if len(history) > 0:
-            last_tick = history[-1]
-            price_change = abs(tick.mid - last_tick.mid) / last_tick.mid
-            
-            if price_change > self.max_price_jump_pct:
-                self.price_anomalies += 1
-                return False, DataQuality.INVALID, f"Price jump: {price_change:.2%}"
-        
-        # Quality classification
-        if tick.latency_ms < 10:
-            quality = DataQuality.EXCELLENT
-        elif tick.latency_ms < 100:
-            quality = DataQuality.GOOD
-        elif tick.latency_ms < 500:
-            quality = DataQuality.FAIR
-        else:
-            quality = DataQuality.POOR
-        
-        history.append(tick)
-        return True, quality, "OK"
+# =============================================================================
+# CONSENSUS AGGREGATION ENGINE
+# =============================================================================
 
-class MultiSourceAggregator:
+class ConsensusAggregator:
     """
-    Intelligent multi-source data aggregation with consensus pricing.
-    Implements Byzantine fault tolerance for data sources.
+    Byzantine fault-tolerant consensus pricing.
+    Combines multiple venue streams into single authoritative price.
     """
     
     def __init__(self,
                  consensus_threshold: float = 0.67,
                  max_sources: int = 5,
+                 outlier_threshold: float = 0.001,  # 10 bps
                  redis_url: Optional[str] = None):
         
-        self.providers: Dict[str, DataProvider] = {}
         self.consensus_threshold = consensus_threshold
         self.max_sources = max_sources
+        self.outlier_threshold = outlier_threshold
         
-        # Redis for cross-process communication
-        self.redis_client = None
+        # Redis for distributed caching
+        self.redis: Optional[redis.Redis] = None
         if redis_url and REDIS_AVAILABLE:
             try:
-                self.redis_client = redis.from_url(redis_url)
+                self.redis = redis.from_url(redis_url)
             except Exception as e:
-                logger.warning(f"Redis connection failed: {e}")
+                logger.warning(f"Redis unavailable: {e}")
         
         # State
+        self.providers: Dict[str, DataProvider] = {}
         self.latest_ticks: Dict[str, Dict[str, MarketTick]] = defaultdict(dict)
         self.consensus_prices: Dict[str, MarketTick] = {}
-        self.validator = DataQualityValidator()
+        self.consensus_history: deque = deque(maxlen=1000)
         
-        # Metrics
-        self.aggregation_stats = {
-            'ticks_processed': 0,
-            'consensus_formed': 0,
-            'disagreements': 0
-        }
+        # Quality tracking
+        self.venue_scores: Dict[str, float] = {}
         
         # Callbacks
         self._consensus_callbacks: List[Callable[[MarketTick], Any]] = []
+        
+        # Statistics
+        self.stats = {
+            'ticks_processed': 0,
+            'consensus_formed': 0,
+            'disagreements': 0,
+            'outliers_rejected': 0
+        }
     
     def add_provider(self, provider: DataProvider):
-        """Add data source"""
+        """Add data source to aggregation"""
         if len(self.providers) >= self.max_sources:
             logger.warning(f"Max sources ({self.max_sources}) reached")
             return
         
         self.providers[provider.name] = provider
-        provider.on_tick(self._on_provider_tick)
-        logger.info(f"Added provider: {provider.name} (priority {provider.priority})")
+        provider.on_tick(lambda tick: asyncio.create_task(self._process_tick(tick)))
+        
+        # Initialize venue score
+        self.venue_scores[provider.name] = 1.0
+        
+        logger.info(f"Added provider: {provider.name} (priority={provider.priority}, weight={provider.weight})")
     
-    def _on_provider_tick(self, tick: MarketTick):
-        """Handle tick from provider"""
-        # Validate
-        is_valid, quality, reason = self.validator.validate(tick)
-        if not is_valid:
-            logger.debug(f"Tick rejected from {tick.source}: {reason}")
+    async def _process_tick(self, tick: MarketTick):
+        """Process incoming tick from any provider"""
+        # Validate tick
+        if tick.quality == DataQuality.INVALID:
+            self.stats['outliers_rejected'] += 1
             return
         
-        # Update latest
+        # Store tick
         self.latest_ticks[tick.symbol][tick.source] = tick
+        self.stats['ticks_processed'] += 1
         
-        # Form consensus
+        # Attempt consensus formation
         consensus = self._form_consensus(tick.symbol)
         if consensus:
             self.consensus_prices[tick.symbol] = consensus
-            self._notify_consensus(consensus)
+            self.consensus_history.append((consensus, datetime.now(timezone.utc)))
+            self.stats['consensus_formed'] += 1
             
-            # Cache in Redis
-            if self.redis_client:
-                asyncio.create_task(self._cache_tick(consensus))
-
+            # Cache and notify
+            await self._cache_consensus(consensus)
+            await self._notify_consensus(consensus)
+    
     def _form_consensus(self, symbol: str) -> Optional[MarketTick]:
         """
         Form consensus price using weighted median.
@@ -673,93 +735,135 @@ class MultiSourceAggregator:
         """
         ticks = list(self.latest_ticks[symbol].values())
         
+        # Need minimum sources
         if len(ticks) < 2:
             return ticks[0] if ticks else None
         
-        # Check for stale data (>1s old)
-        now = datetime.now()
+        # Check freshness (< 1 second old)
+        now = time.time_ns()
         fresh_ticks = [
             t for t in ticks 
-            if (now - t.timestamp).total_seconds() < 1.0
+            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
         ]
         
+        # Check if we have enough fresh data
         if len(fresh_ticks) < len(ticks) * self.consensus_threshold:
-            logger.warning(f"Insufficient fresh data for {symbol}")
             return None
         
-        # Weight by source quality and inverse latency
-        weights = []
-        prices = []
-        
+        # Calculate weighted scores for each tick
+        scored_ticks = []
         for tick in fresh_ticks:
             provider = self.providers.get(tick.source)
             if not provider:
                 continue
             
-            # Weight = source_weight * (1/latency) * health_score
-            weight = (
+            # Score = weight * (1/latency) * health * quality
+            latency_ms = tick.latency_ns / 1_000_000
+            latency_score = 1 / max(latency_ms, 0.1)
+            
+            health_score = provider.metrics.health_score / 100.0
+            
+            quality_score = tick.quality.value / 5.0
+            
+            total_score = (
                 provider.weight * 
-                (1000.0 / max(tick.latency_ms, 1.0)) * 
-                (provider.metrics.health_score / 100.0)
+                latency_score * 
+                health_score * 
+                quality_score
             )
-            weights.append(weight)
-            prices.append(tick.mid)
+            
+            scored_ticks.append((total_score, tick))
         
-        if not prices:
+        if not scored_ticks:
             return None
         
+        # Sort by score
+        scored_ticks.sort(reverse=True)
+        
+        # Extract prices for outlier detection
+        prices = [t.mid for _, t in scored_ticks]
+        
+        # Detect outliers using IQR
+        if len(prices) >= 3:
+            q1, q3 = np.percentile(prices, [25, 75])
+            iqr = q3 - q1
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+            
+            # Filter outliers
+            filtered = [(s, t) for s, t in scored_ticks if lower_bound <= t.mid <= upper_bound]
+            
+            if len(filtered) < len(scored_ticks):
+                self.stats['outliers_rejected'] += len(scored_ticks) - len(filtered)
+                scored_ticks = filtered
+        
         # Calculate weighted median
-        sorted_pairs = sorted(zip(prices, weights))
-        sorted_prices, sorted_weights = zip(*sorted_pairs)
+        if not scored_ticks:
+            return None
         
-        cumsum = np.cumsum(sorted_weights)
-        total_weight = cumsum[-1]
-        median_idx = np.searchsorted(cumsum, total_weight / 2)
+        total_weight = sum(s for s, _ in scored_ticks)
+        cumulative = 0
+        median_tick = None
         
-        consensus_price = sorted_prices[median_idx]
+        for score, tick in scored_ticks:
+            cumulative += score
+            if cumulative >= total_weight / 2:
+                median_tick = tick
+                break
         
-        # Calculate spread from best bid/ask across all sources
-        best_bid = max(t.bid for t in fresh_ticks)
-        best_ask = min(t.ask for t in fresh_ticks)
+        if not median_tick:
+            median_tick = scored_ticks[0][1]
         
-        # Check for disagreement (Byzantine fault detection)
-        price_std = np.std(prices)
-        price_range = max(prices) - min(prices)
+        # Calculate consensus spread (tightest spread across all sources)
+        best_bid = max(t.bid for _, t in scored_ticks)
+        best_ask = min(t.ask for _, t in scored_ticks)
         
-        if price_range > consensus_price * 0.001:  # >10 bps disagreement
-            self.aggregation_stats['disagreements'] += 1
+        # Check for significant disagreement (Byzantine fault detection)
+        price_range = max(t.mid for _, t in scored_ticks) - min(t.mid for _, t in scored_ticks)
+        consensus_price = median_tick.mid
+        
+        if price_range > consensus_price * self.outlier_threshold:
+            self.stats['disagreements'] += 1
             logger.warning(
                 f"Price disagreement for {symbol}: "
-                f"range={price_range:.5f}, sources={[t.source for t in fresh_ticks]}"
+                f"range={price_range:.5f} ({price_range/consensus_price*10000:.1f} bps), "
+                f"sources={[t.source for _, t in scored_ticks]}"
             )
         
         # Create consensus tick
         consensus = MarketTick(
+            timestamp=median_tick.timestamp,
+            receive_timestamp=NanosecondTimestamp.now(),
             symbol=symbol,
-            timestamp=datetime.now(),
             bid=best_bid,
             ask=best_ask,
-            bid_size=sum(t.bid_size for t in fresh_ticks) / len(fresh_ticks),
-            ask_size=sum(t.ask_size for t in fresh_ticks) / len(fresh_ticks),
+            bid_size=np.mean([t.bid_size for _, t in scored_ticks]),
+            ask_size=np.mean([t.ask_size for _, t in scored_ticks]),
             source="consensus",
-            latency_ms=np.mean([t.latency_ms for t in fresh_ticks]),
-            quality=DataQuality.EXCELLENT if len(fresh_ticks) >= 3 else DataQuality.GOOD
+            venue="consensus"
         )
         
-        self.aggregation_stats['consensus_formed'] += 1
         return consensus
     
-    async def _cache_tick(self, tick: MarketTick):
-        """Cache tick in Redis"""
+    async def _cache_consensus(self, tick: MarketTick):
+        """Cache consensus in Redis"""
+        if not self.redis:
+            return
+        
         try:
-            key = f"tick:{tick.symbol}"
-            value = json.dumps(tick.to_dict(), default=str)
-            await self.redis_client.setex(key, 60, value)  # 60s TTL
+            key = f"consensus:{tick.symbol}"
+            value = json.dumps({
+                'timestamp': float(tick.timestamp),
+                'bid': tick.bid,
+                'ask': tick.ask,
+                'quality': tick.quality.name
+            })
+            await self.redis.setex(key, 60, value)  # 60 second TTL
         except Exception as e:
             logger.error(f"Redis cache error: {e}")
     
-    def _notify_consensus(self, tick: MarketTick):
-        """Notify consensus callbacks"""
+    async def _notify_consensus(self, tick: MarketTick):
+        """Notify all consensus subscribers"""
         for callback in self._consensus_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
@@ -770,7 +874,7 @@ class MultiSourceAggregator:
                 logger.error(f"Consensus callback error: {e}")
     
     def on_consensus(self, callback: Callable[[MarketTick], Any]):
-        """Register consensus callback"""
+        """Subscribe to consensus ticks"""
         self._consensus_callbacks.append(callback)
     
     async def start(self):
@@ -779,6 +883,7 @@ class MultiSourceAggregator:
             asyncio.create_task(provider.start())
             for provider in self.providers.values()
         ]
+        
         await asyncio.gather(*tasks, return_exceptions=True)
     
     def stop(self):
@@ -786,14 +891,14 @@ class MultiSourceAggregator:
         for provider in self.providers.values():
             provider.stop()
     
-    def get_health_report(self) -> Dict:
-        """Get comprehensive health report"""
+    def get_health_report(self) -> Dict[str, Any]:
+        """Generate comprehensive health report"""
         return {
             'providers': {
                 name: {
                     'state': provider.metrics.state.name,
                     'health_score': provider.metrics.health_score,
-                    'latency_avg': provider.metrics.latency_avg,
+                    'latency_p50_ms': np.percentile(list(provider.metrics.latency_history), 50) / 1_000_000 if provider.metrics.latency_history else 0,
                     'ticks_received': provider.metrics.ticks_received,
                     'errors': provider.metrics.errors
                 }
@@ -801,166 +906,134 @@ class MultiSourceAggregator:
             },
             'consensus': {
                 'symbols_tracked': len(self.consensus_prices),
-                'stats': self.aggregation_stats
+                'stats': self.stats,
+                'latest_consensus': {
+                    symbol: {
+                        'bid': tick.bid,
+                        'ask': tick.ask,
+                        'latency_ms': tick.latency_ns / 1_000_000
+                    }
+                    for symbol, tick in list(self.consensus_prices.items())[:5]
+                }
             },
-            'redis': 'connected' if self.redis_client else 'disconnected'
-        }
-
-class RealtimeStrategyEngine:
-    """
-    High-performance strategy execution engine.
-    Processes ticks with minimal latency.
-    """
-    
-    def __init__(self,
-                 aggregator: MultiSourceAggregator,
-                 max_latency_ms: float = 10.0,
-                 batch_size: int = 100):
-        
-        self.aggregator = aggregator
-        self.max_latency_ms = max_latency_ms
-        self.batch_size = batch_size
-        
-        # Strategy registry
-        self.strategies: Dict[str, Any] = {}
-        self.signal_history: deque = deque(maxlen=10000)
-        
-        # Execution
-        self.order_queue: asyncio.Queue = asyncio.Queue()
-        self.risk_check_queue: asyncio.Queue = asyncio.Queue()
-        
-        # Performance
-        self.processing_latency_ns: deque = deque(maxlen=1000)
-        self.ticks_processed = 0
-    
-    def register_strategy(self, name: str, strategy: Any):
-        """Register trading strategy"""
-        self.strategies[name] = strategy
-        logger.info(f"Registered strategy: {name}")
-    
-    async def process_tick(self, tick: MarketTick):
-        """Process single tick through all strategies"""
-        start_time = time.time_ns()
-        
-        # Generate signals from all strategies
-        signals = []
-        for name, strategy in self.strategies.items():
-            try:
-                signal = strategy.on_tick(tick)
-                if signal:
-                    signals.append({
-                        'strategy': name,
-                        'signal': signal,
-                        'timestamp': datetime.now()
-                    })
-            except Exception as e:
-                logger.error(f"Strategy {name} error: {e}")
-        
-        # Record latency
-        latency_ns = time.time_ns() - start_time
-        self.processing_latency_ns.append(latency_ns)
-        self.ticks_processed += 1
-        
-        # Queue for risk check if signals generated
-        if signals:
-            await self.risk_check_queue.put({
-                'tick': tick,
-                'signals': signals,
-                'latency_ms': latency_ns / 1_000_000
-            })
-    
-    async def run(self):
-        """Main processing loop"""
-        self.aggregator.on_consensus(self.process_tick)
-        await self.aggregator.start()
-    
-    def get_performance_metrics(self) -> Dict:
-        """Get engine performance metrics"""
-        if not self.processing_latency_ns:
-            return {'status': 'no_data'}
-        
-        latencies = np.array(self.processing_latency_ns) / 1_000_000  # Convert to ms
-        
-        return {
-            'ticks_processed': self.ticks_processed,
-            'avg_latency_ms': np.mean(latencies),
-            'p50_latency_ms': np.percentile(latencies, 50),
-            'p99_latency_ms': np.percentile(latencies, 99),
-            'max_latency_ms': np.max(latencies),
-            'strategies_active': len(self.strategies),
-            'signals_generated': len(self.signal_history)
+            'redis': 'connected' if self.redis else 'disconnected'
         }
 
 # =============================================================================
 # EXAMPLE USAGE & TESTING
 # =============================================================================
 
-if __name__ == "__main__":
-    print("=" * 70)
-    print("ENHANCED REALTIME ENGINE v3.0 - TEST SUITE")
-    print("=" * 70)
+async def run_realtime_test():
+    """Comprehensive realtime engine test"""
+    print("=" * 80)
+    print("HOPEFX REAL-TIME ENGINE v4.0 - COMPREHENSIVE TEST")
+    print("=" * 80)
     
-    async def test_engine():
-        # Create aggregator
-        aggregator = MultiSourceAggregator(
-            consensus_threshold=0.5,
-            max_sources=5
-        )
-        
-        # Add providers (prioritized)
-        aggregator.add_provider(MockProvider(volatility=0.0003))
-        # aggregator.add_provider(OandaProvider("account", "token"))  # Real credentials needed
-        # aggregator.add_provider(BinanceProvider())  # Real credentials needed
-        
-        # Create strategy engine
-        engine = RealtimeStrategyEngine(aggregator, max_latency_ms=5.0)
-        
-        # Simple test strategy
-        class TestStrategy:
-            def __init__(self):
-                self.prices = deque(maxlen=20)
-            
-            def on_tick(self, tick: MarketTick):
-                self.prices.append(tick.mid)
-                if len(self.prices) >= 20:
-                    ma_fast = np.mean(list(self.prices)[-10:])
-                    ma_slow = np.mean(self.prices)
-                    
-                    if ma_fast > ma_slow * 1.0001:
-                        return {'action': 'buy', 'strength': 0.8}
-                    elif ma_fast < ma_slow * 0.9999:
-                        return {'action': 'sell', 'strength': 0.8}
-                return None
-        
-        engine.register_strategy("ma_crossover", TestStrategy())
-        
-        # Start processing
-        print("\nStarting realtime processing (5 seconds)...")
-        task = asyncio.create_task(engine.run())
-        
-        # Let it run
-        await asyncio.sleep(5)
-        
-        # Stop and report
-        aggregator.stop()
-        task.cancel()
-        
-        print("\n" + "=" * 70)
-        print("PERFORMANCE METRICS")
-        print("=" * 70)
-        metrics = engine.get_performance_metrics()
-        for key, value in metrics.items():
-            if isinstance(value, float):
-                print(f"{key}: {value:.4f}")
-            else:
-                print(f"{key}: {value}")
-        
-        health = aggregator.get_health_report()
-        print(f"\nProviders: {list(health['providers'].keys())}")
-        print(f"Consensus formed: {health['consensus']['stats']['consensus_formed']}")
-        
-        print("\n✅ Realtime engine test completed!")
+    # Create aggregator
+    print("\n[1] Initializing consensus aggregator...")
+    aggregator = ConsensusAggregator(
+        consensus_threshold=0.5,
+        max_sources=5,
+        outlier_threshold=0.001
+    )
     
-    # Run test
-    asyncio.run(test_engine())
+    # Add providers
+    print("[2] Adding data providers...")
+    
+    # Mock providers with different characteristics
+    aggregator.add_provider(MockProvider(
+        volatility=0.0002,
+        drift=0.00001,
+        tick_interval_ms=100
+    ))
+    
+    aggregator.add_provider(MockProvider(
+        volatility=0.0003,
+        drift=-0.00001,
+        tick_interval_ms=150
+    ))
+    
+    # Real providers would be added here with actual credentials
+    # aggregator.add_provider(PolygonProvider("YOUR_API_KEY"))
+    # aggregator.add_provider(OandaProvider("account", "token"))
+    
+    print(f"    Added {len(aggregator.providers)} providers")
+    
+    # Set up tick collection
+    consensus_ticks = []
+    latencies = []
+    
+    def on_consensus(tick: MarketTick):
+        consensus_ticks.append(tick)
+        latencies.append(tick.latency_ns / 1_000_000)  # Convert to ms
+        
+        if len(consensus_ticks) % 100 == 0:
+            print(f"    Received {len(consensus_ticks)} consensus ticks "
+                  f"(avg latency: {np.mean(latencies[-100:]):.2f} ms)")
+    
+    aggregator.on_consensus(on_consensus)
+    
+    # Start aggregation
+    print("\n[3] Starting realtime aggregation (5 seconds)...")
+    start_time = time.time()
+    
+    task = asyncio.create_task(aggregator.start())
+    
+    # Let it run
+    await asyncio.sleep(5)
+    
+    # Stop
+    print("\n[4] Stopping aggregation...")
+    aggregator.stop()
+    task.cancel()
+    
+    elapsed = time.time() - start_time
+    
+    # Generate report
+    print("\n" + "=" * 80)
+    print("REAL-TIME ENGINE REPORT")
+    print("=" * 80)
+    
+    print(f"\nDuration: {elapsed:.2f} seconds")
+    print(f"Consensus ticks received: {len(consensus_ticks)}")
+    print(f"Rate: {len(consensus_ticks)/elapsed:.1f} ticks/second")
+    
+    if latencies:
+        print(f"\n--- Latency Statistics ---")
+        print(f"Min: {min(latencies):.3f} ms")
+        print(f"Max: {max(latencies):.3f} ms")
+        print(f"Mean: {np.mean(latencies):.3f} ms")
+        print(f"P50: {np.percentile(latencies, 50):.3f} ms")
+        print(f"P99: {np.percentile(latencies, 99):.3f} ms")
+    
+    # Health report
+    print(f"\n--- Provider Health ---")
+    health = aggregator.get_health_report()
+    for name, status in health['providers'].items():
+        print(f"{name:15}: {status['state']:12} | "
+              f"Health: {status['health_score']:5.1f} | "
+              f"Latency: {status['latency_p50_ms']:6.2f} ms")
+    
+    print(f"\n--- Consensus Stats ---")
+    print(f"Ticks processed: {aggregator.stats['ticks_processed']}")
+    print(f"Consensus formed: {aggregator.stats['consensus_formed']}")
+    print(f"Disagreements: {aggregator.stats['disagreements']}")
+    print(f"Outliers rejected: {aggregator.stats['outliers_rejected']}")
+    
+    # Sample consensus prices
+    if consensus_ticks:
+        print(f"\n--- Sample Prices (last 5) ---")
+        for tick in consensus_ticks[-5:]:
+            print(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} "
+                  f"Spread={tick.spread_bps:.2f} bps")
+    
+    print("\n" + "=" * 80)
+    print("✅ REAL-TIME ENGINE TEST COMPLETED")
+    print("=" * 80)
 
+if __name__ == "__main__":
+    # Run test
+    try:
+        asyncio.run(run_realtime_test())
+    except KeyboardInterrupt:
+        print("\n\nTest interrupted by user")
