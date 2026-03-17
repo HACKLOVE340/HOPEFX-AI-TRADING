@@ -1,433 +1,744 @@
-# FIXED: enhanced_backtest_engine.py
+# ============================================================================
+# FIXED: enhanced_backtest_engine.py - PROPER PYTHON MODULE
+# ============================================================================
+
 """
-Institutional-Grade Backtesting Engine
-FIA 2024 Compliant - Pre-trade Risk Controls Integrated
+Enhanced Backtesting Engine with Tick-Level Precision & Realistic Market Impact
+Institutional-grade backtesting with proper slippage, spread modeling, and transaction costs.
 """
 
-import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Callable, Any
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+import pandas as pd
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Tuple, Any
 from enum import Enum
+from datetime import datetime, timedelta
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from collections import deque
 import json
-from pathlib import Path
 
-# Internal imports
-from database.models import Trade, StrategyPerformance, MarketData
-from risk.manager import RiskManager
-from strategies.base import Strategy, Signal, SignalType
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class BacktestValidationError(Exception):
-    """Raised when backtest parameters violate risk controls"""
-    pass
-
 class ExecutionModel(Enum):
-    SLIPPAGE_RANDOM = "slippage_random"
-    SLIPPAGE_MARKET_IMPACT = "slippage_market_impact"
-    LATENCY_FIXED = "latency_fixed"
-    LATENCY_VARIABLE = "latency_variable"
+    """Market execution quality models"""
+    IDEAL = "ideal"  # No slippage, mid-price fills (unrealistic)
+    CONSERVATIVE = "conservative"  # Small slippage, realistic for liquid pairs
+    AGGRESSIVE = "aggressive"  # Higher slippage, volatile markets
+    PESSIMISTIC = "pessimistic"  # Worst-case scenario modeling
 
 @dataclass
-class BacktestConfig:
-    """FIA 2024 Compliant Backtest Configuration"""
-    # Capital & Position Limits (FIA 1.1, 1.2)
-    initial_capital: float = 100000.0
-    max_position_size_pct: float = 0.05  # 5% max per position
-    max_intraday_position: int = 10      # Max concurrent positions
-    
-    # Price Controls (FIA 1.3)
-    price_tolerance_pct: float = 0.02    # 2% from reference price
-    
-    # Risk Limits (FIA 1.5)
-    daily_loss_limit_pct: float = 0.03   # 3% daily kill switch
-    max_drawdown_pct: float = 0.10       # 10% max drawdown
-    
-    # Execution Modeling
-    execution_model: ExecutionModel = ExecutionModel.SLIPPAGE_MARKET_IMPACT
-    slippage_std: float = 0.001          # 0.1% slippage std dev
-    latency_ms: float = 150.0            # 150ms base latency
-    
-    # Data Quality (FIA 3.1)
-    min_data_quality_score: float = 0.95
-    validate_market_data: bool = True
-    
-    def validate(self) -> None:
-        """Validate configuration against FIA standards"""
-        if self.max_position_size_pct > 0.10:
-            raise BacktestValidationError("Position size exceeds FIA recommended 10%")
-        if self.daily_loss_limit_pct > 0.05:
-            raise BacktestValidationError("Daily loss limit exceeds prudent 5%")
-        if self.price_tolerance_pct > 0.05:
-            raise BacktestValidationError("Price tolerance too wide for risk control")
+class TickData:
+    """Tick-level market data with full depth simulation"""
+    timestamp: datetime
+    bid: float
+    ask: float
+    bid_size: float = 0.0
+    ask_size: float = 0.0
+    volume: float = 0.0
+
+    @property
+    def mid(self) -> float:
+        return (self.bid + self.ask) / 2
+
+    @property
+    def spread(self) -> float:
+        return self.ask - self.bid
+
+    @property
+    def spread_pct(self) -> float:
+        return self.spread / self.mid if self.mid > 0 else 0
 
 @dataclass
-class BacktestResult:
-    """Comprehensive backtest results with risk metrics"""
-    # Performance
-    total_return: float
-    sharpe_ratio: float
-    sortino_ratio: float
-    calmar_ratio: float
-    max_drawdown: float
-    win_rate: float
-    profit_factor: float
-    
-    # Risk Metrics (FIA 4.2)
-    var_95: float                    # Value at Risk
-    cvar_95: float                   # Conditional VaR
-    max_consecutive_losses: int
-    avg_trade_duration: timedelta
-    
-    # Operational
-    total_trades: int
-    slippage_cost: float
-    latency_cost: float
-    data_quality_score: float
-    
-    # Compliance
-    risk_limit_breaches: List[Dict]
-    kill_switch_activations: int
-    
-    def to_dict(self) -> Dict:
-        return {
-            'total_return': self.total_return,
-            'sharpe_ratio': self.sharpe_ratio,
-            'max_drawdown': self.max_drawdown,
-            'var_95': self.var_95,
-            'total_trades': self.total_trades,
-            'compliant': len(self.risk_limit_breaches) == 0
-        }
+class TransactionCosts:
+    """Comprehensive transaction cost model"""
+    spread_pips: float = 0.0  # Variable spread model
+    commission_per_lot: float = 0.0  # Broker commission
+    slippage_model: ExecutionModel = ExecutionModel.CONSERVATIVE
 
-class InstitutionalGradeBacktestEngine:
-    """
-    FIA 2024 Compliant Backtesting Engine
-    Implements pre-trade risk controls, execution simulation, and comprehensive analytics
-    """
-    
-    def __init__(self, config: Optional[BacktestConfig] = None):
-        self.config = config or BacktestConfig()
-        self.config.validate()
-        
-        self.risk_manager = RiskManager()
-        self.trades: List[Trade] = []
-        self.equity_curve: List[float] = []
-        self.risk_events: List[Dict] = []
-        
-        # FIA 1.5 Kill Switch State
-        self.kill_switch_active = False
-        self.daily_pnl = 0.0
-        
-        logger.info(f"BacktestEngine initialized with {self.config}")
-    
-    def run_backtest(
-        self,
-        strategy: Strategy,
-        market_data: pd.DataFrame,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        parallel: bool = True
-    ) -> BacktestResult:
+    # Market impact coefficients (square-root model)
+    impact_coefficient: float = 0.1  # Almgren-Chriss style
+
+    def calculate_slippage(self, order_size: float, volatility: float,
+                          execution_model: ExecutionModel) -> float:
         """
-        Execute institutional-grade backtest with full risk controls
-        
-        FIA Compliance:
-        - Pre-trade order size checks (1.1)
-        - Intraday position limits (1.2)
-        - Price tolerance validation (1.3)
-        - Kill switch on loss limits (1.5)
+        Calculate realistic slippage based on order size and market conditions.
+        Uses square-root market impact model: impact = coeff * sigma * sqrt(order_size)
         """
-        # Data Quality Check (FIA 3.1)
-        if self.config.validate_market_data:
-            quality_score = self._validate_market_data(market_data)
-            if quality_score < self.config.min_data_quality_score:
-                raise BacktestValidationError(
-                    f"Data quality {quality_score:.2f} below threshold "
-                    f"{self.config.min_data_quality_score}"
-                )
-        
-        # Filter date range
-        if start_date:
-            market_data = market_data[market_data.index >= start_date]
-        if end_date:
-            market_data = market_data[market_data.index <= end_date]
-        
-        logger.info(f"Running backtest: {len(market_data)} bars")
-        
-        # Generate signals
-        signals = strategy.generate_signals(market_data)
-        
-        # Simulate execution with risk controls
-        if parallel and len(signals) > 1000:
-            results = self._parallel_execute(signals, market_data)
+        base_slippage = {
+            ExecutionModel.IDEAL: 0.0,
+            ExecutionModel.CONSERVATIVE: 0.1,  # 0.1 pips average
+            ExecutionModel.AGGRESSIVE: 0.5,  # 0.5 pips
+            ExecutionModel.PESSIMISTIC: 1.5  # 1.5 pips (news events)
+        }.get(execution_model, 0.1)
+
+        # Scale with order size (larger orders = more impact)
+        size_factor = np.sqrt(abs(order_size)) * self.impact_coefficient
+
+        # Scale with volatility (higher vol = more slippage)
+        vol_factor = 1 + (volatility * 10)  # 10% vol adds 100% to slippage
+
+        return base_slippage * size_factor * vol_factor
+
+    def total_cost_per_unit(self, order_size: float, volatility: float,
+                           execution_model: ExecutionModel) -> float:
+        """Total transaction cost in price units"""
+        slippage = self.calculate_slippage(order_size, volatility, execution_model)
+        spread_cost = self.spread_pips * 0.0001  # Convert pips to price
+        commission = self.commission_per_lot / 100000  # Per unit
+        return spread_cost + slippage + commission
+
+@dataclass
+class Position:
+    """Track position with detailed P&L attribution"""
+    symbol: str
+    size: float = 0.0
+    avg_entry: float = 0.0
+    entry_time: Optional[datetime] = None
+
+    # Cost tracking
+    total_commission: float = 0.0
+    total_slippage: float = 0.0
+
+    # Risk metrics
+    max_favorable_excursion: float = 0.0  # Best price reached
+    max_adverse_excursion: float = 0.0  # Worst price reached (drawdown)
+
+    def update_mfe_mae(self, current_price: float):
+        """Update max favorable/adverse excursion"""
+        if self.size > 0:  # Long
+            self.max_favorable_excursion = max(self.max_favorable_excursion,
+                                               current_price - self.avg_entry)
+            self.max_adverse_excursion = max(self.max_adverse_excursion,
+                                             self.avg_entry - current_price)
+        elif self.size < 0:  # Short
+            self.max_favorable_excursion = max(self.max_favorable_excursion,
+                                               self.avg_entry - current_price)
+            self.max_adverse_excursion = max(self.max_adverse_excursion,
+                                             current_price - self.avg_entry)
+
+@dataclass
+class Trade:
+    """Complete trade record with full cost attribution"""
+    entry_time: datetime
+    exit_time: datetime
+    symbol: str
+    direction: str  # 'long' or 'short'
+    entry_price: float
+    exit_price: float
+    size: float
+
+    # Cost breakdown
+    entry_slippage: float
+    exit_slippage: float
+    commission: float
+
+    # Risk metrics
+    mfe: float  # Max favorable excursion
+    mae: float  # Max adverse excursion
+
+    @property
+    def gross_pnl(self) -> float:
+        """P&L before costs"""
+        if self.direction == 'long':
+            return (self.exit_price - self.entry_price) * self.size
         else:
-            results = self._sequential_execute(signals, market_data)
-        
-        return self._calculate_results(results)
-    
-    def _validate_market_data(self, data: pd.DataFrame) -> float:
-        """FIA 3.1 Market Data Reasonability Checks"""
-        checks = []
-        
-        # Check for stale data
-        time_diffs = data.index.to_series().diff().dt.total_seconds()
-        checks.append((time_diffs < 300).mean())  # 5min max gap
-        
-        # Check for price jumps > 5%
-        price_changes = data['close'].pct_change().abs()
-        checks.append((price_changes < 0.05).mean())
-        
-        # Check for missing values
-        checks.append(1 - data.isnull().any(axis=1).mean())
-        
-        # Check for negative spreads
-        if 'bid' in data.columns and 'ask' in data.columns:
-            checks.append((data['ask'] > data['bid']).mean())
-        
-        return np.mean(checks)
-    
-    def _sequential_execute(
-        self,
-        signals: List[Signal],
-        market_data: pd.DataFrame
-    ) -> List[Trade]:
-        """Execute signals sequentially with risk checks"""
-        trades = []
-        
-        for signal in signals:
-            # FIA 1.5 Kill Switch Check
-            if self.kill_switch_active:
-                self.risk_events.append({
-                    'time': signal.timestamp,
-                    'type': 'kill_switch_blocked',
-                    'reason': 'Daily loss limit breached'
-                })
-                continue
-            
-            # FIA 1.1 Maximum Order Size
-            position_value = signal.size * signal.price
-            max_order_value = self.config.initial_capital * self.config.max_position_size_pct
-            
-            if position_value > max_order_value:
-                self.risk_events.append({
-                    'time': signal.timestamp,
-                    'type': 'order_size_blocked',
-                    'requested': position_value,
-                    'limit': max_order_value
-                })
-                continue
-            
-            # FIA 1.2 Maximum Intraday Position
-            current_positions = len([t for t in trades if t.status == 'open'])
-            if current_positions >= self.config.max_intraday_position:
-                continue
-            
-            # FIA 1.3 Price Tolerance
-            current_price = self._get_price_at_time(market_data, signal.timestamp)
-            if abs(signal.price - current_price) / current_price > self.config.price_tolerance_pct:
-                self.risk_events.append({
-                    'time': signal.timestamp,
-                    'type': 'price_tolerance_blocked',
-                    'signal_price': signal.price,
-                    'market_price': current_price
-                })
-                continue
-            
-            # Simulate execution with slippage and latency
-            trade = self._simulate_execution(signal, market_data)
-            trades.append(trade)
-            
-            # Update kill switch monitoring
-            self._update_kill_switch(trade)
-        
-        return trades
-    
-    def _simulate_execution(self, signal: Signal, data: pd.DataFrame) -> Trade:
-        """Realistic execution simulation with market impact"""
-        # Latency simulation (FIA execution realism)
-        latency = np.random.exponential(self.config.latency_ms / 1000)
-        
-        # Slippage model based on order size vs volume
-        if self.config.execution_model == ExecutionModel.SLIPPAGE_MARKET_IMPACT:
-            volume = data.loc[signal.timestamp, 'volume']
-            market_impact = (signal.size / volume) * 0.1  # 0.1% per 100% volume
-            slippage = np.random.normal(market_impact, self.config.slippage_std)
+            return (self.entry_price - self.exit_price) * self.size
+
+    @property
+    def net_pnl(self) -> float:
+        """P&L after all costs"""
+        return self.gross_pnl - self.entry_slippage - self.exit_slippage - self.commission
+
+    @property
+    def duration(self) -> timedelta:
+        return self.exit_time - self.entry_time
+
+
+class MarketRegimeDetector:
+    """
+    Detect market regime (trending/ranging/volatile) for adaptive strategies.
+    Uses ADX, volatility percentiles, and fractal dimension.
+    """
+
+    def __init__(self, lookback: int = 50):
+        self.lookback = lookback
+        self.price_history: deque = deque(maxlen=lookback)
+        self.regime_history: deque = deque(maxlen=100)
+
+    def update(self, price: float) -> str:
+        """Update detector and return current regime"""
+        self.price_history.append(price)
+
+        if len(self.price_history) < self.lookback:
+            return "insufficient_data"
+
+        prices = np.array(self.price_history)
+
+        # Calculate indicators
+        adx = self._calculate_adx(prices)
+        volatility = self._calculate_volatility(prices)
+        hurst = self._estimate_hurst(prices)
+
+        # Regime classification
+        if volatility > np.percentile(list(self.price_history), 90):
+            regime = "high_volatility"
+        elif adx > 25 and hurst > 0.5:
+            regime = "trending"
+        elif adx < 20:
+            regime = "ranging"
         else:
-            slippage = np.random.normal(0, self.config.slippage_std)
-        
-        executed_price = signal.price * (1 + slippage)
-        
-        return Trade(
-            id=len(self.trades),
-            timestamp=signal.timestamp,
-            symbol=signal.symbol,
-            side=signal.type.value,
-            size=signal.size,
-            entry_price=executed_price,
-            status='open',
-            slippage=slippage,
-            latency=latency
-        )
-    
-    def _update_kill_switch(self, trade: Trade) -> None:
-        """FIA 1.5 Kill Switch Implementation"""
-        # Calculate unrealized P&L
-        # Simplified - real implementation would track all positions
-        self.daily_pnl += trade.slippage * trade.size * trade.entry_price
-        
-        daily_loss_pct = abs(self.daily_pnl) / self.config.initial_capital
-        
-        if daily_loss_pct >= self.config.daily_loss_limit_pct:
-            self.kill_switch_active = True
-            self.risk_events.append({
-                'time': trade.timestamp,
-                'type': 'kill_switch_activated',
-                'daily_pnl': self.daily_pnl,
-                'threshold': self.config.daily_loss_limit_pct
-            })
-            logger.critical(f"Kill switch activated! Daily P&L: {self.daily_pnl}")
-    
-    def _calculate_results(self, trades: List[Trade]) -> BacktestResult:
-        """Calculate comprehensive performance and risk metrics"""
-        if not trades:
-            return BacktestResult(
-                total_return=0, sharpe_ratio=0, sortino_ratio=0,
-                calmar_ratio=0, max_drawdown=0, win_rate=0,
-                profit_factor=0, var_95=0, cvar_95=0,
-                max_consecutive_losses=0, avg_trade_duration=timedelta(0),
-                total_trades=0, slippage_cost=0, latency_cost=0,
-                data_quality_score=1.0, risk_limit_breaches=self.risk_events,
-                kill_switch_activations=sum(1 for e in self.risk_events 
-                                          if e['type'] == 'kill_switch_activated')
-            )
-        
-        # Calculate returns
-        returns = [t.pnl for t in trades if hasattr(t, 'pnl')]
-        
-        # Risk metrics
-        var_95 = np.percentile(returns, 5) if returns else 0
-        cvar_95 = np.mean([r for r in returns if r <= var_95]) if returns else 0
-        
-        return BacktestResult(
-            total_return=sum(returns),
-            sharpe_ratio=self._calculate_sharpe(returns),
-            sortino_ratio=self._calculate_sortino(returns),
-            calmar_ratio=self._calculate_calmar(returns),
-            max_drawdown=self._calculate_max_drawdown(),
-            win_rate=len([r for r in returns if r > 0]) / len(returns) if returns else 0,
-            profit_factor=abs(sum([r for r in returns if r > 0])) / 
-                         abs(sum([r for r in returns if r < 0])) if returns else 0,
-            var_95=var_95,
-            cvar_95=cvar_95,
-            max_consecutive_losses=self._max_consecutive_losses(returns),
-            avg_trade_duration=self._avg_trade_duration(trades),
-            total_trades=len(trades),
-            slippage_cost=sum(t.slippage * t.size * t.entry_price for t in trades),
-            latency_cost=sum(t.latency for t in trades),
-            data_quality_score=1.0,  # Calculated earlier
-            risk_limit_breaches=self.risk_events,
-            kill_switch_activations=sum(1 for e in self.risk_events 
-                                      if e['type'] == 'kill_switch_activated')
-        )
-    
-    def _calculate_sharpe(self, returns: List[float]) -> float:
-        """Annualized Sharpe ratio"""
-        if not returns or np.std(returns) == 0:
-            return 0
-        return np.mean(returns) / np.std(returns) * np.sqrt(252)
-    
-    def _calculate_sortino(self, returns: List[float]) -> float:
-        """Sortino ratio using downside deviation"""
-        if not returns:
-            return 0
-        downside = [r for r in returns if r < 0]
-        if not downside:
-            return float('inf')
-        downside_std = np.std(downside)
-        return np.mean(returns) / downside_std * np.sqrt(252) if downside_std else 0
-    
-    def _calculate_calmar(self, returns: List[float]) -> float:
-        """Calmar ratio (return / max drawdown)"""
-        if not returns or self.max_drawdown == 0:
-            return 0
-        return np.mean(returns) * 252 / abs(self.max_drawdown)
-    
-    def _calculate_max_drawdown(self) -> float:
-        """Calculate maximum drawdown from equity curve"""
-        if not self.equity_curve:
-            return 0
-        peak = self.equity_curve[0]
-        max_dd = 0
-        for value in self.equity_curve:
-            if value > peak:
-                peak = value
-            dd = (peak - value) / peak
-            max_dd = max(max_dd, dd)
-        return max_dd
-    
-    def _max_consecutive_losses(self, returns: List[float]) -> int:
-        """Count maximum consecutive losing trades"""
-        max_streak = current_streak = 0
-        for r in returns:
-            if r < 0:
-                current_streak += 1
-                max_streak = max(max_streak, current_streak)
+            regime = "transitional"
+
+        self.regime_history.append(regime)
+        return regime
+
+    def _calculate_adx(self, prices: np.ndarray, period: int = 14) -> float:
+        """Simplified ADX calculation"""
+        if len(prices) < period + 1:
+            return 0.0
+
+        highs = prices[1:]
+        lows = prices[:-1]
+
+        # True range
+        tr1 = highs - lows
+        tr = np.mean(tr1[-period:])
+
+        # Directional movement (simplified)
+        plus_dm = np.sum(np.where(highs > np.roll(highs, 1), highs - np.roll(highs, 1), 0)[-period:])
+        minus_dm = np.sum(np.where(lows < np.roll(lows, 1), np.roll(lows, 1) - lows, 0)[-period:])
+
+        if tr == 0:
+            return 0.0
+
+        dx = abs(plus_dm - minus_dm) / (plus_dm + minus_dm + 1e-10) * 100
+        return dx
+
+    def _calculate_volatility(self, prices: np.ndarray) -> float:
+        """Annualized volatility"""
+        returns = np.diff(np.log(prices))
+        if len(returns) < 2:
+            return 0.0
+        return np.std(returns) * np.sqrt(252 * 24 * 60)  # Annualized, assuming minute data
+
+    def _estimate_hurst(self, prices: np.ndarray, max_lag: int = 20) -> float:
+        """Hurst exponent estimation using R/S analysis"""
+        lags = range(2, min(max_lag, len(prices) // 4))
+        tau = [np.std(np.subtract(prices[lag:], prices[:-lag])) for lag in lags]
+
+        if len(tau) < 2 or any(t == 0 for t in tau):
+            return 0.5
+
+        # Linear regression on log-log
+        log_lags = np.log(list(lags))
+        log_tau = np.log(tau)
+
+        # Slope = Hurst exponent
+        slope = np.polyfit(log_lags, log_tau, 1)[0]
+        return slope
+
+    def get_regime_stability(self) -> float:
+        """How long current regime has persisted (0-1)"""
+        if len(self.regime_history) < 10:
+            return 0.0
+
+        current = self.regime_history[-1]
+        same_regime_count = 0
+        for regime in reversed(self.regime_history):
+            if regime == current:
+                same_regime_count += 1
             else:
-                current_streak = 0
-        return max_streak
-    
-    def _avg_trade_duration(self, trades: List[Trade]) -> timedelta:
-        """Calculate average trade holding period"""
-        # Simplified - would need exit timestamps
-        return timedelta(minutes=30)  # Placeholder
-    
-    def _get_price_at_time(self, data: pd.DataFrame, timestamp: datetime) -> float:
-        """Get market price at specific timestamp"""
-        try:
-            return data.loc[timestamp, 'close']
-        except KeyError:
-            # Find nearest timestamp
-            nearest = data.index.get_loc(timestamp, method='nearest')
-            return data.iloc[nearest]['close']
-    
-    def _parallel_execute(self, signals: List[Signal], data: pd.DataFrame) -> List[Trade]:
-        """Parallel execution for large backtests"""
-        # Chunk signals for parallel processing
-        chunk_size = max(1, len(signals) // 4)
-        chunks = [signals[i:i+chunk_size] for i in range(0, len(signals), chunk_size)]
-        
-        trades = []
-        with ProcessPoolExecutor(max_workers=4) as executor:
-            futures = [executor.submit(self._sequential_execute, chunk, data) 
-                      for chunk in chunks]
-            for future in as_completed(futures):
-                trades.extend(future.result())
-        
-        return sorted(trades, key=lambda t: t.timestamp)
-    
-    def generate_report(self, result: BacktestResult, output_path: str) -> None:
-        """Generate institutional-grade backtest report"""
-        report = {
-            'metadata': {
-                'generated_at': datetime.now().isoformat(),
-                'engine_version': '2.0.0',
-                'fia_compliant': True
-            },
-            'configuration': {
-                'initial_capital': self.config.initial_capital,
-                'max_position_size': self.config.max_position_size_pct,
-                'daily_loss_limit': self.config.daily_loss_limit_pct
-            },
-            'performance': result.to_dict(),
-            'risk_events': self.risk_events,
-            'compliance_status': 'PASS' if not result.risk_limit_breaches else 'WARNING'
+                break
+
+        return min(same_regime_count / 20, 1.0)  # Normalize to 20 periods
+
+
+class RiskManager:
+    """
+    Institutional-grade risk management with Kelly criterion,
+    risk of ruin calculations, and dynamic position sizing.
+    """
+
+    def __init__(self,
+                 initial_capital: float = 100000.0,
+                 max_risk_per_trade: float = 0.02,  # 2% per trade
+                 max_total_risk: float = 0.06,  # 6% total exposure
+                 kelly_fraction: float = 0.5):  # Half-Kelly for safety
+        self.initial_capital = initial_capital
+        self.current_capital = initial_capital
+        self.max_risk_per_trade = max_risk_per_trade
+        self.max_total_risk = max_total_risk
+        self.kelly_fraction = kelly_fraction
+
+        self.trade_history: List[Trade] = []
+        self.peak_capital = initial_capital
+        self.current_drawdown = 0.0
+
+    def update_capital(self, pnl: float):
+        """Update capital and track drawdown"""
+        self.current_capital += pnl
+        self.peak_capital = max(self.peak_capital, self.current_capital)
+        self.current_drawdown = (self.peak_capital - self.current_capital) / self.peak_capital
+
+    def calculate_kelly_fraction(self) -> float:
+        """
+        Calculate optimal Kelly fraction based on trade history.
+        f* = (bp - q) / b
+        where b = avg win/avg loss, p = win rate, q = 1-p
+        """
+        if len(self.trade_history) < 20:
+            return self.kelly_fraction
+
+        wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
+        losses = [abs(t.net_pnl) for t in self.trade_history if t.net_pnl < 0]
+
+        if not wins or not losses:
+            return 0.0
+
+        p = len(wins) / len(self.trade_history)
+        q = 1 - p
+        b = np.mean(wins) / np.mean(losses)
+
+        kelly = (b * p - q) / b if b > 0 else 0
+        return max(0, min(kelly, 0.5)) * self.kelly_fraction  # Cap at half-Kelly
+
+    def calculate_risk_of_ruin(self,
+                               win_rate: float = None,
+                               avg_win: float = None,
+                               avg_loss: float = None,
+                               num_simulations: int = 10000) -> float:
+        """
+        Monte Carlo simulation to estimate risk of ruin (losing X% of capital).
+        """
+        if win_rate is None:
+            if len(self.trade_history) < 30:
+                return 0.5  # Unknown = risky
+            wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
+            losses = [t.net_pnl for t in self.trade_history if t.net_pnl < 0]
+            win_rate = len(wins) / len(self.trade_history)
+            avg_win = np.mean(wins) if wins else 0
+            avg_loss = abs(np.mean(losses)) if losses else 1
+
+        ruin_threshold = self.current_capital * 0.5  # 50% capital loss = ruin
+
+        ruins = 0
+        for _ in range(num_simulations):
+            capital = self.current_capital
+            trades = 0
+
+            while capital > ruin_threshold and trades < 1000:
+                if np.random.random() < win_rate:
+                    capital += avg_win
+                else:
+                    capital -= avg_loss
+                trades += 1
+
+            if capital <= 0:
+                ruins += 1
+                break
+
+        return ruins / num_simulations
+
+    def get_position_size(self,
+                          entry_price: float,
+                          stop_loss: float,
+                          volatility: float,
+                          use_kelly: bool = True) -> float:
+        """
+        Calculate position size using volatility-adjusted Kelly or fixed fractional.
+        """
+        # Base risk amount
+        risk_amount = self.current_capital * self.max_risk_per_trade
+
+        if use_kelly:
+            kelly = self.calculate_kelly_fraction()
+            risk_amount *= (1 + kelly)  # Scale by Kelly
+
+        # Adjust for volatility (higher vol = smaller size)
+        vol_adjustment = 1 / (1 + volatility * 5)  # 20% vol = 50% size reduction
+        risk_amount *= vol_adjustment
+
+        # Calculate units based on stop distance
+        stop_distance = abs(entry_price - stop_loss)
+        if stop_distance == 0:
+            return 0.0
+
+        position_size = risk_amount / stop_distance
+
+        # Check total exposure limit
+        current_exposure = sum(abs(p.size * p.avg_entry) for p in self.get_positions())
+        max_new_exposure = self.current_capital * self.max_total_risk - current_exposure
+
+        max_size_by_exposure = max_new_exposure / entry_price if entry_price > 0 else 0
+
+        return min(position_size, max_size_by_exposure)
+
+    def get_positions(self) -> List[Position]:
+        """Get current open positions"""
+        return []  # Implemented in backtest engine
+
+
+class EnhancedBacktestEngine:
+    """
+    Production-grade backtesting with tick-level precision,
+    realistic execution, and comprehensive risk metrics.
+    """
+
+    def __init__(self,
+                 initial_capital: float = 100000.0,
+                 transaction_costs: TransactionCosts = None,
+                 execution_model: ExecutionModel = ExecutionModel.CONSERVATIVE):
+
+        self.initial_capital = initial_capital
+        self.transaction_costs = transaction_costs or TransactionCosts()
+        self.execution_model = execution_model
+
+        # State
+        self.capital = initial_capital
+        self.peak_capital = initial_capital
+        self.positions: Dict[str, Position] = {}
+        self.trades: List[Trade] = []
+        self.equity_curve: List[Tuple[datetime, float]] = []
+
+        # Risk management
+        self.risk_manager = RiskManager(initial_capital)
+        self.regime_detector = MarketRegimeDetector()
+
+        # Market state
+        self.current_regime = "insufficient_data"
+        self.current_volatility = 0.0
+
+        logger.info(f"EnhancedBacktestEngine initialized with {execution_model.value} execution")
+
+    def process_tick(self, tick: TickData, timestamp: datetime):
+        """Process a single tick with full execution simulation"""
+
+        # Update market regime
+        self.current_regime = self.regime_detector.update(tick.mid)
+
+        # Calculate rolling volatility
+        if len(self.regime_detector.price_history) > 20:
+            returns = np.diff(np.log(list(self.regime_detector.price_history)[-20:]))
+            self.current_volatility = np.std(returns) * np.sqrt(252 * 24 * 60)
+
+        # Update open positions MFE/MAE
+        for pos in self.positions.values():
+            pos.update_mfe_mae(tick.mid)
+
+        # Record equity
+        current_equity = self._calculate_equity(tick)
+        self.equity_curve.append((timestamp, current_equity))
+
+        # Update peak and drawdown
+        self.peak_capital = max(self.peak_capital, current_equity)
+
+        return current_equity
+
+    def _calculate_equity(self, tick: TickData) -> float:
+        """Calculate total equity including unrealized P&L"""
+        equity = self.capital
+        for pos in self.positions.values():
+            if pos.size > 0:
+                equity += pos.size * (tick.bid - pos.avg_entry)  # Use bid for longs
+            else:
+                equity += pos.size * (pos.avg_entry - tick.ask)  # Use ask for shorts
+        return equity
+
+    def execute_order(self,
+                      symbol: str,
+                      size: float,
+                      tick: TickData,
+                      timestamp: datetime,
+                      order_type: str = "market") -> Tuple[bool, Dict]:
+        """
+        Execute order with realistic slippage and transaction costs.
+        Returns (success, execution_details)
+        """
+
+        # Determine fill price based on direction and execution quality
+        if size > 0:  # Buy
+            base_price = tick.ask
+            # Slippage moves price against us (higher for buys)
+            slippage = self.transaction_costs.calculate_slippage(
+                size, self.current_volatility, self.execution_model
+            )
+            fill_price = base_price + slippage * 0.0001  # Convert pips to price
+        else:  # Sell
+            base_price = tick.bid
+            slippage = self.transaction_costs.calculate_slippage(
+                size, self.current_volatility, self.execution_model
+            )
+            fill_price = base_price - slippage * 0.0001
+
+        # Calculate costs
+        commission = abs(size) * self.transaction_costs.commission_per_lot / 100000
+        spread_cost = abs(size) * tick.spread * 0.5  # Half spread per side
+
+        # Update or create position
+        if symbol not in self.positions:
+            self.positions[symbol] = Position(symbol=symbol)
+
+        pos = self.positions[symbol]
+
+        # Check if this is a reversal or close
+        if pos.size * size < 0:  # Opposite directions = close/reduce
+            # Calculate realized P&L
+            if abs(size) >= abs(pos.size):  # Full close or reversal
+                realized_pnl = self._close_position(pos, fill_price, size, timestamp, slippage, commission)
+                self.capital += realized_pnl
+                self.risk_manager.update_capital(realized_pnl)
+
+                if abs(size) > abs(pos.size):  # Reversal
+                    remaining = size + pos.size  # pos.size is negative for short
+                    pos.size = remaining
+                    pos.avg_entry = fill_price
+                    pos.entry_time = timestamp
+                    pos.total_slippage = slippage
+                    pos.total_commission = commission
+                else:
+                    del self.positions[symbol]
+            else:  # Partial close
+                realized_pnl = self._close_position_partial(pos, fill_price, size, timestamp, slippage, commission)
+                self.capital += realized_pnl
+                self.risk_manager.update_capital(realized_pnl)
+        else:  # Adding to position
+            # Update average entry
+            total_size = pos.size + size
+            if total_size != 0:
+                pos.avg_entry = (pos.size * pos.avg_entry + size * fill_price) / total_size
+                pos.size = total_size
+                pos.total_slippage += slippage
+                pos.total_commission += commission
+
+        return True, {
+            "fill_price": fill_price,
+            "slippage": slippage,
+            "commission": commission,
+            "spread_cost": spread_cost,
+            "regime": self.current_regime,
+            "volatility": self.current_volatility
         }
+
+    def _close_position(self, pos: Position, exit_price: float,
+                        closing_size: float, timestamp: datetime,
+                        slippage: float, commission: float) -> float:
+        """Close position and record trade"""
+
+        # Calculate P&L
+        if pos.size > 0:  # Long
+            gross_pnl = (exit_price - pos.avg_entry) * abs(pos.size)
+        else:  # Short
+            gross_pnl = (pos.avg_entry - exit_price) * abs(pos.size)
+
+        net_pnl = gross_pnl - pos.total_slippage - pos.total_commission - slippage - commission
+
+        # Record trade
+        trade = Trade(
+            entry_time=pos.entry_time,
+            exit_time=timestamp,
+            symbol=pos.symbol,
+            direction='long' if pos.size > 0 else 'short',
+            entry_price=pos.avg_entry,
+            exit_price=exit_price,
+            size=abs(pos.size),
+            entry_slippage=pos.total_slippage,
+            exit_slippage=slippage,
+            commission=pos.total_commission + commission,
+            mfe=pos.max_favorable_excursion,
+            mae=pos.max_adverse_excursion
+        )
+
+        self.trades.append(trade)
+        self.risk_manager.trade_history.append(trade)
+
+        return net_pnl
+
+    def get_performance_report(self) -> Dict:
+        """Generate comprehensive performance analytics"""
+
+        if not self.trades:
+            return {"error": "No trades executed"}
+
+        pnls = [t.net_pnl for t in self.trades]
+        gross_pnls = [t.gross_pnl for t in self.trades]
+        durations = [(t.exit_time - t.entry_time).total_seconds() / 60 for t in self.trades]  # minutes
+
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p < 0]
+
+        # Core metrics
+        total_return = (self.capital - self.initial_capital) / self.initial_capital
+
+        # Risk metrics
+        equity_values = [e[1] for e in self.equity_curve]
+        returns = np.diff(equity_values) / equity_values[:-1]
+
+        # Sharpe ratio (assuming risk-free rate = 0 for simplicity)
+        if len(returns) > 1 and np.std(returns) > 0:
+            sharpe = np.mean(returns) / np.std(returns) * np.sqrt(252 * 24 * 60)  # Annualized
+        else:
+            sharpe = 0.0
+
+        # Max drawdown
+        peak = self.initial_capital
+        max_dd = 0.0
+        for equity in equity_values:
+            if equity > peak:
+                peak = equity
+            dd = (peak - equity) / peak
+            max_dd = max(max_dd, dd)
+
+        # Cost attribution
+        total_slippage = sum(t.entry_slippage + t.exit_slippage for t in self.trades)
+        total_commission = sum(t.commission for t in self.trades)
+        total_costs = total_slippage + total_commission
+
+        return {
+            "summary": {
+                "total_trades": len(self.trades),
+                "win_rate": len(wins) / len(pnls) if pnls else 0,
+                "profit_factor": abs(sum(wins) / sum(losses)) if losses else float('inf'),
+                "total_return_pct": total_return * 100,
+                "sharpe_ratio": sharpe,
+                "max_drawdown_pct": max_dd * 100,
+                "risk_of_ruin": self.risk_manager.calculate_risk_of_ruin()
+            },
+            "trade_metrics": {
+                "avg_trade": np.mean(pnls),
+                "avg_win": np.mean(wins) if wins else 0,
+                "avg_loss": np.mean(losses) if losses else 0,
+                "largest_win": max(wins) if wins else 0,
+                "largest_loss": min(losses) if losses else 0,
+                "avg_duration_min": np.mean(durations),
+                "avg_mfe": np.mean([t.mfe for t in self.trades]),
+                "avg_mae": np.mean([t.mae for t in self.trades])
+            },
+            "cost_analysis": {
+                "total_costs": total_costs,
+                "slippage_cost": total_slippage,
+                "commission_cost": total_commission,
+                "cost_per_trade": total_costs / len(self.trades),
+                "cost_drag_pct": (total_costs / abs(sum(gross_pnls)) * 100) if gross_pnls else 0
+            },
+            "regime_performance": self._analyze_regime_performance(),
+            "equity_curve": self.equity_curve
+        }
+
+    def _analyze_regime_performance(self) -> Dict:
+        """Analyze performance by market regime"""
+        return {
+            "current_regime": self.current_regime,
+            "regime_stability": self.regime_detector.get_regime_stability()
+        }
+
+    def _close_position_partial(self, pos: Position, exit_price: float,
+                                 closing_size: float, timestamp: datetime,
+                                 slippage: float, commission: float) -> float:
+        """Close partial position"""
+        # Calculate proportional P&L
+        close_ratio = abs(closing_size) / abs(pos.size)
         
-        with open(output_path, 'w') as f:
-            json.dump(report, f, indent=2, default=str)
+        if pos.size > 0:  # Long
+            gross_pnl = (exit_price - pos.avg_entry) * abs(closing_size)
+        else:  # Short
+            gross_pnl = (pos.avg_entry - exit_price) * abs(closing_size)
         
-        logger.info(f"Backtest report saved to {output_path}")
+        # Proportional costs
+        prop_slippage = pos.total_slippage * close_ratio
+        prop_commission = pos.total_commission * close_ratio
+        
+        net_pnl = gross_pnl - prop_slippage - prop_commission - slippage - commission
+        
+        # Reduce position
+        pos.size += closing_size  # closing_size is negative for longs
+        pos.total_slippage -= prop_slippage
+        pos.total_commission -= prop_commission
+        
+        return net_pnl
+
+
+# ============================================================================
+# Example usage and testing
+# ============================================================================
+
+if __name__ == "__main__":
+    # Create realistic XAUUSD tick data simulation
+    np.random.seed(42)
+
+    # Simulate 2 days of minute data
+    n_ticks = 2880  # 2 days of minutes
+    base_price = 1950.0
+
+    # Generate realistic price path with volatility clustering
+    returns = np.random.normal(0, 0.0001, n_ticks)
+    # Add volatility clustering
+    for i in range(1, n_ticks):
+        returns[i] *= (1 + abs(returns[i-1]) * 5)  # GARCH-like effect
+
+    prices = base_price * np.exp(np.cumsum(returns))
+
+    # Create bid/ask with variable spread
+    spreads = np.random.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for XAUUSD
+    bids = prices - spreads / 2
+    asks = prices + spreads / 2
+
+    # Initialize engine with realistic costs
+    costs = TransactionCosts(
+        spread_pips=3.0,  # Average 3 pips
+        commission_per_lot=7.0,  # $7 per lot
+        impact_coefficient=0.05
+    )
+
+    engine = EnhancedBacktestEngine(
+        initial_capital=100000.0,
+        transaction_costs=costs,
+        execution_model=ExecutionModel.CONSERVATIVE
+    )
+
+    # Simulate simple strategy: MA crossover with regime filter
+    fast_ma_period = 10
+    slow_ma_period = 30
+    position = 0
+
+    for i in range(slow_ma_period, n_ticks):
+        timestamp = datetime.now() + timedelta(minutes=i)
+
+        tick = TickData(
+            timestamp=timestamp,
+            bid=bids[i],
+            ask=asks[i],
+            bid_size=1.0,
+            ask_size=1.0
+        )
+
+        # Process tick
+        engine.process_tick(tick, timestamp)
+
+        # Simple MA strategy (only trade in trending regimes)
+        if engine.current_regime in ["trending", "transitional"]:
+            fast_ma = np.mean(prices[i-fast_ma_period:i])
+            slow_ma = np.mean(prices[i-slow_ma_period:i])
+
+            # Entry logic
+            if fast_ma > slow_ma and position <= 0:
+                # Buy signal
+                if position < 0:
+                    engine.execute_order("XAUUSD", -position, tick, timestamp)  # Close short
+                size = engine.risk_manager.get_position_size(asks[i], bids[i] - 5, engine.current_volatility)
+                engine.execute_order("XAUUSD", size, tick, timestamp)
+                position = size
+
+            elif fast_ma < slow_ma and position >= 0:
+                # Sell signal
+                if position > 0:
+                    engine.execute_order("XAUUSD", -position, tick, timestamp)  # Close long
+                size = engine.risk_manager.get_position_size(bids[i], asks[i] + 5, engine.current_volatility)
+                engine.execute_order("XAUUSD", -size, tick, timestamp)
+                position = -size
+
+    # Generate report
+    report = engine.get_performance_report()
+    print(json.dumps(report["summary"], indent=2))
+    print("\nCost Analysis:")
+    print(json.dumps(report["cost_analysis"], indent=2))
