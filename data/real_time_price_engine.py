@@ -6,6 +6,11 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Optional, Callable, List
 import json
+import websockets, json
+async def broadcast_server():
+    async with websockets.serve(lambda ws, path: ws.send(json.dumps(tick)), "localhost", 8765):
+        await asyncio.Future()  # run forever
+asyncio.create_task(broadcast_server())
 
 try:
     import yfinance as yf
