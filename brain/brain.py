@@ -84,13 +84,14 @@ class HOPEFXBrain:
                 logger.warning(f"Watch failed: {e} — retrying...")
                 await asyncio.sleep(5)
 
-           p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
-        risk_ok = self.state action = "buy" if pred > p + 0.06 and risk_ok else "sell" if pred < p - 0.06 and risk_ok else "hold"
-        )
-
-        size = 0.4 if conf > 0.8 else 0.15 if conf > 0.6 else 0
-        reason = f"Pred {pred:.2f} vs {p:.2f} | Risk: {risk_ok} | Strats: {self.state }"
-
+                          p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
+                risk_ok = self.state geo = get_gold_geopolitical_signal()  # geo check!
+                action = "hold" if geo > 70 else (
+                    "buy" if pred > p + 0.06 and risk_ok else
+                    "sell" if pred < p - 0.06 and risk_ok else
+                    "hold"
+                )
+                reason = f"Pred {pred:.2f} vs {p:.2f} | Risk OK: {risk_ok} | Geo: {geo}%"
         # Emergency override: high drawdown → flatten
                 if self.state > 0.08:
             return Decision("flatten", 0, 1.0, "Drawdown alert - flatten", "", override=True)
