@@ -1,5 +1,6 @@
 # brain/brain.py
 import asyncio
+from news.geopolitical_risk import get_gold_geopolitical_signal
 import logging
 import time
 from typing import Dict, Any, Optional
@@ -83,17 +84,8 @@ class HOPEFXBrain:
                 logger.warning(f"Watch failed: {e} — retrying...")
                 await asyncio.sleep(5)
 
-    def command(self, trigger: str = "tick") -> Decision:
-        """Ultimate verdict: full context → action."""
-        if not self.state:
-            return Decision("hold", 0, 0.1, "No state", "")
-
-                p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
-        risk_ok = self.state action = (
-            "buy" if pred > p + 0.06 and risk_ok else
-            "sell" if pred < p - 0.06 and risk_ok else
-            "hold"
-        )
+           p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
+        risk_ok = self.state action = "buy" if pred > p + 0.06 and risk_ok else "sell" if pred < p - 0.06 and risk_ok else "hold"
         )
 
         size = 0.4 if conf > 0.8 else 0.15 if conf > 0.6 else 0
