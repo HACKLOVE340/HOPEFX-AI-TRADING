@@ -94,6 +94,7 @@ class HOPEFXBrain:
             "sell" if pred < p - 0.06 and risk_ok else
             "hold"
         )
+        )
 
         size = 0.4 if conf > 0.8 else 0.15 if conf > 0.6 else 0
         reason = f"Pred {pred:.2f} vs {p:.2f} | Risk: {risk_ok} | Strats: {self.state }"
