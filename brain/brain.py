@@ -1,123 +1,149 @@
-# brain/brain.py
+# brain/brain.py - Ultimate HOPEFX Brain (enhanced 2026)
 import asyncio
-from news.geopolitical_risk import get_gold_geopolitical_signal
 import logging
 import time
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-from ml.online_learner import OnlineLearner
-from risk.manager import RiskManager
-from execution.oms import OrderManagementSystem
-from strategies.manager import StrategyManager
-from cache.market_data_cache import MarketDataCache
-from data.time_and_sales import get_time_and_sales_service
-from notifications.alert_engine import AlertEngine  # if exists, else stub
+# Core imports - graceful
+try: from ml.online_learner import OnlineLearner
+except: OnlineLearner = None
+
+try: from risk.manager import RiskManager
+except: RiskManager = None
+
+try: from execution.oms import OrderManagementSystem
+except: OrderManagementSystem = None
+
+try: from strategies.manager import StrategyManager
+except: StrategyManager = None
+
+try: from cache.market_data_cache import MarketDataCache
+except: MarketDataCache = None
+
+try: from data.time_and_sales import get_time_and_sales_service
+except: get_time_and_sales_service = lambda: None
+
+try: from news.geopolitical_risk import get_gold_geopolitical_signal
+except: get_gold_geopolitical_signal = lambda: 0  # fallback
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class Decision:
-    action: str
-    size: float
-    confidence: float
-    reason: str
-    timestamp: str
-    override: bool = False  # for emergency flatten
+    action: str = "hold"
+    size: float = 0.0
+    confidence: float = 0.0
+    reason: str = ""
+    timestamp: str = ""
+    override: bool = False
 
 class HOPEFXBrain:
-    """Omniscient core: sees every tick, model, risk, trade—commands all."""
+    """Central brain: full visibility, smart decisions, self-healing."""
     def __init__(self):
-        self.learner: Optional = None
-        self.risk: Optional = None
-        self.oms: Optional = None
-        self.strategies: Optional = None
-        self.cache = MarketDataCache()
+        self.learner = OnlineLearner() if OnlineLearner else None
+        self.risk = RiskManager() if RiskManager else None
+        self.oms = OrderManagementSystem() if OrderManagementSystem else None
+        self.strategies = StrategyManager() if StrategyManager else None
+        self.cache = MarketDataCache() if MarketDataCache else None
         self.tas = get_time_and_sales_service()
-        self.alerts = AlertEngine() if 'AlertEngine' in globals() else None
         self.running = False
         self.state: Dict =  # live snapshot
         self.health: Dict =  # module status
 
     async def awaken(self):
-        """Boot + self-diagnose: load everything, report weak links."""
+        """Boot + diagnose all modules."""
         try:
-            self.learner = OnlineLearner()
-            self.risk = RiskManager()
-            self.oms = OrderManagementSystem()
-            self.strategies = StrategyManager()
             self.health = {
-                "learner": True, "risk": True, "oms": True, "strategies": True,
-                "cache": await self.cache.ping(), "tas": True
+                "learner": bool(self.learner),
+                "risk": bool(self.risk),
+                "oms": bool(self.oms),
+                "strategies": bool(self.strategies),
+                "cache": self.cache.ping() if self.cache else False,
+                "tas": bool(self.tas),
+                "news": True  # geo always fallback
             }
-            logger.critical("Brain: All modules loaded. I am awake.")
+            logger.info("Brain awake. Modules: " + ", ".join( ))
         except Exception as e:
-            logger.fatal(f"Brain boot error: {e} — emergency mode: rules only")
-            self.health = False
+            logger.critical(f"Boot fail: {e} - rules-only mode")
 
     async def watch(self):
-        """Infinite loop: pulse every 2s, update state, heal if needed."""
+        """Heartbeat: update state every 2s, heal if stuck."""
         while self.running:
             try:
-                price = await self.cache.get("live:XAUUSD=X") or {"price": 0}
-                current_price = price.get("price", 0)
-                pred = self.learner.predict(current_price) if self.learner else current_price + 0.05
+                price_data = await self.cache.get("live:XAUUSD=X") if self.cache else {"price": 0}
+                p = price_data.get("price", 0)
+                pred = self.learner.predict(p) if self.learner else p + 0.05
                 risk_safe = self.risk.check() if self.risk else True
-                last_trade = self.tas.get_latest() or                strat_count = len(self.strategies.active) if self.strategies else 0
+                tas_latest = self.tas.get_latest() if self.tas else                strat_count = len(self.strategies.active) if self.strategies else 0
+                drawdown = self.risk.get_drawdown() if self.risk else 0
 
                 self.state = {
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "price": current_price,
+                    "price": p,
                     "prediction": pred,
                     "risk_safe": risk_safe,
-                    "last_trade": last_trade,
+                    "last_trade": tas_latest,
                     "active_strats": strat_count,
-                    "drawdown": self.risk.get_drawdown() if self.risk else 0
+                    "drawdown": drawdown
                 }
 
-                # Auto-heal: if learner stalls, reset buffer
-                if self.learner and self.learner.buffer_full():
+                # Heal: replay learner if stalled
+                if self.learner and len(self.learner.buffer) < 10:
                     self.learner.replay()
 
                 await asyncio.sleep(2)
             except Exception as e:
-                logger.warning(f"Watch failed: {e} — retrying...")
+                logger.warning(f"Watch fail: {e}")
                 await asyncio.sleep(5)
 
-                          p = self.state pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
-                risk_ok = self.state geo = get_gold_geopolitical_signal()  # geo check!
-                action = "hold" if geo > 70 else (
-                    "buy" if pred > p + 0.06 and risk_ok else
-                    "sell" if pred < p - 0.06 and risk_ok else
-                    "hold"
-                )
-                reason = f"Pred {pred:.2f} vs {p:.2f} | Risk OK: {risk_ok} | Geo: {geo}%"
-        # Emergency override: high drawdown → flatten
-                if self.state > 0.08:
-            return Decision("flatten", 0, 1.0, "Drawdown alert - flatten", "", override=True)
+    def command(self, trigger: str = "tick") -> Decision:
+        """Core: full context → smart decision."""
+        if not self.state:
+            return Decision(reason="No data")
 
-        return Decision(action, size, conf, reason, "")
+        p = self.state["price"]
+        pred = self.state conf = 0.92 if abs(pred - p) > 0.08 else 0.58
+        risk_ok = self.state drawdown = self.state["drawdown"]
+
+        # Geo filter - real news
+        geo = get_gold_geopolitical_signal()
+        geo_reason = f" | Geo risk: {geo}%"
+
+        action = "hold"
+        if geo > 70:
+            action = "hold"
+            reason = f"High geo risk ({geo}%) - hold"
+        elif drawdown > 0.08:
+            action = "flatten"
+            reason = "Drawdown alert - flatten"
+        else:
+            action = (
+                "buy" if pred > p + 0.06 and risk_ok else
+                "sell" if pred < p - 0.06 and risk_ok else
+                "hold"
+            )
+            reason = f"Pred {pred:.2f} vs {p:.2f} | Risk: {risk_ok} | Conf: {conf:.2f}{geo_reason}"
+
+        size = 0.4 if conf > 0.8 else 0.15 if conf > 0.6 else 0
+        return Decision(action, size, conf, reason, self.state )
 
     async def enforce(self, decision: Decision):
-        """Execute + alert if needed."""
+        """Execute + log + alert."""
         if decision.action == "hold":
             return
         try:
-            await self.oms.place("XAUUSD", decision.action, decision.size)
-            if self.alerts:
-                await self.alerts.send(f"Brain executed: {decision.action} {decision.size}")
-            logger.info(f"Brain: {decision}")
+            await self.oms.place_order("XAUUSD", decision.action, decision.size)
+            logger.info(f"EXEC: {decision.action} {decision.size} - {decision.reason}")
         except Exception as e:
-            logger.error(f"Enforce fail: {e}")
-            if self.alerts:
-                await self.alerts.send("Execution failed - check OMS")
+            logger.error(f"Exec fail: {e}")
 
     async def dominate(self):
         self.running = True
         await self.awaken()
         asyncio.create_task(self.watch())
-        logger.info("Brain: Dominating. All yours.")
+        logger.info("Brain dominating - full control.")
 
-    def sleep(self):
+    def shutdown(self):
         self.running = False
-        logger.info("Brain: Resting. Wake me when needed.")
+        logger.info("Brain offline.")
