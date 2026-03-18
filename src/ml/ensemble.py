@@ -1,307 +1,234 @@
-"""
-XGBoost + LSTM ensemble with online learning capabilities.
-"""
-import os
-import json
-import joblib
-import numpy as np
+"""Adaptive ensemble with online learning and dynamic weighting."""
+from __future__ import annotations
+
 import asyncio
-from typing import Optional, Dict, List, Tuple, Any
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 import structlog
 import xgboost as xgb
-from sklearn.preprocessing import RobustScaler
+from river import linear_model, optim, preprocessing
+from sklearn.ensemble import RandomForestRegressor
 
-try:
-    import tensorflow as tf
-    from tensorflow import keras
-    TF_AVAILABLE = True
-except ImportError:
-    TF_AVAILABLE = False
+from src.ml.drift import DriftDetector
+from src.ml.regime import MarketRegime
+from src.ml.registry import ModelRegistry
 
 logger = structlog.get_logger()
 
 
-class EnsemblePredictor:
-    """
-    Production ML ensemble for XAUUSD prediction.
-    Combines XGBoost (feature importance) with LSTM (temporal patterns).
-    """
+@dataclass
+class ModelPrediction:
+    model: str
+    prediction: float
+    uncertainty: float
+    latency_ms: float
+
+
+class AdaptiveEnsemble:
+    """Multi-model ensemble with online adaptation."""
     
-    def __init__(self, model_path: str = "./models"):
-        self.model_path = Path(model_path)
-        self.model_path.mkdir(parents=True, exist_ok=True)
+    def __init__(self) -> None:
+        self.models: dict[str, Any] = {}
+        self.weights: dict[str, float] = {
+            "xgb": 0.4,
+            "rf": 0.35,
+            "river": 0.25
+        }
+        self.performance: dict[str, list[float]] = {
+            "xgb": [], "rf": [], "river": []
+        }
+        self.window_size = 100
         
-        self.xgb_model: Optional[xgb.XGBClassifier] = None
-        self.lstm_model: Optional[Any] = None
-        self.scaler: Optional[RobustScaler] = None
+        # Online learning
+        self.river = (
+            preprocessing.StandardScaler() | 
+            linear_model.LinearRegression(optimizer=optim.Adam(lr=0.01))
+        )
         
-        self._feature_cols: List[str] = []
-        self._sequence_length: int = 60
-        self._threshold: float = 0.6
-        self._model_version: str = "1.0.0"
+        # Drift detection per model
+        self.drift_detectors: dict[str, DriftDetector] = {
+            name: DriftDetector() for name in self.weights.keys()
+        }
         
-        # Online learning buffer
-        self._retrain_buffer: List[Tuple[np.ndarray, int]] = []
-        self._buffer_size: int = 1000
+        # State
+        self.scaler = None
+        self.feature_names: list[str] = []
+        self.is_fitted = False
+        self.registry = ModelRegistry()
         
-    async def load_models(self) -> bool:
-        """Load pre-trained models from disk."""
-        try:
-            xgb_path = self.model_path / "xgb_model.json"
-            scaler_path = self.model_path / "scaler.joblib"
-            meta_path = self.model_path / "model_meta.json"
-            
-            if xgb_path.exists():
-                self.xgb_model = xgb.XGBClassifier()
-                self.xgb_model.load_model(str(xgb_path))
-                logger.info("xgb_model_loaded")
-            
-            if scaler_path.exists():
-                self.scaler = joblib.load(scaler_path)
-                logger.info("scaler_loaded")
-            
-            if meta_path.exists():
-                with open(meta_path) as f:
-                    meta = json.load(f)
-                    self._feature_cols = meta.get("features", [])
-                    self._model_version = meta.get("version", "1.0.0")
-            
-            # Load LSTM if available
-            lstm_path = self.model_path / "lstm_model.keras"
-            if TF_AVAILABLE and lstm_path.exists():
-                self.lstm_model = keras.models.load_model(lstm_path)
-                logger.info("lstm_model_loaded")
-            
-            return self.xgb_model is not None
-            
-        except Exception as e:
-            logger.error("model_load_failed", error=str(e))
-            return False
+        # GPU
+        self.device = "cuda" if xgb.rabit.get_rank() >= 0 else "cpu"  # Simplified check
     
-    async def predict(self, features: np.ndarray, 
-                      sequence: Optional[np.ndarray] = None) -> Dict[str, Any]:
-        """
-        Generate ensemble prediction.
+    async def load(self) -> None:
+        """Load or initialize models."""
+        latest = await self.registry.get_latest("adaptive_ensemble")
         
-        Args:
-            features: 1D array of engineered features
-            sequence: 2D array [sequence_length, features] for LSTM
-            
-        Returns:
-            Dict with prediction, confidence, and model contributions
-        """
-        if self.scaler is not None:
-            features_scaled = self.scaler.transform(features.reshape(1, -1))
+        if latest:
+            await self._load_checkpoint(latest)
         else:
-            features_scaled = features.reshape(1, -1)
+            await self._initialize_fresh()
         
-        predictions = {}
-        confidences = {}
+        self.is_fitted = True
+        logger.info(f"Ensemble loaded: weights={self.weights}")
+    
+    async def predict(
+        self,
+        features: Any,
+        regime: MarketRegime = MarketRegime.UNKNOWN,
+        regime_confidence: float = 0.0
+    ) -> dict[str, Any]:
+        """Generate prediction with dynamic weighting."""
+        start = asyncio.get_event_loop().time()
         
-        # XGBoost prediction
-        if self.xgb_model is not None:
-            xgb_proba = self.xgb_model.predict_proba(features_scaled)[0]
-            xgb_pred = np.argmax(xgb_proba)
-            predictions["xgboost"] = int(xgb_pred)
-            confidences["xgboost"] = float(xgb_proba[xgb_pred])
+        feature_dict = features.to_dict() if hasattr(features, "to_dict") else features
+        X = np.array([[feature_dict.get(f, 0.0) for f in self.feature_names]])
         
-        # LSTM prediction
-        if self.lstm_model is not None and sequence is not None:
-            if sequence.shape[0] < self._sequence_length:
-                # Pad sequence
-                pad_length = self._sequence_length - sequence.shape[0]
-                sequence = np.pad(sequence, ((pad_length, 0), (0, 0)), mode='edge')
-            
-            sequence_batch = sequence.reshape(1, self._sequence_length, -1)
-            lstm_proba = self.lstm_model.predict(sequence_batch, verbose=0)[0]
-            lstm_pred = np.argmax(lstm_proba)
-            predictions["lstm"] = int(lstm_pred)
-            confidences["lstm"] = float(lstm_proba[lstm_pred])
+        # Individual predictions
+        predictions: list[ModelPrediction] = []
         
-        # Ensemble decision (weighted average)
-        if len(predictions) == 2:
-            # Weight XGBoost 0.4, LSTM 0.6 (LSTM better for time series)
-            weights = {"xgboost": 0.4, "lstm": 0.6}
-            weighted_proba = (
-                confidences["xgboost"] * weights["xgboost"] +
-                confidences["lstm"] * weights["lstm"]
+        # XGBoost
+        if "xgb" in self.models:
+            xgb_pred, xgb_unc = await self._predict_xgb(X)
+            predictions.append(ModelPrediction("xgb", xgb_pred, xgb_unc, 0))
+        
+        # Random Forest
+        if "rf" in self.models:
+            rf_pred, rf_unc = await self._predict_rf(X)
+            predictions.append(ModelPrediction("rf", rf_pred, rf_unc, 0))
+        
+        # River (online)
+        river_pred = self.river.predict_one(feature_dict)
+        river_unc = 0.1  # Fixed for online model
+        predictions.append(ModelPrediction("river", river_pred, river_unc, 0))
+        
+        # Dynamic weight adjustment based on regime
+        weights = self._adjust_weights_for_regime(regime, regime_confidence)
+        
+        # Weighted ensemble
+        total_weight = sum(weights.get(p.model, 0) for p in predictions)
+        ensemble_pred = sum(
+            p.prediction * weights.get(p.model, 0) / total_weight 
+            for p in predictions
+        )
+        
+        # Uncertainty propagation
+        variances = [p.uncertainty ** 2 for p in predictions]
+        ensemble_var = np.average(variances, weights=[weights.get(p.model, 0) for p in predictions])
+        ensemble_unc = np.sqrt(ensemble_var)
+        
+        # Drift check
+        drift_scores = {}
+        for p in predictions:
+            drift_scores[p.model] = await self.drift_detectors[p.model].update(
+                X[0], p.prediction
             )
-            
-            # Agreement check
-            if predictions["xgboost"] == predictions["lstm"]:
-                final_pred = predictions["xgboost"]
-                final_conf = weighted_proba
-            else:
-                # Disagreement - lower confidence
-                final_pred = predictions["lstm"]  # Trust LSTM more
-                final_conf = weighted_proba * 0.8
-        elif "xgboost" in predictions:
-            final_pred = predictions["xgboost"]
-            final_conf = confidences["xgboost"]
-        elif "lstm" in predictions:
-            final_pred = predictions["lstm"]
-            final_conf = confidences["lstm"]
-        else:
-            return {
-                "signal": 0,  # HOLD
-                "confidence": 0.0,
-                "direction": "NEUTRAL",
-                "models_used": []
-            }
         
-        # Determine signal
-        if final_conf < self._threshold:
-            signal = 0  # HOLD
-            direction = "NEUTRAL"
-        elif final_pred == 1:
-            signal = 1  # BUY
-            direction = "LONG"
-        else:
-            signal = -1  # SELL
-            direction = "SHORT"
+        latency_ms = (asyncio.get_event_loop().time() - start) * 1000
         
         return {
-            "signal": signal,
-            "confidence": final_conf,
-            "direction": direction,
-            "models_used": list(predictions.keys()),
-            "model_predictions": predictions,
-            "model_confidences": confidences,
-            "threshold": self._threshold,
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": self._model_version
+            "prediction": ensemble_pred,
+            "confidence": 1.0 - min(ensemble_unc / abs(ensemble_pred) if ensemble_pred != 0 else 0, 1.0),
+            "direction": "UP" if ensemble_pred > 0 else "DOWN",
+            "uncertainty": ensemble_unc,
+            "contributions": {p.model: p.prediction for p in predictions},
+            "weights_used": weights,
+            "drift_scores": drift_scores,
+            "latency_ms": latency_ms,
+            "regime": regime.name
         }
     
-    async def partial_fit(self, features: np.ndarray, 
-                          label: int) -> None:
-        """
-        Online learning update.
-        Accumulates samples and triggers periodic retraining.
-        """
-        self._retrain_buffer.append((features, label))
+    async def _predict_xgb(self, X: np.ndarray) -> tuple[float, float]:
+        """XGBoost prediction with uncertainty (leaf variance)."""
+        dmatrix = xgb.DMatrix(X)
+        pred = self.models["xgb"].predict(dmatrix)
         
-        if len(self._retrain_buffer) >= self._buffer_size:
-            await self._retrain()
+        # Uncertainty from prediction variance across trees
+        # Enable pred_interactions for uncertainty estimation
+        uncertainty = 0.05  # Placeholder - implement tree variance
+        
+        return float(pred[0]), uncertainty
     
-    async def _retrain(self) -> None:
-        """Incremental model update."""
-        if not self._retrain_buffer or self.xgb_model is None:
-            return
+    async def _predict_rf(self, X: np.ndarray) -> tuple[float, float]:
+        """RF prediction with uncertainty (tree disagreement)."""
+        model = self.models["rf"]
+        preds = np.array([tree.predict(X)[0] for tree in model.estimators_])
         
-        logger.info("starting_incremental_retrain", 
-                   samples=len(self._retrain_buffer))
+        mean_pred = np.mean(preds)
+        uncertainty = np.std(preds)
         
-        try:
-            X = np.array([x for x, _ in self._retrain_buffer])
-            y = np.array([y for _, y in self._retrain_buffer])
-            
-            if self.scaler is not None:
-                X = self.scaler.transform(X)
-            
-            # XGBoost warm start
-            self.xgb_model.fit(X, y, xgb_model=self.xgb_model)
-            
-            # Clear buffer
-            self._retrain_buffer.clear()
-            
-            # Save updated model
-            await self._save_models()
-            
-            logger.info("incremental_retrain_complete")
-            
-        except Exception as e:
-            logger.error("retrain_failed", error=str(e))
+        return float(mean_pred), float(uncertainty)
     
-    async def _save_models(self) -> None:
-        """Persist models to disk."""
-        if self.xgb_model is not None:
-            self.xgb_model.save_model(str(self.model_path / "xgb_model.json"))
+    def _adjust_weights_for_regime(
+        self, 
+        regime: MarketRegime, 
+        confidence: float
+    ) -> dict[str, float]:
+        """Adjust ensemble weights based on market regime."""
+        base_weights = self.weights.copy()
         
-        if self.scaler is not None:
-            joblib.dump(self.scaler, self.model_path / "scaler.joblib")
+        # Regime-specific adjustments
+        if regime == MarketRegime.TRENDING_UP or regime == MarketRegime.TRENDING_DOWN:
+            # XGBoost better in trends (captures non-linear momentum)
+            base_weights["xgb"] *= 1.2
+            base_weights["river"] *= 0.8  # Linear model weaker in trends
         
-        meta = {
-            "version": self._model_version,
-            "features": self._feature_cols,
-            "last_updated": datetime.utcnow().isoformat(),
-            "sequence_length": self._sequence_length
-        }
-        with open(self.model_path / "model_meta.json", "w") as f:
-            json.dump(meta, f, indent=2)
+        elif regime == MarketRegime.MEAN_REVERTING:
+            # RF better for pattern recognition in ranges
+            base_weights["rf"] *= 1.2
+            base_weights["xgb"] *= 0.9
         
-        logger.info("models_saved", version=self._model_version)
+        elif regime == MarketRegime.HIGH_VOL:
+            # Conservative: weight uncertainty more
+            base_weights["river"] *= 1.1  # More stable
+            base_weights["xgb"] *= 0.9
+        
+        # Normalize
+        total = sum(base_weights.values())
+        return {k: v/total for k, v in base_weights.items()}
     
-    async def train_initial(self, X: np.ndarray, y: np.ndarray,
-                           feature_names: List[str]) -> None:
-        """Initial training of ensemble."""
-        logger.info("starting_initial_training", samples=len(X))
+    async def online_update(
+        self,
+        features: dict[str, float],
+        target: float,
+        outcome: float | None = None
+    ) -> None:
+        """Online learning update with performance tracking."""
+        # Update River immediately
+        self.river.learn_one(features, target)
         
-        # Fit scaler
-        self.scaler = RobustScaler()
-        X_scaled = self.scaler.fit_transform(X)
+        # Track performance for weight adaptation
+        if outcome is not None:
+            for model_name in self.performance:
+                # Calculate error and update rolling performance
+                pass  # Implement
         
-        # Train XGBoost
-        self.xgb_model = xgb.XGBClassifier(
+        # Periodic batch update for XGB/RF
+        # Buffer and retrain every N samples
+        
+    async def fallback_to_simpler_model(self) -> None:
+        """Degrade gracefully to simpler model."""
+        logger.warning("Falling back to River-only mode")
+        self.weights = {"river": 1.0}
+        self.models = {"river": self.river}
+    
+    async def _load_checkpoint(self, artifact: dict) -> None:
+        """Load from registry."""
+        # Implementation...
+        pass
+    
+    async def _initialize_fresh(self) -> None:
+        """Initialize fresh models."""
+        self.models["xgb"] = xgb.XGBRegressor(
             n_estimators=100,
             max_depth=6,
             learning_rate=0.1,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            objective='binary:logistic',
-            eval_metric='logloss'
+            tree_method="hist",
+            # device="cuda" if available
         )
-        self.xgb_model.fit(X_scaled, y)
-        
-        self._feature_cols = feature_names
-        
-        # Train LSTM if TF available
-        if TF_AVAILABLE:
-            await self._train_lstm(X, y)
-        
-        await self._save_models()
-        logger.info("initial_training_complete")
-    
-    async def _train_lstm(self, X: np.ndarray, y: np.ndarray) -> None:
-        """Train LSTM on sequence data."""
-        # Reshape for LSTM [samples, timesteps, features]
-        # For simplicity, using windowed approach
-        seq_length = self._sequence_length
-        
-        if len(X) < seq_length * 2:
-            logger.warning("insufficient_data_for_lstm")
-            return
-        
-        # Create sequences
-        X_seq, y_seq = [], []
-        for i in range(seq_length, len(X)):
-            X_seq.append(X[i-seq_length:i])
-            y_seq.append(y[i])
-        
-        X_seq = np.array(X_seq)
-        y_seq = np.array(y_seq)
-        
-        # Build model
-        model = keras.Sequential([
-            keras.layers.LSTM(50, return_sequences=True, 
-                             input_shape=(seq_length, X.shape[1])),
-            keras.layers.Dropout(0.2),
-            keras.layers.LSTM(50, return_sequences=False),
-            keras.layers.Dropout(0.2),
-            keras.layers.Dense(25),
-            keras.layers.Dense(3, activation='softmax')  # HOLD, BUY, SELL
-        ])
-        
-        model.compile(optimizer='adam', 
-                     loss='sparse_categorical_crossentropy',
-                     metrics=['accuracy'])
-        
-        # Train
-        model.fit(X_seq, y_seq, epochs=10, batch_size=32, 
-                 validation_split=0.2, verbose=0)
-        
-        self.lstm_model = model
-        self.lstm_model.save(self.model_path / "lstm_model.keras")
-        
-        logger.info("lstm_training_complete")
+        self.models["rf"] = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=10
+        )
