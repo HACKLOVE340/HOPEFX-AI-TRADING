@@ -1,283 +1,145 @@
-"""
-HOPEFX Trading System - Secure Async Entry Point
-"""
 from __future__ import annotations
 
-import asyncio
-import signal
-import sys
-from contextlib import AsyncExitStack, suppress
-from typing import Any  # ✅ ADDED
+import os
+import secrets
+from enum import Enum
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal, Optional
 
-import anyio
-import structlog
-from pydantic import SecretStr  # ✅ ADDED
-
-from hopefx.config.settings import get_settings, VaultSecretProvider
-from hopefx.core.events import get_event_bus, EventBus
-from hopefx.core.distributed_kill_switch import DistributedKillSwitch
-from hopefx.data.feeds.oanda import OandaFeed
-from hopefx.execution.oms import OrderManager
-from hopefx.execution.router import SmartRouter
-from hopefx.risk.manager import RiskManager
-from hopefx.infrastructure.database import init_db, close_db
-from hopefx.infrastructure.redis import get_redis_pool, close_redis
-from hopefx.infrastructure.monitoring import get_metrics_exporter, MetricsExporter
-
-        return self
-
-class SecurityConfig(BaseSettings):
-    """
-    Security hardening with cryptographic validation.
-    ZERO hardcoded defaults - all must come from environment/Vault.
-    """
-    model_config = SettingsConfigDict(env_prefix="SECURITY_")
-    
-    secret_key: SecretStr = Field(
-        ...,  # REQUIRED - no default!
-        min_length=32,
-        description="Application secret key (32+ chars, random)"
-    )
-    algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
-    access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
-    refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
-    
-    # Argon2id parameters (OWASP recommended)
-    argon2_time_cost: int = Field(default=3, ge=2, le=10)
-    argon2_memory_cost: int = Field(default=65536, ge=1024, le=1048576)
-    argon2_parallelism: int = Field(default=4, ge=1, le=16)
-    
-    # Rate limiting
-    rate_limit_requests: int = Field(default=100, ge=10, le=10000)
-    rate_limit_window: int = Field(default=60, ge=1, le=3600)
-    
-    # CORS (strict defaults)
-    cors_origins: list[str] = Field(default_factory=list)
-    allowed_hosts: list[str] = Field(default_factory=list)
-    
-    # Encryption
-    encryption_key: SecretStr | None = Field(
-        default=None,
-        description="Fernet encryption key (32 bytes base64)"
-    )
-    
-    @field_validator("secret_key", mode="after")
-    @classmethod
-    def validate_no_default_key(cls, v: SecretStr) -> SecretStr:
-        """Ensure no development/test keys in production."""
-        secret = v.get_secret_value().lower()
-        forbidden_patterns = [
-            "dev", "test", "example", "sample", "default",
-            "password", "secret", "key", "123", "abc", "xyz"
-        ]
-        
-        for pattern in forbidden_patterns:
-            if pattern in secret and len(pattern) > 2:
-                raise ValueError(
-                    f"Secret key contains forbidden pattern: '{pattern}'. "
-                    "Generate with: openssl rand -hex 32"
-                )
-        return v
-    
-    @field_validator("cors_origins", mode="after")
-    @classmethod
-    def validate_cors_origins(cls, v: list[str]) -> list[str]:
-        """Validate CORS origins."""
-        for origin in v:
-            if origin == "*":
-                raise ValueError(
-                    "CORS origin '*' is not allowed in production. "
-                    "Specify explicit origins."
-                )
-            if not origin.startswith(("https://", "http://localhost")):
-                raise ValueError(f"Invalid CORS origin: {origin}")
-        return v
-    
-    @field_validator("encryption_key", mode="after")
-    @classmethod
-    def validate_encryption_key(cls, v: SecretStr | None) -> SecretStr | None:
-        """Validate Fernet key format."""
-        if v is None:
-            return v
-        
-        key = v.get_secret_value()
-        # Fernet keys are 32 bytes, base64 encoded = 44 chars
-        if len(key) != 44:
-            raise ValueError(
-                "Encryption key must be 32 bytes base64 encoded (44 chars). "
-                "Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
-            )
-        return v
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class TradingConfig(BaseSettings):
-    """Trading parameters with safety limits."""
-    model_config = SettingsConfigDict(env_prefix="TRADING_")
-    
-    default_symbol: str = "XAUUSD"
-    default_timeframe: str = "M5"
-    max_position_size: float = Field(default=100.0, gt=0, le=1000)
-    max_daily_loss_pct: float = Field(default=2.0, gt=0, le=10)
-    max_drawdown_pct: float = Field(default=5.0, gt=0, le=20)
-    risk_per_trade_pct: float = Field(default=1.0, gt=0, le=5)
-    paper_trading: bool = True
-    slippage_model: Literal["fixed", "volatility", "none"] = "volatility"
-    
-    @model_validator(mode="after")
-    def validate_risk_limits(self) -> Self:
-        """Ensure risk limits are sane."""
-        if self.risk_per_trade_pct > self.max_daily_loss_pct:
-            raise ValueError("risk_per_trade_pct cannot exceed max_daily_loss_pct")
-        if self.max_daily_loss_pct > self.max_drawdown_pct:
-            raise ValueError("max_daily_loss_pct cannot exceed max_drawdown_pct")
-        return self
+class Environment(str, Enum):
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
 
 
-class MLConfig(BaseSettings):
-    """Machine learning configuration."""
-    model_config = SettingsConfigDict(env_prefix="ML_")
-    
-    model_registry_path: Path = Path("./models")
-    feature_lookback: int = Field(default=100, ge=10, le=1000)
-    prediction_horizon: int = Field(default=5, ge=1, le=100)
-    retrain_interval_hours: int = Field(default=24, ge=1, le=168)
-    confidence_threshold: float = Field(default=0.65, ge=0.5, le=0.99)
-    drift_threshold: float = Field(default=0.05, ge=0.01, le=0.5)
-    device: Literal["cpu", "cuda", "mps"] = "cpu"
+class TradingMode(str, Enum):
+    PAPER = "paper"
+    LIVE = "live"
+    BACKTEST = "backtest"
 
 
-class BrokerConfig(BaseSettings):
-    """Broker credentials - ALL from environment, no defaults."""
-    model_config = SettingsConfigDict(env_prefix="BROKER_")
-    
-    # OANDA
-    oanda_api_key: SecretStr | None = Field(default=None, repr=False)
-    oanda_account_id: str = ""
-    oanda_environment: Literal["practice", "live"] = "practice"
-    
-    # MT5
-    mt5_server: str = ""
-    mt5_login: int = 0
-    mt5_password: SecretStr | None = Field(default=None, repr=False)
-    
-    # Interactive Brokers
-    ib_host: str = "127.0.0.1"
-    ib_port: int = Field(default=7497, ge=1, le=65535)
-    ib_client_id: int = 1
+class LogLevel(str, Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
 
 
 class Settings(BaseSettings):
-    """
-    Root configuration with Vault integration.
-    """
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="forbid",  # Strict - no extra fields allowed
+        extra="ignore",
+        case_sensitive=False,
     )
-    
-    app_name: str = "HOPEFX v6.0"
-    version: str = "6.0.0"
+
+    # Core
+    app_name: str = "HOPEFX-GODMODE"
     environment: Environment = Environment.DEVELOPMENT
-    debug: bool = False
-    log_level: str = "INFO"
+    log_level: LogLevel = LogLevel.INFO
+    debug: bool = Field(default=False)
+
+    # Security
+    encryption_key: str = Field(default_factory=lambda: secrets.token_hex(32))
+    jwt_secret: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+    argon2_time_cost: int = 3
+    argon2_memory_cost: int = 65536
+    argon2_parallelism: int = 4
     
-    # Sub-configs
-    vault: VaultConfig = Field(default_factory=VaultConfig)
-    database: DatabaseConfig = Field(...)
-    redis: RedisConfig = Field(...)
-    security: SecurityConfig = Field(...)
-    trading: TradingConfig = Field(default_factory=TradingConfig)
-    ml: MLConfig = Field(default_factory=MLConfig)
-    broker: BrokerConfig = Field(default_factory=BrokerConfig)
+    # Cloud Secrets
+    secrets_provider: str = "local"  # local, aws, azure, gcp, hashicorp
+    aws_region: str = "us-east-1"
+    azure_keyvault_url: Optional[str] = None
+    gcp_project_id: Optional[str] = None
+    vault_url: Optional[str] = None
+    vault_token: Optional[str] = None
+    vault_mount_point: str = "secret"
+
+    # Database
+    database_url: str = "postgresql+asyncpg://hopefx:hopefx@localhost:5432/hopefx"
+    redis_url: str = "redis://localhost:6379/0"
+    redis_max_connections: int = 50
+
+    # Trading
+    trading_mode: TradingMode = TradingMode.PAPER
+    default_broker: str = "oanda"
+    max_open_positions: int = 5
+    max_daily_loss_pct: float = 0.02
+    max_position_risk_pct: float = 0.01
+    default_leverage: float = 30.0
+
+    # XAUUSD Specific
+    xauusd_spread_threshold: float = 0.05
+    xauusd_min_volume: float = 0.01
+    xauusd_max_slippage: float = 0.02
+
+    # ML
+    model_registry_path: Path = Path("./models")
+    feature_window: int = 100
+    prediction_horizon: int = 5
+    retrain_interval_minutes: int = 60
+    drift_threshold: float = 0.05
+    enable_model_quantization: bool = True
+    enable_onnx_export: bool = True
+
+    # Risk
+    var_confidence: float = 0.95
+    var_window: int = 252
+    circuit_breaker_threshold: int = 3
+    circuit_breaker_timeout: int = 300
+
+    # API
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_workers: int = 4
+    ws_heartbeat_interval: int = 30
     
-    @model_validator(mode="after")
-    def validate_environment(self) -> Self:
-        """Cross-field validation."""
-        if self.environment == Environment.PRODUCTION:
-            if self.debug:
-                raise ValueError("DEBUG cannot be True in production")
-            
-            if self.trading.paper_trading is False:
-                if os.getenv("LIVE_TRADING_CONFIRMED") != "I_UNDERSTAND_RISKS":
-                    raise ValueError(
-                        "Live trading requires LIVE_TRADING_CONFIRMED=I_UNDERSTAND_RISKS"
-                    )
-            
-            # Production security checks
-            if not self.vault.enabled:
-                logger.warning("Vault not enabled in production - secrets in environment")
-            
-            if self.security.encryption_key is None:
-                raise ValueError("Encryption key required in production")
-        
-        return self
+    # Rate Limiting
+    rate_limit_requests_per_minute: int = 100
+    rate_limit_burst: int = 20
+    enable_geo_blocking: bool = False
+    blocked_countries: list = Field(default_factory=list)
+
+    # Monitoring
+    prometheus_port: int = 9090
+    health_check_interval: int = 30
+    enable_distributed_tracing: bool = True
+    jaeger_endpoint: Optional[str] = None
     
+    # Compliance
+    enable_auto_compliance_reporting: bool = True
+    mifid_firm_id: Optional[str] = None
+    arm_endpoint: Optional[str] = None
+    emir_trade_repository: Optional[str] = None
+
+    @field_validator("encryption_key")
+    @classmethod
+    def validate_encryption_key(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("Encryption key must be at least 32 characters")
+        return v
+
     @property
     def is_production(self) -> bool:
         return self.environment == Environment.PRODUCTION
-    
+
     @property
-    def is_testing(self) -> bool:
-        return self.environment == Environment.TESTING
-
-
-class VaultSecretProvider:
-    """
-    HashiCorp Vault secret provider for dynamic secret retrieval.
-    """
-    
-    def __init__(self, config: VaultConfig):
-        self.config = config
-        self._client = None
-    
-    async def initialize(self):
-        """Initialize Vault client."""
-        if not self.config.enabled:
-            return
-        
-        import hvac
-        
-        self._client = hvac.AsyncClient(
-            url=self.config.addr,
-            token=self.config.token.get_secret_value(),
-            verify=self.config.verify_ssl
-        )
-        
-        # Verify connection
-        await self._client.sys.read_health()
-        logger.info("vault_connected", addr=self.config.addr)
-    
-    async def get_secret(self, key: str) -> str | None:
-        """Retrieve secret from Vault."""
-        if not self._client:
-            return None
-        
-        try:
-            response = await self._client.secrets.kv.v2.read_secret_version(
-                path=f"{self.config.path}/{key}",
-                mount_point=self.config.mount_point
-            )
-            return response["data"]["data"].get("value")
-        except Exception as e:
-            logger.error("vault_read_error", key=key, error=str(e))
-            return None
-    
-    async def close(self):
-        """Cleanup."""
-        if self._client:
-            await self._client.close()
+    def async_database_url(self) -> str:
+        return self.database_url.replace("postgresql://", "postgresql+asyncpg://")
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Cached settings singleton with validation."""
-    try:
-        return Settings()
-    except Exception as e:
-        logger.error("settings_validation_failed", error=str(e))
-        raise RuntimeError(f"Configuration error: {e}") from e
+    return Settings()
 
 
-# Export for convenience
 settings = get_settings()
