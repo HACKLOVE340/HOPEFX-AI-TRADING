@@ -1,31 +1,41 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 from decimal import Decimal
 
+import structlog
 
-@dataclass
-class RiskConfig:
-    max_risk_per_trade_pct: float = 0.01  # 1%
-    max_position_size_lots: float = 10.0
-    atr_multiplier: float = 2.0
+from hopefx.config.settings import settings
+
+logger = structlog.get_logger()
 
 
 class PositionSizer:
-    """ATR-based position sizing with Kelly Criterion adjustment."""
-    
-    def __init__(self, account_balance: Decimal, config: RiskConfig | None = None) -> None:
-        self.balance = account_balance
-        self.config = config or RiskConfig()
-    
-    def calculate(self, symbol: str, confidence: float, atr: float) -> float:
-        """Calculate position size in lots."""
-        if atr <= 0 or confidence < 0.5:
-            return 0.0
-        
-        # Risk amount
-        risk_amount = float(self.balance) * self.config.max_risk_per_trade_pct
-        
-        # ATR stop distance
-        stop_distance = atr * self.config.atr_multiplier
-        
-        # Base size
-        base_size =
+    """ATR-based position sizing."""
+
+    def calculate(
+        self,
+        equity: Decimal,
+        risk_per_trade: Decimal,
+        stop_loss: Decimal,  # in price terms
+        symbol: str,
+        atr: Decimal | None = None,
+    ) -> Decimal:
+        """Calculate position size based on risk."""
+        if stop_loss <= 0:
+            logger.error("risk.invalid_stop_loss", stop_loss=stop_loss)
+            return Decimal("0")
+
+        # Risk amount in currency
+        risk_amount = equity * risk_per_trade
+
+        # Position size = Risk Amount / Stop Loss Distance
+        # For XAUUSD, 1 pip = 0.01, but price is in dollars
+        position_size = risk_amount / stop_loss
+
+        # Apply leverage limits
+        max_notional = equity * Decimal(str(settings.default_leverage))
+        if position_size * Decimal("2000") > max_notional:  # Approximate XAUUSD price
+            position_size = max_notional / Decimal("2000")
+
+        # Round to standard lot sizes
+        return Decimal(str(round(float(position_size), 2)))
