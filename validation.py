@@ -342,7 +342,7 @@ if __name__ == '__main__':
     print(f"After $3k loss: {valid} - {msg}")
 '''
 
-with open('/mnt/kimi/output/hopefx_upgrade/validation.py', 'w') as f:
+with open('/mnt/output/hopefx_upgrade/validation.py', 'w') as f:
     f.write(validation_content)
 
 print("✅ validation.py created - Order validation with risk checks")
