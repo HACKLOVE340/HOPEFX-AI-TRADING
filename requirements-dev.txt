@@ -1,3 +1,4 @@
+# Development dependencies
 -r requirements.txt
 
 # Testing
@@ -28,3 +29,7 @@ mkdocstrings[python]==0.26.2
 ipython==8.29.0
 ipdb==0.13.13
 watchdog==5.0.3
+
+# Jupyter
+jupyter==1.1.1
+jupyterlab==4.2.5
