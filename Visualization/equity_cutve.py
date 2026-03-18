@@ -1,5 +1,5 @@
 
-# Phase 1.2: Visualization Module - Equity Curves & Performance Charts
+ # Phase 1.2: Visualization Module - Equity Curves & Performance Charts
 
 code = '''"""
 HOPEFX Visualization Module
