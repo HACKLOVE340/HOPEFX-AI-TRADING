@@ -1,110 +1,136 @@
-#!/usr/bin/env python3
 """
-HOPEFX Trading Platform - Main Entry Point
+Application entry points for trading engine, API, and worker modes.
+"""
 
-Usage:
-    python -m src.main              # Run API server
-    python -m src.main backtest     # Run backtest mode
-    python -m src.main live         # Run live trading
-    python -m src.main worker       # Run background worker
-"""
-import sys
 import asyncio
-import argparse
-import uvicorn
-from src.config.settings import get_settings
+import sys
+from decimal import Decimal
 
-settings = get_settings()
+import click
+
+from src.brokers.paper import PaperBroker
+from src.core.config import settings
+from src.core.logging_config import configure_logging, get_logger
+from src.core.trading_engine import TradingEngine
+from src.data.feeds.polygon import PolygonDataFeed
+from src.strategies.xauusd_ml import XAUUSDMLStrategy
+
+logger = get_logger(__name__)
 
 
-def run_api_server():
-    """Run FastAPI server with uvicorn."""
-    uvicorn.run(
-        "src.api.server:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.environment == "development",
-        workers=1 if settings.environment == "development" else 4,
-        log_level=settings.log_level.lower(),
-        access_log=False  # We handle logging via structlog
+@click.group()
+def cli():
+    """HOPEFX AI Trading Platform CLI."""
+    configure_logging(
+        log_level=settings.log_level.value,
+        json_output=False
     )
 
 
-def run_backtest():
-    """Run backtest mode."""
-    from src.backtest.engine import BacktestEngine
-    from src.strategies.xauusd_ml import XAUUSDMLEnsemble
-    
-    async def _run():
-        engine = BacktestEngine(
-            initial_capital=10000.0,
-            start_date="2023-01-01",
-            end_date="2024-01-01",
-            symbols=["XAUUSD"]
+@cli.command()
+@click.option('--mode', default='paper', help='Trading mode: paper/live')
+def trade(mode: str):
+    """Start trading engine."""
+    async def run():
+        # Initialize components
+        broker = PaperBroker(initial_balance=Decimal("100000"))
+        
+        # Data feed (use Polygon in production)
+        feed = PolygonDataFeed(symbols=["XAUUSD"])
+        
+        # Strategy
+        strategy = XAUUSDMLStrategy(
+            strategy_id="prod_xauusd",
+            parameters={
+                "lookback": 100,
+                "threshold": 0.65,
+                "cooldown": 15
+            }
         )
         
-        strategy = XAUUSDMLEnsemble()
-        results = await engine.run(strategy)
+        # Trading engine
+        engine = TradingEngine(
+            broker=broker,
+            data_feed=feed,
+            strategies=[strategy]
+        )
         
-        print(f"\nBacktest Results:")
-        print(f"Total Return: {results['total_return_pct']:.2f}%")
-        print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
-        print(f"Max Drawdown: {results['max_drawdown_pct']:.2f}%")
-        print(f"Win Rate: {results['win_rate_pct']:.2f}%")
-        print(f"Report saved to: {results['report_path']}")
-    
-    asyncio.run(_run())
-
-
-def run_live_trading():
-    """Run live trading mode."""
-    from src.core.trading_engine import TradingEngine
-    
-    async def _run():
-        engine = TradingEngine()
+        await engine.initialize()
+        
         try:
-            await engine.start()
-            # Keep running until interrupted
-            while True:
-                await asyncio.sleep(1)
+            await engine.run()
         except KeyboardInterrupt:
-            await engine.stop()
+            await engine.shutdown()
     
-    asyncio.run(_run())
+    asyncio.run(run())
 
 
-def run_worker():
-    """Run background worker for ML retraining, etc."""
-    from src.ml.online_learning import OnlineLearningWorker
-    
-    async def _run():
+@cli.command()
+def api():
+    """Start API server."""
+    import uvicorn
+    uvicorn.run(
+        "src.api.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.is_development,
+        workers=1 if settings.is_development else 4
+    )
+
+
+@cli.command()
+def worker():
+    """Start background worker."""
+    async def run():
+        from src.ml.online_learning import OnlineLearningWorker
+        
         worker = OnlineLearningWorker()
         await worker.start()
+        
+        # Keep running
+        while True:
+            await asyncio.sleep(60)
     
-    asyncio.run(_run())
+    asyncio.run(run())
 
 
-def main():
-    parser = argparse.ArgumentParser(description="HOPEFX Trading Platform")
-    parser.add_argument(
-        "command",
-        choices=["api", "backtest", "live", "worker"],
-        default="api",
-        nargs="?",
-        help="Command to run (default: api)"
-    )
+@cli.command()
+@click.option('--start', required=True, help='Start date YYYY-MM-DD')
+@click.option('--end', required=True, help='End date YYYY-MM-DD')
+@click.option('--capital', default=100000, help='Initial capital')
+def backtest(start: str, end: str, capital: float):
+    """Run backtest."""
+    async def run():
+        from datetime import datetime
+        import pandas as pd
+        
+        # Load data
+        dates = pd.date_range(start=start, end=end, freq='1min')
+        data = pd.DataFrame({
+            'open': [1800 + i * 0.001 for i in range(len(dates))],
+            'high': [1800 + i * 0.001 + 0.5 for i in range(len(dates))],
+            'low': [1800 + i * 0.001 - 0.5 for i in range(len(dates))],
+            'close': [1800 + i * 0.001 + 0.05 for i in range(len(dates))],
+            'volume': [1000] * len(dates),
+        }, index=dates)
+        
+        # Run backtest
+        from src.backtest.engine import EventDrivenBacktester
+        
+        strategy = XAUUSDMLStrategy(strategy_id="backtest")
+        backtester = EventDrivenBacktester(initial_capital=Decimal(str(capital)))
+        
+        result = await backtester.run(strategy, data)
+        
+        # Print results
+        print("\n=== BACKTEST RESULTS ===")
+        print(f"Total Return: {result.metrics['total_return']:.2%}")
+        print(f"Sharpe Ratio: {result.metrics['sharpe_ratio']:.2f}")
+        print(f"Max Drawdown: {result.metrics['max_drawdown']:.2%}")
+        print(f"Number of Trades: {result.metrics['num_trades']}")
     
-    args = parser.parse_args()
-    
-    commands = {
-        "api": run_api_server,
-        "backtest": run_backtest,
-        "live": run_live_trading,
-        "worker": run_worker
-    }
-    
-    commands[args.command]()
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
-    main()
+    cli()
