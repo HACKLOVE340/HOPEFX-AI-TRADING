@@ -90,3 +90,103 @@ beautifulsoup4==4.12.2
 lxml==4.9.3
 feedparser>=6.0.10
 textblob>=0.17.1
+
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+gunicorn==23.0.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# Async Runtime
+anyio==4.6.2
+asyncio-mqtt==0.16.1
+aiohttp==3.11.0
+aiodns==3.2.0
+
+# Database
+sqlmodel==0.0.22
+sqlalchemy[asyncio]==2.0.36
+alembic==1.14.0
+asyncpg==0.30.0
+aiosqlite==0.20.0
+
+# Caching & Messaging
+redis==5.2.0
+aioredis==2.0.1
+hiredis==3.0.0
+
+# Machine Learning
+xgboost==2.1.2
+lightgbm==4.5.0
+torch==2.5.1
+scikit-learn==1.5.2
+numpy==1.26.4
+pandas==2.2.3
+polars==1.12.0
+joblib==1.4.2
+optuna==4.0.0
+
+# Feature Engineering
+ta-lib==0.5.1
+pandas-ta==0.3.14b0
+
+# Model Registry & Monitoring
+mlflow==2.17.2
+prometheus-client==0.21.0
+opentelemetry-api==1.28.0
+opentelemetry-sdk==1.28.0
+opentelemetry-instrumentation-fastapi==0.49b0
+
+# Security
+cryptography==43.0.3
+PyJWT==2.9.0
+argon2-cffi==23.1.0
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+slowapi==0.1.9
+
+# Data Sources
+polygon-api-client==1.14.2
+oandapyV20==0.7.2
+alpaca-py==0.34.0
+binance-connector==3.8.0
+ib-insync==0.9.86
+zmq==0.0.0
+pyzmq==26.2.0
+websockets==13.1
+aio-pika==9.4.3
+
+# Validation & Serialization
+orjson==3.10.11
+msgspec==0.18.6
+python-dateutil==2.9.0
+pytz==2024.2
+
+# Logging & Observability
+structlog==24.4.0
+python-json-logger==2.0.7
+sentry-sdk[fastapi]==2.18.0
+tenacity==9.0.0
+circuitbreaker==2.0.0
+
+# Payments
+stripe==11.2.0
+
+# HTTP Client
+httpx[http2]==0.27.2
+requests==2.32.3
+
+# Environment
+python-dotenv==1.0.1
+
+# Plotting & Visualization
+plotly==5.24.1
+kaleido==0.2.1
+lightweight-charts==1.0.0
+
+# Utilities
+python-multipart==0.0.17
+uuid7==0.1.0
+orjson==3.10.11
