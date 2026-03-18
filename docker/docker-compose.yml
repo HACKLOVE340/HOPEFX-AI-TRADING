@@ -1,100 +1,165 @@
-version: '3.8'
+# docker/docker-compose.yml
+version: "3.8"
 
 services:
-  api:
+  # Main trading application
+  hopefx:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    container_name: hopefx-api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - APP_ENV=production
+      - ENVIRONMENT=production
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
       - LOG_LEVEL=INFO
-      - DB_HOST=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - SECURITY_ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - SECURITY_JWT_SECRET=${JWT_SECRET}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-    volumes:
-      - ../data:/app/data
-      - ../models:/app/models
-      - ../logs:/app/logs
+    env_file:
+      - ../.env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
     networks:
       - hopefx-network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
 
-  worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: ["python", "-m", "src.main", "worker"]
+  # TimescaleDB for market data
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: hopefx-timescale
+    restart: unless-stopped
     environment:
-      - APP_ENV=production
-      - DB_HOST=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - SECURITY_ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      POSTGRES_USER: hopefx
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: market_data
     volumes:
-      - ../data:/app/data
-      - ../models:/app/models
-    depends_on:
-      - postgres
-      - redis
+      - timescale_data:/var/lib/postgresql/data
+      - ../scripts/init_timescale.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
     networks:
       - hopefx-network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hopefx"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # PostgreSQL for application data
   postgres:
     image: postgres:15-alpine
+    container_name: hopefx-postgres
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=hopefx
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=hopefx
+      POSTGRES_USER: hopefx
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: hopefx
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - hopefx-network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hopefx"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  # Redis for caching and pub/sub
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
-    volumes:
-      - redis-data:/data
-    networks:
-      - hopefx-network
+    container_name: hopefx-redis
     restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    ports:
-      - "9090:9090"
+      - redis_data:/data
     networks:
       - hopefx-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
+  # Grafana for visualization
   grafana:
     image: grafana/grafana:latest
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-    volumes:
-      - grafana-data:/var/lib/grafana
+    container_name: hopefx-grafana
+    restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ../monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - hopefx-network
+    depends_on:
+      - hopefx
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hopefx-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
     networks:
       - hopefx-network
 
+  # ML Model Server (optional GPU support)
+  ml-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ml
+    container_name: hopefx-ml
+    restart: unless-stopped
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODEL_REGISTRY_PATH=/models
+    volumes:
+      - ml_models:/models
+    networks:
+      - hopefx-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
-  postgres-data:
-  redis-data:
-  prometheus-data:
-  grafana-data:
+  timescale_data:
+  postgres_data:
+  redis_data:
+  grafana_data:
+  prometheus_data:
+  ml_models:
 
 networks:
   hopefx-network:
