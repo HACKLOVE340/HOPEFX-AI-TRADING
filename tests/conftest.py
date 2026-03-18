@@ -1,238 +1,68 @@
-"""
-Pytest configuration and shared fixtures for HOPEFX tests.
-"""
-
+# tests/conftest.py
 import pytest
-import os
-import tempfile
-from collections import deque
+import asyncio
 from pathlib import Path
+import tempfile
+import shutil
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 
-# Add project root to path
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from config import ConfigManager
-from database.models import Base, Trade, Position
-from cache import MarketDataCache
-from strategies import BaseStrategy, StrategyManager
-from risk import RiskManager, RiskConfig
-from brokers import PaperTradingBroker
-from notifications import NotificationManager
-
-
-@pytest.fixture(scope="session")
-def test_config():
-    """Create a test configuration."""
-    _env_keys = ['CONFIG_ENCRYPTION_KEY', 'CONFIG_SALT', 'DATABASE_URL', 'REDIS_URL', 'ENVIRONMENT']
-    _originals = {k: os.environ.get(k) for k in _env_keys}
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        os.environ['CONFIG_ENCRYPTION_KEY'] = 'a' * 64
-        os.environ['CONFIG_SALT'] = 'b' * 32
-        os.environ['DATABASE_URL'] = f'sqlite:///{tmpdir}/test.db'
-        os.environ['REDIS_URL'] = 'redis://localhost:6379/15'  # Test database
-        os.environ['ENVIRONMENT'] = 'testing'
-
-        config = ConfigManager()
-        yield config
-
-    for k, v in _originals.items():
-        if v is None:
-            os.environ.pop(k, None)
-        else:
-            os.environ[k] = v
-
+@pytest.fixture(scope='session')
+def event_loop():
+    """Create event loop for async tests."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 @pytest.fixture
-def db_session(test_config):
-    """Create a test database session."""
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    engine = create_engine(test_config.get('database.url'))
-    Base.metadata.create_all(engine)
-
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
-    yield session
-
-    session.close()
-    Base.metadata.drop_all(engine)
-
-
-@pytest.fixture
-def market_cache(test_config):
-    """Create a test market data cache."""
-    cache = MarketDataCache(test_config)
-    yield cache
-    try:
-        cache.clear_all()
-    except Exception:
-        pass  # Ignore if Redis not available
-
-
-@pytest.fixture
-def risk_manager(test_config):
-    """Create a test risk manager."""
-    from risk.manager import RiskConfig
-    risk_config = RiskConfig(
-        max_position_size=10000,
-        max_open_positions=5,
-        max_daily_loss=10.0,  # 10% as percentage
-        max_drawdown=10.0  # 10% as percentage
-    )
-    return RiskManager(risk_config, initial_balance=100000)
-
-
-@pytest.fixture
-def paper_broker(test_config):
-    """Create a test paper trading broker."""
-    broker_config = {
-        'initial_balance': 100000
-    }
-    broker = PaperTradingBroker(config=broker_config)
-    broker.connect()  # Connect the broker so it's ready for testing
-    return broker
-
-
-@pytest.fixture
-def strategy_manager(test_config, risk_manager, paper_broker):
-    """Create a test strategy manager."""
-    return StrategyManager()
-
-
-@pytest.fixture
-def notification_manager(test_config):
-    """Create a test notification manager."""
-    return NotificationManager(config=test_config)
-
+def temp_dir():
+    """Create temporary directory for test outputs."""
+    path = tempfile.mkdtemp()
+    yield Path(path)
+    shutil.rmtree(path)
 
 @pytest.fixture
 def sample_market_data():
-    """Generate sample market data for testing."""
-    dates = pd.date_range(start='2023-01-01', periods=100, freq='h')
-
-    # Generate realistic price data with trend and noise
-    base_price = 1.1000
-    trend = np.linspace(0, 0.01, 100)
-    noise = np.random.normal(0, 0.0005, 100)
-    prices = base_price + trend + noise
-
+    """Generate sample OHLCV data for testing."""
+    dates = pd.date_range(start='2024-01-01', periods=100, freq='1H')
+    np.random.seed(42)
+    
     data = pd.DataFrame({
         'timestamp': dates,
-        'open': prices * (1 + np.random.normal(0, 0.0001, 100)),
-        'high': prices * (1 + np.abs(np.random.normal(0, 0.0005, 100))),
-        'low': prices * (1 - np.abs(np.random.normal(0, 0.0005, 100))),
-        'close': prices,
+        'open': 2000 + np.random.randn(100).cumsum(),
+        'high': 2000 + np.random.randn(100).cumsum() + 5,
+        'low': 2000 + np.random.randn(100).cumsum() - 5,
+        'close': 2000 + np.random.randn(100).cumsum(),
         'volume': np.random.randint(1000, 10000, 100)
     })
-
     return data
 
-
 @pytest.fixture
-def sample_tick_data():
-    """Generate sample tick data for testing."""
-    return {
-        'symbol': 'EUR_USD',
-        'bid': 1.1000,
-        'ask': 1.1002,
-        'timestamp': datetime.now(),
-        'volume': 1000
-    }
-
-
-@pytest.fixture
-def mock_strategy(test_config):
-    """Create a mock strategy for testing."""
-    from strategies.base import StrategyConfig
+def mock_broker():
+    """Mock broker for testing."""
+    from unittest.mock import MagicMock
     
-    class MockStrategy(BaseStrategy):
-        def __init__(self, name="MockStrategy", symbol="EUR_USD"):
-            # Create StrategyConfig from parameters
-            config = StrategyConfig(
-                name=name,
-                symbol=symbol,
-                timeframe="1H"
-            )
-            super().__init__(config)
-            self.generate_signal_called = False
-            self.signal_to_return = None
-            
-            # Add backward compatibility properties
-            self._name = name
-            self._symbol = symbol
-            self.performance = {
-                'total_signals': 0,
-                'winning_trades': 0,
-                'losing_trades': 0,
-                'total_pnl': 0,
-                'win_rate': 0.0
-            }
+    broker = MagicMock()
+    broker.connect.return_value = True
+    broker.get_balance.return_value = {'USD': 100000}
+    broker.place_order.return_value = {
+        'id': 'test-order-123',
+        'status': 'filled',
+        'filled_price': 2000.50
+    }
+    return broker
 
-        @property
-        def name(self):
-            return self.config.name
-        
-        @property
-        def symbol(self):
-            return self.config.symbol
-        
-        @property
-        def is_active(self):
-            from strategies.base import StrategyStatus
-            return self.status == StrategyStatus.RUNNING
-
-        def analyze(self, data):
-            """Implement required abstract method."""
-            return {'analyzed': True, 'data': data}
-
-        def generate_signal(self, analysis):
-            """Override to match test expectations."""
-            self.generate_signal_called = True
-            return self.signal_to_return
-        
-        def update_performance(self, profit_loss, signal_type):
-            """Update performance metrics (backward compatibility)."""
-            self.performance['total_signals'] += 1
-            self.performance['total_pnl'] += profit_loss
-            
-            if profit_loss > 0:
-                self.performance['winning_trades'] += 1
-            else:
-                self.performance['losing_trades'] += 1
-            
-            # Calculate win rate
-            if self.performance['total_signals'] > 0:
-                self.performance['win_rate'] = (
-                    self.performance['winning_trades'] / 
-                    self.performance['total_signals'] * 100
-                )
-        
-        def get_performance_metrics(self):
-            """Override to return custom performance dict."""
-            return self.performance
-
-    return MockStrategy
-
-
-# Pytest configuration
-def pytest_configure(config):
-    """Configure pytest."""
-    config.addinivalue_line(
-        "markers", "unit: Unit tests"
-    )
-    config.addinivalue_line(
-        "markers", "integration: Integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "slow: Slow running tests"
-    )
-    config.addinivalue_line(
-        "markers", "requires_redis: Tests that require Redis"
-    )
+@pytest.fixture
+def test_config(temp_dir):
+    """Test configuration."""
+    return {
+        'logging': {'level': 'DEBUG'},
+        'database': {'url': f'sqlite:///{temp_dir}/test.db'},
+        'cache': {'type': 'memory'},
+        'risk': {
+            'max_position_size': 0.1,
+            'max_drawdown': 0.05,
+            'daily_loss_limit': 1000
+        }
+    }
