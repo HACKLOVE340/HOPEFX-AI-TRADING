@@ -1,125 +1,30 @@
-# src/hopefx/config/settings.py
 """
-Fort Knox-grade configuration with HashiCorp Vault integration,
-strict validation, and zero hardcoded defaults.
+HOPEFX Trading System - Secure Async Entry Point
 """
-
 from __future__ import annotations
 
-import os
-import secrets
-import string
-from enum import Enum
-from functools import lru_cache
-from pathlib import Path
-from typing import Literal, Self, Any
+import asyncio
+import signal
+import sys
+from contextlib import AsyncExitStack, suppress
+from typing import Any  # ✅ ADDED
 
-from pydantic import Field, field_validator, model_validator, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
+import anyio
 import structlog
+from pydantic import SecretStr  # ✅ ADDED
 
-logger = structlog.get_logger()
+from hopefx.config.settings import get_settings, VaultSecretProvider
+from hopefx.core.events import get_event_bus, EventBus
+from hopefx.core.distributed_kill_switch import DistributedKillSwitch
+from hopefx.data.feeds.oanda import OandaFeed
+from hopefx.execution.oms import OrderManager
+from hopefx.execution.router import SmartRouter
+from hopefx.risk.manager import RiskManager
+from hopefx.infrastructure.database import init_db, close_db
+from hopefx.infrastructure.redis import get_redis_pool, close_redis
+from hopefx.infrastructure.monitoring import get_metrics_exporter, MetricsExporter
 
-
-class Environment(str, Enum):
-    """Deployment environment."""
-    DEVELOPMENT = "development"
-    STAGING = "staging"
-    PRODUCTION = "production"
-    TESTING = "testing"
-
-
-class VaultConfig(BaseSettings):
-    """HashiCorp Vault configuration for secret management."""
-    password: SecretStr = Field(..., min_length=8, repr=False)  # ✅ REQUIRED
-    model_config = SettingsConfigDict(env_prefix="VAULT_")
-    
-    enabled: bool = False
-    addr: str = "http://localhost:8200"
-    token: SecretStr = Field(default=SecretStr(""), repr=False)
-    mount_point: str = "secret"
-    path: str = "hopefx"
-    verify_ssl: bool = True
-    
-    @field_validator("token", mode="after")
-    @classmethod
-    def validate_vault_token(cls, v: SecretStr) -> SecretStr:
-        if v.get_secret_value() and len(v.get_secret_value()) < 20:
-            raise ValueError("Vault token must be at least 20 characters")
-        return v
-
-
-class DatabaseConfig(BaseSettings):
-    """PostgreSQL/TimescaleDB with strict validation."""
-    model_config = SettingsConfigDict(env_prefix="DB_")
-    
-    host: str = Field(..., min_length=1)  # No default!
-    port: int = Field(default=5432, ge=1, le=65535)
-    name: str = Field(..., min_length=1)
-    user: str = Field(..., min_length=1)
-    password: SecretStr = Field(..., min_length=8)  # Required, no default!
-    pool_size: int = Field(default=20, ge=1, le=100)
-    max_overflow: int = Field(default=10, ge=0, le=50)
-    echo: bool = False
-    ssl_mode: Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] = "require"
-    
-    @property
-    class SecurityConfig(BaseSettings):
-    secret_key: SecretStr = Field(..., min_length=32)  # ✅ REQUIRED, NO DEFAULT
-    
-    @field_validator("secret_key", mode="after")
-    @classmethod
-    def validate_no_empty_or_dev_key(cls, v: SecretStr) -> SecretStr:
-        secret = v.get_secret_value()
-        if len(secret) < 32:
-            raise ValueError("SECRET_KEY must be 32+ characters")
-        # Check for common dev patterns
-        forbidden = ["dev", "test", "example", "123456", "password"]
-        if any(f in secret.lower() for f in forbidden):
-            raise ValueError(f"SECRET_KEY contains forbidden pattern. Generate: openssl rand -hex 32")
-        return v
-
-    @property
-    def _real_async_url(self) -> str:
-        """Actual URL with password for internal use."""
-        encryption_key: SecretStr | None = Field(
-    default=None,
-    repr=False, 
-    description="Fernet encryption key (32 bytes base64)"
-)
-
-        return (
-            f"postgresql+asyncpg://{self.user}:{self.password.get_secret_value()}"
-            f"@{self.host}:{self.port}/{self.name}"
-            f"?ssl={self.ssl_mode}"
-        )
-
-
-class RedisConfig(BaseSettings):
-    """Redis configuration."""
-    model_config = SettingsConfigDict(env_prefix="REDIS_")
-    
-    host: str = Field(..., min_length=1)
-    port: int = Field(default=6379, ge=1, le=65535)
-    db: int = Field(default=0, ge=0, le=15)
-    password: SecretStr | None = Field(default=None, repr=False)
-    ssl: bool = True
-class BrokerConfig(BaseSettings):
-    oanda_api_key: SecretStr | None = Field(default=None, repr=False)  # ✅ Optional but typed
-    mt5_password: SecretStr | None = Field(default=None, repr=False)
-    
-    @model_validator(mode="after")
-    def validate_at_least_one_broker(self) -> Self:
-        """Ensure at least one broker is configured if not in backtest mode."""
-        has_oanda = self.oanda_api_key is not None
-        has_mt5 = self.mt5_password is not None and self.mt5_login > 0
-        
-        if not has_oanda and not has_mt5:
-            # Allow if paper trading with mock broker
-            pass
         return self
-
 
 class SecurityConfig(BaseSettings):
     """
