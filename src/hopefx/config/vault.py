@@ -14,6 +14,14 @@ class Credentials(BaseModel):
     ibkr_account: str | None = None
     stripe_secret: str | None = None
 
+class SecurityPolicy:
+    ALLOWED_IPS = ["your_vpn_ip"]  # Restrict production access
+    REQUIRE_2FA = True  # Implement TOTP
+    
+    @staticmethod
+    def check_ip(request_ip: str) -> bool:
+        return request_ip in SecurityPolicy.ALLOWED_IPS
+
 
 class SecureVault:
     """Fernet encryption with OS keyring for service credentials."""
