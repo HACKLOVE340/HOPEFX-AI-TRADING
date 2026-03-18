@@ -1,108 +1,66 @@
 """
-Abstract base broker interface with strict typing.
+Abstract broker interface.
 """
+
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
+from typing import Any
+
+from src.domain.enums import BrokerType
+from src.domain.models import Account, Order, Position, TickData
 
 
-class OrderSide(str, Enum):
-    BUY = "BUY"
-    SELL = "SELL"
-
-
-@dataclass(frozen=True)
-class TickData:
-    """Immutable tick data structure."""
-    symbol: str
-    timestamp: datetime
-    bid: Decimal
-    ask: Decimal
-    volume: int
-    source: str
-
-
-@dataclass
-class Order:
-    """Order request structure."""
-    symbol: str
-    side: OrderSide
-    quantity: Decimal
-    order_type: str = "MARKET"
-    price: Optional[Decimal] = None
-    stop_price: Optional[Decimal] = None
-    time_in_force: str = "GTC"
-    client_order_id: Optional[str] = None
-
-
-@dataclass
-class Position:
-    """Position structure."""
-    symbol: str
-    quantity: Decimal
-    avg_entry_price: Decimal
-    unrealized_pnl: Decimal
-    realized_pnl: Decimal
-    open_time: datetime
-
-
-class BaseBroker(ABC):
-    """Abstract base class for all broker implementations."""
+class Broker(ABC):
+    """
+    Base class for all broker integrations.
+    """
     
-    def __init__(self, name: str, paper_mode: bool = False):
-        self.name = name
-        self.paper_mode = paper_mode
+    def __init__(self, broker_type: BrokerType, credentials: dict[str, Any]):
+        self.broker_type = broker_type
+        self.credentials = credentials
         self._connected = False
-        self._last_ping: Optional[datetime] = None
-    
-    @property
-    def is_connected(self) -> bool:
-        return self._connected
+        self._account: Account | None = None
     
     @abstractmethod
     async def connect(self) -> bool:
-        """Establish connection to broker."""
+        """Establish connection."""
         pass
     
     @abstractmethod
     async def disconnect(self) -> None:
-        """Close broker connection."""
+        """Close connection."""
         pass
     
     @abstractmethod
-    async def get_account_info(self) -> Dict[str, Any]:
-        """Get account balance and margin info."""
+    async def get_account(self) -> Account:
+        """Fetch account information."""
         pass
     
     @abstractmethod
-    async def get_positions(self) -> List[Position]:
-        """Get all open positions."""
-        pass
-    
-    @abstractmethod
-    async def place_order(self, order: Order) -> Dict[str, Any]:
-        """Execute order."""
+    async def submit_order(self, order: Order) -> Order:
+        """Submit order."""
         pass
     
     @abstractmethod
     async def cancel_order(self, order_id: str) -> bool:
-        """Cancel pending order."""
+        """Cancel order."""
+        pass
+    
+    @abstractmethod
+    async def get_positions(self) -> list[Position]:
+        """Get open positions."""
         pass
     
     @abstractmethod
     async def get_quote(self, symbol: str) -> TickData:
-        """Get current market quote."""
+        """Get current quote."""
         pass
     
-    async def health_check(self) -> bool:
-        """Verify broker connectivity."""
-        try:
-            await self.get_account_info()
-            self._last_ping = datetime.utcnow()
-            return True
-        except Exception:
-            self._connected = False
-            return False
+    @abstractmethod
+    async def stream_quotes(self, symbols: list[str], callback: callable) -> None:
+        """Stream real-time quotes."""
+        pass
+    
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
