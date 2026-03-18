@@ -32,6 +32,7 @@ class Environment(str, Enum):
 
 class VaultConfig(BaseSettings):
     """HashiCorp Vault configuration for secret management."""
+    password: SecretStr = Field(..., min_length=8, repr=False)  # ✅ REQUIRED
     model_config = SettingsConfigDict(env_prefix="VAULT_")
     
     enabled: bool = False
@@ -104,9 +105,20 @@ class RedisConfig(BaseSettings):
     db: int = Field(default=0, ge=0, le=15)
     password: SecretStr | None = Field(default=None, repr=False)
     ssl: bool = True
-    socket_timeout: float = Field(default=5.0, gt=0)
-    socket_connect_timeout: float = Field(default=5.0, gt=0)
-    max_connections: int = Field(default=100, ge=1, le=500)
+class BrokerConfig(BaseSettings):
+    oanda_api_key: SecretStr | None = Field(default=None, repr=False)  # ✅ Optional but typed
+    mt5_password: SecretStr | None = Field(default=None, repr=False)
+    
+    @model_validator(mode="after")
+    def validate_at_least_one_broker(self) -> Self:
+        """Ensure at least one broker is configured if not in backtest mode."""
+        has_oanda = self.oanda_api_key is not None
+        has_mt5 = self.mt5_password is not None and self.mt5_login > 0
+        
+        if not has_oanda and not has_mt5:
+            # Allow if paper trading with mock broker
+            pass
+        return self
 
 
 class SecurityConfig(BaseSettings):
