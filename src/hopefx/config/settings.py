@@ -64,10 +64,21 @@ class DatabaseConfig(BaseSettings):
     ssl_mode: Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] = "require"
     
     @property
-    def async_url(self) -> str:
-        """Async PostgreSQL URL (password hidden)."""
-        return f"postgresql+asyncpg://{self.user}:****@{self.host}:{self.port}/{self.name}"
+    class SecurityConfig(BaseSettings):
+    secret_key: SecretStr = Field(..., min_length=32)  # ✅ REQUIRED, NO DEFAULT
     
+    @field_validator("secret_key", mode="after")
+    @classmethod
+    def validate_no_empty_or_dev_key(cls, v: SecretStr) -> SecretStr:
+        secret = v.get_secret_value()
+        if len(secret) < 32:
+            raise ValueError("SECRET_KEY must be 32+ characters")
+        # Check for common dev patterns
+        forbidden = ["dev", "test", "example", "123456", "password"]
+        if any(f in secret.lower() for f in forbidden):
+            raise ValueError(f"SECRET_KEY contains forbidden pattern. Generate: openssl rand -hex 32")
+        return v
+
     @property
     def _real_async_url(self) -> str:
         """Actual URL with password for internal use."""
