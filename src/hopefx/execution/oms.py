@@ -1,336 +1,198 @@
-# src/hopefx/execution/oms.py
-"""
-Production Order Management System with partial fill handling,
-slippage modeling, and smart routing.
-"""
-
 from __future__ import annotations
 
 import asyncio
-import time
-import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum, auto
-from typing import Callable, Coroutine, Literal
+from typing import Any
+from uuid import uuid4
 
 import structlog
 
-from hopefx.core.events import EventBus, OrderEvent, EventPriority, get_event_bus
+from hopefx.config.settings import settings
+from hopefx.events.bus import event_bus
+from hopefx.events.schemas import Event, EventType, Signal
+from hopefx.execution.brokers.base import Order, OrderResult, OrderStatus, OrderType
+from hopefx.execution.router import smart_router
+from hopefx.risk.prop_rules import prop_rules
 
 logger = structlog.get_logger()
 
 
-class OrderStatus(Enum):
-    """Order lifecycle states."""
-    PENDING = auto()
-    SUBMITTED = auto()
-    PARTIAL = auto()
-    FILLED = auto()
-    CANCELLED = auto()
+class OMSStatus(Enum):
+    IDLE = auto()
+    PENDING_RISK = auto()
+    PENDING_EXECUTION = auto()
+    EXECUTED = auto()
     REJECTED = auto()
-    EXPIRED = auto()
-
-
-class OrderType(Enum):
-    """Order types."""
-    MARKET = auto()
-    LIMIT = auto()
-    STOP = auto()
-    STOP_LIMIT = auto()
-    TRAILING_STOP = auto()
 
 
 @dataclass
-class Order:
-    """Trade order."""
-    order_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    client_order_id: str = ""
-    symbol: str = ""
-    side: Literal["BUY", "SELL"] = "BUY"
-    order_type: OrderType = OrderType.MARKET
-    quantity: Decimal = Decimal("0")
-    filled_quantity: Decimal = Decimal("0")
-    remaining_quantity: Decimal = Decimal("0")
-    price: Decimal | None = None
-    stop_price: Decimal | None = None
-    status: OrderStatus = OrderStatus.PENDING
-    created_at: float = field(default_factory=time.time)
-    updated_at: float = field(default_factory=time.time)
-    filled_at: float | None = None
-    average_fill_price: Decimal | None = None
-    slippage: Decimal = Decimal("0")
-    commission: Decimal = Decimal("0")
-    metadata: dict = field(default_factory=dict)
-
-
-@dataclass
-class Fill:
-    """Individual fill record."""
-    fill_id: str
+class OrderState:
     order_id: str
-    symbol: str
-    quantity: Decimal
-    price: Decimal
-    timestamp: float
-    slippage: Decimal
+    signal: Signal
+    status: OMSStatus
+    created_at: float
+    risk_approved: bool = False
+    execution_result: OrderResult | None = None
+    amendments: list[dict] = field(default_factory=list)
 
 
-class OrderManager:
-    """
-    Production OMS with partial fill tracking, 
-    slippage analysis, and fill probability modeling.
-    """
-    
+class OrderManagementSystem:
+    """Order Management System with full lifecycle tracking."""
+
     def __init__(self) -> None:
-        self._orders: dict[str, Order] = {}
-        self._fills: list[Fill] = []
-        self._callbacks: list[Callable[[Order], Coroutine[None, None, None]]] = []
-        self._event_bus: EventBus | None = None
+        self._orders: dict[str, OrderState] = {}
+        self._positions: dict[str, dict] = {}
         self._lock = asyncio.Lock()
-        self._slippage_model = "volatility"  # fixed, volatility, none
-    
-    async def initialize(self) -> None:
-        """Initialize OMS."""
-        self._event_bus = await get_event_bus()
-        logger.info("oms_initialized")
-    
-    async def submit_order(
-        self,
-        symbol: str,
-        side: Literal["BUY", "SELL"],
-        quantity: Decimal,
-        order_type: OrderType = OrderType.MARKET,
-        price: Decimal | None = None,
-        stop_price: Decimal | None = None,
-        time_in_force: Literal["GTC", "IOC", "FOK"] = "GTC"
-    ) -> Order:
-        """Submit new order."""
+        self._running = False
+
+    async def start(self) -> None:
+        """Start OMS."""
+        self._running = True
+        event_bus.subscribe(EventType.SIGNAL, self._on_signal)
+        logger.info("oms.started")
+
+    async def stop(self) -> None:
+        """Stop OMS."""
+        self._running = False
+        # Cancel all pending orders
         async with self._lock:
-            order = Order(
-                symbol=symbol,
-                side=side,
-                order_type=order_type,
-                quantity=quantity,
-                remaining_quantity=quantity,
-                price=price,
-                stop_price=stop_price,
-                status=OrderStatus.SUBMITTED
-            )
-            
-            self._orders[order.order_id] = order
-            
-            logger.info(
-                "order_submitted",
-                order_id=order.order_id,
-                symbol=symbol,
-                side=side,
-                quantity=float(quantity),
-                order_type=order_type.name
-            )
-            
-            # Publish event
-            await self._event_bus.publish(OrderEvent(
-                priority=EventPriority.HIGH,
-                order_id=order.order_id,
-                action="SUBMITTED",
-                symbol=symbol,
-                side=side,
-                quantity=float(quantity),
-                source="oms"
-            ))
-            
-            return order
-    
-    async def handle_fill(
-        self,
-        order_id: str,
-        fill_quantity: Decimal,
-        fill_price: Decimal,
-        timestamp: float | None = None
-    ) -> Order:
-        """Process fill notification."""
+            for order_id, state in self._orders.items():
+                if state.status in [OMSStatus.PENDING_RISK, OMSStatus.PENDING_EXECUTION]:
+                    logger.info("oms.cancelling_pending", order_id=order_id)
+        logger.info("oms.stopped")
+
+    async def _on_signal(self, event: Event) -> None:
+        """Process trading signal."""
+        if not isinstance(event.payload, Signal):
+            return
+
+        signal: Signal = event.payload
+
+        # Risk check
+        approved, reason = prop_rules.validate(
+            signal.symbol,
+            signal.size,
+            signal.stop_price,
+        )
+
+        if not approved:
+            logger.warning("oms.risk_rejected", signal=signal, reason=reason)
+            return
+
+        # Create order
+        order_id = str(uuid4())
+        order_state = OrderState(
+            order_id=order_id,
+            signal=signal,
+            status=OMSStatus.PENDING_EXECUTION,
+            created_at=asyncio.get_event_loop().time(),
+            risk_approved=True,
+        )
+
         async with self._lock:
-            if order_id not in self._orders:
-                raise ValueError(f"Unknown order: {order_id}")
-            
-            order = self._orders[order_id]
-            now = timestamp or time.time()
-            
-            # Calculate slippage
-            expected_price = order.price
-            if expected_price is None:
-                slippage = Decimal("0")
+            self._orders[order_id] = order_state
+
+        # Route to execution
+        await self._execute(order_id)
+
+    async def _execute(self, order_id: str) -> None:
+        """Execute order through router."""
+        async with self._lock:
+            state = self._orders.get(order_id)
+            if not state:
+                return
+
+            state.status = OMSStatus.PENDING_EXECUTION
+
+        # Convert signal to broker order
+        order = Order(
+            symbol=state.signal.symbol,
+            side=state.signal.direction,
+            quantity=state.signal.size,
+            order_type=OrderType.MARKET if state.signal.order_type == "market" else OrderType.LIMIT,
+            price=state.signal.limit_price,
+            stop_price=state.signal.stop_price,
+            client_order_id=order_id,
+        )
+
+        # Route and execute
+        result = await smart_router.route_order(order)
+
+        async with self._lock:
+            state.execution_result = result
+            if result.status == OrderStatus.FILLED:
+                state.status = OMSStatus.EXECUTED
+                self._update_positions(state.signal, result)
             else:
-                if order.side == "BUY":
-                    slippage = fill_price - expected_price
-                else:
-                    slippage = expected_price - fill_price
-            
-            # Update order
-            order.filled_quantity += fill_quantity
-            order.remaining_quantity -= fill_quantity
-            order.slippage += slippage * fill_quantity
-            
-            # Calculate average fill price
-            if order.average_fill_price is None:
-                order.average_fill_price = fill_price
-            else:
-                total_value = (
-                    order.average_fill_price * (order.filled_quantity - fill_quantity) +
-                    fill_price * fill_quantity
-                )
-                order.average_fill_price = total_value / order.filled_quantity
-            
-            # Update status
-            if order.remaining_quantity <= Decimal("0"):
-                order.status = OrderStatus.FILLED
-                order.filled_at = now
-            else:
-                order.status = OrderStatus.PARTIAL
-            
-            order.updated_at = now
-            
-            # Record fill
-            fill = Fill(
-                fill_id=str(uuid.uuid4()),
-                order_id=order_id,
-                symbol=order.symbol,
-                quantity=fill_quantity,
-                price=fill_price,
-                timestamp=now,
-                slippage=slippage
-            )
-            self._fills.append(fill)
-            
-            logger.info(
-                               "order_filled",
-                order_id=order_id,
-                fill_quantity=float(fill_quantity),
-                fill_price=float(fill_price),
-                slippage=float(slippage),
-                remaining=float(order.remaining_quantity),
-                status=order.status.name
-            )
-            
-            # Publish event
-            await self._event_bus.publish(OrderEvent(
-                priority=EventPriority.HIGH,
-                order_id=order_id,
-                action="FILLED" if order.status == OrderStatus.FILLED else "PARTIAL",
-                symbol=order.symbol,
-                side=order.side,
-                quantity=float(fill_quantity),
-                price=float(fill_price),
-                slippage=float(slippage),
-                source="oms"
-            ))
-            
-            # Notify callbacks
-            for callback in self._callbacks:
-                try:
-                    await callback(order)
-                except Exception as e:
-                    logger.error("fill_callback_error", error=str(e))
-            
-            return order
-    
-    async def cancel_order(self, order_id: str) -> Order:
+                state.status = OMSStatus.REJECTED
+
+        logger.info(
+            "oms.order_completed",
+            order_id=order_id,
+            status=state.status.name,
+            filled=float(result.filled_qty) if result else 0,
+        )
+
+    def _update_positions(self, signal: Signal, result: OrderResult) -> None:
+        """Update position tracking."""
+        symbol = signal.symbol
+
+        if signal.direction in ["buy", "sell"]:
+            # Open position
+            self._positions[symbol] = {
+                "side": signal.direction,
+                "qty": result.filled_qty,
+                "entry_price": result.filled_price,
+                "open_time": result.timestamp,
+                "unrealized_pnl": Decimal("0"),
+            }
+        elif signal.direction == "close":
+            # Close position
+            if symbol in self._positions:
+                del self._positions[symbol]
+
+    async def amend_order(self, order_id: str, updates: dict[str, Any]) -> bool:
+        """Amend pending order."""
+        async with self._lock:
+            state = self._orders.get(order_id)
+            if not state or state.status != OMSStatus.PENDING_EXECUTION:
+                return False
+
+            state.amendments.append({
+                "time": asyncio.get_event_loop().time(),
+                "updates": updates,
+            })
+
+            # Apply updates
+            if "stop_price" in updates:
+                state.signal.stop_price = Decimal(str(updates["stop_price"]))
+
+            return True
+
+    async def cancel_order(self, order_id: str) -> bool:
         """Cancel pending order."""
         async with self._lock:
-            if order_id not in self._orders:
-                raise ValueError(f"Unknown order: {order_id}")
-            
-            order = self._orders[order_id]
-            
-            if order.status not in (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIAL):
-                raise ValueError(f"Cannot cancel order in status: {order.status}")
-            
-            order.status = OrderStatus.CANCELLED
-            order.updated_at = time.time()
-            
-            logger.info("order_cancelled", order_id=order_id)
-            
-            await self._event_bus.publish(OrderEvent(
-                priority=EventPriority.HIGH,
-                order_id=order_id,
-                action="CANCELLED",
-                symbol=order.symbol,
-                side=order.side,
-                quantity=float(order.remaining_quantity),
-                source="oms"
-            ))
-            
-            return order
-    
-    async def modify_order(
-        self,
-        order_id: str,
-        new_quantity: Decimal | None = None,
-        new_price: Decimal | None = None
-    ) -> Order:
-        """Modify pending order."""
-        async with self._lock:
-            if order_id not in self._orders:
-                raise ValueError(f"Unknown order: {order_id}")
-            
-            order = self._orders[order_id]
-            
-            if order.status not in (OrderStatus.PENDING, OrderStatus.SUBMITTED):
-                raise ValueError(f"Cannot modify order in status: {order.status}")
-            
-            if new_quantity is not None:
-                order.quantity = new_quantity
-                order.remaining_quantity = new_quantity - order.filled_quantity
-            
-            if new_price is not None:
-                order.price = new_price
-            
-            order.updated_at = time.time()
-            
-            logger.info(
-                "order_modified",
-                order_id=order_id,
-                new_quantity=float(new_quantity) if new_quantity else None,
-                new_price=float(new_price) if new_price else None
-            )
-            
-            return order
-    
-    def on_order_update(self, callback: Callable[[Order], Coroutine[None, None, None]]) -> None:
-        """Register order update callback."""
-        self._callbacks.append(callback)
-    
-    def get_order(self, order_id: str) -> Order | None:
-        """Get order by ID."""
-        return self._orders.get(order_id)
-    
-    def get_open_orders(self, symbol: str | None = None) -> list[Order]:
-        """Get all open orders."""
-        orders = [
-            o for o in self._orders.values()
-            if o.status in (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIAL)
-        ]
-        if symbol:
-            orders = [o for o in orders if o.symbol == symbol]
-        return orders
-    
-    def get_fill_stats(self, lookback_seconds: float = 3600) -> dict:
-        """Get fill statistics."""
-        cutoff = time.time() - lookback_seconds
-        recent_fills = [f for f in self._fills if f.timestamp > cutoff]
-        
-        if not recent_fills:
-            return {"count": 0}
-        
-        slippages = [float(f.slippage) for f in recent_fills]
-        
-        return {
-            "count": len(recent_fills),
-            "total_quantity": sum(float(f.quantity) for f in recent_fills),
-            "avg_slippage": sum(slippages) / len(slippages),
-            "max_slippage": max(slippages),
-            "min_slippage": min(slippages),
-            "slippage_std": np.std(slippages) if len(slippages) > 1 else 0,
-        }
+            state = self._orders.get(order_id)
+            if not state or state.status != OMSStatus.PENDING_EXECUTION:
+                return False
 
+            state.status = OMSStatus.REJECTED
+            return True
+
+    def get_order(self, order_id: str) -> OrderState | None:
+        """Get order state."""
+        return self._orders.get(order_id)
+
+    def get_position(self, symbol: str) -> dict | None:
+        """Get current position."""
+        return self._positions.get(symbol)
+
+    def get_all_positions(self) -> dict[str, dict]:
+        """Get all positions."""
+        return dict(self._positions)
+
+
+# Global OMS
+oms = OrderManagementSystem()
