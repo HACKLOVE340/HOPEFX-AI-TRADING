@@ -82,6 +82,12 @@ class DatabaseConfig(BaseSettings):
     @property
     def _real_async_url(self) -> str:
         """Actual URL with password for internal use."""
+        encryption_key: SecretStr | None = Field(
+    default=None,
+    repr=False, 
+    description="Fernet encryption key (32 bytes base64)"
+)
+
         return (
             f"postgresql+asyncpg://{self.user}:{self.password.get_secret_value()}"
             f"@{self.host}:{self.port}/{self.name}"
