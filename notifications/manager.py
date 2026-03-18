@@ -1,544 +1,837 @@
-"""
-Notification Manager
 
-Sends notifications via multiple channels (Discord, Telegram, Email, etc.)
+# Phase 7: Notifications Module - Discord, Telegram, Email, SMS
+
+code = '''"""
+HOPEFX Notifications Module
+Multi-channel notifications with delivery tracking and webhooks
+Supports: Discord, Telegram, Email, SMS
 """
 
-from typing import List, Optional, Dict, Any
-from enum import Enum
-from datetime import datetime, timezone
+import json
 import logging
+import smtplib
 import requests
-
-logger = logging.getLogger(__name__)
-
-
-class NotificationLevel(Enum):
-    """Notification severity levels"""
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
+from datetime import datetime
+from typing import Dict, List, Optional, Any, Callable
+from pathlib import Path
+from dataclasses import dataclass, field
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from enum import Enum
+import sqlite3
+import threading
+import time
 
 
 class NotificationChannel(Enum):
-    """Notification channels"""
-    CONSOLE = "CONSOLE"
-    DISCORD = "DISCORD"
-    TELEGRAM = "TELEGRAM"
-    EMAIL = "EMAIL"
-    SMS = "SMS"
+    DISCORD = "discord"
+    TELEGRAM = "telegram"
+    EMAIL = "email"
+    SMS = "sms"
+    WEBHOOK = "webhook"
+
+
+class NotificationPriority(Enum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class NotificationMessage:
+    """Standardized notification message"""
+    message_id: str
+    timestamp: datetime
+    title: str
+    content: str
+    channel: NotificationChannel
+    priority: NotificationPriority
+    recipient: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        if not self.message_id:
+            import uuid
+            self.message_id = str(uuid.uuid4())
+
+
+@dataclass
+class DeliveryRecord:
+    """Delivery tracking record"""
+    record_id: str
+    message_id: str
+    channel: NotificationChannel
+    recipient: str
+    timestamp: datetime
+    status: str  # PENDING, SENT, DELIVERED, FAILED, RETRY
+    response_code: Optional[int] = None
+    response_message: Optional[str] = None
+    retry_count: int = 0
+    delivered_at: Optional[datetime] = None
+
+
+class NotificationDatabase:
+    """SQLite database for notification tracking"""
+    
+    def __init__(self, db_path: str = "notifications/logs/notifications.db"):
+        self.db_path = db_path
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.init_database()
+    
+    def init_database(self):
+        """Initialize database tables"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Messages table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                message_id TEXT PRIMARY KEY,
+                timestamp TEXT,
+                title TEXT,
+                content TEXT,
+                channel TEXT,
+                priority TEXT,
+                recipient TEXT,
+                metadata TEXT
+            )
+        """)
+        
+        # Delivery records table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS delivery_records (
+                record_id TEXT PRIMARY KEY,
+                message_id TEXT,
+                channel TEXT,
+                recipient TEXT,
+                timestamp TEXT,
+                status TEXT,
+                response_code INTEGER,
+                response_message TEXT,
+                retry_count INTEGER,
+                delivered_at TEXT
+            )
+        """)
+        
+        # Webhook logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS webhook_logs (
+                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                webhook_url TEXT,
+                payload TEXT,
+                response_code INTEGER,
+                response_body TEXT
+            )
+        """)
+        
+        conn.commit()
+        conn.close()
+    
+    def save_message(self, message: NotificationMessage):
+        """Save message to database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO messages 
+            (message_id, timestamp, title, content, channel, priority, recipient, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            message.message_id, message.timestamp.isoformat(), message.title,
+            message.content, message.channel.value, message.priority.value,
+            message.recipient, json.dumps(message.metadata)
+        ))
+        conn.commit()
+        conn.close()
+    
+    def save_delivery_record(self, record: DeliveryRecord):
+        """Save delivery record"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO delivery_records
+            (record_id, message_id, channel, recipient, timestamp, status,
+             response_code, response_message, retry_count, delivered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            record.record_id, record.message_id, record.channel.value, record.recipient,
+            record.timestamp.isoformat(), record.status, record.response_code,
+            record.response_message, record.retry_count,
+            record.delivered_at.isoformat() if record.delivered_at else None
+        ))
+        conn.commit()
+        conn.close()
+    
+    def log_webhook(self, webhook_url: str, payload: Dict, response_code: int, response_body: str):
+        """Log webhook call"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO webhook_logs (timestamp, webhook_url, payload, response_code, response_body)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            datetime.now().isoformat(), webhook_url, json.dumps(payload),
+            response_code, response_body
+        ))
+        conn.commit()
+        conn.close()
+    
+    def get_delivery_stats(self, channel: Optional[NotificationChannel] = None) -> Dict:
+        """Get delivery statistics"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if channel:
+            cursor.execute("""
+                SELECT status, COUNT(*) FROM delivery_records 
+                WHERE channel = ?
+                GROUP BY status
+            """, (channel.value,))
+        else:
+            cursor.execute("""
+                SELECT status, COUNT(*) FROM delivery_records 
+                GROUP BY status
+            """)
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        stats = {'total': 0, 'sent': 0, 'delivered': 0, 'failed': 0, 'pending': 0}
+        for status, count in results:
+            stats[status.lower()] = count
+            stats['total'] += count
+        
+        stats['success_rate'] = (stats['delivered'] + stats['sent']) / stats['total'] if stats['total'] > 0 else 0.0
+        return stats
+
+
+class BaseNotifier:
+    """Base class for all notification channels"""
+    
+    def __init__(self, channel: NotificationChannel):
+        self.channel = channel
+        self.db = NotificationDatabase()
+        self.enabled = True
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send notification - to be implemented by subclasses"""
+        raise NotImplementedError
+    
+    def create_delivery_record(self, message: NotificationMessage, status: str,
+                              response_code: Optional[int] = None,
+                              response_message: Optional[str] = None) -> DeliveryRecord:
+        """Create delivery record"""
+        import uuid
+        return DeliveryRecord(
+            record_id=str(uuid.uuid4()),
+            message_id=message.message_id,
+            channel=self.channel,
+            recipient=message.recipient,
+            timestamp=datetime.now(),
+            status=status,
+            response_code=response_code,
+            response_message=response_message
+        )
+
+
+class DiscordNotifier(BaseNotifier):
+    """Discord webhook notifications"""
+    
+    def __init__(self, webhook_url: str):
+        super().__init__(NotificationChannel.DISCORD)
+        self.webhook_url = webhook_url
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send Discord webhook notification"""
+        if not self.enabled:
+            return self.create_delivery_record(message, "DISABLED")
+        
+        # Build Discord embed
+        color_map = {
+            NotificationPriority.LOW: 0x95a5a6,
+            NotificationPriority.NORMAL: 0x3498db,
+            NotificationPriority.HIGH: 0xf39c12,
+            NotificationPriority.CRITICAL: 0xe74c3c
+        }
+        
+        payload = {
+            "embeds": [{
+                "title": message.title,
+                "description": message.content,
+                "color": color_map.get(message.priority, 0x3498db),
+                "timestamp": message.timestamp.isoformat(),
+                "footer": {
+                    "text": f"HOPEFX Trading | {message.priority.value.upper()}"
+                },
+                "fields": [
+                    {
+                        "name": "Channel",
+                        "value": message.channel.value,
+                        "inline": True
+                    },
+                    {
+                        "name": "Message ID",
+                        "value": message.message_id[:8],
+                        "inline": True
+                    }
+                ]
+            }]
+        }
+        
+        # Add metadata fields
+        for key, value in message.metadata.items():
+            if len(payload["embeds"][0]["fields"]) < 25:  # Discord limit
+                payload["embeds"][0]["fields"].append({
+                    "name": key,
+                    "value": str(value)[:1024],  # Discord field limit
+                    "inline": True
+                })
+        
+        try:
+            response = requests.post(
+                self.webhook_url,
+                json=payload,
+                timeout=30,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code in [200, 204]:
+                record = self.create_delivery_record(
+                    message, "DELIVERED",
+                    response_code=response.status_code,
+                    response_message="Success"
+                )
+                record.delivered_at = datetime.now()
+            else:
+                record = self.create_delivery_record(
+                    message, "FAILED",
+                    response_code=response.status_code,
+                    response_message=response.text[:500]
+                )
+            
+            # Log webhook call
+            self.db.log_webhook(self.webhook_url, payload, response.status_code, response.text[:500])
+            
+        except Exception as e:
+            record = self.create_delivery_record(
+                message, "FAILED",
+                response_message=str(e)[:500]
+            )
+            self.db.log_webhook(self.webhook_url, payload, 0, str(e)[:500])
+        
+        # Save to database
+        self.db.save_message(message)
+        self.db.save_delivery_record(record)
+        
+        status_icon = "✅" if record.status == "DELIVERED" else "❌"
+        print(f"{status_icon} Discord notification | {message.title} | {record.status}")
+        
+        return record
+
+
+class TelegramNotifier(BaseNotifier):
+    """Telegram bot notifications"""
+    
+    def __init__(self, bot_token: str, chat_id: str):
+        super().__init__(NotificationChannel.TELEGRAM)
+        self.bot_token = bot_token
+        self.chat_id = chat_id
+        self.api_url = f"https://api.telegram.org/bot{bot_token}"
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send Telegram message"""
+        if not self.enabled:
+            return self.create_delivery_record(message, "DISABLED")
+        
+        # Format message
+        priority_emoji = {
+            NotificationPriority.LOW: "🔵",
+            NotificationPriority.NORMAL: "🟢",
+            NotificationPriority.HIGH: "🟠",
+            NotificationPriority.CRITICAL: "🔴"
+        }
+        
+        text = f"{priority_emoji.get(message.priority, '⚪')} *{message.title}*\n\n"
+        text += f"{message.content}\n\n"
+        text += f"_Priority: {message.priority.value}_\n"
+        text += f"_Time: {message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}_"
+        
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True
+        }
+        
+        try:
+            response = requests.post(
+                f"{self.api_url}/sendMessage",
+                json=payload,
+                timeout=30
+            )
+            
+            result = response.json()
+            
+            if response.status_code == 200 and result.get("ok"):
+                record = self.create_delivery_record(
+                    message, "DELIVERED",
+                    response_code=response.status_code,
+                    response_message="Message sent"
+                )
+                record.delivered_at = datetime.now()
+            else:
+                record = self.create_delivery_record(
+                    message, "FAILED",
+                    response_code=response.status_code,
+                    response_message=result.get("description", "Unknown error")
+                )
+            
+            self.db.log_webhook(f"{self.api_url}/sendMessage", payload, response.status_code, response.text[:500])
+            
+        except Exception as e:
+            record = self.create_delivery_record(
+                message, "FAILED",
+                response_message=str(e)[:500]
+            )
+            self.db.log_webhook(f"{self.api_url}/sendMessage", payload, 0, str(e)[:500])
+        
+        self.db.save_message(message)
+        self.db.save_delivery_record(record)
+        
+        status_icon = "✅" if record.status == "DELIVERED" else "❌"
+        print(f"{status_icon} Telegram notification | {message.title} | {record.status}")
+        
+        return record
+
+
+class EmailNotifier(BaseNotifier):
+    """Email notifications via SMTP"""
+    
+    def __init__(self, smtp_host: str, smtp_port: int, username: str, password: str,
+                 from_email: str, use_tls: bool = True):
+        super().__init__(NotificationChannel.EMAIL)
+        self.smtp_host = smtp_host
+        self.smtp_port = smtp_port
+        self.username = username
+        self.password = password
+        self.from_email = from_email
+        self.use_tls = use_tls
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send email notification"""
+        if not self.enabled:
+            return self.create_delivery_record(message, "DISABLED")
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[{message.priority.value.upper()}] {message.title}"
+        msg['From'] = self.from_email
+        msg['To'] = message.recipient
+        
+        # Plain text version
+        text_body = f"""
+{message.title}
+{'=' * len(message.title)}
+
+{message.content}
+
+Priority: {message.priority.value}
+Time: {message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
+Message ID: {message.message_id}
+
+---
+HOPEFX Trading Platform
+        """
+        
+        # HTML version
+        priority_color = {
+            NotificationPriority.LOW: "#95a5a6",
+            NotificationPriority.NORMAL: "#3498db",
+            NotificationPriority.HIGH: "#f39c12",
+            NotificationPriority.CRITICAL: "#e74c3c"
+        }
+        
+        html_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: {priority_color.get(message.priority, '#3498db')}; 
+                           color: white; padding: 15px; border-radius: 5px 5px 0 0;">
+                    <h2 style="margin: 0;">{message.title}</h2>
+                </div>
+                <div style="background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd;">
+                    <p>{message.content.replace(chr(10), '<br>')}</p>
+                    
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                    
+                    <table style="width: 100%; font-size: 12px; color: #666;">
+                        <tr>
+                            <td><strong>Priority:</strong></td>
+                            <td>{message.priority.value}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Time:</strong></td>
+                            <td>{message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Message ID:</strong></td>
+                            <td>{message.message_id}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div style="text-align: center; padding: 15px; font-size: 12px; color: #999;">
+                    HOPEFX Trading Platform
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        try:
+            # Connect to SMTP server
+            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
+            
+            if self.use_tls:
+                server.starttls()
+            
+            server.login(self.username, self.password)
+            server.send_message(msg)
+            server.quit()
+            
+            record = self.create_delivery_record(
+                message, "DELIVERED",
+                response_code=200,
+                response_message="Email sent successfully"
+            )
+            record.delivered_at = datetime.now()
+            
+        except Exception as e:
+            record = self.create_delivery_record(
+                message, "FAILED",
+                response_message=str(e)[:500]
+            )
+        
+        self.db.save_message(message)
+        self.db.save_delivery_record(record)
+        
+        status_icon = "✅" if record.status == "DELIVERED" else "❌"
+        print(f"{status_icon} Email notification | {message.title} | {record.status}")
+        
+        return record
+
+
+class SMSNotifier(BaseNotifier):
+    """SMS notifications via Twilio"""
+    
+    def __init__(self, account_sid: str, auth_token: str, from_number: str):
+        super().__init__(NotificationChannel.SMS)
+        self.account_sid = account_sid
+        self.auth_token = auth_token
+        self.from_number = from_number
+        self.api_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send SMS notification"""
+        if not self.enabled:
+            return self.create_delivery_record(message, "DISABLED")
+        
+        # Truncate content for SMS
+        sms_content = f"{message.title}: {message.content}"
+        if len(sms_content) > 160:
+            sms_content = sms_content[:157] + "..."
+        
+        payload = {
+            "To": message.recipient,
+            "From": self.from_number,
+            "Body": sms_content
+        }
+        
+        try:
+            response = requests.post(
+                self.api_url,
+                data=payload,
+                auth=(self.account_sid, self.auth_token),
+                timeout=30
+            )
+            
+            result = response.json()
+            
+            if response.status_code == 201:
+                record = self.create_delivery_record(
+                    message, "DELIVERED",
+                    response_code=response.status_code,
+                    response_message=f"SID: {result.get('sid', 'N/A')}"
+                )
+                record.delivered_at = datetime.now()
+            else:
+                record = self.create_delivery_record(
+                    message, "FAILED",
+                    response_code=response.status_code,
+                    response_message=result.get("message", "Unknown error")
+                )
+            
+            self.db.log_webhook(self.api_url, payload, response.status_code, response.text[:500])
+            
+        except Exception as e:
+            record = self.create_delivery_record(
+                message, "FAILED",
+                response_message=str(e)[:500]
+            )
+            self.db.log_webhook(self.api_url, payload, 0, str(e)[:500])
+        
+        self.db.save_message(message)
+        self.db.save_delivery_record(record)
+        
+        status_icon = "✅" if record.status == "DELIVERED" else "❌"
+        print(f"{status_icon} SMS notification | {message.title} | {record.status}")
+        
+        return record
+
+
+class WebhookNotifier(BaseNotifier):
+    """Generic webhook notifications"""
+    
+    def __init__(self, webhook_url: str, headers: Optional[Dict] = None):
+        super().__init__(NotificationChannel.WEBHOOK)
+        self.webhook_url = webhook_url
+        self.headers = headers or {"Content-Type": "application/json"}
+    
+    def send(self, message: NotificationMessage) -> DeliveryRecord:
+        """Send webhook notification"""
+        if not self.enabled:
+            return self.create_delivery_record(message, "DISABLED")
+        
+        payload = {
+            "message_id": message.message_id,
+            "timestamp": message.timestamp.isoformat(),
+            "title": message.title,
+            "content": message.content,
+            "priority": message.priority.value,
+            "channel": message.channel.value,
+            "recipient": message.recipient,
+            "metadata": message.metadata
+        }
+        
+        try:
+            response = requests.post(
+                self.webhook_url,
+                json=payload,
+                headers=self.headers,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201, 202, 204]:
+                record = self.create_delivery_record(
+                    message, "DELIVERED",
+                    response_code=response.status_code,
+                    response_message="Webhook delivered"
+                )
+                record.delivered_at = datetime.now()
+            else:
+                record = self.create_delivery_record(
+                    message, "FAILED",
+                    response_code=response.status_code,
+                    response_message=response.text[:500]
+                )
+            
+            self.db.log_webhook(self.webhook_url, payload, response.status_code, response.text[:500])
+            
+        except Exception as e:
+            record = self.create_delivery_record(
+                message, "FAILED",
+                response_message=str(e)[:500]
+            )
+            self.db.log_webhook(self.webhook_url, payload, 0, str(e)[:500])
+        
+        self.db.save_message(message)
+        self.db.save_delivery_record(record)
+        
+        status_icon = "✅" if record.status == "DELIVERED" else "❌"
+        print(f"{status_icon} Webhook notification | {message.title} | {record.status}")
+        
+        return record
 
 
 class NotificationManager:
-    """
-    Manages notifications across multiple channels.
-
-    Features:
-    - Multiple notification channels
-    - Priority-based filtering
-    - Rate limiting
-    - Template support
-    """
-
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize notification manager.
-
-        Args:
-            config: Configuration dictionary
-        """
-        self.config = config or {}
-        self.enabled_channels = self._get_enabled_channels()
-        self.notification_history = []
-
-        logger.info(
-            f"Notification Manager initialized with channels: "
-            f"{', '.join(c.value for c in self.enabled_channels)}"
-        )
-
-    def _get_enabled_channels(self) -> List[NotificationChannel]:
-        """Get list of enabled notification channels"""
-        channels = [NotificationChannel.CONSOLE]  # Always enabled
-
-        # Add other channels based on config
-        if self.config.get('discord_enabled'):
-            channels.append(NotificationChannel.DISCORD)
-        if self.config.get('telegram_enabled'):
-            channels.append(NotificationChannel.TELEGRAM)
-        if self.config.get('email_enabled'):
-            channels.append(NotificationChannel.EMAIL)
-
-        return channels
-
-    def send(
-        self,
-        message: str,
-        level: NotificationLevel = NotificationLevel.INFO,
-        channels: Optional[List[NotificationChannel]] = None,
-        metadata: Optional[Dict[str, Any]] = None
-    ):
-        """
-        Send notification.
-
-        Args:
-            message: Notification message
-            level: Severity level
-            channels: Specific channels to use (None = all enabled)
-            metadata: Additional metadata
-        """
-        # Use all enabled channels if not specified
-        if channels is None:
-            channels = self.enabled_channels
-
-        # Filter to only enabled channels
-        channels = [c for c in channels if c in self.enabled_channels]
-
-        # Create notification record
-        notification = {
-            'message': message,
-            'level': level.value,
-            'channels': [c.value for c in channels],
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'metadata': metadata or {},
-        }
-
-        # Store in history
-        self.notification_history.append(notification)
-
-        # Send to each channel
-        for channel in channels:
-            try:
-                if channel == NotificationChannel.CONSOLE:
-                    self._send_console(message, level)
-                elif channel == NotificationChannel.DISCORD:
-                    self._send_discord(message, level, metadata)
-                elif channel == NotificationChannel.TELEGRAM:
-                    self._send_telegram(message, level, metadata)
-                elif channel == NotificationChannel.EMAIL:
-                    self._send_email(message, level, metadata)
-            except Exception as e:
-                logger.error(f"Failed to send notification via {channel.value}: {e}")
-
-    def _send_console(self, message: str, level: NotificationLevel):
-        """Send notification to console/logs"""
-        if level == NotificationLevel.INFO:
-            logger.info(f"[NOTIFICATION] {message}")
-        elif level == NotificationLevel.WARNING:
-            logger.warning(f"[NOTIFICATION] {message}")
-        elif level == NotificationLevel.ERROR:
-            logger.error(f"[NOTIFICATION] {message}")
-        elif level == NotificationLevel.CRITICAL:
-            logger.critical(f"[NOTIFICATION] {message}")
-
-    def _send_discord(
-        self,
-        message: str,
-        level: NotificationLevel,
-        metadata: Optional[Dict[str, Any]]
-    ):
-        """Send notification to Discord via webhook"""
-        try:
-            webhook_url = self.config.get('discord_webhook_url')
-            if not webhook_url:
-                logger.warning("Discord webhook URL not configured")
-                return
-            
-            # Try to import requests
-            try:
-                import requests
-                
-                # Determine color based on level
-                color_map = {
-                    NotificationLevel.INFO: 0x3498db,  # Blue
-                    NotificationLevel.WARNING: 0xf39c12,  # Orange
-                    NotificationLevel.ERROR: 0xe74c3c,  # Red
-                    NotificationLevel.CRITICAL: 0x8b0000,  # Dark red
-                }
-                
-                # Create Discord embed
-                embed = {
-                    "title": f"{level.value} Notification",
-                    "description": message,
-                    "color": color_map.get(level, 0x95a5a6),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "footer": {
-                        "text": "HOPEFX AI Trading"
-                    }
-                }
-                
-                # Add metadata as fields if present
-                if metadata:
-                    fields = []
-                    for key, value in metadata.items():
-                        if value is not None:
-                            fields.append({
-                                "name": key.replace('_', ' ').title(),
-                                "value": str(value),
-                                "inline": True
-                            })
-                    if fields:
-                        embed["fields"] = fields
-                
-                payload = {"embeds": [embed]}
-                
-                response = requests.post(
-                    webhook_url,
-                    json=payload,
-                    timeout=10
-                )
-                response.raise_for_status()
-                logger.debug(f"Discord notification sent successfully")
-                
-            except (ImportError, AttributeError):
-                # Fallback without requests library
-                import urllib.request
-                import json
-                
-                payload = {
-                    "content": f"**{level.value}:** {message}"
-                }
-                if metadata:
-                    metadata_str = "\n".join(f"{k}: {v}" for k, v in metadata.items() if v is not None)
-                    payload["content"] += f"\n```{metadata_str}```"
-                
-                data = json.dumps(payload).encode('utf-8')
-                # Validate URL scheme for security (only allow https for webhooks)
-                if not webhook_url.startswith('https://'):
-                    logger.error("Discord webhook URL must use HTTPS")
-                    return
-                    
-                req = urllib.request.Request(
-                    webhook_url,
-                    data=data,
-                    headers={'Content-Type': 'application/json'}
-                )
-                urllib.request.urlopen(req, timeout=10)  # nosec - URL scheme validated above
-                logger.debug(f"Discord notification sent (urllib fallback)")
-                
-        except Exception as e:
-            logger.error(f"Failed to send Discord notification: {e}")
-
-    def _send_telegram(
-        self,
-        message: str,
-        level: NotificationLevel,
-        metadata: Optional[Dict[str, Any]]
-    ):
-        """Send notification to Telegram via Bot API"""
-        try:
-            bot_token = self.config.get('telegram_bot_token')
-            chat_id = self.config.get('telegram_chat_id')
-            
-            if not bot_token or not chat_id:
-                logger.warning("Telegram bot token or chat ID not configured")
-                return
-            
-            # Try to import requests
-            try:
-                import requests
-                
-                # Format message with emoji based on level
-                emoji_map = {
-                    NotificationLevel.INFO: "ℹ️",
-                    NotificationLevel.WARNING: "⚠️",
-                    NotificationLevel.ERROR: "❌",
-                    NotificationLevel.CRITICAL: "🚨",
-                }
-                emoji = emoji_map.get(level, "📢")
-                
-                # Build message text
-                text = f"{emoji} **{level.value}**\n\n{message}"
-                
-                # Add metadata
-                if metadata:
-                    text += "\n\n📊 *Details:*"
-                    for key, value in metadata.items():
-                        if value is not None:
-                            text += f"\n• {key.replace('_', ' ').title()}: `{value}`"
-                
-                # Send via Telegram Bot API
-                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                payload = {
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "Markdown"
-                }
-                
-                response = requests.post(url, json=payload, timeout=10)
-                response.raise_for_status()
-                logger.debug("Telegram notification sent successfully")
-                
-            except (ImportError, AttributeError):
-                # Fallback without requests library
-                import urllib.request
-                import urllib.parse
-                import json
-                
-                emoji_map = {
-                    NotificationLevel.INFO: "INFO",
-                    NotificationLevel.WARNING: "WARNING",
-                    NotificationLevel.ERROR: "ERROR",
-                    NotificationLevel.CRITICAL: "CRITICAL",
-                }
-                level_text = emoji_map.get(level, "NOTIFICATION")
-                
-                text = f"{level_text}: {message}"
-                if metadata:
-                    metadata_str = "\n".join(f"{k}: {v}" for k, v in metadata.items() if v is not None)
-                    text += f"\n\n{metadata_str}"
-                
-                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                # Validate URL scheme for security (only allow https for Telegram API)
-                if not url.startswith('https://api.telegram.org/'):
-                    logger.error("Telegram API URL must use HTTPS and be from api.telegram.org")
-                    return
-                    
-                data = {
-                    "chat_id": chat_id,
-                    "text": text
-                }
-                data_encoded = urllib.parse.urlencode(data).encode('utf-8')
-                req = urllib.request.Request(url, data=data_encoded)
-                urllib.request.urlopen(req, timeout=10)  # nosec - URL scheme validated above
-                logger.debug("Telegram notification sent (urllib fallback)")
-                
-        except Exception as e:
-            logger.error(f"Failed to send Telegram notification: {e}")
-
-    def _send_email(
-        self,
-        message: str,
-        level: NotificationLevel,
-        metadata: Optional[Dict[str, Any]]
-    ):
-        """Send notification via SMTP email"""
-        try:
-            smtp_host = self.config.get('smtp_host', 'smtp.gmail.com')
-            smtp_port = self.config.get('smtp_port', 587)
-            smtp_username = self.config.get('smtp_username')
-            smtp_password = self.config.get('smtp_password')
-            smtp_from = self.config.get('smtp_from', smtp_username)
-            smtp_to = self.config.get('smtp_to')
-            
-            if not smtp_username or not smtp_password or not smtp_to:
-                logger.warning("SMTP credentials or recipient not configured")
-                return
-            
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-            
-            # Create message
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = f"[{level.value}] HOPEFX AI Trading Notification"
-            msg['From'] = smtp_from
-            msg['To'] = smtp_to if isinstance(smtp_to, str) else ', '.join(smtp_to)
-            
-            # Plain text version
-            text_content = f"{level.value} Notification\n\n{message}"
-            if metadata:
-                text_content += "\n\nDetails:\n"
-                for key, value in metadata.items():
-                    if value is not None:
-                        text_content += f"  {key.replace('_', ' ').title()}: {value}\n"
-            
-            # HTML version
-            html_content = f"""
-            <html>
-              <head>
-                <style>
-                  body {{ font-family: Arial, sans-serif; }}
-                  .header {{ background-color: #2c3e50; color: white; padding: 20px; }}
-                  .content {{ padding: 20px; }}
-                  .level-{level.value.lower()} {{ color: {self._get_level_color(level)}; }}
-                  .metadata {{ background-color: #f5f5f5; padding: 10px; margin-top: 20px; }}
-                  .metadata-item {{ margin: 5px 0; }}
-                </style>
-              </head>
-              <body>
-                <div class="header">
-                  <h2>HOPEFX AI Trading Notification</h2>
-                </div>
-                <div class="content">
-                  <h3 class="level-{level.value.lower()}">{level.value}</h3>
-                  <p>{message}</p>
-            """
-            
-            if metadata:
-                html_content += '<div class="metadata"><h4>Details:</h4>'
-                for key, value in metadata.items():
-                    if value is not None:
-                        html_content += f'<div class="metadata-item"><strong>{key.replace("_", " ").title()}:</strong> {value}</div>'
-                html_content += '</div>'
-            
-            html_content += """
-                </div>
-              </body>
-            </html>
-            """
-            
-            # Attach parts
-            part1 = MIMEText(text_content, 'plain')
-            part2 = MIMEText(html_content, 'html')
-            msg.attach(part1)
-            msg.attach(part2)
-            
-            # Send email
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
-                server.starttls()
-                server.login(smtp_username, smtp_password)
-                recipients = [smtp_to] if isinstance(smtp_to, str) else smtp_to
-                server.sendmail(smtp_from, recipients, msg.as_string())
-            
-            logger.debug(f"Email notification sent to {smtp_to}")
-            
-        except Exception as e:
-            logger.error(f"Failed to send email notification: {e}")
+    """Central manager for all notification channels"""
     
-    def _get_level_color(self, level: NotificationLevel) -> str:
-        """Get HTML color for notification level"""
-        color_map = {
-            NotificationLevel.INFO: '#3498db',
-            NotificationLevel.WARNING: '#f39c12',
-            NotificationLevel.ERROR: '#e74c3c',
-            NotificationLevel.CRITICAL: '#8b0000',
-        }
-        return color_map.get(level, '#95a5a6')
-
-    def notify_trade(
-        self,
-        action: str,
-        symbol: str,
-        quantity: float,
-        price: float,
-        pnl: Optional[float] = None
-    ):
+    def __init__(self):
+        self.notifiers: Dict[NotificationChannel, BaseNotifier] = {}
+        self.db = NotificationDatabase()
+        self.default_recipients: Dict[NotificationChannel, str] = {}
+    
+    def register_notifier(self, channel: NotificationChannel, notifier: BaseNotifier):
+        """Register a notification channel"""
+        self.notifiers[channel] = notifier
+    
+    def set_default_recipient(self, channel: NotificationChannel, recipient: str):
+        """Set default recipient for a channel"""
+        self.default_recipients[channel] = recipient
+    
+    def send(self, title: str, content: str, channel: NotificationChannel,
+             priority: NotificationPriority = NotificationPriority.NORMAL,
+             recipient: Optional[str] = None, metadata: Optional[Dict] = None) -> List[DeliveryRecord]:
         """
-        Send trade notification.
-
+        Send notification through specified channel
+        
         Args:
-            action: Trade action (e.g., "BUY", "SELL")
-            symbol: Trading symbol
-            quantity: Trade quantity
-            price: Execution price
-            pnl: Profit/Loss (if closing position)
-        """
-        message = f"Trade: {action} {quantity} {symbol} @ ${price:.2f}"
-
-        if pnl is not None:
-            message += f" | P&L: ${pnl:.2f}"
-
-        self.send(
-            message=message,
-            level=NotificationLevel.INFO,
-            metadata={
-                'type': 'trade',
-                'action': action,
-                'symbol': symbol,
-                'quantity': quantity,
-                'price': price,
-                'pnl': pnl,
-            }
-        )
-
-    def notify_signal(
-        self,
-        strategy: str,
-        signal_type: str,
-        symbol: str,
-        price: float,
-        confidence: float
-    ):
-        """
-        Send trading signal notification.
-
-        Args:
-            strategy: Strategy name
-            signal_type: Signal type (BUY/SELL)
-            symbol: Trading symbol
-            price: Signal price
-            confidence: Signal confidence
-        """
-        message = (
-            f"Signal: {strategy} generated {signal_type} for {symbol} "
-            f"@ ${price:.2f} (confidence: {confidence:.2%})"
-        )
-
-        self.send(
-            message=message,
-            level=NotificationLevel.INFO,
-            metadata={
-                'type': 'signal',
-                'strategy': strategy,
-                'signal_type': signal_type,
-                'symbol': symbol,
-                'price': price,
-                'confidence': confidence,
-            }
-        )
-
-    def notify_risk_alert(
-        self,
-        alert_type: str,
-        message: str,
-        severity: str = "WARNING"
-    ):
-        """
-        Send risk management alert.
-
-        Args:
-            alert_type: Type of alert
-            message: Alert message
-            severity: Severity level
-        """
-        level = NotificationLevel[severity]
-
-        self.send(
-            message=f"RISK ALERT [{alert_type}]: {message}",
-            level=level,
-            metadata={
-                'type': 'risk_alert',
-                'alert_type': alert_type,
-            }
-        )
-
-    def notify_error(self, error_type: str, message: str, details: Optional[str] = None):
-        """
-        Send error notification.
-
-        Args:
-            error_type: Type of error
-            message: Error message
-            details: Additional error details
-        """
-        full_message = f"ERROR [{error_type}]: {message}"
-        if details:
-            full_message += f"\nDetails: {details}"
-
-        self.send(
-            message=full_message,
-            level=NotificationLevel.ERROR,
-            metadata={
-                'type': 'error',
-                'error_type': error_type,
-                'details': details,
-            }
-        )
-
-    def get_recent_notifications(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        Get recent notifications.
-
-        Args:
-            limit: Maximum number to return
-
+            title: Notification title
+            content: Notification content
+            channel: Target channel
+            priority: Priority level
+            recipient: Override default recipient
+            metadata: Additional data
+        
         Returns:
-            List of recent notifications
+            List of delivery records
         """
-        return self.notification_history[-limit:]
+        import uuid
+        
+        # Use default recipient if not specified
+        if recipient is None:
+            recipient = self.default_recipients.get(channel, "default")
+        
+        # Create message
+        message = NotificationMessage(
+            message_id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            title=title,
+            content=content,
+            channel=channel,
+            priority=priority,
+            recipient=recipient,
+            metadata=metadata or {}
+        )
+        
+        # Send through appropriate notifier
+        if channel in self.notifiers:
+            record = self.notifiers[channel].send(message)
+            return [record]
+        else:
+            print(f"❌ No notifier registered for channel: {channel.value}")
+            return []
+    
+    def broadcast(self, title: str, content: str,
+                 priority: NotificationPriority = NotificationPriority.NORMAL,
+                 channels: Optional[List[NotificationChannel]] = None,
+                 metadata: Optional[Dict] = None) -> List[DeliveryRecord]:
+        """
+        Broadcast notification to multiple channels
+        
+        Args:
+            title: Notification title
+            content: Notification content
+            priority: Priority level
+            channels: List of channels (None = all registered)
+            metadata: Additional data
+        
+        Returns:
+            List of delivery records
+        """
+        if channels is None:
+            channels = list(self.notifiers.keys())
+        
+        records = []
+        for channel in channels:
+            if channel in self.notifiers:
+                recipient = self.default_recipients.get(channel, "default")
+                record = self.send(title, content, channel, priority, recipient, metadata)
+                records.extend(record)
+        
+        return records
+    
+    def get_stats(self) -> Dict:
+        """Get notification statistics"""
+        stats = {}
+        for channel in NotificationChannel:
+            stats[channel.value] = self.db.get_delivery_stats(channel)
+        stats['overall'] = self.db.get_delivery_stats()
+        return stats
+    
+    def generate_report(self, output_dir: str = "notifications/logs") -> str:
+        """Generate notification delivery report"""
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_path = Path(output_dir) / f"notification_report_{timestamp}.json"
+        
+        stats = self.get_stats()
+        
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'statistics': stats,
+            'registered_channels': [c.value for c in self.notifiers.keys()],
+            'default_recipients': {k.value: v for k, v in self.default_recipients.items()}
+        }
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        print(f"Notification report generated: {report_path}")
+        return str(report_path)
 
-    def clear_history(self):
-        """Clear notification history"""
-        self.notification_history = []
-        logger.info("Notification history cleared")
+
+# Convenience functions for common notifications
+def notify_trade_opened(symbol: str, direction: str, lot_size: float, entry_price: float,
+                       manager: NotificationManager, channels: Optional[List[NotificationChannel]] = None):
+    """Notify when trade is opened"""
+    title = f"Trade Opened: {symbol}"
+    content = f"{direction} {lot_size} lots @ {entry_price}"
+    
+    return manager.broadcast(title, content, NotificationPriority.NORMAL, channels,
+                           metadata={'symbol': symbol, 'direction': direction,
+                                    'lot_size': lot_size, 'entry_price': entry_price})
+
+
+def notify_trade_closed(symbol: str, profit: float, manager: NotificationManager,
+                       channels: Optional[List[NotificationChannel]] = None):
+    """Notify when trade is closed"""
+    title = f"Trade Closed: {symbol}"
+    content = f"P&L: ${profit:.2f}"
+    priority = NotificationPriority.HIGH if profit < 0 else NotificationPriority.NORMAL
+    
+    return manager.broadcast(title, content, priority, channels,
+                           metadata={'symbol': symbol, 'profit': profit})
+
+
+def notify_error(error_message: str, manager: NotificationManager,
+                channels: Optional[List[NotificationChannel]] = None):
+    """Notify on error"""
+    return manager.broadcast("Error", error_message, NotificationPriority.CRITICAL, channels,
+                           metadata={'error': True})
+
+
+if __name__ == "__main__":
+    print("HOPEFX Notifications Module")
+    print("Features:")
+    print("  ✅ Discord webhook integration")
+    print("  ✅ Telegram bot integration")
+    print("  ✅ Email SMTP integration")
+    print("  ✅ SMS via Twilio")
+    print("  ✅ Generic webhook support")
+    print("  ✅ Delivery tracking with SQLite")
+    print("  ✅ Priority levels")
+    print("  ✅ Broadcast to multiple channels")
+'''
+
+# Save the file
+with open('notifications/manager.py', 'w') as f:
+    f.write(code)
+
+print("✅ Created: notifications/manager.py")
+print(f"   Lines: {len(code.splitlines())}")
+print(f"   Size: {len(code)} bytes")
+print("\n📊 Notifications Module Summary:")
+print("   ✅ Discord webhook with rich embeds")
+print("   ✅ Telegram bot with Markdown formatting")
+print("   ✅ Email SMTP with HTML templates")
+print("   ✅ SMS via Twilio API")
+print("   ✅ Generic webhook support")
+print("   ✅ SQLite delivery tracking database")
+print("   ✅ Priority levels (Low, Normal, High, Critical)")
+print("   ✅ Broadcast to multiple channels")
+print("   ✅ Delivery statistics and reporting")
