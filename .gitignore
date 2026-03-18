@@ -124,7 +124,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Specific to this project
+# Project specific
 backtest_results/
 trading_logs/
 cache/
