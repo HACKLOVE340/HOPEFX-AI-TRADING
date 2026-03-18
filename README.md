@@ -4,26 +4,12 @@
 
 ![HOPEFX Logo](https://img.shields.io/badge/HOPEFX-AI%20Trading-26a69a?style=for-the-badge&logo=bitcoin&logoColor=white)
 
-**🏆 The Most Advanced Open-Source AI Trading Platform** COMING SOON
-
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/hopefx)
 
-### 💡 Key Advantages
 
-- **🧠 Native AI/ML** - LSTM, Random Forest, XGBoost models ready to use
-- **🔒 Self-Hosted Privacy** - Your data stays with you, not on third-party servers  
-- **💰 100% Free Forever** - No subscriptions, no hidden fees, MIT licensed
-- **🏆 Prop Firm Support** - Pass FTMO, MyForexFunds, The5ers, TopStep challenges
-- **📊 40+ Indicators** - Professional charting with TradingView-style themes
-- **📱 Mobile Ready** - PWA + REST API + Push Notifications
-- **🐍 Python Native** - Use the world's most popular ML language
-- **🔄 Copy Trading** - Full engine with leaderboards and marketplace
-- **📈 Research-Grade Backtesting** - Event-driven with walk-forward optimization
-
----
 
 ## 📊 Key Features
 
@@ -36,52 +22,6 @@
 - **Feature engineering system** for technical indicators
 - **Model evaluation metrics** (accuracy, Sharpe, profit factor)
 
-### 📈 TradingView-Style Charting (40+ Indicators)
-- **Interactive Plotly Charts** with zoom/pan/export
-- **40+ Technical Indicators:**
-  - *Moving Averages:* SMA, EMA, WMA
-  - *Oscillators:* RSI, MACD, Stochastic
-  - *Volatility:* Bollinger Bands, ATR, Keltner Channels
-  - *Trend:* ADX, Ichimoku Cloud, Parabolic SAR
-  - *Volume:* OBV, VWAP, Volume Profile
-  - *Fibonacci:* Retracements, Extensions, Pivot Points
-- **Dark/Light Themes** (TradingView-style professional colors)
-- **Drawing Tools** (trendlines, support/resistance, Fibonacci)
-- **Multiple Chart Types:** Candlestick, Line, Bar, Area, Heikin-Ashi
-- **Real-time chart updates via WebSocket**
-- **Export to HTML/PNG/PDF**
-
-### 🔗 Multi-Broker Integration
-| Broker | Asset Types | Status |
-|--------|-------------|--------|
-| OANDA | Forex | ✅ |
-| MetaTrader 5 | Multi-asset | ✅ |
-| Interactive Brokers | Stocks/Forex/Options | ✅ |
-| Alpaca | Stocks/Crypto | ✅ |
-| Binance | Crypto | ✅ |
-| Paper Trading | All | ✅ |
-
-### 🏆 Prop Firm Integration
-- **FTMO** - Full challenge/verification support
-- **MyForexFunds** - Risk rule compliance
-- **The5ers** - Integrated monitoring
-- **TopStep** - Futures support
-
-### 🔄 Copy Trading & Social
-- **Full Copy Trading Engine** with real-time sync
-- **Configurable copy ratios** (0.1x to 10x)
-- **Performance Leaderboards** with multiple ranking metrics
-- **Strategy Marketplace** for monetization
-- **User Profiles & Analytics**
-- **Social following system**
-
-### 📈 Research-Grade Backtesting
-- **Event-driven architecture** (institutional-quality)
-- **Walk-forward optimization** for robust testing
-- **Grid search parameter optimizer**
-- **Portfolio-level backtesting**
-- **Comprehensive metrics** (Sharpe, Sortino, Calmar, Max DD)
-- **Visual reporting** with equity curves
 
 ### 📱 Mobile & API (Full-Featured)
 - **Progressive Web App (PWA)** - Install on any device
