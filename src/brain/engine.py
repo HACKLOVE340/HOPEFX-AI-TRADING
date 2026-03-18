@@ -1,3 +1,9 @@
+async def on_tick(self, event: TickEvent) -> Decision | None:
+    from src.risk.kill_switch import kill_switch
+    if kill_switch.is_killed:
+        return None
+    # ... your existing code
+
 """Brain decision engine - signal generation and execution decision."""
 from __future__ import annotations
 
