@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - DB_HOST=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - SECURITY_ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SECURITY_JWT_SECRET=${JWT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    volumes:
+      - ../data:/app/data
+      - ../models:/app/models
+      - ../logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - hopefx-network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["python", "-m", "src.main", "worker"]
+    environment:
+      - APP_ENV=production
+      - DB_HOST=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - SECURITY_ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - ../data:/app/data
+      - ../models:/app/models
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - hopefx-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=hopefx
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=hopefx
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hopefx-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - hopefx-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - hopefx-network
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - hopefx-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  hopefx-network:
+    driver: bridge
