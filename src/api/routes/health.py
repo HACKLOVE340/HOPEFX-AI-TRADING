@@ -1,55 +1,53 @@
 """
-Health check endpoints for monitoring and load balancers.
+Health check endpoints.
 """
+
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from pydantic import BaseModel
 
+from src.infrastructure.cache import get_cache
 from src.infrastructure.database import get_db
-from src.infrastructure.redis_cache import RedisCache
+from src.infrastructure.monitoring import HealthChecker
 
-router = APIRouter(tags=["health"])
+router = APIRouter()
 
 
-@router.get("/health")
-async def health_check(db: AsyncSession = Depends(get_db)):
-    """
-    Comprehensive health check for load balancers.
-    Checks database and cache connectivity.
-    """
-    health = {
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    checks: dict
+    timestamp: str
+
+
+@router.get("/", response_model=HealthResponse)
+async def health_check():
+    """Liveness probe."""
+    return {
         "status": "healthy",
-        "version": "3.0.0",
-        "services": {}
+        "version": "2.0.0",
+        "checks": {},
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
-    
-    # Check database
-    try:
-        result = await db.execute(text("SELECT 1"))
-        health["services"]["database"] = "connected"
-    except Exception as e:
-        health["status"] = "degraded"
-        health["services"]["database"] = f"error: {str(e)}"
-    
-    # Check cache (if available in request context)
-    # Note: In production, inject cache dependency properly
-    
-    return health
 
 
 @router.get("/ready")
 async def readiness_check():
-    """
-    Kubernetes readiness probe.
-    Returns 200 when ready to accept traffic.
-    """
-    return {"ready": True}
-
-
-@router.get("/live")
-async def liveness_check():
-    """
-    Kubernetes liveness probe.
-    Returns 200 if application is running.
-    """
-    return {"alive": True}
+    """Readiness probe with dependency checks."""
+    checker = HealthChecker()
+    
+    # Register checks
+    async def check_db():
+        async with get_db() as db:
+            await db.execute("SELECT 1")
+            return True
+    
+    async def check_cache():
+        cache = await get_cache()
+        return await cache.health_check()
+    
+    checker.register("database", check_db)
+    checker.register("cache", check_cache)
+    
+    result = await checker.check()
+    
+    return result
