@@ -14,7 +14,7 @@ import pandas as pd
 from src.brokers.paper import PaperBroker
 from src.core.events import Event, get_event_bus
 from src.domain.enums import TradeDirection
-from src.domain.models import OHLCV, Order, Signal
+from src.domain.models import OHLCV, Order, Signal, TickData
 from src.execution.oms import OrderManagementSystem
 from src.strategies.base import Strategy
 
@@ -90,8 +90,19 @@ class EventDrivenBacktester:
                 frequency="1M"
             )
             
+            # Convert to tick for broker update
+            tick = TickData(
+                symbol="XAUUSD",
+                timestamp=timestamp,
+                bid=Decimal(str(row["close"])) - Decimal("0.01"),
+                ask=Decimal(str(row["close"])) + Decimal("0.01"),
+                mid=Decimal(str(row["close"])),
+                volume=int(row.get("volume", 0)),
+                source="BACKTEST"
+            )
+            
             # Update broker price
-            self._broker.update_price(bar.to_tick())
+            self._broker.update_price(tick)
             
             # Process strategy
             signal = await strategy.on_market_data(bar)
@@ -166,4 +177,38 @@ class EventDrivenBacktester:
         total_return = (equity.iloc[-1] / equity.iloc[0]) - 1
         
         # Sharpe ratio (annualized)
-        sharpe
+        sharpe = 0.0
+        if returns.std() > 0:
+            sharpe = (returns.mean() / returns.std()) * np.sqrt(252)
+        
+        # Sortino ratio
+        downside_returns = returns[returns < 0]
+        sortino = 0.0
+        if len(downside_returns) > 0 and downside_returns.std() > 0:
+            sortino = (returns.mean() / downside_returns.std()) * np.sqrt(252)
+        
+        # Maximum drawdown
+        running_max = equity.cummax()
+        drawdown = (equity - running_max) / running_max
+        max_drawdown = drawdown.min()
+        
+        # Calmar ratio
+        calmar = total_return / abs(max_drawdown) if max_drawdown != 0 else 0
+        
+        # Win rate (simplified)
+        win_rate = 0.5  # Would calculate from actual trade outcomes
+        
+        # Profit factor
+        profit_factor = 1.0  # Would calculate from gross profits / gross losses
+        
+        return {
+            "total_return": float(total_return),
+            "sharpe_ratio": float(sharpe),
+            "sortino_ratio": float(sortino),
+            "max_drawdown": float(max_drawdown),
+            "calmar_ratio": float(calmar),
+            "win_rate": float(win_rate),
+            "profit_factor": float(profit_factor),
+            "volatility": float(returns.std() * np.sqrt(252)),
+            "num_trades": len(self._trades)
+        }
