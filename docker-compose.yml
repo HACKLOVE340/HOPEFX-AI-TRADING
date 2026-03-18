@@ -88,3 +88,12 @@ volumes:
 networks:
   hopefx-network:
     driver: bridge
+
+  backup:
+    image: offen/docker-volume-backup:latest
+    volumes:
+      - postgres_data:/backup/data:ro
+      - ./backups:/archive
+    environment:
+      BACKUP_CRON_EXPRESSION: "0 2 * * *"
+      BACKUP_RETENTION_DAYS: "30"
