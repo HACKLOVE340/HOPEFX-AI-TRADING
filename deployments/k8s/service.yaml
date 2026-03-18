@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hopefx-api
+  namespace: hopefx
+spec:
+  selector:
+    app: hopefx-api
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP
