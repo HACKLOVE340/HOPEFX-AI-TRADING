@@ -1,184 +1,223 @@
 """
-Institutional risk management with real-time monitoring.
+Risk Manager - Central risk orchestration and monitoring.
 """
+
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional
-from dataclasses import dataclass, field
-import structlog
+from typing import Any
 
-from src.config.settings import get_settings
+from src.core.config import settings
+from src.core.events import Event, RiskEvent, get_event_bus
+from src.core.logging_config import get_logger
+from src.domain.enums import RiskLevel, TradeDirection
+from src.domain.models import Account, Signal
+from src.risk.kill_switch import KillSwitch
+from src.risk.position_sizing import PositionSizer
+from src.risk.prop_firms import PropFirmCompliance
+from src.risk.var_cvar import RiskMetrics
 
-logger = structlog.get_logger()
-
-
-@dataclass
-class RiskLimits:
-    """Risk limit configuration."""
-    max_daily_loss_pct: Decimal = Decimal("2.0")
-    max_position_size_pct: Decimal = Decimal("5.0")
-    max_drawdown_pct: Decimal = Decimal("10.0")
-    max_trades_per_day: int = 50
-    max_correlated_positions: int = 3
+logger = get_logger(__name__)
 
 
 class RiskManager:
     """
-    Production risk manager with kill switch and prop firm compliance.
+    Central risk management coordinating all risk modules.
     """
     
-    def __init__(self):
-        self._settings = get_settings()
-        self._limits = RiskLimits(
-            max_daily_loss_pct=Decimal(str(self._settings.risk.max_daily_loss_pct)),
-            max_position_size_pct=Decimal(str(self._settings.risk.max_position_size_pct)),
-            max_drawdown_pct=Decimal(str(self._settings.risk.max_drawdown_pct)),
+    def __init__(
+        self,
+        account: Account | None = None,
+        prop_firm_compliance: PropFirmCompliance | None = None
+    ):
+        self.account = account
+        self.prop_firm = prop_firm_compliance or PropFirmCompliance()
+        
+        self.position_sizer = PositionSizer(method="atr")
+        self.risk_metrics = RiskMetrics(
+            confidence=settings.risk.var_confidence,
+            horizon_days=settings.risk.var_horizon_days,
+            simulations=settings.risk.monte_carlo_sims
+        )
+        self.kill_switch = KillSwitch(
+            auto_triggers={
+                "max_drawdown": settings.risk.max_drawdown_pct,
+                "daily_loss": settings.risk.max_daily_loss_pct,
+                "consecutive_losses": 5,
+                "latency_spike_ms": 5000
+            }
         )
         
+        self._price_history: dict[str, list[tuple[datetime, Decimal]]] = {}
         self._daily_pnl: Decimal = Decimal("0")
-        self._daily_trades: int = 0"
-        self._peak_equity: Decimal = Decimal("0")
-        self._current_drawdown: Decimal = Decimal("0")
-        self._kill_switch_triggered: bool = False
-        self._positions: Dict[str, dict] = {}
-        self._trade_history: List[dict] = []
+        self._consecutive_losses: int = 0
+        self._event_bus = get_event_bus()
         self._lock = asyncio.Lock()
-        
-        # Reset at midnight
-        self._last_reset = datetime.utcnow()
-        
-    async def can_trade(self, symbol: str, direction: str, 
-                        size: Decimal, price: Decimal,
-                        account_equity: Decimal) -> tuple[bool, str]:
+    
+    async def initialize(self) -> None:
+        """Initialize risk manager."""
+        await self.kill_switch.initialize()
+        logger.info("Risk manager initialized")
+    
+    async def check_signal(self, signal: Signal) -> tuple[bool, str | None]:
         """
-        Pre-trade risk check. Returns (allowed, reason).
+        Comprehensive signal validation.
+        Returns (allowed, reason).
         """
         async with self._lock:
-            if self._kill_switch_triggered:
-                return False, "KILL_SWITCH_ACTIVE"
+            # 1. Kill switch check
+            if self.kill_switch.is_active:
+                return False, "Kill switch active"
             
-            # Check daily reset
-            await self._check_daily_reset()
+            # 2. Prop firm compliance
+            if self.account:
+                allowed, reason = self.prop_firm.check_trade_allowed(
+                    current_balance=self.account.balance,
+                    daily_pnl=self._daily_pnl,
+                    total_pnl=self.account.total_pnl,
+                    position_size=Decimal(str(signal.metadata.get("size", 1.0))),
+                    is_news_time=self._is_news_time(),
+                    is_weekend=self._is_weekend()
+                )
+                if not allowed:
+                    await self._emit_risk_event("prop_firm_violation", reason)
+                    return False, reason
             
-            # Daily loss limit
-            daily_loss_limit = account_equity * self._limits.max_daily_loss_pct / 100
-            if self._daily_pnl < -daily_loss_limit:
-                await self._trigger_kill_switch("Daily loss limit exceeded")
-                return False, "DAILY_LOSS_LIMIT"
+            # 3. Position limits
+            if self.account:
+                total_exposure = sum(
+                    p.quantity for p in self.account.open_positions.values()
+                )
+                max_exposure = self.account.equity * Decimal(
+                    str(settings.risk.max_position_size_pct)
+                )
+                
+                if total_exposure >= max_exposure:
+                    return False, "Maximum position exposure reached"
             
-            # Drawdown limit
-            if self._peak_equity > 0:
-                current_dd = (self._peak_equity - account_equity) / self._peak_equity * 100
-                if current_dd > self._limits.max_drawdown_pct:
-                    await self._trigger_kill_switch("Max drawdown exceeded")
-                    return False, "MAX_DRAWDOWN"
+            # 4. Signal quality check
+            if signal.confidence < settings.ml.prediction_threshold:
+                return False, f"Confidence {signal.confidence:.2f} below threshold"
             
-            # Position size limit
-            position_value = size * price
-            max_position = account_equity * self._limits.max_position_size_pct / 100
-            if position_value > max_position:
-                return False, f"POSITION_SIZE_EXCEEDS_LIMIT: {position_value} > {max_position}"
-            
-            # Trade frequency
-            if self._daily_trades >= self._limits.max_trades_per_day:
-                return False, "DAILY_TRADE_LIMIT_REACHED"
-            
-            # Correlation check (simplified)
-            correlated = sum(1 for p in self._positions.values() 
-                           if p.get("direction") == direction)
-            if correlated >= self._limits.max_correlated_positions:
-                return False, "MAX_CORRELATED_POSITIONS"
-            
-            return True, "OK"
+            return True, None
     
-    async def on_trade_executed(self, trade: dict) -> None:
-        """Record executed trade for risk tracking."""
-        async with self._lock:
-            self._daily_trades += 1
-            self._trade_history.append({
-                **trade,
-                "timestamp": datetime.utcnow()
-            })
-            
-            symbol = trade["symbol"]
-            self._positions[symbol] = {
-                "direction": trade["direction"],
-                "size": trade["size"],
-                "entry_price": trade["price"]
-            }
-            
-            logger.info("trade_recorded", 
-                       symbol=symbol, 
-                       daily_trades=self._daily_trades,
-                       daily_pnl=float(self._daily_pnl))
-    
-    async def on_position_closed(self, trade: dict, pnl: Decimal) -> None:
-        """Update P&L when position closes."""
-        async with self._lock:
-            self._daily_pnl += pnl
-            
-            symbol = trade["symbol"]
-            if symbol in self._positions:
-                del self._positions[symbol]
-            
-            logger.info("position_closed", 
-                       symbol=symbol, 
-                       pnl=float(pnl),
-                       daily_pnl=float(self._daily_pnl))
-    
-    async def update_equity(self, equity: Decimal) -> None:
-        """Update current equity and track drawdown."""
-        async with self._lock:
-            if equity > self._peak_equity:
-                self._peak_equity = equity
-            
-            self._current_drawdown = (self._peak_equity - equity) / self._peak_equity * 100
-            
-            # Auto kill switch on drawdown
-            if self._current_drawdown > self._limits.max_drawdown_pct:
-                await self._trigger_kill_switch(f"Drawdown: {self._current_drawdown:.2f}%")
-    
-    async def _trigger_kill_switch(self, reason: str) -> None:
-        """Activate emergency stop."""
-        self._kill_switch_triggered = True
-        logger.critical("KILL_SWITCH_TRIGGERED", reason=reason)
+    async def update_price(self, symbol: str, price: Decimal) -> None:
+        """Update price history for risk calculations."""
+        now = datetime.now(timezone.utc)
         
-        # Notify all systems
-        # TODO: Broadcast to trading engine
+        if symbol not in self._price_history:
+            self._price_history[symbol] = []
         
-    async def reset_kill_switch(self, admin_password: str) -> bool:
-        """Manual reset of kill switch (requires verification)."""
-        # In production, verify against secure admin hash
-        if admin_password == "RESET":  # Placeholder
-            self._kill_switch_triggered = False
-            self._daily_pnl = Decimal("0")
-            self._daily_trades = 0
-            logger.warning("KILL_SWITCH_RESET")
-            return True
-        return False
+        self._price_history[symbol].append((now, price))
+        
+        # Keep last 1000 prices
+        if len(self._price_history[symbol]) > 1000:
+            self._price_history[symbol] = self._price_history[symbol][-1000:]
+        
+        # Check kill switch conditions
+        if self.account:
+            current_dd = self._calculate_drawdown()
+            daily_return = self._daily_pnl / self.account.balance if self.account.balance > 0 else 0
+            
+            self.kill_switch.check_conditions(
+                current_drawdown=float(current_dd),
+                daily_pnl=float(daily_return),
+                consecutive_losses=self._consecutive_losses,
+                latency_ms=0  # Would track actual latency
+            )
     
-    async def _check_daily_reset(self) -> None:
-        """Reset daily counters at midnight UTC."""
-        now = datetime.utcnow()
-        if now.date() > self._last_reset.date():
-            self._daily_pnl = Decimal("0")
-            self._daily_trades = 0
-            self._last_reset = now
-            logger.info("daily_counters_reset")
+    async def update_pnl(self, realized_pnl: Decimal) -> None:
+        """Update P&L tracking."""
+        self._daily_pnl += realized_pnl
+        
+        if realized_pnl < 0:
+            self._consecutive_losses += 1
+        else:
+            self._consecutive_losses = 0
     
-    def get_status(self) -> dict:
-        """Get current risk status."""
+    def calculate_position_size(
+        self,
+        signal: Signal,
+        entry_price: Decimal,
+        stop_loss: Decimal | None = None,
+        atr: Decimal | None = None
+    ) -> Decimal:
+        """Calculate optimal position size."""
+        if not self.account:
+            return Decimal("1.0")
+        
+        return self.position_sizer.calculate_size(
+            account=self.account,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            atr=atr,
+            signal_confidence=signal.confidence
+        )
+    
+    def get_risk_report(self) -> dict[str, Any]:
+        """Generate comprehensive risk report."""
         return {
-            "kill_switch_active": self._kill_switch_triggered,
+            "kill_switch_active": self.kill_switch.is_active,
             "daily_pnl": float(self._daily_pnl),
-            "daily_trades": self._daily_trades,
-            "current_drawdown_pct": float(self._current_drawdown),
-            "peak_equity": float(self._peak_equity),
-            "open_positions": len(self._positions),
-            "limits": {
-                "max_daily_loss_pct": float(self._limits.max_daily_loss_pct),
-                "max_position_size_pct": float(self._limits.max_position_size_pct),
-                "max_drawdown_pct": float(self._limits.max_drawdown_pct),
-            }
+            "consecutive_losses": self._consecutive_losses,
+            "prop_firm_status": self.prop_firm.get_status(),
+            "exposure": self._calculate_exposure(),
+            "var_95": self._calculate_var(),
         }
+    
+    def _calculate_drawdown(self) -> Decimal:
+        """Calculate current drawdown."""
+        if not self.account or self.account.equity <= 0:
+            return Decimal("0")
+        
+        peak = self.account.equity + max(Decimal("0"), self.account.total_pnl)
+        if peak <= 0:
+            return Decimal("0")
+        
+        return (peak - self.account.equity) / peak
+    
+    def _calculate_exposure(self) -> dict[str, float]:
+        """Calculate current exposure metrics."""
+        if not self.account:
+            return {}
+        
+        total_position_value = sum(
+            p.quantity * p.entry_price 
+            for p in self.account.open_positions.values()
+        )
+        
+        return {
+            "total_position_value": float(total_position_value),
+            "exposure_pct": float(total_position_value / self.account.equity) if self.account.equity > 0 else 0,
+            "num_positions": len(self.account.open_positions)
+        }
+    
+    def _calculate_var(self) -> float:
+        """Calculate current VaR."""
+        # Simplified - would use actual returns distribution
+        return 0.0
+    
+    def _is_news_time(self) -> bool:
+        """Check if high-impact news period."""
+        now = datetime.now(timezone.utc)
+        # Major news times: 8:30, 10:00, 14:00 EST
+        return now.hour in [12, 14, 18] and now.minute < 15
+    
+    def _is_weekend(self) -> bool:
+        """Check if weekend."""
+        return datetime.now(timezone.utc).weekday() >= 5
+    
+    async def _emit_risk_event(self, rule: str, message: str) -> None:
+        """Emit risk violation event."""
+        await self._event_bus.emit(
+            Event.create(
+                RiskEvent(
+                    level=RiskLevel.HIGH.name,
+                    metric=rule,
+                    value=0.0,
+                    threshold=0.0
+                ),
+                source="risk_manager",
+                priority=2
+            )
+        )
