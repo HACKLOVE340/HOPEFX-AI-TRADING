@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.security.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["*"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         max_age=600
     )
     
