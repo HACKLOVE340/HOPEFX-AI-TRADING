@@ -1,26 +1,32 @@
 """
-Async database management with SQLModel.
+SQLModel/SQLAlchemy async database layer.
 """
+
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 from sqlmodel import SQLModel
-from src.config.settings import get_settings
 
-settings = get_settings()
+from src.core.config import settings
+from src.core.logging_config import get_logger
 
-# Async engine for PostgreSQL
-async_engine = create_async_engine(
-    settings.database.async_url,
+logger = get_logger(__name__)
+
+# Async engine
+engine = create_async_engine(
+    settings.database.url,
     echo=settings.database.echo,
     pool_size=settings.database.pool_size,
     max_overflow=settings.database.max_overflow,
-    pool_pre_ping=True,  # Verify connections before use
+    pool_pre_ping=settings.database.pool_pre_ping,
+    pool_recycle=settings.database.pool_recycle,
 )
 
-AsyncSessionLocal = sessionmaker(
-    async_engine,
+# Session factory
+AsyncSessionLocal = async_sessionmaker(
+    engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autocommit=False,
@@ -30,18 +36,20 @@ AsyncSessionLocal = sessionmaker(
 
 async def init_db() -> None:
     """Initialize database tables."""
-    async with async_engine.begin() as conn:
+    async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+    logger.info("Database initialized")
 
 
 async def close_db() -> None:
     """Close database connections."""
-    await async_engine.dispose()
+    await engine.dispose()
+    logger.info("Database connections closed")
 
 
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for FastAPI to get async database sessions."""
+    """Get database session context manager."""
     session = AsyncSessionLocal()
     try:
         yield session
@@ -54,6 +62,6 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency."""
+    """FastAPI dependency for database sessions."""
     async with get_session() as session:
         yield session
