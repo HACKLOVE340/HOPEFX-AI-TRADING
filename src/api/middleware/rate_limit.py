@@ -1,59 +1,36 @@
 """
-Rate limiting middleware using Redis sliding window.
+Rate limiting middleware using slowapi pattern.
 """
+
 import time
-from typing import Optional
-from fastapi import Request, Response
+from collections import defaultdict
+
+from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
-
-import structlog
-
-logger = structlog.get_logger()
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """
-    Sliding window rate limiter.
-    Default: 100 requests per minute per IP.
-    """
+    """Simple in-memory rate limiting."""
     
-    def __init__(self, app: ASGIApp, requests_per_minute: int = 100):
+    def __init__(self, app, requests_per_minute: int = 60):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
-        self.window_size = 60  # seconds
-        
+        self._requests: defaultdict[str, list[float]] = defaultdict(list)
+    
     async def dispatch(self, request: Request, call_next):
-        # Skip rate limiting for health checks
-        if request.url.path == "/health":
-            return await call_next(request)
-        
         client_ip = request.client.host if request.client else "unknown"
-        key = f"rate_limit:{client_ip}"
+        now = time.time()
         
-        # Get Redis from app state
-        redis = getattr(request.app.state, "cache", None)
+        # Clean old requests
+        self._requests[client_ip] = [
+            ts for ts in self._requests[client_ip]
+            if now - ts < 60
+        ]
         
-        if redis:
-            current = await redis.increment(key, 1)
-            if current == 1:
-                await redis.expire(key, self.window_size)
-            
-            if current > self.requests_per_minute:
-                logger.warning("rate_limit_exceeded", ip=client_ip, count=current)
-                return Response(
-                    content='{"detail": "Rate limit exceeded"}',
-                    status_code=429,
-                    media_type="application/json",
-                    headers={"Retry-After": str(self.window_size)}
-                )
+        # Check limit
+        if len(self._requests[client_ip]) >= self.requests_per_minute:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
         
-        response = await call_next(request)
+        self._requests[client_ip].append(now)
         
-        # Add rate limit headers
-        if redis:
-            remaining = max(0, self.requests_per_minute - (await redis.get(key) or 0))
-            response.headers["X-RateLimit-Limit"] = str(self.requests_per_minute)
-            response.headers["X-RateLimit-Remaining"] = str(remaining)
-        
-        return response
+        return await call_next(request)
