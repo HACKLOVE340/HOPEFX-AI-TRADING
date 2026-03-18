@@ -204,4 +204,133 @@ class OrderManager:
             self._fills.append(fill)
             
             logger.info(
-               
+                               "order_filled",
+                order_id=order_id,
+                fill_quantity=float(fill_quantity),
+                fill_price=float(fill_price),
+                slippage=float(slippage),
+                remaining=float(order.remaining_quantity),
+                status=order.status.name
+            )
+            
+            # Publish event
+            await self._event_bus.publish(OrderEvent(
+                priority=EventPriority.HIGH,
+                order_id=order_id,
+                action="FILLED" if order.status == OrderStatus.FILLED else "PARTIAL",
+                symbol=order.symbol,
+                side=order.side,
+                quantity=float(fill_quantity),
+                price=float(fill_price),
+                slippage=float(slippage),
+                source="oms"
+            ))
+            
+            # Notify callbacks
+            for callback in self._callbacks:
+                try:
+                    await callback(order)
+                except Exception as e:
+                    logger.error("fill_callback_error", error=str(e))
+            
+            return order
+    
+    async def cancel_order(self, order_id: str) -> Order:
+        """Cancel pending order."""
+        async with self._lock:
+            if order_id not in self._orders:
+                raise ValueError(f"Unknown order: {order_id}")
+            
+            order = self._orders[order_id]
+            
+            if order.status not in (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIAL):
+                raise ValueError(f"Cannot cancel order in status: {order.status}")
+            
+            order.status = OrderStatus.CANCELLED
+            order.updated_at = time.time()
+            
+            logger.info("order_cancelled", order_id=order_id)
+            
+            await self._event_bus.publish(OrderEvent(
+                priority=EventPriority.HIGH,
+                order_id=order_id,
+                action="CANCELLED",
+                symbol=order.symbol,
+                side=order.side,
+                quantity=float(order.remaining_quantity),
+                source="oms"
+            ))
+            
+            return order
+    
+    async def modify_order(
+        self,
+        order_id: str,
+        new_quantity: Decimal | None = None,
+        new_price: Decimal | None = None
+    ) -> Order:
+        """Modify pending order."""
+        async with self._lock:
+            if order_id not in self._orders:
+                raise ValueError(f"Unknown order: {order_id}")
+            
+            order = self._orders[order_id]
+            
+            if order.status not in (OrderStatus.PENDING, OrderStatus.SUBMITTED):
+                raise ValueError(f"Cannot modify order in status: {order.status}")
+            
+            if new_quantity is not None:
+                order.quantity = new_quantity
+                order.remaining_quantity = new_quantity - order.filled_quantity
+            
+            if new_price is not None:
+                order.price = new_price
+            
+            order.updated_at = time.time()
+            
+            logger.info(
+                "order_modified",
+                order_id=order_id,
+                new_quantity=float(new_quantity) if new_quantity else None,
+                new_price=float(new_price) if new_price else None
+            )
+            
+            return order
+    
+    def on_order_update(self, callback: Callable[[Order], Coroutine[None, None, None]]) -> None:
+        """Register order update callback."""
+        self._callbacks.append(callback)
+    
+    def get_order(self, order_id: str) -> Order | None:
+        """Get order by ID."""
+        return self._orders.get(order_id)
+    
+    def get_open_orders(self, symbol: str | None = None) -> list[Order]:
+        """Get all open orders."""
+        orders = [
+            o for o in self._orders.values()
+            if o.status in (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIAL)
+        ]
+        if symbol:
+            orders = [o for o in orders if o.symbol == symbol]
+        return orders
+    
+    def get_fill_stats(self, lookback_seconds: float = 3600) -> dict:
+        """Get fill statistics."""
+        cutoff = time.time() - lookback_seconds
+        recent_fills = [f for f in self._fills if f.timestamp > cutoff]
+        
+        if not recent_fills:
+            return {"count": 0}
+        
+        slippages = [float(f.slippage) for f in recent_fills]
+        
+        return {
+            "count": len(recent_fills),
+            "total_quantity": sum(float(f.quantity) for f in recent_fills),
+            "avg_slippage": sum(slippages) / len(slippages),
+            "max_slippage": max(slippages),
+            "min_slippage": min(slippages),
+            "slippage_std": np.std(slippages) if len(slippages) > 1 else 0,
+        }
+
