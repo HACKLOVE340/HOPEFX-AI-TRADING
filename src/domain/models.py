@@ -1,169 +1,175 @@
 """
-Core domain models using SQLModel for type-safe ORM.
+Pydantic v2 domain models with strict validation.
 """
-from datetime import datetime, timedelta
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from decimal import Decimal
-from enum import Enum
-from typing import Optional, List
-from sqlmodel import SQLModel, Field, Relationship
-import uuid
+from typing import Any, Literal
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.domain.enums import (
+    BrokerType,
+    DataFrequency,
+    OrderStatus,
+    OrderType,
+    PositionStatus,
+    PropFirm,
+    TimeInForce,
+    TradeDirection,
+)
 
 
-class TradeDirection(str, Enum):
-    LONG = "LONG"
-    SHORT = "SHORT"
-
-
-class TradeStatus(str, Enum):
-    PENDING = "PENDING"
-    OPEN = "OPEN"
-    CLOSED = "CLOSED"
-    CANCELLED = "CANCELLED"
-
-
-class OrderType(str, Enum):
-    MARKET = "MARKET"
-    LIMIT = "LIMIT"
-    STOP = "STOP"
-    STOP_LIMIT = "STOP_LIMIT"
-
-
-class TimeFrame(str, Enum):
-    M1 = "1m"
-    M5 = "5m"
-    M15 = "15m"
-    M30 = "30m"
-    H1 = "1h"
-    H4 = "4h"
-    D1 = "1d"
-
-
-class Account(SQLModel, table=True):
-    """Trading account entity."""
-    __tablename__ = "accounts"
+class TickData(BaseModel):
+    """Validated tick data with nanosecond precision."""
+    model_config = ConfigDict(frozen=True)
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    symbol: str = Field(pattern=r"^[A-Z]{3,6}$")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    bid: Decimal = Field(decimal_places=5, gt=0)
+    ask: Decimal = Field(decimal_places=5, gt=0)
+    mid: Decimal = Field(decimal_places=5, gt=0)
+    volume: int = Field(ge=0)
+    source: str = Field(default="unknown")
     
-    name: str
-    broker: str
-    account_type: str = "paper"  # paper, live, prop
-    balance: Decimal = Field(default=Decimal("10000.00"), decimal_places=2)
-    equity: Decimal = Field(default=Decimal("10000.00"), decimal_places=2)
-    margin_used: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
-    currency: str = "USD"
-    is_active: bool = True
+    @field_validator("ask")
+    @classmethod
+    def ask_above_bid(cls, v: Decimal, info) -> Decimal:
+        if "bid" in info.data and v <= info.data["bid"]:
+            raise ValueError("Ask must be greater than bid")
+        return v
     
-    # Prop firm specific
-    prop_firm: Optional[str] = None
-    max_daily_loss: Optional[Decimal] = None
-    max_total_loss: Optional[Decimal] = None
-    profit_target: Optional[Decimal] = None
-    
-    trades: List["Trade"] = Relationship(back_populates="account")
+    @field_validator("mid")
+    @classmethod
+    def mid_is_midpoint(cls, v: Decimal, info) -> Decimal:
+        if "bid" in info.data and "ask" in info.data:
+            expected = (info.data["bid"] + info.data["ask"]) / 2
+            if abs(v - expected) > Decimal("0.00001"):
+                raise ValueError("Mid must be midpoint of bid/ask")
+        return v
 
 
-class Trade(SQLModel, table=True):
-    """Trade execution record."""
-    __tablename__ = "trades"
+class OHLCV(BaseModel):
+    """OHLCV bar with validation."""
+    model_config = ConfigDict(frozen=True)
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    symbol: str
+    timestamp: datetime
+    open: Decimal = Field(gt=0)
+    high: Decimal = Field(gt=0)
+    low: Decimal = Field(gt=0)
+    close: Decimal = Field(gt=0)
+    volume: int = Field(ge=0)
+    frequency: DataFrequency
     
-    account_id: str = Field(foreign_key="accounts.id")
-    account: Optional[Account] = Relationship(back_populates="trades")
+    @field_validator("high")
+    @classmethod
+    def high_is_highest(cls, v: Decimal, info) -> Decimal:
+        o, l, c = info.data.get("open"), info.data.get("low"), info.data.get("close")
+        if o and v < o:
+            raise ValueError("High must be >= open")
+        if l and v < l:
+            raise ValueError("High must be >= low")
+        if c and v < c:
+            raise ValueError("High must be >= close")
+        return v
     
-    symbol: str = "XAUUSD"
+    @field_validator("low")
+    @classmethod
+    def low_is_lowest(cls, v: Decimal, info) -> Decimal:
+        o, h, c = info.data.get("open"), info.data.get("high"), info.data.get("close")
+        if o and v > o:
+            raise ValueError("Low must be <= open")
+        if h and v > h:
+            raise ValueError("Low must be <= high")
+        if c and v > c:
+            raise ValueError("Low must be <= close")
+        return v
+
+
+class Order(BaseModel):
+    """Trading order with full lifecycle tracking."""
+    model_config = ConfigDict(frozen=False)
+    
+    id: UUID = Field(default_factory=uuid4)
+    symbol: str
     direction: TradeDirection
-    status: TradeStatus = TradeStatus.PENDING
+    order_type: OrderType
+    quantity: Decimal = Field(gt=0)
+    filled_quantity: Decimal = Field(default=Decimal("0"), ge=0)
+    price: Decimal | None = Field(default=None, gt=0)
+    stop_price: Decimal | None = Field(default=None, gt=0)
+    time_in_force: TimeInForce = Field(default=TimeInForce.GTC)
+    status: OrderStatus = Field(default=OrderStatus.PENDING)
+    broker_id: str | None = Field(default=None)
+    strategy_id: str | None = Field(default=None)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    # Entry
-    entry_price: Optional[Decimal] = Field(default=None, decimal_places=5)
-    entry_time: Optional[datetime] = None
-    entry_order_type: OrderType = OrderType.MARKET
+    @property
+    def is_filled(self) -> bool:
+        return self.status == OrderStatus.FILLED
     
-    # Exit
-    exit_price: Optional[Decimal] = Field(default=None, decimal_places=5)
-    exit_time: Optional[datetime] = None
-    
-    # Sizing
-    quantity: Decimal = Field(decimal_places=2)
-    stop_loss: Optional[Decimal] = Field(default=None, decimal_places=5)
-    take_profit: Optional[Decimal] = Field(default=None, decimal_places=5)
-    
-    # P&L
-    pnl: Optional[Decimal] = Field(default=None, decimal_places=2)
-    pnl_pct: Optional[Decimal] = Field(default=None, decimal_places=4)
-    commission: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
-    swap: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
-    
-    # Metadata
-    strategy: Optional[str] = None
-    broker_trade_id: Optional[str] = None
-    tags: Optional[str] = None  # JSON array
+    @property
+    def remaining(self) -> Decimal:
+        return self.quantity - self.filled_quantity
 
 
-class MarketData(SQLModel, table=True):
-    """OHLCV market data."""
-    __tablename__ = "market_data"
+class Position(BaseModel):
+    """Open position with P&L tracking."""
+    model_config = ConfigDict(frozen=False)
     
-    id: Optional[int] = Field(default=None, primary_key=True)
-    symbol: str = Field(index=True)
-    timeframe: TimeFrame = Field(index=True)
-    timestamp: datetime = Field(index=True)
+    id: UUID = Field(default_factory=uuid4)
+    symbol: str
+    direction: TradeDirection
+    entry_price: Decimal = Field(gt=0)
+    quantity: Decimal = Field(gt=0)
+    status: PositionStatus = Field(default=PositionStatus.OPEN)
+    unrealized_pnl: Decimal = Field(default=Decimal("0"))
+    realized_pnl: Decimal = Field(default=Decimal("0"))
+    open_orders: list[UUID] = Field(default_factory=list)
+    opened_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    closed_at: datetime | None = Field(default=None)
     
-    open: Decimal = Field(decimal_places=5)
-    high: Decimal = Field(decimal_places=5)
-    low: Decimal = Field(decimal_places=5)
-    close: Decimal = Field(decimal_places=5)
-    volume: int
-    
-    # Technical indicators (stored for backtest performance)
-    rsi_14: Optional[float] = None
-    atr_14: Optional[Decimal] = Field(default=None, decimal_places=5)
-    ema_20: Optional[Decimal] = Field(default=None, decimal_places=5)
-    ema_50: Optional[Decimal] = Field(default=None, decimal_places=5)
+    def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
+        """Calculate unrealized P&L at current price."""
+        if self.direction == TradeDirection.LONG:
+            return (current_price - self.entry_price) * self.quantity
+        else:
+            return (self.entry_price - current_price) * self.quantity
 
 
-class Strategy(SQLModel, table=True):
-    """Trading strategy registry."""
-    __tablename__ = "strategies"
+class Signal(BaseModel):
+    """Trading signal from strategy."""
+    model_config = ConfigDict(frozen=True)
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    name: str = Field(index=True)
-    description: Optional[str] = None
-    owner_id: str
-    is_public: bool = False
-    price_monthly: Optional[Decimal] = Field(default=None, decimal_places=2)
-    
-    # Performance metrics
-    total_return: Optional[float] = None
-    sharpe_ratio: Optional[float] = None
-    max_drawdown: Optional[float] = None
-    win_rate: Optional[float] = None
-    profit_factor: Optional[float] = None
-    
-    # Marketplace
-    is_listed: bool = False
-    stripe_product_id: Optional[str] = None
+    strategy_id: str
+    symbol: str
+    direction: TradeDirection
+    strength: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    features: dict[str, float] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class Subscription(SQLModel, table=True):
-    """Strategy subscription for copy trading."""
-    __tablename__ = "subscriptions"
+class Account(BaseModel):
+    """Trading account state."""
+    model_config = ConfigDict(frozen=False)
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    strategy_id: str = Field(foreign_key="strategies.id")
-    subscriber_id: str
-    stripe_subscription_id: Optional[str] = None
-    
-    # Copy settings
-    multiplier: float = Field(default=1.0, ge=0.1, le=10.0)
-    max_risk_per_trade: float = Field(default=0.02, ge=0.001, le=0.1)
-    is_active: bool = True
+    broker: BrokerType
+    account_id: str
+    balance: Decimal = Field(default=Decimal("0"))
+    equity: Decimal = Field(default=Decimal("0"))
+    margin_used: Decimal = Field(default=Decimal("0"))
+    margin_available: Decimal = Field(default=Decimal("0"))
+    open_positions: dict[str, Position] = Field(default_factory=dict)
+    daily_pnl: Decimal = Field(default=Decimal("0"))
+    total_pnl: Decimal = Field(default=Decimal("0"))
+    max_drawdown: Decimal = Field(default=Decimal("0"))
+    prop_firm: PropFirm = Field(default=PropFirm.NONE)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
