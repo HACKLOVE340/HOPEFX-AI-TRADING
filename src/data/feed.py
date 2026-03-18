@@ -1,6 +1,11 @@
+async def _process_message(self, venue: Venue, message: str):
+    from src.risk.kill_switch import kill_switch
+    if kill_switch.is_killed:
+        return None
+    # ... your existing code
+
 """Real-time tick feed engine with asyncio."""
 from __future__ import annotations
-
 import asyncio
 import json
 from dataclasses import dataclass
