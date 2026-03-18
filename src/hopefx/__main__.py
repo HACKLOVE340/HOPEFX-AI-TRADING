@@ -12,6 +12,7 @@ from contextlib import AsyncExitStack, suppress
 import anyio
 import structlog
 
+from pydantic import SecretStr
 from hopefx.config.settings import get_settings, VaultSecretProvider
 from hopefx.core.events import get_event_bus, EventBus
 from hopefx.core.distributed_kill_switch import DistributedKillSwitch
