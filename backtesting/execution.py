@@ -7,6 +7,17 @@ Simulates order execution with realistic fills, slippage, and commissions.
 import logging
 from typing import Optional
 from backtesting.events import OrderEvent, FillEvent
+import hashlib
+from datetime import datetime
+
+def create_audit_log(order: Order, result: OrderResult) -> dict:
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "order_hash": hashlib.sha256(str(order).encode()).hexdigest(),
+        "ip_address": request.client.host,  # Log who placed it
+        "user_agent": request.headers.get("user-agent"),
+        "compliance_version": "1.0",
+    }
 
 logger = logging.getLogger(__name__)
 
