@@ -1,166 +1,171 @@
-"""
-Order Management System with partial fill handling.
-"""
+"""Order Management System."""
+from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from src.core.events import Event, OrderFilled, OrderSubmitted, get_event_bus
-from src.core.logging_config import get_logger
-from src.domain.enums import OrderStatus, OrderType, TimeInForce, TradeDirection
-from src.domain.models import Order
-from src.brokers.base import Broker
+import structlog
 
-logger = get_logger(__name__)
+from src.core.events import OrderEvent, FillEvent
+from src.core.types import Order, Fill, OrderStatus, OrderType, Side, Symbol, Venue
+from src.execution.brokers.base import Broker
+
+logger = structlog.get_logger()
 
 
-class OrderManagementSystem:
-    """
-    Institutional OMS with order lifecycle management.
-    """
+@dataclass
+class OrderState:
+    """Order state tracking."""
+    order: Order
+    fills: list[Fill] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+
+
+class OMS:
+    """Order Management System."""
     
-    def __init__(self, broker: Broker):
+    def __init__(self, broker: Broker) -> None:
         self.broker = broker
-        self._orders: dict[UUID, Order] = {}
-        self._event_bus = get_event_bus()
+        self._orders: dict[str, OrderState] = {}
+        self._pending: asyncio.Queue[Order] = asyncio.Queue()
         self._lock = asyncio.Lock()
+        self._running = False
+    
+    async def start(self) -> None:
+        """Start OMS."""
+        self._running = True
+        await self.broker.connect()
+        asyncio.create_task(self._process_loop())
+        logger.info("OMS started")
+    
+    async def stop(self) -> None:
+        """Stop OMS."""
+        self._running = False
+        await self.broker.disconnect()
+        logger.info("OMS stopped")
     
     async def submit_order(
         self,
-        symbol: str,
-        direction: TradeDirection,
+        symbol: Symbol,
+        side: Side,
         quantity: Decimal,
         order_type: OrderType = OrderType.MARKET,
         price: Decimal | None = None,
         stop_price: Decimal | None = None,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        strategy_id: str | None = None,
-        metadata: dict[str, Any] | None = None
+        venue: Venue = Venue.PAPER
     ) -> Order:
-        """
-        Submit order with full validation.
-        """
+        """Submit new order."""
+        order = Order(
+            id=str(uuid4()),
+            symbol=symbol,
+            side=side,
+            order_type=order_type,
+            quantity=quantity,
+            price=price,
+            stop_price=stop_price,
+            venue=venue,
+            client_order_id=f"cl_{uuid4().hex[:8]}"
+        )
+        
+        await self._pending.put(order)
+        logger.info(f"Order submitted: {order.id}")
+        
+        return order
+    
+    async def cancel(self, order_id: str) -> bool:
+        """Cancel order."""
         async with self._lock:
-            order = Order(
-                symbol=symbol,
-                direction=direction,
-                order_type=order_type,
-                quantity=quantity,
-                price=price,
-                stop_price=stop_price,
-                time_in_force=time_in_force,
-                strategy_id=strategy_id,
-                metadata=metadata or {}
-            )
-            
-            # Validate
-            if order_type in (OrderType.LIMIT, OrderType.STOP_LIMIT) and price is None:
-                raise ValueError("Limit orders require price")
-            
-            # Submit to broker
+            if order_id in self._orders:
+                success = await self.broker.cancel_order(order_id)
+                if success:
+                    self._orders[order_id].order.status = OrderStatus.CANCELLED
+                return success
+        return False
+    
+    async def get_order(self, order_id: str) -> OrderState | None:
+        """Get order state."""
+        async with self._lock:
+            return self._orders.get(order_id)
+    
+    async def get_all_orders(self) -> list[OrderState]:
+        """Get all orders."""
+        async with self._lock:
+            return list(self._orders.values())
+    
+    async def _process_loop(self) -> None:
+        """Main processing loop."""
+        while self._running:
             try:
-                filled_order = await self.broker.submit_order(order)
-                self._orders[order.id] = filled_order
-                
-                # Emit event
-                await self._event_bus.emit(
-                    Event.create(
-                        OrderSubmitted(
-                            order_id=order.id,
-                            symbol=symbol,
-                            quantity=float(quantity),
-                            order_type=order_type.value
-                        ),
-                        source="oms"
-                    )
-                )
-                
-                # Handle immediate fills
-                if filled_order.is_filled:
-                    await self._handle_fill(filled_order)
-                
-                return filled_order
-                
+                order = await asyncio.wait_for(self._pending.get(), timeout=1.0)
+                await self._execute_order(order)
+            except asyncio.TimeoutError:
+                continue
             except Exception as e:
-                order.status = OrderStatus.REJECTED
-                logger.error(f"Order submission failed: {e}")
-                raise
+                logger.error(f"OMS processing error: {e}")
     
-    async def cancel_order(self, order_id: UUID) -> bool:
-        """Cancel pending order."""
+    async def _execute_order(self, order: Order) -> None:
+        """Execute order through broker."""
         async with self._lock:
-            order = self._orders.get(order_id)
-            if not order:
-                return False
-            
-            if order.status not in (OrderStatus.PENDING, OrderStatus.SUBMITTED):
-                return False
-            
-            success = await self.broker.cancel_order(str(order_id))
-            if success:
-                order.status = OrderStatus.CANCELLED
-            
-            return success
-    
-    async def handle_partial_fill(
-        self,
-        order_id: UUID,
-        fill_price: Decimal,
-        fill_quantity: Decimal
-    ) -> None:
-        """Handle partial fill notification."""
-        async with self._lock:
-            order = self._orders.get(order_id)
-            if not order:
-                return
-            
-            order.filled_quantity += fill_quantity
-            order.status = (
-                OrderStatus.FILLED 
-                if order.filled_quantity >= order.quantity 
-                else OrderStatus.PARTIAL_FILL
-            )
-            
-            await self._handle_fill(order, fill_price, fill_quantity)
-    
-    async def _handle_fill(
-        self,
-        order: Order,
-        fill_price: Decimal | None = None,
-        fill_quantity: Decimal | None = None
-    ) -> None:
-        """Process fill event."""
-        price = fill_price or order.price
-        qty = fill_quantity or order.quantity
+            self._orders[order.id] = OrderState(order=order)
         
-        # Emit fill event
-        await self._event_bus.emit(
-            Event.create(
-                OrderFilled(
-                    order_id=order.id,
-                    fill_price=float(price) if price else 0.0,
-                    fill_quantity=float(qty),
-                    commission=0.0  # Calculate based on broker fees
-                ),
-                source="oms"
-            )
+        # Emit pending event
+        await self._emit_order_event(order, None)
+        
+        # Execute
+        try:
+            updated = await self.broker.place_order(order)
+            
+            async with self._lock:
+                self._orders[order.id].order = updated
+                self._orders[order.id].updated_at = datetime.utcnow()
+            
+            await self._emit_order_event(updated, order.status)
+            
+            # Handle fills
+            if updated.status == OrderStatus.FILLED:
+                await self._handle_fill(updated)
+                
+        except Exception as e:
+            logger.error(f"Order execution failed: {e}")
+            order.status = OrderStatus.REJECTED
+            await self._emit_order_event(order, OrderStatus.PENDING)
+    
+    async def _handle_fill(self, order: Order) -> None:
+        """Process fill."""
+        # Create synthetic fill for tracking
+        fill = Fill(
+            order_id=order.id,
+            fill_id=f"fill_{uuid4().hex}",
+            symbol=order.symbol,
+            side=order.side,
+            quantity=order.filled_qty,
+            price=order.avg_fill_price or Decimal("0"),
+            timestamp=datetime.utcnow(),
+            venue=order.venue
         )
         
-        logger.info(
-            f"Order filled: {order.id} {order.symbol} "
-            f"{order.direction.value} @ {price}"
-        )
+        async with self._lock:
+            self._orders[order.id].fills.append(fill)
+        
+        await self._emit_fill_event(fill)
     
-    def get_order(self, order_id: UUID) -> Order | None:
-        """Get order by ID."""
-        return self._orders.get(order_id)
+    async def _emit_order_event(self, order: Order, previous: OrderStatus | None) -> None:
+        """Emit order event."""
+        from src.core.bus import event_bus
+        from src.core.events import OrderEvent
+        
+        event = OrderEvent(order=order, previous_status=previous.value if previous else None)
+        await event_bus.publish(event)
     
-    def get_open_orders(self) -> list[Order]:
-        """Get all open orders."""
-        return [
-            o for o in self._orders.values()
-            if o.status in (OrderStatus.PENDING, OrderStatus.SUBMITTED, OrderStatus.PARTIAL_FILL)
-        ]
+    async def _emit_fill_event(self, fill: Fill) -> None:
+        """Emit fill event."""
+        from src.core.bus import event_bus
+        from src.core.events import FillEvent
+        
+        event = FillEvent(fill=fill)
+        await event_bus.publish(event)
