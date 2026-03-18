@@ -1,0 +1,30 @@
+-r requirements.txt
+
+# Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-xdist==3.6.1
+hypothesis==6.118.0
+factory-boy==3.3.1
+faker==30.8.1
+pytest-mock==3.14.0
+respx==0.21.1
+pytest-httpx==0.34.0
+
+# Code Quality
+ruff==0.7.2
+mypy==1.13.0
+bandit[toml]==1.7.10
+safety==3.2.11
+pre-commit==4.0.1
+
+# Documentation
+mkdocs==1.6.1
+mkdocs-material==9.5.44
+mkdocstrings[python]==0.26.2
+
+# Development Tools
+ipython==8.29.0
+ipdb==0.13.13
+watchdog==5.0.3
