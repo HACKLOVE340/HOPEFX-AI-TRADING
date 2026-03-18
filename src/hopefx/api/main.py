@@ -48,21 +48,16 @@ async def lifespan(app: FastAPI):
     logger.info("api_shutdown")
     await event_bus.stop()
 
-
-def create_app() -> FastAPI:
-    """Create configured FastAPI application."""
-    app = FastAPI(
-        title="HOPEFX API",
-        description="Institutional-grade XAUUSD AI trading platform",
-        version=settings.version,
-        docs_url="/docs" if not settings.is_production else None,
-        redoc_url="/redoc" if not settings.is_production else None,
-        lifespan=lifespan
+    # CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.security.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],  # ✅ EXPLICIT
+        expose_headers=["X-Request-ID"],
+        max_age=600
     )
-    
-    # Middleware stack (order matters)
-    app.state.limiter = limiter
-    app.add_exception_handler(429, _rate_limit_exceeded_handler)
     
     # CORS
     app.add_middleware(
