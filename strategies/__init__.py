@@ -13,7 +13,14 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
-           
+from .manager import (
+    StrategyManager,
+    BaseStrategy,
+    TrendFollowingStrategy,
+    MeanReversionStrategy,
+    BreakoutStrategy,
+    Signal
+        
 logger = logging.getLogger(__name__)
 
 @dataclass
