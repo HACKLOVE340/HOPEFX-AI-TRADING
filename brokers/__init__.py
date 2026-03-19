@@ -518,3 +518,484 @@ class PaperTradingBroker(BaseBroker):
         """Get all open positions with updated prices"""
         async with self._positions_lock:
             positions = list(self._
+
+            # Update prices
+            if self.price_feed:
+                for pos in positions:
+                    try:
+                        tick = self.price_feed.get_last_price(pos.symbol)
+                        if tick:
+                            pos.update_price(tick.mid)
+                    except Exception as e:
+                        logger.error(f"Error updating price for {pos.symbol}: {e}")
+            
+            return positions
+    
+    async def close_position(self, position_id: str) -> bool:
+        """Close a position with proper locking"""
+        async with self._positions_lock:
+            if position_id not in self._positions:
+                logger.warning(f"Position not found: {position_id}")
+                return False
+            
+            pos = self._positions[position_id]
+            
+            # Determine closing side
+            close_side = 'sell' if pos.side == OrderSide.BUY else 'buy'
+            
+            try:
+                # Place closing order
+                order = await self.place_market_order(
+                    pos.symbol,
+                    close_side,
+                    pos.quantity
+                )
+                
+                # Calculate realized P&L
+                realized_pnl = pos.unrealized_pnl - order.commission
+                self.balance += realized_pnl
+                
+                # Record trade
+                trade_record = {
+                    'position_id': position_id,
+                    'symbol': pos.symbol,
+                    'side': pos.side.value,
+                    'quantity': pos.quantity,
+                    'entry_price': pos.entry_price,
+                    'exit_price': order.average_fill_price,
+                    'realized_pnl': realized_pnl,
+                    'commission': order.commission + pos.total_commission,
+                    'opened_at': pos.opened_at,
+                    'closed_at': time.time(),
+                    'duration_seconds': time.time() - pos.opened_at,
+                    'slippage': order.slippage
+                }
+                self._trade_history.append(trade_record)
+                
+                # Remove position
+                del self._positions[position_id]
+                
+                logger.info(
+                    f"Position Closed | {position_id} | "
+                    f"P&L: ${realized_pnl:,.2f} | "
+                    f"Duration: {(time.time() - pos.opened_at)/3600:.1f}h | "
+                    f"Commission: ${order.commission + pos.total_commission:.2f}"
+                )
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Error closing position {position_id}: {e}")
+                return False
+    
+    async def get_pending_orders(self) -> List[Order]:
+        """Get pending orders"""
+        async with self._orders_lock:
+            return [
+                o for o in self._orders.values()
+                if o.status == OrderStatus.PENDING
+            ]
+    
+    def _generate_report(self) -> str:
+        """Generate comprehensive trading report"""
+        total_trades = len(self._trade_history)
+        if total_trades == 0:
+            return "No trades executed"
+        
+        winning_trades = [t for t in self._trade_history if t['realized_pnl'] > 0]
+        losing_trades = [t for t in self._trade_history if t['realized_pnl'] <= 0]
+        
+        total_pnl = sum(t['realized_pnl'] for t in self._trade_history)
+        gross_profit = sum(t['realized_pnl'] for t in winning_trades)
+        gross_loss = sum(t['realized_pnl'] for t in losing_trades)
+        
+        win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0
+        
+        avg_win = gross_profit / len(winning_trades) if winning_trades else 0
+        avg_loss = gross_loss / len(losing_trades) if losing_trades else 0
+        
+        profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else float('inf')
+        
+        # Calculate Sharpe-like metric
+        returns = [t['realized_pnl'] for t in self._trade_history]
+        avg_return = sum(returns) / len(returns) if returns else 0
+        variance = sum((r - avg_return) ** 2 for r in returns) / len(returns) if returns else 0
+        std_return = variance ** 0.5
+        sharpe_like = (avg_return / std_return) if std_return > 0 else 0
+        
+        report = f"""
+╔════════════════════════════════════════════════════════════════╗
+║           PAPER TRADING PERFORMANCE REPORT                      ║
+╠════════════════════════════════════════════════════════════════╣
+║ Account Summary                                                ║
+║   Initial Balance:     ${self.initial_balance:>15,.2f}          ║
+║   Final Balance:        ${self.balance:>15,.2f}          ║
+║   Total P&L:            ${total_pnl:>15,.2f} ({total_pnl/self.initial_balance*100:+.2f}%)   ║
+║   Total Commissions:    ${self._total_commissions:>15,.2f}          ║
+║   Total Slippage:       {self._total_slippage:>15.1f} pips        ║
+╠════════════════════════════════════════════════════════════════╣
+║ Trade Statistics                                               ║
+║   Total Trades:        {total_trades:>15}                     ║
+║   Winning Trades:      {len(winning_trades):>15} ({win_rate*100:.1f}%)              ║
+║   Losing Trades:       {len(losing_trades):>15} ({(1-win_rate)*100:.1f}%)              ║
+║   Profit Factor:       {profit_factor:>15.2f}                   ║
+║   Sharpe-like:         {sharpe_like:>15.2f}                   ║
+╠════════════════════════════════════════════════════════════════╣
+║ P&L Breakdown                                                  ║
+║   Gross Profit:         ${gross_profit:>15,.2f}          ║
+║   Gross Loss:           ${gross_loss:>15,.2f}          ║
+║   Average Win:         ${avg_win:>15,.2f}          ║
+║   Average Loss:         ${avg_loss:>15,.2f}          ║
+║   Largest Win:          ${max((t['realized_pnl'] for t in winning_trades), default=0):>15,.2f}          ║
+║   Largest Loss:         ${min((t['realized_pnl'] for t in losing_trades), default=0):>15,.2f}          ║
+╠════════════════════════════════════════════════════════════════╣
+║ Open Positions:        {len(self._positions):>15}                     ║
+║ Uptime:                {(time.time() - self._start_time)/3600:>15.1f} hours                ║
+╚════════════════════════════════════════════════════════════════╝
+        """
+        return report
+
+
+class OANDABroker(BaseBroker):
+    """
+    OANDA v20 API Implementation - PRODUCTION VERSION
+    
+    Features:
+    - Connection pooling with aiohttp
+    - Request timeouts on all operations
+    - Rate limiting (max 10 concurrent requests)
+    - Automatic retry with exponential backoff
+    - Position caching with TTL
+    """
+    
+    def __init__(
+        self,
+        api_key: str,
+        account_id: str,
+        practice: bool = True,
+        timeout: float = 10.0,
+        max_retries: int = 3
+    ):
+        super().__init__()
+        
+        if not AIOHTTP_AVAILABLE:
+            raise ImportError("aiohttp required for OANDA broker")
+        
+        self.api_key = api_key
+        self.account_id = account_id
+        self.practice = practice
+        self.timeout = timeout
+        self.max_retries = max_retries
+        
+        self.base_url = (
+            "https://api-fxpractice.oanda.com"
+            if practice else
+            "https://api-fxtrade.oanda.com"
+        )
+        
+        # Rate limiting
+        self._rate_limiter = asyncio.Semaphore(10)
+        self._request_count = 0
+        self._last_request_time = 0
+        
+        # Caching
+        self._positions_cache: Dict[str, Position] = {}
+        self._cache_ttl = 5  # 5 seconds
+        self._last_cache_update = 0
+        
+        self._session = None
+    
+    async def connect(self):
+        """Connect to OANDA API with retry"""
+        for attempt in range(self.max_retries):
+            try:
+                self._session = aiohttp.ClientSession(
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                        "Accept-Datetime-Format": "RFC3339"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=self.timeout)
+                )
+                
+                # Verify connection
+                async with self._rate_limiter:
+                    async with self._session.get(
+                        f"{self.base_url}/v3/accounts/{self.account_id}"
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            account = data.get('account', {})
+                            
+                            logger.info(
+                                f"OANDA Connected | "
+                                f"Balance: ${float(account.get('balance', 0)):,.2f} | "
+                                f"Currency: {account.get('currency', 'USD')} | "
+                                f"Practice: {self.practice}"
+                            )
+                            
+                            self.connected = True
+                            return True
+                        else:
+                            error_data = await resp.text()
+                            raise ConnectionError(f"OANDA error {resp.status}: {error_data}")
+                            
+            except Exception as e:
+                logger.error(f"Connection attempt {attempt + 1} failed: {e}")
+                if self._session:
+                    await self._session.close()
+                    self._session = None
+                
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    logger.info(f"Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise ConnectionError(f"Failed to connect after {self.max_retries} attempts")
+        
+        return False
+    
+    async def disconnect(self):
+        """Disconnect and cleanup"""
+        if self._session:
+            await self._session.close()
+            self._session = None
+        
+        async with self._connection_lock:
+            self.connected = False
+        
+        logger.info("OANDA disconnected")
+        return True
+    
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
+        """Make API request with rate limiting and error handling"""
+        url = f"{self.base_url}/v3{endpoint}"
+        
+        async with self._rate_limiter:
+            for attempt in range(self.max_retries):
+                try:
+                    async with self._session.request(method, url, **kwargs) as resp:
+                        self._request_count += 1
+                        self._last_request_time = time.time()
+                        
+                        if resp.status == 200 or resp.status == 201:
+                            return await resp.json()
+                        elif resp.status == 429:  # Rate limited
+                            retry_after = int(resp.headers.get('Retry-After', 1))
+                            logger.warning(f"Rate limited, waiting {retry_after}s")
+                            await asyncio.sleep(retry_after)
+                            continue
+                        else:
+                            error_text = await resp.text()
+                            raise ValueError(f"OANDA API error {resp.status}: {error_text}")
+                            
+                except asyncio.TimeoutError:
+                    logger.error(f"Request timeout (attempt {attempt + 1})")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(1)
+                    else:
+                        raise
+                except Exception as e:
+                    logger.error(f"Request error: {e}")
+                    if attempt < self.max_retries - 1:
+                        await asyncio.sleep(1)
+                    else:
+                        raise
+        
+        raise ConnectionError("Max retries exceeded")
+    
+    async def get_account_info(self) -> Dict:
+        """Get account information"""
+        data = await self._make_request(
+            "GET",
+            f"/accounts/{self.account_id}"
+        )
+        
+        account = data.get('account', {})
+        return {
+            'balance': float(account.get('balance', 0)),
+            'equity': float(account.get('NAV', 0)),
+            'margin_used': float(account.get('marginUsed', 0)),
+            'free_margin': float(account.get('marginAvailable', 0)),
+            'unrealized_pnl': float(account.get('unrealizedPL', 0)),
+            'realized_pnl': float(account.get('realizedPL', 0)),
+            'open_positions': len(account.get('positions', [])),
+            'currency': account.get('currency', 'USD')
+        }
+    
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float
+    ) -> Order:
+        """Place market order"""
+        # Convert symbol to OANDA format
+        instrument = symbol.replace('/', '_')
+        
+        # OANDA uses units (positive for buy, negative for sell)
+        units = quantity if side == 'buy' else -quantity
+        
+        body = {
+            "order": {
+                "type": "MARKET",
+                "instrument": instrument,
+                "units": str(int(units))
+            }
+        }
+        
+        data = await self._make_request(
+            "POST",
+            f"/accounts/{self.account_id}/orders",
+            json=body
+        )
+        
+        # Parse response
+        order_fill = data.get('orderFillTransaction', {})
+        
+        if not order_fill:
+            raise ValueError("No fill transaction in response")
+        
+        return Order(
+            id=order_fill.get('id', ''),
+            symbol=symbol,
+            side=OrderSide(side),
+            type=OrderType.MARKET,
+            quantity=quantity,
+            price=float(order_fill.get('price', 0)),
+            status=OrderStatus.FILLED,
+            filled_quantity=quantity,
+            average_fill_price=float(order_fill.get('price', 0)),
+            filled_at=time.time(),
+            commission=float(order_fill.get('commission', 0))
+        )
+    
+    async def get_positions(self) -> List[Position]:
+        """Get open positions with caching"""
+        # Check cache
+        if time.time() - self._last_cache_update < self._cache_ttl:
+            return list(self._positions_cache.values())
+        
+        data = await self._make_request(
+            "GET",
+            f"/accounts/{self.account_id}/positions"
+        )
+        
+        positions = []
+        self._positions_cache = {}
+        
+        for pos_data in data.get('positions', []):
+            instrument = pos_data.get('instrument', '').replace('_', '/')
+            
+            # Parse long and short sides
+            for side_key, side_enum in [('long', OrderSide.BUY), ('short', OrderSide.SELL)]:
+                side_data = pos_data.get(side_key, {})
+                units = float(side_data.get('units', 0))
+                
+                if units != 0:
+                    pos = Position(
+                        id=f"{instrument}_{side_key}",
+                        symbol=instrument,
+                        side=side_enum,
+                        quantity=abs(units),
+                        entry_price=float(side_data.get('averagePrice', 0)),
+                        current_price=float(side_data.get('markPrice', 0)),
+                        unrealized_pnl=float(side_data.get('unrealizedPL', 0)),
+                        realized_pnl=float(side_data.get('realizedPL', 0))
+                    )
+                    positions.append(pos)
+                    self._positions_cache[pos.id] = pos
+        
+        self._last_cache_update = time.time()
+        return positions
+    
+    async def close_position(self, position_id: str) -> bool:
+        """Close position"""
+        # Parse position ID
+        parts = position_id.rsplit('_', 1)
+        if len(parts) != 2:
+            logger.error(f"Invalid position ID format: {position_id}")
+            return False
+        
+        instrument, side = parts
+        instrument = instrument.replace('/', '_')
+        
+        body = {
+            "longUnits": "ALL" if side == 'long' else "NONE",
+            "shortUnits": "ALL" if side == 'short' else "NONE"
+        }
+        
+        try:
+            await self._make_request(
+                "PUT",
+                f"/accounts/{self.account_id}/positions/{instrument}/close",
+                json=body
+            )
+            
+            # Invalidate cache
+            self._last_cache_update = 0
+            
+            logger.info(f"Position closed: {position_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to close position {position_id}: {e}")
+            return False
+    
+    async def cancel_order(self, order_id: str) -> bool:
+        """Cancel pending order"""
+        try:
+            await self._make_request(
+                "PUT",
+                f"/accounts/{self.account_id}/orders/{order_id}/cancel"
+            )
+            logger.info(f"Order cancelled: {order_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to cancel order {order_id}: {e}")
+            return False
+    
+    async def get_pending_orders(self) -> List[Order]:
+        """Get pending orders"""
+        data = await self._make_request(
+            "GET",
+            f"/accounts/{self.account_id}/pendingOrders"
+        )
+        
+        orders = []
+        for order_data in data.get('orders', []):
+            orders.append(Order(
+                id=order_data.get('id', ''),
+                symbol=order_data.get('instrument', '').replace('_', '/'),
+                side=OrderSide(order_data.get('units', 0) > 0 and 'buy' or 'sell'),
+                type=OrderType(order_data.get('type', 'MARKET').lower()),
+                quantity=abs(float(order_data.get('units', 0))),
+                price=float(order_data.get('price', 0)) if order_data.get('price') else None,
+                status=OrderStatus.PENDING
+            ))
+        
+        return orders
+
+
+def create_broker(broker_type: str, config: Dict) -> BaseBroker:
+    """Factory function to create appropriate broker"""
+    broker_type = broker_type.lower()
+    
+    if broker_type == 'paper':
+        return PaperTradingBroker(
+            initial_balance=config.get('initial_balance', 100000.0),
+            commission_per_lot=config.get('commission_per_lot', 3.5),
+            slippage_model=config.get('slippage_model', 'gaussian')
+        )
+    elif broker_type == 'oanda':
+        if not AIOHTTP_AVAILABLE:
+            raise ImportError("aiohttp required for OANDA broker. Install: pip install aiohttp")
+        return OANDABroker(
+            api_key=config['api_key'],
+            account_id=config['account_id'],
+            practice=config.get('practice', True),
+            timeout=config.get('timeout', 10.0),
+            max_retries=config.get('max_retries', 3)
+        )
+    else:
+        raise ValueError(f"Unknown broker type: {broker_type}")
