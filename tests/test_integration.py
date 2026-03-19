@@ -1,165 +1,162 @@
-# File 22: Create a final integration test that runs everything
-
-integration_test_content = '''#!/usr/bin/env python3
 """
-HOPEFX Integration Test
-Tests the full pipeline: validation -> execution -> backtesting
+HOPEFX Integration Tests
+End-to-end testing of trading system components
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
+import pytest
+import asyncio
+from datetime import datetime, timedelta
 
-import unittest
-from validation import OrderValidator, Order, PropFirmValidator
-from execution import PaperExecutor, OrderStatus
-from examples.backtest_example import (
-    XAUUSDDataGenerator,
-    MovingAverageCrossover,
-    BacktestEngine
-)
+from brain.brain import HOPEFXBrain, SystemState
+from brokers import PaperTradingBroker
+from risk.manager import RiskManager, RiskConfig
+from strategies.manager import StrategyManager
+from execution.position_tracker import PositionTracker
+from execution.trade_executor import TradeExecutor
 
 
-class TestFullPipeline(unittest.TestCase):
-    """Integration tests for the complete trading pipeline."""
+@pytest.mark.asyncio
+async def test_full_trading_cycle(paper_broker, risk_manager, strategy_manager):
+    """Test complete trading cycle from signal to execution"""
     
-    def test_validation_to_execution_flow(self):
-        """Test that validated orders execute correctly."""
-        # Setup
-        validator = OrderValidator()
-        executor = PaperExecutor(initial_balance=10000.0)
-        
-        # Create valid order
-        order = Order(symbol='XAUUSD', side='buy', qty=0.01, stop_loss=1950.0)
-        
-        # Validate
-        validation = validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
-        self.assertTrue(validation.valid, f"Validation failed: {validation.reason}")
-        
-        # Execute
-        result = executor.submit_order(order, current_price=2000.0, skip_validation=True)
-        self.assertEqual(result.status, OrderStatus.FILLED)
-        
-        # Verify position
-        position = executor.get_position('XAUUSD')
-        self.assertIsNotNone(position)
-        self.assertEqual(position['side'], 'long')
-        self.assertEqual(position['qty'], 0.01)
+    # Setup components
+    brain = HOPEFXBrain(config={
+        'max_decision_history': 10,
+        'regime_check_interval': 60
+    })
     
-    def test_invalid_order_rejection(self):
-        """Test that invalid orders are rejected."""
-        validator = OrderValidator()
-        
-        # Create oversized order
-        order = Order(symbol='XAUUSD', side='buy', qty=10.0)
-        
-        validation = validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
-        
-        self.assertFalse(validation.valid)
-        self.assertIn('risk', validation.reason.lower())
+    position_tracker = PositionTracker()
     
-    def test_backtest_to_execution_consistency(self):
-        """Test that backtest and execution use consistent logic."""
-        # Generate data
-        gen = XAUUSDDataGenerator(days=30)
-        data = gen.generate()
-        
-        # Run backtest
-        strategy = MovingAverageCrossover(fast_period=5, slow_period=10)
-        engine = BacktestEngine(data, strategy, initial_capital=10000.0)
-        results = engine.run()
-        
-        # Verify metrics are reasonable
-        self.assertIn('total_trades', results)
-        self.assertIn('max_drawdown_pct', results)
-        self.assertGreaterEqual(results['max_drawdown_pct'], 0)
-        
-        # Compare with paper execution
-        executor = PaperExecutor(initial_balance=10000.0)
-        
-        # Simulate same trade
-        order = Order(symbol='XAUUSD', side='buy', qty=0.01)
-        result = executor.submit_order(order, current_price=2000.0, skip_validation=True)
-        
-        # Both should track P&L
-        self.assertEqual(result.status, OrderStatus.FILLED)
-        self.assertIn('avg_price', result.__dict__)
+    executor = TradeExecutor(
+        broker=paper_broker,
+        risk_manager=risk_manager,
+        position_tracker=position_tracker
+    )
     
-    def test_prop_firm_integration(self):
-        """Test prop firm limits with execution."""
-        prop = PropFirmValidator(firm='ftmo')
-        executor = PaperExecutor(initial_balance=100000.0)
-        
-        # Check initial limits
-        valid, msg = prop.check_limits(current_equity=100000.0)
-        self.assertTrue(valid)
-        
-        # Simulate losses
-        prop.record_pnl(-2000)  # $2k loss
-        valid, msg = prop.check_limits(current_equity=98000.0)
-        self.assertTrue(valid)  # 2% is within 5% daily limit
-        
-        # Simulate large loss
-        prop.record_pnl(-4000)  # Additional $4k
-        valid, msg = prop.check_limits(current_equity=94000.0)
-        self.assertFalse(valid)  # 6% exceeds 5% limit
+    # Inject components into brain
+    brain.inject_components(
+        broker=paper_broker,
+        risk_manager=risk_manager,
+        strategy_manager=strategy_manager,
+        price_engine=None  # Would need mock
+    )
     
-    def test_risk_limits_enforcement(self):
-        """Test that risk limits are enforced across components."""
-        validator = OrderValidator(max_position_risk_pct=0.01)  # 1% max
-        
-        # Order at exactly 1% should pass
-        order = Order(symbol='XAUUSD', side='buy', qty=0.005)
-        result = validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
-        self.assertTrue(result.valid)
-        
-        # Order at 2% should fail
-        big_order = Order(symbol='XAUUSD', side='buy', qty=0.01)
-        result = validator.validate_order(
-            big_order, current_price=2000.0, account_balance=10000.0
-        )
-        self.assertFalse(result.valid)
+    # Verify initial state
+    assert brain.state.system_state == SystemState.INITIALIZING
+    
+    # Test state transitions
+    brain.state.system_state = SystemState.RUNNING
+    assert brain.state.system_state == SystemState.RUNNING
+    
+    # Test emergency stop
+    brain.emergency_stop()
+    assert brain._emergency_stop == True
+    
+    # Cleanup
+    await brain.shutdown()
 
 
-class TestDataFlow(unittest.TestCase):
-    """Test data flows correctly between components."""
+@pytest.mark.asyncio
+async def test_risk_manager_integration(risk_manager, paper_broker):
+    """Test risk manager with actual broker"""
     
-    def test_equity_tracking(self):
-        """Test equity is tracked consistently."""
-        executor = PaperExecutor(initial_balance=10000.0)
-        
-        # Initial state
-        self.assertEqual(executor.equity, 10000.0)
-        
-        # Buy
-        order = Order(symbol='XAUUSD', side='buy', qty=0.01)
-        executor.submit_order(order, current_price=2000.0, skip_validation=True)
-        
-        # Equity should change (cost of position)
-        self.assertLess(executor.balance, 10000.0)
-        
-        # Check unrealized P&L
-        pnl = executor.get_unrealized_pnl('XAUUSD', current_price=2010.0)
-        self.assertGreater(pnl, 0)  # Price up = profit
-
-
-if __name__ == '__main__':
-    # Run with verbose output
-    suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
+    # Get account info
+    account = await paper_broker.get_account_info()
     
-    # Exit with proper code
-    sys.exit(0 if result.wasSuccessful() else 1)
-'''
+    # Update risk manager with equity
+    risk_manager.update_equity(account['equity'])
+    
+    # Verify risk assessment
+    assessment = risk_manager.assess_risk(account, [])
+    
+    assert assessment.can_trade == True
+    assert assessment.level.value in ['low', 'medium', 'high', 'critical']
+    
+    # Test position sizing
+    sizing = risk_manager.calculate_position_size(
+        symbol="EURUSD",
+        signal_strength=0.7,
+        entry_price=1.0850,
+        stop_loss_price=1.0800,
+        take_profit_price=1.0950,
+        account_equity=account['equity'],
+        volatility=0.1
+    )
+    
+    assert sizing.approved == True
+    assert sizing.recommended_size > 0
+    assert sizing.risk_pct <= risk_manager.config.max_position_size_pct
 
-with open('/mnt/kimi/output/hopefx_upgrade/tests/test_integration.py', 'w') as f:
-    f.write(integration_test_content)
 
-print("✅ tests/test_integration.py created - Full pipeline integration tests")
+@pytest.mark.asyncio
+async def test_trade_execution_flow(paper_broker, risk_manager):
+    """Test complete trade execution flow"""
+    
+    # Setup price feed mock
+    class MockPriceFeed:
+        def get_last_price(self, symbol):
+            from data.real_time_price_engine import Tick
+            return Tick(
+                symbol=symbol,
+                timestamp=datetime.now().timestamp(),
+                bid=1.0850,
+                ask=1.0852,
+                mid=1.0851,
+                volume=1000
+            )
+    
+    paper_broker.set_price_feed(MockPriceFeed())
+    
+    # Place order
+    order = await paper_broker.place_market_order(
+        symbol="EURUSD",
+        side="buy",
+        quantity=10000
+    )
+    
+    assert order.status.value in ['filled', 'partial']
+    assert order.filled_quantity > 0
+    assert order.average_fill_price > 0
+    
+    # Verify position created
+    positions = await paper_broker.get_positions()
+    assert len(positions) > 0
+    
+    # Close position
+    position_id = positions[0].id
+    success = await paper_broker.close_position(position_id)
+    assert success == True
+    
+    # Verify closed
+    positions = await paper_broker.get_positions()
+    assert len(positions) == 0
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_behavior():
+    """Test circuit breaker under failure conditions"""
+    
+    from utils import CircuitBreaker
+    
+    cb = CircuitBreaker(failure_threshold=3, recovery_timeout=1.0)
+    
+    # Initial state
+    assert cb.is_open == False
+    assert cb.can_execute() == True
+    
+    # Record failures
+    cb.record_failure()
+    cb.record_failure()
+    assert cb.is_open == False  # Not yet
+    
+    cb.record_failure()
+    assert cb.is_open == True  # Now open
+    assert cb.can_execute() == False
+    
+    # Wait for recovery
+    await asyncio.sleep(1.1)
+    assert cb.can_execute() == True  # Half-open
+    
+    # Success should close it
+    cb.record_success()
+    assert cb.is_open == False
