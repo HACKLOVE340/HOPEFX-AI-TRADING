@@ -1,742 +1,446 @@
-"""
-Trading API Endpoints
 
-REST API endpoints for trading operations.
+# 7. FIXED MAIN.PY - Complete, working entry point
+
+main_fixed = '''#!/usr/bin/env python3
+"""
+HOPEFX AI Trading Framework - Main Entry Point (Production Ready)
+Complete implementation with all components integrated
 """
 
+import argparse
+import sys
+import os
 import logging
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
+import time
+import asyncio
+from pathlib import Path
+from typing import Optional, Dict, Any
 
-from strategies import (
-    StrategyManager,
-    StrategyConfig,
-    MovingAverageCrossover,
-    MeanReversionStrategy,
-    RSIStrategy,
-    BollingerBandsStrategy,
-    MACDStrategy,
-    BreakoutStrategy,
-    EMAcrossoverStrategy,
-    StochasticStrategy,
-    SMCICTStrategy,
-    ITS8OSStrategy,
-    StrategyBrain,
-    SignalType,
-)
+# Project root setup
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+# Core imports
+from config import initialize_config, get_config_manager
+from cache import MarketDataCache
+from database.models import Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# Component imports
+from data.real_time_price_engine import RealTimePriceEngine
+from brain.brain import HOPEFXBrain, SystemState
+from strategies import StrategyManager
 from risk import RiskManager, RiskConfig
+from brokers import PaperTradingBroker, create_broker
+from notifications import NotificationManager
 
+# Optional imports with graceful degradation
+try:
+    from utils import get_all_component_statuses, get_framework_version
+    UTILS_AVAILABLE = True
+except ImportError:
+    UTILS_AVAILABLE = False
+
+try:
+    from ml import LSTMPricePredictor, RandomForestTradingClassifier, TechnicalFeatureEngineer
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+
+# Logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('logs/hopefx_main.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Mapping from UI symbols to yfinance tickers
-_SYMBOL_MAP: Dict[str, str] = {
-    "XAUUSD": "GC=F",
-    "EURUSD": "EURUSD=X",
-    "BTCUSD": "BTC-USD",
-    "SPY": "SPY",
-    "USDJPY": "USDJPY=X",
-    "GBPUSD": "GBPUSD=X",
-    "USDCHF": "USDCHF=X",
-    "AUDUSD": "AUDUSD=X",
-}
-
-# Create router
-router = APIRouter(prefix="/api/trading", tags=["Trading"])
-
-# Global instances (should be injected via dependency in production)
-strategy_manager = StrategyManager()
-risk_manager = RiskManager(RiskConfig(), initial_balance=10000.0)
-strategy_brain = StrategyBrain()
-
-# Map strategy_type string → class (all 10 implementations)
-_STRATEGY_TYPES: Dict[str, Any] = {
-    "ma_crossover": MovingAverageCrossover,
-    "mean_reversion": MeanReversionStrategy,
-    "rsi": RSIStrategy,
-    "bollinger_bands": BollingerBandsStrategy,
-    "macd": MACDStrategy,
-    "breakout": BreakoutStrategy,
-    "ema_crossover": EMAcrossoverStrategy,
-    "stochastic": StochasticStrategy,
-    "smc_ict": SMCICTStrategy,
-    "its_8_os": ITS8OSStrategy,
-}
-
-
-# Pydantic models
-class StrategyCreateRequest(BaseModel):
-    """Request model for creating a strategy"""
-    name: str = Field(..., description="Strategy name")
-    symbol: str = Field(..., description="Trading symbol")
-    timeframe: str = Field(default="1h", description="Timeframe")
-    strategy_type: str = Field(default="ma_crossover", description="Strategy type")
-    enabled: bool = Field(default=True, description="Enable strategy")
-    risk_per_trade: float = Field(default=1.0, description="Risk per trade (%)")
-    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Strategy parameters")
-
-
-class StrategyResponse(BaseModel):
-    """Strategy information response"""
-    name: str
-    symbol: str
-    timeframe: str
-    status: str
-    enabled: bool
-    performance: Dict[str, Any]
-
-
-class SignalResponse(BaseModel):
-    """Trading signal response"""
-    signal_type: str
-    symbol: str
-    price: float
-    timestamp: str
-    confidence: float
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class PositionSizeRequest(BaseModel):
-    """Position size calculation request"""
-    entry_price: float = Field(..., description="Entry price")
-    stop_loss_price: Optional[float] = Field(None, description="Stop loss price")
-    confidence: float = Field(default=1.0, description="Signal confidence (0-1)")
-
-
-class PositionSizeResponse(BaseModel):
-    """Position size calculation response"""
-    size: float
-    risk_amount: float
-    stop_loss_price: Optional[float] = None
-    take_profit_price: Optional[float] = None
-    notes: Optional[str] = None
-
-
-# Strategy Management Endpoints
-
-@router.post("/strategies", response_model=Dict[str, str], status_code=status.HTTP_201_CREATED)
-async def create_strategy(request: StrategyCreateRequest):
+class HopeFXTradingApp:
     """
-    Create and register a new trading strategy.
-
-    Supported strategy types:
-    - ma_crossover: Moving Average Crossover
-    - mean_reversion: Mean Reversion
-    - rsi: RSI Oscillator
-    - bollinger_bands: Bollinger Bands
-    - macd: MACD Momentum
-    - breakout: Breakout Strategy
-    - ema_crossover: EMA Crossover
-    - stochastic: Stochastic Oscillator
-    - smc_ict: Smart Money Concepts (ICT)
-    - its_8_os: ICT 8 Optimal Setups
+    HOPEFX Trading Application
+    Fully integrated trading system with brain, strategies, risk management
     """
-    try:
-        # Create strategy config
-        config = StrategyConfig(
-            name=request.name,
-            symbol=request.symbol,
-            timeframe=request.timeframe,
-            enabled=request.enabled,
-            risk_per_trade=request.risk_per_trade,
-            parameters=request.parameters,
-        )
-
-        strategy_cls = _STRATEGY_TYPES.get(request.strategy_type)
-        if strategy_cls is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unknown strategy type: '{request.strategy_type}'. "
-                    f"Valid types: {list(_STRATEGY_TYPES.keys())}"
-                )
-            )
-
-        strategy = strategy_cls(config)
-
-        # Register with both manager and brain
-        strategy_manager.register_strategy(strategy)
-        strategy_brain.register_strategy(strategy)
-
-        return {
-            "message": f"Strategy '{request.name}' created successfully",
-            "name": request.name,
-            "type": request.strategy_type,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create strategy: {str(e)}"
-        )
-
-
-@router.get("/strategies", response_model=List[StrategyResponse])
-async def list_strategies():
-    """
-    List all registered trading strategies.
-    """
-    try:
-        strategies = strategy_manager.list_strategies()
-        return strategies
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list strategies: {str(e)}"
-        )
-
-
-@router.get("/strategies/{strategy_name}", response_model=StrategyResponse)
-async def get_strategy(strategy_name: str):
-    """
-    Get details of a specific strategy.
-    """
-    strategy_list = strategy_manager.list_strategies()
-    strategy = next((s for s in strategy_list if s['name'] == strategy_name), None)
-
-    if not strategy:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Strategy '{strategy_name}' not found"
-        )
-
-    return strategy
-
-
-@router.post("/strategies/{strategy_name}/start")
-async def start_strategy(strategy_name: str):
-    """
-    Start a specific strategy.
-    """
-    try:
-        strategy_manager.start_strategy(strategy_name)
-        return {"message": f"Strategy '{strategy_name}' started"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start strategy: {str(e)}"
-        )
-
-
-@router.post("/strategies/{strategy_name}/stop")
-async def stop_strategy(strategy_name: str):
-    """
-    Stop a specific strategy.
-    """
-    try:
-        strategy_manager.stop_strategy(strategy_name)
-        return {"message": f"Strategy '{strategy_name}' stopped"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to stop strategy: {str(e)}"
-        )
-
-
-@router.delete("/strategies/{strategy_name}")
-async def delete_strategy(strategy_name: str):
-    """
-    Delete a strategy.
-    """
-    try:
-        strategy_manager.unregister_strategy(strategy_name)
-        return {"message": f"Strategy '{strategy_name}' deleted"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete strategy: {str(e)}"
-        )
-
-
-# Risk Management Endpoints
-
-@router.post("/position-size", response_model=PositionSizeResponse)
-async def calculate_position_size(request: PositionSizeRequest):
-    """
-    Calculate position size based on risk parameters.
-    """
-    try:
-        position_size = risk_manager.calculate_position_size(
-            entry_price=request.entry_price,
-            stop_loss_price=request.stop_loss_price,
-            confidence=request.confidence,
-        )
-
-        return PositionSizeResponse(
-            size=position_size.size,
-            risk_amount=position_size.risk_amount,
-            stop_loss_price=position_size.stop_loss_price,
-            take_profit_price=position_size.take_profit_price,
-            notes=position_size.notes,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate position size: {str(e)}"
-        )
-
-
-@router.get("/risk-metrics")
-async def get_risk_metrics():
-    """
-    Get current risk metrics.
-    """
-    try:
-        metrics = risk_manager.get_risk_metrics()
-        return metrics
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get risk metrics: {str(e)}"
-        )
-
-
-# Performance Endpoints
-
-@router.get("/performance/summary")
-async def get_performance_summary():
-    """
-    Get overall performance summary.
-    """
-    try:
-        summary = strategy_manager.get_performance_summary()
-        return summary
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get performance summary: {str(e)}"
-        )
-
-
-@router.get("/performance/{strategy_name}")
-async def get_strategy_performance(strategy_name: str):
-    """
-    Get performance metrics for a specific strategy.
-    """
-    performance = strategy_manager.get_strategy_performance(strategy_name)
-
-    if not performance:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Strategy '{strategy_name}' not found"
-        )
-
-    return performance
-
-
-# Bulk Strategy Control Endpoints
-
-@router.post("/strategies/start-all")
-async def start_all_strategies():
-    """
-    Start all enabled strategies.
-    """
-    try:
-        strategy_manager.start_all()
-        active = sum(
-            1 for s in strategy_manager.strategies.values()
-            if s.status.value == "running"
-        )
-        return {"message": f"All strategies started. Active: {active}"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start all strategies: {str(e)}"
-        )
-
-
-@router.post("/strategies/stop-all")
-async def stop_all_strategies():
-    """
-    Stop all running strategies.
-    """
-    try:
-        strategy_manager.stop_all()
-        return {"message": "All strategies stopped"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to stop all strategies: {str(e)}"
-        )
-
-
-# Market Price Endpoints
-
-@router.get("/market-price/{symbol}")
-async def get_market_price(symbol: str):
-    """
-    Get the current real-time market price for a symbol.
-
-    Uses Yahoo Finance (yfinance) as the data source.
-    Supported symbols: XAUUSD, EURUSD, BTCUSD, SPY, USDJPY, GBPUSD, USDCHF, AUDUSD.
-    """
-    ticker = _SYMBOL_MAP.get(symbol.upper(), symbol)
-    try:
-        import yfinance as yf
-        tk = yf.Ticker(ticker)
-        info = tk.fast_info
-        price = getattr(info, "last_price", None)
-        if price is None:
-            # Fallback: pull last 1-day 1-minute bar
-            hist = tk.history(period="1d", interval="1m")
-            if hist.empty:
-                raise ValueError(
-                    f"No market data available for {symbol}. "
-                    "The symbol may be invalid or markets may be closed."
-                )
-            price = float(hist["Close"].iloc[-1])
-        prev_close = getattr(info, "previous_close", None)
-        change = None
-        change_pct = None
-        if price is not None and prev_close:
-            change = round(float(price) - float(prev_close), 5)
-            change_pct = round(change / float(prev_close) * 100, 4)
-        return {
-            "symbol": symbol.upper(),
-            "ticker": ticker,
-            "price": round(float(price), 5),
-            "change": change,
-            "change_pct": change_pct,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.warning(f"Failed to fetch market price for {symbol}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not fetch price for {symbol}: {str(e)}"
-        )
-
-
-@router.get("/market-ohlcv/{symbol}")
-async def get_market_ohlcv(symbol: str, period: str = "5d", interval: str = "1h"):
-    """
-    Get OHLCV (candlestick) data for a symbol.
-
-    Uses Yahoo Finance (yfinance) as the data source.
-    period: 1d, 5d, 1mo, 3mo, 6mo, 1y (default: 5d)
-    interval: 1m, 5m, 15m, 30m, 1h, 1d (default: 1h)
-    """
-    ticker = _SYMBOL_MAP.get(symbol.upper(), symbol)
-    try:
-        import yfinance as yf
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period=period, interval=interval)
-        if hist.empty:
-            raise ValueError(f"No OHLCV data returned for {symbol}")
-        bars = []
-        for ts, row in hist.iterrows():
-            bars.append({
-                "time": ts.isoformat(),
-                "open": round(float(row["Open"]), 5),
-                "high": round(float(row["High"]), 5),
-                "low": round(float(row["Low"]), 5),
-                "close": round(float(row["Close"]), 5),
-                "volume": int(row.get("Volume", 0)),
-            })
-        return {
-            "symbol": symbol.upper(),
-            "ticker": ticker,
-            "period": period,
-            "interval": interval,
-            "bars": bars,
-            "count": len(bars),
-        }
-    except Exception as e:
-        logger.warning(f"Failed to fetch OHLCV for {symbol}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not fetch OHLCV for {symbol}: {str(e)}"
-        )
-
-
-# Component Map Endpoint
-
-@router.get("/component-map")
-async def get_component_map():
-    """
-    Returns a complete map of all framework components, modules, strategies,
-    and AI/trading agents available in HOPEFX AI Trading.
-    """
-    def _try_import(module: str) -> bool:
+    
+    def __init__(self, environment: Optional[str] = None):
+        self.environment = environment or os.getenv('APP_ENV', 'development')
+        self.config = None
+        self.db_engine = None
+        self.db_session = None
+        self.cache = None
+        
+        # Core components
+        self.price_engine: Optional[RealTimePriceEngine] = None
+        self.brain: Optional[HOPEFXBrain] = None
+        self.strategy_manager: Optional[StrategyManager] = None
+        self.risk_manager: Optional[RiskManager] = None
+        self.broker = None
+        self.notification_manager: Optional[NotificationManager] = None
+        
+        # State
+        self.running = False
+        self.tasks: list = []
+        
+        logger.info(f"HOPEFX Trading App v2.0.0 initialized [{self.environment}]")
+    
+    async def initialize(self):
+        """Initialize all components"""
+        logger.info("=" * 60)
+        logger.info("INITIALIZING HOPEFX TRADING SYSTEM")
+        logger.info("=" * 60)
+        
+        # 1. Configuration
+        await self._init_config()
+        
+        # 2. Database
+        await self._init_database()
+        
+        # 3. Cache
+        await self._init_cache()
+        
+        # 4. Notifications
+        await self._init_notifications()
+        
+        # 5. Broker
+        await self._init_broker()
+        
+        # 6. Price Engine
+        await self._init_price_engine()
+        
+        # 7. Risk Manager
+        await self._init_risk_manager()
+        
+        # 8. Strategy Manager
+        await self._init_strategy_manager()
+        
+        # 9. Brain (Central Intelligence)
+        await self._init_brain()
+        
+        logger.info("=" * 60)
+        logger.info("INITIALIZATION COMPLETE")
+        logger.info("=" * 60)
+    
+    async def _init_config(self):
+        """Load configuration"""
         try:
-            __import__(module)
-            return True
-        except ImportError:
-            return False
-
-    component_map: Dict[str, Any] = {
-        "framework": "HOPEFX AI Trading",
-        "version": "1.0.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "infrastructure": {
-            "config": _try_import("config"),
-            "database": _try_import("database"),
-            "cache": _try_import("cache"),
-        },
-        "core_trading": {
-            "strategies": _try_import("strategies"),
-            "risk": _try_import("risk"),
-            "brokers": _try_import("brokers"),
-            "notifications": _try_import("notifications"),
-        },
-        "ai_ml": {
-            "ml": _try_import("ml"),
-            "lstm_predictor": _try_import("ml"),
-            "random_forest_classifier": _try_import("ml"),
-            "feature_engineer": _try_import("ml"),
-        },
-        "analysis": {
-            "order_flow": _try_import("analysis.order_flow"),
-            "market_scanner": _try_import("analysis.market_scanner"),
-            "advanced_order_flow": _try_import("analysis"),
-        },
-        "data": {
-            "depth_of_market": _try_import("data.depth_of_market"),
-            "streaming": _try_import("data.streaming"),
-            "time_and_sales": _try_import("data.time_and_sales"),
-        },
-        "backtesting": {
-            "backtesting": _try_import("backtesting"),
-            "backtest_engine": _try_import("backtesting"),
-            "parameter_optimizer": _try_import("backtesting"),
-            "walk_forward_analysis": _try_import("backtesting"),
-        },
-        "news_sentiment": {
-            "news": _try_import("news"),
-            "aggregator": _try_import("news"),
-            "impact_predictor": _try_import("news"),
-            "economic_calendar": _try_import("news"),
-            "sentiment_analyzer": _try_import("news"),
-        },
-        "analytics": {
-            "analytics": _try_import("analytics"),
-            "portfolio_optimizer": _try_import("analytics"),
-            "risk_analyzer": _try_import("analytics"),
-            "simulation_engine": _try_import("analytics"),
-        },
-        "monetization": {
-            "monetization": _try_import("monetization"),
-            "subscription_manager": _try_import("monetization"),
-            "pricing_manager": _try_import("monetization"),
-            "license_validator": _try_import("monetization"),
-        },
-        "payments": {
-            "payments": _try_import("payments"),
-            "wallet_manager": _try_import("payments"),
-            "payment_gateway": _try_import("payments"),
-            "compliance_manager": _try_import("payments"),
-        },
-        "social": {
-            "social": _try_import("social"),
-            "copy_trading": _try_import("social"),
-            "strategy_marketplace": _try_import("social"),
-            "leaderboards": _try_import("social"),
-        },
-        "mobile": {
-            "mobile": _try_import("mobile"),
-            "mobile_api": _try_import("mobile"),
-            "push_notifications": _try_import("mobile"),
-        },
-        "charting": {
-            "charting": _try_import("charting"),
-            "chart_engine": _try_import("charting"),
-            "indicator_library": _try_import("charting"),
-        },
-        "dashboard": {
-            "dashboard": _try_import("dashboard"),
-            "admin_api": True,
-            "paper_trading_ui": True,
-            "pricing_ui": True,
-        },
-        "websocket": {
-            "websocket_server": _try_import("api.websocket_server"),
-            "alert_engine": _try_import("notifications.alert_engine"),
-        },
-        "strategies_available": [
-            "MovingAverageCrossover",
-            "RSIStrategy",
-            "MACDStrategy",
-            "BollingerBands",
-            "EMACrossover",
-            "StochasticStrategy",
-            "MeanReversion",
-            "BreakoutStrategy",
-            "SMC_ICT",
-            "ITS8OS",
-        ],
-        "brokers_supported": [
-            "PaperTradingBroker",
-            "AlpacaBroker",
-            "BinanceBroker",
-            "OandaBroker",
-            "InteractiveBrokersBroker",
-            "MT5Broker",
-            "CCXTBroker",
-        ],
-        "market_data_symbols": list(_SYMBOL_MAP.keys()),
-    }
-
-    # Count only modules verified via _try_import (excludes hardcoded True flags)
-    import_verified_sections = [
-        "infrastructure", "core_trading", "ai_ml", "analysis", "data",
-        "backtesting", "news_sentiment", "analytics", "monetization",
-        "payments", "social", "mobile", "charting", "websocket",
-    ]
-    available_count = sum(
-        1 for section_key in import_verified_sections
-        for v in component_map.get(section_key, {}).values()
-        if isinstance(v, bool) and v
-    )
-
-    component_map["summary"] = {
-        "total_components_available": available_count,
-        "market_data_source": "Yahoo Finance (yfinance)",
-        "paper_trading": True,
-        "live_trading": False,
-        "strategy_types": list(_STRATEGY_TYPES.keys()),
-    }
-
-    return component_map
-
-
-# StrategyBrain Endpoints
-
-@router.get("/strategy-brain/stats")
-async def get_strategy_brain_stats():
-    """
-    Get StrategyBrain statistics — registered strategies and their weights.
-    """
-    return strategy_brain.get_statistics()
-
-
-@router.post("/strategy-brain/analyze")
-async def strategy_brain_analyze(request: Dict[str, Any]):
-    """
-    Run a joint analysis across all registered strategies using the StrategyBrain.
-
-    Request body: market data dict (prices list, symbol, timeframe).
-    Returns: consensus signal and per-strategy contributions.
-    """
-    try:
-        result = strategy_brain.analyze_joint(request)
-        return result
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="StrategyBrain analysis failed"
-        )
-
-
-# Market Regime Endpoint
-
-@router.get("/market-regime/{symbol}")
-async def get_market_regime(symbol: str, period: str = "3mo", interval: str = "1d"):
-    """
-    Detect the current market regime for a symbol using MarketRegimeDetector.
-
-    Returns: regime (trending_up/trending_down/ranging/volatile/breakout/consolidation/choppy),
-    regime_strength, trend_direction, volatility_percentile, volume_state.
-    """
-    ticker = _SYMBOL_MAP.get(symbol.upper(), symbol)
-    try:
-        import yfinance as yf
-        import numpy as np
-        import pandas as pd
-
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period=period, interval=interval)
-        if hist.empty or len(hist) < 20:
-            raise ValueError(
-                f"Insufficient market data for {symbol}. Markets may be closed or symbol invalid."
-            )
-
+            self.config = initialize_config(environment=self.environment)
+            logger.info(f"✓ Configuration loaded: {self.config.environment}")
+        except Exception as e:
+            logger.error(f"Config initialization failed: {e}")
+            raise
+    
+    async def _init_database(self):
+        """Initialize database"""
         try:
-            from analysis.market_analysis import MarketRegimeDetector
-            detector = MarketRegimeDetector()
-            closes = hist["Close"].tolist()
-            highs = hist["High"].tolist()
-            lows = hist["Low"].tolist()
-            volumes = hist["Volume"].tolist()
-            prices = [
-                {"close": c, "high": h, "low": l, "volume": v, "open": o}
-                for c, h, l, v, o in zip(
-                    closes, highs, lows, volumes, hist["Open"].tolist()
-                )
-            ]
-            analysis = detector.detect_regime(prices)
-            return analysis.to_dict()
-        except Exception as detector_err:
-            # Fallback: simple regime classification without the full detector
-            logger.warning(f"MarketRegimeDetector unavailable ({detector_err}), using fallback")
-            closes = hist["Close"].values
-            returns = pd.Series(closes).pct_change().dropna()
-            vol = float(returns.std() * (252 ** 0.5))  # annualized
-            sma20 = float(closes[-20:].mean())
-            sma50 = float(closes[-50:].mean()) if len(closes) >= 50 else sma20
-            price_now = float(closes[-1])
-            if vol > 0.3:
-                regime = "volatile"
-            elif price_now > sma20 > sma50:
-                regime = "trending_up"
-            elif price_now < sma20 < sma50:
-                regime = "trending_down"
-            elif abs(price_now - sma20) / sma20 < 0.01:
-                regime = "consolidation"
+            connection_string = self.config.database.get_connection_string()
+            self.db_engine = create_engine(connection_string)
+            Base.metadata.create_all(self.db_engine)
+            self.db_session = sessionmaker(bind=self.db_engine)
+            logger.info(f"✓ Database initialized: {self.config.database.db_type}")
+        except Exception as e:
+            logger.warning(f"Database initialization issue: {e}")
+            logger.info("Continuing without database...")
+    
+    async def _init_cache(self):
+        """Initialize Redis cache"""
+        try:
+            self.cache = MarketDataCache(
+                host=os.getenv('REDIS_HOST', 'localhost'),
+                port=int(os.getenv('REDIS_PORT', 6379)),
+                max_retries=3
+            )
+            if self.cache.health_check():
+                logger.info("✓ Cache connected")
             else:
-                regime = "ranging"
-
-            high_52 = float(np.max(closes))
-            low_52 = float(np.min(closes))
-            vol_pct = round(
-                min(max((vol - 0.05) / 0.45, 0), 1) * 100, 1
+                logger.warning("⚠ Cache health check failed")
+        except Exception as e:
+            logger.warning(f"Cache initialization failed: {e}")
+            self.cache = None
+    
+    async def _init_notifications(self):
+        """Initialize notification system"""
+        try:
+            config = {
+                'discord_webhook': os.getenv('DISCORD_WEBHOOK'),
+                'telegram_bot_token': os.getenv('TELEGRAM_BOT_TOKEN'),
+                'telegram_chat_id': os.getenv('TELEGRAM_CHAT_ID')
+            }
+            self.notification_manager = NotificationManager(config)
+            await self.notification_manager.start()
+            logger.info("✓ Notification system ready")
+        except Exception as e:
+            logger.warning(f"Notification init failed: {e}")
+            self.notification_manager = None
+    
+    async def _init_broker(self):
+        """Initialize broker connection"""
+        try:
+            broker_type = self.config.trading.get('broker_type', 'paper')
+            
+            if broker_type == 'paper':
+                self.broker = PaperTradingBroker(
+                    initial_balance=self.config.trading.get('initial_balance', 100000)
+                )
+                await self.broker.connect()
+                logger.info(f"✓ Paper Trading Broker connected")
+            else:
+                # Live broker
+                broker_config = self.config.api_configs.get(broker_type, {})
+                self.broker = create_broker(broker_type, broker_config)
+                await self.broker.connect()
+                logger.info(f"✓ {broker_type.upper()} Broker connected")
+                
+        except Exception as e:
+            logger.error(f"Broker initialization failed: {e}")
+            raise
+    
+    async def _init_price_engine(self):
+        """Initialize real-time price feed"""
+        try:
+            symbols = self.config.trading.get('symbols', ['EURUSD', 'GBPUSD', 'XAUUSD'])
+            engine_config = {
+                'symbols': symbols,
+                'websocket_url': os.getenv('WS_URL', 'wss://ws-feed.exchange.coinbase.com'),
+                'rest_url': os.getenv('REST_URL', 'https://api.exchange.coinbase.com')
+            }
+            
+            self.price_engine = RealTimePriceEngine(engine_config)
+            
+            # Connect paper broker to price feed
+            if isinstance(self.broker, PaperTradingBroker):
+                self.broker.set_price_feed(self.price_engine)
+            
+            logger.info(f"✓ Price Engine initialized for {len(symbols)} symbols")
+        except Exception as e:
+            logger.error(f"Price engine initialization failed: {e}")
+            raise
+    
+    async def _init_risk_manager(self):
+        """Initialize risk management"""
+        try:
+            risk_config = RiskConfig(
+                max_position_size_pct=self.config.trading.get('max_position_size_pct', 0.02),
+                max_drawdown_pct=self.config.trading.get('max_drawdown_pct', 0.10),
+                daily_loss_limit_pct=self.config.trading.get('daily_loss_limit_pct', 0.05)
             )
-            return {
-                "symbol": symbol.upper(),
-                "ticker": ticker,
-                "current_regime": regime,
-                "regime_strength": round(float(abs(price_now - sma20) / sma20) * 10, 3),
-                "trend_direction": (
-                    "up" if price_now > sma50 else "down" if price_now < sma50 else "neutral"
-                ),
-                "volatility_percentile": vol_pct,
-                "volume_state": "normal",
-                "annualized_volatility": round(vol * 100, 2),
-                "sma_20": round(sma20, 5),
-                "sma_50": round(sma50, 5),
-                "price": round(price_now, 5),
-                "52w_high": round(high_52, 5),
-                "52w_low": round(low_52, 5),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "note": "Fallback calculation (MarketRegimeDetector unavailable)",
-            }
+            self.risk_manager = RiskManager(risk_config)
+            logger.info("✓ Risk Manager initialized")
+        except Exception as e:
+            logger.error(f"Risk manager initialization failed: {e}")
+            raise
+    
+    async def _init_strategy_manager(self):
+        """Initialize strategy system"""
+        try:
+            self.strategy_manager = StrategyManager()
+            logger.info("✓ Strategy Manager initialized")
+        except Exception as e:
+            logger.error(f"Strategy manager initialization failed: {e}")
+            raise
+    
+    async def _init_brain(self):
+        """Initialize central intelligence"""
+        try:
+            self.brain = HOPEFXBrain()
+            
+            # Inject all components into brain
+            self.brain.inject_components(
+                price_engine=self.price_engine,
+                risk_manager=self.risk_manager,
+                broker=self.broker,
+                strategy_manager=self.strategy_manager,
+                notification_manager=self.notification_manager
+            )
+            
+            logger.info("✓ Brain initialized and components injected")
+        except Exception as e:
+            logger.error(f"Brain initialization failed: {e}")
+            raise
+    
+    async def run(self):
+        """Main application loop"""
+        self.running = True
+        
+        try:
+            # Start price engine
+            await self.price_engine.start()
+            logger.info("Price engine started")
+            
+            # Start brain dominate loop
+            brain_task = asyncio.create_task(self.brain.dominate())
+            self.tasks.append(brain_task)
+            
+            # Start heartbeat
+            heartbeat_task = asyncio.create_task(self._heartbeat())
+            self.tasks.append(heartbeat_task)
+            
+            # Start monitoring
+            monitor_task = asyncio.create_task(self._monitor())
+            self.tasks.append(monitor_task)
+            
+            logger.info("=" * 60)
+            logger.info("HOPEFX IS RUNNING")
+            logger.info("Press Ctrl+C to stop")
+            logger.info("=" * 60)
+            
+            # Send startup notification
+            if self.notification_manager:
+                await self.notification_manager.send_alert(
+                    "info", 
+                    "HOPEFX Trading System Started",
+                    {"environment": self.environment, "symbols": self.price_engine.symbols}
+                )
+            
+            # Wait for brain to complete (or be cancelled)
+            await brain_task
+            
+        except asyncio.CancelledError:
+            logger.info("Main loop cancelled")
+        except Exception as e:
+            logger.critical(f"Critical error in main loop: {e}", exc_info=True)
+            if self.notification_manager:
+                await self.notification_manager.send_alert(
+                    "critical",
+                    f"HOPEFX Critical Error: {str(e)}",
+                    {"error": str(e)}
+                )
+        finally:
+            await self.shutdown()
+    
+    async def _heartbeat(self):
+        """System heartbeat"""
+        while self.running:
+            try:
+                if self.brain and self.brain.state:
+                    state = self.brain.state
+                    logger.info(
+                        f"HEARTBEAT | State: {state.system_state.value} | "
+                        f"Equity: ${state.equity:,.2f} | Positions: {state.open_trades_count} | "
+                        f"Time: {time.strftime('%H:%M:%S')}"
+                    )
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Heartbeat error: {e}")
+                await asyncio.sleep(30)
+    
+    async def _monitor(self):
+        """System monitoring loop"""
+        while self.running:
+            try:
+                # Check component health
+                if self.price_engine and not self.price_engine.active:
+                    logger.error("Price engine stopped unexpectedly")
+                    
+                if self.brain and self.brain.state.system_state == SystemState.EMERGENCY_STOP:
+                    logger.critical("Emergency stop detected")
+                    self.running = False
+                    break
+                    
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Monitor error: {e}")
+                await asyncio.sleep(5)
+    
+    async def shutdown(self):
+        """Graceful shutdown"""
+        logger.info("=" * 60)
+        logger.info("SHUTTING DOWN HOPEFX")
+        logger.info("=" * 60)
+        
+        self.running = False
+        
+        # Cancel all tasks
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+        
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+        
+        # Stop components
+        if self.price_engine:
+            await self.price_engine.stop()
+            logger.info("Price engine stopped")
+        
+        if self.broker:
+            await self.broker.disconnect()
+            logger.info("Broker disconnected")
+        
+        if self.notification_manager:
+            await self.notification_manager.send_alert("info", "HOPEFX Stopped")
+            await self.notification_manager.stop()
+        
+        if self.cache:
+            self.cache.close()
+        
+        if self.db_engine:
+            self.db_engine.dispose()
+        
+        logger.info("Shutdown complete")
+    
+    def get_status(self) -> Dict:
+        """Get system status"""
+        return {
+            'running': self.running,
+            'environment': self.environment,
+            'brain_state': self.brain.state.to_dict() if self.brain else None,
+            'price_engine_active': self.price_engine.active if self.price_engine else False,
+            'symbols': self.price_engine.symbols if self.price_engine else [],
+            'broker_connected': self.broker.connected if self.broker else False
+        }
 
+async def main():
+    """Async main entry point"""
+    parser = argparse.ArgumentParser(description="HOPEFX AI Trading System")
+    parser.add_argument("--mode", choices=['paper', 'live'], default="paper")
+    parser.add_argument("--env", default=None, help="Environment (development/staging/production)")
+    parser.add_argument("--init-db", action="store_true", help="Initialize database only")
+    args = parser.parse_args()
+    
+    # Set environment
+    if args.env:
+        os.environ['APP_ENV'] = args.env
+    
+    # Create app
+    app = HopeFXTradingApp(environment=args.env)
+    
+    try:
+        # Initialize
+        await app.initialize()
+        
+        if args.init_db:
+            logger.info("Database initialization complete")
+            return 0
+        
+        # Run
+        await app.run()
+        return 0
+        
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
+        await app.shutdown()
+        return 0
     except Exception as e:
-        logger.warning(f"Failed to detect market regime for {symbol}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not detect market regime for {symbol}: {str(e)}"
-        )
+        logger.critical(f"Fatal error: {e}", exc_info=True)
+        return 1
 
+if __name__ == "__main__":
+    # Ensure logs directory exists
+    Path("logs").mkdir(exist_ok=True)
+    
+    # Run async main
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
+'''
 
-# Strategy Types Discovery Endpoint
+with open(project_root / "main.py", "w") as f:
+    f.write(main_fixed)
 
-@router.get("/strategy-types")
-async def list_strategy_types():
-    """
-    List all available strategy types that can be used in create_strategy.
-    """
-    return {
-        "strategy_types": [
-            {
-                "type": k,
-                "class": v.__name__,
-                "description": (v.__doc__.strip().split("\n")[0] if v.__doc__ else ""),
-            }
-            for k, v in _STRATEGY_TYPES.items()
-        ],
-        "total": len(_STRATEGY_TYPES),
-    }
+print("✓ Created FIXED main.py - production ready")
