@@ -62,7 +62,7 @@ __all__ = [
     'TopstepTraderConnector',
     'The5ersConnector',
     'MyForexFundsConnector',
-    PropFirmTier',
+    'PropFirmTier',
     'FirmStatus',
     'PropFirmConfig',
 ]
