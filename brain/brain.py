@@ -5,7 +5,7 @@ brain_code = '''"""
 HOPEFX Brain - Central Intelligence System
 Coordinates all components, makes trading decisions, manages state
 """
-
+ 
 import asyncio
 import logging
 import time
