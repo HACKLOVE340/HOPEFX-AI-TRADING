@@ -1,67 +1,75 @@
 """
-Leaderboard System
-
-Ranks users based on performance metrics.
+Performance Leaderboard System
+- Rank traders by performance
+- Calculate rankings with filters
+- Historical leaderboard snapshots
 """
 
-from typing import List, Dict
-from decimal import Decimal
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import List, Dict, Optional
+import logging
 
+logger = logging.getLogger(__name__)
 
+@dataclass
 class LeaderboardEntry:
-    """Entry in a leaderboard"""
-    def __init__(self, user_id: str, score: Decimal, rank: int = 0):
-        self.user_id = user_id
-        self.score = score
-        self.rank = rank
+    """Single leaderboard entry"""
+    rank: int
+    trader_id: str
+    username: str
+    win_rate: float
+    total_pnl: float
+    sharpe_ratio: float
+    followers: int
+    trust_score: float
+    verified: bool
 
-
-class LeaderboardManager:
-    """Manages performance leaderboards"""
-
+class PerformanceLeaderboard:
+    """Leaderboard rankings"""
+    
     def __init__(self):
-        self.leaderboards: Dict[str, List[LeaderboardEntry]] = {}
-
-    def update_leaderboard(
-        self,
-        category: str,
-        user_id: str,
-        score: Decimal
-    ) -> None:
-        """Update leaderboard for a category"""
-        if category not in self.leaderboards:
-            self.leaderboards[category] = []
-
-        # Find or create entry
-        entry = None
-        for e in self.leaderboards[category]:
-            if e.user_id == user_id:
-                entry = e
-                break
-
-        if entry is None:
-            entry = LeaderboardEntry(user_id, score)
-            self.leaderboards[category].append(entry)
-        else:
-            entry.score = score
-
-        # Sort and update ranks
-        self.leaderboards[category].sort(key=lambda x: x.score, reverse=True)
-        for rank, e in enumerate(self.leaderboards[category], start=1):
-            e.rank = rank
-
-    def get_leaderboard(
-        self,
-        category: str,
-        limit: int = 50
-    ) -> List[LeaderboardEntry]:
-        """Get top entries from a leaderboard"""
-        return self.leaderboards.get(category, [])[:limit]
-
-    def get_user_rank(self, category: str, user_id: str) -> int:
-        """Get user's rank in a category"""
-        leaderboard = self.leaderboards.get(category, [])
-        for entry in leaderboard:
-            if entry.user_id == user_id:
-                return entry.rank
-        return 0
+        self.leaderboard: List[LeaderboardEntry] = []
+        self.historical_snapshots: Dict[datetime, List[LeaderboardEntry]] = {}
+    
+    def update_leaderboard(self, traders_data: List[Dict]) -> List[LeaderboardEntry]:
+        """Update leaderboard with current trader data"""
+        entries = []
+        
+        for idx, trader in enumerate(sorted(traders_data, 
+                                           key=lambda x: x.get('win_rate', 0) * x.get('total_pnl', 0),
+                                           reverse=True), 1):
+            entry = LeaderboardEntry(
+                rank=idx,
+                trader_id=trader['trader_id'],
+                username=trader['username'],
+                win_rate=trader.get('win_rate', 0),
+                total_pnl=trader.get('total_pnl', 0),
+                sharpe_ratio=trader.get('sharpe_ratio', 0),
+                followers=trader.get('followers', 0),
+                trust_score=trader.get('trust_score', 0),
+                verified=trader.get('verified', False)
+            )
+            entries.append(entry)
+        
+        self.leaderboard = entries
+        logger.info(f"Leaderboard updated with {len(entries)} traders")
+        return entries
+    
+    def get_top_traders(self, limit: int = 10) -> List[LeaderboardEntry]:
+        """Get top N traders"""
+        return self.leaderboard[:limit]
+    
+    def get_trader_rank(self, trader_id: str) -> Optional[LeaderboardEntry]:
+        """Get single trader's rank"""
+        for entry in self.leaderboard:
+            if entry.trader_id == trader_id:
+                return entry
+        return None
+    
+    def snapshot_leaderboard(self) -> datetime:
+        """Save leaderboard snapshot"""
+        timestamp = datetime.now()
+        self.historical_snapshots[timestamp] = list(self.leaderboard)
+        logger.info(f"Leaderboard snapshot saved at {timestamp}")
+        return timestamp
