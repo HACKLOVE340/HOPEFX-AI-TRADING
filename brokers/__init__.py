@@ -1,23 +1,33 @@
-
-# 3. BROKER MODULE - Paper trading and live broker support
-
-broker_code = '''"""
-HOPEFX Broker Module
-Unified interface for paper trading and live broker integration
-Supports: Paper trading (simulation), OANDA, Interactive Brokers
+"""
+HOPEFX Broker Module - PRODUCTION VERSION
+Fixed: Thread safety, proper position tracking, realistic simulation, timeouts
 """
 
 import asyncio
 import logging
 import time
+import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 import random
-import aiohttp
+
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+    logging.warning("aiohttp not available, OANDA broker disabled")
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
 
 class OrderType(Enum):
     MARKET = "market"
@@ -25,9 +35,11 @@ class OrderType(Enum):
     STOP = "stop"
     STOP_LIMIT = "stop_limit"
 
+
 class OrderSide(Enum):
     BUY = "buy"
     SELL = "sell"
+
 
 class OrderStatus(Enum):
     PENDING = "pending"
@@ -35,6 +47,8 @@ class OrderStatus(Enum):
     PARTIAL = "partial"
     CANCELLED = "cancelled"
     REJECTED = "rejected"
+    ERROR = "error"
+
 
 @dataclass
 class Order:
@@ -50,7 +64,35 @@ class Order:
     average_fill_price: float = 0.0
     created_at: float = field(default_factory=time.time)
     filled_at: Optional[float] = None
+    rejected_reason: Optional[str] = None
+    commission: float = 0.0
+    slippage: float = 0.0
     
+    @property
+    def remaining_quantity(self) -> float:
+        return self.quantity - self.filled_quantity
+    
+    @property
+    def is_complete(self) -> bool:
+        return self.status in (OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED)
+    
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'side': self.side.value,
+            'type': self.type.value,
+            'quantity': self.quantity,
+            'price': self.price,
+            'status': self.status.value,
+            'filled_quantity': self.filled_quantity,
+            'average_fill_price': self.average_fill_price,
+            'commission': self.commission,
+            'slippage': self.slippage,
+            'created_at': self.created_at
+        }
+
+
 @dataclass
 class Position:
     id: str
@@ -59,9 +101,13 @@ class Position:
     quantity: float
     entry_price: float
     current_price: float
-    unrealized_pnl: float
+    unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
     opened_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    total_commission: float = 0.0
     
     @property
     def market_value(self) -> float:
@@ -70,9 +116,41 @@ class Position:
     @property
     def total_pnl(self) -> float:
         return self.unrealized_pnl + self.realized_pnl
+    
+    def update_price(self, new_price: float):
+        """Update position with new price"""
+        self.current_price = new_price
+        self.updated_at = time.time()
+        
+        if self.side == OrderSide.BUY:
+            self.unrealized_pnl = (new_price - self.entry_price) * self.quantity
+        else:
+            self.unrealized_pnl = (self.entry_price - new_price) * self.quantity
+    
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'symbol': self.symbol,
+            'side': self.side.value,
+            'quantity': self.quantity,
+            'entry_price': self.entry_price,
+            'current_price': self.current_price,
+            'unrealized_pnl': self.unrealized_pnl,
+            'realized_pnl': self.realized_pnl,
+            'total_pnl': self.total_pnl,
+            'market_value': self.market_value,
+            'opened_at': self.opened_at
+        }
+
 
 class BaseBroker:
-    """Abstract base class for all brokers"""
+    """Abstract base class with proper interface and connection management"""
+    
+    def __init__(self):
+        self.connected = False
+        self._lock = asyncio.Lock()
+        self._session = None
+        self._connection_lock = asyncio.Lock()
     
     async def connect(self):
         raise NotImplementedError
@@ -83,7 +161,7 @@ class BaseBroker:
     async def get_account_info(self) -> Dict:
         raise NotImplementedError
     
-    async def place_order(self, order: Order) -> Order:
+    async def place_market_order(self, symbol: str, side: str, quantity: float) -> Order:
         raise NotImplementedError
     
     async def cancel_order(self, order_id: str) -> bool:
@@ -95,74 +173,188 @@ class BaseBroker:
     async def close_position(self, position_id: str) -> bool:
         raise NotImplementedError
     
+    async def close_all_positions(self) -> List[str]:
+        """Close all positions with error tracking"""
+        positions = await self.get_positions()
+        closed = []
+        failed = []
+        
+        for pos in positions:
+            try:
+                if await self.close_position(pos.id):
+                    closed.append(pos.id)
+                else:
+                    failed.append(pos.id)
+            except Exception as e:
+                logger.error(f"Failed to close position {pos.id}: {e}")
+                failed.append(pos.id)
+        
+        if failed:
+            logger.warning(f"Failed to close {len(failed)} positions: {failed}")
+        
+        return closed
+    
     async def get_pending_orders(self) -> List[Order]:
         raise NotImplementedError
+    
+    async def cancel_all_orders(self) -> List[str]:
+        """Cancel all pending orders with error tracking"""
+        orders = await self.get_pending_orders()
+        cancelled = []
+        failed = []
+        
+        for order in orders:
+            try:
+                if await self.cancel_order(order.id):
+                    cancelled.append(order.id)
+                else:
+                    failed.append(order.id)
+            except Exception as e:
+                logger.error(f"Failed to cancel order {order.id}: {e}")
+                failed.append(order.id)
+        
+        return cancelled
+
 
 class PaperTradingBroker(BaseBroker):
     """
-    Realistic paper trading simulation
-    - Simulates slippage and latency
-    - Tracks P&L accurately
-    - Handles partial fills
+    PRODUCTION-GRADE Paper Trading Simulation
+    
+    Features:
+    - Thread-safe position/order management (asyncio.Lock)
+    - Realistic slippage model (Gaussian distribution)
+    - Commission calculation per lot
+    - Partial fill simulation for large orders
+    - Comprehensive P&L tracking
+    - Performance reporting
     """
     
-    def __init__(self, initial_balance: float = 100000.0):
+    def __init__(
+        self,
+        initial_balance: float = 100000.0,
+        base_currency: str = "USD",
+        commission_per_lot: float = 3.5,
+        slippage_model: str = "gaussian"
+    ):
+        super().__init__()
+        
         self.initial_balance = initial_balance
         self.balance = initial_balance
         self.equity = initial_balance
+        self.base_currency = base_currency
+        self.commission_per_lot = commission_per_lot
+        self.slippage_model = slippage_model
         
-        self.orders: Dict[str, Order] = {}
-        self.positions: Dict[str, Position] = {}
-        self.order_history: List[Order] = []
-        self.trade_history: List[Dict] = []
+        # THREAD SAFETY: Separate locks for orders and positions
+        self._orders_lock = asyncio.Lock()
+        self._positions_lock = asyncio.Lock()
+        self._account_lock = asyncio.Lock()
         
-        self.price_feed: Optional[Any] = None  # Injected price engine
-        self.connected = False
+        # Storage
+        self._orders: Dict[str, Order] = {}
+        self._positions: Dict[str, Position] = {}
+        self._order_history: List[Order] = []
+        self._trade_history: List[Dict] = []
         
-        # Simulation parameters
-        self.slippage_std = 0.0001  # 1 pip standard deviation
-        self.latency_ms = 50  # 50ms simulated latency
-        self.partial_fill_prob = 0.1  # 10% chance of partial fill
+        self.price_feed = None
         
-        logger.info(f"PaperTradingBroker initialized with ${initial_balance:,.2f}")
+        # Simulation parameters (calibrated to real market conditions)
+        self.slippage_std_pips = 0.5
+        self.latency_ms_mean = 150
+        self.latency_ms_std = 50
+        self.partial_fill_threshold = 100000
+        
+        # Performance tracking
+        self._total_commissions = 0.0
+        self._total_slippage = 0.0
+        self._start_time = time.time()
+        
+        logger.info(
+            f"PaperTradingBroker initialized | "
+            f"Balance: ${initial_balance:,.2f} | "
+            f"Commission: ${commission_per_lot}/lot"
+        )
     
     def set_price_feed(self, price_engine):
         """Inject price feed"""
         self.price_feed = price_engine
+        logger.info("Price feed connected to paper broker")
     
     async def connect(self):
-        self.connected = True
-        logger.info("PaperTradingBroker connected (simulation)")
+        """Connect to simulation"""
+        async with self._connection_lock:
+            self.connected = True
+        logger.info("PaperTradingBroker connected (simulation mode)")
         return True
     
     async def disconnect(self):
-        self.connected = False
-        logger.info("PaperTradingBroker disconnected")
+        """Disconnect and generate report"""
+        async with self._connection_lock:
+            self.connected = False
+        
+        # Generate final report
+        report = self._generate_report()
+        logger.info(f"Final Trading Report:\\n{report}")
         return True
     
     async def get_account_info(self) -> Dict:
-        """Get current account status"""
-        # Calculate equity
-        total_unrealized = sum(p.unrealized_pnl for p in self.positions.values())
-        self.equity = self.balance + total_unrealized
-        
-        margin_used = sum(p.market_value for p in self.positions.values()) * 0.02  # 2% margin
-        
-        return {
-            'balance': self.balance,
-            'equity': self.equity,
-            'margin_used': margin_used,
-            'free_margin': self.equity - margin_used,
-            'unrealized_pnl': total_unrealized,
-            'realized_pnl': self.equity - self.initial_balance - total_unrealized,
-            'open_positions': len(self.positions)
-        }
+        """Get account information with proper locking"""
+        async with self._positions_lock, self._account_lock:
+            # Calculate equity from positions
+            total_unrealized = sum(
+                p.unrealized_pnl for p in self._positions.values()
+            )
+            self.equity = self.balance + total_unrealized
+            
+            # Calculate margin (2% per position)
+            margin_used = sum(
+                p.market_value * 0.02 for p in self._positions.values()
+            )
+            
+            realized_pnl = self.equity - self.initial_balance - total_unrealized
+            
+            return {
+                'balance': round(self.balance, 2),
+                'equity': round(self.equity, 2),
+                'margin_used': round(margin_used, 2),
+                'free_margin': round(self.equity - margin_used, 2),
+                'unrealized_pnl': round(total_unrealized, 2),
+                'realized_pnl': round(realized_pnl, 2),
+                'open_positions': len(self._positions),
+                'total_commissions': round(self._total_commissions, 2),
+                'currency': self.base_currency,
+                'uptime_seconds': time.time() - self._start_time
+            }
     
-    async def place_market_order(self, symbol: str, side: str, quantity: float) -> Order:
-        """Place a market order with realistic simulation"""
-        await asyncio.sleep(self.latency_ms / 1000)  # Simulate latency
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float
+    ) -> Order:
+        """
+        Place market order with realistic simulation
         
-        # Get current price
+        Simulates:
+        1. Network latency (Gaussian distribution)
+        2. Slippage (market impact based on order size)
+        3. Partial fills for large orders
+        4. Commission calculation
+        """
+        if not self.connected:
+            raise ConnectionError("Broker not connected")
+        
+        if quantity <= 0:
+            raise ValueError(f"Quantity must be positive, got {quantity}")
+        
+        if side not in ('buy', 'sell'):
+            raise ValueError(f"Side must be 'buy' or 'sell', got {side}")
+        
+        # 1. Simulate network latency
+        latency_ms = max(0, random.gauss(self.latency_ms_mean, self.latency_ms_std))
+        await asyncio.sleep(latency_ms / 1000)
+        
+        # 2. Get current price
         if not self.price_feed:
             raise ValueError("No price feed available")
         
@@ -170,295 +362,159 @@ class PaperTradingBroker(BaseBroker):
         if not tick:
             raise ValueError(f"No price available for {symbol}")
         
-        # Apply slippage
-        slippage = random.gauss(0, self.slippage_std)
-        if side == 'buy':
-            fill_price = tick.ask * (1 + slippage)
-        else:
-            fill_price = tick.bid * (1 - slippage)
+        # 3. Calculate slippage
+        slippage_pips = self._calculate_slippage(symbol, quantity, side)
+        pip_value = self._get_pip_value(symbol)
+        slippage_factor = slippage_pips * pip_value
         
-        # Create order
+        # Apply slippage
+        if side == 'buy':
+            fill_price = tick.ask * (1 + slippage_factor)
+        else:
+            fill_price = tick.bid * (1 - slippage_factor)
+        
+        # 4. Simulate partial fills
+        fill_quantity = self._simulate_fill_quantity(quantity, symbol)
+        
+        # 5. Calculate commission
+        lots = fill_quantity / 100000
+        commission = lots * self.commission_per_lot * 2  # Round trip
+        
+        # Create order with unique ID
+        order_id = f"paper_{uuid.uuid4().hex[:12]}"
+        
         order = Order(
-            id=f"paper_{int(time.time()*1000)}_{random.randint(1000,9999)}",
+            id=order_id,
             symbol=symbol,
             side=OrderSide(side),
             type=OrderType.MARKET,
             quantity=quantity,
-            price=fill_price
+            price=fill_price,
+            status=OrderStatus.PARTIAL if fill_quantity < quantity else OrderStatus.FILLED,
+            filled_quantity=fill_quantity,
+            average_fill_price=fill_price,
+            filled_at=time.time(),
+            commission=commission,
+            slippage=slippage_pips
         )
         
-        # Simulate partial fill
-        if random.random() < self.partial_fill_prob:
-            order.filled_quantity = quantity * random.uniform(0.5, 0.99)
-            order.status = OrderStatus.PARTIAL
-        else:
-            order.filled_quantity = quantity
-            order.status = OrderStatus.FILLED
-            order.filled_at = time.time()
+        # Update tracking (with locks)
+        async with self._orders_lock:
+            self._orders[order_id] = order
+            self._order_history.append(order)
         
-        order.average_fill_price = fill_price
+        async with self._positions_lock:
+            await self._update_position(order)
+            self._total_commissions += commission
+            self._total_slippage += abs(slippage_pips)
         
-        # Store order
-        self.orders[order.id] = order
-        self.order_history.append(order)
+        logger.info(
+            f"Order Executed | {side.upper()} {fill_quantity:.0f}/{quantity:.0f} {symbol} | "
+            f"Price: {fill_price:.5f} | Slippage: {slippage_pips:.1f}pips | "
+            f"Commission: ${commission:.2f} | ID: {order_id}"
+        )
         
-        # Update positions
-        await self._update_position(order)
-        
-        logger.info(f"Paper order executed: {side} {quantity} {symbol} @ {fill_price:.5f}")
         return order
     
-    async def place_order(self, order: Order) -> Order:
-        """Place any order type"""
-        if order.type == OrderType.MARKET:
-            return await self.place_market_order(
-                order.symbol, order.side.value, order.quantity
-            )
+    def _calculate_slippage(self, symbol: str, quantity: float, side: str) -> float:
+        """Calculate realistic slippage based on order size"""
+        if self.slippage_model == "none":
+            return 0.0
+        
+        # Base slippage increases with order size
+        base_slippage = 0.1  # 0.1 pips base
+        size_factor = min(quantity / 100000, 5.0)
+        
+        if self.slippage_model == "gaussian":
+            slippage = random.gauss(base_slippage * size_factor, 0.2)
         else:
-            # For limit/stop orders, store as pending
-            order.id = f"paper_{int(time.time()*1000)}"
-            order.status = OrderStatus.PENDING
-            self.orders[order.id] = order
-            logger.info(f"Paper pending order: {order.type.value} {order.side.value} {order.quantity} {order.symbol}")
-            return order
+            slippage = random.uniform(0, base_slippage * size_factor * 2)
+        
+        return max(0, slippage)
     
-    async def cancel_order(self, order_id: str) -> bool:
-        """Cancel a pending order"""
-        if order_id in self.orders:
-            order = self.orders[order_id]
-            if order.status == OrderStatus.PENDING:
-                order.status = OrderStatus.CANCELLED
-                logger.info(f"Paper order cancelled: {order_id}")
-                return True
-        return False
+    def _simulate_fill_quantity(self, quantity: float, symbol: str) -> float:
+        """Simulate partial fills for large orders"""
+        if quantity < self.partial_fill_threshold:
+            return quantity
+        
+        fill_prob = min(0.95, 0.5 + (self.partial_fill_threshold / quantity))
+        
+        if random.random() > fill_prob:
+            # Partial fill
+            return quantity * random.uniform(0.6, 0.95)
+        
+        return quantity
     
-    async def get_positions(self) -> List[Position]:
-        """Get all open positions"""
-        # Update position prices
-        for pos in self.positions.values():
-            if self.price_feed:
-                tick = self.price_feed.get_last_price(pos.symbol)
-                if tick:
-                    pos.current_price = tick.mid
-                    # Recalculate P&L
-                    if pos.side == OrderSide.BUY:
-                        pos.unrealized_pnl = (pos.current_price - pos.entry_price) * pos.quantity
-                    else:
-                        pos.unrealized_pnl = (pos.entry_price - pos.current_price) * pos.quantity
-        
-        return list(self.positions.values())
-    
-    async def close_position(self, position_id: str) -> bool:
-        """Close a position"""
-        if position_id not in self.positions:
-            return False
-        
-        pos = self.positions[position_id]
-        
-        # Place opposite order to close
-        close_side = 'sell' if pos.side == OrderSide.BUY else 'buy'
-        order = await self.place_market_order(pos.symbol, close_side, pos.quantity)
-        
-        # Realize P&L
-        realized_pnl = pos.unrealized_pnl
-        self.balance += realized_pnl
-        
-        # Record trade
-        self.trade_history.append({
-            'position_id': position_id,
-            'symbol': pos.symbol,
-            'entry_price': pos.entry_price,
-            'exit_price': order.average_fill_price,
-            'pnl': realized_pnl,
-            'closed_at': time.time()
-        })
-        
-        # Remove position
-        del self.positions[position_id]
-        
-        logger.info(f"Position closed: {position_id} P&L: ${realized_pnl:,.2f}")
-        return True
-    
-    async def close_all_positions(self) -> List[str]:
-        """Close all positions"""
-        closed = []
-        for pos_id in list(self.positions.keys()):
-            if await self.close_position(pos_id):
-                closed.append(pos_id)
-        return closed
-    
-    async def get_pending_orders(self) -> List[Order]:
-        """Get pending orders"""
-        return [o for o in self.orders.values() if o.status == OrderStatus.PENDING]
-    
-    async def cancel_all_orders(self) -> List[str]:
-        """Cancel all pending orders"""
-        cancelled = []
-        for order_id, order in self.orders.items():
-            if order.status == OrderStatus.PENDING:
-                order.status = OrderStatus.CANCELLED
-                cancelled.append(order_id)
-        return cancelled
+    def _get_pip_value(self, symbol: str) -> float:
+        """Get pip value for symbol"""
+        if 'JPY' in symbol:
+            return 0.01
+        if 'XAU' in symbol or 'GOLD' in symbol:
+            return 0.01
+        return 0.0001
     
     async def _update_position(self, order: Order):
-        """Update positions based on filled order"""
-        if order.status not in [OrderStatus.FILLED, OrderStatus.PARTIAL]:
+        """Update positions based on filled order - THREAD SAFE (caller must hold lock)"""
+        if order.status not in (OrderStatus.FILLED, OrderStatus.PARTIAL):
             return
         
-        # Find existing position
         position_key = f"{order.symbol}_{order.side.value}"
+        fill_qty = order.filled_quantity
+        fill_price = order.average_fill_price
         
-        if position_key in self.positions:
+        # Deduct commission from balance
+        self.balance -= order.commission
+        
+        if position_key in self._positions:
             # Update existing position
-            pos = self.positions[position_key]
-            total_quantity = pos.quantity + order.filled_quantity
-            pos.entry_price = (pos.entry_price * pos.quantity + order.average_fill_price * order.filled_quantity) / total_quantity
-            pos.quantity = total_quantity
+            pos = self._positions[position_key]
+            
+            # Calculate new average entry price
+            total_qty = pos.quantity + fill_qty
+            pos.entry_price = (
+                (pos.entry_price * pos.quantity) + (fill_price * fill_qty)
+            ) / total_qty
+            pos.quantity = total_qty
+            pos.total_commission += order.commission
+            pos.updated_at = time.time()
+            
+            logger.debug(f"Updated position {position_key}: Qty={total_qty:.0f}, AvgPrice={pos.entry_price:.5f}")
         else:
             # Create new position
-            self.positions[position_key] = Position(
+            self._positions[position_key] = Position(
                 id=position_key,
                 symbol=order.symbol,
                 side=order.side,
-                quantity=order.filled_quantity,
-                entry_price=order.average_fill_price,
-                current_price=order.average_fill_price,
-                unrealized_pnl=0.0
+                quantity=fill_qty,
+                entry_price=fill_price,
+                current_price=fill_price,
+                unrealized_pnl=-order.commission,
+                opened_at=time.time(),
+                total_commission=order.commission
             )
-        
-        # Deduct balance for buys (simplified)
-        if order.side == OrderSide.BUY:
-            cost = order.filled_quantity * order.average_fill_price
-            self.balance -= cost
-
-class OANDABroker(BaseBroker):
-    """OANDA v20 API implementation"""
-    
-    def __init__(self, api_key: str, account_id: str, practice: bool = True):
-        self.api_key = api_key
-        self.account_id = account_id
-        self.practice = practice
-        self.base_url = "https://api-fxpractice.oanda.com" if practice else "https://api-fxtrade.oanda.com"
-        self.session: Optional[aiohttp.ClientSession] = None
-        
-    async def connect(self):
-        self.session = aiohttp.ClientSession(
-            headers={"Authorization": f"Bearer {self.api_key}"}
-        )
-        # Verify connection
-        async with self.session.get(f"{self.base_url}/v3/accounts/{self.account_id}") as resp:
-            if resp.status != 200:
-                raise ConnectionError("Failed to connect to OANDA")
-        logger.info("OANDA broker connected")
-        return True
-    
-    async def disconnect(self):
-        if self.session:
-            await self.session.close()
-        return True
-    
-    async def get_account_info(self) -> Dict:
-        async with self.session.get(f"{self.base_url}/v3/accounts/{self.account_id}") as resp:
-            data = await resp.json()
-            account = data.get('account', {})
-            return {
-                'balance': float(account.get('balance', 0)),
-                'equity': float(account.get('NAV', 0)),
-                'margin_used': float(account.get('marginUsed', 0)),
-                'free_margin': float(account.get('marginAvailable', 0)),
-                'unrealized_pnl': float(account.get('unrealizedPL', 0)),
-                'realized_pnl': float(account.get('realizedPL', 0))
-            }
-    
-    async def place_market_order(self, symbol: str, side: str, quantity: float) -> Order:
-        # OANDA uses units and instrument formatting
-        instrument = symbol.replace('/', '_')
-        units = quantity if side == 'buy' else -quantity
-        
-        body = {
-            "order": {
-                "type": "MARKET",
-                "instrument": instrument,
-                "units": str(int(units))
-            }
-        }
-        
-        async with self.session.post(
-            f"{self.base_url}/v3/accounts/{self.account_id}/orders",
-            json=body
-        ) as resp:
-            data = await resp.json()
             
-            if resp.status != 201:
-                raise ValueError(f"Order failed: {data}")
+            # For buys, deduct cost from balance
+            if order.side == OrderSide.BUY:
+                cost = fill_qty * fill_price
+                self.balance -= cost
             
-            order_data = data.get('orderFillTransaction', {})
-            return Order(
-                id=order_data.get('id', ''),
-                symbol=symbol,
-                side=OrderSide(side),
-                type=OrderType.MARKET,
-                quantity=quantity,
-                price=float(order_data.get('price', 0)),
-                status=OrderStatus.FILLED,
-                filled_quantity=quantity,
-                average_fill_price=float(order_data.get('price', 0)),
-                filled_at=time.time()
-            )
+            logger.debug(f"New position created: {position_key}")
+    
+    async def cancel_order(self, order_id: str) -> bool:
+        """Cancel a pending order"""
+        async with self._orders_lock:
+            if order_id not in self._orders:
+                return False
+            
+            order = self._orders[order_id]
+            if order.status == OrderStatus.PENDING:
+                order.status = OrderStatus.CANCELLED
+                logger.info(f"Order cancelled: {order_id}")
+                return True
+            
+            return False
     
     async def get_positions(self) -> List[Position]:
-        async with self.session.get(f"{self.base_url}/v3/accounts/{self.account_id}/positions") as resp:
-            data = await resp.json()
-            positions = []
-            for pos in data.get('positions', []):
-                # Parse long and short positions
-                for side in ['long', 'short']:
-                    side_data = pos.get(side, {})
-                    if side_data and float(side_data.get('units', 0)) != 0:
-                        positions.append(Position(
-                            id=f"{pos['instrument']}_{side}",
-                            symbol=pos['instrument'].replace('_', '/'),
-                            side=OrderSide.BUY if side == 'long' else OrderSide.SELL,
-                            quantity=abs(float(side_data.get('units', 0))),
-                            entry_price=float(side_data.get('averagePrice', 0)),
-                            current_price=float(side_data.get('markPrice', 0)),
-                            unrealized_pnl=float(side_data.get('unrealizedPL', 0))
-                        ))
-            return positions
-    
-    async def close_position(self, position_id: str) -> bool:
-        # Extract instrument and side from position_id
-        parts = position_id.rsplit('_', 1)
-        if len(parts) != 2:
-            return False
-        
-        instrument, side = parts
-        instrument = instrument.replace('/', '_')
-        
-        # Close all units on that side
-        async with self.session.put(
-            f"{self.base_url}/v3/accounts/{self.account_id}/positions/{instrument}/close",
-            json={"longUnits": "ALL" if side == 'long' else "NONE",
-                  "shortUnits": "ALL" if side == 'short' else "NONE"}
-        ) as resp:
-            return resp.status == 200
-
-# Factory function
-def create_broker(broker_type: str, config: Dict) -> BaseBroker:
-    """Create appropriate broker instance"""
-    if broker_type == 'paper':
-        return PaperTradingBroker(config.get('initial_balance', 100000.0))
-    elif broker_type == 'oanda':
-        return OANDABroker(
-            api_key=config['api_key'],
-            account_id=config['account_id'],
-            practice=config.get('practice', True)
-        )
-    else:
-        raise ValueError(f"Unknown broker type: {broker_type}")
-'''
-
-with open(project_root / "brokers" / "__init__.py", "w") as f:
-    f.write(broker_code)
-
-print("✓ Created brokers/__init__.py with PaperTrading and OANDA support")
+        """Get all open positions with updated prices"""
+        async with self._positions_lock:
+            positions = list(self._
