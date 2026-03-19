@@ -1,121 +1,321 @@
 """
-FTMO Connector
-
-FTMO is a prop trading firm that uses MT5 platform.
-This connector is a specialized wrapper around MT5Connector for FTMO accounts.
-
-FTMO Server Information:
-- Demo: FTMO-Demo, FTMO-Demo2, FTMO-Demo3
-- Live: FTMO-Server, FTMO-Server2, FTMO-Server3
+FTMO (Forex Trader Mom) Integration
+- Real-time account metrics
+- Challenge/Verification phases
+- Profit distribution & payouts
+- Risk limit enforcement
 """
 
-from typing import Dict, Any
+import asyncio
 import logging
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass, asdict
+from datetime import datetime, timedelta
+import json
+import hmac
+import hashlib
+from enum import Enum
 
-from ..mt5 import MT5Connector
+import aiohttp
+import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
+class FTMOPhase(Enum):
+    """FTMO Account Phases"""
+    CHALLENGE = "challenge"
+    VERIFICATION = "verification"
+    FUNDED = "funded"
+    PROFIT_SHARING = "profit_sharing"
 
-class FTMOConnector(MT5Connector):
-    """
-    FTMO Proprietary Trading Firm Connector.
+@dataclass
+class FTMOMetrics:
+    """FTMO Account Metrics"""
+    account_balance: float
+    equity: float
+    profit_loss: float
+    drawdown: float
+    daily_loss_limit: float
+    remaining_daily_loss: float
+    monthly_loss_limit: float
+    remaining_monthly_loss: float
+    phase: FTMOPhase
+    days_remaining: int
+    phase_progress: float  # 0-1
+    
+    def to_dict(self) -> Dict:
+        data = asdict(self)
+        data['phase'] = self.phase.value
+        return data
 
-    FTMO provides funded trading accounts after passing challenges.
-    Uses MT5 platform with FTMO-specific servers.
-
-    Configuration:
-        login: FTMO account number
-        password: FTMO account password
-        server: FTMO server (auto-detected if not provided)
-        challenge_type: 'demo' or 'live' (default: 'demo')
-
-    Example:
-        config = {
-            'login': 12345678,
-            'password': 'your_ftmo_password',
-            'challenge_type': 'demo'  # or 'live'
-        }
-        ftmo = FTMOConnector(config)
-        ftmo.connect()
-    """
-
-    # FTMO server list
-    FTMO_SERVERS = {
-        'demo': ['FTMO-Demo', 'FTMO-Demo2', 'FTMO-Demo3'],
-        'live': ['FTMO-Server', 'FTMO-Server2', 'FTMO-Server3'],
-    }
-
-    def __init__(self, config: Dict[str, Any]):
+class FTMOBroker:
+    """Enterprise-grade FTMO Integration"""
+    
+    BASE_URL = "https://api.ftmo.com/v1"
+    
+    def __init__(self, 
+                 api_key: str,
+                 secret_key: str,
+                 account_id: str,
+                 sandbox: bool = False):
         """
-        Initialize FTMO connector.
-
+        Initialize FTMO broker
+        
         Args:
-            config: Configuration dict with login, password, challenge_type
+            api_key: FTMO API key
+            secret_key: FTMO secret key
+            account_id: FTMO account ID
+            sandbox: Use sandbox environment
         """
-        # Auto-select server if not provided
-        if 'server' not in config:
-            challenge_type = config.get('challenge_type', 'demo').lower()
-            config['server'] = self.FTMO_SERVERS[challenge_type][0]
-            logger.info(f"Auto-selected FTMO server: {config['server']}")
-
-        # Add FTMO-specific defaults
-        config.setdefault('timeout', 60000)
-
-        # Initialize MT5 connector
-        super().__init__(config)
-
-        self.challenge_type = config.get('challenge_type', 'demo')
-
-        logger.info(f"FTMO Connector initialized for {self.challenge_type} account")
-
-    def get_ftmo_rules(self) -> Dict[str, Any]:
-        """
-        Get FTMO trading rules and limits.
-
-        Returns:
-            Dict with FTMO rules
-        """
-        # FTMO standard rules (may vary by account size)
-        rules = {
-            'max_daily_loss': '5%',  # of initial balance
-            'max_total_loss': '10%',  # of initial balance
-            'profit_target': '10%',  # for challenge
-            'min_trading_days': 4,
-            'max_lot_size': 'varies',  # depends on account size
-            'profit_split': '80%',  # trader gets 80% of profits
-            'scaling': 'up to $2M',
-            'trading_period': 'unlimited',
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.account_id = account_id
+        self.sandbox = sandbox
+        
+        if sandbox:
+            self.BASE_URL = "https://sandbox-api.ftmo.com/v1"
+        
+        self.session: Optional[aiohttp.ClientSession] = None
+        self._request_nonce = 0
+        self._rate_limit_remaining = 1000
+        self._rate_limit_reset = 0
+    
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession()
+        return self
+    
+    async def __aexit__(self, *args):
+        if self.session:
+            await self.session.close()
+    
+    def _generate_signature(self, 
+                           method: str,
+                           endpoint: str,
+                           params: Optional[Dict] = None) -> Dict[str, str]:
+        """Generate FTMO API signature"""
+        timestamp = str(int(datetime.utcnow().timestamp() * 1000))
+        nonce = self._request_nonce
+        self._request_nonce += 1
+        
+        # Build signature string
+        sig_string = f"{method.upper()}{endpoint}{timestamp}{nonce}"
+        
+        if params:
+            sig_string += json.dumps(params, sort_keys=True)
+        
+        # Create HMAC-SHA256 signature
+        signature = hmac.new(
+            self.secret_key.encode(),
+            sig_string.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return {
+            'Authorization': f'FTMO {self.api_key}:{signature}',
+            'X-FTMO-TIMESTAMP': timestamp,
+            'X-FTMO-NONCE': str(nonce),
+            'Content-Type': 'application/json'
         }
-
-        return rules
-
-    def check_ftmo_compliance(self) -> Dict[str, Any]:
+    
+    async def get_account_metrics(self) -> FTMOMetrics:
         """
-        Check if trading complies with FTMO rules.
-
+        Retrieve real-time account metrics
+        
         Returns:
-            Dict with compliance status
+            FTMOMetrics: Account performance data
+            
+        Raises:
+            RuntimeError: If account fetch fails
         """
-        account = self.get_account_info()
-        if not account:
-            return {'compliant': False, 'error': 'Cannot get account info'}
-
-        # Calculate metrics
-        initial_balance = 100000  # This should be retrieved from account history
-        current_equity = account.equity
-
-        daily_loss_pct = 0  # Would need to calculate from today's trades
-        total_loss_pct = ((initial_balance - current_equity) / initial_balance) * 100
-
-        compliance = {
-            'compliant': total_loss_pct < 10,
-            'total_loss_percent': total_loss_pct,
-            'max_loss_allowed': 10,
-            'daily_loss_percent': daily_loss_pct,
-            'max_daily_loss_allowed': 5,
-            'equity': current_equity,
-            'balance': account.balance,
+        if not self.session:
+            raise RuntimeError("Session not initialized. Use async context manager.")
+        
+        endpoint = f"/accounts/{self.account_id}/metrics"
+        headers = self._generate_signature("GET", endpoint)
+        
+        try:
+            async with self.session.get(
+                f"{self.BASE_URL}{endpoint}",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    error_data = await resp.json()
+                    raise RuntimeError(f"FTMO API Error: {error_data}")
+                
+                data = await resp.json()
+                
+                # Update rate limit info
+                self._rate_limit_remaining = int(
+                    resp.headers.get('X-RateLimit-Remaining', self._rate_limit_remaining)
+                )
+                self._rate_limit_reset = int(
+                    resp.headers.get('X-RateLimit-Reset', self._rate_limit_reset)
+                )
+                
+                return FTMOMetrics(
+                    account_balance=float(data['accountBalance']),
+                    equity=float(data['equity']),
+                    profit_loss=float(data['profitLoss']),
+                    drawdown=float(data['drawdown']),
+                    daily_loss_limit=float(data['dailyLossLimit']),
+                    remaining_daily_loss=float(data['remainingDailyLoss']),
+                    monthly_loss_limit=float(data['monthlyLossLimit']),
+                    remaining_monthly_loss=float(data['remainingMonthlyLoss']),
+                    phase=FTMOPhase(data['phase']),
+                    days_remaining=int(data['daysRemaining']),
+                    phase_progress=float(data['phaseProgress'])
+                )
+                
+        except asyncio.TimeoutError:
+            logger.error("FTMO API timeout")
+            raise RuntimeError("FTMO API request timed out")
+        except Exception as e:
+            logger.error(f"Failed to fetch FTMO metrics: {e}")
+            raise
+    
+    async def place_order(self,
+                         symbol: str,
+                         order_type: str,
+                         side: str,
+                         quantity: float,
+                         price: Optional[float] = None,
+                         stop_loss: Optional[float] = None,
+                         take_profit: Optional[float] = None,
+                         comment: str = "") -> Dict[str, Any]:
+        """
+        Place order with FTMO risk limits applied
+        
+        Args:
+            symbol: Trading pair (EUR/USD)
+            order_type: MARKET, LIMIT, STOP
+            side: BUY, SELL
+            quantity: Lot size
+            price: Limit/Stop price
+            stop_loss: Stop loss price
+            take_profit: Take profit price
+            comment: Order comment
+            
+        Returns:
+            Order placement response
+        """
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+        
+        # Validate against FTMO risk limits
+        metrics = await self.get_account_metrics()
+        
+        if metrics.remaining_daily_loss <= 0:
+            raise ValueError("Daily loss limit exceeded")
+        
+        # Calculate potential loss
+        potential_loss = quantity * abs(price - stop_loss) if stop_loss else 0
+        
+        if potential_loss > metrics.remaining_daily_loss:
+            raise ValueError(
+                f"Order size would exceed daily loss limit. "
+                f"Max allowed loss: {metrics.remaining_daily_loss}"
+            )
+        
+        endpoint = f"/accounts/{self.account_id}/orders"
+        payload = {
+            "symbol": symbol,
+            "orderType": order_type,
+            "side": side,
+            "quantity": quantity,
+            "price": price,
+            "stopLoss": stop_loss,
+            "takeProfit": take_profit,
+            "comment": comment
         }
-
-        return compliance
+        
+        headers = self._generate_signature("POST", endpoint, payload)
+        
+        try:
+            async with self.session.post(
+                f"{self.BASE_URL}{endpoint}",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status not in [200, 201]:
+                    error_data = await resp.json()
+                    raise RuntimeError(f"Order placement failed: {error_data}")
+                
+                return await resp.json()
+                
+        except Exception as e:
+            logger.error(f"Failed to place FTMO order: {e}")
+            raise
+    
+    async def get_trade_history(self,
+                               limit: int = 100,
+                               offset: int = 0) -> pd.DataFrame:
+        """Get closed trades history"""
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+        
+        endpoint = f"/accounts/{self.account_id}/trades/closed"
+        params = {"limit": limit, "offset": offset}
+        headers = self._generate_signature("GET", endpoint, params)
+        
+        try:
+            async with self.session.get(
+                f"{self.BASE_URL}{endpoint}",
+                headers=headers,
+                params=params
+            ) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(await resp.json())
+                
+                data = await resp.json()
+                df = pd.DataFrame(data['trades'])
+                df['closeTime'] = pd.to_datetime(df['closeTime'])
+                return df
+                
+        except Exception as e:
+            logger.error(f"Failed to fetch trade history: {e}")
+            raise
+    
+    async def check_violation(self) -> Tuple[bool, Optional[str]]:
+        """
+        Check if account has any rule violations
+        
+        Returns:
+            (is_violated, violation_reason)
+        """
+        metrics = await self.get_account_metrics()
+        
+        if metrics.remaining_daily_loss <= 0:
+            return True, "Daily loss limit exceeded"
+        
+        if metrics.remaining_monthly_loss <= 0:
+            return True, "Monthly loss limit exceeded"
+        
+        if metrics.drawdown >= 0.05:  # 5% max drawdown
+            return True, "Maximum drawdown exceeded"
+        
+        return False, None
+    
+    async def request_payout(self, amount: float) -> Dict[str, Any]:
+        """Request profit withdrawal"""
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+        
+        endpoint = f"/accounts/{self.account_id}/payouts"
+        payload = {"amount": amount}
+        headers = self._generate_signature("POST", endpoint, payload)
+        
+        try:
+            async with self.session.post(
+                f"{self.BASE_URL}{endpoint}",
+                headers=headers,
+                json=payload
+            ) as resp:
+                if resp.status not in [200, 201]:
+                    raise RuntimeError(await resp.json())
+                return await resp.json()
+        except Exception as e:
+            logger.error(f"Payout request failed: {e}")
+            raise
