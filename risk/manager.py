@@ -1,4 +1,4 @@
-"""
+""" 
 HOPEFX Risk Manager
 Comprehensive risk management with position sizing, exposure limits, and drawdown control
 """
