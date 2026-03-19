@@ -1,335 +1,589 @@
-
-# 1. CORE DATA ENGINE - Real-time price feed with WebSocket and REST fallback
-
-data_engine_code = '''"""
+"""
 HOPEFX Real-Time Price Engine
-Multi-source market data ingestion with failover
-Supports: WebSocket primary, REST fallback, synthetic data for testing
+WebSocket and REST hybrid data feed with automatic failover
 """
 
 import asyncio
-import aiohttp
-import json
 import logging
 import time
+import json
+import threading
 from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
-import websockets
-from websockets.exceptions import ConnectionClosed
+from collections import defaultdict, deque
+import numpy as np
+
+try:
+    import aiohttp
+    import aiohttp.web
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+
+try:
+    import websockets
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-class DataSource(Enum):
-    WEBSOCKET = "websocket"
-    REST = "rest"
-    SYNTHETIC = "synthetic"
 
 @dataclass
 class Tick:
+    """Price tick data"""
     symbol: str
-    timestamp: int
+    timestamp: float
     bid: float
     ask: float
-    last_price: float
-    volume: float
-    source: DataSource = DataSource.WEBSOCKET
+    mid: float
+    volume: float = 0.0
+    bid_volume: float = 0.0
+    ask_volume: float = 0.0
     
     @property
     def spread(self) -> float:
-        return self.ask - self.bid
+        return self.ask - self.bid if self.ask > self.bid else 0.0
     
     @property
-    def mid(self) -> float:
-        return (self.bid + self.ask) / 2
+    def spread_pct(self) -> float:
+        return (self.spread / self.mid * 100) if self.mid > 0 else 0.0
+
 
 @dataclass
 class OHLCV:
-    timestamp: int
+    """OHLCV candle data"""
+    timestamp: float
     open: float
     high: float
     low: float
     close: float
     volume: float
     
+    def to_dict(self) -> Dict:
+        return {
+            'timestamp': self.timestamp,
+            'open': self.open,
+            'high': self.high,
+            'low': self.low,
+            'close': self.close,
+            'volume': self.volume
+        }
+
+
+class PriceFeedBase:
+    """Base class for price feeds"""
+    
+    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+        self.symbols = symbols
+        self.config = config
+        self.active = False
+        self._callbacks: List[Callable] = []
+        self._last_prices: Dict[str, Tick] = {}
+        self._lock = asyncio.Lock()
+    
+    async def connect(self):
+        raise NotImplementedError
+    
+    async def disconnect(self):
+        raise NotImplementedError
+    
+    def register_callback(self, callback: Callable[[Tick], None]):
+        """Register price update callback"""
+        self._callbacks.append(callback)
+    
+    def _notify_callbacks(self, tick: Tick):
+        """Notify all registered callbacks"""
+        for callback in self._callbacks:
+            try:
+                callback(tick)
+            except Exception as e:
+                logger.error(f"Callback error: {e}")
+    
+    def get_last_price(self, symbol: str) -> Optional[Tick]:
+        """Get last known price"""
+        return self._last_prices.get(symbol)
+    
+    async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> List[OHLCV]:
+        """Get historical OHLCV data"""
+        raise NotImplementedError
+
+
+class WebSocketPriceFeed(PriceFeedBase):
+    """
+    WebSocket-based real-time price feed
+    Automatic reconnection with exponential backoff
+    """
+    
+    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+        super().__init__(symbols, config)
+        self.ws_url = config.get('websocket_url', 'wss://ws-feed.exchange.coinbase.com')
+        self.reconnect_delay = config.get('reconnect_delay', 1.0)
+        self.max_reconnect_delay = config.get('max_reconnect_delay', 60.0)
+        self.heartbeat_interval = config.get('heartbeat_interval', 30.0)
+        
+        self._websocket = None
+        self._reconnect_attempts = 0
+        self._running = False
+        self._heartbeat_task = None
+        self._receive_task = None
+        self._ohlcv_buffers: Dict[str, Dict[str, deque]] = defaultdict(
+            lambda: defaultdict(lambda: deque(maxlen=1000))
+        )
+    
+    async def connect(self):
+        """Connect to WebSocket feed"""
+        if not WEBSOCKETS_AVAILABLE:
+            raise ImportError("websockets library required: pip install websockets")
+        
+        self._running = True
+        
+        while self._running:
+            try:
+                logger.info(f"Connecting to WebSocket: {self.ws_url}")
+                
+                self._websocket = await websockets.connect(
+                    self.ws_url,
+                    ping_interval=self.heartbeat_interval,
+                    ping_timeout=10
+                )
+                
+                # Subscribe to channels
+                subscribe_msg = {
+                    "type": "subscribe",
+                    "product_ids": self.symbols,
+                    "channels": ["ticker", "heartbeat"]
+                }
+                await self._websocket.send(json.dumps(subscribe_msg))
+                
+                self.active = True
+                self._reconnect_attempts = 0
+                
+                logger.info(f"WebSocket connected, subscribed to {len(self.symbols)} symbols")
+                
+                # Start tasks
+                self._receive_task = asyncio.create_task(self._receive_loop())
+                self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                
+                # Wait for disconnect
+                await self._receive_task
+                
+            except Exception as e:
+                logger.error(f"WebSocket error: {e}")
+                self.active = False
+                
+                if not self._running:
+                    break
+                
+                # Exponential backoff
+                delay = min(
+                    self.reconnect_delay * (2 ** self._reconnect_attempts),
+                    self.max_reconnect_delay
+                )
+                self._reconnect_attempts += 1
+                
+                logger.info(f"Reconnecting in {delay}s (attempt {self._reconnect_attempts})")
+                await asyncio.sleep(delay)
+    
+    async def disconnect(self):
+        """Disconnect from WebSocket"""
+        self._running = False
+        self.active = False
+        
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+        
+        if self._receive_task:
+            self._receive_task.cancel()
+        
+        if self._websocket:
+            await self._websocket.close()
+        
+        logger.info("WebSocket disconnected")
+    
+    async def _receive_loop(self):
+        """Main receive loop"""
+        try:
+            async for message in self._websocket:
+                try:
+                    data = json.loads(message)
+                    await self._process_message(data)
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON received: {message[:100]}")
+                except Exception as e:
+                    logger.error(f"Message processing error: {e}")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Receive loop error: {e}")
+    
+    async def _process_message(self, data: Dict):
+        """Process incoming message"""
+        msg_type = data.get('type')
+        
+        if msg_type == 'ticker':
+            # Process tick
+            symbol = data.get('product_id')
+            if symbol not in self.symbols:
+                return
+            
+            tick = Tick(
+                symbol=symbol,
+                timestamp=time.time(),
+                bid=float(data.get('best_bid', 0)),
+                ask=float(data.get('best_ask', 0)),
+                mid=(float(data.get('best_bid', 0)) + float(data.get('best_ask', 0))) / 2,
+                volume=float(data.get('volume_24h', 0)),
+                bid_volume=float(data.get('bid_volume', 0)),
+                ask_volume=float(data.get('ask_volume', 0))
+            )
+            
+            async with self._lock:
+                self._last_prices[symbol] = tick
+            
+            # Update OHLCV buffers
+            self._update_ohlcv_buffers(symbol, tick)
+            
+            # Notify callbacks
+            self._notify_callbacks(tick)
+            
+        elif msg_type == 'heartbeat':
+            logger.debug("Heartbeat received")
+            
+        elif msg_type == 'error':
+            logger.error(f"WebSocket error message: {data}")
+    
+    def _update_ohlcv_buffers(self, symbol: str, tick: Tick):
+        """Update OHLCV buffers with new tick"""
+        now = datetime.now(timezone.utc)
+        
+        for timeframe, seconds in [
+            ('1m', 60), ('5m', 300), ('15m', 900),
+            ('1h', 3600), ('4h', 14400), ('1d', 86400)
+        ]:
+            bucket_time = int(now.timestamp() / seconds) * seconds
+            
+            buffer = self._ohlcv_buffers[symbol][timeframe]
+            
+            if buffer and buffer[-1].timestamp == bucket_time:
+                # Update existing candle
+                candle = buffer[-1]
+                candle.high = max(candle.high, tick.mid)
+                candle.low = min(candle.low, tick.mid)
+                candle.close = tick.mid
+                candle.volume += tick.volume
+            else:
+                # New candle
+                new_candle = OHLCV(
+                    timestamp=bucket_time,
+                    open=tick.mid,
+                    high=tick.mid,
+                    low=tick.mid,
+                    close=tick.mid,
+                    volume=tick.volume
+                )
+                buffer.append(new_candle)
+    
+    async def _heartbeat_loop(self):
+        """Send periodic heartbeats"""
+        try:
+            while self._running:
+                await asyncio.sleep(self.heartbeat_interval)
+                if self._websocket and self._websocket.open:
+                    try:
+                        await self._websocket.send(json.dumps({"type": "heartbeat"}))
+                    except Exception as e:
+                        logger.warning(f"Heartbeat send failed: {e}")
+        except asyncio.CancelledError:
+            pass
+    
+    async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> List[OHLCV]:
+        """Get OHLCV from buffer"""
+        if symbol not in self._ohlcv_buffers or timeframe not in self._ohlcv_buffers[symbol]:
+            return []
+        
+        buffer = self._ohlcv_buffers[symbol][timeframe]
+        return list(buffer)[-limit:]
+    
+    def get_spread(self, symbol: str) -> Optional[float]:
+        """Get current spread for symbol"""
+        tick = self.get_last_price(symbol)
+        return tick.spread if tick else None
+
+
+class RESTPriceFeed(PriceFeedBase):
+    """
+    REST API fallback for historical data
+    """
+    
+    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+        super().__init__(symbols, config)
+        self.rest_url = config.get('rest_url', 'https://api.exchange.coinbase.com')
+        self.rate_limit_per_sec = config.get('rate_limit_per_sec', 10)
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._request_times: deque = deque(maxlen=100)
+        self._cache: Dict[str, Any] = {}
+        self._cache_ttl = 5  # seconds
+    
+    async def connect(self):
+        """Initialize REST client"""
+        if not AIOHTTP_AVAILABLE:
+            raise ImportError("aiohttp required: pip install aiohttp")
+        
+        self._session = aiohttp.ClientSession(
+            headers={'Accept': 'application/json'},
+            timeout=aiohttp.ClientTimeout(total=30)
+        )
+        self.active = True
+        logger.info("REST price feed initialized")
+    
+    async def disconnect(self):
+        """Close REST client"""
+        if self._session:
+            await self._session.close()
+        self.active = False
+    
+    async def _rate_limited_request(self, url: str) -> Dict:
+        """Make rate-limited request"""
+        # Enforce rate limit
+        now = time.time()
+        while self._request_times and now - self._request_times[0] < 1.0:
+            if len(self._request_times) >= self.rate_limit_per_sec:
+                await asyncio.sleep(0.1)
+                now = time.time()
+            else:
+                break
+        
+        self._request_times.append(now)
+        
+        async with self._session.get(url) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                raise ValueError(f"HTTP {response.status}: {await response.text()}")
+    
+    async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> List[OHLCV]:
+        """Get OHLCV from REST API"""
+        cache_key = f"{symbol}_{timeframe}_{limit}"
+        
+        # Check cache
+        if cache_key in self._cache:
+            cached_time, data = self._cache[cache_key]
+            if time.time() - cached_time < self._cache_ttl:
+                return data
+        
+        # Map timeframe to API granularity
+        granularity_map = {
+            '1m': 60, '5m': 300, '15m': 900,
+            '1h': 3600, '6h': 21600, '1d': 86400
+        }
+        granularity = granularity_map.get(timeframe, 3600)
+        
+        # Calculate time range
+        end_time = datetime.now(timezone.utc)
+        start_time = end_time - timedelta(seconds=granularity * limit)
+        
+        url = (
+            f"{self.rest_url}/products/{symbol}/candles?"
+            f"granularity={granularity}&"
+            f"start={start_time.isoformat()}&"
+            f"end={end_time.isoformat()}"
+        )
+        
+        try:
+            data = await self._rate_limited_request(url)
+            
+            # Parse response (Coinbase format: [time, low, high, open, close, volume])
+            ohlcv_list = []
+            for candle in reversed(data):  # Reverse to chronological order
+                ohlcv_list.append(OHLCV(
+                    timestamp=candle[0],
+                    low=float(candle[1]),
+                    high=float(candle[2]),
+                    open=float(candle[3]),
+                    close=float(candle[4]),
+                    volume=float(candle[5])
+                ))
+            
+            # Cache result
+            self._cache[cache_key] = (time.time(), ohlcv_list)
+            
+            return ohlcv_list
+            
+        except Exception as e:
+            logger.error(f"REST API error for {symbol}: {e}")
+            return []
+
+
 class RealTimePriceEngine:
     """
-    Production-grade price engine with:
-    - WebSocket primary feed
-    - REST API fallback
-    - Automatic reconnection
-    - Multi-symbol support
-    - Tick aggregation to OHLCV
+    Hybrid price engine with WebSocket primary and REST fallback
+    
+    Features:
+    - Automatic failover between WebSocket and REST
+    - OHLCV aggregation from ticks
+    - Spread monitoring
+    - Latency tracking
     """
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.symbols: List[str] = config.get('symbols', ['XAUUSD', 'EURUSD'])
+        self.symbols = config.get('symbols', ['EURUSD', 'XAUUSD'])
+        
+        # Primary and fallback feeds
+        self._ws_feed = WebSocketPriceFeed(self.symbols, config)
+        self._rest_feed = RESTPriceFeed(self.symbols, config)
+        
+        # State
         self.active = False
-        self.last_price: Dict[str, Tick] = {}
-        self.price_history: Dict[str, List[Tick]] = {s: [] for s in self.symbols}
-        self.ohlcv_data: Dict[str, Dict[str, List[OHLCV]]] = {
-            s: {'1m': [], '5m': [], '15m': [], '1h': []} for s in self.symbols
+        self._primary_active = False
+        self._fallback_active = False
+        self._latency_metrics: deque = deque(maxlen=1000)
+        self._spread_metrics: Dict[str, deque] = {
+            s: deque(maxlen=100) for s in self.symbols
         }
         
         # Callbacks
-        self.tick_callbacks: List[Callable[[Tick], None]] = []
-        self.ohlcv_callbacks: List[Callable[[str, str, OHLCV], None]] = []
+        self._price_callbacks: List[Callable[[Tick], None]] = []
+        self._candle_callbacks: List[Callable[[str, str, OHLCV], None]] = []
         
-        # WebSocket state
-        self.ws_connection = None
-        self.ws_task = None
-        self.reconnect_delay = 1
-        self.max_reconnect_delay = 60
-        
-        # Aggregation state
-        self.current_candles: Dict[str, Dict[str, OHLCV]] = {
-            s: {'1m': None, '5m': None, '15m': None, '1h': None} for s in self.symbols
-        }
-        
-        logger.info(f"PriceEngine initialized for symbols: {self.symbols}")
+        # Tasks
+        self._tasks: List[asyncio.Task] = []
+        self._monitor_task: Optional[asyncio.Task] = None
     
     async def start(self):
-        """Start the price engine"""
-        self.active = True
-        logger.info("Starting RealTimePriceEngine...")
+        """Start price engine"""
+        logger.info(f"Starting price engine for {len(self.symbols)} symbols")
         
-        # Start WebSocket connection
-        self.ws_task = asyncio.create_task(self._websocket_loop())
+        # Start fallback first
+        try:
+            await self._rest_feed.connect()
+            self._fallback_active = True
+            logger.info("REST fallback active")
+        except Exception as e:
+            logger.warning(f"REST fallback failed: {e}")
         
-        # Start OHLCV aggregation
-        asyncio.create_task(self._aggregation_loop())
+        # Start primary WebSocket
+        try:
+            ws_task = asyncio.create_task(self._ws_feed.connect())
+            self._tasks.append(ws_task)
+            self._primary_active = True
+            
+            # Register for updates
+            self._ws_feed.register_callback(self._on_price_update)
+            
+            logger.info("WebSocket feed active")
+        except Exception as e:
+            logger.warning(f"WebSocket failed, using REST only: {e}")
+            self._primary_active = False
         
-        # Start REST fallback monitor
-        asyncio.create_task(self._rest_fallback_loop())
+        self.active = self._primary_active or self._fallback_active
         
-        logger.info("PriceEngine started successfully")
+        # Start monitoring
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        
+        logger.info("Price engine started")
     
     async def stop(self):
-        """Graceful shutdown"""
+        """Stop price engine"""
+        logger.info("Stopping price engine")
+        
+        # Cancel tasks
+        for task in self._tasks:
+            task.cancel()
+        
+        if self._monitor_task:
+            self._monitor_task.cancel()
+        
+        # Disconnect feeds
+        await self._ws_feed.disconnect()
+        await self._rest_feed.disconnect()
+        
         self.active = False
-        if self.ws_task:
-            self.ws_task.cancel()
-            try:
-                await self.ws_task
-            except asyncio.CancelledError:
-                pass
-        
-        if self.ws_connection:
-            await self.ws_connection.close()
-        
-        logger.info("PriceEngine stopped")
+        logger.info("Price engine stopped")
     
-    async def _websocket_loop(self):
-        """Main WebSocket connection loop with auto-reconnect"""
-        while self.active:
-            try:
-                await self._connect_websocket()
-                self.reconnect_delay = 1  # Reset on successful connection
-            except Exception as e:
-                logger.error(f"WebSocket error: {e}")
-                await asyncio.sleep(self.reconnect_delay)
-                self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
-    
-    async def _connect_websocket(self):
-        """Establish WebSocket connection and handle messages"""
-        # Using Coinbase Pro WebSocket as example (free, reliable)
-        # For forex/XAUUSD, you'd use OANDA, Polygon.io, or similar
-        ws_url = self.config.get('websocket_url', 'wss://ws-feed.exchange.coinbase.com')
-        
-        logger.info(f"Connecting to WebSocket: {ws_url}")
-        
-        async with websockets.connect(ws_url) as ws:
-            self.ws_connection = ws
-            
-            # Subscribe to channels
-            subscribe_msg = {
-                "type": "subscribe",
-                "product_ids": self._normalize_symbols(self.symbols),
-                "channels": ["ticker"]
-            }
-            await ws.send(json.dumps(subscribe_msg))
-            
-            logger.info("WebSocket connected and subscribed")
-            
-            async for message in ws:
-                if not self.active:
-                    break
-                await self._handle_ws_message(message)
-    
-    async def _handle_ws_message(self, message: str):
-        """Parse and process WebSocket message"""
-        try:
-            data = json.loads(message)
-            
-            if data.get('type') == 'ticker':
-                # Coinbase format - adapt to your broker
-                symbol = self._denormalize_symbol(data.get('product_id', ''))
-                if symbol not in self.symbols:
-                    return
-                
-                tick = Tick(
-                    symbol=symbol,
-                    timestamp=int(time.time()),
-                    bid=float(data.get('best_bid', 0)),
-                    ask=float(data.get('best_ask', 0)),
-                    last_price=float(data.get('price', 0)),
-                    volume=float(data.get('volume_24h', 0)),
-                    source=DataSource.WEBSOCKET
-                )
-                
-                await self._process_tick(tick)
-                
-        except Exception as e:
-            logger.error(f"Error handling message: {e}")
-    
-    async def _process_tick(self, tick: Tick):
-        """Process incoming tick data"""
-        # Store tick
-        self.last_price[tick.symbol] = tick
-        self.price_history[tick.symbol].append(tick)
-        
-        # Trim history (keep last 10k ticks)
-        if len(self.price_history[tick.symbol]) > 10000:
-            self.price_history[tick.symbol] = self.price_history[tick.symbol][-5000:]
+    def _on_price_update(self, tick: Tick):
+        """Handle price update from WebSocket"""
+        # Record metrics
+        self._spread_metrics[tick.symbol].append(tick.spread)
         
         # Notify callbacks
-        for callback in self.tick_callbacks:
+        for callback in self._price_callbacks:
             try:
                 callback(tick)
             except Exception as e:
-                logger.error(f"Tick callback error: {e}")
+                logger.error(f"Price callback error: {e}")
     
-    async def _aggregation_loop(self):
-        """Aggregate ticks into OHLCV candles"""
-        while self.active:
-            try:
-                await self._aggregate_candles()
-                await asyncio.sleep(1)  # Check every second
-            except Exception as e:
-                logger.error(f"Aggregation error: {e}")
-                await asyncio.sleep(5)
+    def register_price_callback(self, callback: Callable[[Tick], None]):
+        """Register for price updates"""
+        self._price_callbacks.append(callback)
     
-    async def _aggregate_candles(self):
-        """Create OHLCV candles from tick history"""
-        now = int(time.time())
-        
-        for symbol in self.symbols:
-            if symbol not in self.last_price:
-                continue
-            
-            current_price = self.last_price[symbol].mid
-            
-            for timeframe, seconds in [('1m', 60), ('5m', 300), ('15m', 900), ('1h', 3600)]:
-                candle_start = (now // seconds) * seconds
-                
-                current = self.current_candles[symbol][timeframe]
-                
-                if current is None or current.timestamp != candle_start:
-                    # New candle
-                    if current is not None:
-                        # Close previous candle
-                        self.ohlcv_data[symbol][timeframe].append(current)
-                        if len(self.ohlcv_data[symbol][timeframe]) > 1000:
-                            self.ohlcv_data[symbol][timeframe] = self.ohlcv_data[symbol][timeframe][-500:]
-                        
-                        # Notify callbacks
-                        for callback in self.ohlcv_callbacks:
-                            try:
-                                callback(symbol, timeframe, current)
-                            except Exception as e:
-                                logger.error(f"OHLCV callback error: {e}")
-                    
-                    # Start new candle
-                    self.current_candles[symbol][timeframe] = OHLCV(
-                        timestamp=candle_start,
-                        open=current_price,
-                        high=current_price,
-                        low=current_price,
-                        close=current_price,
-                        volume=0
-                    )
-                else:
-                    # Update current candle
-                    current.high = max(current.high, current_price)
-                    current.low = min(current.low, current_price)
-                    current.close = current_price
-                    current.volume += self.last_price[symbol].volume
-    
-    async def _rest_fallback_loop(self):
-        """REST API fallback when WebSocket is down"""
-        while self.active:
-            try:
-                # If no prices for 10 seconds, use REST
-                stale_symbols = [
-                    s for s in self.symbols 
-                    if s not in self.last_price or 
-                    time.time() - self.last_price[s].timestamp > 10
-                ]
-                
-                if stale_symbols and not self.ws_connection:
-                    await self._fetch_rest_prices(stale_symbols)
-                
-                await asyncio.sleep(5)
-            except Exception as e:
-                logger.error(f"REST fallback error: {e}")
-                await asyncio.sleep(10)
-    
-    async def _fetch_rest_prices(self, symbols: List[str]):
-        """Fetch prices via REST API"""
-        # Example using Coinbase REST API
-        rest_url = self.config.get('rest_url', 'https://api.exchange.coinbase.com')
-        
-        async with aiohttp.ClientSession() as session:
-            for symbol in symbols:
-                try:
-                    normalized = self._normalize_symbol(symbol)
-                    async with session.get(f"{rest_url}/products/{normalized}/ticker") as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            tick = Tick(
-                                symbol=symbol,
-                                timestamp=int(time.time()),
-                                bid=float(data.get('bid', 0)),
-                                ask=float(data.get('ask', 0)),
-                                last_price=float(data.get('price', 0)),
-                                volume=float(data.get('volume', 0)),
-                                source=DataSource.REST
-                            )
-                            await self._process_tick(tick)
-                except Exception as e:
-                    logger.error(f"REST fetch error for {symbol}: {e}")
-    
-    def _normalize_symbols(self, symbols: List[str]) -> List[str]:
-        """Convert to exchange format (e.g., XAUUSD -> XAU-USD)"""
-        return [s.replace('/', '-') for s in symbols]
-    
-    def _normalize_symbol(self, symbol: str) -> str:
-        return symbol.replace('/', '-')
-    
-    def _denormalize_symbol(self, symbol: str) -> str:
-        return symbol.replace('-', '')
+    def register_candle_callback(self, callback: Callable[[str, str, OHLCV], None]):
+        """Register for candle updates"""
+        self._candle_callbacks.append(callback)
     
     def get_last_price(self, symbol: str) -> Optional[Tick]:
-        return self.last_price.get(symbol)
+        """Get last price (prefer WebSocket)"""
+        # Try WebSocket first
+        tick = self._ws_feed.get_last_price(symbol)
+        if tick:
+            return tick
+        
+        # Fall back to REST
+        return self._rest_feed.get_last_price(symbol)
     
-    def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> List[OHLCV]:
-        """Get OHLCV data for symbol and timeframe"""
-        data = self.ohlcv_data.get(symbol, {}).get(timeframe, [])
-        return data[-limit:] if data else []
+    async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> List[OHLCV]:
+        """Get OHLCV data"""
+        # Try WebSocket buffer first
+        if self._primary_active:
+            data = self._ws_feed.get_ohlcv(symbol, timeframe, limit)
+            if data:
+                return data
+        
+        # Fall back to REST
+        return await self._rest_feed.get_ohlcv(symbol, timeframe, limit)
     
-    def on_tick(self, callback: Callable[[Tick], None]):
-        """Register tick callback"""
-        self.tick_callbacks.append(callback)
+    async def _monitor_loop(self):
+        """Monitor feed health"""
+        while self.active:
+            try:
+                # Check WebSocket health
+                if self._primary_active and not self._ws_feed.active:
+                    logger.warning("WebSocket disconnected, activating REST fallback")
+                    self._primary_active = False
+                
+                # Log statistics
+                avg_spreads = {
+                    s: np.mean(list(self._spread_metrics[s])) if self._spread_metrics[s] else 0
+                    for s in self.symbols
+                }
+                
+                logger.debug(f"Price engine stats: {avg_spreads}")
+                
+                await asyncio.sleep(60)  # Check every minute
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Monitor loop error: {e}")
+                await asyncio.sleep(5)
     
-    def on_ohlcv(self, callback: Callable[[str, str, OHLCV], None]):
-        """Register OHLCV callback"""
-        self.ohlcv_callbacks.append(callback)
-'''
+    def get_status(self) -> Dict[str, Any]:
+        """Get engine status"""
+        return {
+            'active': self.active,
+            'primary_active': self._primary_active,
+            'fallback_active': self._fallback_active,
+            'symbols': self.symbols,
+            'websocket_connected': self._ws_feed.active if self._ws_feed else False,
+            'rest_available': self._rest_feed.active if self._rest_feed else False
+        }
 
-# Write the file
-with open(project_root / "data" / "real_time_price_engine.py", "w") as f:
-    f.write(data_engine_code)
 
-print("✓ Created data/real_time_price_engine.py")
+# Convenience function
+async def create_price_engine(config: Dict[str, Any]) -> RealTimePriceEngine:
+    """Factory function to create price engine"""
+    engine = RealTimePriceEngine(config)
+    await engine.start()
+    return engine
