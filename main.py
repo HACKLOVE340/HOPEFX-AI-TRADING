@@ -1,12 +1,10 @@
 
-# 7. FIXED MAIN.PY - Complete, working entry point
-
-main_fixed = '''#!/usr/bin/env python3
+# #!/usr/bin/env python3
 """
-HOPEFX AI Trading Framework - Main Entry Point (Production Ready)
-Complete implementation with all components integrated
+HOPEFX AI Trading Framework
 """
-
+import argparse
+import sys
 import argparse
 import sys
 import os
