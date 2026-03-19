@@ -52,7 +52,7 @@ class TopstepTraderConnector(MT5Connector):
 
         super().__init__(config)
 
-  class TopStepTrader:
+class TopStepTrader:
     def __init__(self, api_key):
         self.api_key = api_key
 
