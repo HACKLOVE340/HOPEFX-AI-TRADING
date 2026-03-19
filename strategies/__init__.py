@@ -1,7 +1,7 @@
 
 # 5. STRATEGY MANAGER - Multi-strategy system with regime detection
-
-strategy_code = '''"""
+"""
+strategy_code 
 HOPEFX Strategy Manager
 Multi-strategy system with market regime adaptation
 """
@@ -14,6 +14,110 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
 
+import enum
+
+try:
+    from sqlalchemy import (
+        Column, Integer, BigInteger, String, Float, Boolean,
+        DateTime, ForeignKey, Enum, Text, Index, create_engine
+    )
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import relationship, sessionmaker
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+    # Create dummy base for type hints
+    class _DummyBase:
+        pass
+    declarative_base = lambda: _DummyBase
+
+Base = declarative_base()
+
+
+class TradeStatus(enum.Enum):
+    PENDING = "pending"
+    OPEN = "open"
+    CLOSED = "closed"
+    CANCELLED = "cancelled"
+    ERROR = "error"
+
+
+class OrderSide(enum.Enum):
+    BUY = "buy"
+    SELL = "sell"
+
+
+class OrderType(enum.Enum):
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
+    STOP_LIMIT = "stop_limit"
+
+
+class SignalSource(enum.Enum):
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    BREAKOUT = "breakout"
+    MANUAL = "manual"
+    STOP_LOSS = "stop_loss"
+    TAKE_PROFIT = "take_profit"
+
+
+class Trade(Base):
+    """Trade record"""
+    __tablename__ = 'trades'
+    
+    id = Column(Integer, primary_key=True)
+    trade_id = Column(String(50), unique=True, nullable=False, index=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    side = Column(Enum(OrderSide), nullable=False)
+    
+    # Entry
+    entry_time = Column(DateTime, default=datetime.utcnow)
+    entry_price = Column(Float, nullable=False)
+    entry_quantity = Column(Float, nullable=False)
+    
+    # Exit
+    exit_time = Column(DateTime, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    exit_quantity = Column(Float, nullable=True)
+    
+    # P&L
+    realized_pnl = Column(Float, default=0.0)
+    unrealized_pnl = Column(Float, default=0.0)
+    commission = Column(Float, default=0.0)
+    swap = Column(Float, default=0.0)
+    total_pnl = Column(Float, default=0.0)
+    
+    # Risk
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    risk_reward_ratio = Column(Float, nullable=True)
+    
+    # Strategy
+    strategy = Column(String(50), nullable=True)
+    signal_source = Column(Enum(SignalSource), nullable=True)
+    signal_strength = Column(Float, nullable=True)
+    
+    # Status
+    status = Column(Enum(TradeStatus), default=TradeStatus.PENDING)
+    is_open = Column(Boolean, default=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    
+    # Relationships
+    orders = relationship("Order", back_populates="trade", lazy="dynamic")
+    signals = relationship("Signal", back_populates="trade", lazy="dynamic")
+    
+    def __repr__(self):
+        return f"<Trade({self.trade_id}, {self.symbol}, {self.side.value}, PnL={self.total_pnl})>"
+    
+    def to_dict(self) -> dict:
+        return {
+           
 logger = logging.getLogger(__name__)
 
 @dataclass
