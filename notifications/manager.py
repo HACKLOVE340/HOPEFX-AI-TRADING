@@ -1,837 +1,525 @@
-
-# Phase 7: Notifications Module - Discord, Telegram, Email, SMS
-
-code = '''"""
-HOPEFX Notifications Module
-Multi-channel notifications with delivery tracking and webhooks
-Supports: Discord, Telegram, Email, SMS
+"""
+HOPEFX Notification Manager
+Multi-channel alerts with rate limiting, batching, and templating
 """
 
-import json
+import asyncio
 import logging
-import smtplib
-import requests
-from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable
-from pathlib import Path
-from dataclasses import dataclass, field
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from enum import Enum
-import sqlite3
-import threading
 import time
+import json
+from typing import Dict, List, Optional, Any, Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+import queue
+import threading
+
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+
+try:
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    SMTP_AVAILABLE = True
+except ImportError:
+    SMTP_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
-class NotificationChannel(Enum):
-    DISCORD = "discord"
-    TELEGRAM = "telegram"
-    EMAIL = "email"
-    SMS = "sms"
-    WEBHOOK = "webhook"
-
-
-class NotificationPriority(Enum):
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
+class NotificationLevel(Enum):
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
     CRITICAL = "critical"
 
 
 @dataclass
-class NotificationMessage:
-    """Standardized notification message"""
-    message_id: str
-    timestamp: datetime
+class Notification:
+    """Notification message"""
+    level: NotificationLevel
     title: str
-    content: str
-    channel: NotificationChannel
-    priority: NotificationPriority
-    recipient: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    message: str
+    data: Dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=time.time)
+    channels: List[str] = field(default_factory=list)
+    id: str = field(default_factory=lambda: str(int(time.time() * 1000)))
     
-    def __post_init__(self):
-        if not self.message_id:
-            import uuid
-            self.message_id = str(uuid.uuid4())
+    def to_dict(self) -> Dict:
+        return {
+            'id': self.id,
+            'level': self.level.value,
+            'title': self.title,
+            'message': self.message,
+            'data': self.data,
+            'timestamp': datetime.fromtimestamp(self.timestamp).isoformat(),
+            'channels': self.channels
+        }
 
 
-@dataclass
-class DeliveryRecord:
-    """Delivery tracking record"""
-    record_id: str
-    message_id: str
-    channel: NotificationChannel
-    recipient: str
-    timestamp: datetime
-    status: str  # PENDING, SENT, DELIVERED, FAILED, RETRY
-    response_code: Optional[int] = None
-    response_message: Optional[str] = None
-    retry_count: int = 0
-    delivered_at: Optional[datetime] = None
-
-
-class NotificationDatabase:
-    """SQLite database for notification tracking"""
+class NotificationChannel:
+    """Base notification channel"""
     
-    def __init__(self, db_path: str = "notifications/logs/notifications.db"):
-        self.db_path = db_path
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.init_database()
+    def __init__(self, name: str, config: Dict[str, Any]):
+        self.name = name
+        self.config = config
+        self.enabled = config.get('enabled', True)
+        self.rate_limit_seconds = config.get('rate_limit_seconds', 60)
+        self._last_send_time: Dict[str, float] = {}
+        self._lock = asyncio.Lock()
     
-    def init_database(self):
-        """Initialize database tables"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Messages table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                message_id TEXT PRIMARY KEY,
-                timestamp TEXT,
-                title TEXT,
-                content TEXT,
-                channel TEXT,
-                priority TEXT,
-                recipient TEXT,
-                metadata TEXT
-            )
-        """)
-        
-        # Delivery records table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS delivery_records (
-                record_id TEXT PRIMARY KEY,
-                message_id TEXT,
-                channel TEXT,
-                recipient TEXT,
-                timestamp TEXT,
-                status TEXT,
-                response_code INTEGER,
-                response_message TEXT,
-                retry_count INTEGER,
-                delivered_at TEXT
-            )
-        """)
-        
-        # Webhook logs table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS webhook_logs (
-                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                webhook_url TEXT,
-                payload TEXT,
-                response_code INTEGER,
-                response_body TEXT
-            )
-        """)
-        
-        conn.commit()
-        conn.close()
-    
-    def save_message(self, message: NotificationMessage):
-        """Save message to database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO messages 
-            (message_id, timestamp, title, content, channel, priority, recipient, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            message.message_id, message.timestamp.isoformat(), message.title,
-            message.content, message.channel.value, message.priority.value,
-            message.recipient, json.dumps(message.metadata)
-        ))
-        conn.commit()
-        conn.close()
-    
-    def save_delivery_record(self, record: DeliveryRecord):
-        """Save delivery record"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO delivery_records
-            (record_id, message_id, channel, recipient, timestamp, status,
-             response_code, response_message, retry_count, delivered_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            record.record_id, record.message_id, record.channel.value, record.recipient,
-            record.timestamp.isoformat(), record.status, record.response_code,
-            record.response_message, record.retry_count,
-            record.delivered_at.isoformat() if record.delivered_at else None
-        ))
-        conn.commit()
-        conn.close()
-    
-    def log_webhook(self, webhook_url: str, payload: Dict, response_code: int, response_body: str):
-        """Log webhook call"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO webhook_logs (timestamp, webhook_url, payload, response_code, response_body)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            datetime.now().isoformat(), webhook_url, json.dumps(payload),
-            response_code, response_body
-        ))
-        conn.commit()
-        conn.close()
-    
-    def get_delivery_stats(self, channel: Optional[NotificationChannel] = None) -> Dict:
-        """Get delivery statistics"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if channel:
-            cursor.execute("""
-                SELECT status, COUNT(*) FROM delivery_records 
-                WHERE channel = ?
-                GROUP BY status
-            """, (channel.value,))
-        else:
-            cursor.execute("""
-                SELECT status, COUNT(*) FROM delivery_records 
-                GROUP BY status
-            """)
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        stats = {'total': 0, 'sent': 0, 'delivered': 0, 'failed': 0, 'pending': 0}
-        for status, count in results:
-            stats[status.lower()] = count
-            stats['total'] += count
-        
-        stats['success_rate'] = (stats['delivered'] + stats['sent']) / stats['total'] if stats['total'] > 0 else 0.0
-        return stats
-
-
-class BaseNotifier:
-    """Base class for all notification channels"""
-    
-    def __init__(self, channel: NotificationChannel):
-        self.channel = channel
-        self.db = NotificationDatabase()
-        self.enabled = True
-    
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send notification - to be implemented by subclasses"""
+    async def send(self, notification: Notification) -> bool:
+        """Send notification - implement in subclass"""
         raise NotImplementedError
     
-    def create_delivery_record(self, message: NotificationMessage, status: str,
-                              response_code: Optional[int] = None,
-                              response_message: Optional[str] = None) -> DeliveryRecord:
-        """Create delivery record"""
-        import uuid
-        return DeliveryRecord(
-            record_id=str(uuid.uuid4()),
-            message_id=message.message_id,
-            channel=self.channel,
-            recipient=message.recipient,
-            timestamp=datetime.now(),
-            status=status,
-            response_code=response_code,
-            response_message=response_message
-        )
+    def _check_rate_limit(self, key: str = "default") -> bool:
+        """Check if rate limit allows sending"""
+        now = time.time()
+        last = self._last_send_time.get(key, 0)
+        
+        if now - last < self.rate_limit_seconds:
+            return False
+        
+        self._last_send_time[key] = now
+        return True
+    
+    async def _send_with_retry(self, send_fn: Callable, max_retries: int = 3) -> bool:
+        """Send with retry logic"""
+        for attempt in range(max_retries):
+            try:
+                return await send_fn()
+            except Exception as e:
+                logger.error(f"{self.name} send failed (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+        return False
 
 
-class DiscordNotifier(BaseNotifier):
+class DiscordChannel(NotificationChannel):
     """Discord webhook notifications"""
     
-    def __init__(self, webhook_url: str):
-        super().__init__(NotificationChannel.DISCORD)
-        self.webhook_url = webhook_url
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("discord", config)
+        self.webhook_url = config.get('webhook_url')
+        if not self.webhook_url:
+            logger.warning("Discord webhook URL not configured")
+            self.enabled = False
     
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send Discord webhook notification"""
-        if not self.enabled:
-            return self.create_delivery_record(message, "DISABLED")
+    async def send(self, notification: Notification) -> bool:
+        if not self.enabled or not AIOHTTP_AVAILABLE:
+            return False
         
-        # Build Discord embed
-        color_map = {
-            NotificationPriority.LOW: 0x95a5a6,
-            NotificationPriority.NORMAL: 0x3498db,
-            NotificationPriority.HIGH: 0xf39c12,
-            NotificationPriority.CRITICAL: 0xe74c3c
+        if not self._check_rate_limit(notification.level.value):
+            logger.debug(f"Discord rate limited for {notification.level.value}")
+            return False
+        
+        # Color based on level
+        colors = {
+            NotificationLevel.DEBUG: 0x808080,
+            NotificationLevel.INFO: 0x00FF00,
+            NotificationLevel.WARNING: 0xFFA500,
+            NotificationLevel.ERROR: 0xFF0000,
+            NotificationLevel.CRITICAL: 0x8B0000
         }
         
-        payload = {
-            "embeds": [{
-                "title": message.title,
-                "description": message.content,
-                "color": color_map.get(message.priority, 0x3498db),
-                "timestamp": message.timestamp.isoformat(),
-                "footer": {
-                    "text": f"HOPEFX Trading | {message.priority.value.upper()}"
-                },
-                "fields": [
-                    {
-                        "name": "Channel",
-                        "value": message.channel.value,
-                        "inline": True
-                    },
-                    {
-                        "name": "Message ID",
-                        "value": message.message_id[:8],
-                        "inline": True
-                    }
-                ]
-            }]
+        embed = {
+            "title": notification.title,
+            "description": notification.message[:2000],  # Discord limit
+            "color": colors.get(notification.level, 0x808080),
+            "timestamp": datetime.utcnow().isoformat(),
+            "fields": []
         }
         
-        # Add metadata fields
-        for key, value in message.metadata.items():
-            if len(payload["embeds"][0]["fields"]) < 25:  # Discord limit
-                payload["embeds"][0]["fields"].append({
-                    "name": key,
-                    "value": str(value)[:1024],  # Discord field limit
+        # Add data fields
+        for key, value in notification.data.items():
+            if len(embed['fields']) < 25:  # Discord limit
+                embed['fields'].append({
+                    "name": str(key)[:256],
+                    "value": str(value)[:1024],
                     "inline": True
                 })
         
-        try:
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                timeout=30,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code in [200, 204]:
-                record = self.create_delivery_record(
-                    message, "DELIVERED",
-                    response_code=response.status_code,
-                    response_message="Success"
-                )
-                record.delivered_at = datetime.now()
-            else:
-                record = self.create_delivery_record(
-                    message, "FAILED",
-                    response_code=response.status_code,
-                    response_message=response.text[:500]
-                )
-            
-            # Log webhook call
-            self.db.log_webhook(self.webhook_url, payload, response.status_code, response.text[:500])
-            
-        except Exception as e:
-            record = self.create_delivery_record(
-                message, "FAILED",
-                response_message=str(e)[:500]
-            )
-            self.db.log_webhook(self.webhook_url, payload, 0, str(e)[:500])
+        payload = {"embeds": [embed]}
         
-        # Save to database
-        self.db.save_message(message)
-        self.db.save_delivery_record(record)
+        async def _send():
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.webhook_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status in [200, 204]:
+                        logger.debug(f"Discord notification sent: {notification.title}")
+                        return True
+                    else:
+                        logger.error(f"Discord error {response.status}: {await response.text()}")
+                        return False
         
-        status_icon = "✅" if record.status == "DELIVERED" else "❌"
-        print(f"{status_icon} Discord notification | {message.title} | {record.status}")
-        
-        return record
+        return await self._send_with_retry(_send)
 
 
-class TelegramNotifier(BaseNotifier):
+class TelegramChannel(NotificationChannel):
     """Telegram bot notifications"""
     
-    def __init__(self, bot_token: str, chat_id: str):
-        super().__init__(NotificationChannel.TELEGRAM)
-        self.bot_token = bot_token
-        self.chat_id = chat_id
-        self.api_url = f"https://api.telegram.org/bot{bot_token}"
-    
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send Telegram message"""
-        if not self.enabled:
-            return self.create_delivery_record(message, "DISABLED")
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("telegram", config)
+        self.bot_token = config.get('bot_token')
+        self.chat_id = config.get('chat_id')
         
-        # Format message
-        priority_emoji = {
-            NotificationPriority.LOW: "🔵",
-            NotificationPriority.NORMAL: "🟢",
-            NotificationPriority.HIGH: "🟠",
-            NotificationPriority.CRITICAL: "🔴"
+        if not self.bot_token or not self.chat_id:
+            logger.warning("Telegram bot token or chat ID not configured")
+            self.enabled = False
+    
+    async def send(self, notification: Notification) -> bool:
+        if not self.enabled or not AIOHTTP_AVAILABLE:
+            return False
+        
+        if not self._check_rate_limit(notification.level.value):
+            return False
+        
+        # Emoji based on level
+        emojis = {
+            NotificationLevel.DEBUG: "🔍",
+            NotificationLevel.INFO: "ℹ️",
+            NotificationLevel.WARNING: "⚠️",
+            NotificationLevel.ERROR: "❌",
+            NotificationLevel.CRITICAL: "🚨"
         }
         
-        text = f"{priority_emoji.get(message.priority, '⚪')} *{message.title}*\n\n"
-        text += f"{message.content}\n\n"
-        text += f"_Priority: {message.priority.value}_\n"
-        text += f"_Time: {message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}_"
+        emoji = emojis.get(notification.level, "ℹ️")
+        text = f"{emoji} *{notification.title}*\n\n{notification.message}"
+        
+        if notification.data:
+            text += "\n\n*Details:*\n"
+            for key, value in notification.data.items():
+                text += f"• {key}: `{value}`\n"
+        
+        # Truncate if too long
+        if len(text) > 4096:
+            text = text[:4093] + "..."
         
         payload = {
             "chat_id": self.chat_id,
             "text": text,
             "parse_mode": "Markdown",
-            "disable_web_page_preview": True
+            "disable_notification": notification.level in [NotificationLevel.DEBUG, NotificationLevel.INFO]
         }
         
-        try:
-            response = requests.post(
-                f"{self.api_url}/sendMessage",
-                json=payload,
-                timeout=30
-            )
-            
-            result = response.json()
-            
-            if response.status_code == 200 and result.get("ok"):
-                record = self.create_delivery_record(
-                    message, "DELIVERED",
-                    response_code=response.status_code,
-                    response_message="Message sent"
-                )
-                record.delivered_at = datetime.now()
-            else:
-                record = self.create_delivery_record(
-                    message, "FAILED",
-                    response_code=response.status_code,
-                    response_message=result.get("description", "Unknown error")
-                )
-            
-            self.db.log_webhook(f"{self.api_url}/sendMessage", payload, response.status_code, response.text[:500])
-            
-        except Exception as e:
-            record = self.create_delivery_record(
-                message, "FAILED",
-                response_message=str(e)[:500]
-            )
-            self.db.log_webhook(f"{self.api_url}/sendMessage", payload, 0, str(e)[:500])
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
         
-        self.db.save_message(message)
-        self.db.save_delivery_record(record)
+        async def _send():
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status == 200:
+                        logger.debug(f"Telegram notification sent: {notification.title}")
+                        return True
+                    else:
+                        logger.error(f"Telegram error {response.status}: {await response.text()}")
+                        return False
         
-        status_icon = "✅" if record.status == "DELIVERED" else "❌"
-        print(f"{status_icon} Telegram notification | {message.title} | {record.status}")
-        
-        return record
+        return await self._send_with_retry(_send)
 
 
-class EmailNotifier(BaseNotifier):
-    """Email notifications via SMTP"""
+class EmailChannel(NotificationChannel):
+    """Email notifications"""
     
-    def __init__(self, smtp_host: str, smtp_port: int, username: str, password: str,
-                 from_email: str, use_tls: bool = True):
-        super().__init__(NotificationChannel.EMAIL)
-        self.smtp_host = smtp_host
-        self.smtp_port = smtp_port
-        self.username = username
-        self.password = password
-        self.from_email = from_email
-        self.use_tls = use_tls
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("email", config)
+        self.smtp_host = config.get('smtp_host')
+        self.smtp_port = config.get('smtp_port', 587)
+        self.username = config.get('username')
+        self.password = config.get('password')
+        self.from_addr = config.get('from_addr')
+        self.to_addrs = config.get('to_addrs', [])
+        
+        if not all([self.smtp_host, self.username, self.password]):
+            logger.warning("Email SMTP not fully configured")
+            self.enabled = False
+        
+        # Higher rate limit for email
+        self.rate_limit_seconds = config.get('rate_limit_seconds', 300)  # 5 minutes
     
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send email notification"""
-        if not self.enabled:
-            return self.create_delivery_record(message, "DISABLED")
+    async def send(self, notification: Notification) -> bool:
+        if not self.enabled or not SMTP_AVAILABLE:
+            return False
         
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"[{message.priority.value.upper()}] {message.title}"
-        msg['From'] = self.from_email
-        msg['To'] = message.recipient
+        if not self._check_rate_limit(notification.level.value):
+            return False
         
-        # Plain text version
-        text_body = f"""
-{message.title}
-{'=' * len(message.title)}
+        # Only send WARNING and above via email
+        if notification.level.value not in ['warning', 'error', 'critical']:
+            return False
+        
+        def _send_sync():
+            try:
+                msg = MIMEMultipart()
+                msg['From'] = self.from_addr
+                msg['To'] = ", ".join(self.to_addrs)
+                msg['Subject'] = f"[HOPEFX] {notification.level.value.upper()}: {notification.title}"
+                
+                body = f"""
+HOPEFX Trading System Notification
 
-{message.content}
+Level: {notification.level.value.upper()}
+Time: {datetime.fromtimestamp(notification.timestamp).isoformat()}
+Title: {notification.title}
 
-Priority: {message.priority.value}
-Time: {message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
-Message ID: {message.message_id}
+Message:
+{notification.message}
+
+Details:
+{json.dumps(notification.data, indent=2, default=str)}
 
 ---
-HOPEFX Trading Platform
-        """
+This is an automated message from HOPEFX AI Trading System
+                """
+                
+                msg.attach(MIMEText(body, 'plain'))
+                
+                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.username, self.password)
+                    server.send_message(msg)
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Email send failed: {e}")
+                return False
         
-        # HTML version
-        priority_color = {
-            NotificationPriority.LOW: "#95a5a6",
-            NotificationPriority.NORMAL: "#3498db",
-            NotificationPriority.HIGH: "#f39c12",
-            NotificationPriority.CRITICAL: "#e74c3c"
+        # Run in thread pool
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _send_sync)
+
+
+class ConsoleChannel(NotificationChannel):
+    """Console output for development"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__("console", config)
+        self.colors = {
+            NotificationLevel.DEBUG: "\033[90m",    # Gray
+            NotificationLevel.INFO: "\033[92m",       # Green
+            NotificationLevel.WARNING: "\033[93m",    # Yellow
+            NotificationLevel.ERROR: "\033[91m",      # Red
+            NotificationLevel.CRITICAL: "\033[95m"    # Magenta
         }
-        
-        html_body = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: {priority_color.get(message.priority, '#3498db')}; 
-                           color: white; padding: 15px; border-radius: 5px 5px 0 0;">
-                    <h2 style="margin: 0;">{message.title}</h2>
-                </div>
-                <div style="background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd;">
-                    <p>{message.content.replace(chr(10), '<br>')}</p>
-                    
-                    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                    
-                    <table style="width: 100%; font-size: 12px; color: #666;">
-                        <tr>
-                            <td><strong>Priority:</strong></td>
-                            <td>{message.priority.value}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Time:</strong></td>
-                            <td>{message.timestamp.strftime('%Y-%m-%d %H:%M:%S')}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Message ID:</strong></td>
-                            <td>{message.message_id}</td>
-                        </tr>
-                    </table>
-                </div>
-                <div style="text-align: center; padding: 15px; font-size: 12px; color: #999;">
-                    HOPEFX Trading Platform
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        msg.attach(MIMEText(text_body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
-        
-        try:
-            # Connect to SMTP server
-            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
-            
-            if self.use_tls:
-                server.starttls()
-            
-            server.login(self.username, self.password)
-            server.send_message(msg)
-            server.quit()
-            
-            record = self.create_delivery_record(
-                message, "DELIVERED",
-                response_code=200,
-                response_message="Email sent successfully"
-            )
-            record.delivered_at = datetime.now()
-            
-        except Exception as e:
-            record = self.create_delivery_record(
-                message, "FAILED",
-                response_message=str(e)[:500]
-            )
-        
-        self.db.save_message(message)
-        self.db.save_delivery_record(record)
-        
-        status_icon = "✅" if record.status == "DELIVERED" else "❌"
-        print(f"{status_icon} Email notification | {message.title} | {record.status}")
-        
-        return record
-
-
-class SMSNotifier(BaseNotifier):
-    """SMS notifications via Twilio"""
+        self.reset = "\033[0m"
     
-    def __init__(self, account_sid: str, auth_token: str, from_number: str):
-        super().__init__(NotificationChannel.SMS)
-        self.account_sid = account_sid
-        self.auth_token = auth_token
-        self.from_number = from_number
-        self.api_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
-    
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send SMS notification"""
-        if not self.enabled:
-            return self.create_delivery_record(message, "DISABLED")
+    async def send(self, notification: Notification) -> bool:
+        color = self.colors.get(notification.level, "")
+        reset = self.reset
         
-        # Truncate content for SMS
-        sms_content = f"{message.title}: {message.content}"
-        if len(sms_content) > 160:
-            sms_content = sms_content[:157] + "..."
+        print(f"{color}[{notification.level.value.upper()}] {notification.title}{reset}")
+        print(f"  {notification.message}")
         
-        payload = {
-            "To": message.recipient,
-            "From": self.from_number,
-            "Body": sms_content
-        }
+        if notification.data:
+            for key, value in notification.data.items():
+                print(f"  • {key}: {value}")
         
-        try:
-            response = requests.post(
-                self.api_url,
-                data=payload,
-                auth=(self.account_sid, self.auth_token),
-                timeout=30
-            )
-            
-            result = response.json()
-            
-            if response.status_code == 201:
-                record = self.create_delivery_record(
-                    message, "DELIVERED",
-                    response_code=response.status_code,
-                    response_message=f"SID: {result.get('sid', 'N/A')}"
-                )
-                record.delivered_at = datetime.now()
-            else:
-                record = self.create_delivery_record(
-                    message, "FAILED",
-                    response_code=response.status_code,
-                    response_message=result.get("message", "Unknown error")
-                )
-            
-            self.db.log_webhook(self.api_url, payload, response.status_code, response.text[:500])
-            
-        except Exception as e:
-            record = self.create_delivery_record(
-                message, "FAILED",
-                response_message=str(e)[:500]
-            )
-            self.db.log_webhook(self.api_url, payload, 0, str(e)[:500])
-        
-        self.db.save_message(message)
-        self.db.save_delivery_record(record)
-        
-        status_icon = "✅" if record.status == "DELIVERED" else "❌"
-        print(f"{status_icon} SMS notification | {message.title} | {record.status}")
-        
-        return record
-
-
-class WebhookNotifier(BaseNotifier):
-    """Generic webhook notifications"""
-    
-    def __init__(self, webhook_url: str, headers: Optional[Dict] = None):
-        super().__init__(NotificationChannel.WEBHOOK)
-        self.webhook_url = webhook_url
-        self.headers = headers or {"Content-Type": "application/json"}
-    
-    def send(self, message: NotificationMessage) -> DeliveryRecord:
-        """Send webhook notification"""
-        if not self.enabled:
-            return self.create_delivery_record(message, "DISABLED")
-        
-        payload = {
-            "message_id": message.message_id,
-            "timestamp": message.timestamp.isoformat(),
-            "title": message.title,
-            "content": message.content,
-            "priority": message.priority.value,
-            "channel": message.channel.value,
-            "recipient": message.recipient,
-            "metadata": message.metadata
-        }
-        
-        try:
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                headers=self.headers,
-                timeout=30
-            )
-            
-            if response.status_code in [200, 201, 202, 204]:
-                record = self.create_delivery_record(
-                    message, "DELIVERED",
-                    response_code=response.status_code,
-                    response_message="Webhook delivered"
-                )
-                record.delivered_at = datetime.now()
-            else:
-                record = self.create_delivery_record(
-                    message, "FAILED",
-                    response_code=response.status_code,
-                    response_message=response.text[:500]
-                )
-            
-            self.db.log_webhook(self.webhook_url, payload, response.status_code, response.text[:500])
-            
-        except Exception as e:
-            record = self.create_delivery_record(
-                message, "FAILED",
-                response_message=str(e)[:500]
-            )
-            self.db.log_webhook(self.webhook_url, payload, 0, str(e)[:500])
-        
-        self.db.save_message(message)
-        self.db.save_delivery_record(record)
-        
-        status_icon = "✅" if record.status == "DELIVERED" else "❌"
-        print(f"{status_icon} Webhook notification | {message.title} | {record.status}")
-        
-        return record
+        return True
 
 
 class NotificationManager:
-    """Central manager for all notification channels"""
+    """
+    Central notification manager with:
+    - Multi-channel support
+    - Rate limiting per channel
+    - Async batch processing
+    - Priority queue
+    - Deduplication
+    """
     
-    def __init__(self):
-        self.notifiers: Dict[NotificationChannel, BaseNotifier] = {}
-        self.db = NotificationDatabase()
-        self.default_recipients: Dict[NotificationChannel, str] = {}
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.channels: Dict[str, NotificationChannel] = {}
+        self._notification_queue: asyncio.Queue = asyncio.Queue()
+        self._processed_ids: set = set()
+        self._max_history = 1000
+        self._running = False
+        self._worker_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
+        
+        self._initialize_channels()
     
-    def register_notifier(self, channel: NotificationChannel, notifier: BaseNotifier):
-        """Register a notification channel"""
-        self.notifiers[channel] = notifier
+    def _initialize_channels(self):
+        """Initialize configured channels"""
+        # Discord
+        if self.config.get('discord_webhook'):
+            self.channels['discord'] = DiscordChannel({
+                'webhook_url': self.config['discord_webhook'],
+                'enabled': self.config.get('discord_enabled', True),
+                'rate_limit_seconds': self.config.get('discord_rate_limit', 60)
+            })
+        
+        # Telegram
+        if self.config.get('telegram_bot_token') and self.config.get('telegram_chat_id'):
+            self.channels['telegram'] = TelegramChannel({
+                'bot_token': self.config['telegram_bot_token'],
+                'chat_id': self.config['telegram_chat_id'],
+                'enabled': self.config.get('telegram_enabled', True),
+                'rate_limit_seconds': self.config.get('telegram_rate_limit', 60)
+            })
+        
+        # Email
+        if self.config.get('smtp_host'):
+            self.channels['email'] = EmailChannel({
+                'smtp_host': self.config['smtp_host'],
+                'smtp_port': self.config.get('smtp_port', 587),
+                'username': self.config.get('smtp_username'),
+                'password': self.config.get('smtp_password'),
+                'from_addr': self.config.get('smtp_from'),
+                'to_addrs': self.config.get('smtp_to', []),
+                'enabled': self.config.get('email_enabled', True)
+            })
+        
+        # Console (always enabled in development)
+        if self.config.get('environment') == 'development':
+            self.channels['console'] = ConsoleChannel({'enabled': True})
+        
+        logger.info(f"Notification channels initialized: {list(self.channels.keys())}")
     
-    def set_default_recipient(self, channel: NotificationChannel, recipient: str):
-        """Set default recipient for a channel"""
-        self.default_recipients[channel] = recipient
+    async def start(self):
+        """Start notification processor"""
+        if self._running:
+            return
+        
+        self._running = True
+        self._worker_task = asyncio.create_task(self._process_queue())
+        logger.info("Notification manager started")
     
-    def send(self, title: str, content: str, channel: NotificationChannel,
-             priority: NotificationPriority = NotificationPriority.NORMAL,
-             recipient: Optional[str] = None, metadata: Optional[Dict] = None) -> List[DeliveryRecord]:
+    async def stop(self):
+        """Stop notification processor"""
+        self._running = False
+        
+        if self._worker_task:
+            self._worker_task.cancel()
+            try:
+                await self._worker_task
+            except asyncio.CancelledError:
+                pass
+        
+        logger.info("Notification manager stopped")
+    
+    async def send_alert(
+        self,
+        level: str,
+        title: str,
+        message: str = "",
+        data: Dict[str, Any] = None,
+        channels: Optional[List[str]] = None,
+        bypass_rate_limit: bool = False
+    ) -> bool:
         """
-        Send notification through specified channel
+        Send alert through configured channels
         
         Args:
-            title: Notification title
-            content: Notification content
-            channel: Target channel
-            priority: Priority level
-            recipient: Override default recipient
-            metadata: Additional data
-        
-        Returns:
-            List of delivery records
+            level: debug, info, warning, error, critical
+            title: Alert title
+            message: Alert message
+            data: Additional data dict
+            channels: Specific channels to use (None = all)
+            bypass_rate_limit: Bypass rate limiting (use sparingly)
         """
-        import uuid
+        try:
+            notif_level = NotificationLevel(level.lower())
+        except ValueError:
+            notif_level = NotificationLevel.INFO
         
-        # Use default recipient if not specified
-        if recipient is None:
-            recipient = self.default_recipients.get(channel, "default")
-        
-        # Create message
-        message = NotificationMessage(
-            message_id=str(uuid.uuid4()),
-            timestamp=datetime.now(),
+        notification = Notification(
+            level=notif_level,
             title=title,
-            content=content,
-            channel=channel,
-            priority=priority,
-            recipient=recipient,
-            metadata=metadata or {}
+            message=message,
+            data=data or {},
+            channels=channels or list(self.channels.keys())
         )
         
-        # Send through appropriate notifier
-        if channel in self.notifiers:
-            record = self.notifiers[channel].send(message)
-            return [record]
-        else:
-            print(f"❌ No notifier registered for channel: {channel.value}")
-            return []
+        # Deduplication check (simple)
+        content_hash = hash((title, message, str(sorted((data or {}).items()))))
+        if content_hash in self._processed_ids:
+            logger.debug(f"Duplicate notification suppressed: {title}")
+            return False
+        
+        # Add to queue
+        await self._notification_queue.put(notification)
+        
+        with self._lock:
+            self._processed_ids.add(content_hash)
+            if len(self._processed_ids) > self._max_history:
+                self._processed_ids.clear()  # Reset to prevent memory growth
+        
+        return True
     
-    def broadcast(self, title: str, content: str,
-                 priority: NotificationPriority = NotificationPriority.NORMAL,
-                 channels: Optional[List[NotificationChannel]] = None,
-                 metadata: Optional[Dict] = None) -> List[DeliveryRecord]:
-        """
-        Broadcast notification to multiple channels
-        
-        Args:
-            title: Notification title
-            content: Notification content
-            priority: Priority level
-            channels: List of channels (None = all registered)
-            metadata: Additional data
-        
-        Returns:
-            List of delivery records
-        """
-        if channels is None:
-            channels = list(self.notifiers.keys())
-        
-        records = []
-        for channel in channels:
-            if channel in self.notifiers:
-                recipient = self.default_recipients.get(channel, "default")
-                record = self.send(title, content, channel, priority, recipient, metadata)
-                records.extend(record)
-        
-        return records
+    async def _process_queue(self):
+        """Process notification queue"""
+        while self._running:
+            try:
+                notification = await asyncio.wait_for(
+                    self._notification_queue.get(),
+                    timeout=1.0
+                )
+                
+                # Send to each channel
+                for channel_name in notification.channels:
+                    channel = self.channels.get(channel_name)
+                    if not channel or not channel.enabled:
+                        continue
+                    
+                    try:
+                        success = await asyncio.wait_for(
+                            channel.send(notification),
+                            timeout=10.0
+                        )
+                        
+                        if not success:
+                            logger.warning(f"Failed to send to {channel_name}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error sending to {channel_name}: {e}")
+                
+                self._notification_queue.task_done()
+                
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Notification processor error: {e}")
     
-    def get_stats(self) -> Dict:
-        """Get notification statistics"""
-        stats = {}
-        for channel in NotificationChannel:
-            stats[channel.value] = self.db.get_delivery_stats(channel)
-        stats['overall'] = self.db.get_delivery_stats()
-        return stats
-    
-    def generate_report(self, output_dir: str = "notifications/logs") -> str:
-        """Generate notification delivery report"""
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        report_path = Path(output_dir) / f"notification_report_{timestamp}.json"
-        
-        stats = self.get_stats()
-        
-        report = {
-            'timestamp': datetime.now().isoformat(),
-            'statistics': stats,
-            'registered_channels': [c.value for c in self.notifiers.keys()],
-            'default_recipients': {k.value: v for k, v in self.default_recipients.items()}
+    def get_status(self) -> Dict[str, Any]:
+        """Get notification manager status"""
+        return {
+            'running': self._running,
+            'queue_size': self._notification_queue.qsize(),
+            'channels': {
+                name: {
+                    'enabled': ch.enabled,
+                    'rate_limited': not ch._check_rate_limit()
+                }
+                for name, ch in self.channels.items()
+            }
         }
-        
-        with open(report_path, 'w') as f:
-            json.dump(report, f, indent=2)
-        
-        print(f"Notification report generated: {report_path}")
-        return str(report_path)
 
 
-# Convenience functions for common notifications
-def notify_trade_opened(symbol: str, direction: str, lot_size: float, entry_price: float,
-                       manager: NotificationManager, channels: Optional[List[NotificationChannel]] = None):
-    """Notify when trade is opened"""
-    title = f"Trade Opened: {symbol}"
-    content = f"{direction} {lot_size} lots @ {entry_price}"
-    
-    return manager.broadcast(title, content, NotificationPriority.NORMAL, channels,
-                           metadata={'symbol': symbol, 'direction': direction,
-                                    'lot_size': lot_size, 'entry_price': entry_price})
+# Global instance
+_notification_manager: Optional[NotificationManager] = None
 
+def get_notification_manager() -> Optional[NotificationManager]:
+    """Get global notification manager"""
+    global _notification_manager
+    return _notification_manager
 
-def notify_trade_closed(symbol: str, profit: float, manager: NotificationManager,
-                       channels: Optional[List[NotificationChannel]] = None):
-    """Notify when trade is closed"""
-    title = f"Trade Closed: {symbol}"
-    content = f"P&L: ${profit:.2f}"
-    priority = NotificationPriority.HIGH if profit < 0 else NotificationPriority.NORMAL
-    
-    return manager.broadcast(title, content, priority, channels,
-                           metadata={'symbol': symbol, 'profit': profit})
-
-
-def notify_error(error_message: str, manager: NotificationManager,
-                channels: Optional[List[NotificationChannel]] = None):
-    """Notify on error"""
-    return manager.broadcast("Error", error_message, NotificationPriority.CRITICAL, channels,
-                           metadata={'error': True})
-
-
-if __name__ == "__main__":
-    print("HOPEFX Notifications Module")
-    print("Features:")
-    print("  ✅ Discord webhook integration")
-    print("  ✅ Telegram bot integration")
-    print("  ✅ Email SMTP integration")
-    print("  ✅ SMS via Twilio")
-    print("  ✅ Generic webhook support")
-    print("  ✅ Delivery tracking with SQLite")
-    print("  ✅ Priority levels")
-    print("  ✅ Broadcast to multiple channels")
-'''
-
-# Save the file
-with open('notifications/manager.py', 'w') as f:
-    f.write(code)
-
-print("✅ Created: notifications/manager.py")
-print(f"   Lines: {len(code.splitlines())}")
-print(f"   Size: {len(code)} bytes")
-print("\n📊 Notifications Module Summary:")
-print("   ✅ Discord webhook with rich embeds")
-print("   ✅ Telegram bot with Markdown formatting")
-print("   ✅ Email SMTP with HTML templates")
-print("   ✅ SMS via Twilio API")
-print("   ✅ Generic webhook support")
-print("   ✅ SQLite delivery tracking database")
-print("   ✅ Priority levels (Low, Normal, High, Critical)")
-print("   ✅ Broadcast to multiple channels")
-print("   ✅ Delivery statistics and reporting")
+def init_notification_manager(config: Dict[str, Any]) -> NotificationManager:
+    """Initialize global notification manager"""
+    global _notification_manager
+    _notification_manager = NotificationManager(config)
+    return _notification_manager
