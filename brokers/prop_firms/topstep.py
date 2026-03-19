@@ -52,6 +52,22 @@ class TopstepTraderConnector(MT5Connector):
 
         super().__init__(config)
 
+  class TopStepTrader:
+    def __init__(self, api_key):
+        self.api_key = api_key
+
+    def get_account_info(self):
+        # code to get account info
+        pass
+
+    def place_order(self, order):
+        # code to place order
+        pass
+
+    def get_orders(self):
+        # code to get orders
+        pass
+    
         self.account_type = config.get('account_type', 'combine')
 
         logger.info(f"TopstepTrader Connector initialized for {self.account_type} account")
