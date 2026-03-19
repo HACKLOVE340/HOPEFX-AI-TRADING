@@ -1,7 +1,7 @@
 
 # 4. RISK MANAGER - Advanced risk controls
-
-risk_code = '''"""
+"""
+risk_code =
 HOPEFX Risk Management System
 Position sizing, drawdown controls, correlation management
 """
@@ -11,6 +11,26 @@ import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
+"""
+HOPEFX Risk Management Package
+"""
+
+from .manager import (
+    RiskManager,
+    RiskConfig,
+    PositionSizingResult,
+    RiskAssessment,
+    RiskLevel
+)
+
+__all__ = [
+    'RiskManager',
+    'RiskConfig',
+    'PositionSizingResult',
+    'RiskAssessment',
+    'RiskLevel'
+]
+
 
 logger = logging.getLogger(__name__)
 
