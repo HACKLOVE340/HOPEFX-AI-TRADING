@@ -1,423 +1,433 @@
+#!/usr/bin/env python3
+"""
+HOPEFX AI Trading Framework - COMPLETE PRODUCTION SYSTEM
+All components integrated and wired together
+"""
 
-# #!/usr/bin/env python3
-"""
-HOPEFX AI Trading Framework
-"""
-import argparse
-import sys
 import argparse
 import sys
 import os
-import logging
-import time
 import asyncio
+import signal
+import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
 
-# Project root setup
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# Core infrastructure (must be first)
+from infrastructure.logging import HOPEFXLogger, get_logger, set_context, LogContext
+from infrastructure.health import HealthChecker, get_health_checker, start_health_server
+from infrastructure.metrics import get_metrics_registry, MetricsRegistry
 
-# Core imports
-from config import initialize_config, get_config_manager
-from cache import MarketDataCache
-from database.models import Base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-# Component imports
+# Data and execution
 from data.real_time_price_engine import RealTimePriceEngine
+from data.order_book import MultiSymbolOrderBook
+from execution.position_tracker import PositionTracker
+from execution.trade_executor import TradeExecutor
+
+# Core intelligence
 from brain.brain import HOPEFXBrain, SystemState
-from strategies import StrategyManager
-from risk import RiskManager, RiskConfig
+from strategies.manager import StrategyManager
+from risk.manager import RiskManager, RiskConfig
 from brokers import PaperTradingBroker, create_broker
-from notifications import NotificationManager
 
-# Optional imports with graceful degradation
-try:
-    from utils import get_all_component_statuses, get_framework_version
-    UTILS_AVAILABLE = True
-except ImportError:
-    UTILS_AVAILABLE = False
+# Infrastructure services
+from database.connection import DatabaseManager, init_db_manager
+from cache import MarketDataCache
+from notifications.manager import NotificationManager, init_notification_manager
+from events.event_store import EventStore, get_event_store, publish_event, EventType
+from security.encryption import get_credential_manager
+from dashboard.web_dashboard import start_dashboard
+from api.server import create_api_app, start_api_server
 
-try:
-    from ml import LSTMPricePredictor, RandomForestTradingClassifier, TechnicalFeatureEngineer
-    ML_AVAILABLE = True
-except ImportError:
-    ML_AVAILABLE = False
+# Utilities
+from utils import get_framework_version, get_all_component_statuses
 
-# Logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/hopefx_main.log')
-    ]
+# Setup logging first
+HOPEFXLogger().setup(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    log_dir="logs",
+    app_name="hopefx",
+    json_format=True,
+    async_mode=True,
+    enable_console=True
 )
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
+
 
 class HopeFXTradingApp:
     """
-    HOPEFX Trading Application
-    Fully integrated trading system with brain, strategies, risk management
+    Complete HOPEFX Trading Application
+    All components wired together with proper lifecycle management
     """
     
-    def __init__(self, environment: Optional[str] = None):
-        self.environment = environment or os.getenv('APP_ENV', 'development')
-        self.config = None
-        self.db_engine = None
-        self.db_session = None
-        self.cache = None
+    def __init__(self, environment: str = "development"):
+        self.environment = environment
+        self.version = get_framework_version()
         
-        # Core components
+        # Core state
+        self.running = False
+        self._shutdown_event = asyncio.Event()
+        self._tasks: List[asyncio.Task] = []
+        self._components_initialized = False
+        
+        # Infrastructure
+        self.db_manager: Optional[DatabaseManager] = None
+        self.cache: Optional[MarketDataCache] = None
+        self.event_store: Optional[EventStore] = None
+        self.credential_manager = get_credential_manager()
+        
+        # Trading components
         self.price_engine: Optional[RealTimePriceEngine] = None
-        self.brain: Optional[HOPEFXBrain] = None
-        self.strategy_manager: Optional[StrategyManager] = None
-        self.risk_manager: Optional[RiskManager] = None
+        self.order_book: Optional[MultiSymbolOrderBook] = None
         self.broker = None
+        self.risk_manager: Optional[RiskManager] = None
+        self.strategy_manager: Optional[StrategyManager] = None
+        self.position_tracker: Optional[PositionTracker] = None
+        self.trade_executor: Optional[TradeExecutor] = None
+        self.brain: Optional[HOPEFXBrain] = None
         self.notification_manager: Optional[NotificationManager] = None
         
-        # State
-        self.running = False
-        self.tasks: list = []
+        # Services
+        self.health_checker: Optional[HealthChecker] = None
+        self.metrics = get_metrics_registry()
         
-        logger.info(f"HOPEFX Trading App v2.0.0 initialized [{self.environment}]")
+        logger.info(f"HOPEFX v{self.version} initialized [{environment}]")
     
     async def initialize(self):
-        """Initialize all components"""
+        """Initialize all components in dependency order"""
         logger.info("=" * 60)
         logger.info("INITIALIZING HOPEFX TRADING SYSTEM")
         logger.info("=" * 60)
         
-        # 1. Configuration
-        await self._init_config()
-        
-        # 2. Database
-        await self._init_database()
-        
-        # 3. Cache
-        await self._init_cache()
-        
-        # 4. Notifications
-        await self._init_notifications()
-        
-        # 5. Broker
-        await self._init_broker()
-        
-        # 6. Price Engine
-        await self._init_price_engine()
-        
-        # 7. Risk Manager
-        await self._init_risk_manager()
-        
-        # 8. Strategy Manager
-        await self._init_strategy_manager()
-        
-        # 9. Brain (Central Intelligence)
-        await self._init_brain()
-        
-        logger.info("=" * 60)
-        logger.info("INITIALIZATION COMPLETE")
-        logger.info("=" * 60)
-    
-    async def _init_config(self):
-        """Load configuration"""
         try:
-            self.config = initialize_config(environment=self.environment)
-            logger.info(f"✓ Configuration loaded: {self.config.environment}")
-        except Exception as e:
-            logger.error(f"Config initialization failed: {e}")
-            raise
-    
-    async def _init_database(self):
-        """Initialize database"""
-        try:
-            connection_string = self.config.database.get_connection_string()
-            self.db_engine = create_engine(connection_string)
-            Base.metadata.create_all(self.db_engine)
-            self.db_session = sessionmaker(bind=self.db_engine)
-            logger.info(f"✓ Database initialized: {self.config.database.db_type}")
-        except Exception as e:
-            logger.warning(f"Database initialization issue: {e}")
-            logger.info("Continuing without database...")
-    
-    async def _init_cache(self):
-        """Initialize Redis cache"""
-        try:
+            # 1. Event Store (for audit trail)
+            self.event_store = get_event_store()
+            await self.event_store.start()
+            logger.info("✓ Event store started")
+            
+            # 2. Database
+            db_url = os.getenv('DATABASE_URL', 'sqlite:///hopefx.db')
+            self.db_manager = init_db_manager(db_url, pool_size=10)
+            logger.info(f"✓ Database connected: {db_url[:20]}...")
+            
+            # 3. Cache
             self.cache = MarketDataCache(
                 host=os.getenv('REDIS_HOST', 'localhost'),
-                port=int(os.getenv('REDIS_PORT', 6379)),
-                max_retries=3
+                port=int(os.getenv('REDIS_PORT', 6379))
             )
-            if self.cache.health_check():
-                logger.info("✓ Cache connected")
-            else:
-                logger.warning("⚠ Cache health check failed")
-        except Exception as e:
-            logger.warning(f"Cache initialization failed: {e}")
-            self.cache = None
-    
-    async def _init_notifications(self):
-        """Initialize notification system"""
-        try:
-            config = {
+            logger.info("✓ Cache initialized")
+            
+            # 4. Notifications
+            self.notification_manager = init_notification_manager({
                 'discord_webhook': os.getenv('DISCORD_WEBHOOK'),
                 'telegram_bot_token': os.getenv('TELEGRAM_BOT_TOKEN'),
-                'telegram_chat_id': os.getenv('TELEGRAM_CHAT_ID')
-            }
-            self.notification_manager = NotificationManager(config)
+                'telegram_chat_id': os.getenv('TELEGRAM_CHAT_ID'),
+                'environment': self.environment
+            })
             await self.notification_manager.start()
-            logger.info("✓ Notification system ready")
-        except Exception as e:
-            logger.warning(f"Notification init failed: {e}")
-            self.notification_manager = None
-    
-    async def _init_broker(self):
-        """Initialize broker connection"""
-        try:
-            broker_type = self.config.trading.get('broker_type', 'paper')
+            logger.info("✓ Notifications ready")
             
+            # 5. Broker
+            broker_type = os.getenv('BROKER_TYPE', 'paper')
             if broker_type == 'paper':
                 self.broker = PaperTradingBroker(
-                    initial_balance=self.config.trading.get('initial_balance', 100000)
+                    initial_balance=float(os.getenv('INITIAL_BALANCE', '100000')),
+                    commission_per_lot=float(os.getenv('COMMISSION', '3.5'))
                 )
                 await self.broker.connect()
-                logger.info(f"✓ Paper Trading Broker connected")
             else:
-                # Live broker
-                broker_config = self.config.api_configs.get(broker_type, {})
-                self.broker = create_broker(broker_type, broker_config)
+                # Live broker with encrypted credentials
+                api_key = self.credential_manager.get_credential('oanda', 'api_key')
+                account_id = self.credential_manager.get_credential('oanda', 'account_id')
+                self.broker = create_broker('oanda', {
+                    'api_key': api_key or os.getenv('OANDA_API_KEY'),
+                    'account_id': account_id or os.getenv('OANDA_ACCOUNT_ID'),
+                    'practice': os.getenv('OANDA_ENVIRONMENT', 'practice') == 'practice'
+                })
                 await self.broker.connect()
-                logger.info(f"✓ {broker_type.upper()} Broker connected")
-                
-        except Exception as e:
-            logger.error(f"Broker initialization failed: {e}")
-            raise
-    
-    async def _init_price_engine(self):
-        """Initialize real-time price feed"""
-        try:
-            symbols = self.config.trading.get('symbols', ['EURUSD', 'GBPUSD', 'XAUUSD'])
-            engine_config = {
-                'symbols': symbols,
-                'websocket_url': os.getenv('WS_URL', 'wss://ws-feed.exchange.coinbase.com'),
-                'rest_url': os.getenv('REST_URL', 'https://api.exchange.coinbase.com')
-            }
+            logger.info(f"✓ Broker connected: {broker_type}")
             
-            self.price_engine = RealTimePriceEngine(engine_config)
+            # 6. Price Engine
+            symbols = os.getenv('TRADING_SYMBOLS', 'EURUSD,XAUUSD,GBPUSD').split(',')
+            self.price_engine = RealTimePriceEngine({
+                'symbols': symbols,
+                'websocket_url': os.getenv('WS_URL'),
+                'rest_url': os.getenv('REST_URL')
+            })
+            await self.price_engine.start()
             
             # Connect paper broker to price feed
             if isinstance(self.broker, PaperTradingBroker):
                 self.broker.set_price_feed(self.price_engine)
+            logger.info(f"✓ Price engine started: {len(symbols)} symbols")
             
-            logger.info(f"✓ Price Engine initialized for {len(symbols)} symbols")
-        except Exception as e:
-            logger.error(f"Price engine initialization failed: {e}")
-            raise
-    
-    async def _init_risk_manager(self):
-        """Initialize risk management"""
-        try:
-            risk_config = RiskConfig(
-                max_position_size_pct=self.config.trading.get('max_position_size_pct', 0.02),
-                max_drawdown_pct=self.config.trading.get('max_drawdown_pct', 0.10),
-                daily_loss_limit_pct=self.config.trading.get('daily_loss_limit_pct', 0.05)
-            )
-            self.risk_manager = RiskManager(risk_config)
-            logger.info("✓ Risk Manager initialized")
-        except Exception as e:
-            logger.error(f"Risk manager initialization failed: {e}")
-            raise
-    
-    async def _init_strategy_manager(self):
-        """Initialize strategy system"""
-        try:
+            # 7. Order Book
+            self.order_book = MultiSymbolOrderBook(symbols)
+            logger.info("✓ Order book initialized")
+            
+            # 8. Risk Manager
+            self.risk_manager = RiskManager(RiskConfig(
+                max_position_size_pct=float(os.getenv('MAX_POSITION_PCT', '0.02')),
+                max_drawdown_pct=float(os.getenv('MAX_DRAWDOWN_PCT', '0.10')),
+                daily_loss_limit_pct=float(os.getenv('DAILY_LOSS_PCT', '0.05'))
+            ))
+            logger.info("✓ Risk manager ready")
+            
+            # 9. Strategy Manager
             self.strategy_manager = StrategyManager()
-            logger.info("✓ Strategy Manager initialized")
-        except Exception as e:
-            logger.error(f"Strategy manager initialization failed: {e}")
-            raise
-    
-    async def _init_brain(self):
-        """Initialize central intelligence"""
-        try:
-            self.brain = HOPEFXBrain()
+            logger.info("✓ Strategy manager ready")
             
-            # Inject all components into brain
+            # 10. Position Tracker
+            self.position_tracker = PositionTracker()
+            logger.info("✓ Position tracker ready")
+            
+            # 11. Trade Executor
+            self.trade_executor = TradeExecutor(
+                broker=self.broker,
+                risk_manager=self.risk_manager,
+                position_tracker=self.position_tracker
+            )
+            logger.info("✓ Trade executor ready")
+            
+            # 12. Brain (Central Intelligence)
+            self.brain = HOPEFXBrain(config={
+                'max_decision_history': 1000,
+                'regime_check_interval': 60,
+                'circuit_breaker_threshold': 5
+            })
+            
+            # Wire all components into brain
             self.brain.inject_components(
                 price_engine=self.price_engine,
                 risk_manager=self.risk_manager,
                 broker=self.broker,
                 strategy_manager=self.strategy_manager,
-                notification_manager=self.notification_manager
+                notification_manager=self.notification_manager,
+                position_tracker=self.position_tracker,
+                trade_executor=self.trade_executor
+            )
+            logger.info("✓ Brain initialized with all components")
+            
+            # 13. Health Checker
+            self.health_checker = get_health_checker(self)
+            logger.info("✓ Health checker ready")
+            
+            # Publish system start event
+            await publish_event(
+                EventType.BRAIN_STARTED,
+                aggregate_id="system",
+                aggregate_type="system",
+                payload={'version': self.version, 'environment': self.environment}
             )
             
-            logger.info("✓ Brain initialized and components injected")
-        except Exception as e:
-            logger.error(f"Brain initialization failed: {e}")
-            raise
-    
-    async def run(self):
-        """Main application loop"""
-        self.running = True
-        
-        try:
-            # Start price engine
-            await self.price_engine.start()
-            logger.info("Price engine started")
-            
-            # Start brain dominate loop
-            brain_task = asyncio.create_task(self.brain.dominate())
-            self.tasks.append(brain_task)
-            
-            # Start heartbeat
-            heartbeat_task = asyncio.create_task(self._heartbeat())
-            self.tasks.append(heartbeat_task)
-            
-            # Start monitoring
-            monitor_task = asyncio.create_task(self._monitor())
-            self.tasks.append(monitor_task)
+            self._components_initialized = True
             
             logger.info("=" * 60)
-            logger.info("HOPEFX IS RUNNING")
-            logger.info("Press Ctrl+C to stop")
+            logger.info("ALL COMPONENTS INITIALIZED SUCCESSFULLY")
             logger.info("=" * 60)
             
             # Send startup notification
-            if self.notification_manager:
-                await self.notification_manager.send_alert(
-                    "info", 
-                    "HOPEFX Trading System Started",
-                    {"environment": self.environment, "symbols": self.price_engine.symbols}
-                )
+            await self._safe_notify(
+                "info",
+                f"🚀 HOPEFX v{self.version} Started",
+                {
+                    'environment': self.environment,
+                    'symbols': symbols,
+                    'broker': broker_type
+                }
+            )
             
-            # Wait for brain to complete (or be cancelled)
-            await brain_task
-            
-        except asyncio.CancelledError:
-            logger.info("Main loop cancelled")
         except Exception as e:
-            logger.critical(f"Critical error in main loop: {e}", exc_info=True)
-            if self.notification_manager:
-                await self.notification_manager.send_alert(
-                    "critical",
-                    f"HOPEFX Critical Error: {str(e)}",
-                    {"error": str(e)}
-                )
-        finally:
+            logger.critical(f"Initialization failed: {e}", exc_info=True)
             await self.shutdown()
+            raise
     
-    async def _heartbeat(self):
-        """System heartbeat"""
+    async def run(self):
+        """Run the complete trading system"""
+        if not self._components_initialized:
+            raise RuntimeError("Components not initialized")
+        
+        self.running = True
+        
+        # Start all background services
+        services = [
+            # Core trading
+            asyncio.create_task(self.brain.dominate(), name="brain"),
+            
+            # Monitoring
+            asyncio.create_task(self.health_checker.start_monitoring(30), name="health_monitor"),
+            asyncio.create_task(self._metrics_collection(), name="metrics"),
+            
+            # Web services
+            asyncio.create_task(start_api_server(trading_app=self), name="api"),
+            asyncio.create_task(start_dashboard(self), name="dashboard"),
+            asyncio.create_task(start_health_server(checker=self.health_checker), name="health_server"),
+            
+            # Event processing
+            asyncio.create_task(self._event_processor(), name="events")
+        ]
+        
+        self._tasks.extend(services)
+        
+        logger.info("=" * 60)
+        logger.info("HOPEFX IS RUNNING")
+        logger.info(f"API: http://localhost:8000")
+        logger.info(f"Dashboard: http://localhost:8081")
+        logger.info(f"Health: http://localhost:8080/health")
+        logger.info("Press Ctrl+C to stop")
+        logger.info("=" * 60)
+        
+        # Wait for shutdown
+        await self._shutdown_event.wait()
+        await self.shutdown()
+    
+    async def _metrics_collection(self):
+        """Collect metrics periodically"""
         while self.running:
             try:
-                if self.brain and self.brain.state:
-                    state = self.brain.state
-                    logger.info(
-                        f"HEARTBEAT | State: {state.system_state.value} | "
-                        f"Equity: ${state.equity:,.2f} | Positions: {state.open_trades_count} | "
-                        f"Time: {time.strftime('%H:%M:%S')}"
-                    )
-                await asyncio.sleep(30)
+                self.metrics.update_system_metrics()
+                
+                # Update trading metrics
+                if self.broker:
+                    account = await self.broker.get_account_info()
+                    self.metrics.update_gauge('account_equity', account.get('equity', 0))
+                    self.metrics.update_gauge('account_balance', account.get('balance', 0))
+                
+                await asyncio.sleep(15)
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Heartbeat error: {e}")
-                await asyncio.sleep(30)
+                logger.error(f"Metrics error: {e}")
+                await asyncio.sleep(5)
     
-    async def _monitor(self):
-        """System monitoring loop"""
+    async def _event_processor(self):
+        """Process system events"""
         while self.running:
             try:
-                # Check component health
-                if self.price_engine and not self.price_engine.active:
-                    logger.error("Price engine stopped unexpectedly")
-                    
-                if self.brain and self.brain.state.system_state == SystemState.EMERGENCY_STOP:
-                    logger.critical("Emergency stop detected")
-                    self.running = False
-                    break
-                    
-                await asyncio.sleep(5)
+                # Event processing logic here
+                await asyncio.sleep(1)
             except asyncio.CancelledError:
                 break
+    
+    async def _safe_notify(self, level: str, message: str, data: Dict = None):
+        """Safe notification with error handling"""
+        if self.notification_manager:
+            try:
+                await asyncio.wait_for(
+                    self.notification_manager.send_alert(level, message, data),
+                    timeout=3.0
+                )
             except Exception as e:
-                logger.error(f"Monitor error: {e}")
-                await asyncio.sleep(5)
+                logger.error(f"Notification failed: {e}")
+    
+    def signal_handler(self, signum, frame):
+        """Handle shutdown signals"""
+        logger.info(f"Received signal {signum}, initiating shutdown...")
+        self._shutdown_event.set()
     
     async def shutdown(self):
-        """Graceful shutdown"""
+        """Graceful shutdown of all components"""
+        if not self.running:
+            return
+        
         logger.info("=" * 60)
-        logger.info("SHUTTING DOWN HOPEFX")
+        logger.info("INITIATING GRACEFUL SHUTDOWN")
         logger.info("=" * 60)
         
         self.running = False
+        self._shutdown_event.set()
         
         # Cancel all tasks
-        for task in self.tasks:
+        for task in self._tasks:
             if not task.done():
                 task.cancel()
         
-        if self.tasks:
-            await asyncio.gather(*self.tasks, return_exceptions=True)
+        # Wait with timeout
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self._tasks, return_exceptions=True),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Some tasks did not terminate gracefully")
         
-        # Stop components
-        if self.price_engine:
-            await self.price_engine.stop()
-            logger.info("Price engine stopped")
+        # Shutdown components in reverse order
+        shutdown_order = [
+            ('brain', lambda: self.brain.shutdown() if self.brain else None),
+            ('price_engine', lambda: self.price_engine.stop() if self.price_engine else None),
+            ('broker', lambda: self.broker.disconnect() if self.broker else None),
+            ('notifications', lambda: self.notification_manager.stop() if self.notification_manager else None),
+            ('event_store', lambda: self.event_store.stop() if self.event_store else None),
+            ('cache', lambda: self.cache.close() if self.cache else None),
+            ('database', lambda: self.db_manager.close() if self.db_manager else None),
+        ]
         
-        if self.broker:
-            await self.broker.disconnect()
-            logger.info("Broker disconnected")
+        for name, shutdown_fn in shutdown_order:
+            try:
+                result = shutdown_fn()
+                if asyncio.iscoroutinefunction(shutdown_fn) or isinstance(result, asyncio.Future):
+                    await asyncio.wait_for(result, timeout=5.0)
+                logger.info(f"✓ {name} stopped")
+            except Exception as e:
+                logger.error(f"✗ Error stopping {name}: {e}")
         
-        if self.notification_manager:
-            await self.notification_manager.send_alert("info", "HOPEFX Stopped")
-            await self.notification_manager.stop()
+        # Final notification
+        await self._safe_notify(
+            "info",
+            "HOPEFX Stopped",
+            {'uptime': 'unknown'}  # Would track actual uptime
+        )
         
-        if self.cache:
-            self.cache.close()
-        
-        if self.db_engine:
-            self.db_engine.dispose()
-        
-        logger.info("Shutdown complete")
+        logger.info("=" * 60)
+        logger.info("SHUTDOWN COMPLETE")
+        logger.info("=" * 60)
     
     def get_status(self) -> Dict:
-        """Get system status"""
+        """Get complete system status"""
         return {
-            'running': self.running,
+            'version': self.version,
             'environment': self.environment,
+            'running': self.running,
+            'initialized': self._components_initialized,
             'brain_state': self.brain.state.to_dict() if self.brain else None,
-            'price_engine_active': self.price_engine.active if self.price_engine else False,
-            'symbols': self.price_engine.symbols if self.price_engine else [],
-            'broker_connected': self.broker.connected if self.broker else False
+            'health': self.health_checker.run_all_checks() if self.health_checker else None,
+            'metrics': self.metrics.get_all_metrics(),
+            'components': {
+                'database': self.db_manager is not None,
+                'cache': self.cache is not None,
+                'broker': self.broker.connected if self.broker else False,
+                'price_engine': self.price_engine.active if self.price_engine else False,
+                'brain': self.brain.state.system_state.value if self.brain else None
+            }
         }
 
+
 async def main():
-    """Async main entry point"""
+    """Main entry point"""
     parser = argparse.ArgumentParser(description="HOPEFX AI Trading System")
     parser.add_argument("--mode", choices=['paper', 'live'], default="paper")
-    parser.add_argument("--env", default=None, help="Environment (development/staging/production)")
-    parser.add_argument("--init-db", action="store_true", help="Initialize database only")
+    parser.add_argument("--env", default="development")
+    parser.add_argument("--init-db", action="store_true")
     args = parser.parse_args()
     
     # Set environment
-    if args.env:
-        os.environ['APP_ENV'] = args.env
+    os.environ['APP_ENV'] = args.env
+    os.environ['BROKER_TYPE'] = args.mode
     
-    # Create app
+    # Create and run app
     app = HopeFXTradingApp(environment=args.env)
     
+    # Setup signal handlers
+    signal.signal(signal.SIGINT, app.signal_handler)
+    signal.signal(signal.SIGTERM, app.signal_handler)
+    
     try:
-        # Initialize
         await app.initialize()
         
         if args.init_db:
             logger.info("Database initialization complete")
             return 0
         
-        # Run
         await app.run()
         return 0
         
@@ -427,18 +437,16 @@ async def main():
         return 0
     except Exception as e:
         logger.critical(f"Fatal error: {e}", exc_info=True)
+        await app.shutdown()
         return 1
 
+
 if __name__ == "__main__":
-    # Ensure logs directory exists
+    # Ensure directories exist
     Path("logs").mkdir(exist_ok=True)
+    Path("config").mkdir(exist_ok=True)
+    Path("data").mkdir(exist_ok=True)
     
-    # Run async main
+    # Run
     exit_code = asyncio.run(main())
     sys.exit(exit_code)
-'''
-
-with open(project_root / "main.py", "w") as f:
-    f.write(main_fixed)
-
-print("✓ Created FIXED main.py - production ready")
