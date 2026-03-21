@@ -226,7 +226,30 @@ async def startup_event():
         logger.info("Loading configuration...")
         encryption_key = os.getenv('CONFIG_ENCRYPTION_KEY')
 
-        app_state.config = initialize_config()
+        _raw_config = initialize_config()
+        # initialize_config() may return a dict — wrap it in a namespace so
+        # attribute access works throughout the app.
+        if isinstance(_raw_config, dict):
+            class _DB:
+                """Minimal database config object."""
+                connection_pool_size = 5
+                max_overflow = 10
+                def get_connection_string(self):
+                    return os.getenv('DATABASE_URL', 'sqlite:///hopefx.db')
+
+            class _ConfigNS:
+                def __init__(self, d):
+                    for k, v in d.items():
+                        setattr(self, k, v)
+                    if not hasattr(self, 'environment'):
+                        self.environment = os.getenv('APP_ENV', 'development')
+                    # Always replace database with a proper object
+                    self.database = _DB()
+                    if not hasattr(self, 'api_configs'):
+                        self.api_configs = {}
+            app_state.config = _ConfigNS(_raw_config)
+        else:
+            app_state.config = _raw_config
         logger.info(f"✓ Configuration loaded: {app_state.config.environment}")
 
         # Initialize database
