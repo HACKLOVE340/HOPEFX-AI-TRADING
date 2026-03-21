@@ -1,6 +1,4 @@
-# File 8: tests/test_execution.py - Test coverage for execution module
-
-test_execution_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Tests for execution module.
 """
@@ -160,9 +158,3 @@ class TestSmartOrderRouter:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-'''
-
-with open('/mnt/kimi/output/hopefx_upgrade/tests/test_execution.py', 'w') as f:
-    f.write(test_execution_content)
-
-print("✅ tests/test_execution.py created - Execution test coverage")

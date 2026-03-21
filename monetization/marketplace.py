@@ -773,3 +773,19 @@ StrategyMarketplace = MarketplaceAPI
 
 # Module-level singleton
 strategy_marketplace = MarketplaceAPI()
+
+
+@dataclass
+class StrategyPerformance:
+    """Performance metrics for a marketplace strategy."""
+    strategy_id: str
+    total_return: float = 0.0
+    sharpe_ratio: float = 0.0
+    max_drawdown: float = 0.0
+    win_rate: float = 0.0
+    total_trades: int = 0
+    avg_trade_duration_hours: float = 0.0
+    calmar_ratio: float = 0.0
+    profit_factor: float = 0.0
+    period_days: int = 90
+    updated_at: datetime = field(default_factory=datetime.utcnow)

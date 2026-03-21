@@ -10,8 +10,15 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Callable, Awaitable
 
-import aioredis
-from aioredis.sentinel import Sentinel
+try:
+    import aioredis
+    from aioredis.sentinel import Sentinel
+    _AIOREDIS_AVAILABLE = True
+except Exception:
+    aioredis = None  # type: ignore
+    Sentinel = None  # type: ignore
+    _AIOREDIS_AVAILABLE = False
+
 import structlog
 
 logger = structlog.get_logger()
@@ -337,7 +344,13 @@ class DistributedKillSwitch:
         }
 
 
-# Singleton
-kill_switch = DistributedKillSwitch(
-    sentinel_hosts=[("localhost", 26379), ("localhost", 26380), ("localhost", 26381)]
-)
+# Singleton — only instantiate if aioredis is available
+if _AIOREDIS_AVAILABLE:
+    kill_switch = DistributedKillSwitch(
+        sentinel_hosts=[("localhost", 26379), ("localhost", 26380), ("localhost", 26381)]
+    )
+else:
+    kill_switch = None  # type: ignore
+
+KillSwitch = DistributedKillSwitch
+KillSwitchState = KillScope

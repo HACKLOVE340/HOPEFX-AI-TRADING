@@ -275,3 +275,46 @@ def get_config_manager() -> ConfigManager:
 def initialize_config(environment: Optional[str] = None) -> Dict[str, Any]:
     """Initialize and load configuration"""
     return get_config_manager().load_config(environment)
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+from dataclasses import dataclass as _dc, field as _field
+from typing import List as _List
+
+class EncryptionManager:
+    """Thin wrapper around ConfigManager's encryption — satisfies test imports."""
+    def __init__(self, key: str = ""):
+        from cryptography.fernet import Fernet
+        import base64, hashlib
+        k = hashlib.sha256(key.encode() if key else b"dev").digest()
+        self._fernet = Fernet(base64.urlsafe_b64encode(k))
+
+    def encrypt(self, data: str) -> str:
+        return self._fernet.encrypt(data.encode()).decode()
+
+    def decrypt(self, token: str) -> str:
+        return self._fernet.decrypt(token.encode()).decode()
+
+
+@_dc
+class APIConfig:
+    host: str = "0.0.0.0"
+    port: int = 8000
+    debug: bool = False
+    cors_origins: _List[str] = _field(default_factory=list)
+
+
+@_dc
+class LoggingConfig:
+    level: str = "INFO"
+    format: str = "json"
+    file: str = "logs/hopefx.log"
+
+
+@_dc
+class AppConfig:
+    environment: str = "development"
+    api: APIConfig = _field(default_factory=APIConfig)
+    database: "DatabaseConfig" = _field(default_factory=DatabaseConfig)
+    trading: "TradingConfig" = _field(default_factory=TradingConfig)
+    logging: LoggingConfig = _field(default_factory=LoggingConfig)

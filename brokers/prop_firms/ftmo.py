@@ -319,3 +319,6 @@ class FTMOBroker:
         except Exception as e:
             logger.error(f"Payout request failed: {e}")
             raise
+
+
+FTMOConnector = FTMOBroker

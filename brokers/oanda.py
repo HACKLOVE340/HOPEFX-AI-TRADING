@@ -180,3 +180,6 @@ class OandaBroker(Broker):
             except Exception as e:
                 print(f"Streaming error: {e}")
                 await asyncio.sleep(5) 
+
+# Alias expected by tests
+OANDAConnector = OandaBroker

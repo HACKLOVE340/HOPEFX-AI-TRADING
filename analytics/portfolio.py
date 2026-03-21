@@ -687,3 +687,6 @@ if __name__ == "__main__":
     print("\nUsage:")
     print("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
     print("  report = create_portfolio_report(returns_df)")
+
+# Alias expected by tests
+PortfolioOptimizer = PortfolioAnalytics

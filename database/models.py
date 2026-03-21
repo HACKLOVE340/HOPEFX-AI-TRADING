@@ -553,3 +553,17 @@ def drop_tables(engine):
     if SQLALCHEMY_AVAILABLE:
         Base.metadata.drop_all(engine)
         logger.info("Database tables dropped")
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+AccountStatus = TradeStatus          # tests import AccountStatus; TradeStatus is the real enum
+TradeType = OrderSide                # buy/sell trade type alias
+OrderStatus = TradeStatus            # order lifecycle mirrors trade lifecycle
+PositionStatus = TradeStatus         # position lifecycle alias
+PredictionType = SignalSource        # prediction source alias
+RiskLevel = SignalSource             # risk level placeholder alias
+MarketDataType = SignalSource        # market data type placeholder alias
+
+# Model aliases
+Session = Account                    # Session model alias (Account holds session-like data)
+User = Account                       # User model alias — real user model is in user_models.py

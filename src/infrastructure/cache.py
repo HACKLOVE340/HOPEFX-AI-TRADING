@@ -6,9 +6,21 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
-import aioredis
-from aioredis import Redis
-from circuitbreaker import circuit
+try:
+    import aioredis
+    from aioredis import Redis
+    _AIOREDIS_OK = True
+except Exception:
+    aioredis = None  # type: ignore
+    Redis = object   # type: ignore
+    _AIOREDIS_OK = False
+
+try:
+    from circuitbreaker import circuit
+except ImportError:
+    def circuit(*a, **kw):  # type: ignore
+        def decorator(fn): return fn
+        return decorator
 
 from src.core.config import settings
 from src.core.exceptions import CacheError

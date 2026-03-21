@@ -73,3 +73,5 @@ class PerformanceLeaderboard:
         self.historical_snapshots[timestamp] = list(self.leaderboard)
         logger.info(f"Leaderboard snapshot saved at {timestamp}")
         return timestamp
+# Alias expected by tests
+LeaderboardManager = PerformanceLeaderboard

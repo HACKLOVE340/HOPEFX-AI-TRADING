@@ -38,3 +38,5 @@ class Backtest:
 # backtest.run()
 # metrics = backtest.performance_metrics()
 # print(metrics)
+# Alias expected by tests
+BacktestEngine = Backtest

@@ -1,7 +1,4 @@
-
-# File 3: examples/backtest_example.py - REAL working backtest with XAUUSD data
-
-backtest_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 HOPEFX Backtest Example - WORKING PROTOTYPE
 Runs a simple moving average crossover backtest on synthetic XAUUSD data.
@@ -352,9 +349,3 @@ def main():
 
 if __name__ == '__main__':
     results = main()
-'''
-
-with open('/mnt/kimi/output/hopefx_upgrade/examples/backtest_example.py', 'w') as f:
-    f.write(backtest_content)
-
-print("✅ examples/backtest_example.py created - REAL working backtest with XAUUSD")

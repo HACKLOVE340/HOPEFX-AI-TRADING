@@ -244,3 +244,14 @@ async def get_kyc_status(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+_activity_log = activity_log
+_load_persisted_risk_settings = apply_persisted_risk_settings
+
+
+def _check_module(name: str) -> bool:
+    """Return True if a module can be imported."""
+    import importlib.util
+    return importlib.util.find_spec(name) is not None

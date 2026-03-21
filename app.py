@@ -609,6 +609,29 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Mobile API not available: {e}")
 
+        # ── Hyperopt router ───────────────────────────────────────────────────
+        try:
+            from backtesting.hyperopt import create_hyperopt_router
+            app.include_router(create_hyperopt_router())
+            logger.info("✓ Hyperopt router registered")
+            log_activity("Hyperopt router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Hyperopt router not available: {e}")
+
+        # ── Telegram Bot ──────────────────────────────────────────────────────
+        try:
+            from notifications.telegram_bot import init_telegram_bot
+            tg_bot = init_telegram_bot(app_state)
+            if tg_bot:
+                asyncio.create_task(tg_bot.start())
+                app_state.telegram_bot = tg_bot
+                logger.info("✓ Telegram bot started")
+                log_activity("Telegram bot started")
+            else:
+                logger.info("Telegram bot skipped (TELEGRAM_BOT_TOKEN not set)")
+        except Exception as e:
+            logger.warning(f"⚠ Telegram bot not available: {e}")
+
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)

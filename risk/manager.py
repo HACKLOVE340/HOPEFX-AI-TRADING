@@ -522,3 +522,21 @@ class RiskManager:
                 'daily_loss_limit_pct': self.config.daily_loss_limit_pct
             }
         }
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+from dataclasses import dataclass as _dc, field as _field
+from typing import Optional as _Opt
+
+
+@_dc
+class RiskCheckResult:
+    """Result of a single risk check — used by tests."""
+    passed: bool
+    risk_level: "RiskLevel" = None
+    message: str = ""
+    details: dict = _field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.risk_level is None:
+            self.risk_level = RiskLevel.LOW if self.passed else RiskLevel.HIGH

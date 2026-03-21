@@ -440,3 +440,53 @@ async def export_trade_history_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Models expected by tests ──────────────────────────────────────────────────
+
+class StrategyCreateRequest(BaseModel):
+    name: str
+    symbol: str = "XAUUSD"
+    timeframe: str = "1h"
+    strategy_type: str = "RSIStrategy"
+    parameters: dict = {}
+    enabled: bool = True
+
+
+class StrategyResponse(BaseModel):
+    id: str
+    name: str
+    symbol: str
+    timeframe: str
+    strategy_type: str
+    enabled: bool
+    parameters: dict = {}
+
+
+class SignalResponse(BaseModel):
+    id: str
+    symbol: str
+    direction: str
+    confidence: float
+    entry_price: float
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    timestamp: str
+    source: str = "strategy_brain"
+
+
+class PositionSizeRequest(BaseModel):
+    symbol: str
+    account_equity: float
+    entry_price: float
+    stop_loss_price: float
+    risk_pct: float = 0.02
+
+
+class PositionSizeResponse(BaseModel):
+    symbol: str
+    recommended_size: float
+    risk_amount: float
+    risk_pct: float
+    entry_price: float
+    stop_loss_price: float

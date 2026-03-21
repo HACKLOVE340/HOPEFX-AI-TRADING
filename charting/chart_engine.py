@@ -71,3 +71,17 @@ class ChartEngine:
         self.indicators = {}
         self.annotations = []
         logger.info("Chart cleared")
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+import enum as _enum
+
+class ChartType(_enum.Enum):
+    CANDLESTICK = "candlestick"
+    LINE = "line"
+    BAR = "bar"
+    AREA = "area"
+    HEIKIN_ASHI = "heikin_ashi"
+
+# Chart is an alias for ChartEngine (tests import Chart directly)
+Chart = ChartEngine

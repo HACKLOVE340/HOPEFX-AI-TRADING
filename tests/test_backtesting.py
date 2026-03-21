@@ -1,6 +1,4 @@
-# File 9: tests/test_backtesting.py - Test coverage for backtesting module
-
-test_backtesting_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Tests for backtesting module.
 """
@@ -150,9 +148,3 @@ class TestBacktestEngine:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-'''
-
-with open('/mnt/kimi/output/hopefx_upgrade/tests/test_backtesting.py', 'w') as f:
-    f.write(test_backtesting_content)
-
-print("✅ tests/test_backtesting.py created - Backtesting test coverage")

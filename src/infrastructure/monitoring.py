@@ -3,7 +3,7 @@ Prometheus metrics and health monitoring.
 """
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from prometheus_client import (
     Counter,
@@ -122,6 +122,31 @@ RISK_EVENTS = Counter(
 KILL_SWITCH_ACTIVE = Gauge(
     "hopefx_kill_switch_active",
     "Kill switch state (1=active)",
+    registry=REGISTRY
+)
+
+DB_CONNECTIONS_ACTIVE = Gauge(
+    "hopefx_db_connections_active",
+    "Number of active database connections",
+    registry=REGISTRY
+)
+
+DB_QUERY_DURATION = Histogram(
+    "hopefx_db_query_duration_seconds",
+    "Database query duration in seconds",
+    buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0],
+    registry=REGISTRY
+)
+
+CACHE_HITS = Counter(
+    "hopefx_cache_hits_total",
+    "Total cache hits",
+    registry=REGISTRY
+)
+
+CACHE_MISSES = Counter(
+    "hopefx_cache_misses_total",
+    "Total cache misses",
     registry=REGISTRY
 )
 

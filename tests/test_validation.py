@@ -1,6 +1,4 @@
-# File 7: tests/ - Test coverage for core modules
-
-test_validation_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Tests for validation module.
 """
@@ -173,9 +171,3 @@ class TestConvenienceFunction:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-'''
-
-with open('/mnt/kimi/output/hopefx_upgrade/tests/test_validation.py', 'w') as f:
-    f.write(test_validation_content)
-
-print("✅ tests/test_validation.py created - Validation test coverage")

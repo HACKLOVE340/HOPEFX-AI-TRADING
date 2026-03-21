@@ -10,7 +10,10 @@ from typing import Any
 import aiofiles
 import structlog
 
-from configs.settings import get_settings
+try:
+    from configs.settings import get_settings
+except ImportError:
+    from src.core.config import get_settings
 
 logger = structlog.get_logger()
 

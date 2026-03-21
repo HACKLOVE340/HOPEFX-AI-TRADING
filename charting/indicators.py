@@ -261,3 +261,49 @@ class TechnicalIndicators:
             '61.8%': high - (diff * 0.618),
             '100%': low
         }
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+import pandas as _pd
+from typing import List as _List
+
+class Indicator:
+    """Base class for individual indicator objects."""
+    def __init__(self, name: str, period: int = 14):
+        self.name = name
+        self.period = period
+
+    def calculate(self, data: _pd.Series) -> _pd.Series:
+        raise NotImplementedError
+
+
+class SMA(Indicator):
+    def __init__(self, period: int = 20):
+        super().__init__(f"SMA_{period}", period)
+
+    def calculate(self, data: _pd.Series) -> _pd.Series:
+        return data.rolling(window=self.period).mean()
+
+
+class EMA(Indicator):
+    def __init__(self, period: int = 20):
+        super().__init__(f"EMA_{period}", period)
+
+    def calculate(self, data: _pd.Series) -> _pd.Series:
+        return data.ewm(span=self.period, adjust=False).mean()
+
+
+class RSI(Indicator):
+    def __init__(self, period: int = 14):
+        super().__init__(f"RSI_{period}", period)
+
+    def calculate(self, data: _pd.Series) -> _pd.Series:
+        delta = data.diff()
+        gain = delta.where(delta > 0, 0).rolling(window=self.period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+
+
+# IndicatorLibrary is an alias for TechnicalIndicators
+IndicatorLibrary = TechnicalIndicators

@@ -53,3 +53,20 @@ class ModelError(HopeFXError):
 class DriftDetectedError(HopeFXError):
     """Model drift threshold exceeded."""
     pass
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+RiskViolation = RiskLimitError
+BrokerError = ExecutionError
+BrokerConnectionError = BrokerError
+TradingError = ExecutionError
+ConfigurationError = HopeFXError
+NetworkError = HopeFXError
+TimeoutError = HopeFXError
+FeedError = HopeFXError
+DataError = DataValidationError
+DatabaseError = HopeFXError
+CacheError = HopeFXError
+InfrastructureError = HopeFXError
+EncryptionError = HopeFXError
+ValidationFailed = DataValidationError

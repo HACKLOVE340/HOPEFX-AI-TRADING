@@ -1034,7 +1034,7 @@ class OANDABroker(BaseBroker):
 def create_broker(broker_type: str, config: Dict) -> BaseBroker:
     """Factory function to create appropriate broker"""
     broker_type = broker_type.lower()
-    
+
     if broker_type == 'paper':
         return PaperTradingBroker(
             initial_balance=config.get('initial_balance', 100000.0),
@@ -1051,5 +1051,9 @@ def create_broker(broker_type: str, config: Dict) -> BaseBroker:
             timeout=config.get('timeout', 10.0),
             max_retries=config.get('max_retries', 3)
         )
+    elif broker_type == 'ccxt':
+        from brokers.ccxt_connector import CCXTConnector
+        return CCXTConnector(config)
     else:
-        raise ValueError(f"Unknown broker type: {broker_type}")
+        raise ValueError(f"Unknown broker type: {broker_type}. "
+                         f"Supported: paper, oanda, ccxt")

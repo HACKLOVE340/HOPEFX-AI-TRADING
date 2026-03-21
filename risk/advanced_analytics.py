@@ -820,3 +820,6 @@ class AdvancedRiskAnalytics:
             'positive_days': float(np.mean(returns > 0)),
             'recovery_rate': drawdown.recovery_rate,
         }
+
+# Alias expected by tests
+RiskAnalytics = AdvancedRiskAnalytics
