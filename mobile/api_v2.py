@@ -17,7 +17,7 @@ import asyncio
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, Header, Query, BackgroundTasks, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials as HTTPAuthCredentials
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class MobileUserRegistration(BaseModel):
     """Mobile user registration"""
-    email: str = Field(..., regex=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+    email: str = Field(..., pattern=r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
     password: str = Field(..., min_length=8)
     username: str = Field(..., min_length=3, max_length=30)
     device_id: str
@@ -76,8 +76,8 @@ class QuoteData(BaseModel):
 class PlaceOrderRequest(BaseModel):
     """Mobile order placement"""
     symbol: str
-    side: str = Field(..., regex="^(BUY|SELL)$")
-    order_type: str = Field(..., regex="^(MARKET|LIMIT|STOP)$")
+    side: str = Field(..., pattern="^(BUY|SELL)$")
+    order_type: str = Field(..., pattern="^(MARKET|LIMIT|STOP)$")
     quantity: float = Field(..., gt=0)
     price: Optional[float] = None
     stop_loss: Optional[float] = None

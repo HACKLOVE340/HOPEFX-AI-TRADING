@@ -1,7 +1,4 @@
-
-# 6. NOTIFICATIONS SYSTEM - Multi-channel alerts
-
-notification_code = '''"""
+"""
 HOPEFX Notification System
 Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 """
@@ -202,9 +199,6 @@ async def send_alert(level: str, message: str, **kwargs):
         getattr(logging, level.upper(), logging.INFO),
         f"ALERT [{level}]: {message}"
     )
-'''
 
-with open(project_root / "notifications" / "__init__.py", "w") as f:
-    f.write(notification_code)
-
-print("✓ Created notifications/__init__.py")
+# Compatibility alias
+AlertEngine = NotificationManager

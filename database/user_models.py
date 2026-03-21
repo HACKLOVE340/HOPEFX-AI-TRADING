@@ -72,7 +72,7 @@ class User(Base):
     login_attempts = relationship("LoginAttempt", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
-        Index("idx_users_email", "email"),
+        # email uniqueness enforced by Column(unique=True) — no separate index needed
         Index("idx_users_username", "username"),
         Index("idx_users_status", "status"),
     )

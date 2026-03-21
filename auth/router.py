@@ -20,7 +20,9 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-
+import os
+import time
+from collections import defaultdict
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -33,6 +35,69 @@ _bearer = HTTPBearer(auto_error=False)
 
 # Module-level service reference — injected from app.py startup
 _auth_service = None
+
+# ── Per-IP rate limiter ───────────────────────────────────────────────────────
+# Sliding-window counter: max N requests per window_seconds per IP.
+# Uses Redis when available, falls back to in-memory (single-process only).
+
+_AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))   # max attempts
+_AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # per minute
+
+# In-memory fallback: {ip: [timestamp, ...]}
+_ip_windows: dict = defaultdict(list)
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_ip_rate_limit(ip: str) -> None:
+    """Raise HTTP 429 if the IP has exceeded the auth rate limit."""
+    # Try Redis first
+    try:
+        import redis as _redis
+        r = _redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            socket_connect_timeout=1,
+            decode_responses=True,
+        )
+        key = f"auth_rl:{ip}"
+        pipe = r.pipeline()
+        now = time.time()
+        pipe.zremrangebyscore(key, 0, now - _AUTH_RATE_WINDOW)
+        pipe.zadd(key, {str(now): now})
+        pipe.zcard(key)
+        pipe.expire(key, _AUTH_RATE_WINDOW + 1)
+        results = pipe.execute()
+        count = results[2]
+        if count > _AUTH_RATE_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many auth attempts. Try again in {_AUTH_RATE_WINDOW}s.",
+                headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+            )
+        return
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Redis unavailable — fall through to in-memory
+
+    # In-memory fallback
+    now = time.time()
+    cutoff = now - _AUTH_RATE_WINDOW
+    timestamps = [t for t in _ip_windows[ip] if t > cutoff]
+    timestamps.append(now)
+    _ip_windows[ip] = timestamps
+    if len(timestamps) > _AUTH_RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many auth attempts. Try again in {_AUTH_RATE_WINDOW}s.",
+            headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+        )
 
 
 def set_auth_service(service) -> None:
@@ -117,6 +182,7 @@ def _get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(_be
 @router.post("/register", status_code=201)
 async def register(body: RegisterRequest, request: Request):
     """Create a new user account and send email verification."""
+    _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, verify_token = _svc().register(
         email=body.email,
         username=body.username,
@@ -168,6 +234,7 @@ async def resend_verification(body: ForgotPasswordRequest):
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
     """Authenticate and receive access + refresh tokens."""
+    _check_ip_rate_limit(_get_client_ip(request))
     ip = _client_ip(request)
     device = request.headers.get("User-Agent", "")
     ok, msg, tokens = _svc().login(
@@ -217,8 +284,9 @@ async def logout_all(user_id: str = Depends(_get_current_user_id)):
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest):
+async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
+    _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, reset_token = _svc().request_password_reset(body.email)
     if reset_token:
         try:

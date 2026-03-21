@@ -36,6 +36,7 @@ from api.admin import router as admin_router, log_activity, apply_persisted_risk
 from auth.router import router as auth_router, set_auth_service
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
+from api.backtesting import router as backtesting_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -62,6 +63,7 @@ app.include_router(auth_router)
 app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
+app.include_router(backtesting_router)
 
 # Global application state
 class AppState:
@@ -557,6 +559,26 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠ ML Predictions router not available: {e}")
                 log_activity(f"ML Predictions router unavailable: {e}")
+
+        # ── Mobile API ────────────────────────────────────────────────────────
+        try:
+            from mobile.api import MobileAPIServer
+            from mobile.push_notifications import PushNotificationManager
+            mobile_api_server = MobileAPIServer()
+            # Register mobile routes under /api/mobile prefix
+            if hasattr(mobile_api_server, 'router'):
+                app.include_router(mobile_api_server.router, prefix="/api/mobile", tags=["Mobile"])
+            elif hasattr(mobile_api_server, 'app'):
+                # MobileAPIServer wraps its own FastAPI app — mount it
+                app.mount("/api/mobile", mobile_api_server.app)
+            app_state.mobile_api = mobile_api_server
+
+            push_manager = PushNotificationManager()
+            app_state.push_notifications = push_manager
+            logger.info("✓ Mobile API + Push Notifications initialized")
+            log_activity("Mobile API initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Mobile API not available: {e}")
 
         app_state.initialized = True
         log_activity("API server ready")

@@ -1,7 +1,4 @@
-
-# Phase 8: Marketplace Backend - Strategy Listings, Pricing, Subscriptions
-
-code = '''"""
+"""
 HOPEFX Marketplace Backend
 Strategy listings, pricing engine, subscription management, license validation
 """
@@ -710,22 +707,69 @@ if __name__ == "__main__":
     print("  ✅ SQLite database for persistence")
     print("  ✅ Creator revenue tracking")
     print("  ✅ Strategy search and filtering")
-'''
 
-# Save the file
-with open('monetization/marketplace.py', 'w') as f:
-    f.write(code)
 
-print("✅ Created: monetization/marketplace.py")
-print(f"   Lines: {len(code.splitlines())}")
-print(f"   Size: {len(code)} bytes")
-print("\n📊 Marketplace Backend Summary:")
-print("   ✅ Strategy listings with approval workflow (Draft, Pending, Active, Suspended)")
-print("   ✅ Dynamic pricing engine with tier discounts and coupon codes")
-print("   ✅ Subscription management (monthly/yearly, auto-renew)")
-print("   ✅ License key generation (XXXX-XXXX-XXXX-XXXX format)")
-print("   ✅ License validation with activation limits")
-print("   ✅ SQLite database for strategies, subscriptions, licenses, transactions")
-print("   ✅ Creator revenue tracking and statistics")
-print("   ✅ Strategy search with filters (category, tier, rating, price)")
-print("   ✅ Featured strategies and ratings system")
+# ── Compatibility aliases expected by monetization/__init__.py ────────────────
+import enum as _enum
+
+class StrategyCategory(_enum.Enum):
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    BREAKOUT = "breakout"
+    SCALPING = "scalping"
+    ARBITRAGE = "arbitrage"
+    ML_BASED = "ml_based"
+    CUSTOM = "custom"
+
+class StrategyLicenseType(_enum.Enum):
+    FREE = "free"
+    ONE_TIME = "one_time"
+    SUBSCRIPTION = "subscription"
+    REVENUE_SHARE = "revenue_share"
+
+class PurchaseStatus(_enum.Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+    REFUNDED = "refunded"
+
+# Dataclass-style aliases
+from dataclasses import dataclass, field
+from typing import List, Optional
+from datetime import datetime
+
+@dataclass
+class MarketplaceStrategy:
+    id: str = ""
+    name: str = ""
+    description: str = ""
+    category: StrategyCategory = StrategyCategory.CUSTOM
+    license_type: StrategyLicenseType = StrategyLicenseType.FREE
+    price: float = 0.0
+    author_id: str = ""
+    status: StrategyStatus = StrategyStatus.ACTIVE
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class StrategyPurchase:
+    id: str = ""
+    user_id: str = ""
+    strategy_id: str = ""
+    status: PurchaseStatus = PurchaseStatus.ACTIVE
+    purchased_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class StrategyReview:
+    id: str = ""
+    user_id: str = ""
+    strategy_id: str = ""
+    rating: int = 5
+    comment: str = ""
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+# StrategyMarketplace is an alias for MarketplaceAPI
+StrategyMarketplace = MarketplaceAPI
+
+# Module-level singleton
+strategy_marketplace = MarketplaceAPI()

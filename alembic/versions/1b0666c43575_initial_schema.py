@@ -310,7 +310,6 @@ def upgrade() -> None:
     sa.Column('last_login_ip', sa.String(length=45), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_users_email', 'users', ['email'], unique=False)
     op.create_index('idx_users_status', 'users', ['status'], unique=False)
     op.create_index('idx_users_username', 'users', ['username'], unique=False)
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
@@ -451,7 +450,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_index('idx_users_username', table_name='users')
     op.drop_index('idx_users_status', table_name='users')
-    op.drop_index('idx_users_email', table_name='users')
     op.drop_table('users')
     op.drop_index(op.f('ix_trades_trade_id'), table_name='trades')
     op.drop_index(op.f('ix_trades_symbol'), table_name='trades')

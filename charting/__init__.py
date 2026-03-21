@@ -5,12 +5,12 @@ Provides professional-grade charting capabilities.
 """
 
 from .chart_engine import ChartEngine
-from .indicators import IndicatorLibrary
+from .indicators import TechnicalIndicators as IndicatorLibrary
 from .drawing_tools import DrawingToolkit, Drawing, DrawingType
 from .timeframes import TimeframeManager
 from .templates import TemplateManager
 
-chart_engine = ChartEngine()
+chart_engine = ChartEngine(symbol="XAUUSD")
 indicator_library = IndicatorLibrary()
 drawing_toolkit = DrawingToolkit()
 timeframe_manager = TimeframeManager()

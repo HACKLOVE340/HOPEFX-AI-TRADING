@@ -14,10 +14,25 @@ Connectors for proprietary trading firms:
 All prop firms using MT5 can use the MT5Connector with appropriate server details.
 """
 
-from .ftmo import FTMOConnector
-from .topstep import TopstepTraderConnector
-from .the5ers import The5ersConnector
-from .myforexfunds import MyForexFundsConnector
+try:
+    from .ftmo import FTMOBroker as FTMOConnector
+except ImportError:
+    FTMOConnector = None  # type: ignore
+
+try:
+    from .topstep import TopstepTraderConnector
+except ImportError:
+    TopstepTraderConnector = None  # type: ignore
+
+try:
+    from .the5ers import The5ersConnector
+except ImportError:
+    The5ersConnector = None  # type: ignore
+
+try:
+    from .myforexfunds import MyForexFundsConnector
+except ImportError:
+    MyForexFundsConnector = None  # type: ignore
 
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass

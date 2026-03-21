@@ -95,3 +95,152 @@ async def update_risk_settings(
             setattr(app_state.risk_manager.config, key, value)
     log_activity(f"Risk settings updated by {user.sub}: {list(settings.keys())}")
     return {"status": "success", "settings": settings}
+
+
+# ── KYC management ────────────────────────────────────────────────────────────
+
+from typing import Optional
+from pydantic import BaseModel
+
+
+class KYCDecision(BaseModel):
+    user_id: str
+    action: str          # "approve" | "reject" | "request_more_info"
+    notes: Optional[str] = None
+
+
+@router.get("/kyc/pending")
+async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
+    """List users with pending KYC submissions. Requires: role >= 'admin'."""
+    try:
+        from database.user_models import User
+        from app import app_state as _state
+        if not _state or not _state.db_session_factory:
+            raise HTTPException(status_code=503, detail="Database not available")
+        with _state.db_session_factory() as session:
+            pending = session.query(User).filter(
+                User.kyc_status.in_(["pending", "submitted", "under_review"])
+            ).all()
+            return {
+                "count": len(pending),
+                "users": [
+                    {
+                        "user_id": u.id,
+                        "email": u.email,
+                        "username": u.username,
+                        "kyc_status": u.kyc_status,
+                        "created_at": str(u.created_at),
+                    }
+                    for u in pending
+                ],
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/kyc/decide")
+async def decide_kyc(
+    body: KYCDecision,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Approve, reject, or request more info for a KYC submission.
+
+    action: 'approve' | 'reject' | 'request_more_info'
+    Requires: role >= 'admin'.
+    """
+    if body.action not in ("approve", "reject", "request_more_info"):
+        raise HTTPException(status_code=400, detail="action must be approve | reject | request_more_info")
+
+    try:
+        from database.user_models import User
+        from app import app_state as _state
+        from datetime import datetime, timezone
+        if not _state or not _state.db_session_factory:
+            raise HTTPException(status_code=503, detail="Database not available")
+
+        with _state.db_session_factory() as session:
+            target = session.query(User).filter_by(id=body.user_id).first()
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            status_map = {
+                "approve": "approved",
+                "reject": "rejected",
+                "request_more_info": "more_info_required",
+            }
+            target.kyc_status = status_map[body.action]
+            session.commit()
+
+        # Audit log
+        log_activity(
+            f"KYC {body.action} for user {body.user_id} by admin {user.sub}"
+            + (f" — {body.notes}" if body.notes else "")
+        )
+
+        # Notify user via email
+        try:
+            from core.email_service import _send
+            from database.user_models import User as _User
+            with _state.db_session_factory() as session:
+                target = session.query(_User).filter_by(id=body.user_id).first()
+                if target:
+                    subject_map = {
+                        "approve": "Your KYC has been approved",
+                        "reject": "Your KYC submission was not approved",
+                        "request_more_info": "Additional information required for KYC",
+                    }
+                    msg_map = {
+                        "approve": "Your identity verification has been approved. You can now trade without restrictions.",
+                        "reject": f"Your KYC submission was not approved. {body.notes or ''}",
+                        "request_more_info": f"We need additional information to complete your verification. {body.notes or ''}",
+                    }
+                    _send(
+                        to=target.email,
+                        subject=subject_map[body.action],
+                        html=f"<p>{msg_map[body.action]}</p>",
+                        text=msg_map[body.action],
+                    )
+        except Exception:
+            pass  # email failure is non-fatal
+
+        return {
+            "status": "success",
+            "user_id": body.user_id,
+            "kyc_status": status_map[body.action],
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/kyc/{user_id}")
+async def get_kyc_status(
+    user_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """Get KYC status for a specific user. Requires: role >= 'admin'."""
+    try:
+        from database.user_models import User
+        from app import app_state as _state
+        if not _state or not _state.db_session_factory:
+            raise HTTPException(status_code=503, detail="Database not available")
+        with _state.db_session_factory() as session:
+            target = session.query(User).filter_by(id=user_id).first()
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            return {
+                "user_id": target.id,
+                "email": target.email,
+                "kyc_status": target.kyc_status,
+                "is_email_verified": target.is_email_verified,
+                "role": target.role,
+                "status": target.status,
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

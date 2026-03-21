@@ -53,7 +53,8 @@ venv.bak/
 *.db
 *.sqlite
 *.sqlite3
-data/
+# data/ — source package, not ignored
+# /data/  # uncomment to ignore data download cache
 *.dump
 
 # Logs

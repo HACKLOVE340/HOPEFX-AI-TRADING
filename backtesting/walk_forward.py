@@ -6,7 +6,7 @@ Prevents overfitting with rolling train/test splits
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Callable, Optional
+from typing import List, Dict, Callable, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -214,3 +214,5 @@ class WalkForwardEngine:
             'consistency': 1 - np.std(test_returns) / (np.mean(test_returns) + 1e-10),
             'is_robust': np.mean(test_sharpes) > 0.5 and sum(1 for r in self.results if r.is_overfit) < len(self.results) * 0.3
         }
+
+WalkForwardAnalysis = WalkForwardEngine
