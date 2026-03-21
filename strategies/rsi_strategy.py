@@ -4,12 +4,15 @@ RSI (Relative Strength Index) Trading Strategy
 This strategy uses RSI to identify overbought and oversold conditions.
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from strategies.base import BaseStrategy
+from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+
+logger = logging.getLogger(__name__)
 
 
 class RSIStrategy(BaseStrategy):
@@ -20,27 +23,53 @@ class RSIStrategy(BaseStrategy):
     Sells when RSI is overbought (above upper threshold).
     """
 
-    def __init__(self, name: str, symbol: str, config,
+    def __init__(self, config: StrategyConfig,
                  period: int = 14, oversold: float = 30, overbought: float = 70):
         """
         Initialize RSI strategy.
 
         Args:
-            name: Strategy name
-            symbol: Trading symbol
-            config: Configuration manager
+            config: StrategyConfig with name, symbol, timeframe
             period: RSI calculation period
             oversold: Oversold threshold (buy signal)
             overbought: Overbought threshold (sell signal)
         """
-        super().__init__(name, symbol, config)
+        super().__init__(config)
         self.period = period
         self.oversold = oversold
         self.overbought = overbought
-        self.logger.info(
+        logger.info(
             f"RSI Strategy initialized: period={period}, "
             f"oversold={oversold}, overbought={overbought}"
         )
+
+    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute RSI from OHLCV data dict."""
+        prices = data.get("prices") or data.get("close")
+        if prices is None:
+            return {"rsi": None, "error": "no price data"}
+        series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
+        rsi = self.calculate_rsi(series)
+        current = float(rsi.iloc[-1]) if not rsi.empty else None
+        return {"rsi": current, "oversold": self.oversold, "overbought": self.overbought}
+
+    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+        """Generate Signal from analyze() output."""
+        rsi = analysis.get("rsi")
+        if rsi is None:
+            return None
+        price = analysis.get("price", 0.0)
+        if rsi < self.oversold:
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(),
+                          confidence=min(0.95, 0.5 + (self.oversold - rsi) / self.oversold * 0.4))
+        if rsi > self.overbought:
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(),
+                          confidence=min(0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4))
+        return None
+
+    def generate_signal_from_data(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+        """Legacy helper used by backtesting — returns dict signal."""
+        return self._generate_dict_signal(market_data)
 
     def calculate_rsi(self, prices: pd.Series) -> pd.Series:
         """
@@ -60,16 +89,8 @@ class RSIStrategy(BaseStrategy):
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Generate trading signal based on RSI.
-
-        Args:
-            market_data: DataFrame with OHLCV data
-
-        Returns:
-            Dictionary with signal type, confidence, and metadata
-        """
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+        """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             if len(market_data) < self.period + 1:
                 return {

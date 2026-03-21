@@ -13,6 +13,7 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -430,15 +431,20 @@ async def startup_event():
         # ── Strategy Brain ───────────────────────────────────────────────────
         try:
             from strategies.strategy_brain import StrategyBrain
+            from strategies.base import StrategyConfig
             from strategies.ma_crossover import MovingAverageCrossover
             from strategies.rsi_strategy import RSIStrategy
             from strategies.macd_strategy import MACDStrategy
             from strategies.bollinger_bands import BollingerBandsStrategy
+
+            def _cfg(name, symbol="XAUUSD", tf="1h"):
+                return StrategyConfig(name=name, symbol=symbol, timeframe=tf)
+
             brain = StrategyBrain()
-            brain.register_strategy(MovingAverageCrossover())
-            brain.register_strategy(RSIStrategy())
-            brain.register_strategy(MACDStrategy())
-            brain.register_strategy(BollingerBandsStrategy())
+            brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
+            brain.register_strategy(RSIStrategy(_cfg("RSI")))
+            brain.register_strategy(MACDStrategy(_cfg("MACD")))
+            brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
             app_state.strategy_brain = brain
             logger.info("✓ Strategy Brain initialized with 4 strategies")
             log_activity("Strategy Brain initialized")

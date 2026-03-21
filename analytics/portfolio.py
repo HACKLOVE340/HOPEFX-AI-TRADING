@@ -1,7 +1,4 @@
-
-# Phase 5: Portfolio Analytics Module
-
-code = '''"""
+"""
 HOPEFX Portfolio Analytics Module
 Multi-asset backtesting, portfolio optimization, correlation analysis, risk metrics
 """
@@ -456,7 +453,7 @@ class MultiAssetBacktester:
         # Calculate performance metrics
         returns = equity_df['equity'].pct_change().dropna()
         
-        print(f"\\nBacktest complete:")
+        print(f"\nBacktest complete:")
         print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
         print(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
         print(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
@@ -667,7 +664,7 @@ def create_portfolio_report(
     dd_path = Path(output_dir) / "drawdown_analysis.png"
     risk_analyzer.plot_drawdowns(save_path=str(dd_path))
     
-    print(f"\\nPortfolio report complete: {report_path}")
+    print(f"\nPortfolio report complete: {report_path}")
     print(f"Key metrics:")
     print(f"  Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
     print(f"  Sortino Ratio: {metrics['sortino_ratio']:.2f}")
@@ -687,25 +684,6 @@ if __name__ == "__main__":
     print("  - Multi-asset backtesting with rebalancing")
     print("  - Stress testing")
     print("  - Rolling performance metrics")
-    print("\\nUsage:")
+    print("\nUsage:")
     print("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
     print("  report = create_portfolio_report(returns_df)")
-'''
-
-# Save the file
-with open('analytics/portfolio.py', 'w') as f:
-    f.write(code)
-
-print("✅ Created: analytics/portfolio.py")
-print(f"   Lines: {len(code.splitlines())}")
-print(f"   Size: {len(code)} bytes")
-print("\n📊 Portfolio Analytics Summary:")
-print("   ✅ Multi-asset portfolio optimization (max Sharpe, min volatility)")
-print("   ✅ Efficient frontier generation with visualization")
-print("   ✅ Correlation matrix heatmaps")
-print("   ✅ Risk metrics: Sharpe, Sortino, Calmar, Max DD, VaR(95%), CVaR")
-print("   ✅ Beta, Treynor ratio, Information ratio")
-print("   ✅ Multi-asset backtesting with rebalancing")
-print("   ✅ Stress testing scenarios")
-print("   ✅ Rolling performance metrics")
-print("   ✅ JSON/CSV report generation")
