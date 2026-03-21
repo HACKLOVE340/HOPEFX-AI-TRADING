@@ -19,6 +19,7 @@ from api.auth import (
     TokenPayload,
     get_current_user,
     require_role,
+    require_kyc,
     validate_order_symbol,
     validate_order_quantity,
 )
@@ -78,17 +79,63 @@ def set_state(state) -> None:
 @router.post("/order", status_code=status.HTTP_201_CREATED)
 async def place_order(
     order: OrderRequest,
-    user: TokenPayload = Depends(require_role("trader")),
+    user: TokenPayload = Depends(require_kyc),
+    _role: TokenPayload = Depends(require_role("trader")),
 ):
     """
     Place a new order.
 
     Requires: Bearer token with role >= 'trader'.
+    Passes through RiskManager.assess_risk() before broker execution.
     Symbol and quantity are validated against server-side allowlists.
     """
     if not app_state or not app_state.broker:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
 
+    # ── Risk gate ────────────────────────────────────────────────────────────
+    if hasattr(app_state, "risk_manager") and app_state.risk_manager is not None:
+        try:
+            account_info = await app_state.broker.get_account_info()
+            positions = await app_state.broker.get_positions()
+            positions_dicts = [
+                {
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "current_price": getattr(p, "current_price", 0),
+                }
+                for p in positions
+            ]
+            assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
+            if not assessment.can_trade:
+                logger.warning(
+                    "Order blocked by risk manager: user=%s reason=%s",
+                    user.sub, assessment.messages,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Risk check failed: {'; '.join(assessment.messages)}",
+                )
+        except HTTPException:
+            raise
+        except Exception as risk_exc:
+            logger.error("Risk check error (allowing trade): %s", risk_exc)
+
+    # ── Compliance / audit log ───────────────────────────────────────────────
+    if hasattr(app_state, "compliance_manager") and app_state.compliance_manager is not None:
+        try:
+            app_state.compliance_manager.log_trade(
+                user_id=user.sub,
+                trade_data={
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "order_type": order.order_type,
+                },
+            )
+        except Exception as comp_exc:
+            logger.error("Compliance log error: %s", comp_exc)
+
+    # ── Execute ──────────────────────────────────────────────────────────────
     try:
         result = await app_state.broker.place_market_order(
             symbol=order.symbol,
@@ -99,12 +146,28 @@ async def place_order(
             "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
             user.sub, order.symbol, order.side, order.quantity, result.id,
         )
+
+        # ── Broadcast to WebSocket subscribers ──────────────────────────────
+        if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
+            try:
+                await app_state.ws_manager.broadcast_trade(
+                    symbol=order.symbol,
+                    price=result.average_fill_price or 0.0,
+                    quantity=order.quantity,
+                    side=order.side,
+                    trade_id=result.id,
+                )
+            except Exception as ws_exc:
+                logger.warning("WebSocket broadcast failed: %s", ws_exc)
+
         return {
             "status": "success",
             "order_id": result.id,
             "filled_price": result.average_fill_price,
             "filled_quantity": result.filled_quantity,
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Order error for user=%s: %s", user.sub, exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -147,6 +210,17 @@ async def close_position(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found")
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
+
+    if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
+        try:
+            await app_state.ws_manager.broadcast_to_all({
+                "type": "position_closed",
+                "position_id": position_id,
+                "user_id": user.sub,
+            }, event="position_closed")
+        except Exception as ws_exc:
+            logger.warning("WebSocket broadcast failed: %s", ws_exc)
+
     return {"status": "success", "position_id": position_id}
 
 

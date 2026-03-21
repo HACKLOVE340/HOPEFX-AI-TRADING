@@ -69,13 +69,64 @@ class Wallet:
 
 
 class WalletManager:
-    """Manages wallet operations"""
+    """
+    Manages wallet operations with DB persistence.
 
-    def __init__(self):
-        # In-memory storage (replace with database in production)
+    Pass a SQLAlchemy session_factory to enable persistence.
+    Without it, falls back to in-memory storage (tests / paper trading).
+    """
+
+    def __init__(self, session_factory=None):
+        self._session_factory = session_factory
+        # In-memory fallback
         self._wallets: Dict[str, Wallet] = {}
         self._transaction_history: Dict[str, List[Dict]] = {}
-        logger.info("WalletManager initialized")
+        logger.info("WalletManager initialized (DB=%s)", session_factory is not None)
+
+    def set_session_factory(self, session_factory):
+        """Wire in DB session factory after construction."""
+        self._session_factory = session_factory
+
+    def _persist_transaction(self, user_id: str, txn: Dict):
+        """Write a transaction record to the DB."""
+        if not self._session_factory:
+            return
+        try:
+            from database.models import WalletTransaction
+            with self._session_factory() as session:
+                session.add(WalletTransaction(
+                    transaction_id=txn["transaction_id"],
+                    user_id=user_id,
+                    transaction_type=txn["type"],
+                    amount=txn["amount"],
+                    balance_after=txn["balance_after"],
+                    currency=txn.get("currency", "USD"),
+                    reference=txn.get("reference"),
+                    status=txn.get("status", "completed"),
+                    notes=txn.get("wallet_type"),
+                ))
+                session.commit()
+        except Exception as exc:
+            logger.error("Wallet DB write failed: %s", exc)
+
+    def _load_balance_from_db(self, user_id: str) -> Optional[Decimal]:
+        """Read latest balance_after for user from DB."""
+        if not self._session_factory:
+            return None
+        try:
+            from database.models import WalletTransaction
+            with self._session_factory() as session:
+                row = (
+                    session.query(WalletTransaction)
+                    .filter_by(user_id=user_id)
+                    .order_by(WalletTransaction.id.desc())
+                    .first()
+                )
+                if row:
+                    return Decimal(str(row.balance_after))
+        except Exception as exc:
+            logger.error("Wallet DB read failed: %s", exc)
+        return None
 
     def create_wallet(
         self,
@@ -96,24 +147,27 @@ class WalletManager:
         """
         wallet_id = f"WAL-{user_id}"
 
-        # Check if wallet already exists
+        # Check if wallet already exists in memory
         if wallet_id in self._wallets:
-            logger.warning(f"Wallet already exists for user {user_id}")
             return self._wallets[wallet_id]
+
+        # Try to restore balance from DB
+        db_balance = self._load_balance_from_db(user_id)
+        starting_balance = db_balance if db_balance is not None else initial_balance
 
         wallet = Wallet(
             wallet_id=wallet_id,
             user_id=user_id,
-            subscription_balance=initial_balance,
+            subscription_balance=starting_balance,
             commission_balance=Decimal('0.00'),
             currency=currency,
-            status=WalletStatus.ACTIVE
+            status=WalletStatus.ACTIVE,
         )
 
         self._wallets[wallet_id] = wallet
         self._transaction_history[user_id] = []
 
-        logger.info(f"Created wallet {wallet_id} for user {user_id}")
+        logger.info(f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})")
         return wallet
 
     def get_wallet(self, user_id: str) -> Optional[Wallet]:
@@ -233,6 +287,7 @@ class WalletManager:
         if user_id not in self._transaction_history:
             self._transaction_history[user_id] = []
         self._transaction_history[user_id].append(transaction)
+        self._persist_transaction(user_id, transaction)
 
         logger.info(f"Credited {amount} to {wallet_type} wallet for user {user_id}")
         return True, "Wallet credited successfully", transaction
@@ -297,6 +352,7 @@ class WalletManager:
         if user_id not in self._transaction_history:
             self._transaction_history[user_id] = []
         self._transaction_history[user_id].append(transaction)
+        self._persist_transaction(user_id, transaction)
 
         logger.info(f"Debited {amount} from {wallet_type} wallet for user {user_id}")
         return True, "Wallet debited successfully", transaction

@@ -239,7 +239,127 @@
   </div>
 </div>
 
-<!-- Row 4: Quick Actions + Activity Feed -->
+<!-- Row 4: Strategy Brain Consensus + Compliance/KYC -->
+<div class="dash-grid dash-row-2" style="margin-bottom:20px;">
+  <!-- Strategy Brain -->
+  <div class="card">
+    <div class="section-title">🧠 Strategy Brain Consensus</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div class="kpi-label">Total Analyses</div>
+        <div style="font-size:20px;font-weight:700;" id="brain-total">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Consensus Rate</div>
+        <div style="font-size:20px;font-weight:700;" id="brain-consensus-rate">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Bullish / Bearish</div>
+        <div style="font-size:16px;font-weight:600;" id="brain-direction">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Avg Confidence</div>
+        <div style="font-size:16px;font-weight:600;" id="brain-confidence">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Registered Strategies</div>
+        <div style="font-size:16px;font-weight:600;" id="brain-strategies">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Auto-Trade</div>
+        <div style="font-size:14px;font-weight:600;" id="brain-autotrade">—</div>
+      </div>
+    </div>
+    <div id="brain-last-signal" style="background:#f8f9fa;border-radius:6px;padding:10px;font-size:13px;color:#2c3e50;">
+      No consensus signal yet
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn-sm btn-purple" href="/api/trading/strategy-brain/stats" target="_blank">📊 Brain Stats</a>
+      <a class="btn-sm btn-blue" href="/api/trading/brain-state" target="_blank">🔍 Brain State</a>
+    </div>
+  </div>
+
+  <!-- Compliance & KYC -->
+  <div class="card">
+    <div class="section-title">🛡️ Compliance &amp; KYC</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div class="kpi-label">KYC Approved</div>
+        <div style="font-size:20px;font-weight:700;color:#27ae60;" id="kyc-approved">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">KYC Pending</div>
+        <div style="font-size:20px;font-weight:700;color:#f39c12;" id="kyc-pending">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Audit Log Entries</div>
+        <div style="font-size:16px;font-weight:600;" id="audit-count">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Last Audit Event</div>
+        <div style="font-size:12px;" id="audit-last">—</div>
+      </div>
+    </div>
+    <div id="audit-feed" style="max-height:120px;overflow-y:auto;">
+      <div style="color:#95a5a6;font-size:13px;">Loading audit log…</div>
+    </div>
+    <div style="margin-top:10px;">
+      <a class="btn-sm btn-gray" href="/admin/api/activity" target="_blank">📋 Full Audit Log</a>
+    </div>
+  </div>
+</div>
+
+<!-- Row 5: WebSocket Live Feed + Copy Trading -->
+<div class="dash-grid dash-row-2" style="margin-bottom:20px;">
+  <!-- WebSocket Live Feed -->
+  <div class="card">
+    <div class="section-title">⚡ Live WebSocket Feed <span id="ws-status-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e74c3c;margin-left:6px;"></span></div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:13px;">
+      <div><span class="kpi-label">Status</span><br><span id="ws-status-text" style="font-weight:600;">Disconnected</span></div>
+      <div><span class="kpi-label">Messages</span><br><span id="ws-msg-count" style="font-weight:600;">0</span></div>
+      <div><span class="kpi-label">Active Channels</span><br><span id="ws-channels" style="font-weight:600;">—</span></div>
+    </div>
+    <div id="ws-live-feed" style="background:#1a1a2e;border-radius:6px;padding:10px;height:140px;overflow-y:auto;font-family:monospace;font-size:11px;color:#00ff88;">
+      <div style="color:#666;">Connecting to WebSocket…</div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button class="btn-sm btn-green" onclick="connectWS()">🔌 Connect</button>
+      <button class="btn-sm btn-red" onclick="disconnectWS()">✕ Disconnect</button>
+    </div>
+  </div>
+
+  <!-- Copy Trading -->
+  <div class="card">
+    <div class="section-title">👥 Copy Trading &amp; Social</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div class="kpi-label">Active Traders</div>
+        <div style="font-size:20px;font-weight:700;" id="ct-traders">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Active Followers</div>
+        <div style="font-size:20px;font-weight:700;" id="ct-followers">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Copied Trades</div>
+        <div style="font-size:16px;font-weight:600;" id="ct-trades">—</div>
+      </div>
+      <div>
+        <div class="kpi-label">Marketplace Strategies</div>
+        <div style="font-size:16px;font-weight:600;" id="ct-marketplace">—</div>
+      </div>
+    </div>
+    <div id="ct-leaderboard" style="max-height:100px;overflow-y:auto;">
+      <div style="color:#95a5a6;font-size:13px;">Loading leaderboard…</div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn-sm btn-blue" href="/api/monetization/marketplace/strategies" target="_blank">🏪 Marketplace</a>
+      <a class="btn-sm btn-purple" href="/api/monetization/pricing" target="_blank">💲 Pricing</a>
+    </div>
+  </div>
+</div>
+
+<!-- Row 6: Quick Actions + Activity Feed -->
 <div class="dash-grid dash-row-2">
   <!-- Quick Actions -->
   <div class="card">
@@ -462,14 +582,169 @@ async function loadMarketRegimePanel() {
   } catch (e) { /* regime service not yet running */ }
 }
 
+// ── Strategy Brain panel ─────────────────────────────────────────────────
+async function loadBrainPanel() {
+  try {
+    const r = await fetch('/api/trading/brain-state');
+    if (!r.ok) return;
+    const d = await r.json();
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
+    const stats = d.stats || d;
+    setText('brain-total', stats.total_analyses);
+    const rate = stats.total_analyses > 0
+      ? ((stats.consensus_reached / stats.total_analyses) * 100).toFixed(1) + '%'
+      : '—';
+    setText('brain-consensus-rate', rate);
+    setText('brain-direction', `▲ ${stats.bullish_consensus ?? 0} / ▼ ${stats.bearish_consensus ?? 0}`);
+    const conf = stats.average_confidence;
+    setText('brain-confidence', conf != null ? (conf * 100).toFixed(1) + '%' : '—');
+    setText('brain-strategies', Object.keys(d.strategies || {}).length || '—');
+    const autoEl = document.getElementById('brain-autotrade');
+    if (autoEl) {
+      const auto = d.auto_trade ?? false;
+      autoEl.textContent = auto ? 'Enabled' : 'Disabled';
+      autoEl.style.color = auto ? '#27ae60' : '#e74c3c';
+    }
+    // Last consensus signal
+    const sigs = d.consensus_signals || [];
+    const lastSig = sigs[sigs.length - 1];
+    const sigEl = document.getElementById('brain-last-signal');
+    if (sigEl && lastSig) {
+      const dir = lastSig.signal_type || lastSig.direction || '—';
+      const conf2 = lastSig.confidence != null ? (lastSig.confidence * 100).toFixed(1) + '%' : '—';
+      sigEl.textContent = `Last: ${dir.toUpperCase()} | Confidence: ${conf2} | ${lastSig.timestamp || ''}`;
+      sigEl.style.color = dir.toLowerCase() === 'buy' ? '#27ae60' : dir.toLowerCase() === 'sell' ? '#e74c3c' : '#2c3e50';
+    }
+  } catch (e) { /* brain not yet running */ }
+}
+
+// ── Compliance / KYC panel ───────────────────────────────────────────────
+async function loadCompliancePanel() {
+  try {
+    const r = await fetch('/admin/api/activity');
+    if (!r.ok) return;
+    const d = await r.json();
+    const entries = Array.isArray(d) ? d : (d.entries || d.audit_log || []);
+    document.getElementById('audit-count').textContent = entries.length;
+    const last = entries[entries.length - 1];
+    if (last) {
+      document.getElementById('audit-last').textContent =
+        (last.action || last.message || '').substring(0, 40) + '…';
+    }
+    // Count KYC entries
+    const kycApproved = entries.filter(e => (e.action || '').includes('kyc_approved')).length;
+    const kycPending  = entries.filter(e => (e.action || '').includes('kyc_submitted')).length;
+    document.getElementById('kyc-approved').textContent = kycApproved;
+    document.getElementById('kyc-pending').textContent  = kycPending;
+    // Render last 5 audit entries
+    const feed = document.getElementById('audit-feed');
+    const recent = entries.slice(-5).reverse();
+    if (recent.length === 0) {
+      feed.innerHTML = '<div style="color:#95a5a6;font-size:13px;">No audit entries yet</div>';
+    } else {
+      feed.innerHTML = recent.map(e => {
+        const msg = (e.action || e.message || '').substring(0, 60);
+        const ts  = (e.timestamp || '').substring(0, 19).replace('T', ' ');
+        return `<div class="activity-item"><div class="activity-dot"></div><div><div style="font-size:12px;">${msg}</div><div style="color:#95a5a6;font-size:11px;">${ts}</div></div></div>`;
+      }).join('');
+    }
+  } catch (e) { /* compliance not yet running */ }
+}
+
+// ── Copy Trading panel ───────────────────────────────────────────────────
+async function loadCopyTradingPanel() {
+  try {
+    const r = await fetch('/api/monetization/marketplace/strategies');
+    if (!r.ok) return;
+    const d = await r.json();
+    const strats = Array.isArray(d) ? d : (d.strategies || []);
+    document.getElementById('ct-marketplace').textContent = strats.length;
+    // Leaderboard placeholder
+    const lb = document.getElementById('ct-leaderboard');
+    if (strats.length > 0) {
+      lb.innerHTML = strats.slice(0, 3).map(s =>
+        `<div class="activity-item"><div class="activity-dot" style="background:#9b59b6;"></div><div style="font-size:12px;">${s.name || s.strategy_name || 'Strategy'} — ${s.price != null ? '$' + s.price : 'Free'}</div></div>`
+      ).join('');
+    } else {
+      lb.innerHTML = '<div style="color:#95a5a6;font-size:13px;">No strategies listed yet</div>';
+    }
+  } catch (e) { /* marketplace not yet running */ }
+}
+
+// ── WebSocket live feed ──────────────────────────────────────────────────
+let _ws = null;
+let _wsMsgCount = 0;
+
+function appendWSMessage(text) {
+  const feed = document.getElementById('ws-live-feed');
+  if (!feed) return;
+  const line = document.createElement('div');
+  line.textContent = new Date().toLocaleTimeString() + ' › ' + text;
+  feed.appendChild(line);
+  // Keep last 50 lines
+  while (feed.children.length > 50) feed.removeChild(feed.firstChild);
+  feed.scrollTop = feed.scrollHeight;
+  _wsMsgCount++;
+  const cnt = document.getElementById('ws-msg-count');
+  if (cnt) cnt.textContent = _wsMsgCount;
+}
+
+function setWSStatus(connected) {
+  const dot  = document.getElementById('ws-status-dot');
+  const text = document.getElementById('ws-status-text');
+  if (dot)  dot.style.background  = connected ? '#27ae60' : '#e74c3c';
+  if (text) text.textContent = connected ? 'Connected' : 'Disconnected';
+}
+
+function connectWS() {
+  if (_ws && _ws.readyState === WebSocket.OPEN) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${location.host}/ws`;
+  try {
+    _ws = new WebSocket(url);
+    _ws.onopen = () => {
+      setWSStatus(true);
+      appendWSMessage('Connected to ' + url);
+      // Authenticate with stored token if available
+      const token = localStorage.getItem('hopefx_token');
+      if (token) _ws.send(JSON.stringify({action: 'auth', token}));
+      // Subscribe to key channels
+      ['trades:XAUUSD', 'signals:all', 'alerts'].forEach(ch =>
+        _ws.send(JSON.stringify({action: 'subscribe', channel: ch}))
+      );
+    };
+    _ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        const type = msg.event || msg.type || 'msg';
+        const payload = JSON.stringify(msg.data || msg).substring(0, 80);
+        appendWSMessage(`[${type}] ${payload}`);
+      } catch { appendWSMessage(evt.data.substring(0, 100)); }
+    };
+    _ws.onclose = () => { setWSStatus(false); appendWSMessage('Disconnected'); };
+    _ws.onerror = () => { setWSStatus(false); appendWSMessage('Connection error'); };
+  } catch (e) { appendWSMessage('WebSocket not available: ' + e); }
+}
+
+function disconnectWS() {
+  if (_ws) { _ws.close(); _ws = null; }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadDashboard();
   loadAIBotPanel();
   loadMarketRegimePanel();
+  loadBrainPanel();
+  loadCompliancePanel();
+  loadCopyTradingPanel();
+  connectWS();
 });
 setInterval(loadDashboard, 5000);
 setInterval(loadLivePrices, 15000);
 setInterval(loadAIBotPanel, 30000);
 setInterval(loadMarketRegimePanel, 60000);
+setInterval(loadBrainPanel, 10000);
+setInterval(loadCompliancePanel, 30000);
+setInterval(loadCopyTradingPanel, 60000);
 </script>
 {% endblock %}

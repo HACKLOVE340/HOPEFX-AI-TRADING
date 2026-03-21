@@ -17,10 +17,18 @@ try:
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
-    # Create dummy base for type hints
+    # Stub everything so class bodies that reference Column etc. don't NameError
+    class _Stub:
+        def __init__(self, *a, **kw): pass
+        def __call__(self, *a, **kw): return self
+        def __getattr__(self, name): return self
+    Column = BigInteger = Integer = String = Float = Boolean = _Stub()
+    DateTime = ForeignKey = Enum = Text = Index = create_engine = _Stub()
+    relationship = sessionmaker = _Stub()
     class _DummyBase:
         pass
-    declarative_base = lambda: _DummyBase
+    def declarative_base():
+        return _DummyBase
 
 Base = declarative_base()
 
@@ -339,12 +347,198 @@ class Configuration(Base):
     change_reason = Column(Text, nullable=True)
 
 
+class Account(Base):
+    """Broker account snapshot."""
+    __tablename__ = 'accounts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    broker = Column(String(50), nullable=False)
+    account_id = Column(String(100), nullable=True)
+    balance = Column(Float, nullable=False, default=0.0)
+    equity = Column(Float, nullable=True)
+    margin_used = Column(Float, nullable=True)
+    margin_free = Column(Float, nullable=True)
+    currency = Column(String(10), default='USD')
+    leverage = Column(Float, nullable=True)
+    snapshot_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Position(Base):
+    """Open trading position."""
+    __tablename__ = 'positions'
+
+    id = Column(String(50), primary_key=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    side = Column(String(10), nullable=False)          # buy / sell
+    quantity = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=False)
+    current_price = Column(Float, nullable=True)
+    unrealized_pnl = Column(Float, nullable=True)
+    realized_pnl = Column(Float, default=0.0)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    broker = Column(String(50), nullable=True)
+    user_id = Column(String(50), nullable=True, index=True)
+    opened_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    status = Column(String(20), default='open')        # open, closed
+
+
+class OrderBook(Base):
+    """Snapshot of order book depth at a point in time."""
+    __tablename__ = 'order_book_snapshots'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    bids_json = Column(Text, nullable=True)   # JSON [[price, size], ...]
+    asks_json = Column(Text, nullable=True)
+    spread = Column(Float, nullable=True)
+    mid_price = Column(Float, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class AISignal(Base):
+    """AI-generated trading signal stored for audit and replay."""
+    __tablename__ = 'ai_signals'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    signal_type = Column(String(10), nullable=False)   # buy, sell, hold
+    confidence = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=True)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    source = Column(String(100), nullable=True)        # strategy name / brain
+    executed = Column(Boolean, default=False)
+    order_id = Column(String(50), nullable=True)
+    generated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class Prediction(Base):
+    """ML model price prediction."""
+    __tablename__ = 'predictions'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    model_name = Column(String(100), nullable=False)
+    predicted_price = Column(Float, nullable=False)
+    predicted_direction = Column(String(10), nullable=True)  # up, down, flat
+    confidence = Column(Float, nullable=True)
+    horizon_minutes = Column(Integer, nullable=True)
+    actual_price = Column(Float, nullable=True)
+    error_pct = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class NewsData(Base):
+    """News article with sentiment score."""
+    __tablename__ = 'news_data'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    headline = Column(String(500), nullable=False)
+    source = Column(String(100), nullable=True)
+    url = Column(String(500), nullable=True)
+    symbols = Column(String(200), nullable=True)       # comma-separated
+    sentiment_score = Column(Float, nullable=True)     # -1.0 to 1.0
+    sentiment_label = Column(String(20), nullable=True)  # positive, negative, neutral
+    published_at = Column(DateTime, nullable=True, index=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PerformanceMetrics(Base):
+    """Strategy / backtest performance metrics snapshot."""
+    __tablename__ = 'performance_metrics'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    strategy_name = Column(String(100), nullable=False, index=True)
+    symbol = Column(String(20), nullable=True)
+    timeframe = Column(String(20), nullable=True)
+    total_trades = Column(Integer, default=0)
+    winning_trades = Column(Integer, default=0)
+    losing_trades = Column(Integer, default=0)
+    win_rate = Column(Float, nullable=True)
+    total_pnl = Column(Float, default=0.0)
+    max_drawdown = Column(Float, nullable=True)
+    sharpe_ratio = Column(Float, nullable=True)
+    profit_factor = Column(Float, nullable=True)
+    avg_trade_duration_minutes = Column(Float, nullable=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class TickData(Base):
+    """Real-time tick data storage."""
+    __tablename__ = 'tick_data'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    bid = Column(Float, nullable=False)
+    ask = Column(Float, nullable=False)
+    last_price = Column(Float, nullable=True)
+    volume = Column(Float, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    source = Column(String(50), nullable=True)
+
+
+class WalletTransaction(Base):
+    """Persistent wallet transaction ledger — replaces in-memory dict."""
+    __tablename__ = 'wallet_transactions'
+
+    id = Column(BigInteger, primary_key=True)
+    transaction_id = Column(String(50), unique=True, nullable=False, index=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    transaction_type = Column(String(30), nullable=False)   # deposit, withdrawal, fee, commission
+    amount = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    currency = Column(String(10), default='USD')
+    reference = Column(String(100), nullable=True)          # external payment ref
+    status = Column(String(20), default='completed')        # pending, completed, failed
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLogEntry(Base):
+    """Persistent, append-only audit log — replaces in-memory list."""
+    __tablename__ = 'audit_log'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    sequence_number = Column(BigInteger, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    level = Column(String(20), nullable=False)              # INFO, COMPLIANCE, CRITICAL
+    category = Column(String(30), nullable=False)           # ORDER, RISK, KYC, SYSTEM
+    actor = Column(String(100), nullable=False)             # user_id or system component
+    action = Column(String(200), nullable=False)
+    data_json = Column(Text, nullable=True)                 # JSON payload
+    hash_chain = Column(String(64), nullable=False)         # tamper-evident chain
+
+
+class KYCRecord(Base):
+    """Persistent KYC records — replaces in-memory dict."""
+    __tablename__ = 'kyc_records'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(50), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default='unverified')  # unverified, pending, approved, rejected
+    document_type = Column(String(50), nullable=True)
+    verification_method = Column(String(50), nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    rejected_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Create indexes for common queries
 Index('idx_trades_symbol_status', Trade.symbol, Trade.status)
 Index('idx_trades_entry_time', Trade.entry_time)
 Index('idx_orders_symbol_created', Order.symbol, Order.created_at)
 Index('idx_signals_generated_executed', Signal.generated_at, Signal.executed)
 Index('idx_account_snapshots_timestamp', AccountSnapshot.timestamp)
+Index('idx_wallet_user_created', WalletTransaction.user_id, WalletTransaction.created_at)
+Index('idx_audit_timestamp', AuditLogEntry.timestamp)
+Index('idx_kyc_user', KYCRecord.user_id)
 
 
 def create_tables(engine):

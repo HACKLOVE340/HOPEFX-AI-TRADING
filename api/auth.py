@@ -135,3 +135,30 @@ def validate_order_quantity(quantity: float) -> float:
             detail=f"Quantity {quantity} exceeds maximum allowed {MAX_ORDER_QUANTITY}",
         )
     return quantity
+
+
+def require_kyc(user: TokenPayload = Depends(get_current_user)) -> TokenPayload:
+    """
+    Dependency: require the caller to have passed KYC verification.
+
+    Checks app_state.compliance_manager if available.
+    If compliance_manager is not wired (tests / paper trading), passes through.
+
+    Usage:
+        @router.post("/order")
+        async def place_order(user: TokenPayload = Depends(require_kyc)):
+            ...
+    """
+    try:
+        # Import here to avoid circular imports at module load time
+        from app import app_state
+        if app_state.compliance_manager is not None:
+            if not app_state.compliance_manager.is_kyc_approved(user.sub):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="KYC verification required before trading. "
+                           "Please complete identity verification.",
+                )
+    except ImportError:
+        pass  # app not fully initialised (e.g. during tests)
+    return user

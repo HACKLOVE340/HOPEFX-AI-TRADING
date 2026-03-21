@@ -70,6 +70,18 @@ class AppState:
         self.db_session_factory = None
         self.cache = None
         self.initialized = False
+        # Core trading components
+        self.broker = None
+        self.risk_manager = None
+        self.compliance_manager = None
+        self.strategy_brain = None
+        self.ws_manager = None
+        self.alert_engine = None
+        self.wallet_manager = None
+        # Social
+        self.copy_trading_engine = None
+        self.marketplace = None
+        self.leaderboard_manager = None
         # Experimental module instances (populated at startup when flags are on)
         self.research_engine = None
         self.explainer = None
@@ -299,6 +311,84 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ News router not available: {e}")
             log_activity(f"News router unavailable: {e}")
+
+        # ── Risk Manager ─────────────────────────────────────────────────────
+        try:
+            from risk.manager import RiskManager, RiskConfig
+            risk_config = RiskConfig(
+                max_position_size_pct=float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.02")),
+                max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
+                daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
+            )
+            app_state.risk_manager = RiskManager(config=risk_config)
+            logger.info("✓ Risk Manager initialized")
+            log_activity("Risk Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Risk Manager not available: {e}")
+            app_state.risk_manager = None
+
+        # ── Compliance Manager ───────────────────────────────────────────────
+        try:
+            from compliance.compliance_manager import ComplianceManager
+            app_state.compliance_manager = ComplianceManager(
+                session_factory=app_state.db_session_factory
+            )
+            logger.info("✓ Compliance Manager initialized (DB-backed)")
+            log_activity("Compliance Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Compliance Manager not available: {e}")
+            app_state.compliance_manager = None
+
+        # ── Strategy Brain ───────────────────────────────────────────────────
+        try:
+            from strategies.strategy_brain import StrategyBrain
+            from strategies.ma_crossover import MovingAverageCrossover
+            from strategies.rsi_strategy import RSIStrategy
+            from strategies.macd_strategy import MACDStrategy
+            from strategies.bollinger_bands import BollingerBandsStrategy
+            brain = StrategyBrain()
+            brain.register_strategy(MovingAverageCrossover())
+            brain.register_strategy(RSIStrategy())
+            brain.register_strategy(MACDStrategy())
+            brain.register_strategy(BollingerBandsStrategy())
+            app_state.strategy_brain = brain
+            logger.info("✓ Strategy Brain initialized with 4 strategies")
+            log_activity("Strategy Brain initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Strategy Brain not available: {e}")
+            app_state.strategy_brain = None
+
+        # ── Wallet Manager ───────────────────────────────────────────────────
+        try:
+            from payments.wallet import WalletManager
+            app_state.wallet_manager = WalletManager(
+                session_factory=app_state.db_session_factory
+            )
+            logger.info("✓ Wallet Manager initialized (DB-backed)")
+            log_activity("Wallet Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Wallet Manager not available: {e}")
+            app_state.wallet_manager = None
+
+        # ── Social / Copy Trading ────────────────────────────────────────────
+        try:
+            from social import copy_trading_engine, marketplace, leaderboard_manager
+            app_state.copy_trading_engine = copy_trading_engine
+            app_state.marketplace = marketplace
+            app_state.leaderboard_manager = leaderboard_manager
+            logger.info("✓ Social trading initialized")
+            log_activity("Social trading initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Social trading not available: {e}")
+
+        # ── Signal Engine (StrategyBrain → broker loop) ──────────────────────
+        try:
+            from core.signal_engine import run_signal_engine
+            asyncio.create_task(run_signal_engine(app_state))
+            logger.info("✓ Signal engine started")
+            log_activity("Signal engine started")
+        except Exception as e:
+            logger.warning(f"⚠ Signal engine not started: {e}")
 
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()

@@ -116,3 +116,6 @@ class PaymentGateway:
         if payment_id in self.payments:
             return self.payments[payment_id].status
         return None
+# Alias for backwards compatibility
+PaymentInfo = Payment
+payment_gateway = PaymentGateway()
