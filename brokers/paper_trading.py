@@ -30,18 +30,22 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], session_factory=None, user_id: str = "paper"):
         """
         Initialize paper trading broker.
 
         Args:
             config: Configuration with 'initial_balance'
+            session_factory: SQLAlchemy session factory for P&L persistence
+            user_id: User identifier for DB records
         """
         super().__init__(config)
 
         self.initial_balance = config.get('initial_balance', 10000.0)
         self.balance = self.initial_balance
         self.equity = self.initial_balance
+        self._session_factory = session_factory
+        self._user_id = user_id
 
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
@@ -212,6 +216,9 @@ class PaperTradingBroker(BrokerConnector):
         self.balance += pnl
         self.equity = self.balance
 
+        # Persist closed trade to DB
+        self._persist_trade(position, current_price, pnl)
+
         # Remove position
         del self.positions[symbol]
 
@@ -221,6 +228,40 @@ class PaperTradingBroker(BrokerConnector):
         )
 
         return True
+
+    def _persist_trade(self, position: "Position", exit_price: float, realized_pnl: float) -> None:
+        """Write a closed trade record to the DB trades table."""
+        if not self._session_factory:
+            return
+        try:
+            from database.models import Trade, OrderSide, TradeStatus
+            # Normalise side to OrderSide enum
+            raw_side = str(position.side).lower().replace("orderside.", "").replace("long", "buy").replace("short", "sell")
+            side_enum = OrderSide.BUY if "buy" in raw_side or "long" in raw_side else OrderSide.SELL
+
+            trade = Trade(
+                trade_id=str(uuid.uuid4()),
+                symbol=position.symbol,
+                side=side_enum,
+                entry_price=float(position.entry_price),
+                entry_quantity=float(position.quantity),
+                exit_price=float(exit_price),
+                exit_quantity=float(position.quantity),
+                realized_pnl=float(realized_pnl),
+                total_pnl=float(realized_pnl),
+                commission=0.0,
+                status=TradeStatus.CLOSED,
+                is_open=False,
+                strategy=getattr(position, "strategy", "paper"),
+                entry_time=getattr(position, "entry_time", datetime.now(timezone.utc)),
+                exit_time=datetime.now(timezone.utc),
+            )
+            with self._session_factory() as session:
+                session.add(trade)
+                session.commit()
+            logger.debug("Trade persisted: %s %s pnl=%.2f", position.symbol, position.side, realized_pnl)
+        except Exception as exc:
+            logger.warning("Failed to persist trade to DB: %s", exc)
 
     def get_account_info(self) -> AccountInfo:
         """Get account information"""

@@ -51,7 +51,7 @@ def _get_jwt_secret() -> str:
 
 
 def _decode_token(token: str) -> TokenPayload:
-    """Decode and validate a JWT bearer token."""
+    """Decode and validate a JWT bearer token, checking the revocation blacklist."""
     try:
         secret = _get_jwt_secret()
         payload = jwt.decode(
@@ -60,7 +60,26 @@ def _decode_token(token: str) -> TokenPayload:
             algorithms=["HS256"],
             options={"require": ["sub", "exp"]},
         )
+
+        # Check access-token blacklist (populated on logout)
+        jti = payload.get("jti")
+        if jti:
+            try:
+                from auth.service import is_access_token_revoked
+                if is_access_token_revoked(jti):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Token has been revoked",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass  # blacklist unavailable — allow token (fail open)
+
         return TokenPayload(**payload)
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

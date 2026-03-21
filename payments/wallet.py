@@ -323,6 +323,22 @@ class WalletManager:
         if wallet.status != WalletStatus.ACTIVE:
             return False, f"Wallet is {wallet.status}", None
 
+        # AML gate — only applied to actual withdrawals, not internal debits
+        if transaction_type == 'withdrawal':
+            try:
+                from compliance.aml import get_aml_gate
+                kyc_status = getattr(wallet, 'kyc_status', 'unverified')
+                decision = get_aml_gate().check_withdrawal(
+                    user_id=user_id,
+                    amount=amount,
+                    kyc_status=kyc_status,
+                )
+                if not decision.allowed:
+                    logger.warning("AML blocked withdrawal for user %s: %s", user_id, decision.reason)
+                    return False, f"Withdrawal blocked: {decision.reason}", None
+            except Exception as _aml_err:
+                logger.warning("AML check error (allowing): %s", _aml_err)
+
         # Check sufficient balance
         if wallet_type == WalletType.SUBSCRIPTION:
             if wallet.subscription_balance < amount:

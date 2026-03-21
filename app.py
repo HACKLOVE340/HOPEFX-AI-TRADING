@@ -21,7 +21,7 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -33,6 +33,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
+from auth.router import router as auth_router, set_auth_service
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from cache import MarketDataCache
@@ -57,6 +58,7 @@ app = FastAPI(
 )
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
@@ -71,6 +73,7 @@ class AppState:
         self.cache = None
         self.initialized = False
         # Core trading components
+        self.auth_service = None
         self.broker = None
         self.risk_manager = None
         self.compliance_manager = None
@@ -182,6 +185,17 @@ def setup_security_headers(app: FastAPI):
     app.add_middleware(_SecurityHeaders)
 
 
+def setup_metrics_middleware(app: FastAPI):
+    """Add Prometheus HTTP metrics middleware."""
+    try:
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from core.metrics import make_metrics_middleware
+        app.add_middleware(BaseHTTPMiddleware, dispatch=make_metrics_middleware())
+        logger.info("Prometheus metrics middleware registered")
+    except Exception as exc:
+        logger.warning("Metrics middleware not available: %s", exc)
+
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -191,12 +205,24 @@ async def startup_event():
     logger.info("=" * 70)
 
     try:
+        # ── Environment validation ────────────────────────────────────────────
+        # Set dev defaults before validation so the app can start in dev mode.
+        if not os.getenv('CONFIG_ENCRYPTION_KEY'):
+            logger.warning("CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)")
+            os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
+        if not os.getenv('SECURITY_JWT_SECRET'):
+            logger.warning("SECURITY_JWT_SECRET not set — using dev default (not for production)")
+            os.environ['SECURITY_JWT_SECRET'] = 'dev-jwt-secret-minimum-32-characters-long!!'
+
+        try:
+            from core.env_validator import validate_and_report
+            validate_and_report(strict=False, exit_on_error=False)
+        except Exception as _ve:
+            logger.warning("Env validator unavailable: %s", _ve)
+
         # Initialize configuration
         logger.info("Loading configuration...")
         encryption_key = os.getenv('CONFIG_ENCRYPTION_KEY')
-        if not encryption_key:
-            logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development.")
-            os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
 
         app_state.config = initialize_config()
         logger.info(f"✓ Configuration loaded: {app_state.config.environment}")
@@ -210,12 +236,21 @@ async def startup_event():
             max_overflow=app_state.config.database.max_overflow,
         )
         try:
-            Base.metadata.create_all(app_state.db_engine)
-            logger.info("✓ Database initialized")
+            # Run Alembic migrations instead of create_all so schema changes
+            # are tracked and applied incrementally.
+            from alembic.config import Config as AlembicConfig
+            from alembic import command as alembic_command
+            alembic_cfg = AlembicConfig("alembic.ini")
+            alembic_cfg.set_main_option("sqlalchemy.url", connection_string)
+            alembic_command.upgrade(alembic_cfg, "head")
+            logger.info("✓ Database migrations applied (alembic upgrade head)")
         except Exception as e:
-            logger.warning(f"⚠ Database initialization had issues: {e}")
-            # Continue anyway - database might already exist or have compatibility issues
-            logger.info("Continuing with existing database state...")
+            logger.warning(f"⚠ Alembic migration failed ({e}), falling back to create_all")
+            try:
+                Base.metadata.create_all(app_state.db_engine)
+                logger.info("✓ Database initialized via create_all fallback")
+            except Exception as e2:
+                logger.warning(f"⚠ create_all also failed: {e2}")
         
         app_state.db_session_factory = sessionmaker(bind=app_state.db_engine)
 
@@ -312,6 +347,25 @@ async def startup_event():
             logger.warning(f"⚠ News router not available: {e}")
             log_activity(f"News router unavailable: {e}")
 
+        # ── Auth Service ─────────────────────────────────────────────────────
+        try:
+            from database.user_models import User, UserSession, LoginAttempt
+            # Ensure user tables exist
+            from database.models import Base as _Base
+            User.__table__.create(app_state.db_engine, checkfirst=True)
+            UserSession.__table__.create(app_state.db_engine, checkfirst=True)
+            LoginAttempt.__table__.create(app_state.db_engine, checkfirst=True)
+
+            from auth.service import AuthService
+            auth_svc = AuthService(session_factory=app_state.db_session_factory)
+            set_auth_service(auth_svc)
+            app_state.auth_service = auth_svc
+            logger.info("✓ Auth Service initialized")
+            log_activity("Auth Service initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Auth Service not available: {e}")
+            app_state.auth_service = None
+
         # ── Risk Manager ─────────────────────────────────────────────────────
         try:
             from risk.manager import RiskManager, RiskConfig
@@ -338,6 +392,15 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Compliance Manager not available: {e}")
             app_state.compliance_manager = None
+
+        # ── AML Gate ─────────────────────────────────────────────────────────
+        try:
+            from compliance.aml import init_aml_gate
+            init_aml_gate(session_factory=app_state.db_session_factory)
+            logger.info("✓ AML Gate initialized (DB-backed)")
+            log_activity("AML Gate initialized")
+        except Exception as e:
+            logger.warning(f"⚠ AML Gate not available: {e}")
 
         # ── Strategy Brain ───────────────────────────────────────────────────
         try:
@@ -389,6 +452,23 @@ async def startup_event():
             log_activity("Signal engine started")
         except Exception as e:
             logger.warning(f"⚠ Signal engine not started: {e}")
+
+        # ── Position Reconciliation Loop ──────────────────────────────────────
+        try:
+            from core.position_reconciler import PositionReconciler
+            interval = int(os.getenv("RECONCILER_INTERVAL_SECONDS", "30"))
+            reconciler = PositionReconciler(
+                session_factory=app_state.db_session_factory,
+                broker=getattr(app_state, "broker", None),
+                ws_manager=getattr(app_state, "ws_manager", None),
+                interval_seconds=interval,
+            )
+            await reconciler.start()
+            app_state.reconciler = reconciler
+            logger.info("✓ Position reconciler started (interval=%ds)", interval)
+            log_activity("Position reconciler started")
+        except Exception as e:
+            logger.warning(f"⚠ Position reconciler not started: {e}")
 
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()
@@ -510,37 +590,60 @@ async def shutdown_event():
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """
-    Health check endpoint
-
-    Returns the health status of all system components
+    Health check endpoint — probes each component and reports real status.
     """
-    components = {
-        "api": "healthy",
-        "config": "healthy" if app_state.config else "unavailable",
-        "database": "healthy" if app_state.db_engine else "unavailable",
-    }
-    
-    # Cache is optional for health check
+    components: dict = {"api": "healthy"}
+
+    # Config
+    components["config"] = "healthy" if app_state.config else "unavailable"
+
+    # Database — run a lightweight query
+    if app_state.db_engine:
+        try:
+            from sqlalchemy import text as _text
+            with app_state.db_engine.connect() as _conn:
+                _conn.execute(_text("SELECT 1"))
+            components["database"] = "healthy"
+        except Exception as _dbe:
+            logger.warning("DB health probe failed: %s", _dbe)
+            components["database"] = "degraded"
+    else:
+        components["database"] = "unavailable"
+
+    # Cache (Redis) — optional
     if app_state.cache:
         try:
-            cache_healthy = app_state.cache.health_check() if hasattr(app_state.cache, 'health_check') else True
-            components["cache"] = "healthy" if cache_healthy else "degraded"
-        except Exception as e:
-            logger.warning(f"Cache health check failed: {e}")
+            ok = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
+            components["cache"] = "healthy" if ok else "degraded"
+        except Exception:
             components["cache"] = "degraded"
     else:
         components["cache"] = "unavailable"
 
-    # Consider system healthy if API and config are available
-    # Database and cache are optional for basic health
-    critical_components = ["api", "config"]
+    # Auth service
+    components["auth"] = "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
+
+    # Risk manager
+    components["risk_manager"] = "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
+
+    # Compliance manager
+    components["compliance"] = "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
+
+    # Strategy brain
+    components["strategy_brain"] = "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
+
+    # WebSocket manager
+    components["websocket"] = "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
+
+    # Overall: degraded if any critical component is not healthy
+    critical = ["api", "config", "database"]
     overall_status = "healthy" if all(
-        components.get(c) == "healthy" for c in critical_components
+        components.get(c) == "healthy" for c in critical
     ) else "degraded"
 
     return HealthResponse(
         status=overall_status,
-        version="1.0.0",
+        version="2.0.0",
         environment=app_state.config.environment if app_state.config else "unknown",
         components=components,
     )
@@ -575,6 +678,18 @@ async def get_status():
         cache_connected=cache_connected,
         api_configs=len(app_state.config.api_configs) if app_state.config else 0,
     )
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics", tags=["System"], include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus text-format metrics. Scraped by Prometheus server."""
+    try:
+        from core.metrics import metrics_response
+        body, content_type = metrics_response()
+        return Response(content=body, media_type=content_type)
+    except Exception as exc:
+        return PlainTextResponse(f"# metrics error: {exc}\n", status_code=500)
 
 
 # Root endpoint
@@ -677,9 +792,10 @@ async def global_exception_handler(request, exc):
     )
 
 
-# Setup CORS and security headers
+# Setup CORS, security headers, and metrics middleware
 setup_cors(app)
 setup_security_headers(app)
+setup_metrics_middleware(app)
 
 
 def run_server():

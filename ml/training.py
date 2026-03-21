@@ -1,7 +1,4 @@
-
-# Phase 3: ML Training Pipeline - LSTM, XGBoost, Random Forest
-
-code = '''"""
+"""
 HOPEFX Machine Learning Pipeline
 LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, evaluation
 """
@@ -226,11 +223,11 @@ class LSTMModel:
         self.learning_rate = learning_rate
         self.model_name = model_name
         
-        self.model: Optional[tf.keras.Model] = None
+        self.model: Optional[Any] = None  # tf.keras.Model when TF available
         self.history: Optional[Any] = None
         self.scaler = MinMaxScaler(feature_range=(0, 1))
     
-    def build_model(self) -> tf.keras.Model:
+    def build_model(self) -> Any:
         """Build LSTM architecture"""
         model = Sequential()
         
@@ -1171,21 +1168,3 @@ if __name__ == "__main__":
     print("\nUsage:")
     print("  from ml.training import train_ml_pipeline")
     print("  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_f'])")
-'''
-
-# Save the file
-with open('ml/training.py', 'w') as f:
-    f.write(code)
-
-print("✅ Created: ml/training.py")
-print(f"   Lines: {len(code.splitlines())}")
-print(f"   Size: {len(code)} bytes")
-print("\n🤖 ML Pipeline Summary:")
-print("   - LSTM: Sequence models with .h5 saving, checkpoints, early stopping")
-print("   - XGBoost: Classification/regression with .json/.pkl saving, feature importance")
-print("   - Random Forest: Ensemble with .pkl saving, feature importance")
-print("   - Feature Engineering: 20+ technical indicators, lag features, scaling")
-print("   - Hyperparameter Tuning: Grid search, random search, time series CV")
-print("   - Evaluation: Classification metrics (accuracy, precision, recall, F1, confusion matrix)")
-print("   - Evaluation: Regression metrics (MSE, RMSE, MAE, R², MAPE)")
-print("   - Reports: JSON metrics, CSV predictions, PNG visualizations")

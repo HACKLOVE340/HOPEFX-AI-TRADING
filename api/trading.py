@@ -9,10 +9,14 @@ authenticated user ("user" role or higher).
 Auth is enforced via Depends(require_role(...)) from api.auth.
 """
 
+import csv
+import io
 import logging
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from api.auth import (
@@ -160,6 +164,13 @@ async def place_order(
             except Exception as ws_exc:
                 logger.warning("WebSocket broadcast failed: %s", ws_exc)
 
+        # Prometheus order metric
+        try:
+            from core.metrics import ORDERS_TOTAL
+            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "order_id": result.id,
@@ -170,6 +181,11 @@ async def place_order(
         raise
     except Exception as exc:
         logger.error("Order error for user=%s: %s", user.sub, exc)
+        try:
+            from core.metrics import ORDERS_TOTAL
+            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
+        except Exception:
+            pass
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
@@ -322,3 +338,105 @@ async def emergency_stop(
     app_state.brain.emergency_stop()
     logger.critical("Emergency stop triggered by user=%s", user.sub)
     return {"status": "emergency_stop_triggered", "triggered_by": user.sub}
+
+
+# ── Trade history ─────────────────────────────────────────────────────────────
+
+_TRADE_CSV_FIELDS = [
+    "trade_id", "symbol", "side", "quantity", "entry_price", "exit_price",
+    "realized_pnl", "commission", "status", "strategy", "entry_time", "exit_time",
+]
+
+
+def _query_trades(user_id: str, symbol: Optional[str], limit: int, offset: int) -> list:
+    """Fetch trades from DB for the given user."""
+    try:
+        from database.models import Trade
+        from app import app_state as _state
+        if not _state or not _state.db_session_factory:
+            return []
+        with _state.db_session_factory() as session:
+            q = session.query(Trade).filter(Trade.user_id == user_id)
+            if symbol:
+                q = q.filter(Trade.symbol == symbol.upper())
+            q = q.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
+            return q.all()
+    except Exception as exc:
+        logger.warning("Trade history DB query failed: %s", exc)
+        return []
+
+
+def _trade_to_dict(t) -> dict:
+    return {
+        "trade_id": getattr(t, "trade_id", str(getattr(t, "id", ""))),
+        "symbol": getattr(t, "symbol", ""),
+        "side": getattr(t, "side", ""),
+        "quantity": getattr(t, "quantity", 0),
+        "entry_price": getattr(t, "entry_price", 0),
+        "exit_price": getattr(t, "exit_price", None),
+        "realized_pnl": getattr(t, "realized_pnl", 0),
+        "commission": getattr(t, "commission", 0),
+        "status": getattr(t, "status", ""),
+        "strategy": getattr(t, "strategy", ""),
+        "entry_time": str(getattr(t, "entry_time", "")),
+        "exit_time": str(getattr(t, "exit_time", "") or ""),
+    }
+
+
+@router.get("/trades")
+async def get_trade_history(
+    user: TokenPayload = Depends(get_current_user),
+    symbol: Optional[str] = Query(None, max_length=20),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Return paginated trade history for the authenticated user.
+
+    Query params:
+      symbol  — filter by symbol (optional)
+      limit   — max rows (1–1000, default 100)
+      offset  — pagination offset
+    """
+    trades = _query_trades(user.sub, symbol, limit, offset)
+    return {
+        "trades": [_trade_to_dict(t) for t in trades],
+        "count": len(trades),
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.get("/trades/export")
+async def export_trade_history_csv(
+    user: TokenPayload = Depends(get_current_user),
+    symbol: Optional[str] = Query(None, max_length=20),
+    limit: int = Query(10000, ge=1, le=100000),
+):
+    """
+    Download trade history as a CSV file.
+
+    Query params:
+      symbol  — filter by symbol (optional)
+      limit   — max rows (default 10 000)
+
+    Returns: application/csv attachment.
+    """
+    trades = _query_trades(user.sub, symbol, limit, offset=0)
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_TRADE_CSV_FIELDS, extrasaction="ignore")
+    writer.writeheader()
+    for t in trades:
+        writer.writerow(_trade_to_dict(t))
+
+    buf.seek(0)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    sym_part = f"_{symbol.upper()}" if symbol else ""
+    filename = f"hopefx_trades{sym_part}_{ts}.csv"
+
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

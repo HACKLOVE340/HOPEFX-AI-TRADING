@@ -313,19 +313,19 @@ class SystemEvent(Base):
 
 
 class PerformanceMetric(Base):
-    """Strategy and system performance metrics"""
-    __tablename__ = 'performance_metrics'
-    
+    """Time-series metric samples (strategy, system, risk)."""
+    __tablename__ = 'performance_metric_samples'
+
     id = Column(BigInteger, primary_key=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     metric_type = Column(String(50), nullable=False, index=True)  # strategy, system, risk
-    
+
     # Metric details
     name = Column(String(100), nullable=False)
     value = Column(Float, nullable=False)
     unit = Column(String(20), nullable=True)
     labels_json = Column(Text, nullable=True)  # JSON string for tags
-    
+
     # Context
     symbol = Column(String(20), nullable=True, index=True)
     strategy = Column(String(50), nullable=True, index=True)

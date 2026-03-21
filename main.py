@@ -132,7 +132,9 @@ class HopeFXTradingApp:
             if broker_type == 'paper':
                 self.broker = PaperTradingBroker(
                     initial_balance=float(os.getenv('INITIAL_BALANCE', '100000')),
-                    commission_per_lot=float(os.getenv('COMMISSION', '3.5'))
+                    commission_per_lot=float(os.getenv('COMMISSION', '3.5')),
+                    session_factory=getattr(self, 'db_session_factory', None),
+                    user_id=os.getenv('PAPER_USER_ID', 'paper'),
                 )
                 await self.broker.connect()
             else:

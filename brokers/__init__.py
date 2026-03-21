@@ -234,7 +234,9 @@ class PaperTradingBroker(BaseBroker):
         initial_balance: float = 100000.0,
         base_currency: str = "USD",
         commission_per_lot: float = 3.5,
-        slippage_model: str = "gaussian"
+        slippage_model: str = "gaussian",
+        session_factory=None,
+        user_id: str = "paper",
     ):
         super().__init__()
         
@@ -244,6 +246,8 @@ class PaperTradingBroker(BaseBroker):
         self.base_currency = base_currency
         self.commission_per_lot = commission_per_lot
         self.slippage_model = slippage_model
+        self._session_factory = session_factory
+        self._user_id = user_id
         
         # THREAD SAFETY: Separate locks for orders and positions
         self._orders_lock = asyncio.Lock()
@@ -571,6 +575,9 @@ class PaperTradingBroker(BaseBroker):
                     'slippage': order.slippage
                 }
                 self._trade_history.append(trade_record)
+
+                # Persist to DB
+                self._persist_trade_record(trade_record)
                 
                 # Remove position
                 del self._positions[position_id]
@@ -596,6 +603,53 @@ class PaperTradingBroker(BaseBroker):
                 if o.status == OrderStatus.PENDING
             ]
     
+    def _persist_trade_record(self, record: dict) -> None:
+        """Persist a closed trade record to the DB trades table."""
+        if not self._session_factory:
+            return
+        try:
+            from database.models import Trade, OrderSide as DBOrderSide, TradeStatus
+            from datetime import datetime, timezone
+            import uuid as _uuid
+
+            raw_side = str(record.get("side", "buy")).lower()
+            side_enum = DBOrderSide.BUY if "buy" in raw_side else DBOrderSide.SELL
+
+            opened_at = record.get("opened_at")
+            if isinstance(opened_at, (int, float)):
+                opened_at = datetime.fromtimestamp(opened_at, tz=timezone.utc)
+            closed_at = record.get("closed_at")
+            if isinstance(closed_at, (int, float)):
+                closed_at = datetime.fromtimestamp(closed_at, tz=timezone.utc)
+
+            qty = float(record.get("quantity", 0))
+            commission = float(record.get("commission", 0))
+            realized_pnl = float(record.get("realized_pnl", 0))
+
+            trade = Trade(
+                trade_id=str(_uuid.uuid4()),
+                symbol=record.get("symbol", ""),
+                side=side_enum,
+                entry_price=float(record.get("entry_price", 0)),
+                entry_quantity=qty,
+                exit_price=float(record.get("exit_price", 0)),
+                exit_quantity=qty,
+                realized_pnl=realized_pnl,
+                total_pnl=realized_pnl,
+                commission=commission,
+                status=TradeStatus.CLOSED,
+                is_open=False,
+                strategy="paper",
+                entry_time=opened_at or datetime.now(timezone.utc),
+                exit_time=closed_at or datetime.now(timezone.utc),
+            )
+            with self._session_factory() as session:
+                session.add(trade)
+                session.commit()
+            logger.debug("Trade persisted to DB: %s pnl=%.2f", record.get("symbol"), realized_pnl)
+        except Exception as exc:
+            logger.warning("Failed to persist paper trade to DB: %s", exc)
+
     def _generate_report(self) -> str:
         """Generate comprehensive trading report"""
         total_trades = len(self._trade_history)
