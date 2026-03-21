@@ -63,8 +63,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# ML models
-models/
+# ML trained model artifacts (not source code)
+/models/
 *.pkl
 *.joblib
 *.h5
@@ -127,4 +127,6 @@ $RECYCLE.BIN/
 # Project specific
 backtest_results/
 trading_logs/
-cache/
+# cache/ is a source code package — not ignored
+# Ignore only runtime cache artifacts:
+*.cache

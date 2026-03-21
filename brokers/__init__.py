@@ -517,7 +517,7 @@ class PaperTradingBroker(BaseBroker):
     async def get_positions(self) -> List[Position]:
         """Get all open positions with updated prices"""
         async with self._positions_lock:
-            positions = list(self._
+            positions = list(self._positions.values())
 
             # Update prices
             if self.price_feed:

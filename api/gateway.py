@@ -5,6 +5,7 @@ Secure external interface for clients and integrations
 """
 
 import asyncio
+import os
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,12 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import jwt
 import hashlib
+
+try:
+    import redis as _redis_lib
+    _REDIS_AVAILABLE = True
+except ImportError:
+    _REDIS_AVAILABLE = False
 
 
 class APIGateway:
@@ -26,11 +33,23 @@ class APIGateway:
         self.pms = pms
         self.auth_secret = auth_secret
         self.app = FastAPI(title="HOPEFX Ultimate API", version="3.0")
-        
+
         # Security
         self.security = HTTPBearer()
-        self.rate_limits: Dict[str, Dict] = {}  # IP -> {count, reset_time}
-        
+        self.rate_limits: Dict[str, Dict] = {}  # in-process fallback only
+
+        # Redis client for distributed rate limiting (optional)
+        self._redis_client = None
+        if _REDIS_AVAILABLE:
+            try:
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+                self._redis_client = _redis_lib.from_url(
+                    redis_url, socket_connect_timeout=2, socket_timeout=2
+                )
+                self._redis_client.ping()
+            except Exception:
+                self._redis_client = None  # degrade to in-process fallback
+
         # Middleware
         self._setup_middleware()
         self._setup_routes()
@@ -49,26 +68,58 @@ class APIGateway:
         # Compression
         self.app.add_middleware(GZipMiddleware, minimum_size=1000)
         
-        # Rate limiting
+        # Rate limiting — Redis-backed sliding window (falls back to in-process counter)
+        _RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MINUTE", "1000"))
+        _WINDOW = 60  # seconds
+
         @self.app.middleware("http")
         async def rate_limit(request, call_next):
-            client_ip = request.client.host
-            
-            # Check rate limit
-            now = datetime.utcnow()
-            limit = self.rate_limits.get(client_ip, {'count': 0, 'reset_time': now})
-            
-            if now > limit['reset_time'] + 60:  # Reset every minute
-                limit = {'count': 0, 'reset_time': now}
-            
-            if limit['count'] > 1000:  # 1000 requests per minute
-                raise HTTPException(status_code=429, detail="Rate limit exceeded")
-            
-            limit['count'] += 1
-            self.rate_limits[client_ip] = limit
-            
+            client_ip = request.client.host if request.client else "unknown"
+            key = f"rl:{client_ip}"
+
+            remaining = _RATE_LIMIT - 1  # default if Redis unavailable
+
+            # Try Redis sliding window (INCR + EXPIRE is atomic enough for rate limiting)
+            if self._redis_client is not None:
+                try:
+                    pipe = self._redis_client.pipeline()
+                    pipe.incr(key)
+                    pipe.expire(key, _WINDOW)
+                    count, _ = pipe.execute()
+                    remaining = max(0, _RATE_LIMIT - count)
+                    if count > _RATE_LIMIT:
+                        from fastapi.responses import JSONResponse
+                        return JSONResponse(
+                            status_code=429,
+                            content={"detail": "Rate limit exceeded"},
+                            headers={
+                                "X-RateLimit-Limit": str(_RATE_LIMIT),
+                                "X-RateLimit-Remaining": "0",
+                                "Retry-After": str(_WINDOW),
+                            },
+                        )
+                except Exception:
+                    pass  # Redis unavailable — degrade gracefully, don't block traffic
+            else:
+                # In-process fallback (single-worker only)
+                now = datetime.utcnow()
+                limit = self.rate_limits.get(client_ip, {'count': 0, 'reset_time': now})
+                if (now - limit['reset_time']).total_seconds() > _WINDOW:
+                    limit = {'count': 0, 'reset_time': now}
+                limit['count'] += 1
+                self.rate_limits[client_ip] = limit
+                remaining = max(0, _RATE_LIMIT - limit['count'])
+                if limit['count'] > _RATE_LIMIT:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": "Rate limit exceeded"},
+                        headers={"Retry-After": str(_WINDOW)},
+                    )
+
             response = await call_next(request)
-            response.headers["X-RateLimit-Remaining"] = str(1000 - limit['count'])
+            response.headers["X-RateLimit-Limit"] = str(_RATE_LIMIT)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
             return response
     
     def _setup_routes(self):

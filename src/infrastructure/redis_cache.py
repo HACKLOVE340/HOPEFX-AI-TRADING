@@ -1,8 +1,10 @@
 """
 Async Redis cache with circuit breaker.
+
+Serialization uses JSON (not pickle) to prevent remote code execution
+if Redis is compromised.
 """
 import json
-import pickle
 from typing import Optional, Any, Union
 import asyncio
 
@@ -67,31 +69,31 @@ class RedisCache:
                 return None
             
             self._circuit_breaker.record_success()
-            return pickle.loads(data)
+            return json.loads(data)
         except Exception as e:
             self._circuit_breaker.record_failure()
             logger.error("redis_get_failed", key=key, error=str(e))
             return None
-    
-    async def set(self, 
-                  key: str, 
-                  value: Any, 
+
+    async def set(self,
+                  key: str,
+                  value: Any,
                   ttl: Optional[int] = None,
                   nx: bool = False) -> bool:
         """Set value in cache."""
         if not await self._circuit_breaker.can_execute():
             return False
-        
+
         try:
-            serialized = pickle.dumps(value)
+            serialized = json.dumps(value, default=str)
             result = await self._redis.set(
-                key, 
-                serialized, 
+                key,
+                serialized,
                 ex=ttl or self._default_ttl,
-                nx=nx
+                nx=nx,
             )
             self._circuit_breaker.record_success()
-            return result
+            return bool(result)
         except Exception as e:
             self._circuit_breaker.record_failure()
             logger.error("redis_set_failed", key=key, error=str(e))

@@ -145,20 +145,28 @@ class BaseMLModel(ABC):
 
         self.logger.info(f"Model saved to {filepath}")
 
+    # Allowed base directory for model files — prevents path traversal
+    _MODEL_BASE_DIR: Path = Path("models").resolve()
+
     def load(self, filepath: str) -> None:
         """
         Load model from disk.
 
-        Args:
-            filepath: Path to load the model from
-            
-        Note:
-            Uses pickle for serialization. Only load models from trusted sources.
-            For production, consider using safer formats like joblib or ONNX.
+        Path is resolved and validated to be inside _MODEL_BASE_DIR to prevent
+        path traversal. pickle is used because sklearn/tensorflow objects cannot
+        be serialised to JSON; only load files written by this application.
         """
-        # Security note: pickle can execute arbitrary code. Only load from trusted sources.
-        with open(filepath, 'rb') as f:
-            data = pickle.load(f)  # nosec - Loading from trusted model directory
+        resolved = Path(filepath).resolve()
+        try:
+            resolved.relative_to(self._MODEL_BASE_DIR)
+        except ValueError:
+            raise ValueError(
+                f"Model path '{resolved}' is outside the allowed model directory "
+                f"'{self._MODEL_BASE_DIR}'. Refusing to load."
+            )
+
+        with open(resolved, 'rb') as f:
+            data = pickle.load(f)  # nosec - path validated above; file written by this app
 
         self.model = data['model']
         self.config = data['config']

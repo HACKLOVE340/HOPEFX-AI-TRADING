@@ -124,18 +124,50 @@ def get_db() -> Session:
         db.close()
 
 
-# CORS configuration
+# CORS + security headers configuration
 def setup_cors(app: FastAPI):
-    """Setup CORS middleware"""
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+    """Setup CORS middleware with restricted origins."""
+    raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000')
+    allowed_origins = [o.strip() for o in raw.split(',') if o.strip()]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
+
+
+def setup_security_headers(app: FastAPI):
+    """Add security response headers to every reply."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request as _Req
+
+    class _SecurityHeaders(BaseHTTPMiddleware):
+        _HEADERS = {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+            "Content-Security-Policy": (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; "
+                "connect-src 'self' wss:;"
+            ),
+        }
+
+        async def dispatch(self, request: _Req, call_next):
+            response = await call_next(request)
+            for header, value in self._HEADERS.items():
+                response.headers[header] = value
+            return response
+
+    app.add_middleware(_SecurityHeaders)
 
 
 # Startup event
@@ -555,8 +587,9 @@ async def global_exception_handler(request, exc):
     )
 
 
-# Setup CORS
+# Setup CORS and security headers
 setup_cors(app)
+setup_security_headers(app)
 
 
 def run_server():

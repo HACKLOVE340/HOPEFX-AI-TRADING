@@ -21,6 +21,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
+    Redis = None  # type: ignore[assignment,misc]
     logging.warning("Redis not available, using in-memory fallback")
 
 logger = logging.getLogger(__name__)

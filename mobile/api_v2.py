@@ -133,23 +133,31 @@ class MobileAPIServer:
     def __init__(self,
                  host: str = "0.0.0.0",
                  port: int = 8001,
-                 jwt_secret: str = "your-secret-key",
+                 jwt_secret: str = None,
                  broker=None,
                  db=None,
                  notification_service=None,
                  cache_service=None,
                  rate_limiter=None):
         """Initialize mobile API"""
-        
+        import os
+        resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
+        if not resolved_secret or len(resolved_secret) < 32:
+            raise ValueError(
+                "jwt_secret must be >= 32 characters. "
+                "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "
+                "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+
         self.app = FastAPI(
             title="HopeFX Mobile API",
             version="2.0.0",
             description="Enterprise mobile trading API"
         )
-        
+
         self.host = host
         self.port = port
-        self.jwt_secret = jwt_secret
+        self.jwt_secret = resolved_secret
         self.broker = broker
         self.db = db
         self.notification_service = notification_service
@@ -692,8 +700,6 @@ class MobileAPIServer:
 # ============ USAGE ============
 
 if __name__ == "__main__":
-    api = MobileAPIServer(
-        port=8001,
-        jwt_secret="your-super-secret-key"
-    )
+    # SECURITY_JWT_SECRET must be set in environment — no hardcoded fallback
+    api = MobileAPIServer(port=8001)
     api.run()
