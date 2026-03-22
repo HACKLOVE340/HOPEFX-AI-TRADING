@@ -5,10 +5,19 @@ End-to-end trading flow tests.
 import pytest
 import asyncio
 
-from src.core.trading_engine import TradingEngine
-from src.brokers.paper import PaperBroker
-from src.data.feeds.polygon import PolygonDataFeed
-from src.strategies.xauusd_ml import XAUUSDMLStrategy
+try:
+    from src.core.trading_engine import TradingEngine
+    from src.brokers.paper import PaperBroker
+    from src.data.feeds.polygon import PolygonDataFeed
+    from src.strategies.xauusd_ml import XAUUSDMLStrategy
+    HAS_TRADING_DEPS = True
+except ImportError:
+    HAS_TRADING_DEPS = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_TRADING_DEPS,
+    reason="trading dependencies (torch or others) not available",
+)
 
 
 @pytest.mark.asyncio

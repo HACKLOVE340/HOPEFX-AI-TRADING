@@ -7,7 +7,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Generator
 
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
 import structlog
 
 logger = structlog.get_logger()
@@ -36,7 +41,8 @@ class GPUMemoryManager:
     def __init__(self, max_gb: float = 4.0):
         if self._initialized:
             return
-        
+        if not HAS_TORCH:
+            raise ImportError("torch is required for this feature. Install with: pip install torch")
         self.max_bytes = int(max_gb * 1024**3)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._pre_allocated: list[torch.Tensor] = []
@@ -82,8 +88,10 @@ class GPUMemoryManager:
         logger.info("GPU emergency cleanup completed")
     
     @contextmanager
-    def allocate(self, shape: tuple[int, ...], dtype: torch.dtype = torch.float32) -> Generator[torch.Tensor, None, None]:
+    def allocate(self, shape: tuple[int, ...], dtype: Any = None) -> Generator[torch.Tensor, None, None]:
         """Context-managed tensor allocation."""
+        if dtype is None:
+            dtype = torch.float32
         tensor = None
         try:
             if self.device.type == "cuda":

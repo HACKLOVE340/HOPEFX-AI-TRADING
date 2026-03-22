@@ -11,8 +11,20 @@ from typing import Any
 
 import joblib
 import numpy as np
-import torch
-import torch.nn as nn
+try:
+    import torch
+    import torch.nn as nn
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
+
+    class _FakeModule:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("torch is required. Install with: pip install torch")
+
+    class nn:  # type: ignore[no-redef]
+        Module = _FakeModule
 import xgboost as xgb
 from sklearn.preprocessing import RobustScaler
 

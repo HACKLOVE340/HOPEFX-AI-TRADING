@@ -1,11 +1,18 @@
 # In src/ml/predictor.py
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
 from contextlib import contextmanager
 
 class GPUMemoryManager:
     """Context manager for GPU memory."""
-    
+
     def __init__(self, max_gb: float = 4.0):
+        if not HAS_TORCH:
+            raise ImportError("torch is required for this feature. Install with: pip install torch")
         self.max_bytes = max_gb * 1024**3
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     

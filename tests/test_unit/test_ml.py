@@ -5,8 +5,17 @@ import pytest
 import numpy as np
 from datetime import datetime, timezone
 
-from hopefx.ml.pipeline import XGBoostOnlineModel
-from hopefx.ml.drift import DriftDetector
+try:
+    from hopefx.ml.pipeline import XGBoostOnlineModel
+    from hopefx.ml.drift import DriftDetector
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_ML_DEPS,
+    reason="ML dependencies (torch or others) not available",
+)
 
 
 def test_xgboost_training():

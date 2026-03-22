@@ -18,7 +18,12 @@ import asyncio
 import json
 import sys
 import signal
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timezone
@@ -307,16 +312,16 @@ class HopeFXUltimateIntegrated:
     
     async def _init_acceleration(self):
         """Initialize GPU and optional FPGA"""
-        if self.config.enable_gpu and torch.cuda.is_available():
+        if self.config.enable_gpu and HAS_TORCH and torch.cuda.is_available():
             gpu_config = GPUConfig(
                 batch_size=self.config.gpu_batch_size,
                 mixed_precision=True
             )
             self.gpu_engine = GPUInferenceEngine(gpu_config)
             self.gpu_engine.start()
-            
+
             self.gpu_features = GPUFeatureEngine()
-            
+
             self.health['gpu'] = ComponentHealth('gpu')
             self.health['gpu'].update('healthy')
             print(f"   ✓ GPU Engine ({torch.cuda.get_device_name(0)})")

@@ -12,7 +12,12 @@ from typing import Any, Generic, TypeVar
 
 import numpy as np
 import structlog
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
 
 logger = structlog.get_logger()
 
