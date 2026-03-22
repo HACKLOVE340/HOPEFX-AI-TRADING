@@ -15,6 +15,7 @@ Features:
 """
 
 import asyncio
+import json
 import sys
 import signal
 import torch
@@ -47,6 +48,10 @@ from sqlalchemy.orm import sessionmaker
 
 # Visualization
 from visualization.dashboard import DashboardServer
+
+# Safety & liveness
+from kill_switch import KillSwitch
+from heartbeat_monitor import HeartbeatMonitor
 
 
 @dataclass
@@ -129,6 +134,13 @@ class HopeFXUltimateIntegrated:
         self.db_session = None
         self.cache: Optional[MarketDataCache] = None
         
+        # Safety & liveness (initialized in _init_safety)
+        self.kill_switch: Optional[KillSwitch] = None
+        self.heartbeat_monitor: Optional[HeartbeatMonitor] = None
+        
+        # Prop-firm mode (loaded from prop_firm_mode.json if present)
+        self.prop_firm_config: Optional[dict] = self._load_prop_firm_config()
+        
         # Performance tracking
         self.performance_metrics = {
             'events_processed': 0,
@@ -154,11 +166,34 @@ class HopeFXUltimateIntegrated:
         print("║     • Advanced Risk (Monte Carlo + GARCH + Copula)               ║")
         print("║     • Cross-Exchange Arbitrage (multi-venue)                     ║")
         print("║     • Real-Time Heatmap (live analytics)                         ║")
+        print("║     • Kill Switch (instant trading halt)                          ║")
+        print("║     • Heartbeat Monitor (component liveness)                     ║")
         print("║                                                                  ║")
         print("╚══════════════════════════════════════════════════════════════════╝")
+
+    @staticmethod
+    def _load_prop_firm_config() -> Optional[dict]:
+        """Load prop_firm_mode.json from the project root if it exists."""
+        cfg_path = Path(__file__).parent / "prop_firm_mode.json"
+        if not cfg_path.exists():
+            return None
+        try:
+            with cfg_path.open() as fh:
+                data = json.load(fh)
+            enabled = data.get("enabled", False)
+            firm = data.get("active_firm", "")
+            if enabled:
+                print(f"   ⚠ Prop-firm mode ENABLED ({firm})")
+            return data
+        except Exception as exc:
+            print(f"   ⚠ Could not load prop_firm_mode.json: {exc}")
+            return None
     
     async def initialize(self):
         """Initialize all components with dependency injection"""
+        print("\n🛡️  PHASE 0: Safety & Liveness")
+        await self._init_safety()
+
         print("\n🔧 PHASE 1: Core Infrastructure")
         await self._init_core_infrastructure()
         
@@ -183,6 +218,32 @@ class HopeFXUltimateIntegrated:
         print("\n✅ ALL SYSTEMS INITIALIZED AND INTEGRATED")
         self._print_system_status()
     
+    async def _init_safety(self):
+        """Initialize KillSwitch and HeartbeatMonitor before anything else."""
+        # Kill switch – event bus not yet available; wired later in _init_master_control_core
+        self.kill_switch = KillSwitch(poll_interval_sec=1.0)
+        self.kill_switch.register_callback(self._on_kill_switch_callback)
+        await self.kill_switch.start()
+        self.health['kill_switch'] = ComponentHealth('kill_switch')
+        self.health['kill_switch'].update('healthy')
+        print("   ✓ Kill Switch (file-flag + env-var polling active)")
+
+        # Heartbeat monitor – critical components added as they are initialised
+        self.heartbeat_monitor = HeartbeatMonitor(
+            check_interval_sec=5.0,
+            kill_switch=self.kill_switch,
+        )
+        self.health['heartbeat_monitor'] = ComponentHealth('heartbeat_monitor')
+        self.health['heartbeat_monitor'].update('healthy')
+        print("   ✓ Heartbeat Monitor (component liveness)")
+
+        # Log whether prop-firm mode is active
+        if self.prop_firm_config and self.prop_firm_config.get("enabled"):
+            firm = self.prop_firm_config.get("active_firm", "unknown")
+            print(f"   ✓ Prop-firm mode active: {firm}")
+        else:
+            print("   ℹ Prop-firm mode disabled (set enabled=true in prop_firm_mode.json to activate)")
+
     async def _init_core_infrastructure(self):
         """Initialize database, cache, config"""
         # Config
@@ -226,6 +287,17 @@ class HopeFXUltimateIntegrated:
         self.event_bus.subscribe('KILL_SWITCH', self._on_kill_switch)
         self.event_bus.subscribe('RISK_VIOLATION', self._on_risk_violation)
         self.event_bus.subscribe('EMERGENCY_STOP', self._on_emergency_stop)
+
+        # Wire kill switch to event bus now that it is available
+        if self.kill_switch is not None:
+            self.kill_switch.set_event_bus(self.event_bus)
+
+        # Register critical components with heartbeat monitor
+        if self.heartbeat_monitor is not None:
+            self.heartbeat_monitor.register('event_bus',   timeout_sec=10,  critical=True)
+            self.heartbeat_monitor.register('price_feed',  timeout_sec=15,  critical=True)
+            self.heartbeat_monitor.register('risk_engine', timeout_sec=120, critical=True)
+            self.heartbeat_monitor.register('ml_inference',timeout_sec=120, critical=False)
         
         # Strategy Orchestra
         self.orchestra = StrategyOrchestra(self.event_bus)
@@ -352,6 +424,13 @@ class HopeFXUltimateIntegrated:
         """Handle emergency stop from any component"""
         print("\n🛑 EMERGENCY STOP RECEIVED")
         self.emergency_stop = True
+
+    def _on_kill_switch_callback(self, reason: str) -> None:
+        """Callback invoked by KillSwitch on activation (non-event-bus path)."""
+        print(f"\n🚨 KILL SWITCH CALLBACK: {reason}")
+        self.emergency_stop = True
+        if self.orchestra:
+            self._emergency_liquidate()
     
     def _trigger_kill_switch(self, reason: str):
         """Trigger system-wide kill switch"""
@@ -375,11 +454,15 @@ class HopeFXUltimateIntegrated:
         """Run all system loops concurrently"""
         print("\n🚀 STARTING ALL SYSTEM LOOPS...")
         self.is_running = True
-        
+
+        # Start heartbeat monitor background task
+        if self.heartbeat_monitor:
+            await self.heartbeat_monitor.start()
+
         # Setup signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
+
         try:
             await asyncio.gather(
                 self._event_bus_loop(),
@@ -403,20 +486,24 @@ class HopeFXUltimateIntegrated:
     async def _price_feed_loop(self):
         """Main price feed and strategy distribution"""
         print("\n📈 Price feed started")
-        
+
         while self.is_running and not self.emergency_stop:
+            # Halt immediately if kill switch is active
+            if self.kill_switch and self.kill_switch.is_active():
+                print("\n🚨 Price feed halted – kill switch is active")
+                break
             try:
                 # Get price from your existing feed
                 # Replace with your actual price source
                 price = await self._fetch_price()
                 timestamp = datetime.utcnow()
-                
+
                 # Distribute to orchestra
                 self.orchestra.distribute_price(price)
-                
+
                 # Update heatmap
                 self.heatmap_engine.on_price("XAUUSD", price, timestamp)
-                
+
                 # Emit event
                 await self.event_bus.publish(DomainEvent.create(
                     'PRICE_UPDATE',
@@ -424,11 +511,15 @@ class HopeFXUltimateIntegrated:
                     {'symbol': 'XAUUSD', 'price': price, 'timestamp': timestamp.isoformat()},
                     priority=1
                 ))
-                
+
                 self.performance_metrics['events_processed'] += 1
-                
+
+                # Heartbeat – proves price_feed is alive
+                if self.heartbeat_monitor:
+                    self.heartbeat_monitor.beat('price_feed')
+
                 await asyncio.sleep(0.1)  # 10Hz - adjust as needed
-                
+
             except Exception as e:
                 print(f"Price feed error: {e}")
                 await asyncio.sleep(1)
@@ -443,40 +534,49 @@ class HopeFXUltimateIntegrated:
         """GPU-accelerated ML inference"""
         if not self.gpu_engine:
             return
-        
+
         while self.is_running:
             try:
                 # Get features
                 # features = self.gpu_features.compute(prices, volumes)
-                
+
                 # Run inference
                 # result = await self.gpu_engine.infer(features, request_id)
-                
+
                 self.performance_metrics['ml_inferences'] += 1
+
+                # Heartbeat – proves ml_inference is alive
+                if self.heartbeat_monitor:
+                    self.heartbeat_monitor.beat('ml_inference')
+
                 await asyncio.sleep(0.01)  # 100Hz
-                
+
             except Exception as e:
                 print(f"ML inference error: {e}")
                 await asyncio.sleep(1)
-    
+
     async def _risk_monitoring_loop(self):
         """Continuous risk monitoring"""
         if not self.risk_monitor:
             return
-        
+
         while self.is_running:
             try:
                 # Get current positions
                 # positions = self._get_current_positions()
                 # prices = self._get_current_prices()
-                
+
                 # Update risk
                 # violations = self.risk_monitor.update_portfolio(positions, prices)
-                
+
                 self.performance_metrics['risk_calculations'] += 1
-                
+
+                # Heartbeat – proves risk_engine is alive
+                if self.heartbeat_monitor:
+                    self.heartbeat_monitor.beat('risk_engine')
+
                 await asyncio.sleep(self.config.risk_calculation_interval_sec)
-                
+
             except Exception as e:
                 print(f"Risk monitoring error: {e}")
                 await asyncio.sleep(5)
@@ -575,6 +675,16 @@ class HopeFXUltimateIntegrated:
         if self.cache:
             print("🛑 Closing cache...")
             # self.cache.close()
+
+        # Stop heartbeat monitor
+        if self.heartbeat_monitor:
+            print("🛑 Stopping heartbeat monitor...")
+            await self.heartbeat_monitor.stop()
+
+        # Stop kill switch polling
+        if self.kill_switch:
+            print("🛑 Stopping kill switch...")
+            await self.kill_switch.stop()
         
         # Final status
         runtime = (datetime.utcnow() - self.start_time).total_seconds()
