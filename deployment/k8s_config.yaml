@@ -1,0 +1,116 @@
+# deployment/k8s_config.yaml
+"""
+Kubernetes deployment configuration for HOPEFX Ultimate
+Production-ready with auto-scaling and high availability
+"""
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hopefx-master
+  namespace: trading
+spec:
+  serviceName: hopefx-headless
+  replicas: 3  # 3-node cluster for HA
+  selector:
+    matchLabels:
+      app: hopefx
+      role: master
+  template:
+    metadata:
+      labels:
+        app: hopefx
+        role: master
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: hopefx
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: hopefx
+          image: hopefx/ultimate:v3.0
+          resources:
+            requests:
+              memory: "32Gi"
+              cpu: "16"
+              nvidia.com/gpu: 1  # GPU for ML inference
+            limits:
+              memory: "64Gi"
+              cpu: "32"
+              nvidia.com/gpu: 1
+          
+          env:
+            - name: HSM_TYPE
+              value: "cloudhsm"
+            - name: GPU_ENABLED
+              value: "true"
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          volumeMounts:
+            - name: event-store
+              mountPath: /data/events
+            - name: hsm-credentials
+              mountPath: /secrets/hsm
+              readOnly: true
+            - name: config
+              mountPath: /config
+      
+      volumes:
+        - name: event-store
+          persistentVolumeClaim:
+            claimName: hopefx-events-pvc
+        - name: hsm-credentials
+          secret:
+            secretName: hsm-cloud-credentials
+        - name: config
+          configMap:
+            name: hopefx-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hopefx-dashboard
+  namespace: trading
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: hopefx
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hopefx-hpa
+  namespace: trading
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: hopefx-master
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Pods
+      pods:
+        metric:
+          name: hopefx_events_per_second
+        target:
+          type: AverageValue
+          averageValue: "1000000"  # Scale if > 1M events/sec

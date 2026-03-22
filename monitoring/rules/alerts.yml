@@ -1,0 +1,65 @@
+groups:
+  - name: hopefx-critical
+    rules:
+      - alert: HopeFXAPIDown
+        expr: up{job="hopefx-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX API is down"
+          description: "API instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: HopeFXHighErrorRate
+        expr: rate(hopefx_http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second"
+
+      - alert: HopeFXCircuitBreakerOpen
+        expr: hopefx_circuit_breaker_state == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "{{ $labels.name }} circuit breaker is open - trading halted"
+
+      - alert: HopeFXHighLatency
+        expr: histogram_quantile(0.95, rate(hopefx_latency_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "95th percentile latency is {{ $value }}s"
+
+      - alert: HopeFXDailyLossLimit
+        expr: hopefx_daily_pnl / hopefx_equity < -0.02
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily loss limit breached"
+          description: "Daily loss is {{ $value | humanizePercentage }} of equity"
+
+      - alert: HopeFXDatabaseConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connections high"
+          description: "{{ $value }} active connections"
+
+      - alert: HopeFXRedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis using {{ $value | humanizePercentage }} of memory"

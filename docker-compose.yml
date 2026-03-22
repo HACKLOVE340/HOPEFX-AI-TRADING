@@ -1,67 +1,101 @@
-version: '3.8'
+version: "3.9"
+
+# HOPEFX AI Trading — full stack
+# Usage:
+#   cp .env.example .env && docker compose up -d
 
 services:
-  # Trading Application
-  hopefx-app:
-    build: .
-    container_name: hopefx-trading
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "8000:8000"
+    env_file: .env
     environment:
-      - APP_ENV=production
-      - CONFIG_ENCRYPTION_KEY=${CONFIG_ENCRYPTION_KEY}
-      - CONFIG_SALT=${CONFIG_SALT}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - DB_TYPE=postgresql
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=hopefx_trading
-      - POSTGRES_USER=${POSTGRES_USER:-hopefx_admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - ./logs:/app/logs
-      - ./data:/app/data
-      - ./credentials:/app/credentials
+      DATABASE_URL: postgresql://hopefx:hopefx@postgres:5432/hopefx
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
     depends_on:
-      - redis
-      - postgres
-    networks:
-      - hopefx-network
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: hopefx-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - redis-data:/data
-    networks:
-      - hopefx-network
+      - ./ml/saved_models:/app/ml/saved_models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
-  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    container_name: hopefx-postgres
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=hopefx_trading
-      - POSTGRES_USER=${POSTGRES_USER:-hopefx_admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_USER: hopefx
+      POSTGRES_PASSWORD: hopefx
+      POSTGRES_DB: hopefx
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - hopefx-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hopefx -d hopefx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  hopefx-network:
-    driver: bridge
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
-  redis-data:
-  postgres-data:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,510 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#050810"/>
+<stop offset="50%" stop-color="#080d1a"/>
+<stop offset="100%" stop-color="#030608"/>
+</linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#b8860b"/>
+<stop offset="50%" stop-color="#FFD700"/>
+<stop offset="100%" stop-color="#ffa500"/>
+</linearGradient>
+<linearGradient id="goldV" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#FFD700"/>
+<stop offset="100%" stop-color="#b8860b"/>
+</linearGradient>
+<linearGradient id="emerald" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#00c853"/>
+<stop offset="100%" stop-color="#00e676"/>
+</linearGradient>
+<linearGradient id="panelBg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#0d1526" stop-opacity="0.95"/>
+<stop offset="100%" stop-color="#060c18" stop-opacity="0.98"/>
+</linearGradient>
+<linearGradient id="equityLine" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#FFD700" stop-opacity="0.3"/>
+<stop offset="100%" stop-color="#FFD700"/>
+</linearGradient>
+<linearGradient id="coreGlow" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="#FFD700" stop-opacity="0.15"/>
+<stop offset="100%" stop-color="#FFD700" stop-opacity="0.02"/>
+</linearGradient>
+<radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#FFD700" stop-opacity="0.12"/>
+<stop offset="100%" stop-color="#FFD700" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="cyanGlow" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#00e5ff" stop-opacity="0.18"/>
+<stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+</radialGradient>
+<filter id="glow">
+<feGaussianBlur stdDeviation="3" result="blur"/>
+<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="strongGlow">
+<feGaussianBlur stdDeviation="6" result="blur"/>
+<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="softGlow">
+<feGaussianBlur stdDeviation="12" result="blur"/>
+<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<clipPath id="chartClip"><rect x="30" y="120" width="420" height="340"/></clipPath>
+<clipPath id="equityClip"><rect x="30" y="680" width="1540" height="180"/></clipPath>
+</defs>
+<!-- ═══ BACKGROUND ═══ -->
+<rect width="1600" height="900" fill="url(#bg)"/>
+<!-- cosmic particle field -->
+<circle cx="120" cy="80" r="1" fill="#FFD700" opacity="0.4"/>
+<circle cx="340" cy="45" r="1.5" fill="#00e5ff" opacity="0.3"/>
+<circle cx="580" cy="90" r="1" fill="#FFD700" opacity="0.25"/>
+<circle cx="820" cy="30" r="1" fill="#ffffff" opacity="0.2"/>
+<circle cx="1050" cy="70" r="1.5" fill="#00e5ff" opacity="0.3"/>
+<circle cx="1280" cy="50" r="1" fill="#FFD700" opacity="0.35"/>
+<circle cx="1480" cy="85" r="1" fill="#ffffff" opacity="0.2"/>
+<circle cx="200" cy="200" r="1" fill="#00e5ff" opacity="0.2"/>
+<circle cx="450" cy="620" r="1" fill="#FFD700" opacity="0.3"/>
+<circle cx="700" cy="750" r="1.5" fill="#00e5ff" opacity="0.2"/>
+<circle cx="950" cy="820" r="1" fill="#FFD700" opacity="0.25"/>
+<circle cx="1200" cy="680" r="1" fill="#ffffff" opacity="0.15"/>
+<circle cx="1400" cy="780" r="1.5" fill="#00e5ff" opacity="0.2"/>
+<circle cx="60" cy="450" r="1" fill="#FFD700" opacity="0.2"/>
+<circle cx="1550" cy="350" r="1" fill="#FFD700" opacity="0.3"/>
+<circle cx="1520" cy="600" r="1.5" fill="#00e5ff" opacity="0.25"/>
+<!-- Lagos skyline glass reflection at bottom -->
+<rect x="0" y="820" width="1600" height="80" fill="#0a1628" opacity="0.6"/>
+<rect x="60" y="830" width="18" height="50" fill="#1a2a4a" opacity="0.5"/>
+<rect x="90" y="820" width="25" height="60" fill="#1a2a4a" opacity="0.4"/>
+<rect x="130" y="835" width="15" height="45" fill="#1a2a4a" opacity="0.5"/>
+<rect x="160" y="825" width="20" height="55" fill="#1a2a4a" opacity="0.4"/>
+<rect x="195" y="840" width="12" height="40" fill="#1a2a4a" opacity="0.5"/>
+<rect x="1350" y="828" width="18" height="52" fill="#1a2a4a" opacity="0.5"/>
+<rect x="1380" y="820" width="25" height="60" fill="#1a2a4a" opacity="0.4"/>
+<rect x="1420" y="835" width="15" height="45" fill="#1a2a4a" opacity="0.5"/>
+<rect x="1450" y="825" width="20" height="55" fill="#1a2a4a" opacity="0.4"/>
+<rect x="1490" y="840" width="12" height="40" fill="#1a2a4a" opacity="0.5"/>
+<!-- center ambient glow -->
+<ellipse cx="800" cy="450" rx="380" ry="280" fill="url(#centerGlow)"/>
+
+<!-- ═══ TOP BANNER BAR ═══ -->
+<rect x="0" y="0" width="1600" height="72" fill="#060c18" opacity="0.97"/>
+<rect x="0" y="70" width="1600" height="2" fill="url(#gold)" opacity="0.8"/>
+<!-- HOPEFX logo mark: gold bar + circuit -->
+<rect x="28" y="18" width="36" height="20" rx="3" fill="url(#goldV)" filter="url(#glow)"/>
+<rect x="32" y="22" width="28" height="3" rx="1" fill="#050810" opacity="0.5"/>
+<rect x="32" y="28" width="28" height="3" rx="1" fill="#050810" opacity="0.5"/>
+<!-- circuit lines from logo -->
+<line x1="64" y1="28" x2="76" y2="28" stroke="#FFD700" stroke-width="1.5" opacity="0.7"/>
+<circle cx="78" cy="28" r="2" fill="#FFD700" opacity="0.9"/>
+<line x1="80" y1="28" x2="88" y2="28" stroke="#00e5ff" stroke-width="1" opacity="0.6"/>
+<!-- HOPEFX wordmark -->
+<text x="96" y="44" font-family="Arial Black, sans-serif" font-size="28" font-weight="900" fill="url(#gold)" filter="url(#glow)" letter-spacing="4">HOPEFX</text>
+<!-- tagline -->
+<text x="96" y="62" font-family="Arial, sans-serif" font-size="9" fill="#FFD700" opacity="0.7" letter-spacing="1.5">INSTITUTIONAL-GRADE AI GOLD TRADING</text>
+<!-- top-right badges -->
+<rect x="1180" y="14" width="90" height="22" rx="11" fill="#00c853" opacity="0.15"/>
+<rect x="1180" y="14" width="90" height="22" rx="11" fill="none" stroke="#00c853" stroke-width="1"/>
+<text x="1225" y="29" font-family="Arial, sans-serif" font-size="10" fill="#00e676" text-anchor="middle" font-weight="bold">MIT LICENSE</text>
+<rect x="1282" y="14" width="80" height="22" rx="11" fill="#FFD700" opacity="0.12"/>
+<rect x="1282" y="14" width="80" height="22" rx="11" fill="none" stroke="#FFD700" stroke-width="1"/>
+<text x="1322" y="29" font-family="Arial, sans-serif" font-size="10" fill="#FFD700" text-anchor="middle" font-weight="bold">PYTHON 3.11+</text>
+<rect x="1374" y="14" width="100" height="22" rx="11" fill="#00e5ff" opacity="0.1"/>
+<rect x="1374" y="14" width="100" height="22" rx="11" fill="none" stroke="#00e5ff" stroke-width="1"/>
+<text x="1424" y="29" font-family="Arial, sans-serif" font-size="10" fill="#00e5ff" text-anchor="middle" font-weight="bold">EVENT-DRIVEN</text>
+<rect x="1486" y="14" width="90" height="22" rx="11" fill="#FFD700" opacity="0.15"/>
+<rect x="1486" y="14" width="90" height="22" rx="11" fill="none" stroke="#FFD700" stroke-width="1"/>
+<text x="1531" y="29" font-family="Arial, sans-serif" font-size="10" fill="#FFD700" text-anchor="middle" font-weight="bold">SHARPE 2.78</text>
+<!-- version tag -->
+<text x="1531" y="58" font-family="Arial, sans-serif" font-size="9" fill="#ffffff" opacity="0.35" text-anchor="middle">v2.0 · 2026</text>
+
+<!-- ═══ LEFT PANEL: XAUUSD CHART ═══ -->
+<rect x="22" y="88" width="440" height="370" rx="8" fill="url(#panelBg)" stroke="#FFD700" stroke-width="1" stroke-opacity="0.4"/>
+<!-- panel header -->
+<rect x="22" y="88" width="440" height="28" rx="8" fill="#FFD700" fill-opacity="0.08"/>
+<circle cx="38" cy="102" r="4" fill="#00e676"/>
+<text x="50" y="107" font-family="Arial, sans-serif" font-size="11" fill="#FFD700" font-weight="bold">XAUUSD · 1H</text>
+<text x="200" y="107" font-family="Arial, sans-serif" font-size="10" fill="#00e5ff" opacity="0.8">Transformer-Diffusion Forecast</text>
+<text x="420" y="107" font-family="Arial, sans-serif" font-size="10" fill="#00e676" text-anchor="end">LIVE</text>
+<!-- grid lines -->
+<line x1="30" y1="150" x2="454" y2="150" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<line x1="30" y1="200" x2="454" y2="200" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<line x1="30" y1="250" x2="454" y2="250" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<line x1="30" y1="300" x2="454" y2="300" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<line x1="30" y1="350" x2="454" y2="350" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<line x1="30" y1="400" x2="454" y2="400" stroke="#ffffff" stroke-width="0.3" opacity="0.08"/>
+<!-- price labels -->
+<text x="458" y="154" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.4">2415</text>
+<text x="458" y="204" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.4">2390</text>
+<text x="458" y="254" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.4">2365</text>
+<text x="458" y="304" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.4">2340</text>
+<text x="458" y="354" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.4">2315</text>
+<!-- candlesticks (bearish=crimson, bullish=emerald) -->
+<!-- candle 1 bull -->
+<line x1="50" y1="340" x2="50" y2="310" stroke="#00e676" stroke-width="1"/>
+<rect x="45" y="320" width="10" height="18" fill="#00e676" opacity="0.9"/>
+<!-- candle 2 bear -->
+<line x1="72" y1="315" x2="72" y2="345" stroke="#ff1744" stroke-width="1"/>
+<rect x="67" y="322" width="10" height="16" fill="#ff1744" opacity="0.9"/>
+<!-- candle 3 bull -->
+<line x1="94" y1="308" x2="94" y2="335" stroke="#00e676" stroke-width="1"/>
+<rect x="89" y="312" width="10" height="20" fill="#00e676" opacity="0.9"/>
+<!-- candle 4 bull -->
+<line x1="116" y1="295" x2="116" y2="325" stroke="#00e676" stroke-width="1"/>
+<rect x="111" y="300" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 5 bear -->
+<line x1="138" y1="298" x2="138" y2="320" stroke="#ff1744" stroke-width="1"/>
+<rect x="133" y="302" width="10" height="14" fill="#ff1744" opacity="0.9"/>
+<!-- candle 6 bull -->
+<line x1="160" y1="280" x2="160" y2="310" stroke="#00e676" stroke-width="1"/>
+<rect x="155" y="284" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 7 bull -->
+<line x1="182" y1="265" x2="182" y2="295" stroke="#00e676" stroke-width="1"/>
+<rect x="177" y="270" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 8 bear -->
+<line x1="204" y1="268" x2="204" y2="290" stroke="#ff1744" stroke-width="1"/>
+<rect x="199" y="272" width="10" height="14" fill="#ff1744" opacity="0.9"/>
+<!-- candle 9 bull -->
+<line x1="226" y1="248" x2="226" y2="278" stroke="#00e676" stroke-width="1"/>
+<rect x="221" y="252" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 10 bull -->
+<line x1="248" y1="232" x2="248" y2="262" stroke="#00e676" stroke-width="1"/>
+<rect x="243" y="236" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 11 bear -->
+<line x1="270" y1="235" x2="270" y2="255" stroke="#ff1744" stroke-width="1"/>
+<rect x="265" y="238" width="10" height="14" fill="#ff1744" opacity="0.9"/>
+<!-- candle 12 bull -->
+<line x1="292" y1="218" x2="292" y2="248" stroke="#00e676" stroke-width="1"/>
+<rect x="287" y="222" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 13 bull -->
+<line x1="314" y1="200" x2="314" y2="230" stroke="#00e676" stroke-width="1"/>
+<rect x="309" y="204" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 14 bull -->
+<line x1="336" y1="185" x2="336" y2="215" stroke="#00e676" stroke-width="1"/>
+<rect x="331" y="189" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 15 bear -->
+<line x1="358" y1="188" x2="358" y2="208" stroke="#ff1744" stroke-width="1"/>
+<rect x="353" y="191" width="10" height="14" fill="#ff1744" opacity="0.9"/>
+<!-- candle 16 bull -->
+<line x1="380" y1="170" x2="380" y2="200" stroke="#00e676" stroke-width="1"/>
+<rect x="375" y="174" width="10" height="22" fill="#00e676" opacity="0.9"/>
+<!-- candle 17 bull (current, glowing) -->
+<line x1="402" y1="152" x2="402" y2="182" stroke="#00e676" stroke-width="1.5" filter="url(#glow)"/>
+<rect x="397" y="156" width="10" height="22" fill="#00e676" opacity="1" filter="url(#glow)"/>
+<!-- prediction ribbon (future candles, faded) -->
+<rect x="420" y="140" width="8" height="18" fill="#FFD700" opacity="0.5" rx="1"/>
+<rect x="432" y="128" width="8" height="18" fill="#FFD700" opacity="0.4" rx="1"/>
+<rect x="444" y="118" width="8" height="16" fill="#FFD700" opacity="0.3" rx="1"/>
+<!-- uncertainty cloud -->
+<ellipse cx="435" cy="130" rx="22" ry="18" fill="#FFD700" opacity="0.06"/>
+<ellipse cx="448" cy="118" rx="18" ry="14" fill="#00e5ff" opacity="0.05"/>
+<!-- transformer prediction line -->
+<polyline points="402,167 420,149 432,137 444,126 456,116" fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8" filter="url(#glow)"/>
+<!-- 92% label -->
+<rect x="420" y="108" width="36" height="14" rx="7" fill="#00e676" opacity="0.2"/>
+<text x="438" y="119" font-family="Arial, sans-serif" font-size="9" fill="#00e676" text-anchor="middle" font-weight="bold">92% ↑</text>
+<!-- MA line -->
+<polyline points="50,330 72,328 94,322 116,308 138,305 160,292 182,278 204,275 226,260 248,244 270,240 292,228 314,212 336,196 358,192 380,178 402,162" fill="none" stroke="#FFD700" stroke-width="1.5" opacity="0.6"/>
+<!-- Informer label -->
+<text x="30" y="450" font-family="Arial, sans-serif" font-size="9" fill="#00e5ff" opacity="0.7">Informer · Autoformer · TimesFM overlay</text>
+<!-- current price tag -->
+<rect x="390" y="148" width="62" height="14" rx="3" fill="#FFD700" opacity="0.9"/>
+<text x="421" y="159" font-family="monospace" font-size="9" fill="#050810" text-anchor="middle" font-weight="bold">2,401.50</text>
+
+<!-- ═══ CENTER: CORE ENGINE ═══ -->
+<!-- outer ring -->
+<circle cx="800" cy="390" r="155" fill="none" stroke="#FFD700" stroke-width="0.5" stroke-opacity="0.2" stroke-dasharray="6,4"/>
+<circle cx="800" cy="390" r="120" fill="none" stroke="#FFD700" stroke-width="0.8" stroke-opacity="0.35" stroke-dasharray="3,3"/>
+<!-- core hexagon glow -->
+<polygon points="800,270 893,325 893,435 800,490 707,435 707,325" fill="#060e1e" stroke="#FFD700" stroke-width="1.5" stroke-opacity="0.7" filter="url(#glow)"/>
+<polygon points="800,285 878,330 878,420 800,465 722,420 722,330" fill="url(#coreGlow)"/>
+<!-- inner hex -->
+<polygon points="800,300 868,338 868,414 800,452 732,414 732,338" fill="#080d1a" stroke="#FFD700" stroke-width="1" stroke-opacity="0.5"/>
+<!-- core label -->
+<text x="800" y="368" font-family="Arial Black, sans-serif" font-size="13" fill="#FFD700" text-anchor="middle" font-weight="900" filter="url(#glow)">HOPEFX</text>
+<text x="800" y="385" font-family="Arial, sans-serif" font-size="9" fill="#00e5ff" text-anchor="middle" letter-spacing="2">EVENT ENGINE</text>
+<text x="800" y="400" font-family="monospace" font-size="8" fill="#FFD700" text-anchor="middle" opacity="0.7">nanosecond · deterministic</text>
+<text x="800" y="415" font-family="monospace" font-size="8" fill="#00e676" text-anchor="middle" opacity="0.8">research ↔ live parity</text>
+<!-- orbit nodes -->
+<!-- Portfolio (top) -->
+<circle cx="800" cy="248" r="22" fill="#0d1526" stroke="#FFD700" stroke-width="1.5" filter="url(#glow)"/>
+<text x="800" y="245" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle" font-weight="bold">PORTFOLIO</text>
+<text x="800" y="256" font-family="Arial, sans-serif" font-size="7" fill="#00e676" text-anchor="middle">engine</text>
+<!-- Risk (top-right) -->
+<circle cx="920" cy="318" r="22" fill="#0d1526" stroke="#ff6d00" stroke-width="1.5" filter="url(#glow)"/>
+<text x="920" y="315" font-family="Arial, sans-serif" font-size="8" fill="#ff6d00" text-anchor="middle" font-weight="bold">RISK</text>
+<text x="920" y="326" font-family="Arial, sans-serif" font-size="7" fill="#ff6d00" text-anchor="middle">manager</text>
+<!-- Execution (bottom-right) -->
+<circle cx="920" cy="462" r="22" fill="#0d1526" stroke="#00e5ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="920" y="459" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle" font-weight="bold">EXEC</text>
+<text x="920" y="470" font-family="Arial, sans-serif" font-size="7" fill="#00e5ff" text-anchor="middle">engine</text>
+<!-- Data (bottom) -->
+<circle cx="800" cy="532" r="22" fill="#0d1526" stroke="#00e676" stroke-width="1.5" filter="url(#glow)"/>
+<text x="800" y="529" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle" font-weight="bold">DATA</text>
+<text x="800" y="540" font-family="Arial, sans-serif" font-size="7" fill="#00e676" text-anchor="middle">feed</text>
+<!-- OrderBook (bottom-left) -->
+<circle cx="680" cy="462" r="22" fill="#0d1526" stroke="#aa00ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="680" y="459" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle" font-weight="bold">ORDER</text>
+<text x="680" y="470" font-family="Arial, sans-serif" font-size="7" fill="#aa00ff" text-anchor="middle">book</text>
+<!-- Strategy (top-left) -->
+<circle cx="680" cy="318" r="22" fill="#0d1526" stroke="#FFD700" stroke-width="1.5" filter="url(#glow)"/>
+<text x="680" y="315" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle" font-weight="bold">STRAT</text>
+<text x="680" y="326" font-family="Arial, sans-serif" font-size="7" fill="#FFD700" text-anchor="middle">manager</text>
+<!-- orbit connector lines -->
+<line x1="800" y1="270" x2="800" y2="300" stroke="#FFD700" stroke-width="1" opacity="0.5"/>
+<line x1="898" y1="330" x2="878" y2="345" stroke="#ff6d00" stroke-width="1" opacity="0.5"/>
+<line x1="898" y1="450" x2="878" y2="435" stroke="#00e5ff" stroke-width="1" opacity="0.5"/>
+<line x1="800" y1="510" x2="800" y2="480" stroke="#00e676" stroke-width="1" opacity="0.5"/>
+<line x1="702" y1="450" x2="722" y2="435" stroke="#aa00ff" stroke-width="1" opacity="0.5"/>
+<line x1="702" y1="330" x2="722" y2="345" stroke="#FFD700" stroke-width="1" opacity="0.5"/>
+<!-- bidirectional event arrows (research <-> live) -->
+<line x1="560" y1="390" x2="700" y2="390" stroke="#00e5ff" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+<polygon points="700,386 710,390 700,394" fill="#00e5ff" opacity="0.8"/>
+<polygon points="560,386 550,390 560,394" fill="#00e5ff" opacity="0.8"/>
+<line x1="900" y1="390" x2="1040" y2="390" stroke="#FFD700" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+<polygon points="1040,386 1050,390 1040,394" fill="#FFD700" opacity="0.8"/>
+<polygon points="900,386 890,390 900,394" fill="#FFD700" opacity="0.8"/>
+<text x="630" y="384" font-family="monospace" font-size="8" fill="#00e5ff" text-anchor="middle" opacity="0.7">research</text>
+<text x="970" y="384" font-family="monospace" font-size="8" fill="#FFD700" text-anchor="middle" opacity="0.7">live</text>
+
+<!-- ═══ RIGHT PANEL: BROKER / FIX ═══ -->
+<rect x="1138" y="88" width="440" height="200" rx="8" fill="url(#panelBg)" stroke="#00e5ff" stroke-width="1" stroke-opacity="0.4"/>
+<rect x="1138" y="88" width="440" height="28" rx="8" fill="#00e5ff" fill-opacity="0.06"/>
+<text x="1154" y="107" font-family="Arial, sans-serif" font-size="11" fill="#00e5ff" font-weight="bold">FIX BROKER ADAPTERS</text>
+<text x="1540" y="107" font-family="Arial, sans-serif" font-size="9" fill="#00e676" text-anchor="end">ultra-low latency</text>
+<!-- broker rows -->
+<!-- OANDA -->
+<circle cx="1162" cy="138" r="5" fill="#00e676" filter="url(#glow)"/>
+<text x="1175" y="142" font-family="monospace" font-size="11" fill="#ffffff" font-weight="bold">OANDA</text>
+<rect x="1280" y="130" width="60" height="16" rx="8" fill="#00e676" opacity="0.15"/>
+<rect x="1280" y="130" width="60" height="16" rx="8" fill="none" stroke="#00e676" stroke-width="0.8"/>
+<text x="1310" y="142" font-family="monospace" font-size="9" fill="#00e676" text-anchor="middle">&lt;8ms</text>
+<text x="1360" y="142" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">REST · Stream</text>
+<!-- MT5 -->
+<circle cx="1162" cy="162" r="5" fill="#00e676" filter="url(#glow)"/>
+<text x="1175" y="166" font-family="monospace" font-size="11" fill="#ffffff" font-weight="bold">MT5</text>
+<rect x="1280" y="154" width="60" height="16" rx="8" fill="#00e676" opacity="0.15"/>
+<rect x="1280" y="154" width="60" height="16" rx="8" fill="none" stroke="#00e676" stroke-width="0.8"/>
+<text x="1310" y="166" font-family="monospace" font-size="9" fill="#00e676" text-anchor="middle">&lt;6ms</text>
+<text x="1360" y="166" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">FIX 4.4</text>
+<!-- Binance -->
+<circle cx="1162" cy="186" r="5" fill="#00e676" filter="url(#glow)"/>
+<text x="1175" y="190" font-family="monospace" font-size="11" fill="#ffffff" font-weight="bold">BINANCE</text>
+<rect x="1280" y="178" width="60" height="16" rx="8" fill="#00e676" opacity="0.15"/>
+<rect x="1280" y="178" width="60" height="16" rx="8" fill="none" stroke="#00e676" stroke-width="0.8"/>
+<text x="1310" y="190" font-family="monospace" font-size="9" fill="#00e676" text-anchor="middle">&lt;10ms</text>
+<text x="1360" y="190" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">WS · REST</text>
+<!-- Paper -->
+<circle cx="1162" cy="210" r="5" fill="#FFD700" filter="url(#glow)"/>
+<text x="1175" y="214" font-family="monospace" font-size="11" fill="#FFD700" font-weight="bold">PAPER</text>
+<rect x="1280" y="202" width="60" height="16" rx="8" fill="#FFD700" opacity="0.12"/>
+<rect x="1280" y="202" width="60" height="16" rx="8" fill="none" stroke="#FFD700" stroke-width="0.8"/>
+<text x="1310" y="214" font-family="monospace" font-size="9" fill="#FFD700" text-anchor="middle">&lt;1ms</text>
+<text x="1360" y="214" font-family="monospace" font-size="9" fill="#ffffff" opacity="0.5">simulation</text>
+<!-- circuit breaker shield -->
+<polygon points="1530,120 1555,132 1555,158 1530,170 1505,158 1505,132" fill="#0d1526" stroke="#ff6d00" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1530" y="143" font-family="Arial, sans-serif" font-size="8" fill="#ff6d00" text-anchor="middle" font-weight="bold">CIRCUIT</text>
+<text x="1530" y="154" font-family="Arial, sans-serif" font-size="8" fill="#ff6d00" text-anchor="middle" font-weight="bold">BREAKER</text>
+<text x="1530" y="165" font-family="Arial, sans-serif" font-size="7" fill="#ff6d00" text-anchor="middle">kill-switch</text>
+<!-- ═══ RIGHT PANEL: TCA / VaR ═══ -->
+<rect x="1138" y="302" width="440" height="156" rx="8" fill="url(#panelBg)" stroke="#FFD700" stroke-width="1" stroke-opacity="0.4"/>
+<rect x="1138" y="302" width="440" height="28" rx="8" fill="#FFD700" fill-opacity="0.06"/>
+<text x="1154" y="321" font-family="Arial, sans-serif" font-size="11" fill="#FFD700" font-weight="bold">TCA · VaR · CVaR ANALYTICS</text>
+<!-- metric cards -->
+<rect x="1148" y="338" width="90" height="50" rx="5" fill="#0a1628" stroke="#ff1744" stroke-width="1"/>
+<text x="1193" y="356" font-family="Arial, sans-serif" font-size="8" fill="#ff1744" text-anchor="middle">VaR 99%</text>
+<text x="1193" y="372" font-family="Arial Black, sans-serif" font-size="13" fill="#ff1744" text-anchor="middle" font-weight="900">-1.2%</text>
+<text x="1193" y="384" font-family="Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" opacity="0.5">daily</text>
+<rect x="1252" y="338" width="90" height="50" rx="5" fill="#0a1628" stroke="#FFD700" stroke-width="1"/>
+<text x="1297" y="356" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle">Slippage</text>
+<text x="1297" y="372" font-family="Arial Black, sans-serif" font-size="13" fill="#FFD700" text-anchor="middle" font-weight="900">&lt;0.3bps</text>
+<text x="1297" y="384" font-family="Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" opacity="0.5">avg fill</text>
+<rect x="1356" y="338" width="90" height="50" rx="5" fill="#0a1628" stroke="#00e676" stroke-width="1"/>
+<text x="1401" y="356" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle">Sharpe</text>
+<text x="1401" y="372" font-family="Arial Black, sans-serif" font-size="13" fill="#00e676" text-anchor="middle" font-weight="900">2.78</text>
+<text x="1401" y="384" font-family="Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" opacity="0.5">annualized</text>
+<rect x="1460" y="338" width="90" height="50" rx="5" fill="#0a1628" stroke="#00e5ff" stroke-width="1"/>
+<text x="1505" y="356" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle">CVaR 99%</text>
+<text x="1505" y="372" font-family="Arial Black, sans-serif" font-size="13" fill="#00e5ff" text-anchor="middle" font-weight="900">-1.8%</text>
+<text x="1505" y="384" font-family="Arial, sans-serif" font-size="7" fill="#ffffff" text-anchor="middle" opacity="0.5">expected</text>
+<!-- peer benchmark ghosts -->
+<text x="1154" y="418" font-family="Arial, sans-serif" font-size="8" fill="#ffffff" opacity="0.35">vs Jane Street</text>
+<line x1="1220" y1="414" x2="1320" y2="414" stroke="#ffffff" stroke-width="1" opacity="0.15" stroke-dasharray="3,2"/>
+<text x="1340" y="418" font-family="Arial, sans-serif" font-size="8" fill="#ffffff" opacity="0.35">vs Citadel</text>
+<line x1="1390" y1="414" x2="1490" y2="414" stroke="#ffffff" stroke-width="1" opacity="0.15" stroke-dasharray="3,2"/>
+<text x="1154" y="440" font-family="Arial, sans-serif" font-size="8" fill="#00e676" opacity="0.6">HOPEFX outperforms on risk-adjusted returns ↑</text>
+
+<!-- ═══ TOP-LEFT: AGENTIC LLM INTERFACE ═══ -->
+<rect x="22" y="472" width="440" height="190" rx="8" fill="url(#panelBg)" stroke="#aa00ff" stroke-width="1" stroke-opacity="0.5"/>
+<rect x="22" y="472" width="440" height="28" rx="8" fill="#aa00ff" fill-opacity="0.08"/>
+<text x="38" y="491" font-family="Arial, sans-serif" font-size="11" fill="#aa00ff" font-weight="bold">AGENTIC LLM · GOD-MODE</text>
+<text x="440" y="491" font-family="Arial, sans-serif" font-size="9" fill="#00e5ff" text-anchor="end">LangGraph · RAG</text>
+<!-- chat prompt -->
+<rect x="32" y="508" width="420" height="28" rx="5" fill="#0a1628" stroke="#aa00ff" stroke-width="0.8"/>
+<text x="44" y="526" font-family="monospace" font-size="9" fill="#00e5ff">&#x276F; Create ICT + LSTM ensemble Sharpe &gt;2.5</text>
+<rect x="420" y="512" width="24" height="20" rx="4" fill="#aa00ff" opacity="0.8"/>
+<text x="432" y="526" font-family="Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">&#x23CE;</text>
+<!-- LangGraph state flow -->
+<rect x="32" y="546" width="70" height="22" rx="4" fill="#1a0a2e" stroke="#aa00ff" stroke-width="1"/>
+<text x="67" y="561" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle">parse intent</text>
+<line x1="102" y1="557" x2="118" y2="557" stroke="#aa00ff" stroke-width="1" opacity="0.7"/>
+<polygon points="118,554 124,557 118,560" fill="#aa00ff" opacity="0.8"/>
+<rect x="124" y="546" width="70" height="22" rx="4" fill="#1a0a2e" stroke="#aa00ff" stroke-width="1"/>
+<text x="159" y="561" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle">gen code</text>
+<line x1="194" y1="557" x2="210" y2="557" stroke="#aa00ff" stroke-width="1" opacity="0.7"/>
+<polygon points="210,554 216,557 210,560" fill="#aa00ff" opacity="0.8"/>
+<rect x="216" y="546" width="70" height="22" rx="4" fill="#1a0a2e" stroke="#aa00ff" stroke-width="1"/>
+<text x="251" y="561" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle">backtest</text>
+<line x1="286" y1="557" x2="302" y2="557" stroke="#aa00ff" stroke-width="1" opacity="0.7"/>
+<polygon points="302,554 308,557 302,560" fill="#aa00ff" opacity="0.8"/>
+<rect x="308" y="546" width="70" height="22" rx="4" fill="#1a0a2e" stroke="#00e676" stroke-width="1"/>
+<text x="343" y="561" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle">save model</text>
+<line x1="378" y1="557" x2="394" y2="557" stroke="#00e676" stroke-width="1" opacity="0.7"/>
+<polygon points="394,554 400,557 394,560" fill="#00e676" opacity="0.8"/>
+<rect x="400" y="546" width="34" height="22" rx="4" fill="#0a2010" stroke="#00e676" stroke-width="1"/>
+<text x="417" y="561" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle">&#x2713;</text>
+<!-- auto-generated code snippet -->
+<rect x="32" y="578" width="420" height="72" rx="5" fill="#050810" stroke="#aa00ff" stroke-width="0.5" stroke-opacity="0.4"/>
+<text x="44" y="594" font-family="monospace" font-size="8" fill="#aa00ff" opacity="0.7">&#x23;&#x23; auto-generated by HOPEFX Agentic LLM</text>
+<text x="44" y="608" font-family="monospace" font-size="8" fill="#00e5ff">class ICT_LSTM_Ensemble(BaseStrategy):</text>
+<text x="44" y="620" font-family="monospace" font-size="8" fill="#ffffff" opacity="0.7">    def generate_signal(self, data) -&gt; Signal:</text>
+<text x="44" y="632" font-family="monospace" font-size="8" fill="#00e676">        &#x23; Sharpe: 2.61 | Win: 58.3% | DD: -3.1%</text>
+<text x="44" y="644" font-family="monospace" font-size="8" fill="#FFD700">        return self.lstm.predict(self.ict(data))</text>
+
+<!-- ═══ TOP-RIGHT: VECTOR DB FEATURE STORE ═══ -->
+<rect x="1138" y="472" width="440" height="190" rx="8" fill="url(#panelBg)" stroke="#00e5ff" stroke-width="1" stroke-opacity="0.4"/>
+<rect x="1138" y="472" width="440" height="28" rx="8" fill="#00e5ff" fill-opacity="0.06"/>
+<text x="1154" y="491" font-family="Arial, sans-serif" font-size="11" fill="#00e5ff" font-weight="bold">VECTOR DB · FEATURE STORE</text>
+<text x="1540" y="491" font-family="Arial, sans-serif" font-size="9" fill="#aa00ff" text-anchor="end">Chroma · LanceDB</text>
+<!-- 3D embedding cluster dots -->
+<circle cx="1200" cy="540" r="4" fill="#00e5ff" opacity="0.8" filter="url(#glow)"/>
+<circle cx="1220" cy="525" r="3" fill="#00e5ff" opacity="0.6"/>
+<circle cx="1240" cy="548" r="5" fill="#FFD700" opacity="0.7" filter="url(#glow)"/>
+<circle cx="1215" cy="560" r="3" fill="#00e5ff" opacity="0.5"/>
+<circle cx="1255" cy="530" r="4" fill="#aa00ff" opacity="0.7"/>
+<circle cx="1270" cy="555" r="3" fill="#00e5ff" opacity="0.6"/>
+<circle cx="1230" cy="575" r="4" fill="#FFD700" opacity="0.6"/>
+<circle cx="1285" cy="540" r="5" fill="#00e676" opacity="0.7" filter="url(#glow)"/>
+<circle cx="1300" cy="520" r="3" fill="#00e5ff" opacity="0.5"/>
+<circle cx="1310" cy="560" r="4" fill="#aa00ff" opacity="0.6"/>
+<circle cx="1325" cy="535" r="3" fill="#FFD700" opacity="0.7"/>
+<circle cx="1340" cy="555" r="5" fill="#00e5ff" opacity="0.8" filter="url(#glow)"/>
+<circle cx="1355" cy="525" r="3" fill="#00e676" opacity="0.6"/>
+<circle cx="1370" cy="548" r="4" fill="#FFD700" opacity="0.7"/>
+<circle cx="1385" cy="535" r="3" fill="#00e5ff" opacity="0.5"/>
+<!-- cluster labels -->
+<text x="1230" y="595" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle" opacity="0.8">order-flow</text>
+<text x="1310" y="595" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle" opacity="0.8">DOM</text>
+<text x="1370" y="595" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle" opacity="0.8">time-sales</text>
+<!-- RAG query ray -->
+<line x1="1430" y1="510" x2="1340" y2="545" stroke="#00e5ff" stroke-width="1.5" stroke-dasharray="4,2" opacity="0.7" filter="url(#glow)"/>
+<polygon points="1340,541 1334,545 1340,549" fill="#00e5ff" opacity="0.9"/>
+<rect x="1430" y="498" width="130" height="24" rx="5" fill="#0a1628" stroke="#00e5ff" stroke-width="0.8"/>
+<text x="1495" y="514" font-family="monospace" font-size="8" fill="#00e5ff" text-anchor="middle">RAG: 2022 vol regime</text>
+<!-- feature count -->
+<text x="1154" y="618" font-family="Arial, sans-serif" font-size="9" fill="#ffffff" opacity="0.5">10,000+ embeddings · cosine similarity · HNSW index</text>
+<!-- alt data streams -->
+<text x="1154" y="638" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" opacity="0.7">X sentiment</text>
+<line x1="1215" y1="634" x2="1240" y2="634" stroke="#FFD700" stroke-width="1" opacity="0.4"/>
+<text x="1250" y="638" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" opacity="0.7">COT data</text>
+<line x1="1290" y1="634" x2="1315" y2="634" stroke="#00e5ff" stroke-width="1" opacity="0.4"/>
+<text x="1325" y="638" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" opacity="0.7">Pyth oracles</text>
+<line x1="1385" y1="634" x2="1410" y2="634" stroke="#aa00ff" stroke-width="1" opacity="0.4"/>
+<text x="1420" y="638" font-family="Arial, sans-serif" font-size="8" fill="#00e676" opacity="0.7">COT reports</text>
+<!-- converging arrows to center -->
+<line x1="1154" y1="650" x2="1138" y2="660" stroke="#FFD700" stroke-width="1" opacity="0.3"/>
+<line x1="1250" y1="650" x2="1138" y2="660" stroke="#00e5ff" stroke-width="1" opacity="0.3"/>
+
+<!-- ═══ BOTTOM: EQUITY CURVE ═══ -->
+<rect x="22" y="676" width="1100" height="190" rx="8" fill="url(#panelBg)" stroke="#FFD700" stroke-width="1" stroke-opacity="0.4"/>
+<rect x="22" y="676" width="1100" height="28" rx="8" fill="#FFD700" fill-opacity="0.06"/>
+<text x="38" y="695" font-family="Arial, sans-serif" font-size="11" fill="#FFD700" font-weight="bold">EQUITY CURVE · RL AGENT vs BASELINE</text>
+<text x="1100" y="695" font-family="Arial, sans-serif" font-size="9" fill="#00e676" text-anchor="end">Sharpe 2.78 · Calmar 1.13</text>
+<!-- grid -->
+<line x1="30" y1="730" x2="1114" y2="730" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+<line x1="30" y1="760" x2="1114" y2="760" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+<line x1="30" y1="790" x2="1114" y2="790" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+<line x1="30" y1="820" x2="1114" y2="820" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+<line x1="30" y1="850" x2="1114" y2="850" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+<!-- baseline (RandomForest) - flat/slight upward -->
+<polyline points="38,848 150,844 280,840 420,836 560,832 700,828 840,824 980,820 1110,816" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="4,3" opacity="0.3"/>
+<text x="1115" y="820" font-family="Arial, sans-serif" font-size="8" fill="#ffffff" opacity="0.35">RF baseline</text>
+<!-- RL agent equity curve - exponential growth -->
+<polyline points="38,848 80,845 130,840 190,832 260,820 340,805 430,786 530,762 640,734 760,702 890,666 1030,626 1110,606" fill="none" stroke="#FFD700" stroke-width="2.5" filter="url(#glow)"/>
+<!-- fill under curve -->
+<polygon points="38,848 80,845 130,840 190,832 260,820 340,805 430,786 530,762 640,734 760,702 890,666 1030,626 1110,606 1110,858 38,858" fill="url(#equityLine)" opacity="0.12"/>
+<!-- trade markers -->
+<circle cx="190" cy="832" r="3" fill="#00e676" opacity="0.8"/>
+<circle cx="340" cy="805" r="3" fill="#00e676" opacity="0.8"/>
+<circle cx="530" cy="762" r="3" fill="#00e676" opacity="0.8"/>
+<circle cx="760" cy="702" r="3" fill="#00e676" opacity="0.8"/>
+<circle cx="1030" cy="626" r="3" fill="#00e676" opacity="0.8"/>
+<!-- current trade ticker -->
+<rect x="38" y="706" width="200" height="18" rx="4" fill="#0a1628" stroke="#00e676" stroke-width="0.8"/>
+<text x="48" y="719" font-family="monospace" font-size="9" fill="#00e676">+2.34% | Risk 0.65% | XAUUSD</text>
+<!-- metric cards bottom -->
+<rect x="860" y="706" width="80" height="40" rx="5" fill="#0a1628" stroke="#FFD700" stroke-width="0.8"/>
+<text x="900" y="722" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle">Calmar</text>
+<text x="900" y="738" font-family="Arial Black, sans-serif" font-size="12" fill="#FFD700" text-anchor="middle" font-weight="900">1.13</text>
+<rect x="952" y="706" width="80" height="40" rx="5" fill="#0a1628" stroke="#ff1744" stroke-width="0.8"/>
+<text x="992" y="722" font-family="Arial, sans-serif" font-size="8" fill="#ff1744" text-anchor="middle">Max DD</text>
+<text x="992" y="738" font-family="Arial Black, sans-serif" font-size="12" fill="#ff1744" text-anchor="middle" font-weight="900">-0.6%</text>
+<rect x="1044" y="706" width="80" height="40" rx="5" fill="#0a1628" stroke="#00e676" stroke-width="0.8"/>
+<text x="1084" y="722" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle">Win Rate</text>
+<text x="1084" y="738" font-family="Arial Black, sans-serif" font-size="12" fill="#00e676" text-anchor="middle" font-weight="900">47.1%</text>
+<!-- RL agent label -->
+<text x="1115" y="610" font-family="Arial, sans-serif" font-size="9" fill="#FFD700" filter="url(#glow)">RL agent ↑</text>
+
+<!-- ═══ BOTTOM-RIGHT: DEPLOYMENT FORTRESS ═══ -->
+<rect x="1138" y="676" width="440" height="190" rx="8" fill="url(#panelBg)" stroke="#00e676" stroke-width="1" stroke-opacity="0.4"/>
+<rect x="1138" y="676" width="440" height="28" rx="8" fill="#00e676" fill-opacity="0.06"/>
+<text x="1154" y="695" font-family="Arial, sans-serif" font-size="11" fill="#00e676" font-weight="bold">DEPLOYMENT FORTRESS</text>
+<text x="1540" y="695" font-family="Arial, sans-serif" font-size="9" fill="#FFD700" text-anchor="end">one-command Helm</text>
+<!-- k8s pods -->
+<rect x="1148" y="712" width="50" height="30" rx="4" fill="#0a1628" stroke="#00e5ff" stroke-width="1"/>
+<text x="1173" y="731" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle">pod ×3</text>
+<rect x="1208" y="712" width="50" height="30" rx="4" fill="#0a1628" stroke="#00e5ff" stroke-width="1"/>
+<text x="1233" y="731" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle">pod ×3</text>
+<rect x="1268" y="712" width="50" height="30" rx="4" fill="#0a1628" stroke="#00e676" stroke-width="1"/>
+<text x="1293" y="731" font-family="Arial, sans-serif" font-size="8" fill="#00e676" text-anchor="middle">scale ↑</text>
+<!-- edge lambda -->
+<rect x="1338" y="712" width="80" height="30" rx="4" fill="#0a1628" stroke="#FFD700" stroke-width="1"/>
+<text x="1378" y="727" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle">edge lambda</text>
+<text x="1378" y="738" font-family="monospace" font-size="8" fill="#00e676" text-anchor="middle">&lt;10ms</text>
+<!-- Redis + Kafka -->
+<rect x="1148" y="752" width="80" height="28" rx="4" fill="#0a1628" stroke="#ff6d00" stroke-width="1"/>
+<text x="1188" y="769" font-family="Arial, sans-serif" font-size="8" fill="#ff6d00" text-anchor="middle">Redis Streams</text>
+<rect x="1240" y="752" width="80" height="28" rx="4" fill="#0a1628" stroke="#ff6d00" stroke-width="1"/>
+<text x="1280" y="769" font-family="Arial, sans-serif" font-size="8" fill="#ff6d00" text-anchor="middle">Kafka fallback</text>
+<!-- Helm deploy -->
+<rect x="1430" y="712" width="130" height="68" rx="6" fill="#0a2010" stroke="#00e676" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1495" y="732" font-family="monospace" font-size="8" fill="#00e676" text-anchor="middle">$ helm install</text>
+<text x="1495" y="746" font-family="monospace" font-size="8" fill="#FFD700" text-anchor="middle">hopefx ./helm</text>
+<text x="1495" y="760" font-family="monospace" font-size="8" fill="#00e676" text-anchor="middle">--set env=prod</text>
+<text x="1495" y="774" font-family="monospace" font-size="8" fill="#00e676" text-anchor="middle">&#x2713; deployed</text>
+<!-- compliance icons -->
+<rect x="1148" y="792" width="60" height="20" rx="4" fill="#0a1628" stroke="#FFD700" stroke-width="0.8"/>
+<text x="1178" y="806" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle">MiFID II</text>
+<rect x="1220" y="792" width="60" height="20" rx="4" fill="#0a1628" stroke="#FFD700" stroke-width="0.8"/>
+<text x="1250" y="806" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" text-anchor="middle">audit log</text>
+<rect x="1292" y="792" width="80" height="20" rx="4" fill="#0a1628" stroke="#00e5ff" stroke-width="0.8"/>
+<text x="1332" y="806" font-family="Arial, sans-serif" font-size="8" fill="#00e5ff" text-anchor="middle">immutable chain</text>
+<!-- deep RL avatar -->
+<circle cx="1490" cy="820" r="20" fill="#0a1628" stroke="#aa00ff" stroke-width="1.5" filter="url(#glow)"/>
+<text x="1490" y="816" font-family="Arial, sans-serif" font-size="8" fill="#aa00ff" text-anchor="middle">deep RL</text>
+<text x="1490" y="828" font-family="Arial, sans-serif" font-size="7" fill="#aa00ff" text-anchor="middle">agent</text>
+<!-- holographic gold ingots (decorative) -->
+<rect x="1148" y="828" width="28" height="16" rx="2" fill="url(#goldV)" opacity="0.7" transform="rotate(-8,1162,836)"/>
+<rect x="1185" y="832" width="28" height="16" rx="2" fill="url(#goldV)" opacity="0.6" transform="rotate(5,1199,840)"/>
+<rect x="1222" y="826" width="28" height="16" rx="2" fill="url(#goldV)" opacity="0.7" transform="rotate(-3,1236,834)"/>
+<text x="1290" y="848" font-family="Arial, sans-serif" font-size="8" fill="#FFD700" opacity="0.5">digital gold reserves</text>
+
+<!-- ═══ TAGLINE STRIP ═══ -->
+<rect x="0" y="862" width="1600" height="38" fill="#060c18" opacity="0.97"/>
+<rect x="0" y="862" width="1600" height="1.5" fill="url(#gold)" opacity="0.6"/>
+<text x="800" y="886" font-family="Arial, sans-serif" font-size="10" fill="#FFD700" text-anchor="middle" letter-spacing="1.5" opacity="0.9">EVENT-DRIVEN RUST CORE  ·  AGENTIC LLM  ·  VECTOR RAG  ·  DEEP RL  ·  TRANSFORMER DIFFUSION  ·  FIX LOW-LATENCY  ·  TCA/VaR  ·  100% FREE MIT  ·  PROVEN SHARPE 2.78+  ·  2026</text>
+<!-- cyan neural pulse lines (decorative) -->
+<line x1="0" y1="863" x2="400" y2="863" stroke="#00e5ff" stroke-width="0.5" opacity="0.2"/>
+<line x1="1200" y1="863" x2="1600" y2="863" stroke="#00e5ff" stroke-width="0.5" opacity="0.2"/>
+<!-- closing SVG -->
+</svg>
