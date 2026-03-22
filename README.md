@@ -2,12 +2,23 @@
 
 <div align="center">
 
-![HOPEFX Logo](https://img.shields.io/badge/HOPEFX-AI%20Trading-26a69a?style=for-the-badge&logo=bitcoin&logoColor=white)
+<img src="docs/assets/banner.svg" alt="HOPEFX — Institutional-Grade AI Gold Trading Platform" width="100%"/>
 
-[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-7289da?logo=discord&logoColor=white)](https://discord.gg/hopefx)
+<br/>
+
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00c853.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Sharpe Ratio](https://img.shields.io/badge/Sharpe-2.78%2B-FFD700.svg?style=for-the-badge)](examples/end_to_end.ipynb)
+[![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-00e5ff.svg?style=for-the-badge)](docs/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
+[![Tests](https://img.shields.io/badge/Tests-2100%2B_passing-00c853.svg?style=for-the-badge)](tests/)
+
+<br/>
+
+> **Institutional-grade AI gold/forex trading platform.**  
+> Event-driven core · Agentic LLM · Transformer-Diffusion forecasting · Deep RL · Vector RAG · FIX low-latency · TCA/VaR analytics · One-command Helm deploy · 100% MIT
+
+</div>
 
 
 
