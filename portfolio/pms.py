@@ -20,7 +20,7 @@ class Position:
     market_price: Decimal = Decimal("0")
     unrealized_pnl: Decimal = Decimal("0")
     realized_pnl: Decimal = Decimal("0")
-    opened_at: datetime = field(default_factory=datetime.utcnow)
+    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     trades: List[Dict] = field(default_factory=list)
     
     def update_market_price(self, price: Decimal):

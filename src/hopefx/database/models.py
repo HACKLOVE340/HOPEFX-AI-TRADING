@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
@@ -52,7 +52,7 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     is_verified: bool = Field(default=False)
     two_factor_secret: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = None
     
     # Relations
@@ -109,8 +109,8 @@ class Wallet(SQLModel, table=True):
     currency: str = Field(default="USD")
     stripe_customer_id: Optional[str] = None
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     user: User = Relationship(back_populates="wallet")
     transactions: List["Transaction"] = Relationship(back_populates="wallet")
@@ -129,7 +129,7 @@ class Transaction(SQLModel, table=True):
     stripe_transfer_id: Optional[str] = None
     metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     
     wallet: Wallet = Relationship(back_populates="transactions")
@@ -163,8 +163,8 @@ class Strategy(SQLModel, table=True):
     strategy_type: str  # ml, technical, hybrid
     config: dict = Field(default_factory=dict, sa_column=Column(JSON))
     
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     user: User = Relationship(back_populates="strategies")
     trades: List["Trade"] = Relationship(back_populates="strategy")
@@ -191,7 +191,7 @@ class StrategyPerformance(SQLModel, table=True):
     equity_curve: list = Field(default_factory=list, sa_column=Column(JSON))
     monthly_returns: dict = Field(default_factory=dict, sa_column=Column(JSON))
     
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     strategy: Strategy = Relationship(back_populates="performance")
 
@@ -214,7 +214,7 @@ class Trade(SQLModel, table=True):
     commission: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(19, 8)))
     swap: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(19, 8)))
     
-    entry_time: datetime = Field(default_factory=datetime.utcnow)
+    entry_time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     exit_time: Optional[datetime] = None
     duration_seconds: Optional[int] = None
     
@@ -253,7 +253,7 @@ class CopyTrading(SQLModel, table=True):
     total_fees_paid: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(19, 8)))
     
     # Performance tracking
-    start_date: datetime = Field(default_factory=datetime.utcnow)
+    start_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     end_date: Optional[datetime] = None
     initial_equity: Decimal = Field(sa_column=Column(Numeric(19, 8)))
     current_equity: Decimal = Field(sa_column=Column(Numeric(19, 8)))
@@ -294,7 +294,7 @@ class CopyTrade(SQLModel, table=True):
     pnl: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(19, 8)))
     copy_fee: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(19, 8)))
     
-    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    executed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = None
     
     copy_relationship: CopyTrading = Relationship(back_populates="trades")
@@ -322,7 +322,7 @@ class LeaderboardEntry(SQLModel, table=True):
     copiers_count: int = Field(default=0)
     total_copied_volume: Decimal = Field(default=Decimal("0"), sa_column=Column(Numeric(19, 8)))
     
-    calculated_at: datetime = Field(default_factory=datetime.utcnow)
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     __table_args__ = (
         Index("idx_leaderboard_period_rank", "period", "rank"),
@@ -349,7 +349,7 @@ class PropChallenge(SQLModel, table=True):
     
     # Status
     status: str = Field(default="active")  # active, passed, failed, violated
-    start_date: datetime = Field(default_factory=datetime.utcnow)
+    start_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     end_date: Optional[datetime] = None
     
     # Current metrics
@@ -378,7 +378,7 @@ class AuditLog(SQLModel, table=True):
     user_agent: Optional[str] = None
     details: dict = Field(default_factory=dict, sa_column=Column(JSON))
     risk_score: int = Field(default=0)  # 0-100 risk assessment
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     __table_args__ = (
         Index("idx_audit_user_time", "user_id", "created_at"),

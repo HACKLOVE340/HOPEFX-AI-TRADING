@@ -79,7 +79,7 @@ class Order:
     strategy_id: Optional[str] = None
     parent_order_id: Optional[str] = None       # For child orders
     user_id: str = "system"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def __post_init__(self):
         # Validate

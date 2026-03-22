@@ -19,14 +19,14 @@ class EventType(str, Enum):
 # Additional schemas used by integration tests
 from dataclasses import dataclass, field
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
 class FeatureVector:
     symbol: str
     features: List[float] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -35,4 +35,4 @@ class Prediction:
     direction: str
     confidence: float
     model: str = "ensemble"
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

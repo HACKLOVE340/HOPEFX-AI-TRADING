@@ -48,8 +48,8 @@ class Order:
     status: OrderStatus = OrderStatus.CREATED
     filled_quantity: Decimal = Decimal("0")
     avg_fill_price: Optional[Decimal] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
     parent_order_id: Optional[str] = None  # For OCO, bracket orders
     child_orders: List[str] = field(default_factory=list)

@@ -2,7 +2,7 @@
 import numpy as np
 from typing import List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -11,7 +11,7 @@ class DriftResult:
     score: float
     threshold: float
     method: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class DriftDetector:

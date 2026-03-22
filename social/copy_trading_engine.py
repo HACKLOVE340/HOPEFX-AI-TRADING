@@ -11,7 +11,7 @@ import logging
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import hashlib
 
@@ -51,7 +51,7 @@ class CopyTraderProfile:
     followers_count: int = 0
     subscription_price: float = 0.0
     bio: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def calculate_trust_score(self) -> float:
         """Calculate trader trust score (0-100)"""
@@ -88,7 +88,7 @@ class FollowerConfig:
     auto_close_on_stop_loss: bool = True
     skip_correlation_above: float = 0.8  # Skip correlated trades
     enabled: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class SignalMessage:
@@ -103,7 +103,7 @@ class SignalMessage:
     risk_amount: float
     lot_size: float
     reason: str  # Trading reason/analysis
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
         return {

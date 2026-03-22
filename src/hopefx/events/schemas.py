@@ -127,7 +127,7 @@ class RiskViolation(BaseModel):
     current_value: float
     limit_value: float
     symbol: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     auto_action: Optional[str] = None
 
 
@@ -136,20 +136,20 @@ class ComplianceBreach(BaseModel):
     rule_id: str
     severity: Literal["warning", "violation", "critical"]
     details: dict[str, Any]
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CircuitBreakerEvent(BaseModel):
     breaker_name: str
     state: str
     metrics: Any
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Event(BaseModel):
     id: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     type: EventType
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     payload: Any
     priority: int = Field(default=5, ge=1, le=10)
     source: str = "system"

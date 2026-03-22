@@ -48,8 +48,8 @@ class Order:
     status: OrderStatus = OrderStatus.PENDING
     filled_qty: float = 0.0
     avg_fill_price: float = 0.0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict = field(default_factory=dict)
     
     @property

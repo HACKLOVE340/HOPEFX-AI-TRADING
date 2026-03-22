@@ -1,7 +1,7 @@
 """Strict type definitions for the trading system."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum, StrEnum
 from typing import Literal, NewType
@@ -120,7 +120,7 @@ class Order(BaseModel):
     filled_qty: Decimal = Decimal("0")
     avg_fill_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     venue: Venue
     client_order_id: str | None = None
 

@@ -83,7 +83,7 @@ class PropFirmMetrics:
     monthly_loss_limit: float
     remaining_monthly_loss: float
     leverage: int = 100
-    last_update: datetime = field(default_factory=datetime.utcnow)
+    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class PropFirmTrade:
@@ -96,7 +96,7 @@ class PropFirmTrade:
     quantity: float = 0.0
     pnl: float = 0.0
     pnl_percentage: float = 0.0
-    entry_time: datetime = field(default_factory=datetime.utcnow)
+    entry_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     exit_time: Optional[datetime] = None
     duration_seconds: int = 0
     status: str = "open"  # open, closed, cancelled

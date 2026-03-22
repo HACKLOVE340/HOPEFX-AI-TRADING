@@ -18,7 +18,7 @@ from src.core.types import (
 class Event(BaseModel, Generic[_T]):
     """Base event — supports Event[PayloadType] generic syntax."""
     event_id: str = Field(default_factory=lambda: f"evt_{datetime.now(timezone.utc).timestamp()}")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     event_type: str
     payload: Any = None
     source: str = ""
@@ -199,7 +199,7 @@ class TickReceived(BaseModel):
     bid: float
     ask: float
     volume: float = 0.0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Additional aliases
 KillSwitchTriggered = RiskEvent
