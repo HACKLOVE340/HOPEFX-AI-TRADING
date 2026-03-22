@@ -5,7 +5,7 @@ import gc
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Generator
+from typing import Generator
 
 try:
     import torch
@@ -88,7 +88,7 @@ class GPUMemoryManager:
         logger.info("GPU emergency cleanup completed")
     
     @contextmanager
-    def allocate(self, shape: tuple[int, ...], dtype: Any = None) -> Generator[torch.Tensor, None, None]:
+    def allocate(self, shape: tuple[int, ...], dtype: torch.dtype | None = None) -> Generator[torch.Tensor, None, None]:
         """Context-managed tensor allocation."""
         if dtype is None:
             dtype = torch.float32
