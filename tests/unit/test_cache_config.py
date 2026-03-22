@@ -123,13 +123,14 @@ class TestMarketDataCacheInit:
         assert cache.stats.total_evictions == 0
 
     @patch("redis.Redis")
-    def test_redis_unavailable_raises(self, mock_redis_cls):
-        """When Redis refuses all attempts, ConnectionError is raised."""
+    def test_redis_unavailable_falls_back_to_memory(self, mock_redis_cls):
+        """When Redis refuses all attempts, MarketDataCache falls back to in-memory store."""
         from redis.exceptions import ConnectionError as RedisConnErr
 
         mock_redis_cls.return_value.ping.side_effect = RedisConnErr("refused")
-        with pytest.raises(Exception):
-            MarketDataCache(max_retries=1, retry_delay=0.0)
+        cache = MarketDataCache(max_retries=1, retry_delay=0.0)
+        # Should not raise; in-memory fallback should be healthy
+        assert cache.health_check() is True
 
     @patch.object(MarketDataCache, "_connect_with_retry")
     def test_context_manager(self, mock_connect):
@@ -619,10 +620,13 @@ class TestEncryptionManagerExtended:
         monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", ENCRYPTION_KEY)
         monkeypatch.setenv("CONFIG_SALT", SALT_HEX)
 
-    def test_no_key_raises_value_error(self, monkeypatch):
+    def test_no_key_auto_generates(self, monkeypatch, tmp_path):
+        """When CONFIG_ENCRYPTION_KEY is absent, a key is auto-generated."""
         monkeypatch.delenv("CONFIG_ENCRYPTION_KEY", raising=False)
-        with pytest.raises(ValueError):
-            EncryptionManager()
+        monkeypatch.chdir(tmp_path)
+        mgr = EncryptionManager()
+        assert mgr.master_key  # non-empty key was generated
+        assert len(mgr.master_key) == 64  # 32 bytes hex = 64 chars
 
     def test_explicit_key_overrides_env(self, monkeypatch):
         monkeypatch.delenv("CONFIG_ENCRYPTION_KEY", raising=False)
