@@ -18,9 +18,16 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-import redis
-from redis import Redis
-from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError
+try:
+    import redis
+    from redis import Redis
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+    _REDIS_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _REDIS_AVAILABLE = False
+    RedisConnectionError = ConnectionError  # type: ignore[assignment,misc]
+    RedisTimeoutError = TimeoutError  # type: ignore[assignment,misc]
 
 
 # Configure logging
@@ -114,9 +121,93 @@ class CacheStatistics:
         }
 
 
+class _InMemoryStore:
+    """
+    Minimal Redis-compatible in-memory store used as a fallback when Redis
+    is unavailable.  Only the subset of commands used by MarketDataCache is
+    implemented.
+    """
+
+    def __init__(self) -> None:
+        self._data: Dict[str, Any] = {}
+        self._expiry: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _is_expired(self, key: str) -> bool:
+        exp = self._expiry.get(key)
+        if exp is None:
+            return False
+        return time.time() > exp
+
+    def _clean(self, key: str) -> None:
+        if self._is_expired(key):
+            self._data.pop(key, None)
+            self._expiry.pop(key, None)
+
+    # ------------------------------------------------------------------
+    # Redis-compatible API subset
+    # ------------------------------------------------------------------
+
+    def ping(self) -> bool:
+        return True
+
+    def setex(self, name: str, time_secs: int, value: str) -> bool:
+        with self._lock:
+            self._data[name] = value
+            self._expiry[name] = time.time() + time_secs
+        return True
+
+    def get(self, name: str) -> Optional[str]:
+        with self._lock:
+            self._clean(name)
+            return self._data.get(name)
+
+    def delete(self, *names: str) -> int:
+        removed = 0
+        with self._lock:
+            for name in names:
+                if name in self._data:
+                    del self._data[name]
+                    self._expiry.pop(name, None)
+                    removed += 1
+        return removed
+
+    def scan(
+        self,
+        cursor: int = 0,
+        match: Optional[str] = None,
+        count: int = 100,
+    ) -> Tuple[int, List[str]]:
+        """Single-pass SCAN (always returns cursor=0, all matching keys)."""
+        import fnmatch
+
+        with self._lock:
+            all_keys = [k for k in self._data if not self._is_expired(k)]
+
+        if match:
+            pattern = match.replace('*', '**')
+            all_keys = [k for k in all_keys if fnmatch.fnmatch(k, match)]
+
+        return 0, all_keys
+
+    def info(self, section: str = 'all') -> Dict[str, Any]:
+        with self._lock:
+            return {'used_memory': sum(len(v) for v in self._data.values())}
+
+    def close(self) -> None:
+        pass
+
+
 class MarketDataCache:
     """
-    Redis-based cache for market data with multi-timeframe support
+    Redis-based cache for market data with multi-timeframe support.
+
+    Falls back to an in-memory store when Redis is unavailable so the rest
+    of the application can start without a running Redis instance.
     """
 
     # Default TTL values (in seconds)
@@ -165,7 +256,7 @@ class MarketDataCache:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-        # Try to connect with retries
+        # Try to connect to Redis; fall back to in-memory store if unavailable.
         self.redis_client = self._connect_with_retry(
             host=host,
             port=port,
@@ -188,17 +279,22 @@ class MarketDataCache:
         password: Optional[str],
         socket_timeout: int,
         socket_connect_timeout: int,
-        decode_responses: bool
-    ) -> Redis:
+        decode_responses: bool,
+    ):
         """
-        Connect to Redis with retry logic
+        Connect to Redis with retry logic.
 
         Returns:
-            Connected Redis client
-
-        Raises:
-            ConnectionError: If all connection attempts fail
+            Connected Redis client, or an _InMemoryStore fallback if Redis is
+            unavailable (module not installed or server not reachable).
         """
+        if not _REDIS_AVAILABLE:
+            logger.warning(
+                "redis package not installed — using in-memory cache fallback. "
+                "Install redis for production use."
+            )
+            return _InMemoryStore()
+
         last_error = None
 
         for attempt in range(1, self.max_retries + 1):
@@ -210,13 +306,13 @@ class MarketDataCache:
                     password=password,
                     socket_timeout=socket_timeout,
                     socket_connect_timeout=socket_connect_timeout,
-                    decode_responses=decode_responses
+                    decode_responses=decode_responses,
                 )
                 # Test connection
                 client.ping()
                 logger.info(f"Connected to Redis at {host}:{port} (attempt {attempt})")
                 return client
-            except (ConnectionError, RedisTimeoutError) as e:
+            except (RedisConnectionError, RedisTimeoutError) as e:
                 last_error = e
                 if attempt < self.max_retries:
                     logger.warning(
@@ -229,7 +325,11 @@ class MarketDataCache:
                         f"Failed to connect to Redis after {self.max_retries} attempts: {e}"
                     )
 
-        raise ConnectionError(f"Could not connect to Redis: {last_error}")
+        logger.warning(
+            f"Redis unavailable ({last_error}) — falling back to in-memory cache. "
+            "Data will not persist across process restarts."
+        )
+        return _InMemoryStore()
     def _build_key(
         self,
         symbol: str,

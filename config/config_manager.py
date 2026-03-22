@@ -44,16 +44,67 @@ class EncryptionManager:
 
         Args:
             master_key: Master encryption key. If None, generates from environment.
+                If still absent, a new key is auto-generated and written to .env so
+                subsequent runs are stable.
         """
         self.master_key = master_key or os.getenv('CONFIG_ENCRYPTION_KEY')
         if not self.master_key:
-            raise ValueError(
-                "Encryption key required. Set CONFIG_ENCRYPTION_KEY environment variable "
-                "or pass master_key parameter."
-            )
+            self.master_key = self._bootstrap_encryption_key()
 
         self._cipher = self._create_cipher()
         logger.info("Encryption manager initialized")
+
+    # ------------------------------------------------------------------
+    # Key bootstrap helpers
+    # ------------------------------------------------------------------
+
+    def _bootstrap_encryption_key(self) -> str:
+        """
+        Auto-generate CONFIG_ENCRYPTION_KEY when it is not set.
+
+        The generated key is:
+        1. Set in the current process environment so the running session works.
+        2. Appended to (or updated in) the project-root .env file so that
+           subsequent restarts pick it up automatically.
+
+        Returns:
+            The newly generated hex key string.
+        """
+        new_key = secrets.token_hex(32)  # 64 hex chars → 256-bit entropy
+        os.environ['CONFIG_ENCRYPTION_KEY'] = new_key
+
+        env_path = Path('.env')
+        self._persist_env_key('CONFIG_ENCRYPTION_KEY', new_key, env_path)
+
+        logger.warning(
+            "CONFIG_ENCRYPTION_KEY was not set. "
+            "A new key has been generated and saved to .env — "
+            "back it up and set it as an environment variable in production."
+        )
+        return new_key
+
+    @staticmethod
+    def _persist_env_key(key: str, value: str, env_path: Path) -> None:
+        """Write or update a KEY=value line in a .env file."""
+        try:
+            lines: list = []
+            if env_path.exists():
+                lines = env_path.read_text().splitlines()
+
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
+                    lines[i] = f"{key}={value}"
+                    updated = True
+                    break
+
+            if not updated:
+                lines.append(f"{key}={value}")
+
+            env_path.write_text('\n'.join(lines) + '\n')
+            logger.info(f"Persisted {key} to {env_path}")
+        except OSError as exc:
+            logger.warning(f"Could not write {key} to {env_path}: {exc}")
 
     def _create_cipher(self) -> Fernet:
         """Create Fernet cipher from master key."""
