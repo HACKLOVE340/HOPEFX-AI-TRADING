@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -40,7 +40,7 @@ class RiskManager:
         
         self.var_calc = VaRCalculator()
         self._daily_pnl = Decimal("0")
-        self._last_reset = datetime.utcnow()
+        self._last_reset = datetime.now(timezone.utc)
         self._lock = asyncio.Lock()
     
     async def check_limits(
@@ -51,9 +51,9 @@ class RiskManager:
         """Check all risk limits."""
         async with self._lock:
             # Reset daily P&L if new day
-            if datetime.utcnow().date() != self._last_reset.date():
+            if datetime.now(timezone.utc).date() != self._last_reset.date():
                 self._daily_pnl = Decimal("0")
-                self._last_reset = datetime.utcnow()
+                self._last_reset = datetime.now(timezone.utc)
             
             checks = []
             

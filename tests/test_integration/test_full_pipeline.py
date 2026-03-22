@@ -1,3 +1,4 @@
+from datetime import timezone
 """End-to-end integration tests."""
 
 import pytest
@@ -23,7 +24,7 @@ async def test_full_trade_lifecycle():
         # 1. Inject tick
         tick = TickData(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=Decimal("2034.50"),
             ask=Decimal("2034.70"),
             volume=Decimal("100")
@@ -43,14 +44,14 @@ async def test_full_trade_lifecycle():
         
         prediction = Prediction(
             symbol="XAUUSD",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_id="test_model",
             model_version="1.0",
             direction="long",
             confidence=0.85,
             feature_vector=FeatureVector(
                 symbol="XAUUSD",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 features={"rsi_14": 65.0, "trend": 1.0}
             )
         )
@@ -73,7 +74,7 @@ async def test_full_trade_lifecycle():
         fill = OrderFill(
             order_id=list(oms._orders.keys())[0],
             symbol="XAUUSD",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             side="buy",
             filled_qty=Decimal("0.1"),
             filled_price=Decimal("2034.60"),

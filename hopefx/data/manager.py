@@ -7,7 +7,7 @@ import asyncio
 import json
 import pickle
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Callable
 import hashlib
@@ -97,14 +97,14 @@ class UnifiedDataManager:
         """Get from local memory cache."""
         if key in self._local_cache:
             value, expiry = self._local_cache[key]
-            if expiry > datetime.utcnow().timestamp():
+            if expiry > datetime.now(timezone.utc).timestamp():
                 return value
             del self._local_cache[key]
         return None
     
     def local_set(self, key: str, value: Any, ttl_seconds: int = 60):
         """Set in local cache."""
-        expiry = datetime.utcnow().timestamp() + ttl_seconds
+        expiry = datetime.now(timezone.utc).timestamp() + ttl_seconds
         self._local_cache[key] = (value, expiry)
     
     # =====================================================================
@@ -354,7 +354,7 @@ class UnifiedDataManager:
     ) -> Path:
         """Save ML model with metadata."""
         metadata = {
-            "saved_at": datetime.utcnow().isoformat(),
+            "saved_at": datetime.now(timezone.utc).isoformat(),
             "metrics": metrics,
             "features": features,
             "model_type": type(model).__name__
@@ -410,7 +410,7 @@ class UnifiedDataManager:
             await asyncio.sleep(60)
             
             # Clean expired L1 entries
-            now = datetime.utcnow().timestamp()
+            now = datetime.now(timezone.utc).timestamp()
             expired = [
                 k for k, (_, exp) in self._local_cache.items() 
                 if exp < now

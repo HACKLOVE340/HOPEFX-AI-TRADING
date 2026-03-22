@@ -4,6 +4,7 @@ HOPEFX GodMode v9.5 - Complete Trading Platform
 """
 
 from __future__ import annotations
+from datetime import timezone
 
 import argparse
 import asyncio
@@ -149,7 +150,7 @@ class HopeFXApplication:
         return {
             "healthy": all_healthy,
             "checks": checks,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def _attempt_recovery(self, health: dict) -> None:
@@ -178,7 +179,7 @@ class HopeFXApplication:
             "event_queue_size": event_bus._queue.qsize(),
             "active_feeds": len(feed_manager._feeds),
             "latest_tick_age_ms": (
-                (datetime.utcnow() - latest_tick.timestamp).total_seconds() * 1000 
+                (datetime.now(timezone.utc) - latest_tick.timestamp).total_seconds() * 1000 
                 if latest_tick else None
             ),
         }

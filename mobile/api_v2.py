@@ -10,7 +10,7 @@ Production Mobile API v2.0
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import json
 import asyncio
@@ -188,7 +188,7 @@ class MobileAPIServer:
             """Health check endpoint"""
             return {
                 "status": "healthy",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "version": "2.0.0"
             }
         
@@ -217,7 +217,7 @@ class MobileAPIServer:
                         'password_hash': password_hash.decode(),
                         'device_id': user.device_id,
                         'platform': user.platform,
-                        'created_at': datetime.utcnow(),
+                        'created_at': datetime.now(timezone.utc),
                         'notification_preferences': NotificationPreferences().dict()
                     })
                 
@@ -353,7 +353,7 @@ class MobileAPIServer:
                     symbol=symbol,
                     bid=float(quote['bid']),
                     ask=float(quote['ask']),
-                    last_update=datetime.utcnow(),
+                    last_update=datetime.now(timezone.utc),
                     spread=float(quote['ask']) - float(quote['bid']),
                     bid_volume=float(quote.get('bid_volume', 0)),
                     ask_volume=float(quote.get('ask_volume', 0))
@@ -422,7 +422,7 @@ class MobileAPIServer:
                     'status': result.get('status', 'pending'),
                     'entry_price': order.price or result.get('entry_price', 0),
                     'quantity': order.quantity,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             
             except ValueError as e:
@@ -454,7 +454,7 @@ class MobileAPIServer:
                         pnl=float(t['pnl']),
                         pnl_percentage=float(t['pnl_percentage']),
                         entry_time=datetime.fromisoformat(t['entry_time']),
-                        duration_seconds=int((datetime.utcnow() - datetime.fromisoformat(t['entry_time'])).total_seconds()),
+                        duration_seconds=int((datetime.now(timezone.utc) - datetime.fromisoformat(t['entry_time'])).total_seconds()),
                         spread=float(t.get('spread', 0))
                     )
                     for t in trades
@@ -493,7 +493,7 @@ class MobileAPIServer:
                     'status': 'closed',
                     'close_price': result.get('close_price', 0),
                     'pnl': result.get('pnl', 0),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             
             except HTTPException:
@@ -600,7 +600,7 @@ class MobileAPIServer:
                                 quotes[symbol] = {
                                     'bid': float(quote['bid']),
                                     'ask': float(quote['ask']),
-                                    'timestamp': datetime.utcnow().isoformat()
+                                    'timestamp': datetime.now(timezone.utc).isoformat()
                                 }
                             except Exception:
                                 pass
@@ -644,8 +644,8 @@ class MobileAPIServer:
         
         payload = {
             'user_id': user_id,
-            'exp': datetime.utcnow() + timedelta(hours=expires_hours),
-            'iat': datetime.utcnow()
+            'exp': datetime.now(timezone.utc) + timedelta(hours=expires_hours),
+            'iat': datetime.now(timezone.utc)
         }
         
         token = jwt.encode(payload, self.jwt_secret, algorithm='HS256')

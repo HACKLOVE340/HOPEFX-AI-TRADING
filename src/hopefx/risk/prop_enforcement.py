@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict
 from dataclasses import dataclass
@@ -120,7 +120,7 @@ class PropEnforcementEngine:
                 severity="violation" if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.2") else "warning",
                 current_value=daily_loss_pct,
                 limit_value=rules["daily_loss_limit"],
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 auto_action="close_positions" if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.5") else None
             ))
 
@@ -132,7 +132,7 @@ class PropEnforcementEngine:
                 severity="termination",
                 current_value=total_loss_pct,
                 limit_value=rules["total_loss_limit"],
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 auto_action="disable_trading"
             ))
 
@@ -144,12 +144,12 @@ class PropEnforcementEngine:
                     severity="success",
                     current_value=challenge.total_pnl / challenge.account_size,
                     limit_value=rules["profit_target"],
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     auto_action="promote_to_funded"
                 ))
 
         # Max trading days
-        days_active = (datetime.utcnow() - challenge.start_date).days
+        days_active = (datetime.now(timezone.utc) - challenge.start_date).days
         if days_active > rules["max_trading_days"] and challenge.status == "active":
             if challenge.total_pnl / challenge.account_size < rules["profit_target"]:
                 breaches.append(PropBreach(
@@ -157,7 +157,7 @@ class PropEnforcementEngine:
                     severity="termination",
                     current_value=days_active,
                     limit_value=rules["max_trading_days"],
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     auto_action="challenge_failed"
                 ))
 
@@ -258,7 +258,7 @@ class PropEnforcementEngine:
                 continue
 
             report = {
-                "date": datetime.utcnow().isoformat(),
+                "date": datetime.now(timezone.utc).isoformat(),
                 "challenge_id": challenge.id,
                 "equity": float(challenge.current_equity),
                 "daily_pnl": float(challenge.daily_pnl),

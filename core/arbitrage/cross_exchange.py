@@ -8,7 +8,7 @@ import asyncio
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 import numpy as np
 
 
@@ -85,7 +85,7 @@ class ArbitrageDetector:
             self.price_cache[symbol][exchange.name] = {
                 'bid': Decimal(str(ticker['bid'])),
                 'ask': Decimal(str(ticker['ask'])),
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(timezone.utc)
             }
         except Exception as e:
             print(f"Price fetch error {exchange.name}/{symbol}: {e}")

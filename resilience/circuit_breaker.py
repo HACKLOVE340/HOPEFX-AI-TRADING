@@ -7,7 +7,7 @@ Prevents cascade failures and ensures system stability
 import asyncio
 from typing import Dict, Callable, Optional
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
 
 
@@ -47,7 +47,7 @@ class CircuitBreaker:
         if self.state == CircuitState.OPEN:
             # Check if we should try half-open
             if self.last_failure_time:
-                elapsed = (datetime.utcnow() - self.last_failure_time).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - self.last_failure_time).total_seconds()
                 if elapsed > self.config.timeout_seconds:
                     self.state = CircuitState.HALF_OPEN
                     self.half_open_calls = 0
@@ -90,7 +90,7 @@ class CircuitBreaker:
         self.total_calls += 1
         self.total_failures += 1
         self.failures += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = datetime.now(timezone.utc)
         
         if self.state == CircuitState.HALF_OPEN:
             print(f"❌ Circuit {self.name}: OPEN (recovery failed)")

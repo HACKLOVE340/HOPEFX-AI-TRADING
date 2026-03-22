@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List
 
@@ -36,14 +36,14 @@ class TWAPExecutor:
         router: any
     ) -> List[OrderResult]:
         """Execute TWAP slices."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         end_time = start_time + timedelta(minutes=self.duration_minutes)
 
         for i in range(self.num_slices):
-            slice_start = datetime.utcnow()
+            slice_start = datetime.now(timezone.utc)
             
             # Check if we're within time window
-            if datetime.utcnow() > end_time:
+            if datetime.now(timezone.utc) > end_time:
                 break
 
             # Check price tolerance
@@ -70,7 +70,7 @@ class TWAPExecutor:
             self._actual_vwap = self._calculate_vwap()
 
             # Wait for next slice
-            elapsed = (datetime.utcnow() - slice_start).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - slice_start).total_seconds()
             remaining = self.interval - elapsed
             if remaining > 0:
                 await asyncio.sleep(remaining)

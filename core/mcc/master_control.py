@@ -6,7 +6,7 @@ with advanced features. Non-breaking integration.
 
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -247,7 +247,7 @@ class MasterControlCore:
         Call this from your existing price feed handler.
         MCC distributes to all strategies.
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         # Store price
         self.current_prices[symbol] = price

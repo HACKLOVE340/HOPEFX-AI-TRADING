@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import timezone
 
 from decimal import Decimal
 from typing import List, Optional
@@ -53,7 +54,7 @@ async def create_trade(request: TradeRequest, background_tasks: BackgroundTasks)
     from hopefx.events.schemas import Signal
     signal = Signal(
         symbol=request.symbol,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         direction=request.side,
         confidence=Decimal("0.8"),  # From ML or manual
         size=request.quantity,
@@ -161,7 +162,7 @@ async def close_position(symbol: str):
     # Create close signal
     close_signal = Signal(
         symbol=symbol,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         direction="close",
         confidence=Decimal("1.0"),
         size=position["qty"],
@@ -206,7 +207,7 @@ async def emergency_stop():
 
     return {
         "message": "EMERGENCY STOP ACTIVATED",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "closed_positions": list(oms.get_all_positions().keys()),
     }
 

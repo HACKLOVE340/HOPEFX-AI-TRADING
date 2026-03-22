@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -51,12 +51,12 @@ class ComponentStatus:
     # ------------------------------------------------------------------ #
     def update(self) -> None:
         """Record a fresh heartbeat."""
-        self.last_beat = datetime.utcnow()
+        self.last_beat = datetime.now(timezone.utc)
         self.missed_beats = 0
         self.alive = True
 
     def seconds_since_last_beat(self) -> float:
-        return (datetime.utcnow() - self.last_beat).total_seconds()
+        return (datetime.now(timezone.utc) - self.last_beat).total_seconds()
 
     def is_overdue(self) -> bool:
         return self.seconds_since_last_beat() > self.timeout_sec

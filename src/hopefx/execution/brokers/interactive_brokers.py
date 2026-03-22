@@ -1,6 +1,7 @@
 """Interactive Brokers TWS/Gateway integration."""
 
 from __future__ import annotations
+from datetime import timezone
 
 import asyncio
 from decimal import Decimal
@@ -93,7 +94,7 @@ class InteractiveBrokers(BaseBroker):
                 remaining_qty=Decimal(str(trade.remaining())),
                 commission=Decimal(str(fill.commissionReport.commission)) if fill and fill.commissionReport else Decimal("0"),
                 slippage=self._calculate_slippage(order, fill),
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 raw_response=trade
             )
         else:
@@ -107,7 +108,7 @@ class InteractiveBrokers(BaseBroker):
                 remaining_qty=Decimal(str(trade.remaining())),
                 commission=Decimal("0"),
                 slippage=Decimal("0"),
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 raw_response="Timeout"
             )
 

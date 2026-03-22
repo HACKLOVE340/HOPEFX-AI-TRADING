@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -122,7 +122,7 @@ class OMS:
             
             async with self._lock:
                 self._orders[order.id].order = updated
-                self._orders[order.id].updated_at = datetime.utcnow()
+                self._orders[order.id].updated_at = datetime.now(timezone.utc)
             
             await self._emit_order_event(updated, order.status)
             
@@ -145,7 +145,7 @@ class OMS:
             side=order.side,
             quantity=order.filled_qty,
             price=order.avg_fill_price or Decimal("0"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             venue=order.venue
         )
         

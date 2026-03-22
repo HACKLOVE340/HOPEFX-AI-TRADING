@@ -10,7 +10,7 @@ import gzip
 import shutil
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
 import aiofiles
@@ -64,7 +64,7 @@ class ContinuousBackup:
         # (In production, use copy-on-write)
         
         state = SystemState(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             event_store_position=event_store._sequence if hasattr(event_store, '_sequence') else 0,
             strategy_states={
                 sid: {
@@ -187,7 +187,7 @@ class FailoverManager:
                 primary = max([self.node_id] + self.peers)  # Assume highest is primary
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
-                    if last_seen and (datetime.utcnow() - last_seen).seconds > self.failover_timeout:
+                    if last_seen and (datetime.now(timezone.utc) - last_seen).seconds > self.failover_timeout:
                         print(f"⚠️ Primary {primary} appears down! Triggering failover...")
                         await self._trigger_failover()
             

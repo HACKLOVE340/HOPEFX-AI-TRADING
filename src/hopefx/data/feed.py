@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import timezone
 
 import asyncio
 import json
@@ -186,7 +187,7 @@ class OandaFeed(PriceFeed):
             price_data = msg.get("price", {})
             return TickData(
                 symbol=price_data.get("instrument", self.config.symbol),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 bid=Decimal(str(price_data.get("bids", [{}])[0].get("price", 0))),
                 ask=Decimal(str(price_data.get("asks", [{}])[0].get("price", 0))),
                 volume=Decimal(str(price_data.get("tradeableUnits", 0))),
@@ -276,7 +277,7 @@ class MT5Feed(PriceFeed):
             msg = json.loads(data)
             return TickData(
                 symbol=msg.get("symbol", self.config.symbol),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 bid=Decimal(str(msg.get("bid", 0))),
                 ask=Decimal(str(msg.get("ask", 0))),
                 volume=Decimal(str(msg.get("volume", 0))),
@@ -418,7 +419,7 @@ class PriceFeedManager:
                 for feed in feeds:
                     # Check if feed is stale
                     if feed._last_tick:
-                        age = (datetime.utcnow() - feed._last_tick.timestamp).total_seconds()
+                        age = (datetime.now(timezone.utc) - feed._last_tick.timestamp).total_seconds()
                         if age > 60:
                             logger.warning(
                                 "feed_manager.stale_feed",
@@ -472,7 +473,7 @@ class PriceFeedManager:
         
         return TickData(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=vwap_bid,
             ask=vwap_ask,
             volume=sum(t.volume for t in ticks),

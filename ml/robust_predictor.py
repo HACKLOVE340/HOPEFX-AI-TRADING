@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 from sklearn.model_selection import TimeSeriesSplit
@@ -147,7 +147,7 @@ class RobustPredictor:
         stability = self._check_feature_stability()
         logger.info(f"Feature stability: {stability:.2f}")
         
-        self.last_retrain = datetime.utcnow()
+        self.last_retrain = datetime.now(timezone.utc)
         
         return {
             'cv_results': cv_results,
@@ -326,7 +326,7 @@ class RobustPredictor:
             regime=regime,
             model_agreement=float(agreement),
             features_importance=current_importance,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
     
     def _estimate_return(self, direction: int, probability: float, regime: Regime) -> float:
@@ -518,7 +518,7 @@ class RobustPredictor:
             return True
         
         # Check time since last train
-        if self.last_retrain and (datetime.utcnow() - self.last_retrain).days > 7:
+        if self.last_retrain and (datetime.now(timezone.utc) - self.last_retrain).days > 7:
             return True
         
         return False

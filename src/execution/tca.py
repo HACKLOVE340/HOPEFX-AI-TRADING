@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Callable
@@ -149,11 +149,11 @@ class TCAEngine:
             "side": side,
             "quantity": quantity,
             "arrival_price": arrival_price,
-            "arrival_time": datetime.utcnow(),
+            "arrival_time": datetime.now(timezone.utc),
             "benchmark": benchmark,
             "expected_alpha_bps": expected_advantage_bps,
             "fills": [],
-            "decision_time": datetime.utcnow(),
+            "decision_time": datetime.now(timezone.utc),
         }
         
         logger.debug(f"TCA tracking started: {order_id}")
@@ -168,7 +168,7 @@ class TCAEngine:
         order["fills"].append(fill)
         
         # Track timing
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if not order.get("first_fill_time"):
             order["first_fill_time"] = now
             order["time_to_first_fill_ms"] = (
@@ -331,7 +331,7 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append((
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             tick.mid,
             tick.volume
         ))
@@ -341,7 +341,7 @@ class TCAEngine:
         # TWAP
         if symbol not in self._twap_cache:
             self._twap_cache[symbol] = []
-        self._twap_cache[symbol].append((datetime.utcnow(), tick.mid))
+        self._twap_cache[symbol].append((datetime.now(timezone.utc), tick.mid))
         if len(self._twap_cache[symbol]) > 10000:
             self._twap_cache[symbol].pop(0)
     

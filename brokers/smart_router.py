@@ -7,7 +7,7 @@ Intelligent order routing across multiple brokers with best execution
 import asyncio
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 import numpy as np
 
@@ -91,7 +91,7 @@ class SmartOrderRouter:
             'selected_broker': best_broker,
             'alternative_brokers': [r.broker_id for r in ranked[1:3]],
             'selection_reason': self._explain_selection(ranked[0]),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'expected_latency_ms': ranked[0].latency_ms,
             'expected_cost_bps': ranked[0].cost_score
         }
@@ -108,9 +108,9 @@ class SmartOrderRouter:
         for broker_id, connector in self.brokers.items():
             try:
                 # Ping latency
-                start = datetime.utcnow()
+                start = datetime.now(timezone.utc)
                 await connector.ping()
-                latency = (datetime.utcnow() - start).total_seconds() * 1000
+                latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                 
                 score = self.scores[broker_id]
                 score.latency_ms = 0.7 * score.latency_ms + 0.3 * latency  # EMA
@@ -191,9 +191,9 @@ class BrokerConnector:
     
     async def ping(self) -> float:
         """Measure round-trip latency"""
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         await self.client.get_server_time()
-        latency = (datetime.utcnow() - start).total_seconds() * 1000
+        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
         self.latency_history.append(latency)
         if len(self.latency_history) > 1000:
             self.latency_history.pop(0)
@@ -201,7 +201,7 @@ class BrokerConnector:
     
     async def place_order(self, order: Dict) -> Dict:
         """Place order with full tracking"""
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         
         result = await self.client.place_order(
             symbol=order['symbol'],
@@ -211,11 +211,11 @@ class BrokerConnector:
             price=order.get('price')
         )
         
-        latency = (datetime.utcnow() - start).total_seconds() * 1000
+        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
         
         # Track fill
         fill_record = {
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'order_id': result.get('id'),
             'filled': result.get('status') == 'FILLED',
             'slippage_bps': self._calculate_slippage(order, result),
@@ -242,5 +242,5 @@ class BrokerConnector:
     
     async def get_recent_fills(self, hours: int = 1) -> List[Dict]:
         """Get recent fill history"""
-        cutoff = datetime.utcnow() - __import__('datetime').timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - __import__('datetime').timedelta(hours=hours)
         return [f for f in self.fill_history if f['timestamp'] > cutoff]

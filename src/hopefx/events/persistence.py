@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Any, Callable
 
 import asyncpg
@@ -258,7 +258,7 @@ class EventStore:
 
     async def get_event_statistics(self, days: int = 7) -> dict:
         """Get event statistics for monitoring."""
-        start = datetime.utcnow() - timedelta(days=days)
+        start = datetime.now(timezone.utc) - timedelta(days=days)
         
         async with self._pool.acquire() as conn:
             rows = await conn.fetch("""

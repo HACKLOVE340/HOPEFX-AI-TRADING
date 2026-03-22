@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Callable, Any
 
 import structlog
@@ -69,14 +69,14 @@ class DeadLetterQueue:
         # Calculate next retry with exponential backoff and jitter
         delay = min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
         jitter = random.uniform(0, 0.1 * delay)  # 10% jitter
-        next_retry = datetime.utcnow().timestamp() + delay + jitter
+        next_retry = datetime.now(timezone.utc).timestamp() + delay + jitter
 
         self._failed_events[event_id] = {
             'event': event,
             'error': error,
             'handler': handler,
             'attempts': attempt,
-            'first_failure': existing['first_failure'] if existing else datetime.utcnow(),
+            'first_failure': existing['first_failure'] if existing else datetime.now(timezone.utc),
             'next_retry': next_retry,
             'context': context or {},
             'error_history': existing['error_history'] + [error] if existing else [error]
@@ -93,7 +93,7 @@ class DeadLetterQueue:
         """Process retry queue."""
         while True:
             try:
-                now = datetime.utcnow().timestamp()
+                now = datetime.now(timezone.utc).timestamp()
                 
                 # Find ready events
                 ready = [
@@ -151,8 +151,8 @@ class DeadLetterQueue:
             'final_error': error,
             'attempts': attempts,
             'error_history': context.get('error_history', []) if context else [],
-            'first_failure': context.get('first_failure', datetime.utcnow()).isoformat() if context else datetime.utcnow().isoformat(),
-            'final_failure': datetime.utcnow().isoformat(),
+            'first_failure': context.get('first_failure', datetime.now(timezone.utc)).isoformat() if context else datetime.now(timezone.utc).isoformat(),
+            'final_failure': datetime.now(timezone.utc).isoformat(),
             'handler_name': context.get('handler', lambda: None).__name__ if context else 'unknown'
         }
 
@@ -179,7 +179,7 @@ class DeadLetterQueue:
         """Manually trigger immediate retry."""
         for eid, data in list(self._failed_events.items()):
             if eid.startswith(event_id):
-                data['next_retry'] = datetime.utcnow().timestamp()
+                data['next_retry'] = datetime.now(timezone.utc).timestamp()
                 return True
         
         # Check permanent failures
@@ -194,7 +194,7 @@ class DeadLetterQueue:
 
     async def get_metrics(self) -> dict:
         """DLQ metrics for monitoring."""
-        now = datetime.utcnow().timestamp()
+        now = datetime.now(timezone.utc).timestamp()
         
         pending = sum(
             1 for data in self._failed_events.values()
@@ -223,7 +223,7 @@ class DeadLetterQueue:
             'avg_attempts': avg_attempts,
             'metrics': self._metrics,
             'oldest_failure_seconds': (
-                (datetime.utcnow() - oldest_failure).total_seconds()
+                (datetime.now(timezone.utc) - oldest_failure).total_seconds()
                 if oldest_failure else None
             )
         }
@@ -231,7 +231,7 @@ class DeadLetterQueue:
     async def archive_permanent_failures(self, storage: Any) -> int:
         """Archive permanent failures to cold storage."""
         archived = 0
-        cutoff = datetime.utcnow() - timedelta(days=30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
         for failure in list(self._permanent_failures):
             failure_time = datetime.fromisoformat(failure['final_failure'])
@@ -247,7 +247,7 @@ class DeadLetterQueue:
 
     async def _cleanup_permanent_failures(self) -> None:
         """Remove very old permanent failures."""
-        cutoff = datetime.utcnow() - timedelta(days=90)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
         self._permanent_failures = [
             f for f in self._permanent_failures
             if datetime.fromisoformat(f['final_failure']) > cutoff

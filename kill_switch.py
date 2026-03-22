@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -175,7 +175,7 @@ class KillSwitch:
             return  # already active – avoid duplicate log spam
         self._active = True
         self._reason = reason
-        self._activated_at = datetime.utcnow()
+        self._activated_at = datetime.now(timezone.utc)
 
         logger.critical(
             "🚨 KILL SWITCH ACTIVATED — reason: %s | time: %s",
@@ -211,7 +211,7 @@ class KillSwitch:
             event = DomainEvent.create(
                 "KILL_SWITCH",
                 "kill_switch",
-                {"reason": reason, "timestamp": datetime.utcnow().isoformat()},
+                {"reason": reason, "timestamp": datetime.now(timezone.utc).isoformat()},
                 priority=0,
             )
             # publish() may be a coroutine; schedule it without blocking the

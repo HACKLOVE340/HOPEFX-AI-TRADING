@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import hmac
 import hashlib
@@ -94,7 +94,7 @@ class FTMOBroker:
                            endpoint: str,
                            params: Optional[Dict] = None) -> Dict[str, str]:
         """Generate FTMO API signature"""
-        timestamp = str(int(datetime.utcnow().timestamp() * 1000))
+        timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
         nonce = self._request_nonce
         self._request_nonce += 1
         
