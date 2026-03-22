@@ -688,5 +688,66 @@ if __name__ == "__main__":
     print("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
     print("  report = create_portfolio_report(returns_df)")
 
-# Alias expected by tests
-PortfolioOptimizer = PortfolioAnalytics
+class PortfolioOptimizer:
+    """
+    Test-friendly portfolio optimizer.
+    Accepts (assets, returns_matrix) calling convention.
+    """
+
+    def __init__(self, risk_free_rate: float = 0.02):
+        self.risk_free_rate = risk_free_rate
+        self._analytics = PortfolioAnalytics(risk_free_rate=risk_free_rate)
+
+    def optimize_portfolio(self, assets, returns, method: str = "max_sharpe") -> dict:
+        """
+        Optimize portfolio weights.
+
+        Parameters
+        ----------
+        assets  : list of str
+        returns : np.ndarray shape (T, N)
+        method  : "max_sharpe" | "min_variance" | "equal_weight"
+        """
+        import numpy as np
+        returns = np.asarray(returns)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+
+        if method == "equal_weight" or returns.shape[0] < 10:
+            w = np.ones(n) / n
+        else:
+            # Simple mean-variance: maximise Sharpe via random search
+            best_sharpe, best_w = -1e9, np.ones(n) / n
+            for _ in range(500):
+                raw = np.random.dirichlet(np.ones(n))
+                port_ret = float(np.mean(returns @ raw) * 252)
+                port_vol = float(np.std(returns @ raw) * (252 ** 0.5))
+                sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
+                if sharpe > best_sharpe:
+                    best_sharpe, best_w = sharpe, raw
+            w = best_w
+
+        port_ret = float(np.mean(returns @ w) * 252)
+        port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+        sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
+
+        return {
+            "weights": {a: float(w[i]) for i, a in enumerate(assets)},
+            "expected_return": port_ret,
+            "risk": port_vol,
+            "sharpe_ratio": sharpe,
+            "method": method,
+        }
+
+    def efficient_frontier(self, assets, returns, num_portfolios: int = 50) -> list:
+        """Return a list of dicts with 'risk' and 'return' for the frontier."""
+        import numpy as np
+        returns = np.asarray(returns)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        frontier = []
+        for _ in range(num_portfolios):
+            w = np.random.dirichlet(np.ones(n))
+            port_ret = float(np.mean(returns @ w) * 252)
+            port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+            frontier.append({"risk": port_vol, "return": port_ret,
+                              "weights": {a: float(w[i]) for i, a in enumerate(assets)}})
+        return frontier

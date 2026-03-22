@@ -23,7 +23,7 @@ class RSIStrategy(BaseStrategy):
     Sells when RSI is overbought (above upper threshold).
     """
 
-    def __init__(self, config: StrategyConfig,
+    def __init__(self, config: StrategyConfig, *_args,
                  period: int = 14, oversold: float = 30, overbought: float = 70):
         """
         Initialize RSI strategy.
@@ -53,8 +53,11 @@ class RSIStrategy(BaseStrategy):
         current = float(rsi.iloc[-1]) if not rsi.empty else None
         return {"rsi": current, "oversold": self.oversold, "overbought": self.overbought}
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
-        """Generate Signal from analyze() output."""
+    def generate_signal(self, data) -> Any:
+        """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
+        if isinstance(data, pd.DataFrame):
+            return self._generate_dict_signal(data)
+        analysis = data
         rsi = analysis.get("rsi")
         if rsi is None:
             return None

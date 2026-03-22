@@ -23,3 +23,5 @@ __all__ = [
     "MACDStrategy", "BollingerBandsStrategy", "MeanReversionStrategy",
     "BreakoutStrategy", "StochasticStrategy", "SMCICTStrategy", "ITS8OSStrategy",
 ]
+
+__version__ = "1.0.0"

@@ -202,3 +202,5 @@ async def send_alert(level: str, message: str, **kwargs):
 
 # Compatibility alias
 AlertEngine = NotificationManager
+
+__version__ = "1.0.0"

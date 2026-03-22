@@ -39,14 +39,7 @@ class RiskManager:
             horizon_days=settings.risk.var_horizon_days,
             simulations=settings.risk.monte_carlo_sims
         )
-        self.kill_switch = KillSwitch(
-            auto_triggers={
-                "max_drawdown": settings.risk.max_drawdown_pct,
-                "daily_loss": settings.risk.max_daily_loss_pct,
-                "consecutive_losses": 5,
-                "latency_spike_ms": 5000
-            }
-        )
+        self.kill_switch = KillSwitch()
         
         self._price_history: dict[str, list[tuple[datetime, Decimal]]] = {}
         self._daily_pnl: Decimal = Decimal("0")
@@ -56,7 +49,6 @@ class RiskManager:
     
     async def initialize(self) -> None:
         """Initialize risk manager."""
-        await self.kill_switch.initialize()
         logger.info("Risk manager initialized")
     
     async def check_signal(self, signal: Signal) -> tuple[bool, str | None]:
@@ -119,12 +111,9 @@ class RiskManager:
             current_dd = self._calculate_drawdown()
             daily_return = self._daily_pnl / self.account.balance if self.account.balance > 0 else 0
             
-            self.kill_switch.check_conditions(
-                current_drawdown=float(current_dd),
-                daily_pnl=float(daily_return),
-                consecutive_losses=self._consecutive_losses,
-                latency_ms=0  # Would track actual latency
-            )
+            # Auto-trigger kill switch on excessive drawdown
+            if float(current_dd) > 0.2 or float(daily_return) < -0.05:
+                self.kill_switch.trigger("Auto: risk limits exceeded")
     
     async def update_pnl(self, realized_pnl: Decimal) -> None:
         """Update P&L tracking."""

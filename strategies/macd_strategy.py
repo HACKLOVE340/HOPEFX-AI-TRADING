@@ -22,7 +22,7 @@ class MACDStrategy(BaseStrategy):
     Generates signals based on MACD line crossing signal line.
     """
 
-    def __init__(self, config: StrategyConfig,
+    def __init__(self, config: StrategyConfig, *_args,
                  fast_period: int = 12, slow_period: int = 26, signal_period: int = 9):
         """
         Initialize MACD strategy.
@@ -58,8 +58,11 @@ class MACDStrategy(BaseStrategy):
             "price": float(series.iloc[-1]),
         }
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
-        """Generate Signal from analyze() output."""
+    def generate_signal(self, data) -> Any:
+        """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
+        if isinstance(data, pd.DataFrame):
+            return self._generate_dict_signal(data)
+        analysis = data
         macd = analysis.get("macd")
         sig = analysis.get("signal_line")
         prev_macd = analysis.get("prev_macd")

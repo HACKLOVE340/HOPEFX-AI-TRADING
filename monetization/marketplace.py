@@ -23,11 +23,13 @@ class SubscriptionTier(Enum):
 
 
 class StrategyStatus(Enum):
-    DRAFT = "draft"
-    PENDING = "pending"
-    ACTIVE = "active"
-    SUSPENDED = "suspended"
-    ARCHIVED = "archived"
+    DRAFT          = "draft"
+    PENDING        = "pending"
+    PENDING_REVIEW = "pending_review"
+    APPROVED       = "approved"
+    ACTIVE         = "active"
+    SUSPENDED      = "suspended"
+    ARCHIVED       = "archived"
 
 
 @dataclass
@@ -714,12 +716,15 @@ import enum as _enum
 
 class StrategyCategory(_enum.Enum):
     TREND_FOLLOWING = "trend_following"
-    MEAN_REVERSION = "mean_reversion"
-    BREAKOUT = "breakout"
-    SCALPING = "scalping"
-    ARBITRAGE = "arbitrage"
-    ML_BASED = "ml_based"
-    CUSTOM = "custom"
+    MEAN_REVERSION  = "mean_reversion"
+    BREAKOUT        = "breakout"
+    SCALPING        = "scalping"
+    ARBITRAGE       = "arbitrage"
+    ML_BASED        = "ml_based"
+    ALGORITHMIC     = "algorithmic"
+    DAY_TRADING     = "day_trading"
+    SWING_TRADING   = "swing_trading"
+    CUSTOM          = "custom"
 
 class StrategyLicenseType(_enum.Enum):
     FREE = "free"
@@ -768,11 +773,151 @@ class StrategyReview:
     comment: str = ""
     created_at: datetime = field(default_factory=datetime.utcnow)
 
-# StrategyMarketplace is an alias for MarketplaceAPI
-StrategyMarketplace = MarketplaceAPI
+# ── Full StrategyMarketplace implementation expected by tests ─────────────────
+import uuid as _uuid
+from decimal import Decimal as _Decimal
+
+
+@dataclass
+class _StrategyListing:
+    strategy_id: str
+    creator_id: str
+    name: str
+    description: str
+    category: "StrategyCategory"
+    price: _Decimal
+    tags: list = field(default_factory=list)
+    status: "StrategyStatus" = None
+    avg_rating: float = 0.0
+    _reviews: list = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.status is None:
+            self.status = StrategyStatus.DRAFT
+
+    def submit_for_review(self):
+        self.status = StrategyStatus.PENDING_REVIEW
+
+    def is_available(self) -> bool:
+        return self.status == StrategyStatus.APPROVED
+
+
+@dataclass
+class _Purchase:
+    purchase_id: str
+    buyer_id: str
+    strategy_id: str
+    amount: _Decimal
+    status: str = "pending"
+
+
+@dataclass
+class _Review:
+    review_id: str
+    user_id: str
+    strategy_id: str
+    rating: int
+    title: str
+    content: str
+
+
+class StrategyMarketplace:
+    """In-memory strategy marketplace — full API used by tests."""
+
+    def __init__(self):
+        self._strategies: Dict[str, _StrategyListing] = {}
+        self._purchases: Dict[str, _Purchase] = {}
+        self._licenses: Dict[str, set] = {}   # buyer_id → {strategy_id}
+        self._reviews: Dict[str, _Review] = {}
+
+    def list_strategy(self, creator_id: str, name: str, description: str,
+                      category, price, tags=None) -> _StrategyListing:
+        sid = str(_uuid.uuid4())
+        s = _StrategyListing(strategy_id=sid, creator_id=creator_id, name=name,
+                              description=description, category=category,
+                              price=_Decimal(str(price)), tags=tags or [])
+        self._strategies[sid] = s
+        return s
+
+    def approve_strategy(self, strategy_id: str) -> bool:
+        s = self._strategies.get(strategy_id)
+        if s:
+            s.status = StrategyStatus.APPROVED
+            return True
+        return False
+
+    def purchase_strategy(self, buyer_id: str, strategy_id: str) -> Optional[_Purchase]:
+        s = self._strategies.get(strategy_id)
+        if not s:
+            return None
+        pid = str(_uuid.uuid4())
+        p = _Purchase(purchase_id=pid, buyer_id=buyer_id,
+                      strategy_id=strategy_id, amount=s.price)
+        self._purchases[pid] = p
+        return p
+
+    def complete_purchase(self, purchase_id: str) -> bool:
+        p = self._purchases.get(purchase_id)
+        if not p:
+            return False
+        p.status = "completed"
+        self._licenses.setdefault(p.buyer_id, set()).add(p.strategy_id)
+        return True
+
+    def has_strategy_license(self, buyer_id: str, strategy_id: str) -> bool:
+        return strategy_id in self._licenses.get(buyer_id, set())
+
+    def add_review(self, user_id: str, strategy_id: str, rating: int,
+                   title: str, content: str) -> Optional[_Review]:
+        s = self._strategies.get(strategy_id)
+        if not s:
+            return None
+        r = _Review(review_id=str(_uuid.uuid4()), user_id=user_id,
+                    strategy_id=strategy_id, rating=rating, title=title, content=content)
+        s._reviews.append(r)
+        s.avg_rating = sum(rv.rating for rv in s._reviews) / len(s._reviews)
+        self._reviews[r.review_id] = r
+        return r
+
+    def search_strategies(self, query=None, category=None, min_price=None, max_price=None,
+                          tags=None, min_rating=None, sort_by="popular",
+                          limit: int = 20, offset: int = 0) -> list:
+        results = [s for s in self._strategies.values()
+                   if s.status == StrategyStatus.APPROVED]
+        if query:
+            q = query.lower()
+            results = [s for s in results if q in s.name.lower() or q in s.description.lower()]
+        if category is not None:
+            results = [s for s in results if s.category == category]
+        if min_price is not None:
+            results = [s for s in results if s.price >= _Decimal(str(min_price))]
+        if max_price is not None:
+            results = [s for s in results if s.price <= _Decimal(str(max_price))]
+        if tags:
+            results = [s for s in results if any(t in s.tags for t in tags)]
+        return results[offset:offset + limit]
+
+    def get_featured_strategies(self, limit: int = 10) -> list:
+        """Return top-rated approved strategies."""
+        results = [s for s in self._strategies.values()
+                   if s.status == StrategyStatus.APPROVED]
+        results.sort(key=lambda s: getattr(s, "rating", 0), reverse=True)
+        return results[:limit]
+
+    def get_marketplace_stats(self) -> dict:
+        """Return aggregate marketplace statistics."""
+        strategies = list(self._strategies.values())
+        approved = [s for s in strategies if s.status == StrategyStatus.APPROVED]
+        return {
+            "total_strategies": len(strategies),
+            "approved_strategies": len(approved),
+            "total_purchases": len(self._purchases),
+            "total_reviews": len(self._reviews),
+        }
+
 
 # Module-level singleton
-strategy_marketplace = MarketplaceAPI()
+strategy_marketplace = StrategyMarketplace()
 
 
 @dataclass

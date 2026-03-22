@@ -20,9 +20,20 @@ class Event(BaseModel, Generic[_T]):
     event_id: str = Field(default_factory=lambda: f"evt_{datetime.utcnow().timestamp()}")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     event_type: str
-    
+    payload: Any = None
+    source: str = ""
+
     class Config:
         frozen = True
+
+    @classmethod
+    def create(cls, payload: Any, source: str = "") -> "Event":
+        """Wrap an arbitrary payload in an Event."""
+        return cls(
+            event_type=type(payload).__name__,
+            payload=payload,
+            source=source,
+        )
 
 
 class TickEvent(Event):
@@ -103,24 +114,51 @@ _ebus_logger = _logging.getLogger(__name__)
 class EventBus:
     """
     Simple async pub/sub event bus.
-    Subscribers register handlers per event_type string.
+    Subscribers register handlers per event_type string or class.
     """
 
     def __init__(self):
         self._handlers: _Dict[str, _List[_Callable]] = {}
+        self._running = False
 
-    def subscribe(self, event_type: str, handler: _Callable):
-        self._handlers.setdefault(event_type, []).append(handler)
+    async def start(self) -> None:
+        self._running = True
 
-    def unsubscribe(self, event_type: str, handler: _Callable):
-        if event_type in self._handlers:
-            self._handlers[event_type] = [
-                h for h in self._handlers[event_type] if h is not handler
+    async def stop(self) -> None:
+        self._running = False
+
+    @staticmethod
+    def _key(event_type) -> str:
+        """Normalise event_type: accept string or class."""
+        if isinstance(event_type, str):
+            return event_type
+        return getattr(event_type, "__name__", str(event_type))
+
+    def subscribe(self, event_type, handler: _Callable):
+        self._handlers.setdefault(self._key(event_type), []).append(handler)
+
+    def unsubscribe(self, event_type, handler: _Callable):
+        key = self._key(event_type)
+        if key in self._handlers:
+            self._handlers[key] = [
+                h for h in self._handlers[key] if h is not handler
             ]
 
     async def publish(self, event: "Event"):
-        event_type = getattr(event, "event_type", type(event).__name__)
-        handlers = self._handlers.get(event_type, []) + self._handlers.get("*", [])
+        # Match by event_type field, class name, or parent class names
+        keys = set()
+        et = getattr(event, "event_type", None)
+        if et:
+            keys.add(str(et))
+        keys.add(type(event).__name__)
+        for base in type(event).__mro__:
+            keys.add(base.__name__)
+        keys.add("*")
+
+        handlers = []
+        for k in keys:
+            handlers.extend(self._handlers.get(k, []))
+
         for handler in handlers:
             try:
                 if _asyncio.iscoroutinefunction(handler):
@@ -128,7 +166,11 @@ class EventBus:
                 else:
                     handler(event)
             except Exception as exc:
-                _ebus_logger.error("EventBus handler error for %s: %s", event_type, exc)
+                _ebus_logger.error("EventBus handler error: %s", exc)
+
+    async def emit(self, event: "Event"):
+        """Alias for publish."""
+        await self.publish(event)
 
     def publish_sync(self, event: "Event"):
         """Fire-and-forget from sync context."""
@@ -151,8 +193,13 @@ def get_event_bus() -> EventBus:
     return _default_bus
 
 
-# TickReceived is an alias for TickEvent
-TickReceived = TickEvent
+class TickReceived(BaseModel):
+    """Lightweight tick payload used by tests and simple consumers."""
+    symbol: str
+    bid: float
+    ask: float
+    volume: float = 0.0
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 # Additional aliases
 KillSwitchTriggered = RiskEvent

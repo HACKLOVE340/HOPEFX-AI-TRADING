@@ -23,7 +23,7 @@ class BollingerBandsStrategy(BaseStrategy):
     Combines band touches with band squeeze for signal generation.
     """
 
-    def __init__(self, config: StrategyConfig,
+    def __init__(self, config: StrategyConfig, *_args,
                  period: int = 20, std_dev: float = 2.0):
         """
         Initialize Bollinger Bands strategy.
@@ -63,8 +63,16 @@ class BollingerBandsStrategy(BaseStrategy):
             "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
         }
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
-        """Generate Signal from analyze() output."""
+    def generate_signal(self, data) -> Any:
+        """
+        Dual-dispatch: accepts either a dict (from analyze()) or a DataFrame.
+        - dict  → returns Optional[Signal]  (BaseStrategy contract)
+        - DataFrame → returns dict signal   (legacy backtesting / test contract)
+        """
+        if isinstance(data, pd.DataFrame):
+            return self._generate_dict_signal(data)
+        # dict path — BaseStrategy abstract method contract
+        analysis = data
         upper = analysis.get("upper")
         lower = analysis.get("lower")
         price = analysis.get("price")

@@ -134,9 +134,9 @@ class TestRiskAnalytics:
         returns = [-0.05, -0.04, -0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.03, 0.04]
         
         cvar = analytics.calculate_cvar(returns, confidence=0.95)
-        # CVaR should be worse than VaR
+        # CVaR magnitude should be >= VaR magnitude (CVaR is worse than VaR)
         var = analytics.calculate_var(returns, confidence=0.95)
-        assert cvar <= var
+        assert abs(cvar) >= abs(var)
     
     def test_sharpe_ratio(self, analytics):
         """Test Sharpe ratio calculation"""

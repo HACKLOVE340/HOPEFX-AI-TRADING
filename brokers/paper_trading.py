@@ -30,15 +30,23 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
-    def __init__(self, config: Dict[str, Any], session_factory=None, user_id: str = "paper"):
+    def __init__(self, config: Dict[str, Any] = None, session_factory=None,
+                 user_id: str = "paper", initial_balance: float = None,
+                 commission_per_lot: float = None, slippage_model: str = "gaussian"):
         """
         Initialize paper trading broker.
 
-        Args:
-            config: Configuration with 'initial_balance'
-            session_factory: SQLAlchemy session factory for P&L persistence
-            user_id: User identifier for DB records
+        Accepts either a config dict or keyword arguments directly.
         """
+        if config is None:
+            config = {}
+        # Allow keyword args to override config dict
+        if initial_balance is not None:
+            config = dict(config)
+            config['initial_balance'] = initial_balance
+        if commission_per_lot is not None:
+            config = dict(config)
+            config['commission_per_lot'] = commission_per_lot
         super().__init__(config)
 
         self.initial_balance = config.get('initial_balance', 10000.0)
@@ -86,14 +94,21 @@ class PaperTradingBroker(BrokerConnector):
             'NAS100': 18200.0,    # Nasdaq 100
         }
 
-    def connect(self) -> bool:
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.disconnect()
+
+    async def connect(self) -> bool:
         """Connect to paper trading broker (always succeeds)"""
         self.connected = True
         logger.info(f"Connected to {self.name} (Paper Trading)")
         logger.info(f"Initial balance: ${self.initial_balance:,.2f}")
         return True
 
-    def disconnect(self) -> bool:
+    async def disconnect(self) -> bool:
         """Disconnect from paper trading broker"""
         self.connected = False
         logger.info(f"Disconnected from {self.name}")

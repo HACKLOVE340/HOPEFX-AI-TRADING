@@ -321,4 +321,56 @@ class FTMOBroker:
             raise
 
 
-FTMOConnector = FTMOBroker
+
+# ---------------------------------------------------------------------------
+# MT5-based FTMOConnector (used by tests and BrokerFactory)
+# ---------------------------------------------------------------------------
+
+from typing import Dict as _Dict, Any as _Any  # noqa: E402
+
+try:
+    from brokers.mt5 import MT5Connector as _MT5Connector
+
+    class FTMOConnector(_MT5Connector):
+        """FTMO prop firm connector (MT5-based)."""
+
+        FTMO_SERVERS = {
+            "demo": ["FTMO-Demo", "FTMO-Demo2"],
+            "live": ["FTMO-Live", "FTMO-Live2"],
+        }
+
+        def __init__(self, config: _Dict[str, _Any]):
+            cfg = dict(config)
+            self.challenge_type = cfg.get("challenge_type", "demo")
+            if "server" not in cfg:
+                servers = self.FTMO_SERVERS.get(self.challenge_type, self.FTMO_SERVERS["demo"])
+                cfg["server"] = servers[0]
+            super().__init__(cfg)
+            logger.info(f"FTMOConnector initialized: {self.challenge_type} / {self.server}")
+
+        def get_ftmo_rules(self) -> _Dict[str, _Any]:
+            return {
+                "max_daily_loss": "5%",
+                "max_total_drawdown": "10%",
+                "profit_target": "10%",
+                "min_trading_days": 10,
+                "profit_split": "70/30",
+                "scaling": "up to $2M",
+            }
+
+        def check_ftmo_compliance(self) -> _Dict[str, _Any]:
+            info = self.get_account_info()
+            if info is None:
+                return {"compliant": False, "reason": "not connected"}
+            daily_loss_pct = (info.balance - info.equity) / info.balance * 100 if info.balance else 0
+            compliant = daily_loss_pct < 5.0
+            return {
+                "compliant": compliant,
+                "equity": info.equity,
+                "balance": info.balance,
+                "daily_loss_pct": daily_loss_pct,
+            }
+
+except ImportError:
+    # Fallback alias if MT5 not available
+    FTMOConnector = FTMOBroker  # type: ignore

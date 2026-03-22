@@ -2,6 +2,7 @@
 Unit tests for core components.
 """
 
+import asyncio
 import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
