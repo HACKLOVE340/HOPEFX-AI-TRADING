@@ -1,1 +1,62 @@
-import pandas as pd\nimport numpy as np\nfrom sklearn.ensemble import RandomForestClassifier\nimport talib\n\n# Load historical data\ndef load_data(file_path):\n    try:\n        data = pd.read_csv(file_path)\n        return data\n    except Exception as e:\n        print(f'Error loading data: {e}')\n        return None\n\n# Generate signals\ndef generate_signals(data):\n    data['EMA9'] = talib.EMA(data['Close'], timeperiod=9)\n    data['EMA21'] = talib.EMA(data['Close'], timeperiod=21)\n    data['RSI14'] = talib.RSI(data['Close'], timeperiod=14)\n    data['upper_band'], data['middle_band'], data['lower_band'] = talib.BBANDS(data['Close'])\n\n    # Generate signals based on conditions\n    data['Signal'] = 0\n    data.loc[(data['EMA9'] > data['EMA21']) & (data['RSI14'] < 70), 'Signal'] = 1  # Buy\n    data.loc[(data['EMA9'] < data['EMA21']) & (data['RSI14'] > 30), 'Signal'] = -1  # Sell\n    return data\n\n# Random Forest Model\ndef train_model(data):\n    model = RandomForestClassifier()\n    try:\n        features = data[['EMA9', 'EMA21', 'RSI14', 'upper_band', 'lower_band']]\n        labels = data['Signal']\n        model.fit(features, labels)\n    except Exception as e:\n        print(f'Error training model: {e}')\n        return None\n    return model\n\n# Test edge cases\ndef test_edge_cases(data):\n    if data is None or data.empty:\n        print('Insufficient data for predictions.')\n        return\n    if data.isnull().values.any():\n        print('NaN values found in data. Handling NaN...')\n        data.fillna(method='ffill', inplace=True)\n    # Simulating stale ticks is more context-dependent.\n\n# Main function\ndef main(file_path):\n    data = load_data(file_path)\n    if data is not None:\n        data = generate_signals(data)\n        model = train_model(data)\n        test_edge_cases(data)\n        print(data['Signal'].value_counts())\n        # More validation can be added here\n\n# Example usage\nif __name__ == '__main__':\n    main('historical_XAUUSD_data.csv')\n
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+import talib
+
+# Load historical data
+def load_data(file_path):
+    try:
+        data = pd.read_csv(file_path)
+        return data
+    except Exception as e:
+        print(f'Error loading data: {e}')
+        return None
+
+# Generate signals
+def generate_signals(data):
+    data['EMA9'] = talib.EMA(data['Close'], timeperiod=9)
+    data['EMA21'] = talib.EMA(data['Close'], timeperiod=21)
+    data['RSI14'] = talib.RSI(data['Close'], timeperiod=14)
+    data['upper_band'], data['middle_band'], data['lower_band'] = talib.BBANDS(data['Close'])
+
+    # Generate signals based on conditions
+    data['Signal'] = 0
+    data.loc[(data['EMA9'] > data['EMA21']) & (data['RSI14'] < 70), 'Signal'] = 1  # Buy
+    data.loc[(data['EMA9'] < data['EMA21']) & (data['RSI14'] > 30), 'Signal'] = -1  # Sell
+    return data
+
+# Random Forest Model
+def train_model(data):
+    model = RandomForestClassifier()
+    try:
+        features = data[['EMA9', 'EMA21', 'RSI14', 'upper_band', 'lower_band']]
+        labels = data['Signal']
+        model.fit(features, labels)
+    except Exception as e:
+        print(f'Error training model: {e}')
+        return None
+    return model
+
+# Test edge cases
+def test_edge_cases(data):
+    if data is None or data.empty:
+        print('Insufficient data for predictions.')
+        return
+    if data.isnull().values.any():
+        print('NaN values found in data. Handling NaN...')
+        data.fillna(method='ffill', inplace=True)
+    # Simulating stale ticks is more context-dependent.
+
+# Main function
+def main(file_path):
+    data = load_data(file_path)
+    if data is not None:
+        data = generate_signals(data)
+        model = train_model(data)
+        test_edge_cases(data)
+        print(data['Signal'].value_counts())
+        # More validation can be added here
+
+# Example usage
+if __name__ == '__main__':
+    main('historical_XAUUSD_data.csv')

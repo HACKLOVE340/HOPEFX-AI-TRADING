@@ -12,7 +12,7 @@ class TestRedisConnection:
             print('Connection to Redis successful.')
             return True
         except redis.ConnectionError:
-            print('Failed to connect to Redis.')</strong>
+            print('Failed to connect to Redis.')
             return False
 
     def store_tick_data(self, tick_data):

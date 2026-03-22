@@ -112,4 +112,77 @@ class DistributedKillSwitch:
             })
         )
     
-    async def
+    async def _heartbeat_loop(self) -> None:
+        """Periodically publish this node's heartbeat to Redis."""
+        while self._running:
+            try:
+                if self._redis:
+                    await self._redis.hset(
+                        "kill_switch:nodes",
+                        self.node_id,
+                        json.dumps({
+                            "last_heartbeat": time.time(),
+                            "state": self._state.name,
+                        }),
+                    )
+            except Exception as exc:
+                logger.warning("kill_switch.heartbeat_error", error=str(exc))
+            await asyncio.sleep(5)
+
+    async def _on_kill_switch_message(self, message: "StreamMessage") -> None:
+        """Handle incoming kill-switch messages from the message bus."""
+        try:
+            payload = message.data if hasattr(message, "data") else {}
+            reason = payload.get("reason", "remote signal")
+            async with self._lock:
+                self._state = KillSwitchState.TRIGGERED
+            logger.critical("kill_switch.triggered", reason=reason, node=self.node_id)
+        except Exception as exc:
+            logger.error("kill_switch.message_error", error=str(exc))
+
+    async def trigger(self, reason: str = "manual", votes_required: bool = True) -> bool:
+        """
+        Trigger the kill switch.
+
+        Args:
+            reason: Human-readable reason for the trigger.
+            votes_required: When True, quorum must be reached before full activation.
+
+        Returns:
+            True if the kill switch was activated.
+        """
+        async with self._lock:
+            self._trigger_votes.add(self.node_id)
+
+            if not votes_required or len(self._trigger_votes) >= self.quorum_size:
+                self._state = KillSwitchState.TRIGGERED
+                logger.critical(
+                    "kill_switch.activated",
+                    reason=reason,
+                    votes=len(self._trigger_votes),
+                    node=self.node_id,
+                )
+
+                if self._redis:
+                    try:
+                        import json as _json
+                        await self._redis.publish(
+                            "kill_switch",
+                            _json.dumps({"reason": reason, "node": self.node_id}),
+                        )
+                    except Exception as exc:
+                        logger.warning("kill_switch.publish_error", error=str(exc))
+
+                return True
+
+            logger.warning(
+                "kill_switch.vote_recorded",
+                votes=len(self._trigger_votes),
+                required=self.quorum_size,
+            )
+            return False
+
+    @property
+    def is_triggered(self) -> bool:
+        """True when the kill switch has been activated."""
+        return self._state == KillSwitchState.TRIGGERED

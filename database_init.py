@@ -1,1 +1,73 @@
-import os\nfrom sqlalchemy import create_engine, Column, Integer, Float, String, Sequence\nfrom sqlalchemy.ext.declarative import declarative_base\nfrom sqlalchemy.orm import sessionmaker\nfrom sqlalchemy.exc import IntegrityError\nfrom alembic import command\nfrom alembic.config import Config\n\nBase = declarative_base()\n\n# Define your database models\nclass Trade(Base):\n    __tablename__ = 'trades'\n    id = Column(Integer, Sequence('trade_id_seq'), primary_key=True)\n    symbol = Column(String(50), nullable=False)\n    price = Column(Float, nullable=False)\n    quantity = Column(Integer, nullable=False)\n\nclass Equity(Base):\n    __tablename__ = 'equity'\n    id = Column(Integer, Sequence('equity_id_seq'), primary_key=True)\n    symbol = Column(String(50), nullable=False)\n    value = Column(Float, nullable=False)\n\nclass Order(Base):\n    __tablename__ = 'orders'\n    id = Column(Integer, Sequence('order_id_seq'), primary_key=True)\n    trade_id = Column(Integer, nullable=False)\n    status = Column(String(50), nullable=False)\n\n# Database initialization\ndef initialize_database(db_url='sqlite:///trading.db'):\n    engine = create_engine(db_url)\n    \n    # Create tables\n    Base.metadata.create_all(engine)\n    \n    # Run migrations (assuming alembic is set up)\n    alembic_cfg = Config("alembic.ini")  # Adjust the path to your alembic.ini file\n    with engine.begin() as connection:\n        alembic_cfg.attributes['connection'] = connection\n        command.upgrade(alembic_cfg, "head")\n\n    # Seed initial data\n    Session = sessionmaker(bind=engine)\n    session = Session()\n    try:\n        trade = Trade(symbol='AAPL', price=150.0, quantity=10)\n        equity = Equity(symbol='AAPL', value=1500.0)\n        order = Order(trade_id=1, status='Completed')\n        \n        session.add(trade)\n        session.add(equity)\n        session.add(order)\n        session.commit()\n    except IntegrityError:\n        session.rollback()\n    finally:\n        session.close()\n\n# Schema validation\ndef validate_schema(engine):\n    inspector = inspect(engine)\n    # Add validation logic here\n\n# Recovery logic\ndef recover_database(file_path):\n    # Add your recovery logic here\n    pass\n\nif __name__ == "__main__":\n    db_url = os.getenv('DATABASE_URL', 'sqlite:///trading.db')  # Use env variable for DB URL\n    initialize_database(db_url)\n
+import os
+from sqlalchemy import create_engine, Column, Integer, Float, String, Sequence
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
+from alembic import command
+from alembic.config import Config
+
+Base = declarative_base()
+
+# Define your database models
+class Trade(Base):
+    __tablename__ = 'trades'
+    id = Column(Integer, Sequence('trade_id_seq'), primary_key=True)
+    symbol = Column(String(50), nullable=False)
+    price = Column(Float, nullable=False)
+    quantity = Column(Integer, nullable=False)
+
+class Equity(Base):
+    __tablename__ = 'equity'
+    id = Column(Integer, Sequence('equity_id_seq'), primary_key=True)
+    symbol = Column(String(50), nullable=False)
+    value = Column(Float, nullable=False)
+
+class Order(Base):
+    __tablename__ = 'orders'
+    id = Column(Integer, Sequence('order_id_seq'), primary_key=True)
+    trade_id = Column(Integer, nullable=False)
+    status = Column(String(50), nullable=False)
+
+# Database initialization
+def initialize_database(db_url='sqlite:///trading.db'):
+    engine = create_engine(db_url)
+    
+    # Create tables
+    Base.metadata.create_all(engine)
+    
+    # Run migrations (assuming alembic is set up)
+    alembic_cfg = Config("alembic.ini")  # Adjust the path to your alembic.ini file
+    with engine.begin() as connection:
+        alembic_cfg.attributes['connection'] = connection
+        command.upgrade(alembic_cfg, "head")
+
+    # Seed initial data
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        trade = Trade(symbol='AAPL', price=150.0, quantity=10)
+        equity = Equity(symbol='AAPL', value=1500.0)
+        order = Order(trade_id=1, status='Completed')
+        
+        session.add(trade)
+        session.add(equity)
+        session.add(order)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+    finally:
+        session.close()
+
+# Schema validation
+def validate_schema(engine):
+    inspector = inspect(engine)
+    # Add validation logic here
+
+# Recovery logic
+def recover_database(file_path):
+    # Add your recovery logic here
+    pass
+
+if __name__ == "__main__":
+    db_url = os.getenv('DATABASE_URL', 'sqlite:///trading.db')  # Use env variable for DB URL
+    initialize_database(db_url)

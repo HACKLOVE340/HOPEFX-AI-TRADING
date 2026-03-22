@@ -313,8 +313,8 @@ class EquityCurveGenerator:
         
         logger.info("equity_curve_saved", path=str(filepath))
         return str(filepath)
-    
-        def generate_report(self, 
+
+    def generate_report(self,
                        output_dir: Union[str, Path],
                        strategy_name: str = "XAUUSD_ML_Strategy") -> Dict:
         """

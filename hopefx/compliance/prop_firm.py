@@ -222,8 +222,8 @@ class PropFirmCompliance:
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
         return timestamp.weekday() >= 5  # Saturday=5, Sunday=6
-    
-        async def _violation(self, code: str, message: str, details: Dict):
+
+    async def _violation(self, code: str, message: str, details: Dict):
         """Record compliance violation."""
         violation = {
             "timestamp": datetime.utcnow().isoformat(),

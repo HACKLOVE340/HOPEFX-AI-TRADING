@@ -12,7 +12,10 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
 import sqlite3
-import stripe
+try:
+    import stripe
+except ImportError:
+    stripe = None  # type: ignore[assignment]
 
 
 class SubscriptionTier(Enum):
