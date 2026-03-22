@@ -921,9 +921,13 @@ class HOPEFXBrain:
         asyncio.create_task(_resume())
     
     def emergency_stop(self):
-        """Manual emergency stop"""
+        """Manual emergency stop — sets flag synchronously, schedules cleanup async."""
         logger.info("Manual emergency stop triggered")
-        asyncio.create_task(self._execute_emergency_stop())
+        self._emergency_stop = True
+        try:
+            asyncio.create_task(self._execute_emergency_stop())
+        except RuntimeError:
+            pass  # No running loop — flag is already set
     
     async def shutdown(self):
         """Graceful shutdown"""

@@ -126,12 +126,12 @@ class TestBacktestEngine:
         assert results['total_trades'] >= 0
     
     def test_no_trades_with_small_data(self):
-        """Test behavior with insufficient data."""
-        gen = XAUUSDDataGenerator(days=5)  # Very small dataset
+        """Test behavior with insufficient data (fewer candles than slow_period)."""
+        gen = XAUUSDDataGenerator(days=5, candles_per_day=1)  # 5 candles < slow_period=20
         data = gen.generate()
         strategy = MovingAverageCrossover(fast_period=10, slow_period=20)
         engine = BacktestEngine(data, strategy, initial_capital=10000.0)
-        
+
         results = engine.run()
         # Should handle gracefully even with no trades
         assert 'error' in results or results['total_trades'] == 0

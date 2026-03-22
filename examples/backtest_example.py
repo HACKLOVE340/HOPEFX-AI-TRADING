@@ -21,9 +21,10 @@ logger = logging.getLogger('backtest')
 class XAUUSDDataGenerator:
     """Generate realistic synthetic XAUUSD OHLCV data for testing."""
     
-    def __init__(self, start_date='2024-01-01', days=90):
+    def __init__(self, start_date='2024-01-01', days=90, candles_per_day=24):
         self.start_date = datetime.strptime(start_date, '%Y-%m-%d')
         self.days = days
+        self.candles_per_day = candles_per_day
         self.base_price = 2000.0
         
     def generate(self) -> List[Dict]:
@@ -38,8 +39,8 @@ class XAUUSDDataGenerator:
             if date.weekday() >= 5:
                 continue
                 
-            # Generate 24 hourly candles per day
-            for hour in range(24):
+            # Generate hourly candles per day
+            for hour in range(self.candles_per_day):
                 # Random walk with slight upward drift
                 change = random.gauss(0.1, 1.5)
                 price = max(1800, min(2200, price + change))

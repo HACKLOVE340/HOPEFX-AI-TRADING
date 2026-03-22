@@ -1,5 +1,6 @@
 """Unit tests for ML components."""
 
+import asyncio
 import pytest
 import numpy as np
 from datetime import datetime

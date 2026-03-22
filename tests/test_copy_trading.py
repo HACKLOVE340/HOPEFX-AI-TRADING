@@ -1,6 +1,7 @@
 import pytest
 import asyncio
 from hopefx.social.copy_trading import CopyTradingEngine, CopyTrader
+from social.copy_trading import RiskLimitExceeded
 
 class TestCopyTradingEngine:
     
