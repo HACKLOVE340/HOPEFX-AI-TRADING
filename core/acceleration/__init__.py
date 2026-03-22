@@ -3,13 +3,24 @@
 HOPEFX GPU Acceleration Engine
 CUDA-powered inference for sub-millisecond predictions
 """
+from __future__ import annotations
 
-import torch
-import torch.nn as nn
-import numpy as np
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
-import asyncio
+try:
+    import torch
+    import torch.nn as nn
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
+
+    class _FakeModule:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("torch is required. Install with: pip install torch")
+
+    class nn:  # type: ignore[no-redef]
+        Module = _FakeModule
+        ModuleList = list
+
 
 
 @dataclass

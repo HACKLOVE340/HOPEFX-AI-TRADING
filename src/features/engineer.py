@@ -9,8 +9,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import structlog
-import torch
-import torch.cuda.nvtx as nvtx
+try:
+    import torch
+    import torch.cuda.nvtx as nvtx
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    nvtx = None  # type: ignore[assignment]
+    HAS_TORCH = False
 from numba import cuda, float32, int32
 from numba.cuda import jit
 
