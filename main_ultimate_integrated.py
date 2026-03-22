@@ -717,7 +717,7 @@ if __name__ == "__main__":
     try:
         import os
         os.nice(-20)
-    except:
+    except Exception:
         pass
     
     # Run

@@ -25,7 +25,7 @@ import logging
 import random
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -40,6 +40,11 @@ logging.basicConfig(
 logger = logging.getLogger("forward_test")
 
 
+def _utcnow() -> datetime:
+    """Return current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # Lightweight mock components (no external deps required)
 # ---------------------------------------------------------------------------
@@ -49,7 +54,7 @@ class MockTick:
     symbol: str
     bid: float
     ask: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utcnow)
 
     @property
     def mid(self) -> float:
@@ -178,7 +183,7 @@ class MockPosition:
     lots: float
     stop_loss: float
     take_profit: float
-    opened_at: datetime = field(default_factory=datetime.utcnow)
+    opened_at: datetime = field(default_factory=_utcnow)
 
 
 class MockOrderGateway:
@@ -259,7 +264,7 @@ class MockOrderGateway:
                     "pnl": round(pnl, 2),
                     "reason": reason,
                     "duration_s": (
-                        datetime.utcnow() - pos.opened_at
+                        _utcnow() - pos.opened_at
                     ).total_seconds(),
                 }
             )

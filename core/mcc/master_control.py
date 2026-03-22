@@ -122,7 +122,7 @@ class MasterControlCore:
                 mcc_settings = self.config_manager.get('mcc', {})
                 self.config.max_strategies_active = mcc_settings.get('max_strategies', 5)
                 self.config.emergency_drawdown_pct = Decimal(str(mcc_settings.get('max_drawdown', 0.10)))
-        except:
+        except Exception:
             pass  # Use defaults
     
     def register_strategy(self, strategy: EnhancedStrategy, 

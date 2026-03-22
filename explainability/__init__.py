@@ -334,7 +334,7 @@ class AIExplainer:
         try:
             if hasattr(model, 'predict_proba'):
                 return 0.75  # Simulated probability
-        except:
+        except Exception:
             pass
         
         # Default confidence based on prediction strength

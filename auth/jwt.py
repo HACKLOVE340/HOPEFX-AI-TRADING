@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -5,10 +6,20 @@ from fastapi import HTTPException
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# Secret key for JWT token
-SECRET_KEY = "your_secret_key"
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Secret key for JWT token – MUST be set via environment variable in production
+_default_secret = "CHANGE_ME_IN_PRODUCTION"
+SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY", _default_secret)
+if SECRET_KEY == _default_secret:
+    logger.warning(
+        "JWT_SECRET_KEY is not set – using insecure default. "
+        "Set the JWT_SECRET_KEY environment variable before deploying."
+    )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
