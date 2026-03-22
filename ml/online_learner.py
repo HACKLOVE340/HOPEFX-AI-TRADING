@@ -74,10 +74,14 @@ class OnlineLearner:
     Adapts to new data while preserving knowledge of past regimes.
     """
     
-    def __init__(self, model: nn.Module, learning_rate: float = 1e-4):
+    def __init__(self, model: "nn.Module" = None, learning_rate: float = 1e-4):
         self.model = model
-        self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
-        self.ewc = EWCRegularizer(model)
+        if model is not None:
+            self.optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
+            self.ewc = EWCRegularizer(model)
+        else:
+            self.optimizer = None
+            self.ewc = None
         
         # Experience replay buffer
         self.replay_buffer: deque = deque(maxlen=10000)
