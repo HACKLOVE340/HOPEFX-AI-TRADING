@@ -79,7 +79,8 @@ class CircuitBreaker:
         except Exception as e:
             await self._on_failure()
             raise
-        async def _on_success(self) -> None:
+
+    async def _on_success(self) -> None:
         """Handle successful call."""
         async with self._lock:
             self._metrics.successes += 1
