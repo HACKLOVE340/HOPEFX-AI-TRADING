@@ -13,6 +13,7 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -138,6 +139,94 @@ def setup_cors(app: FastAPI):
     )
 
 
+# ------------------------------------------------------------------ #
+#  Background price-streaming loop                                     #
+# ------------------------------------------------------------------ #
+
+_STREAM_SYMBOLS = ["XAUUSD", "EURUSD", "BTCUSD"]
+_STREAM_INTERVAL = 5  # seconds between price polls
+
+# Symbol → yfinance ticker mapping (mirrors api/trading.py)
+_STREAM_SYMBOL_MAP: Dict[str, str] = {
+    "XAUUSD": "GC=F",
+    "EURUSD": "EURUSD=X",
+    "BTCUSD": "BTC-USD",
+}
+
+
+async def _fetch_price(symbol: str) -> Optional[float]:
+    """Fetch the latest price for *symbol* using yfinance (non-blocking via executor)."""
+    ticker = _STREAM_SYMBOL_MAP.get(symbol, symbol)
+
+    def _sync_fetch():
+        try:
+            import yfinance as yf  # imported lazily so app starts without it
+            tk = yf.Ticker(ticker)
+            price = getattr(tk.fast_info, "last_price", None)
+            if price is None:
+                hist = tk.history(period="1d", interval="1m")
+                if not hist.empty:
+                    price = float(hist["Close"].iloc[-1])
+            return float(price) if price is not None else None
+        except Exception:
+            return None
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _sync_fetch)
+
+
+async def _price_stream_loop(ws_manager) -> None:
+    """
+    Continuously fetch live prices and broadcast them via the WebSocket manager.
+
+    Runs as a background asyncio task started during app startup.
+    Each iteration fetches prices for all tracked symbols and broadcasts
+    a ``price`` event on the ``prices:<SYMBOL>`` channel.
+    """
+    logger.info("Price stream loop starting (interval=%ds)", _STREAM_INTERVAL)
+    _prev_prices: Dict[str, float] = {}
+
+    while True:
+        try:
+            for symbol in _STREAM_SYMBOLS:
+                price = await _fetch_price(symbol)
+                if price is None:
+                    continue
+
+                prev = _prev_prices.get(symbol)
+                change = round(price - prev, 5) if prev is not None else 0.0
+                change_pct = round(change / prev * 100, 4) if prev else 0.0
+                _prev_prices[symbol] = price
+
+                spread = round(price * 0.00002, 5)  # synthetic 2-pip spread
+                bid = round(price - spread / 2, 5)
+                ask = round(price + spread / 2, 5)
+
+                await ws_manager.broadcast_price_update(
+                    symbol=symbol,
+                    price=round(price, 5),
+                    bid=bid,
+                    ask=ask,
+                )
+                # Also publish an enriched dict on the general "prices:all" channel
+                await ws_manager.broadcast(
+                    "prices:all",
+                    {
+                        "symbol": symbol,
+                        "price": round(price, 5),
+                        "bid": bid,
+                        "ask": ask,
+                        "change": change,
+                        "change_pct": change_pct,
+                    },
+                    event="price",
+                )
+        except Exception as exc:
+            logger.warning("Price stream error: %s", exc)
+
+        await asyncio.sleep(_STREAM_INTERVAL)
+
+
 # Startup event
 @app.on_event("startup")
 async def startup_event():
@@ -198,6 +287,9 @@ async def startup_event():
             app_state.ws_manager = ws_manager
             logger.info("✓ WebSocket router registered")
             log_activity("WebSocket router registered")
+            # Start background price-streaming task
+            asyncio.create_task(_price_stream_loop(ws_manager))
+            logger.info("✓ Price streaming background task started")
         except Exception as e:
             logger.warning(f"⚠ WebSocket router not available: {e}")
             log_activity(f"WebSocket router unavailable: {e}")
@@ -471,6 +563,7 @@ async def root():
         "health": "/health",
         "status": "/status",
         "paper_trading": "/paper-trading",
+        "stream_dashboard": "/stream",
         "pricing": "/pricing",
         "admin_dashboard": "/admin",
         "component_map": "/api/trading/component-map",
@@ -542,6 +635,33 @@ async def paper_trading_dashboard():
             """,
             status_code=200
         )
+
+
+@app.get("/stream", response_class=HTMLResponse, tags=["Dashboard"])
+async def stream_dashboard():
+    """
+    Live Streaming Dashboard
+
+    Real-time dashboard that streams XAUUSD/EURUSD/BTCUSD prices,
+    trading signals, news, and alerts via WebSocket.
+    """
+    template_path = Path(__file__).parent / "templates" / "stream_dashboard.html"
+    if template_path.exists():
+        with open(template_path, "r") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(
+        content="""
+        <html>
+        <head><title>Live Stream</title></head>
+        <body style="background:#131722;color:#d1d4dc;font-family:sans-serif;padding:40px;text-align:center;">
+            <h1>🔴 Live Stream</h1>
+            <p>Template not found. Please ensure templates/stream_dashboard.html exists.</p>
+            <a href="/docs" style="color:#26a69a;">Go to API Docs</a>
+        </body>
+        </html>
+        """,
+        status_code=200,
+    )
 
 
 # Error handler
