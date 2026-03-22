@@ -6,8 +6,8 @@ Provides copy trading, strategy marketplace, and community features.
 
 from .copy_trading import CopyTradingEngine
 from .marketplace import StrategyMarketplace
-from .profiles import ProfileManager
-from .leaderboards import LeaderboardManager
+from .profiles import TraderProfileManager as ProfileManager
+from .leaderboards import PerformanceLeaderboard as LeaderboardManager
 from .performance import PerformanceTracker
 
 copy_trading_engine = CopyTradingEngine()

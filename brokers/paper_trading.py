@@ -30,18 +30,30 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any] = None, session_factory=None,
+                 user_id: str = "paper", initial_balance: float = None,
+                 commission_per_lot: float = None, slippage_model: str = "gaussian"):
         """
         Initialize paper trading broker.
 
-        Args:
-            config: Configuration with 'initial_balance'
+        Accepts either a config dict or keyword arguments directly.
         """
+        if config is None:
+            config = {}
+        # Allow keyword args to override config dict
+        if initial_balance is not None:
+            config = dict(config)
+            config['initial_balance'] = initial_balance
+        if commission_per_lot is not None:
+            config = dict(config)
+            config['commission_per_lot'] = commission_per_lot
         super().__init__(config)
 
         self.initial_balance = config.get('initial_balance', 10000.0)
         self.balance = self.initial_balance
         self.equity = self.initial_balance
+        self._session_factory = session_factory
+        self._user_id = user_id
 
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
@@ -82,14 +94,21 @@ class PaperTradingBroker(BrokerConnector):
             'NAS100': 18200.0,    # Nasdaq 100
         }
 
-    def connect(self) -> bool:
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.disconnect()
+
+    async def connect(self) -> bool:
         """Connect to paper trading broker (always succeeds)"""
         self.connected = True
         logger.info(f"Connected to {self.name} (Paper Trading)")
         logger.info(f"Initial balance: ${self.initial_balance:,.2f}")
         return True
 
-    def disconnect(self) -> bool:
+    async def disconnect(self) -> bool:
         """Disconnect from paper trading broker"""
         self.connected = False
         logger.info(f"Disconnected from {self.name}")
@@ -175,28 +194,40 @@ class PaperTradingBroker(BrokerConnector):
         """Get order by ID"""
         return self.orders.get(order_id)
 
-    def get_positions(self) -> List[Position]:
-        """Get all open positions"""
-        # Update unrealized P&L for each position
+    def _get_positions_sync(self) -> List[Position]:
+        """Sync helper used internally."""
         positions = []
         for position in self.positions.values():
             current_price = self.market_prices.get(position.symbol, position.entry_price)
-
             if position.side == "LONG":
                 unrealized_pnl = (current_price - position.entry_price) * position.quantity
-            else:  # SHORT
+            else:
                 unrealized_pnl = (position.entry_price - current_price) * position.quantity
-
             position.current_price = current_price
             position.unrealized_pnl = unrealized_pnl
+            if not hasattr(position, "id") or not position.id:
+                position.id = position.symbol
             positions.append(position)
-
         return positions
 
-    def close_position(self, symbol: str) -> bool:
-        """Close a position"""
+    def get_positions(self) -> List[Position]:
+        """Get all open positions."""
+        return self._get_positions_sync()
+
+
+
+    def close_position(self, symbol_or_id: str) -> bool:
+        """Close a position by symbol or position id."""
+        symbol = symbol_or_id
+        if symbol_or_id not in self.positions:
+            for sym, pos in self.positions.items():
+                if getattr(pos, "id", sym) == symbol_or_id:
+                    symbol = sym
+                    break
+            else:
+                logger.warning(f"No open position for {symbol_or_id}")
+                return False
         if symbol not in self.positions:
-            logger.warning(f"No open position for {symbol}")
             return False
 
         position = self.positions[symbol]
@@ -212,6 +243,9 @@ class PaperTradingBroker(BrokerConnector):
         self.balance += pnl
         self.equity = self.balance
 
+        # Persist closed trade to DB
+        self._persist_trade(position, current_price, pnl)
+
         # Remove position
         del self.positions[symbol]
 
@@ -222,23 +256,78 @@ class PaperTradingBroker(BrokerConnector):
 
         return True
 
-    def get_account_info(self) -> AccountInfo:
-        """Get account information"""
-        # Calculate total unrealized P&L
-        total_unrealized = sum(
-            p.unrealized_pnl for p in self.get_positions()
-        )
+    def _persist_trade(self, position: "Position", exit_price: float, realized_pnl: float) -> None:
+        """Write a closed trade record to the DB trades table."""
+        if not self._session_factory:
+            return
+        try:
+            from database.models import Trade, OrderSide, TradeStatus
+            # Normalise side to OrderSide enum
+            raw_side = str(position.side).lower().replace("orderside.", "").replace("long", "buy").replace("short", "sell")
+            side_enum = OrderSide.BUY if "buy" in raw_side or "long" in raw_side else OrderSide.SELL
 
+            trade = Trade(
+                trade_id=str(uuid.uuid4()),
+                symbol=position.symbol,
+                side=side_enum,
+                entry_price=float(position.entry_price),
+                entry_quantity=float(position.quantity),
+                exit_price=float(exit_price),
+                exit_quantity=float(position.quantity),
+                realized_pnl=float(realized_pnl),
+                total_pnl=float(realized_pnl),
+                commission=0.0,
+                status=TradeStatus.CLOSED,
+                is_open=False,
+                strategy=getattr(position, "strategy", "paper"),
+                entry_time=getattr(position, "entry_time", datetime.now(timezone.utc)),
+                exit_time=datetime.now(timezone.utc),
+            )
+            with self._session_factory() as session:
+                session.add(trade)
+                session.commit()
+            logger.debug("Trade persisted: %s %s pnl=%.2f", position.symbol, position.side, realized_pnl)
+        except Exception as exc:
+            logger.warning("Failed to persist trade to DB: %s", exc)
+
+    def _get_account_info_sync(self) -> AccountInfo:
+        """Sync helper — returns AccountInfo dataclass."""
+        total_unrealized = sum(p.unrealized_pnl for p in self._get_positions_sync())
         equity = self.balance + total_unrealized
-
         return AccountInfo(
             balance=self.balance,
             equity=equity,
-            margin_used=0.0,  # Not used in paper trading
+            margin_used=0.0,
             margin_available=equity,
             positions_count=len(self.positions),
             timestamp=datetime.now(timezone.utc),
         )
+
+    def get_account_info(self) -> "AccountInfo":
+        """Get account information."""
+        return self._get_account_info_sync()
+
+    def set_price_feed(self, price_engine) -> None:
+        """Attach a price feed / engine for live price updates."""
+        self._price_feed = price_engine
+
+    async def place_market_order(self, symbol: str, side: str, quantity: float):
+        """Async market order — delegates to sync place_order."""
+        from .base import OrderSide as _OS, OrderType as _OT
+        side_enum = _OS.BUY if str(side).lower() in ("buy", "long") else _OS.SELL
+        return self.place_order(symbol=symbol, side=side_enum,
+                                order_type=_OT.MARKET, quantity=quantity)
+
+    async def close_all_positions(self) -> int:
+        """Close all open positions. Returns number closed."""
+        closed = 0
+        for symbol in list(self.positions.keys()):
+            try:
+                if self.close_position(symbol):
+                    closed += 1
+            except Exception as exc:
+                logger.warning("Failed to close position %s: %s", symbol, exc)
+        return closed
 
     def get_market_data(
         self,

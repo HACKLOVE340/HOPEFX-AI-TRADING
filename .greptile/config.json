@@ -1,0 +1,10 @@
+{
+  "strictness": 3,
+  "commentTypes": ["logic", "security", "performance"],
+  "model": "gpt-5-codex",
+  "reviewTriggers": {
+    "branches": ["main", "master"],
+    "enabledLabels": ["ready-for-audit"]
+  },
+  "autoLabel": true
+}

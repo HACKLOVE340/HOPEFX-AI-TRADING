@@ -30,11 +30,12 @@ class OrderSide(Enum):
 
 class OrderStatus(Enum):
     """Order status"""
-    PENDING = "PENDING"
-    OPEN = "OPEN"
-    FILLED = "FILLED"
-    CANCELLED = "CANCELLED"
-    REJECTED = "REJECTED"
+    PENDING = "pending"
+    OPEN = "open"
+    FILLED = "filled"
+    PARTIAL = "partial"
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
 
 
 @dataclass
@@ -53,6 +54,11 @@ class Order:
     timestamp: Optional[datetime] = None
     metadata: Optional[Dict[str, Any]] = None
 
+    @property
+    def average_fill_price(self) -> Optional[float]:
+        """Alias for average_price."""
+        return self.average_price
+
 
 @dataclass
 class Position:
@@ -65,6 +71,7 @@ class Position:
     unrealized_pnl: float
     realized_pnl: float = 0.0
     timestamp: Optional[datetime] = None
+    id: str = ""  # position identifier (defaults to symbol if empty)
 
 
 @dataclass
@@ -76,6 +83,12 @@ class AccountInfo:
     margin_available: float
     positions_count: int
     timestamp: Optional[datetime] = None
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
+    def get(self, key: str, default=None):
+        return getattr(self, key, default)
 
 
 class BrokerConnector(ABC):

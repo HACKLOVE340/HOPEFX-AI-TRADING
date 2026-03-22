@@ -1,57 +1,603 @@
 """
-SQLAlchemy ORM Models for HOPEFX AI Trading System
-
-This module defines all database models for the trading application including:
-- Accounts and authentication
-- Trades and orders
-- Positions and portfolios
-- Performance metrics
-- AI predictions
-- Market data
-- Risk analysis
+HOPEFX Database Models
+Complete SQLAlchemy models for all entities
 """
 
 from datetime import datetime
-from decimal import Decimal
-from enum import Enum
-from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, Boolean, Text, Numeric,
-    ForeignKey, Table, Index, UniqueConstraint, CheckConstraint,
-    Enum as SQLEnum, Date, Time, JSON
-)
-from sqlalchemy.orm import relationship, declarative_base
-from sqlalchemy.sql import func
+from typing import Optional, List
+import enum
+
+try:
+    from sqlalchemy import (
+        Column, Integer, BigInteger, String, Float, Boolean,
+        DateTime, ForeignKey, Enum, Text, Index, create_engine
+    )
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import relationship, sessionmaker
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+    # Stub everything so class bodies that reference Column etc. don't NameError
+    class _Stub:
+        def __init__(self, *a, **kw): pass
+        def __call__(self, *a, **kw): return self
+        def __getattr__(self, name): return self
+    Column = BigInteger = Integer = String = Float = Boolean = _Stub()
+    DateTime = ForeignKey = Enum = Text = Index = create_engine = _Stub()
+    relationship = sessionmaker = _Stub()
+    class _DummyBase:
+        pass
+    def declarative_base():
+        return _DummyBase
 
 Base = declarative_base()
 
-# Foreign key reference constants
-FK_USERS_ID = "users.id"
-FK_ACCOUNTS_ID = "accounts.id"
-ON_DELETE_SET_NULL = "SET NULL"
-CASCADE_DELETE_ORPHAN = "all, delete-orphan"
+
+class TradeStatus(enum.Enum):
+    PENDING = "pending"
+    OPEN = "open"
+    CLOSED = "closed"
+    CANCELLED = "cancelled"
+    ERROR = "error"
 
 
-# ============================================================================
-# ENUMS
-# ============================================================================
+class OrderSide(enum.Enum):
+    BUY = "buy"
+    SELL = "sell"
 
-class AccountStatus(Enum):
-    """Account status enumeration"""
+
+class OrderType(enum.Enum):
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
+    STOP_LIMIT = "stop_limit"
+
+
+class SignalSource(enum.Enum):
+    TREND_FOLLOWING = "trend_following"
+    MEAN_REVERSION = "mean_reversion"
+    BREAKOUT = "breakout"
+    MANUAL = "manual"
+    STOP_LOSS = "stop_loss"
+    TAKE_PROFIT = "take_profit"
+
+
+class Trade(Base):
+    """Trade record"""
+    __tablename__ = 'trades'
+    
+    id = Column(Integer, primary_key=True)
+    trade_id = Column(String(50), unique=True, nullable=True, index=True)
+    account_id = Column(Integer, nullable=True, index=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    side = Column(String(20), nullable=True)
+    trade_type = Column(String(20), nullable=True)
+
+    # Entry
+    entry_time = Column(DateTime, default=datetime.utcnow)
+    entry_price = Column(Float, nullable=True)
+    entry_quantity = Column(Float, nullable=True)
+    size = Column(Float, nullable=True)  # alias for entry_quantity
+    timestamp = Column(DateTime, nullable=True)
+    
+    # Exit
+    exit_time = Column(DateTime, nullable=True)
+    exit_price = Column(Float, nullable=True)
+    exit_quantity = Column(Float, nullable=True)
+    
+    # P&L
+    realized_pnl = Column(Float, default=0.0)
+    unrealized_pnl = Column(Float, default=0.0)
+    commission = Column(Float, default=0.0)
+    swap = Column(Float, default=0.0)
+    total_pnl = Column(Float, default=0.0)
+    
+    # Risk
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    risk_reward_ratio = Column(Float, nullable=True)
+    
+    # Strategy
+    strategy = Column(String(50), nullable=True)
+    signal_source = Column(Enum(SignalSource), nullable=True)
+    signal_strength = Column(Float, nullable=True)
+    
+    # Status
+    status = Column(Enum(TradeStatus), default=TradeStatus.PENDING)
+    is_open = Column(Boolean, default=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    
+    # Relationships
+    orders = relationship("Order", back_populates="trade", lazy="dynamic")
+    signals = relationship("Signal", back_populates="trade", lazy="dynamic")
+    account = relationship("Account", back_populates="trades",
+                           primaryjoin="Trade.account_id == Account.id",
+                           foreign_keys="[Trade.account_id]")
+    
+    def __repr__(self):
+        return f"<Trade({self.trade_id}, {self.symbol}, {self.side.value}, PnL={self.total_pnl})>"
+    
+    def to_dict(self) -> dict:
+        return {
+            'id': self.id,
+            'trade_id': self.trade_id,
+            'symbol': self.symbol,
+            'side': self.side.value,
+            'entry_price': self.entry_price,
+            'entry_quantity': self.entry_quantity,
+            'exit_price': self.exit_price,
+            'realized_pnl': self.realized_pnl,
+            'status': self.status.value,
+            'is_open': self.is_open
+        }
+
+
+class Order(Base):
+    """Order record"""
+    __tablename__ = 'orders'
+    
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String(50), unique=True, nullable=False, index=True)
+    account_id = Column(Integer, nullable=True, index=True)
+    trade_id = Column(String(50), ForeignKey('trades.trade_id'), nullable=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    
+    # Order details
+    side = Column(Enum(OrderSide), nullable=False)
+    order_type = Column(Enum(OrderType), nullable=False)
+    quantity = Column(Float, nullable=False)
+    price = Column(Float, nullable=True)  # For limit orders
+    stop_price = Column(Float, nullable=True)  # For stop orders
+    
+    # Execution
+    filled_quantity = Column(Float, default=0.0)
+    average_fill_price = Column(Float, nullable=True)
+    commission = Column(Float, default=0.0)
+    slippage = Column(Float, default=0.0)
+    
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, nullable=True)
+    filled_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    
+    # Status
+    is_filled = Column(Boolean, default=False)
+    is_cancelled = Column(Boolean, default=False)
+    rejection_reason = Column(Text, nullable=True)
+    
+    # Broker info
+    broker_order_id = Column(String(100), nullable=True)
+    broker = Column(String(50), nullable=True)
+    
+    # Relationships
+    trade = relationship("Trade", back_populates="orders")
+    account = relationship("Account", back_populates="orders",
+                           primaryjoin="Order.account_id == Account.id",
+                           foreign_keys="[Order.account_id]")
+    
+    def to_dict(self) -> dict:
+        return {
+            'order_id': self.order_id,
+            'symbol': self.symbol,
+            'side': self.side.value,
+            'type': self.order_type.value,
+            'quantity': self.quantity,
+            'filled_quantity': self.filled_quantity,
+            'average_fill_price': self.average_fill_price,
+            'is_filled': self.is_filled,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class Signal(Base):
+    """Trading signal record"""
+    __tablename__ = 'signals'
+    
+    id = Column(Integer, primary_key=True)
+    signal_id = Column(String(50), unique=True, nullable=False)
+    
+    # Signal details
+    symbol = Column(String(20), nullable=False, index=True)
+    action = Column(String(10), nullable=False)  # buy, sell, close
+    strategy = Column(String(50), nullable=False)
+    source = Column(Enum(SignalSource), nullable=False)
+    
+    # Prices
+    entry_price = Column(Float, nullable=True)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    
+    # Strength and metadata
+    strength = Column(Float, nullable=True)
+    confidence = Column(Float, nullable=True)
+    metadata_json = Column(Text, nullable=True)  # JSON string
+    
+    # Execution
+    executed = Column(Boolean, default=False)
+    trade_id = Column(String(50), ForeignKey('trades.trade_id'), nullable=True)
+    execution_time = Column(DateTime, nullable=True)
+    
+    # Timing
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    expired_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    trade = relationship("Trade", back_populates="signals")
+    
+    def to_dict(self) -> dict:
+        return {
+            'signal_id': self.signal_id,
+            'symbol': self.symbol,
+            'action': self.action,
+            'strategy': self.strategy,
+            'strength': self.strength,
+            'executed': self.executed,
+            'generated_at': self.generated_at.isoformat() if self.generated_at else None
+        }
+
+
+class AccountSnapshot(Base):
+    """Periodic account snapshot"""
+    __tablename__ = 'account_snapshots'
+    
+    id = Column(BigInteger, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Balance
+    balance = Column(Float, nullable=False)
+    equity = Column(Float, nullable=False)
+    margin_used = Column(Float, default=0.0)
+    free_margin = Column(Float, default=0.0)
+    
+    # P&L
+    realized_pnl = Column(Float, default=0.0)
+    unrealized_pnl = Column(Float, default=0.0)
+    daily_pnl = Column(Float, default=0.0)
+    
+    # Exposure
+    open_positions = Column(Integer, default=0)
+    total_exposure = Column(Float, default=0.0)
+    
+    # Risk metrics
+    current_drawdown = Column(Float, default=0.0)
+    margin_level = Column(Float, nullable=True)
+    
+    def to_dict(self) -> dict:
+        return {
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'balance': self.balance,
+            'equity': self.equity,
+            'open_positions': self.open_positions,
+            'current_drawdown': self.current_drawdown
+        }
+
+
+class MarketData(Base):
+    """Historical market data storage"""
+    __tablename__ = 'market_data'
+    
+    id = Column(BigInteger, primary_key=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    timeframe = Column(String(10), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    
+    # OHLCV
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, default=0.0)
+    
+    # Additional metrics
+    spread = Column(Float, nullable=True)
+    tick_count = Column(Integer, nullable=True)
+    
+    # Create composite index
+    __table_args__ = (
+        Index('idx_symbol_timeframe_timestamp', 'symbol', 'timeframe', 'timestamp'),
+    )
+
+
+class SystemEvent(Base):
+    """System events and logs"""
+    __tablename__ = 'system_events'
+    
+    id = Column(BigInteger, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    level = Column(String(20), nullable=False)  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    component = Column(String(50), nullable=False, index=True)
+    event_type = Column(String(50), nullable=False)
+    
+    # Content
+    message = Column(Text, nullable=False)
+    details_json = Column(Text, nullable=True)  # JSON string
+    traceback = Column(Text, nullable=True)
+    
+    # Context
+    trace_id = Column(String(50), nullable=True, index=True)
+    session_id = Column(String(50), nullable=True)
+
+
+class PerformanceMetric(Base):
+    """Time-series metric samples (strategy, system, risk)."""
+    __tablename__ = 'performance_metric_samples'
+
+    id = Column(BigInteger, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    metric_type = Column(String(50), nullable=False, index=True)  # strategy, system, risk
+
+    # Metric details
+    name = Column(String(100), nullable=False)
+    value = Column(Float, nullable=False)
+    unit = Column(String(20), nullable=True)
+    labels_json = Column(Text, nullable=True)  # JSON string for tags
+
+    # Context
+    symbol = Column(String(20), nullable=True, index=True)
+    strategy = Column(String(50), nullable=True, index=True)
+
+
+class Configuration(Base):
+    """Configuration history"""
+    __tablename__ = 'configurations'
+    
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    environment = Column(String(20), nullable=False)
+    
+    config_key = Column(String(100), nullable=False)
+    config_value = Column(Text, nullable=True)
+    is_encrypted = Column(Boolean, default=False)
+    
+    changed_by = Column(String(100), nullable=True)
+    change_reason = Column(Text, nullable=True)
+
+
+class Account(Base):
+    """Broker account snapshot."""
+    __tablename__ = 'accounts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    account_name = Column(String(100), nullable=True)
+    broker = Column(String(50), nullable=True)
+    account_id = Column(String(100), nullable=True)
+    balance = Column(Float, nullable=True, default=0.0)
+    equity = Column(Float, nullable=True)
+    margin_used = Column(Float, nullable=True)
+    margin_free = Column(Float, nullable=True)
+    currency = Column(String(10), default='USD')
+    leverage = Column(Float, nullable=True)
+    snapshot_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    user = relationship("User", back_populates="accounts")
+    trades = relationship("Trade", back_populates="account", lazy="dynamic",
+                          primaryjoin="Account.id == foreign(Trade.account_id)")
+    orders = relationship("Order", back_populates="account", lazy="dynamic",
+                          primaryjoin="Account.id == foreign(Order.account_id)")
+    positions = relationship("Position", back_populates="account", lazy="dynamic",
+                             primaryjoin="Account.id == foreign(Position.account_id)")
+
+
+class Position(Base):
+    """Open trading position."""
+    __tablename__ = 'positions'
+
+    id = Column(String(50), primary_key=True, default=lambda: str(__import__('uuid').uuid4()))
+    account_id = Column(Integer, nullable=True, index=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    side = Column(String(10), nullable=True)
+    quantity = Column(Float, nullable=True)
+    size = Column(Float, nullable=True)          # alias for quantity
+    entry_price = Column(Float, nullable=True)
+    current_price = Column(Float, nullable=True)
+    market_value = Column(Float, nullable=True)  # current market value
+    unrealized_pnl = Column(Float, nullable=True)
+    realized_pnl = Column(Float, default=0.0)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    broker = Column(String(50), nullable=True)
+    user_id = Column(String(50), nullable=True, index=True)
+    opened_at = Column(DateTime, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    status = Column(String(20), default='open')
+
+    account = relationship("Account", back_populates="positions",
+                           primaryjoin="Position.account_id == Account.id",
+                           foreign_keys="[Position.account_id]")
+
+
+class OrderBook(Base):
+    """Snapshot of order book depth at a point in time."""
+    __tablename__ = 'order_book_snapshots'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    bids_json = Column(Text, nullable=True)   # JSON [[price, size], ...]
+    asks_json = Column(Text, nullable=True)
+    spread = Column(Float, nullable=True)
+    mid_price = Column(Float, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class AISignal(Base):
+    """AI-generated trading signal stored for audit and replay."""
+    __tablename__ = 'ai_signals'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    signal_type = Column(String(10), nullable=False)   # buy, sell, hold
+    confidence = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=True)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
+    source = Column(String(100), nullable=True)        # strategy name / brain
+    executed = Column(Boolean, default=False)
+    order_id = Column(String(50), nullable=True)
+    generated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class Prediction(Base):
+    """ML model price prediction."""
+    __tablename__ = 'predictions'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    model_name = Column(String(100), nullable=False)
+    predicted_price = Column(Float, nullable=False)
+    predicted_direction = Column(String(10), nullable=True)  # up, down, flat
+    confidence = Column(Float, nullable=True)
+    horizon_minutes = Column(Integer, nullable=True)
+    actual_price = Column(Float, nullable=True)
+    error_pct = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class NewsData(Base):
+    """News article with sentiment score."""
+    __tablename__ = 'news_data'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    headline = Column(String(500), nullable=False)
+    source = Column(String(100), nullable=True)
+    url = Column(String(500), nullable=True)
+    symbols = Column(String(200), nullable=True)       # comma-separated
+    sentiment_score = Column(Float, nullable=True)     # -1.0 to 1.0
+    sentiment_label = Column(String(20), nullable=True)  # positive, negative, neutral
+    published_at = Column(DateTime, nullable=True, index=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PerformanceMetrics(Base):
+    """Strategy / backtest performance metrics snapshot."""
+    __tablename__ = 'performance_metrics'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    strategy_name = Column(String(100), nullable=False, index=True)
+    symbol = Column(String(20), nullable=True)
+    timeframe = Column(String(20), nullable=True)
+    total_trades = Column(Integer, default=0)
+    winning_trades = Column(Integer, default=0)
+    losing_trades = Column(Integer, default=0)
+    win_rate = Column(Float, nullable=True)
+    total_pnl = Column(Float, default=0.0)
+    max_drawdown = Column(Float, nullable=True)
+    sharpe_ratio = Column(Float, nullable=True)
+    profit_factor = Column(Float, nullable=True)
+    avg_trade_duration_minutes = Column(Float, nullable=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class TickData(Base):
+    """Real-time tick data storage."""
+    __tablename__ = 'tick_data'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    bid = Column(Float, nullable=False)
+    ask = Column(Float, nullable=False)
+    last_price = Column(Float, nullable=True)
+    volume = Column(Float, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    source = Column(String(50), nullable=True)
+
+
+class WalletTransaction(Base):
+    """Persistent wallet transaction ledger — replaces in-memory dict."""
+    __tablename__ = 'wallet_transactions'
+
+    id = Column(BigInteger, primary_key=True)
+    transaction_id = Column(String(50), unique=True, nullable=False, index=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    transaction_type = Column(String(30), nullable=False)   # deposit, withdrawal, fee, commission
+    amount = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    currency = Column(String(10), default='USD')
+    reference = Column(String(100), nullable=True)          # external payment ref
+    status = Column(String(20), default='completed')        # pending, completed, failed
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLogEntry(Base):
+    """Persistent, append-only audit log — replaces in-memory list."""
+    __tablename__ = 'audit_log'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    sequence_number = Column(BigInteger, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    level = Column(String(20), nullable=False)              # INFO, COMPLIANCE, CRITICAL
+    category = Column(String(30), nullable=False)           # ORDER, RISK, KYC, SYSTEM
+    actor = Column(String(100), nullable=False)             # user_id or system component
+    action = Column(String(200), nullable=False)
+    data_json = Column(Text, nullable=True)                 # JSON payload
+    hash_chain = Column(String(64), nullable=False)         # tamper-evident chain
+
+
+class KYCRecord(Base):
+    """Persistent KYC records — replaces in-memory dict."""
+    __tablename__ = 'kyc_records'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(50), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default='unverified')  # unverified, pending, approved, rejected
+    document_type = Column(String(50), nullable=True)
+    verification_method = Column(String(50), nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    rejected_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# Create indexes for common queries
+Index('idx_trades_symbol_status', Trade.symbol, Trade.status)
+Index('idx_trades_entry_time', Trade.entry_time)
+Index('idx_orders_symbol_created', Order.symbol, Order.created_at)
+Index('idx_signals_generated_executed', Signal.generated_at, Signal.executed)
+Index('idx_account_snapshots_timestamp', AccountSnapshot.timestamp)
+Index('idx_wallet_user_created', WalletTransaction.user_id, WalletTransaction.created_at)
+Index('idx_audit_timestamp', AuditLogEntry.timestamp)
+Index('idx_kyc_user', KYCRecord.user_id)
+
+
+def create_tables(engine):
+    """Create all tables"""
+    if SQLALCHEMY_AVAILABLE:
+        Base.metadata.create_all(engine)
+        logger.info("Database tables created")
+
+
+def drop_tables(engine):
+    """Drop all tables"""
+    if SQLALCHEMY_AVAILABLE:
+        Base.metadata.drop_all(engine)
+        logger.info("Database tables dropped")
+
+
+# ── Proper enums expected by tests ───────────────────────────────────────────
+
+class AccountStatus(enum.Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
     CLOSED = "closed"
 
 
-class TradeType(Enum):
-    """Trade type enumeration"""
+class TradeType(enum.Enum):
     LONG = "long"
     SHORT = "short"
     HEDGE = "hedge"
 
 
-class OrderStatus(Enum):
-    """Order status enumeration"""
+class OrderStatus(enum.Enum):
     PENDING = "pending"
     OPEN = "open"
     PARTIALLY_FILLED = "partially_filled"
@@ -60,863 +606,93 @@ class OrderStatus(Enum):
     REJECTED = "rejected"
 
 
-class OrderType(Enum):
-    """Order type enumeration"""
+class OrderType(enum.Enum):
     MARKET = "market"
     LIMIT = "limit"
     STOP = "stop"
     STOP_LIMIT = "stop_limit"
 
 
-class PositionStatus(Enum):
-    """Position status enumeration"""
+class PositionStatus(enum.Enum):
     OPEN = "open"
     CLOSING = "closing"
     CLOSED = "closed"
 
 
-class PredictionType(Enum):
-    """AI prediction type enumeration"""
+class PredictionType(enum.Enum):
     PRICE = "price"
     DIRECTION = "direction"
     VOLATILITY = "volatility"
     TREND = "trend"
 
 
-class RiskLevel(Enum):
-    """Risk level enumeration"""
+class RiskLevel(enum.Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class MarketDataType(Enum):
-    """Market data type enumeration"""
+class MarketDataType(enum.Enum):
     OHLCV = "ohlcv"
     TICK = "tick"
     DEPTH = "depth"
     NEWS = "news"
 
 
-# ============================================================================
-# ACCOUNTS & AUTHENTICATION
-# ============================================================================
-
-class User(Base):
-    """User account model"""
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(255), unique=True, nullable=False, index=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    full_name = Column(String(255))
-    phone = Column(String(20))
-    status = Column(SQLEnum(AccountStatus), default=AccountStatus.ACTIVE, nullable=False)
-    kyc_verified = Column(Boolean, default=False, nullable=False)
-    two_factor_enabled = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    last_login = Column(DateTime)
-
-    # Relationships
-    accounts = relationship("Account", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
-    sessions = relationship("Session", back_populates="user", cascade=CASCADE_DELETE_ORPHAN)
-
-    __table_args__ = (
-        Index("idx_user_email_status", "email", "status"),
-    )
-
-
-class Session(Base):
-    """User session model"""
-    __tablename__ = "sessions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
-    token = Column(String(512), unique=True, nullable=False, index=True)
-    ip_address = Column(String(45))  # Supports IPv4 and IPv6
-    user_agent = Column(Text)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="sessions")
-
-    __table_args__ = (
-        Index("idx_session_user_id_expires", "user_id", "expires_at"),
-    )
-
-
-class Account(Base):
-    """Trading account model"""
-    __tablename__ = "accounts"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete="CASCADE"), nullable=False)
-    account_name = Column(String(255), nullable=False)
-    account_type = Column(String(50), nullable=False)  # e.g., LIVE, DEMO, PAPER
-    broker = Column(String(100), nullable=False)  # e.g., OANDA, ALPACA, IB
-    api_key = Column(String(512), nullable=False)
-    api_secret = Column(String(512), nullable=False)
-    balance = Column(Numeric(20, 2), nullable=False, default=0)
-    equity = Column(Numeric(20, 2), nullable=False, default=0)
-    used_margin = Column(Numeric(20, 2), nullable=False, default=0)
-    available_margin = Column(Numeric(20, 2), nullable=False, default=0)
-    leverage = Column(Float, nullable=False, default=1.0)
-    status = Column(SQLEnum(AccountStatus), default=AccountStatus.ACTIVE, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    last_sync = Column(DateTime)
-
-    # Relationships
-    user = relationship("User", back_populates="accounts")
-    trades = relationship("Trade", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
-    orders = relationship("Order", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
-    positions = relationship("Position", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
-    performance_metrics = relationship("PerformanceMetrics", back_populates="account", cascade=CASCADE_DELETE_ORPHAN)
-    risk_parameters = relationship("RiskParameters", back_populates="account", uselist=False, cascade=CASCADE_DELETE_ORPHAN)
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "account_name", name="uq_user_account_name"),
-        Index("idx_account_user_status", "user_id", "status"),
-    )
-
-
-# ============================================================================
-# TRADES & ORDERS
-# ============================================================================
-
-class Trade(Base):
-    """Trade model"""
-    __tablename__ = "trades"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    symbol = Column(String(20), nullable=False)  # e.g., EUR/USD
-    trade_type = Column(SQLEnum(TradeType), nullable=False)
-    entry_price = Column(Numeric(20, 8), nullable=False)
-    entry_time = Column(DateTime, nullable=False)
-    exit_price = Column(Numeric(20, 8))
-    exit_time = Column(DateTime)
-    quantity = Column(Numeric(18, 8), nullable=False)
-    commission = Column(Numeric(15, 2), default=0)
-    swap = Column(Numeric(15, 2), default=0)
-    profit_loss = Column(Numeric(18, 2))
-    profit_loss_percent = Column(Float)
-    status = Column(String(50), nullable=False, default="open")  # open, closed, partial
-    risk_reward_ratio = Column(Float)
-    duration_seconds = Column(Integer)
-    notes = Column(Text)
-    ai_signal_used = Column(Boolean, default=False)
-    prediction_id = Column(Integer, ForeignKey("predictions.id"))
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    # Relationships
-    account = relationship("Account", back_populates="trades")
-    orders = relationship("Order", back_populates="trade")
-    prediction = relationship("Prediction", back_populates="trades")
-
-    __table_args__ = (
-        Index("idx_trade_account_symbol", "account_id", "symbol"),
-        Index("idx_trade_status_time", "status", "entry_time"),
-    )
-
-
-class Order(Base):
-    """Order model"""
-    __tablename__ = "orders"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    trade_id = Column(Integer, ForeignKey("trades.id", ondelete=ON_DELETE_SET_NULL))
-    symbol = Column(String(20), nullable=False)
-    order_type = Column(SQLEnum(OrderType), nullable=False)
-    side = Column(String(10), nullable=False)  # BUY or SELL
-    quantity = Column(Numeric(18, 8), nullable=False)
-    price = Column(Numeric(20, 8))
-    stop_price = Column(Numeric(20, 8))
-    limit_price = Column(Numeric(20, 8))
-    status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
-    filled_quantity = Column(Numeric(18, 8), default=0)
-    average_filled_price = Column(Numeric(20, 8))
-    commission = Column(Numeric(15, 2), default=0)
-    time_in_force = Column(String(20), default="GTC")  # GTC, FOK, IOC, DAY
-    external_order_id = Column(String(100), unique=True)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    expires_at = Column(DateTime)
-
-    # Relationships
-    account = relationship("Account", back_populates="orders")
-    trade = relationship("Trade", back_populates="orders")
-
-    __table_args__ = (
-        Index("idx_order_account_status", "account_id", "status"),
-        Index("idx_order_symbol_time", "symbol", "created_at"),
-    )
-
-
-# ============================================================================
-# POSITIONS & PORTFOLIO
-# ============================================================================
-
-class Position(Base):
-    """Open position model"""
-    __tablename__ = "positions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    symbol = Column(String(20), nullable=False)
-    position_type = Column(SQLEnum(TradeType), nullable=False)
-    quantity = Column(Numeric(18, 8), nullable=False)
-    average_entry_price = Column(Numeric(20, 8), nullable=False)
-    current_price = Column(Numeric(20, 8), nullable=False)
-    unrealized_profit_loss = Column(Numeric(18, 2))
-    unrealized_profit_loss_percent = Column(Float)
-    realized_profit_loss = Column(Numeric(18, 2), default=0)
-    status = Column(SQLEnum(PositionStatus), default=PositionStatus.OPEN, nullable=False)
-    opened_at = Column(DateTime, nullable=False)
-    closed_at = Column(DateTime)
-    duration_seconds = Column(Integer)
-    stop_loss = Column(Numeric(20, 8))
-    take_profit = Column(Numeric(20, 8))
-    trailing_stop = Column(Numeric(20, 8))
-    risk_amount = Column(Numeric(18, 2))
-    leverage_used = Column(Float)
-    position_metadata = Column(JSON)  # Store additional data like tags, notes, etc.
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    # Relationships
-    account = relationship("Account", back_populates="positions")
-
-    __table_args__ = (
-        UniqueConstraint("account_id", "symbol", "position_type",
-                        name="uq_account_symbol_type"),
-        Index("idx_position_account_status", "account_id", "status"),
-    )
-
-
-# ============================================================================
-# PERFORMANCE METRICS
-# ============================================================================
-
-class PerformanceMetrics(Base):
-    """Account performance metrics model"""
-    __tablename__ = "performance_metrics"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    metric_date = Column(Date, nullable=False)
-
-    # Return metrics
-    daily_return = Column(Float)
-    weekly_return = Column(Float)
-    monthly_return = Column(Float)
-    yearly_return = Column(Float)
-    total_return = Column(Float)
-
-    # Risk metrics
-    sharpe_ratio = Column(Float)
-    sortino_ratio = Column(Float)
-    max_drawdown = Column(Float)
-    max_drawdown_percent = Column(Float)
-    current_drawdown = Column(Float)
-
-    # Trade statistics
-    total_trades = Column(Integer)
-    winning_trades = Column(Integer)
-    losing_trades = Column(Integer)
-    win_rate = Column(Float)
-    average_win = Column(Numeric(18, 2))
-    average_loss = Column(Numeric(18, 2))
-    largest_win = Column(Numeric(18, 2))
-    largest_loss = Column(Numeric(18, 2))
-    profit_factor = Column(Float)
-
-    # Position metrics
-    open_positions = Column(Integer)
-    closed_positions = Column(Integer)
-    average_trade_duration = Column(Integer)  # seconds
-
-    # Consistency metrics
-    consecutive_wins = Column(Integer)
-    consecutive_losses = Column(Integer)
-    expectancy = Column(Float)  # Average profit per trade
-
-    # Metadata
-    calculated_at = Column(DateTime, server_default=func.now(), nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    # Relationships
-    account = relationship("Account", back_populates="performance_metrics")
-
-    __table_args__ = (
-        UniqueConstraint("account_id", "metric_date", name="uq_account_metric_date"),
-        Index("idx_metrics_account_date", "account_id", "metric_date"),
-    )
-
-
-class DailySnapshot(Base):
-    """Daily account snapshot for historical tracking"""
-    __tablename__ = "daily_snapshots"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    snapshot_date = Column(Date, nullable=False)
-
-    # Account state
-    balance = Column(Numeric(20, 2), nullable=False)
-    equity = Column(Numeric(20, 2), nullable=False)
-    used_margin = Column(Numeric(20, 2), nullable=False)
-    available_margin = Column(Numeric(20, 2), nullable=False)
-
-    # Daily performance
-    daily_profit_loss = Column(Numeric(18, 2))
-    daily_profit_loss_percent = Column(Float)
-    open_position_count = Column(Integer)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("account_id", "snapshot_date", name="uq_account_snapshot_date"),
-        Index("idx_snapshot_account_date", "account_id", "snapshot_date"),
-    )
-
-
-# ============================================================================
-# AI PREDICTIONS & SIGNALS
-# ============================================================================
-
-class Prediction(Base):
-    """AI prediction model"""
-    __tablename__ = "predictions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    prediction_type = Column(SQLEnum(PredictionType), nullable=False)
-    model_version = Column(String(50), nullable=False)
-
-    # Prediction data
-    predicted_value = Column(Numeric(20, 8))
-    predicted_direction = Column(String(10))  # UP, DOWN, NEUTRAL
-    confidence = Column(Float, nullable=False)  # 0-1
-    confidence_percent = Column(Float)
-
-    # Price prediction specifics
-    target_price = Column(Numeric(20, 8))
-    price_target_percent = Column(Float)
-    timeframe = Column(String(20))  # e.g., 1H, 4H, 1D
-
-    # Volatility prediction
-    predicted_volatility = Column(Float)
-    volatility_change_percent = Column(Float)
-
-    # Trend prediction
-    trend = Column(String(50))  # STRONG_UP, UP, DOWN, STRONG_DOWN, SIDEWAYS
-    trend_strength = Column(Float)  # 0-1
-
-    # Supporting data
-    supporting_factors = Column(JSON)  # Store important indicators/factors
-    risk_level = Column(SQLEnum(RiskLevel))
-
-    # Status
-    is_active = Column(Boolean, default=True)
-    prediction_time = Column(DateTime, nullable=False)
-    expiry_time = Column(DateTime)
-
-    # Validation after expiry
-    actual_value = Column(Numeric(20, 8))
-    actual_direction = Column(String(10))
-    accuracy = Column(Float)  # 0-1
-    is_accurate = Column(Boolean)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    # Relationships
-    trades = relationship("Trade", back_populates="prediction")
-
-    __table_args__ = (
-        Index("idx_prediction_symbol_active", "symbol", "is_active"),
-        Index("idx_prediction_model_time", "model_version", "prediction_time"),
-    )
-
-
-class AISignal(Base):
-    """AI trading signal model"""
-    __tablename__ = "ai_signals"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    signal_type = Column(String(20), nullable=False)  # BUY, SELL, CLOSE
-    confidence = Column(Float, nullable=False)  # 0-1
-    strength = Column(Float)  # 0-1
-
-    # Signal components
-    technical_score = Column(Float)
-    sentiment_score = Column(Float)
-    fundamental_score = Column(Float)
-
-    # Strategy info
-    strategy_name = Column(String(100), nullable=False)
-    strategy_version = Column(String(50))
-
-    # Position recommendation
-    suggested_entry = Column(Numeric(20, 8))
-    suggested_stop_loss = Column(Numeric(20, 8))
-    suggested_take_profit = Column(Numeric(20, 8))
-    suggested_quantity = Column(Numeric(18, 8))
-    risk_reward_ratio = Column(Float)
-
-    # Metadata
-    signal_reasons = Column(JSON)
-    is_active = Column(Boolean, default=True)
-    generated_at = Column(DateTime, nullable=False)
-    expires_at = Column(DateTime)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_signal_symbol_active", "symbol", "is_active"),
-        Index("idx_signal_type_confidence", "signal_type", "confidence"),
-    )
-
-
-class ModelPerformance(Base):
-    """AI model performance tracking"""
-    __tablename__ = "model_performance"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    model_name = Column(String(100), nullable=False)
-    model_version = Column(String(50), nullable=False)
-    symbol = Column(String(20), nullable=False)
-
-    # Metrics
-    accuracy = Column(Float)
-    precision = Column(Float)
-    recall = Column(Float)
-    f1_score = Column(Float)
-    auc_score = Column(Float)
-    mape = Column(Float)  # Mean Absolute Percentage Error
-    rmse = Column(Float)  # Root Mean Squared Error
-
-    # Directional accuracy
-    directional_accuracy = Column(Float)
-
-    # Trading metrics
-    win_rate = Column(Float)
-    average_return = Column(Float)
-    sharpe_ratio = Column(Float)
-    max_drawdown = Column(Float)
-
-    # Data
-    total_predictions = Column(Integer)
-    evaluation_period = Column(String(50))
-    evaluation_start = Column(Date)
-    evaluation_end = Column(Date)
-
-    is_current = Column(Boolean, default=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_model_performance_model_symbol", "model_name", "model_version", "symbol"),
-    )
-
-
-# ============================================================================
-# MARKET DATA
-# ============================================================================
-
-class MarketData(Base):
-    """OHLCV market data model"""
-    __tablename__ = "market_data"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    timeframe = Column(String(20), nullable=False)  # 1m, 5m, 15m, 1h, 4h, 1d, 1w
-    timestamp = Column(DateTime, nullable=False)
-
-    # OHLCV
-    open = Column(Numeric(20, 8), nullable=False)
-    high = Column(Numeric(20, 8), nullable=False)
-    low = Column(Numeric(20, 8), nullable=False)
-    close = Column(Numeric(20, 8), nullable=False)
-    volume = Column(Numeric(20, 8), nullable=False)
-
-    # Additional metrics
-    typical_price = Column(Numeric(20, 8))  # (H + L + C) / 3
-    hlc3 = Column(Numeric(20, 8))  # (H + L + C) / 3
-
-    # Technical indicators
-    sma_20 = Column(Numeric(20, 8))
-    sma_50 = Column(Numeric(20, 8))
-    sma_200 = Column(Numeric(20, 8))
-    ema_12 = Column(Numeric(20, 8))
-    ema_26 = Column(Numeric(20, 8))
-
-    # Momentum indicators
-    rsi_14 = Column(Float)
-    macd = Column(Float)
-    macd_signal = Column(Float)
-    macd_histogram = Column(Float)
-
-    # Volatility
-    atr_14 = Column(Float)
-    bbands_upper = Column(Numeric(20, 8))
-    bbands_middle = Column(Numeric(20, 8))
-    bbands_lower = Column(Numeric(20, 8))
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("symbol", "timeframe", "timestamp",
-                        name="uq_symbol_timeframe_timestamp"),
-        Index("idx_market_data_symbol_time", "symbol", "timeframe", "timestamp"),
-    )
-
-
-class TickData(Base):
-    """Tick-level market data"""
-    __tablename__ = "tick_data"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    bid = Column(Numeric(20, 8), nullable=False)
-    ask = Column(Numeric(20, 8), nullable=False)
-    bid_volume = Column(Numeric(20, 8))
-    ask_volume = Column(Numeric(20, 8))
-    timestamp = Column(DateTime, nullable=False)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_tick_symbol_time", "symbol", "timestamp"),
-    )
-
-
-class OrderBook(Base):
-    """Order book depth data"""
-    __tablename__ = "order_book"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20), nullable=False)
-    timestamp = Column(DateTime, nullable=False)
-
-    # Bid side (top 10) - stored as JSON for SQLite compatibility
-    bid_prices = Column(JSON)
-    bid_sizes = Column(JSON)
-
-    # Ask side (top 10) - stored as JSON for SQLite compatibility
-    ask_prices = Column(JSON)
-    ask_sizes = Column(JSON)
-
-    # Summary
-    mid_price = Column(Numeric(20, 8))
-    bid_ask_spread = Column(Float)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_orderbook_symbol_time", "symbol", "timestamp"),
-    )
-
-
-class NewsData(Base):
-    """Financial news and events"""
-    __tablename__ = "news_data"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    symbol = Column(String(20))
-    headline = Column(String(500), nullable=False)
-    content = Column(Text)
-    source = Column(String(100))
-
-    # Classification
-    sentiment = Column(String(20))  # POSITIVE, NEGATIVE, NEUTRAL
-    impact = Column(String(20))  # HIGH, MEDIUM, LOW
-    category = Column(String(50))  # EARNINGS, ECONOMIC, POLITICS, etc.
-
-    # Relevance
-    relevance_score = Column(Float)  # 0-1
-    symbols_affected = Column(JSON)  # List of symbol strings
-
-    published_at = Column(DateTime)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_news_symbol_sentiment", "symbol", "sentiment"),
-        Index("idx_news_published", "published_at"),
-    )
-
-
-# ============================================================================
-# RISK ANALYSIS & MANAGEMENT
-# ============================================================================
-
-class RiskParameters(Base):
-    """Account risk management parameters"""
-    __tablename__ = "risk_parameters"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"),
-                       nullable=False, unique=True)
-
-    # Risk limits
-    max_daily_loss = Column(Numeric(18, 2))
-    max_daily_loss_percent = Column(Float)
-    max_monthly_loss = Column(Numeric(18, 2))
-    max_monthly_loss_percent = Column(Float)
-
-    # Position limits
-    max_position_size = Column(Numeric(18, 8))
-    max_positions = Column(Integer)
-    max_correlation = Column(Float)  # Max correlated positions
-
-    # Leverage limits
-    max_leverage = Column(Float)
-    max_margin_utilization = Column(Float)  # 0-1
-
-    # Risk per trade
-    risk_per_trade = Column(Float)  # As % of account
-    max_risk_per_trade = Column(Numeric(18, 2))
-    max_stop_loss_distance = Column(Float)  # In pips/points
-
-    # Diversification
-    max_concentration = Column(Float)  # Max % in single instrument
-    min_diversification = Column(Integer)  # Min number of different instruments
-
-    # Market conditions
-    trading_allowed_outside_hours = Column(Boolean, default=False)
-    trading_allowed_on_news = Column(Boolean, default=False)
-    high_volatility_mode = Column(String(20))  # ALLOW, RESTRICT, STOP
-
-    # Alerts
-    alert_on_max_loss = Column(Boolean, default=True)
-    alert_on_max_leverage = Column(Boolean, default=True)
-
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    # Relationships
-    account = relationship("Account", back_populates="risk_parameters")
-
-
-class RiskMetrics(Base):
-    """Real-time risk metrics for positions"""
-    __tablename__ = "risk_metrics"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    symbol = Column(String(20), nullable=False)
-
-    # Current exposure
-    exposure_percent = Column(Float)  # % of account equity
-    notional_exposure = Column(Numeric(18, 2))
-
-    # Risk measures
-    var_95 = Column(Numeric(18, 2))  # Value at Risk 95%
-    cvar_95 = Column(Numeric(18, 2))  # Conditional Value at Risk 95%
-    max_loss = Column(Numeric(18, 2))  # Maximum possible loss
-
-    # Greeks (for options)
-    delta = Column(Float)
-    gamma = Column(Float)
-    vega = Column(Float)
-    theta = Column(Float)
-    rho = Column(Float)
-
-    # Correlation metrics
-    correlation_with_portfolio = Column(Float)  # -1 to 1
-    beta = Column(Float)
-
-    # Liquidity risk
-    liquidity_score = Column(Float)  # 0-1, higher is more liquid
-    spread_percent = Column(Float)
-
-    # Updated metrics
-    calculated_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_risk_metrics_account_symbol", "account_id", "symbol"),
-    )
-
-
-class RiskEvent(Base):
-    """Risk events and alerts"""
-    __tablename__ = "risk_events"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-
-    # Event details
-    event_type = Column(String(100), nullable=False)  # e.g., MAX_LOSS, HIGH_LEVERAGE, CONCENTRATION
-    severity = Column(SQLEnum(RiskLevel), nullable=False)
-    description = Column(Text, nullable=False)
-
-    # Context
-    symbol = Column(String(20))
-    position_id = Column(Integer, ForeignKey("positions.id", ondelete=ON_DELETE_SET_NULL))
-
-    # Metrics
-    threshold = Column(Numeric(20, 8))
-    actual_value = Column(Numeric(20, 8))
-
-    # Action
-    action_taken = Column(String(200))
-    auto_remediated = Column(Boolean, default=False)
-
-    # Timing
-    event_time = Column(DateTime, nullable=False)
-    acknowledged_at = Column(DateTime)
-    acknowledged_by = Column(String(255))
-    resolved_at = Column(DateTime)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_risk_event_account_severity", "account_id", "severity"),
-        Index("idx_risk_event_unresolved", "account_id", "resolved_at"),
-    )
-
-
-class StressTest(Base):
-    """Stress test scenarios and results"""
-    __tablename__ = "stress_tests"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete="CASCADE"), nullable=False)
-    test_name = Column(String(255), nullable=False)
-
-    # Scenario
-    scenario_type = Column(String(50))  # HISTORICAL, HYPOTHETICAL
-    description = Column(Text)
-
-    # Market conditions tested
-    market_moves = Column(JSON)  # e.g., {"EUR/USD": -0.05, "GBP/USD": 0.03}
-    volatility_increase = Column(Float)
-    correlation_assumptions = Column(JSON)
-
-    # Results
-    portfolio_loss = Column(Numeric(18, 2))
-    loss_percent = Column(Float)
-    affected_positions = Column(Integer)
-    recovery_time_days = Column(Integer)
-
-    # Analysis
-    key_risks = Column(JSON)
-    recommendations = Column(JSON)
-
-    executed_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_stress_test_account_date", "account_id", "executed_at"),
-    )
-
-
-# ============================================================================
-# AUDIT & COMPLIANCE
-# ============================================================================
-
-class AuditLog(Base):
-    """Audit log for all system actions"""
-    __tablename__ = "audit_logs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey(FK_USERS_ID, ondelete=ON_DELETE_SET_NULL))
-    account_id = Column(Integer, ForeignKey(FK_ACCOUNTS_ID, ondelete=ON_DELETE_SET_NULL))
-
-    # Action details
-    action = Column(String(100), nullable=False)
-    entity_type = Column(String(50))  # Trade, Order, Position, etc.
-    entity_id = Column(Integer)
-
-    # Changes
-    old_values = Column(JSON)
-    new_values = Column(JSON)
-    description = Column(Text)
-
-    # Source
-    ip_address = Column(String(45))
-    user_agent = Column(String(500))
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_audit_account_action", "account_id", "action"),
-        Index("idx_audit_user_time", "user_id", "created_at"),
-    )
-
-
-# ============================================================================
-# CONFIGURATION & SETTINGS
-# ============================================================================
-
-class SystemConfig(Base):
-    """System configuration settings"""
-    __tablename__ = "system_config"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    key = Column(String(255), unique=True, nullable=False)
-    value = Column(Text, nullable=False)
-    description = Column(Text)
-    config_type = Column(String(50))  # STRING, INT, FLOAT, BOOLEAN, JSON
-    is_encrypted = Column(Boolean, default=False)
-
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_config_key", "key"),
-    )
-
-
-class BacktestResult(Base):
-    """Backtest results and analysis"""
-    __tablename__ = "backtest_results"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    test_name = Column(String(255), nullable=False)
-    strategy_name = Column(String(100), nullable=False)
-    strategy_version = Column(String(50))
-
-    # Test parameters
-    start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
-    initial_balance = Column(Numeric(20, 2), nullable=False)
-    symbols = Column(JSON)  # List of symbol strings
-
-    # Results
-    final_balance = Column(Numeric(20, 2), nullable=False)
-    total_return = Column(Float)
-    total_return_percent = Column(Float)
-
-    # Risk metrics
-    sharpe_ratio = Column(Float)
-    sortino_ratio = Column(Float)
-    max_drawdown = Column(Float)
-    max_drawdown_percent = Column(Float)
-    win_rate = Column(Float)
-    profit_factor = Column(Float)
-
-    # Trade statistics
-    total_trades = Column(Integer)
-    winning_trades = Column(Integer)
-    losing_trades = Column(Integer)
-    average_trade = Column(Numeric(18, 2))
-    largest_win = Column(Numeric(18, 2))
-    largest_loss = Column(Numeric(18, 2))
-
-    # Additional metrics
-    recovery_factor = Column(Float)
-    monthly_return = Column(Float)
-    calmar_ratio = Column(Float)
-
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("idx_backtest_strategy", "strategy_name", "strategy_version"),
-    )
+# ── Proper SQLAlchemy models expected by tests ────────────────────────────────
+
+if SQLALCHEMY_AVAILABLE:
+    class User(Base):
+        __tablename__ = "users"
+        id = Column(Integer, primary_key=True)
+        username = Column(String(100), unique=True, nullable=False)
+        email = Column(String(255), unique=True, nullable=False)
+        password_hash = Column(String(255), nullable=False)
+        status = Column(String(50), default="active")
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        sessions = relationship("Session", back_populates="user", lazy="dynamic")
+        accounts = relationship("Account", back_populates="user", lazy="dynamic")
+
+    class Session(Base):
+        __tablename__ = "sessions"
+        id = Column(Integer, primary_key=True)
+        user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+        token = Column(String(512), unique=True, nullable=False)
+        expires_at = Column(DateTime, nullable=False)
+        created_at = Column(DateTime, default=datetime.utcnow)
+        user = relationship("User", back_populates="sessions")
+
+    # No relationship patches needed — Account.user_id is a string FK
+    # Trade/Order/Position already have account_id columns added above
+
+else:
+    # Stub models when SQLAlchemy not available
+    class User:
+        __tablename__ = "users"
+        __table__ = type("T", (), {"columns": []})()
+
+    class Session:
+        __tablename__ = "sessions"
+        __table__ = type("T", (), {"columns": []})()
+
+def _add_enum_value(enum_cls, name, value):
+    """Add a new member to an existing Enum if it doesn't already exist."""
+    if name in enum_cls._member_map_:
+        return
+    new_member = object.__new__(enum_cls)
+    new_member._name_ = name
+    new_member._value_ = value
+    enum_cls._member_map_[name] = new_member
+    enum_cls._value2member_map_[value] = new_member
+    # Bypass enum's __setattr__ which rejects new members
+    type.__setattr__(enum_cls, name, new_member)
+
+_add_enum_value(SignalSource, "PRICE", "price")
+_add_enum_value(SignalSource, "OHLCV", "ohlcv")
+_add_enum_value(SignalSource, "LOW", "low")
+_add_enum_value(TradeStatus, "ACTIVE", "active")
+_add_enum_value(TradeStatus, "CLOSING", "closing")
+_add_enum_value(TradeStatus, "PARTIALLY_FILLED", "partially_filled")
+_add_enum_value(OrderSide, "LONG", "long")

@@ -5,12 +5,15 @@ This strategy uses Bollinger Bands for identifying trend strength
 and potential reversals.
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from strategies.base import BaseStrategy
+from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+
+logger = logging.getLogger(__name__)
 
 
 class BollingerBandsStrategy(BaseStrategy):
@@ -20,36 +23,72 @@ class BollingerBandsStrategy(BaseStrategy):
     Combines band touches with band squeeze for signal generation.
     """
 
-    def __init__(self, name: str, symbol: str, config,
+    def __init__(self, config: StrategyConfig, *_args,
                  period: int = 20, std_dev: float = 2.0):
         """
         Initialize Bollinger Bands strategy.
 
         Args:
-            name: Strategy name
-            symbol: Trading symbol
-            config: Configuration manager
+            config: StrategyConfig with name, symbol, timeframe
             period: Moving average period
             std_dev: Standard deviation multiplier
         """
-        super().__init__(name, symbol, config)
+        super().__init__(config)
         self.period = period
         self.std_dev = std_dev
-        self.logger.info(
+        logger.info(
             f"Bollinger Bands Strategy initialized: "
             f"period={period}, std_dev={std_dev}"
         )
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Generate trading signal based on Bollinger Bands.
+    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute Bollinger Bands from OHLCV data dict."""
+        prices = data.get("prices") or data.get("close")
+        if prices is None:
+            return {"upper": None, "lower": None, "sma": None, "price": None}
+        series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
+        sma = series.rolling(window=self.period).mean()
+        std = series.rolling(window=self.period).std()
+        upper = sma + std * self.std_dev
+        lower = sma - std * self.std_dev
+        price = float(series.iloc[-1])
+        prev_price = float(series.iloc[-2]) if len(series) > 1 else price
+        return {
+            "upper": float(upper.iloc[-1]) if not upper.empty else None,
+            "lower": float(lower.iloc[-1]) if not lower.empty else None,
+            "sma": float(sma.iloc[-1]) if not sma.empty else None,
+            "price": price,
+            "prev_price": prev_price,
+            "prev_upper": float(upper.iloc[-2]) if len(upper) > 1 else None,
+            "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
+        }
 
-        Args:
-            market_data: DataFrame with OHLCV data
-
-        Returns:
-            Dictionary with signal type, confidence, and metadata
+    def generate_signal(self, data) -> Any:
         """
+        Dual-dispatch: accepts either a dict (from analyze()) or a DataFrame.
+        - dict  → returns Optional[Signal]  (BaseStrategy contract)
+        - DataFrame → returns dict signal   (legacy backtesting / test contract)
+        """
+        if isinstance(data, pd.DataFrame):
+            return self._generate_dict_signal(data)
+        # dict path — BaseStrategy abstract method contract
+        analysis = data
+        upper = analysis.get("upper")
+        lower = analysis.get("lower")
+        price = analysis.get("price")
+        prev_price = analysis.get("prev_price", price)
+        if any(v is None for v in (upper, lower, price)):
+            return None
+        if price < lower:
+            conf = 0.85 if price > prev_price else 0.70
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(), confidence=conf)
+        if price > upper:
+            conf = 0.85 if price < prev_price else 0.70
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(), confidence=conf)
+        return None
+
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+        """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             if len(market_data) < self.period:
                 return {
