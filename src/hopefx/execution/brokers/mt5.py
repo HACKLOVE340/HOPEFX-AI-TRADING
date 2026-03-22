@@ -64,10 +64,46 @@ class MT5Broker(BaseBroker):
         )
 
     async def cancel_order(self, order_id: str) -> bool:
-        return True  # TODO: Implement
+        """Cancel a pending MT5 order via ZeroMQ."""
+        if not self._socket:
+            return False
+        try:
+            request = {"action": "CANCEL", "ticket": int(order_id)}
+            await self._socket.send_json(request)
+            response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+            success = bool(response.get("success", False))
+            if success:
+                logger.info("mt5.order_cancelled", order_id=order_id)
+            else:
+                logger.warning("mt5.cancel_failed", order_id=order_id,
+                               reason=response.get("error", "unknown"))
+            return success
+        except Exception as exc:
+            logger.error("mt5.cancel_order_error", order_id=order_id, error=str(exc))
+            return False
 
     async def get_position(self, symbol: str) -> dict:
-        return {}  # TODO: Implement
+        """Get open position for a symbol from MT5 via ZeroMQ."""
+        if not self._socket:
+            return {}
+        try:
+            request = {"action": "GET_POSITION", "symbol": symbol}
+            await self._socket.send_json(request)
+            response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+            return response.get("position", {})
+        except Exception as exc:
+            logger.error("mt5.get_position_error", symbol=symbol, error=str(exc))
+            return {}
 
     async def get_account(self) -> dict:
-        return {}  # TODO: Implement
+        """Get MT5 account summary via ZeroMQ."""
+        if not self._socket:
+            return {}
+        try:
+            request = {"action": "GET_ACCOUNT"}
+            await self._socket.send_json(request)
+            response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+            return response.get("account", {})
+        except Exception as exc:
+            logger.error("mt5.get_account_error", error=str(exc))
+            return {}

@@ -580,7 +580,19 @@ class DepthOfMarketService:
 
             # Build ladder
             ladder = []
-            tick_size = 0.01  # TODO: Get from symbol config
+            # Derive tick size from the price ladder: use the smallest observed
+            # gap between adjacent price levels, or fall back to a sensible
+            # default per-instrument precision (0.01 for most FX/metals).
+            tick_size = 0.01
+            if len(all_prices) >= 2:
+                sorted_prices = sorted(set(all_prices))
+                gaps = [
+                    abs(sorted_prices[i + 1] - sorted_prices[i])
+                    for i in range(len(sorted_prices) - 1)
+                    if abs(sorted_prices[i + 1] - sorted_prices[i]) > 1e-9
+                ]
+                if gaps:
+                    tick_size = round(min(gaps), 10)
 
             # Generate price ladder
             price = max_price

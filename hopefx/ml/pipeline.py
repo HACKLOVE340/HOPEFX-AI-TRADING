@@ -40,7 +40,21 @@ class XGBoostOnlineModel:
 
     @property
     def feature_importances_(self) -> np.ndarray:
-        return np.ones(10) / 10  # placeholder
+        """Return feature importances from the underlying learner, if available."""
+        learner = getattr(self, "_learner", None)
+        if learner is not None:
+            # Try sklearn-style model first
+            model = getattr(learner, "_model", None) or getattr(learner, "model", None)
+            if model is not None and hasattr(model, "feature_importances_"):
+                return np.asarray(model.feature_importances_, dtype=float)
+            # Try coef_ (linear models)
+            if model is not None and hasattr(model, "coef_"):
+                coef = np.asarray(model.coef_).ravel()
+                total = np.abs(coef).sum()
+                return np.abs(coef) / total if total > 0 else np.ones(len(coef)) / len(coef)
+        # Fallback: uniform importances over a default window size
+        n = 10
+        return np.ones(n, dtype=float) / n
 
 
 __all__ = ["XGBoostOnlineModel", "ml_pipeline", "EnsemblePredictor"]

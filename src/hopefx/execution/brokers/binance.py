@@ -53,10 +53,57 @@ class BinanceBroker(BaseBroker):
         )
 
     async def cancel_order(self, order_id: str) -> bool:
-        return True  # TODO
+        if not self._client:
+            return False
+        try:
+            # Binance requires the symbol to cancel; try to extract from stored orders
+            # For robustness, cancel by orderId across all open orders when symbol unknown
+            open_orders = self._client.get_open_orders()
+            for o in open_orders:
+                if str(o.get("orderId")) == str(order_id):
+                    self._client.cancel_order(
+                        symbol=o["symbol"], orderId=int(order_id)
+                    )
+                    logger.info("binance.order_cancelled", order_id=order_id)
+                    return True
+            logger.warning("binance.cancel_order_not_found", order_id=order_id)
+            return False
+        except Exception as exc:
+            logger.error("binance.cancel_order_failed", order_id=order_id, error=str(exc))
+            return False
 
     async def get_position(self, symbol: str) -> dict:
-        return {}  # TODO
+        """Return open position info for a symbol (uses account balances for spot)."""
+        if not self._client:
+            return {}
+        try:
+            acct = self._client.account()
+            clean_symbol = symbol.replace("/", "").upper()
+            # For a spot account the 'position' is the asset balance
+            for bal in acct.get("balances", []):
+                asset = bal.get("asset", "")
+                if clean_symbol.startswith(asset) and asset:
+                    free = float(bal.get("free", 0))
+                    locked = float(bal.get("locked", 0))
+                    total = free + locked
+                    if total > 0:
+                        return {
+                            "symbol": clean_symbol,
+                            "asset": asset,
+                            "free": free,
+                            "locked": locked,
+                            "total": total,
+                        }
+            return {}
+        except Exception as exc:
+            logger.error("binance.get_position_failed", symbol=symbol, error=str(exc))
+            return {}
 
     async def get_account(self) -> dict:
-        return self._client.account() if self._client else {}
+        if not self._client:
+            return {}
+        try:
+            return self._client.account()
+        except Exception as exc:
+            logger.error("binance.get_account_failed", error=str(exc))
+            return {}
