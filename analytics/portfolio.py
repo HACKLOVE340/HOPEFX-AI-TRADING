@@ -14,8 +14,14 @@ warnings.filterwarnings('ignore')
 
 # Visualization
 import matplotlib.pyplot as plt
-import seaborn as sns
 from matplotlib.gridspec import GridSpec
+
+try:
+    import seaborn as sns
+    SEABORN_AVAILABLE = True
+except ImportError:
+    sns = None  # type: ignore[assignment]
+    SEABORN_AVAILABLE = False
 
 # Optimization
 try:
@@ -48,12 +54,16 @@ class PortfolioAnalytics:
             raise ValueError("No returns data loaded")
         
         corr_matrix = self.returns_data.corr()
-        
+
         # Plot
         plt.figure(figsize=(12, 10))
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
-        sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='RdYlBu_r',
-                   center=0, square=True, linewidths=0.5, cbar_kws={"shrink": 0.8})
+        if SEABORN_AVAILABLE and sns is not None:
+            sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='RdYlBu_r',
+                       center=0, square=True, linewidths=0.5, cbar_kws={"shrink": 0.8})
+        else:
+            plt.imshow(corr_matrix, cmap='RdYlBu_r', aspect='auto')
+            plt.colorbar(shrink=0.8)
         plt.title('Asset Correlation Matrix', fontsize=14, fontweight='bold')
         plt.tight_layout()
         

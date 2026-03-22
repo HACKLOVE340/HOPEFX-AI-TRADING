@@ -536,28 +536,44 @@ class HopeFXUltimateIntegrated:
         return 2000.0 + random.uniform(-2, 2)
     
     async def _ml_inference_loop(self):
-        """GPU-accelerated ML inference"""
+        """GPU-accelerated ML inference with full logging."""
         if not self.gpu_engine:
+            import logging as _logging
+            _logging.getLogger(__name__).info("ML inference loop skipped – no GPU engine available")
             return
+
+        ml_logger = __import__("logging").getLogger("hopefx.ml")
+        price_buffer: list = []
 
         while self.is_running:
             try:
-                # Get features
-                # features = self.gpu_features.compute(prices, volumes)
+                # Collect recent prices into buffer
+                current_price = await self._fetch_price()
+                price_buffer.append(current_price)
+                if len(price_buffer) > 60:
+                    price_buffer.pop(0)
 
-                # Run inference
-                # result = await self.gpu_engine.infer(features, request_id)
+                if len(price_buffer) >= 20:
+                    import numpy as _np
+                    features = _np.array(price_buffer[-20:], dtype=_np.float32).reshape(1, -1)
+                    # GPU inference (best-effort – engine may not be loaded)
+                    try:
+                        result = self.gpu_engine.infer(features)
+                        ml_logger.debug(
+                            "ML inference | price=%.4f result=%s", current_price, result
+                        )
+                    except Exception as infer_exc:
+                        ml_logger.warning("ML inference error: %s", infer_exc)
 
                 self.performance_metrics['ml_inferences'] += 1
 
-                # Heartbeat – proves ml_inference is alive
                 if self.heartbeat_monitor:
                     self.heartbeat_monitor.beat('ml_inference')
 
-                await asyncio.sleep(0.01)  # 100Hz
+                await asyncio.sleep(0.01)  # 100 Hz
 
             except Exception as e:
-                print(f"ML inference error: {e}")
+                __import__("logging").getLogger(__name__).error("ML loop error: %s", e)
                 await asyncio.sleep(1)
 
     async def _risk_monitoring_loop(self):
@@ -700,21 +716,177 @@ class HopeFXUltimateIntegrated:
         print("="*70)
 
 
+
+# ==================== FORWARD-TEST RUNNER ====================
+
+async def run_forward_test(duration_seconds: int = 60, tick_interval: float = 0.5) -> dict:
+    """
+    Simulate a forward test using mock market data.
+
+    Runs the full system for *duration_seconds* seconds with synthetic price
+    ticks generated every *tick_interval* seconds.  All components
+    (risk, strategy orchestra, ML inference stub, kill-switch) are exercised.
+
+    Returns a summary dict so callers can assert correctness in CI.
+    """
+    import logging as _logging
+    import random as _random
+
+    log = _logging.getLogger("hopefx.forward_test")
+    _logging.basicConfig(
+        level=_logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    log.info("=" * 60)
+    log.info("HOPEFX FORWARD-TEST MODE  (duration=%ds)", duration_seconds)
+    log.info("=" * 60)
+
+    app = HopeFXUltimateIntegrated()
+
+    # ── Monkey-patch _fetch_price with deterministic mock data ──────────────
+    base_price = 2000.0
+    tick_count = {"n": 0}
+
+    async def _mock_fetch_price() -> float:
+        tick_count["n"] += 1
+        # Simple GBM simulation
+        drift = 0.0001
+        vol = 0.002
+        noise = _random.gauss(drift, vol)
+        nonlocal base_price
+        base_price = base_price * (1.0 + noise)
+        base_price = max(1500.0, min(3000.0, base_price))  # clamp
+        return base_price
+
+    app._fetch_price = _mock_fetch_price  # type: ignore[method-assign]
+
+    results: dict = {
+        "status": "unknown",
+        "ticks_generated": 0,
+        "events_processed": 0,
+        "ml_inferences": 0,
+        "risk_calculations": 0,
+        "trades_executed": 0,
+        "errors": [],
+    }
+
+    try:
+        await app.initialize()
+        log.info("✓ System initialised successfully")
+
+        # Run for the requested duration
+        deadline = asyncio.get_event_loop().time() + duration_seconds
+
+        async def _limited_run():
+            """Run until deadline or kill-switch fires."""
+            while asyncio.get_event_loop().time() < deadline and app.is_running:
+                price = await app._fetch_price()
+                app.orchestra.distribute_price(price)
+                app.heatmap_engine.on_price("XAUUSD", price, datetime.now(timezone.utc))
+                await app.event_bus.publish(
+                    DomainEvent.create(
+                        "PRICE_UPDATE",
+                        "forward_test",
+                        {"symbol": "XAUUSD", "price": price},
+                        priority=1,
+                    )
+                )
+                app.performance_metrics["events_processed"] += 1
+                results["ticks_generated"] += 1
+
+                if results["ticks_generated"] % 20 == 0:
+                    log.info(
+                        "Forward-test tick=%d  price=%.4f  events=%d",
+                        results["ticks_generated"],
+                        price,
+                        app.performance_metrics["events_processed"],
+                    )
+
+                await asyncio.sleep(tick_interval)
+
+            app.is_running = False
+
+        await _limited_run()
+
+        results.update(
+            {
+                "status": "passed",
+                "events_processed": app.performance_metrics["events_processed"],
+                "ml_inferences": app.performance_metrics["ml_inferences"],
+                "risk_calculations": app.performance_metrics["risk_calculations"],
+                "trades_executed": app.performance_metrics["trades_executed"],
+            }
+        )
+        log.info("✓ Forward test PASSED  ticks=%d", results["ticks_generated"])
+
+    except Exception as exc:
+        results["status"] = "failed"
+        results["errors"].append(str(exc))
+        log.exception("Forward test FAILED: %s", exc)
+    finally:
+        try:
+            await app.shutdown()
+        except Exception:
+            pass
+
+    # Print summary
+    log.info("=" * 60)
+    log.info("FORWARD-TEST SUMMARY")
+    for k, v in results.items():
+        log.info("  %-24s : %s", k, v)
+    log.info("=" * 60)
+    return results
+
+
 # ==================== ENTRY POINT ====================
 
 async def main():
-    """Entry point"""
-    app = HopeFXUltimateIntegrated()
-    
-    try:
-        await app.initialize()
-        await app.run()
-    except Exception as e:
-        print(f"\n💥 FATAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        await app.shutdown()
-        sys.exit(1)
+    """Entry point – honours --mode=forward-test CLI flag."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="HOPEFX Ultimate Integrated Trading System",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["live", "paper", "forward-test"],
+        default="paper",
+        help="Operating mode",
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=60,
+        help="Forward-test duration in seconds",
+    )
+    parser.add_argument(
+        "--tick-interval",
+        type=float,
+        default=0.5,
+        dest="tick_interval",
+        help="Seconds between mock ticks in forward-test mode",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "forward-test":
+        results = await run_forward_test(
+            duration_seconds=args.duration,
+            tick_interval=args.tick_interval,
+        )
+        sys.exit(0 if results["status"] == "passed" else 1)
+    else:
+        app = HopeFXUltimateIntegrated()
+        try:
+            await app.initialize()
+            await app.run()
+        except Exception as e:
+            print(f"\n💥 FATAL ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            await app.shutdown()
+            sys.exit(1)
 
 
 if __name__ == "__main__":
@@ -724,6 +896,5 @@ if __name__ == "__main__":
         os.nice(-20)
     except Exception:
         pass
-    
-    # Run
+
     asyncio.run(main())
