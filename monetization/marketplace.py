@@ -6,7 +6,7 @@ Strategy listings, pricing engine, subscription management, license validation
 import json
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -757,7 +757,7 @@ class MarketplaceStrategy:
     price: float = 0.0
     author_id: str = ""
     status: StrategyStatus = StrategyStatus.ACTIVE
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class StrategyPurchase:
@@ -765,7 +765,7 @@ class StrategyPurchase:
     user_id: str = ""
     strategy_id: str = ""
     status: PurchaseStatus = PurchaseStatus.ACTIVE
-    purchased_at: datetime = field(default_factory=datetime.utcnow)
+    purchased_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class StrategyReview:
@@ -774,7 +774,7 @@ class StrategyReview:
     strategy_id: str = ""
     rating: int = 5
     comment: str = ""
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 # ── Full StrategyMarketplace implementation expected by tests ─────────────────
 import uuid as _uuid
@@ -1017,4 +1017,4 @@ class StrategyPerformance:
     calmar_ratio: float = 0.0
     profit_factor: float = 0.0
     period_days: int = 90
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

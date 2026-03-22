@@ -25,8 +25,8 @@ class Position:
     unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
     commission: float = 0.0
-    opened_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     

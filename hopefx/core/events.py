@@ -10,7 +10,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum, auto
 from typing import (
@@ -83,7 +83,7 @@ class DomainEvent:
     """
     
     event_type: EventType
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     source: str = "system"  # Component that emitted

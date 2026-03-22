@@ -1,7 +1,7 @@
 """
 Marketplace database models for strategy monetization.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
@@ -13,8 +13,8 @@ class MarketplaceStrategy(SQLModel, table=True):
     __tablename__ = "marketplace_strategies"
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Strategy info
     name: str = Field(index=True)
@@ -56,7 +56,7 @@ class MarketplaceSubscription(SQLModel, table=True):
     __tablename__ = "marketplace_subscriptions"
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     strategy_id: str = Field(foreign_key="marketplace_strategies.id")
     strategy: Optional[MarketplaceStrategy] = Relationship(back_populates="subscriptions")
@@ -85,7 +85,7 @@ class StrategyReview(SQLModel, table=True):
     __tablename__ = "strategy_reviews"
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     strategy_id: str = Field(foreign_key="marketplace_strategies.id")
     user_id: str

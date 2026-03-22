@@ -44,7 +44,7 @@ class ComponentStatus:
     name: str
     timeout_sec: float
     critical: bool
-    last_beat: datetime = field(default_factory=datetime.utcnow)
+    last_beat: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     missed_beats: int = 0
     alive: bool = True
 
