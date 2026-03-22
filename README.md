@@ -11,6 +11,37 @@
 
 
 
+## Backtest Results — XAUUSD RandomForest Strategy
+
+> **Data**: 730 daily bars, Jan 2022 – Dec 2023 (synthetic GBM + Ornstein-Uhlenbeck, realistic gold parameters)  
+> **Model**: RandomForestClassifier, 200 trees, trained on first 70% of bars (walk-forward split)  
+> **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 2 bps commission
+
+![Equity Curve](examples/results/equity_curve.png)
+
+| Metric | Value |
+|---|---|
+| Backtest period | 2024-01-08 – 2024-10-18 |
+| Total return | +0.68% |
+| Trades | 17 |
+| Win rate | 47.1% |
+| Profit factor | 1.446 |
+| Max drawdown | −0.6% |
+| Sharpe ratio | 2.778 |
+| Calmar ratio | 1.134 |
+| ML accuracy (test) | 48.3% |
+
+**Honest caveats**: ML accuracy is ~48% (near-random) — the positive result is driven by the asymmetric 2.5:1.5 TP:SL ratio, not prediction skill. Real gold has fat tails and macro regime shifts not present in synthetic data. Treat this as infrastructure proof, not a live-trading signal.
+
+**Reproduce in one command:**
+```bash
+python examples/generate_proof_artifacts.py
+```
+
+**Full walkthrough**: [`examples/end_to_end.ipynb`](examples/end_to_end.ipynb)
+
+---
+
 ## 📊 Key Features
 
 ### 🤖 Machine Learning & AI (Research-Grade)
