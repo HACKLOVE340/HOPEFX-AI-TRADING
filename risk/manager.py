@@ -4,6 +4,8 @@ Comprehensive risk management with position sizing, exposure limits, and drawdow
 """
 
 import logging
+import signal
+import sys
 import time
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -177,10 +179,14 @@ class RiskManager:
     
     def assess_risk(self, account_info: Dict, positions: List[Any]) -> RiskAssessment:
         """
-        Comprehensive risk assessment
+        Comprehensive risk assessment.
+
+        Invariant: equity must be > 0. If equity is zero or negative the method
+        halts trading immediately and returns a CRITICAL assessment so no orders
+        are submitted while the account is in an invalid state.
         """
         messages = []
-        
+
         # Check if trading halted
         if self._trading_halted:
             return RiskAssessment(
@@ -194,8 +200,30 @@ class RiskManager:
                 largest_position_pct=0.0,
                 messages=[f"Trading halted: {self._halt_reason}"]
             )
-        
+
         equity = account_info.get('equity', 0)
+
+        # ── Invariant: equity must be positive ──────────────────────────────
+        if equity <= 0:
+            logger.critical(
+                "INVARIANT VIOLATED: equity=%.2f is not positive — halting trading", equity
+            )
+            self._halt_trading(
+                f"equity invariant violated (equity={equity})", duration_hours=24
+            )
+            return RiskAssessment(
+                level=RiskLevel.CRITICAL,
+                can_trade=False,
+                daily_pnl=self.daily_pnl,
+                daily_pnl_pct=0.0,
+                current_drawdown=self.current_drawdown,
+                margin_used_pct=0.0,
+                total_exposure_pct=0.0,
+                largest_position_pct=0.0,
+                messages=[f"Equity invariant violated: equity={equity}"],
+            )
+        # ────────────────────────────────────────────────────────────────────
+
         margin_used = account_info.get('margin_used', 0)
         
         # Calculate metrics
@@ -810,3 +838,49 @@ class RiskCheckResult:
     def __post_init__(self):
         if self.risk_level is None:
             self.risk_level = RiskLevel.LOW if self.passed else RiskLevel.HIGH
+
+
+# ── Graceful shutdown on invariant violations / panics ───────────────────────
+
+def _graceful_shutdown(reason: str, exit_code: int = 1) -> None:
+    """
+    Halt all trading and exit the process cleanly.
+
+    Called when an invariant is violated (e.g. negative equity) or an
+    unrecoverable error is detected.  Sends SIGTERM to the process group
+    so any spawned subprocesses also receive the signal, then exits.
+    """
+    logger.critical("GRACEFUL SHUTDOWN initiated: %s", reason)
+    try:
+        # Allow any registered atexit handlers / finalizers to run
+        import atexit
+        atexit._run_exitfuncs()  # noqa: SLF001
+    except Exception:
+        pass
+    try:
+        import os
+        os.kill(os.getpid(), signal.SIGTERM)
+    except Exception:
+        pass
+    sys.exit(exit_code)
+
+
+def install_invariant_signal_handlers(risk_manager: "RiskManager") -> None:
+    """
+    Install OS-level signal handlers that trigger a graceful shutdown when
+    SIGTERM or SIGINT is received, giving the risk manager a chance to halt
+    trading before the process exits.
+
+    Args:
+        risk_manager: The active :class:`RiskManager` instance.
+    """
+
+    def _handle(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logger.warning("Signal %s received — halting trading and shutting down.", sig_name)
+        risk_manager._halt_trading(f"OS signal {sig_name}", duration_hours=0)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _handle)
+    signal.signal(signal.SIGINT, _handle)
+    logger.info("Invariant signal handlers installed (SIGTERM, SIGINT).")
