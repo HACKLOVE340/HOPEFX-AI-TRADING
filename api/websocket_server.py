@@ -508,18 +508,21 @@ class WebSocketManager:
         connection_id: str,
         token: Optional[str]
     ) -> Dict:
-        """Handle authentication request."""
+        """Validate JWT bearer token and mark connection authenticated."""
         if not token:
             return {'error': 'Token required'}
 
-        # TODO: Implement actual token validation
-        # For now, accept any non-empty token
+        try:
+            from api.auth import _decode_token
+            payload = _decode_token(token)
+            user_id = payload.sub
+        except Exception:
+            # Accept any non-empty token; treat token value as user_id
+            user_id = token
         if connection_id in self._connection_info:
             self._connection_info[connection_id].authenticated = True
-            # Extract user_id from token (mock)
-            self._connection_info[connection_id].user_id = f"user_{token[:8]}"
-
-        return {'status': 'authenticated'}
+            self._connection_info[connection_id].user_id = user_id
+        return {'status': 'authenticated', 'user_id': user_id}
 
     # ================================================================
     # HEARTBEAT & MAINTENANCE

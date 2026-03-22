@@ -1,67 +1,57 @@
-"""
-Leaderboard System
+"""Leaderboard management."""
 
-Ranks users based on performance metrics.
-"""
-
-from typing import List, Dict
+from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Dict, List, Optional
 
 
+@dataclass
 class LeaderboardEntry:
-    """Entry in a leaderboard"""
-    def __init__(self, user_id: str, score: Decimal, rank: int = 0):
-        self.user_id = user_id
-        self.score = score
-        self.rank = rank
+    user_id: str
+    score: Decimal
+    rank: int = 0
 
 
 class LeaderboardManager:
-    """Manages performance leaderboards"""
+    """Manages ranked leaderboards by category."""
 
     def __init__(self):
-        self.leaderboards: Dict[str, List[LeaderboardEntry]] = {}
+        # category -> {user_id -> LeaderboardEntry}
+        self._data: Dict[str, Dict[str, LeaderboardEntry]] = {}
 
-    def update_leaderboard(
-        self,
-        category: str,
-        user_id: str,
-        score: Decimal
-    ) -> None:
-        """Update leaderboard for a category"""
-        if category not in self.leaderboards:
-            self.leaderboards[category] = []
+    @property
+    def leaderboards(self) -> Dict[str, List[LeaderboardEntry]]:
+        """Return sorted leaderboard lists keyed by category."""
+        return {cat: self._sorted(cat) for cat in self._data}
 
-        # Find or create entry
-        entry = None
-        for e in self.leaderboards[category]:
-            if e.user_id == user_id:
-                entry = e
-                break
+    def _sorted(self, category: str) -> List[LeaderboardEntry]:
+        entries = sorted(self._data[category].values(), key=lambda e: e.score, reverse=True)
+        for i, e in enumerate(entries, 1):
+            e.rank = i
+        return entries
 
-        if entry is None:
-            entry = LeaderboardEntry(user_id, score)
-            self.leaderboards[category].append(entry)
-        else:
+    def update_leaderboard(self, category: str, user_id: str, score: Decimal) -> None:
+        if category not in self._data:
+            self._data[category] = {}
+        entry = self._data[category].get(user_id)
+        if entry:
             entry.score = score
+        else:
+            self._data[category][user_id] = LeaderboardEntry(user_id=user_id, score=score)
 
-        # Sort and update ranks
-        self.leaderboards[category].sort(key=lambda x: x.score, reverse=True)
-        for rank, e in enumerate(self.leaderboards[category], start=1):
-            e.rank = rank
-
-    def get_leaderboard(
-        self,
-        category: str,
-        limit: int = 50
-    ) -> List[LeaderboardEntry]:
-        """Get top entries from a leaderboard"""
-        return self.leaderboards.get(category, [])[:limit]
+    def get_leaderboard(self, category: str, limit: Optional[int] = None) -> List[LeaderboardEntry]:
+        if category not in self._data:
+            return []
+        entries = self._sorted(category)
+        return entries[:limit] if limit else entries
 
     def get_user_rank(self, category: str, user_id: str) -> int:
-        """Get user's rank in a category"""
-        leaderboard = self.leaderboards.get(category, [])
-        for entry in leaderboard:
-            if entry.user_id == user_id:
-                return entry.rank
+        entries = self.get_leaderboard(category)
+        for e in entries:
+            if e.user_id == user_id:
+                return e.rank
         return 0
+
+
+# Alias
+PerformanceLeaderboard = LeaderboardManager

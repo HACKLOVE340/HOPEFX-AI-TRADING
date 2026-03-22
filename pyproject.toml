@@ -106,3 +106,4 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+# duplicate [build-system] removed — kept setuptools declaration at top of file

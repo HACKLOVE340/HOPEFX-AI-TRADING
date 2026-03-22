@@ -1,49 +1,37 @@
 """
-Risk Management Module
-
-This module provides risk management and position sizing.
-
-Components:
-- Position sizing (Kelly Criterion, Fixed Fractional, etc.)
-- Portfolio risk calculation
-- Drawdown monitoring
-- Stop loss management
-- Risk-adjusted returns
-- Value at Risk (VaR)
-- Maximum Drawdown tracking
-- Monte Carlo simulations
-- Stress testing
+Risk management package.
 """
 
 from .manager import (
     RiskManager,
     RiskConfig,
-    PositionSize,
-    PositionSizeMethod,
+    RiskLevel,
+    RiskAssessment,
+    PositionSizingResult,
 )
 from .advanced_analytics import (
-    AdvancedRiskAnalytics,
+    RiskMetricType,
     VaRResult,
     MonteCarloResult,
     StressTestResult,
     DrawdownAnalysis,
-    RiskMetricType,
 )
 
+# Backwards-compat aliases expected by old callers
+PositionSize = PositionSizingResult
+
+class PositionSizeMethod:
+    """Stub enum — sizing method is determined by RiskConfig."""
+    FIXED = "fixed"
+    PERCENT_EQUITY = "percent_equity"
+    KELLY = "kelly"
+    VOLATILITY = "volatility"
+
 __all__ = [
-    'RiskManager',
-    'RiskConfig',
-    'PositionSize',
-    'PositionSizeMethod',
-    'AdvancedRiskAnalytics',
-    'VaRResult',
-    'MonteCarloResult',
-    'StressTestResult',
-    'DrawdownAnalysis',
-    'RiskMetricType',
+    "RiskManager", "RiskConfig", "RiskLevel", "RiskAssessment",
+    "PositionSizingResult", "PositionSize", "PositionSizeMethod",
+    "RiskMetricType", "VaRResult", "MonteCarloResult",
+    "StressTestResult", "DrawdownAnalysis",
 ]
 
-# Module metadata
-__version__ = '2.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Advanced risk management with VaR, Monte Carlo, and stress testing'
+__version__ = "1.0.0"

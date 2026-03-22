@@ -1,0 +1,34 @@
+{
+  "app_name": "HOPEFX AI Trading",
+  "version": "2.1.0",
+  "environment": "development",
+  "database": {
+    "db_type": "sqlite",
+    "host": "localhost",
+    "port": 5432,
+    "username": "",
+    "password": "",
+    "database": "hopefx.db",
+    "ssl_enabled": true
+  },
+  "trading": {
+    "symbols": [
+      "EURUSD",
+      "XAUUSD"
+    ],
+    "max_position_size_pct": 0.02,
+    "max_drawdown_pct": 0.1,
+    "daily_loss_limit_pct": 0.05,
+    "paper_trading": true
+  },
+  "api": {
+    "oanda_account_id": "",
+    "oanda_api_key": "",
+    "practice": true
+  },
+  "notifications": {
+    "discord_webhook": "",
+    "telegram_bot_token": "",
+    "telegram_chat_id": ""
+  }
+}

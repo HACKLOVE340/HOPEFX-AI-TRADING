@@ -565,9 +565,13 @@ def create_replay_router(engine: 'ChartReplayEngine'):
     return router
 
 
+# Canonical alias used by app.py and WORDMAP
+ReplayEngine = ChartReplayEngine
+
 # Module exports
 __all__ = [
     'ChartReplayEngine',
+    'ReplayEngine',
     'ReplaySession',
     'ReplayBar',
     'ReplaySpeed',

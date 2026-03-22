@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hopefx-api
+  namespace: hopefx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hopefx-api
+  template:
+    metadata:
+      labels:
+        app: hopefx-api
+    spec:
+      containers:
+      - name: api
+        image: hopefx/ai-trading:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: hopefx-config
+        - secretRef:
+            name: hopefx-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
