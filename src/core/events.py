@@ -1,7 +1,7 @@
 """Pydantic-based event definitions for the event bus."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal, Any, Generic, TypeVar
 
@@ -17,7 +17,7 @@ from src.core.types import (
 
 class Event(BaseModel, Generic[_T]):
     """Base event — supports Event[PayloadType] generic syntax."""
-    event_id: str = Field(default_factory=lambda: f"evt_{datetime.utcnow().timestamp()}")
+    event_id: str = Field(default_factory=lambda: f"evt_{datetime.now(timezone.utc).timestamp()}")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     event_type: str
     payload: Any = None

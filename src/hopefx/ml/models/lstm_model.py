@@ -1,6 +1,7 @@
 """Production LSTM with attention for time series."""
 
 from __future__ import annotations
+from datetime import timezone
 
 import torch
 import torch.nn as nn
@@ -139,7 +140,7 @@ class LSTMOnlineModel(BaseModel):
         self.metadata = ModelMetadata(
             model_id=self.model_id,
             version=self.version,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             feature_hash="",
             train_samples=len(X),
             val_score=float(best_loss),

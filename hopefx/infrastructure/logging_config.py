@@ -8,7 +8,7 @@ import sys
 import uuid
 from pathlib import Path
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import threading
 
@@ -17,7 +17,7 @@ class JSONFormatter(logging.Formatter):
     
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
@@ -163,7 +163,7 @@ class TradeLogger:
             'broker': order.get('broker'),
             'status': result.get('status'),
             'commission': result.get('commission'),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     
     def log_position_change(self, position: Dict[str, Any]):
@@ -176,7 +176,7 @@ class TradeLogger:
             'size': position.get('size'),
             'entry_price': position.get('entry_price'),
             'unrealized_pnl': position.get('unrealized_pnl'),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     
     def log_risk_event(self, event_type: str, details: Dict[str, Any]):
@@ -185,5 +185,5 @@ class TradeLogger:
             'event_type': 'risk',
             'risk_type': event_type,
             'details': details,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })

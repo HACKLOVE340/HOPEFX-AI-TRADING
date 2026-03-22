@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class DashboardServer:
@@ -30,7 +30,7 @@ class DashboardServer:
             return {
                 'orchestra': self.orchestra.get_heatmap_data(),
                 'events': self.event_bus.get_metrics(),
-                'time': datetime.utcnow().isoformat()
+                'time': datetime.now(timezone.utc).isoformat()
             }
         
         @self.app.websocket("/ws")

@@ -8,7 +8,7 @@ import hashlib
 import json
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import asyncio
 
@@ -53,7 +53,7 @@ class ImmutableAuditLog:
         
         # Create record
         record = AuditRecord(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             sequence_number=self.sequence,
             level=level,
             category=category,
@@ -77,7 +77,7 @@ class ImmutableAuditLog:
         record_str = json.dumps({
             'seq': self.sequence,
             'prev_hash': self.last_hash,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'data_hash': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
         }, sort_keys=True)
         
@@ -87,7 +87,7 @@ class ImmutableAuditLog:
         """Write to append-only log"""
         import aiofiles
         
-        filename = f"{self.log_path}audit_{datetime.utcnow().strftime('%Y-%m')}.jsonl"
+        filename = f"{self.log_path}audit_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
         
         # Async write
         asyncio.create_task(self._async_write(filename, record))
@@ -231,7 +231,7 @@ class TradeReporting:
     
     def generate_daily_report(self) -> Dict:
         """Generate end-of-day compliance report"""
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         
         trades_today = [
             r for r in self.audit_log.records

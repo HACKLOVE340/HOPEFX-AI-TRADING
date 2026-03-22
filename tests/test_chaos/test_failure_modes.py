@@ -1,3 +1,4 @@
+from datetime import timezone
 """Chaos engineering tests."""
 
 import pytest
@@ -54,7 +55,7 @@ async def test_ml_model_failure_graceful_degradation():
     # System should still process ticks (rule-based fallback)
     tick = TickData(
         symbol="XAUUSD",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         bid=Decimal("2000"),
         ask=Decimal("2000.10"),
         volume=Decimal("100")

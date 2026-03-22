@@ -7,7 +7,7 @@ Real-time P&L, exposure, and portfolio optimization
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 
@@ -32,7 +32,7 @@ class Position:
     def add_trade(self, trade_qty: Decimal, trade_price: Decimal, side: str):
         """Process new trade"""
         trade = {
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'quantity': trade_qty,
             'price': trade_price,
             'side': side
@@ -92,7 +92,7 @@ class PortfolioManager:
         self.peak_value: Decimal = Decimal("0")
         self.max_drawdown: Decimal = Decimal("0")
         self.trade_history: List[Dict] = []
-        self.last_update: datetime = datetime.utcnow()
+        self.last_update: datetime = datetime.now(timezone.utc)
     
     def update_price(self, symbol: str, price: Decimal):
         """Update market price for symbol"""
@@ -122,7 +122,7 @@ class PortfolioManager:
         # Record trade
         trade_record = {
             'order_id': order_id,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'symbol': symbol,
             'side': side,
             'quantity': quantity,
@@ -150,7 +150,7 @@ class PortfolioManager:
         # Update P&L
         self.total_pnl = sum(pos.total_pnl for pos in self.positions.values())
         
-        self.last_update = datetime.utcnow()
+        self.last_update = datetime.now(timezone.utc)
     
     def get_portfolio_summary(self) -> Dict:
         """Get complete portfolio summary"""

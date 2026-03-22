@@ -6,7 +6,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 from core.event_bus import EventBus, DomainEvent
@@ -78,7 +78,7 @@ class StrategyOrchestra:
         """Distribute price to all active strategies"""
         for sid in self.active_strategies:
             try:
-                bar = {'close': price, 'timestamp': datetime.utcnow()}
+                bar = {'close': price, 'timestamp': datetime.now(timezone.utc)}
                 signal = self.strategies[sid].on_bar(bar)
                 if signal:
                     self.signal_buffer[sid].append(signal)
@@ -127,7 +127,7 @@ class StrategyOrchestra:
                 signal_type=best_signal[0],
                 symbol="XAUUSD",
                 price=0,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 confidence=min(best_signal[1] / total_weight, 1.0)
             )
         return None

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ class ModelRegistry:
         await self._load_manifest()
         
         # Generate version
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         version = f"v{len(self._manifest.get('models', [])) + 1}.{timestamp}"
         version_path = self.base_path / version
         version_path.mkdir(exist_ok=True)
@@ -86,7 +86,7 @@ class ModelRegistry:
         # Metadata
         metadata = {
             "feature_names": feature_names,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "signatures": {
                 k: self._compute_signature(Path(v)) 
                 for k, v in paths.items()

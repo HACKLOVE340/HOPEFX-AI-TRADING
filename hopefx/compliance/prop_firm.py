@@ -4,7 +4,7 @@ FTMO, MyForexFunds, The5ers, TopStep integration
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional, Callable
@@ -94,7 +94,7 @@ class PropFirmCompliance:
         if not self.rules:
             raise ValueError(f"No rules for {firm} ${account_size}")
         
-        self.start_date = datetime.utcnow()
+        self.start_date = datetime.now(timezone.utc)
         self.daily_pnl: Dict[str, Decimal] = {}
         self.trades: List[Dict] = []
         self.violations: List[Dict] = []
@@ -141,7 +141,7 @@ class PropFirmCompliance:
         pnl = Decimal(str(event.payload.get('realized_pnl', 0)))
         
         # Daily tracking
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         self.daily_pnl[today] = self.daily_pnl.get(today, Decimal("0")) + pnl
         
         # Update extremes
@@ -226,7 +226,7 @@ class PropFirmCompliance:
     async def _violation(self, code: str, message: str, details: Dict):
         """Record compliance violation."""
         violation = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "code": code,
             "message": message,
             "details": details
@@ -246,7 +246,7 @@ class PropFirmCompliance:
         """Get real-time compliance dashboard."""
         total_pnl = sum(self.daily_pnl.values(), Decimal("0"))
         days_traded = len(self.daily_pnl)
-        days_remaining = self.rules.max_trading_days - (datetime.utcnow() - self.start_date).days
+        days_remaining = self.rules.max_trading_days - (datetime.now(timezone.utc) - self.start_date).days
         
         return {
             "status": self.status,
@@ -258,7 +258,7 @@ class PropFirmCompliance:
             "progress_pct": float(min(total_pnl / (self.rules.account_size * self.rules.profit_target_pct), 1) * 100),
             
             "risk_metrics": {
-                "daily_loss_used_pct": float(abs(min(Decimal("0"), self.daily_pnl.get(datetime.utcnow().strftime("%Y-%m-%d"), Decimal("0")))) / self.rules.account_size * 100),
+                "daily_loss_used_pct": float(abs(min(Decimal("0"), self.daily_pnl.get(datetime.now(timezone.utc).strftime("%Y-%m-%d"), Decimal("0")))) / self.rules.account_size * 100),
                 "daily_loss_limit_pct": float(self.rules.max_daily_loss_pct * 100),
                 "total_loss_used_pct": float(abs(min(Decimal("0"), total_pnl)) / self.rules.account_size * 100),
                 "total_loss_limit_pct": float(self.rules.max_total_loss_pct * 100),
@@ -284,7 +284,7 @@ class PropFirmCompliance:
     def export_report(self, filepath: str):
         """Export compliance report for prop firm submission."""
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "challenge": {
                 "firm": self.rules.firm.value,
                 "account_size": float(self.rules.account_size),

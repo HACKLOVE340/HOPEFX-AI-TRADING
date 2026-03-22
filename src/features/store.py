@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +79,7 @@ class FeatureStore:
     async def get_latest(self, symbol: str, n: int = 100) -> pd.DataFrame:
         """Get latest n feature vectors."""
         # Get from cache first
-        today = datetime.utcnow().strftime("%Y%m%d")
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")
         key = f"{symbol}_{today}"
         
         if key in self._cache:

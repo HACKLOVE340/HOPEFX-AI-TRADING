@@ -11,7 +11,7 @@ import threading
 import msgpack
 import lz4.frame
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Callable, Optional, Any
 from collections import defaultdict
 
@@ -36,7 +36,7 @@ class DomainEvent:
         packed = msgpack.packb(data, use_bin_type=True)
         compressed = lz4.frame.compress(packed)
         return cls(
-            timestamp=int(datetime.utcnow().timestamp() * 1e9),
+            timestamp=int(datetime.now(timezone.utc).timestamp() * 1e9),
             event_type=type_codes.get(event_type, 99),
             source=source,
             payload=compressed,

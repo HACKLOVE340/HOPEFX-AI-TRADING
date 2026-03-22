@@ -9,7 +9,7 @@ import aiohttp
 import time
 from typing import Dict, List, Optional, Callable, Any, Set
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum, auto
 import logging
 import json
@@ -201,7 +201,7 @@ class AsyncExecutionEngine:
             try:
                 await self._rate_limited_request(venue, 'cancel', order_id)
                 order.status = OrderStatus.CANCELLED
-                order.updated_at = datetime.utcnow()
+                order.updated_at = datetime.now(timezone.utc)
                 self.pending_orders.discard(order_id)
                 
                 if self.on_order_update:
@@ -375,7 +375,7 @@ class AsyncExecutionEngine:
                 symbol=order.symbol,
                 quantity=fill_qty,
                 price=fill_price * (1 + np.random.normal(0, 0.0001)),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 side=order.side,
                 fees=fill_qty * fill_price * 0.0005  # 5bps fee
             )
@@ -414,7 +414,7 @@ class AsyncExecutionEngine:
                 symbol=order.symbol,
                 quantity=order.quantity,
                 price=order.price,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 side=order.side
             )
             await self._apply_fill(order, fill)
@@ -434,7 +434,7 @@ class AsyncExecutionEngine:
             else:
                 order.status = OrderStatus.PARTIAL_FILL
             
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
             
             # Update stats
             self.fill_stats[order.symbol]['count'] += 1

@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 import aioredis
@@ -95,7 +95,7 @@ class DistributedKillSwitch:
             triggered=True,
             reason=reason,
             triggered_by=triggered_by,
-            triggered_at=datetime.utcnow(),
+            triggered_at=datetime.now(timezone.utc),
             scope=scope
         )
         
@@ -125,7 +125,7 @@ class DistributedKillSwitch:
             triggered=False,
             reason=f"Reset by {reset_by}",
             triggered_by=reset_by,
-            triggered_at=datetime.utcnow(),
+            triggered_at=datetime.now(timezone.utc),
             scope="global"
         )
         

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -69,12 +69,12 @@ class PaperBroker(Broker):
             
             fill = Fill(
                 order_id=order.id,
-                fill_id=f"fill_{datetime.utcnow().timestamp()}",
+                fill_id=f"fill_{datetime.now(timezone.utc).timestamp()}",
                 symbol=order.symbol,
                 side=order.side,
                 quantity=order.quantity,
                 price=fill_price,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 venue=Venue.PAPER,
                 commission=order.quantity * fill_price * Decimal("0.0001"),  # 1 bp commission
                 slippage=slippage_pct * order.price if order.price else Decimal("0")
@@ -154,7 +154,7 @@ class PaperBroker(Broker):
                     "symbol": symbol,
                     "bid": price - Decimal("0.05"),
                     "ask": price + Decimal("0.05"),
-                    "timestamp": datetime.utcnow()
+                    "timestamp": datetime.now(timezone.utc)
                 })
             
             await asyncio.sleep(1)

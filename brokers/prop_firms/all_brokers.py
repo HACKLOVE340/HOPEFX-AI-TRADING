@@ -17,7 +17,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import hmac
 import hashlib
@@ -200,7 +200,7 @@ class FTMOBroker(BasePropFirmBroker):
     
     def _generate_signature(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, str]:
         """Generate FTMO API signature"""
-        timestamp = str(int(datetime.utcnow().timestamp() * 1000))
+        timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
         self._nonce += 1
         
         sig_string = f"{method.upper()}{endpoint}{timestamp}{self._nonce}"

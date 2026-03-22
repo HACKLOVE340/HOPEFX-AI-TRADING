@@ -21,7 +21,7 @@ import signal
 import torch
 import numpy as np
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -79,20 +79,20 @@ class ComponentHealth:
     def __init__(self, name: str):
         self.name = name
         self.status = "initializing"
-        self.last_heartbeat = datetime.utcnow()
+        self.last_heartbeat = datetime.now(timezone.utc)
         self.error_count = 0
         self.latency_ms = 0.0
         self.throughput = 0.0
     
     def update(self, status: str, latency_ms: float = 0, throughput: float = 0):
         self.status = status
-        self.last_heartbeat = datetime.utcnow()
+        self.last_heartbeat = datetime.now(timezone.utc)
         self.latency_ms = latency_ms
         self.throughput = throughput
     
     def is_healthy(self) -> bool:
         return self.status == "healthy" and \
-               (datetime.utcnow() - self.last_heartbeat).seconds < 10
+               (datetime.now(timezone.utc) - self.last_heartbeat).seconds < 10
 
 
 class HopeFXUltimateIntegrated:
@@ -102,7 +102,7 @@ class HopeFXUltimateIntegrated:
     """
     
     def __init__(self):
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
         self.config = SystemConfig()
         self.health: Dict[str, ComponentHealth] = {}
         self.is_running = False
@@ -437,7 +437,7 @@ class HopeFXUltimateIntegrated:
         self.event_bus.publish(DomainEvent.create(
             'KILL_SWITCH',
             'master_control',
-            {'reason': reason, 'timestamp': datetime.utcnow().isoformat()},
+            {'reason': reason, 'timestamp': datetime.now(timezone.utc).isoformat()},
             priority=0  # CRITICAL
         ))
     
@@ -496,7 +496,7 @@ class HopeFXUltimateIntegrated:
                 # Get price from your existing feed
                 # Replace with your actual price source
                 price = await self._fetch_price()
-                timestamp = datetime.utcnow()
+                timestamp = datetime.now(timezone.utc)
 
                 # Distribute to orchestra
                 self.orchestra.distribute_price(price)
@@ -619,7 +619,7 @@ class HopeFXUltimateIntegrated:
                             self._trigger_kill_switch(f"Critical component failure: {name}")
                 
                 # Print status every 60 seconds
-                if int(datetime.utcnow().timestamp()) % 60 == 0:
+                if int(datetime.now(timezone.utc).timestamp()) % 60 == 0:
                     self._print_system_status()
                     self._print_performance_metrics()
                 
@@ -687,7 +687,7 @@ class HopeFXUltimateIntegrated:
             await self.kill_switch.stop()
         
         # Final status
-        runtime = (datetime.utcnow() - self.start_time).total_seconds()
+        runtime = (datetime.now(timezone.utc) - self.start_time).total_seconds()
         print(f"\n✅ SHUTDOWN COMPLETE")
         print(f"   Runtime: {runtime:.1f} seconds")
         print(f"   Events processed: {self.performance_metrics['events_processed']:,}")

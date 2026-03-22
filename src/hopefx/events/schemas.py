@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum, auto
 from typing import Any, Literal, Optional
@@ -147,7 +147,7 @@ class CircuitBreakerEvent(BaseModel):
 
 
 class Event(BaseModel):
-    id: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    id: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     type: EventType
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     payload: Any

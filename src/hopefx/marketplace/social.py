@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 
@@ -72,7 +72,7 @@ class LeaderboardEngine:
         """Check if cache needs refresh."""
         if not self._last_update:
             return True
-        return datetime.utcnow() - self._last_update > self._update_interval
+        return datetime.now(timezone.utc) - self._last_update > self._update_interval
 
     async def get_trader_profile(self, user_id: str) -> Optional[dict]:
         """Get public trader profile with stats."""

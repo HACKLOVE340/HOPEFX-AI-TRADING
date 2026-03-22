@@ -21,7 +21,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -84,7 +84,7 @@ def run_pipeline(symbol: str, period: str, model_types: list[str], model_dir: st
     # Write a manifest so the app knows which weights are available
     manifest = {
         "symbol": symbol,
-        "trained_at": datetime.utcnow().isoformat(),
+        "trained_at": datetime.now(timezone.utc).isoformat(),
         "period": period,
         "rows": len(df),
         "models": {},

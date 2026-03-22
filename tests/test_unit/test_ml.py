@@ -3,7 +3,7 @@
 import asyncio
 import pytest
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 
 from hopefx.ml.pipeline import XGBoostOnlineModel
 from hopefx.ml.drift import DriftDetector
@@ -32,7 +32,7 @@ def test_drift_detection():
     # Reference distribution
     ref_features = {
         "symbol": "XAUUSD",
-        "timestamp": datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc),
         "features": {"returns_20": 0.001}
     }
     
@@ -44,7 +44,7 @@ def test_drift_detection():
     # Test with shifted distribution
     drift_features = {
         "symbol": "XAUUSD",
-        "timestamp": datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc),
         "features": {"returns_20": 0.05}  # Shifted mean
     }
     
