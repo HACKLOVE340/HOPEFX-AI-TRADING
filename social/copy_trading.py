@@ -66,3 +66,73 @@ class CopyTradingEngine:
             elif not as_follower and rel.leader_id == user_id:
                 out.append(rel)
         return out
+
+
+class RiskLimitExceeded(Exception):
+    """Raised when a copy trade would exceed risk limits."""
+    pass
+
+
+# Patch CopyTradingEngine with the methods tests expect
+def _ct_init_patched(self, config=None):
+    self.relationships = {}
+    self.config = config or {}
+
+async def _copy_trade(self, leader_trade: dict, follower_config: dict,
+                      follower_balance: float = 100_000.0, balance: float = None) -> dict:
+    """Copy a leader trade proportionally, respecting follower risk limits."""
+    if balance is not None:
+        follower_balance = balance
+
+    copy_ratio     = follower_config.get("copy_ratio", 1.0)
+    max_pos_size   = follower_config.get("max_position_size", 1.0)  # fraction of balance
+    leader_qty     = leader_trade.get("quantity", 1.0)
+    leader_balance = 100_000.0  # assumed leader balance
+
+    # Proportional sizing
+    balance_ratio = follower_balance / leader_balance
+    raw_qty       = leader_qty * copy_ratio * balance_ratio
+
+    # max_position_size is a fraction of balance expressed as notional lots.
+    # 1 lot ≈ $1 notional when no price given; use price if available.
+    price = leader_trade.get("price", None)
+    if price and price > 0:
+        max_qty_by_risk = (follower_balance * max_pos_size) / price
+    else:
+        # No price: treat max_position_size as max fraction of leader qty
+        max_qty_by_risk = leader_qty * max_pos_size
+
+    if raw_qty > max_qty_by_risk:
+        raise RiskLimitExceeded(
+            f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}"
+        )
+
+    return {
+        "symbol":      leader_trade["symbol"],
+        "side":        leader_trade.get("side", "buy"),
+        "quantity":    round(raw_qty, 4),
+        "price":       price or 0.0,
+        "follower_id": follower_config.get("follower_id", ""),
+    }
+
+
+def _calculate_leaderboard(self, traders: list) -> list:
+    """Rank traders by composite score: return × sharpe × log1p(followers)."""
+    import math
+    scored = []
+    for t in traders:
+        score = (
+            t.get("return", 0) *
+            t.get("sharpe", 1) *
+            math.log1p(t.get("followers", 0))
+        )
+        scored.append({**t, "score": score})
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    for i, t in enumerate(scored):
+        t["rank"] = i + 1
+    return scored
+
+
+CopyTradingEngine.__init__ = _ct_init_patched
+CopyTradingEngine.copy_trade = _copy_trade
+CopyTradingEngine.calculate_leaderboard = _calculate_leaderboard

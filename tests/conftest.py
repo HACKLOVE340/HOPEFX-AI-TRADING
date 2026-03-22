@@ -3,8 +3,11 @@ HOPEFX Test Configuration
 Pytest fixtures and test utilities
 """
 
+import os
+import tempfile
 import pytest
 import asyncio
+import numpy as np
 from datetime import datetime, timedelta
 from typing import Generator
 
@@ -120,7 +123,7 @@ def generate_ohlcv_from_close(closes: list) -> list:
         high = close * (1 + abs(np.random.normal(0, 0.001)))
         low = close * (1 - abs(np.random.normal(0, 0.001)))
         open_price = closes[i-1] if i > 0 else close
-        
+
         ohlcv.append(OHLCV(
             timestamp=datetime.now().timestamp() - (len(closes) - i) * 3600,
             open=open_price,
@@ -129,5 +132,68 @@ def generate_ohlcv_from_close(closes: list) -> list:
             close=close,
             volume=np.random.randint(1000, 10000)
         ))
-    
+
     return ohlcv
+
+
+# ── Additional fixtures required by root-level tests ─────────────────────────
+
+@pytest.fixture
+def test_config():
+    """Generic test configuration dict."""
+    return {
+        "initial_balance": 100_000.0,
+        "commission_per_lot": 3.5,
+        "max_position_size_pct": 0.02,
+        "max_drawdown_pct": 0.10,
+        "environment": "testing",
+    }
+
+
+@pytest.fixture
+def mock_broker():
+    """Lightweight synchronous mock broker for unit tests."""
+    from unittest.mock import MagicMock, AsyncMock as _AsyncMock
+    broker = MagicMock()
+    broker.get_account_info = _AsyncMock(return_value={
+        "balance": 100_000.0,
+        "equity": 100_000.0,
+        "margin_used": 0.0,
+        "free_margin": 100_000.0,
+    })
+    broker.place_market_order = _AsyncMock(return_value=MagicMock(
+        id="mock_order_1",
+        status=MagicMock(value="filled"),
+        filled_quantity=10_000,
+        average_fill_price=1.0851,
+    ))
+    broker.get_positions = _AsyncMock(return_value=[])
+    broker.close_position = _AsyncMock(return_value=True)
+    return broker
+
+
+@pytest.fixture
+def temp_dir():
+    """Temporary directory, cleaned up after the test."""
+    with tempfile.TemporaryDirectory() as d:
+        yield d
+
+
+@pytest.fixture
+def sample_market_data():
+    """Multi-asset OHLCV dict for portfolio tests."""
+    import pandas as pd
+    import numpy as np
+    rng = np.random.default_rng(42)
+    dates = pd.date_range("2023-01-01", periods=252, freq="B")
+    data = {}
+    for sym, base in [("XAUUSD", 1900), ("EURUSD", 1.08), ("GBPUSD", 1.25), ("USDJPY", 130)]:
+        closes = base * np.cumprod(1 + rng.normal(0.0002, 0.01, 252))
+        data[sym] = pd.DataFrame({
+            "open":   closes * (1 + rng.uniform(-0.002, 0.002, 252)),
+            "high":   closes * (1 + rng.uniform(0, 0.005, 252)),
+            "low":    closes * (1 - rng.uniform(0, 0.005, 252)),
+            "close":  closes,
+            "volume": rng.integers(5000, 50000, 252),
+        }, index=dates)
+    return data

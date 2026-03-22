@@ -751,3 +751,55 @@ class PortfolioOptimizer:
             frontier.append({"risk": port_vol, "return": port_ret,
                               "weights": {a: float(w[i]) for i, a in enumerate(assets)}})
         return frontier
+
+
+
+
+# ── PortfolioAnalytics aliases expected by tests ──────────────────────────────
+
+def _pa_calculate_correlation(self, returns):
+    """Calculate correlation matrix from a returns dict or DataFrame."""
+    if isinstance(returns, dict):
+        df = pd.DataFrame(returns)
+    elif isinstance(returns, pd.DataFrame):
+        df = returns
+    else:
+        df = pd.DataFrame(returns)
+    return df.corr()
+
+
+def _pa_optimize(self, assets, expected_returns, cov_matrix,
+                 method="max_sharpe", risk_free_rate=0.02, **kwargs):
+    """Optimize portfolio weights (random-search max-Sharpe)."""
+    n = len(assets)
+    best = {"sharpe": -float("inf"), "weights": {a: 1/n for a in assets}}
+    rng = np.random.default_rng(42)
+    for _ in range(2000):
+        w = rng.dirichlet(np.ones(n))
+        ret    = float(np.dot(w, expected_returns))
+        vol    = float(np.sqrt(w @ np.asarray(cov_matrix) @ w))
+        sharpe = (ret - risk_free_rate) / vol if vol > 0 else 0
+        if sharpe > best["sharpe"]:
+            best = {
+                "sharpe": sharpe,
+                "weights": {a: float(w[i]) for i, a in enumerate(assets)},
+                "expected_return": ret,
+                "risk": vol,
+            }
+    return best
+
+
+def _pa_calculate_risk_contribution(self, weights, cov_matrix):
+    """Return per-asset marginal risk contribution."""
+    w = np.asarray(list(weights.values()) if isinstance(weights, dict) else weights)
+    C = np.asarray(cov_matrix)
+    port_var = float(w @ C @ w)
+    marginal = C @ w
+    contrib  = w * marginal / port_var if port_var > 0 else np.zeros_like(w)
+    assets   = list(weights.keys()) if isinstance(weights, dict) else list(range(len(w)))
+    return {a: float(contrib[i]) for i, a in enumerate(assets)}
+
+
+PortfolioAnalytics.calculate_correlation      = _pa_calculate_correlation
+PortfolioAnalytics.optimize                   = _pa_optimize
+PortfolioAnalytics.calculate_risk_contribution = _pa_calculate_risk_contribution

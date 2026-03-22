@@ -194,28 +194,40 @@ class PaperTradingBroker(BrokerConnector):
         """Get order by ID"""
         return self.orders.get(order_id)
 
-    def get_positions(self) -> List[Position]:
-        """Get all open positions"""
-        # Update unrealized P&L for each position
+    def _get_positions_sync(self) -> List[Position]:
+        """Sync helper used internally."""
         positions = []
         for position in self.positions.values():
             current_price = self.market_prices.get(position.symbol, position.entry_price)
-
             if position.side == "LONG":
                 unrealized_pnl = (current_price - position.entry_price) * position.quantity
-            else:  # SHORT
+            else:
                 unrealized_pnl = (position.entry_price - current_price) * position.quantity
-
             position.current_price = current_price
             position.unrealized_pnl = unrealized_pnl
+            if not hasattr(position, "id") or not position.id:
+                position.id = position.symbol
             positions.append(position)
-
         return positions
 
-    def close_position(self, symbol: str) -> bool:
-        """Close a position"""
+    def get_positions(self) -> List[Position]:
+        """Get all open positions."""
+        return self._get_positions_sync()
+
+
+
+    def close_position(self, symbol_or_id: str) -> bool:
+        """Close a position by symbol or position id."""
+        symbol = symbol_or_id
+        if symbol_or_id not in self.positions:
+            for sym, pos in self.positions.items():
+                if getattr(pos, "id", sym) == symbol_or_id:
+                    symbol = sym
+                    break
+            else:
+                logger.warning(f"No open position for {symbol_or_id}")
+                return False
         if symbol not in self.positions:
-            logger.warning(f"No open position for {symbol}")
             return False
 
         position = self.positions[symbol]
@@ -278,23 +290,44 @@ class PaperTradingBroker(BrokerConnector):
         except Exception as exc:
             logger.warning("Failed to persist trade to DB: %s", exc)
 
-    def get_account_info(self) -> AccountInfo:
-        """Get account information"""
-        # Calculate total unrealized P&L
-        total_unrealized = sum(
-            p.unrealized_pnl for p in self.get_positions()
-        )
-
+    def _get_account_info_sync(self) -> AccountInfo:
+        """Sync helper — returns AccountInfo dataclass."""
+        total_unrealized = sum(p.unrealized_pnl for p in self._get_positions_sync())
         equity = self.balance + total_unrealized
-
         return AccountInfo(
             balance=self.balance,
             equity=equity,
-            margin_used=0.0,  # Not used in paper trading
+            margin_used=0.0,
             margin_available=equity,
             positions_count=len(self.positions),
             timestamp=datetime.now(timezone.utc),
         )
+
+    def get_account_info(self) -> "AccountInfo":
+        """Get account information."""
+        return self._get_account_info_sync()
+
+    def set_price_feed(self, price_engine) -> None:
+        """Attach a price feed / engine for live price updates."""
+        self._price_feed = price_engine
+
+    async def place_market_order(self, symbol: str, side: str, quantity: float):
+        """Async market order — delegates to sync place_order."""
+        from .base import OrderSide as _OS, OrderType as _OT
+        side_enum = _OS.BUY if str(side).lower() in ("buy", "long") else _OS.SELL
+        return self.place_order(symbol=symbol, side=side_enum,
+                                order_type=_OT.MARKET, quantity=quantity)
+
+    async def close_all_positions(self) -> int:
+        """Close all open positions. Returns number closed."""
+        closed = 0
+        for symbol in list(self.positions.keys()):
+            try:
+                if self.close_position(symbol):
+                    closed += 1
+            except Exception as exc:
+                logger.warning("Failed to close position %s: %s", symbol, exc)
+        return closed
 
     def get_market_data(
         self,

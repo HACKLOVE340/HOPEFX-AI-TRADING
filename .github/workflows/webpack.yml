@@ -1,28 +1,20 @@
+# Disabled — this is a Python project with no JavaScript bundle.
+# Re-enable if a frontend build step is added.
 name: NodeJS with Webpack
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:  # manual only
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
-
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-
-    - name: Build
-      run: |
-        npm install
-        npx webpack
+      - uses: actions/checkout@v4
+      - name: Check for package.json
+        run: |
+          if [ ! -f package.json ]; then
+            echo "No package.json found — skipping Node build."
+            exit 0
+          fi
+          npm install
+          npx webpack
