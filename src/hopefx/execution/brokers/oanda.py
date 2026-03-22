@@ -71,8 +71,25 @@ class OandaBroker(BaseBroker):
                     instrument=order.symbol,
                     units=float(order.quantity) if order.side == "buy" else -float(order.quantity),
                 )
+            elif order.order_type in (OrderType.LIMIT, OrderType.STOP):
+                from oandapyV20.contrib.requests import LimitOrderRequest, StopOrderRequest
+                units = float(order.quantity) if order.side == "buy" else -float(order.quantity)
+                if order.price is None:
+                    raise ValueError("price is required for LIMIT/STOP orders")
+                if order.order_type == OrderType.LIMIT:
+                    ordr = LimitOrderRequest(
+                        instrument=order.symbol,
+                        units=units,
+                        price=str(order.price),
+                    )
+                else:
+                    ordr = StopOrderRequest(
+                        instrument=order.symbol,
+                        units=units,
+                        price=str(order.price),
+                    )
             else:
-                raise NotImplementedError(f"Order type {order.order_type} not implemented")
+                raise NotImplementedError(f"Order type {order.order_type} not supported")
 
             r = OrderCreate(self.account_id, data=ordr.data)
             response = self.api.request(r)
@@ -112,9 +129,18 @@ class OandaBroker(BaseBroker):
             )
 
     async def cancel_order(self, order_id: str) -> bool:
-        """Cancel order."""
-        # Implementation for OANDA cancel
-        return True
+        """Cancel a pending OANDA order."""
+        if not self._connected or not self.api:
+            return False
+        try:
+            from oandapyV20.endpoints.orders import OrderCancel
+            r = OrderCancel(accountID=self.account_id, orderID=order_id)
+            self.api.request(r)
+            logger.info("oanda.order_cancelled", order_id=order_id)
+            return True
+        except V20Error as exc:
+            logger.error("oanda.cancel_order_failed", order_id=order_id, error=str(exc))
+            return False
 
     async def get_position(self, symbol: str) -> dict:
         """Get position."""

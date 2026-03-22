@@ -164,9 +164,112 @@ class HistoricalDataLoader:
         end: datetime,
         timeframe: str
     ) -> pd.DataFrame:
-        """Load from OANDA."""
-        # Implementation for OANDA historical data
-        raise NotImplementedError("OANDA historical data not yet implemented")
+        """Load historical OHLCV data from the OANDA v20 REST API.
+
+        The symbol should be in the OANDA instrument format, e.g. ``XAU_USD``
+        (underscores) or the slash form ``XAUUSD``/``XAU/USD``, which is
+        normalised automatically.
+
+        Timeframe mapping follows OANDA granularity codes:
+        ``1min`` → M1, ``5min`` → M5, ``15min`` → M15, ``30min`` → M30,
+        ``1h`` / ``1hour`` → H1, ``4h`` → H4, ``1d`` / ``1day`` → D,
+        ``1w`` → W, ``1M`` → M.
+        """
+        import os
+
+        api_key = os.environ.get("OANDA_API_KEY", "")
+        account_env = os.environ.get("OANDA_ENVIRONMENT", "practice")
+        if not api_key:
+            raise DataError(
+                "OANDA_API_KEY environment variable is not set. "
+                "Cannot load historical data from OANDA."
+            )
+
+        # Normalise symbol → OANDA instrument (e.g. XAUUSD → XAU_USD)
+        instrument = symbol.upper().replace("/", "")
+        if len(instrument) == 6 and "_" not in instrument:
+            instrument = f"{instrument[:3]}_{instrument[3:]}"
+        else:
+            instrument = instrument.replace("/", "_")
+
+        # Timeframe → OANDA granularity
+        _TF_MAP: dict[str, str] = {
+            "1min": "M1", "1m": "M1",
+            "5min": "M5", "5m": "M5",
+            "15min": "M15", "15m": "M15",
+            "30min": "M30", "30m": "M30",
+            "1h": "H1", "1hour": "H1",
+            "4h": "H4", "4hour": "H4",
+            "1d": "D", "1day": "D", "d": "D",
+            "1w": "W", "1week": "W", "w": "W",
+            "1M": "M", "1month": "M",
+        }
+        granularity = _TF_MAP.get(timeframe.lower(), "M1")
+
+        base_url = (
+            "https://api-fxtrade.oanda.com"
+            if account_env == "live"
+            else "https://api-fxpractice.oanda.com"
+        )
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        records: list[dict] = []
+        # OANDA returns max 5000 candles per request; paginate with `from`/`to`
+        page_start = start
+        session = await self._get_session()
+
+        while page_start < end:
+            params = {
+                "granularity": granularity,
+                "from": page_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "to": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "count": 5000,
+                "price": "M",  # mid prices
+            }
+            url = f"{base_url}/v3/instruments/{instrument}/candles"
+
+            async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise DataError(
+                        f"OANDA API error {resp.status} for {instrument}: {text[:200]}"
+                    )
+                data = await resp.json()
+
+            candles = data.get("candles", [])
+            if not candles:
+                break
+
+            for c in candles:
+                if not c.get("complete", True):
+                    continue
+                mid = c.get("mid", {})
+                records.append({
+                    "timestamp": pd.Timestamp(c["time"]),
+                    "open": float(mid.get("o", 0)),
+                    "high": float(mid.get("h", 0)),
+                    "low": float(mid.get("l", 0)),
+                    "close": float(mid.get("c", 0)),
+                    "volume": int(c.get("volume", 0)),
+                })
+
+            # Advance window past the last returned candle
+            last_ts = pd.Timestamp(candles[-1]["time"])
+            next_start = last_ts.to_pydatetime() + pd.Timedelta(seconds=1)
+            if next_start <= page_start:
+                break  # guard against infinite loop
+            page_start = next_start
+
+        if not records:
+            raise DataError(f"No OANDA candles returned for {instrument} [{start} – {end}]")
+
+        df = pd.DataFrame(records).set_index("timestamp")
+        df.index = pd.to_datetime(df.index, utc=True)
+        df.sort_index(inplace=True)
+        return df
     
     async def _load_from_file(
         self,
