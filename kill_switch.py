@@ -220,8 +220,11 @@ class KillSwitch:
                 loop = asyncio.get_running_loop()
                 loop.create_task(self._event_bus.publish(event))
             except RuntimeError:
-                # No running loop (e.g. tests) – attempt synchronous call
-                self._event_bus.publish(event)
+                # No running loop (e.g. tests) – call only if synchronous
+                import inspect as _inspect
+                result = self._event_bus.publish(event)
+                if _inspect.iscoroutine(result):
+                    result.close()  # prevent "coroutine was never awaited" warning
         except Exception as exc:
             logger.warning("Could not publish kill-switch event: %s", exc)
 
