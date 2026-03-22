@@ -561,3 +561,6 @@ def get_streaming_service() -> StreamingService:
     if _streaming_service is None:
         _streaming_service = StreamingService()
     return _streaming_service
+
+# Compatibility alias
+DataStreamingService = StreamingService

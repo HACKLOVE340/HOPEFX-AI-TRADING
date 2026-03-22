@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopefx-config
+  namespace: hopefx
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "INFO"
+  TRADING_MODE: "paper"
+  DB_POOL_SIZE: "20"
+  REDIS_SOCKET_TIMEOUT: "5"

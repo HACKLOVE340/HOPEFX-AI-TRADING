@@ -1,0 +1,52 @@
+{
+    "name": "HOPEFX AI Trading",
+    "short_name": "HOPEFX",
+    "description": "Advanced AI-powered trading platform",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#1a1a1a",
+    "theme_color": "#00C851",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/static/icons/icon-72x72.png",
+            "sizes": "72x72",
+            "type": "image/png"
+        },
+        {
+            "src": "/static/icons/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/static/icons/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": ["finance", "productivity"],
+    "screenshots": [
+        {
+            "src": "/static/screenshots/dashboard.png",
+            "sizes": "1280x720",
+            "type": "image/png"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Open Positions",
+            "short_name": "Positions",
+            "description": "View current positions",
+            "url": "/positions",
+            "icons": [{ "src": "/static/icons/positions.png", "sizes": "96x96" }]
+        },
+        {
+            "name": "Market Overview",
+            "short_name": "Markets",
+            "description": "View market overview",
+            "url": "/markets",
+            "icons": [{ "src": "/static/icons/markets.png", "sizes": "96x96" }]
+        }
+    ]
+}

@@ -1,133 +1,113 @@
 """
-Broker Factory
-
-Factory pattern for creating broker connectors.
+Broker Factory — creates and registers broker instances by name.
 """
 
-from typing import Dict, Any, Optional
 import logging
-
-from .base import BrokerConnector
-from .paper_trading import PaperTradingBroker
-from .oanda import OANDAConnector
-from .binance import BinanceConnector
-from .alpaca import AlpacaConnector
-from .mt5 import MT5Connector
-from .interactive_brokers import InteractiveBrokersConnector
-
-# Import prop firms
-from .prop_firms.ftmo import FTMOConnector
-from .prop_firms.topstep import TopstepTraderConnector
-from .prop_firms.the5ers import The5ersConnector
-from .prop_firms.myforexfunds import MyForexFundsConnector
+from typing import Dict, Optional, Type
 
 logger = logging.getLogger(__name__)
 
 
 class BrokerFactory:
-    """
-    Factory for creating broker connector instances.
+    """Factory for creating broker instances."""
 
-    Supports:
-        - paper: Paper trading simulator
-        - oanda: OANDA forex trading
-        - binance: Binance cryptocurrency trading
-        - alpaca: Alpaca US stock trading
-        - mt5: MetaTrader 5 (any broker/prop firm)
-        - ib: Interactive Brokers (all asset types)
-        - ftmo: FTMO prop firm
-        - topstep: TopstepTrader prop firm
-        - the5ers: The5ers prop firm
-        - myforexfunds: MyForexFunds prop firm
-    """
-
-    _brokers = {
-        'paper': PaperTradingBroker,
-        'oanda': OANDAConnector,
-        'binance': BinanceConnector,
-        'alpaca': AlpacaConnector,
-        'mt5': MT5Connector,
-        'ib': InteractiveBrokersConnector,
-        'interactive_brokers': InteractiveBrokersConnector,
-        # Prop firms
-        'ftmo': FTMOConnector,
-        'topstep': TopstepTraderConnector,
-        'topsteptrader': TopstepTraderConnector,
-        'the5ers': The5ersConnector,
-        'myforexfunds': MyForexFundsConnector,
-        'mff': MyForexFundsConnector,
-    }
+    _brokers: Dict[str, type] = {}
 
     @classmethod
-    def create_broker(
-        cls,
-        broker_type: str,
-        config: Dict[str, Any]
-    ) -> Optional[BrokerConnector]:
-        """
-        Create a broker connector instance.
-
-        Args:
-            broker_type: Type of broker ('paper', 'oanda', 'binance', 'alpaca')
-            config: Broker configuration dictionary
-
-        Returns:
-            BrokerConnector instance or None if invalid type
-
-        Examples:
-            # OANDA
-            >>> config = {'api_key': 'key', 'account_id': 'id', 'environment': 'practice'}
-            >>> broker = BrokerFactory.create_broker('oanda', config)
-
-            # MT5 (any broker)
-            >>> config = {'server': 'ICMarkets-Demo', 'login': 12345, 'password': 'pass'}
-            >>> broker = BrokerFactory.create_broker('mt5', config)
-
-            # FTMO prop firm
-            >>> config = {'login': 12345, 'password': 'pass', 'challenge_type': 'demo'}
-            >>> broker = BrokerFactory.create_broker('ftmo', config)
-
-            # Interactive Brokers
-            >>> config = {'host': '127.0.0.1', 'port': 7497, 'paper': True}
-            >>> broker = BrokerFactory.create_broker('ib', config)
-        """
-        broker_type = broker_type.lower()
-
-        if broker_type not in cls._brokers:
-            logger.error(f"Unknown broker type: {broker_type}")
-            logger.info(f"Available brokers: {list(cls._brokers.keys())}")
-            return None
-
+    def _ensure_registered(cls) -> None:
+        """Lazy-register all built-in brokers on first use."""
+        if cls._brokers:
+            return
         try:
-            broker_class = cls._brokers[broker_type]
-            broker = broker_class(config)
-            logger.info(f"Created broker: {broker_type}")
-            return broker
-        except Exception as e:
-            logger.error(f"Failed to create broker {broker_type}: {e}")
-            return None
+            from brokers.paper_trading import PaperTradingBroker
+            cls._brokers["paper"] = PaperTradingBroker
+        except Exception:
+            pass
+        try:
+            from brokers.alpaca import AlpacaConnector
+            cls._brokers["alpaca"] = AlpacaConnector
+        except Exception:
+            pass
+        try:
+            from brokers.binance import BinanceConnector
+            cls._brokers["binance"] = BinanceConnector
+        except Exception:
+            pass
+        try:
+            from brokers.oanda import OANDAConnector
+            cls._brokers["oanda"] = OANDAConnector
+        except Exception:
+            pass
+        try:
+            from brokers.mt5 import MT5Connector
+            cls._brokers["mt5"] = MT5Connector
+        except Exception:
+            pass
+        try:
+            from brokers.interactive_brokers import InteractiveBrokersConnector
+            cls._brokers["ib"] = InteractiveBrokersConnector
+            cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
+        except Exception:
+            pass
+        try:
+            from brokers.prop_firms.ftmo import FTMOConnector
+            cls._brokers["ftmo"] = FTMOConnector
+        except Exception:
+            pass
+        try:
+            from brokers.prop_firms.topstep import TopstepTraderConnector
+            cls._brokers["topstep"] = TopstepTraderConnector
+            cls._brokers["topsteptrader"] = TopstepTraderConnector
+        except Exception:
+            pass
+        try:
+            from brokers.prop_firms.the5ers import The5ersConnector
+            cls._brokers["the5ers"] = The5ersConnector
+        except Exception:
+            pass
+        try:
+            from brokers.prop_firms.myforexfunds import MyForexFundsConnector
+            cls._brokers["myforexfunds"] = MyForexFundsConnector
+            cls._brokers["mff"] = MyForexFundsConnector
+        except Exception:
+            pass
 
     @classmethod
-    def register_broker(cls, name: str, broker_class: type):
-        """
-        Register a custom broker connector.
-
-        Args:
-            name: Broker identifier
-            broker_class: BrokerConnector subclass
-        """
-        if not issubclass(broker_class, BrokerConnector):
-            raise ValueError(f"{broker_class} must be a subclass of BrokerConnector")
-
+    def register_broker(cls, name: str, broker_class: type) -> None:
+        """Register a broker class. Raises ValueError if not a BrokerConnector subclass."""
+        try:
+            from brokers.base import BrokerConnector
+            if not (isinstance(broker_class, type) and issubclass(broker_class, BrokerConnector)):
+                raise ValueError(f"{broker_class} is not a BrokerConnector subclass")
+        except ImportError:
+            pass
         cls._brokers[name.lower()] = broker_class
-        logger.info(f"Registered broker: {name}")
+        logger.info(f"Broker registered: {name}")
+
+    @classmethod
+    def create_broker(cls, name: str, config: Dict = None):
+        """Create a broker instance by name (case-insensitive). Returns None for unknown brokers."""
+        cls._ensure_registered()
+        key = name.lower()
+        broker_class = cls._brokers.get(key)
+        if broker_class is None:
+            logger.warning(f"Unknown broker: {name}")
+            return None
+        return broker_class(config or {})
 
     @classmethod
     def list_brokers(cls) -> list:
-        """
-        Get list of available broker types.
-
-        Returns:
-            List of broker type strings
-        """
+        """Return list of registered broker names."""
+        cls._ensure_registered()
         return list(cls._brokers.keys())
+
+    @classmethod
+    def get_broker_info(cls, name: str) -> Dict:
+        cls._ensure_registered()
+        broker_class = cls._brokers.get(name.lower())
+        if not broker_class:
+            return {}
+        return {
+            "name": name,
+            "class": broker_class.__name__,
+        }

@@ -1,0 +1,59 @@
+# config/ultimate_config.yaml
+"""
+HOPEFX Ultimate Configuration
+Override your existing config with these advanced settings
+"""
+
+mcc:
+  enable_gpu: true
+  enable_fpga: false
+  enable_arbitrage: true
+  enable_risk_montecarlo: true
+  
+  event_bus:
+    buffer_size: 10000
+    max_latency_ms: 5
+  
+  gpu:
+    batch_size: 64
+    mixed_precision: true
+    max_queue_size: 1000
+  
+  risk:
+    montecarlo_sims: 100000
+    var_limit: 0.02  # 2% daily
+    cvar_limit: 0.03  # 3% daily
+    max_drawdown: 0.15  # 15%
+    calculation_interval_sec: 60
+  
+  arbitrage:
+    min_profit_bps: 5.0  # 0.05%
+    max_execution_time_ms: 500
+    emergency_hedge_slippage: 0.005  # 0.5%
+  
+  orchestra:
+    max_active_strategies: 10
+    correlation_threshold: 0.7
+    regime_switching: true
+  
+  dashboard:
+    port: 8080
+    update_frequency_hz: 1
+    websocket_enabled: true
+
+exchanges:
+  # Configure your exchange APIs here
+  binance:
+    api_key: ${BINANCE_API_KEY}
+    api_secret: ${BINANCE_API_SECRET}
+    latency_ms: 50
+    maker_fee: 0.001
+    taker_fee: 0.001
+  
+  coinbase:
+    api_key: ${COINBASE_API_KEY}
+    api_secret: ${COINBASE_API_SECRET}
+    passphrase: ${COINBASE_PASSPHRASE}
+    latency_ms: 80
+    maker_fee: 0.005
+    taker_fee: 0.005
