@@ -1,0 +1,20 @@
+# Disabled — this is a Python project with no JavaScript bundle.
+# Re-enable if a frontend build step is added.
+name: NodeJS with Webpack
+
+on:
+  workflow_dispatch:  # manual only
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for package.json
+        run: |
+          if [ ! -f package.json ]; then
+            echo "No package.json found — skipping Node build."
+            exit 0
+          fi
+          npm install
+          npx webpack

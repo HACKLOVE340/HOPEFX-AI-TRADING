@@ -15,7 +15,7 @@ from .market_data_cache import (
     MarketDataCache,
     Timeframe,
     OHLCVData,
-    CachedTickData,
+    TickData as CachedTickData,
     CacheStatistics,
 )
 

@@ -5,7 +5,7 @@ Portfolio optimization, options trading, advanced simulations,
 and performance analytics.
 """
 
-from .portfolio import PortfolioOptimizer
+from .portfolio import PortfolioAnalytics as PortfolioOptimizer
 from .options import OptionsAnalyzer
 from .simulations import SimulationEngine
 from .risk import RiskAnalyzer

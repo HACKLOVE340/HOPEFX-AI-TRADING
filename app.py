@@ -13,6 +13,7 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -21,7 +22,7 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -33,8 +34,10 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
+from auth.router import router as auth_router, set_auth_service
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
+from api.backtesting import router as backtesting_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -57,9 +60,11 @@ app = FastAPI(
 )
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
+app.include_router(backtesting_router)
 
 # Global application state
 class AppState:
@@ -70,6 +75,19 @@ class AppState:
         self.db_session_factory = None
         self.cache = None
         self.initialized = False
+        # Core trading components
+        self.auth_service = None
+        self.broker = None
+        self.risk_manager = None
+        self.compliance_manager = None
+        self.strategy_brain = None
+        self.ws_manager = None
+        self.alert_engine = None
+        self.wallet_manager = None
+        # Social
+        self.copy_trading_engine = None
+        self.marketplace = None
+        self.leaderboard_manager = None
         # Experimental module instances (populated at startup when flags are on)
         self.research_engine = None
         self.explainer = None
@@ -124,18 +142,61 @@ def get_db() -> Session:
         db.close()
 
 
-# CORS configuration
+# CORS + security headers configuration
 def setup_cors(app: FastAPI):
-    """Setup CORS middleware"""
-    allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+    """Setup CORS middleware with restricted origins."""
+    raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000')
+    allowed_origins = [o.strip() for o in raw.split(',') if o.strip()]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
+
+
+def setup_security_headers(app: FastAPI):
+    """Add security response headers to every reply."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request as _Req
+
+    class _SecurityHeaders(BaseHTTPMiddleware):
+        _HEADERS = {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+            "Content-Security-Policy": (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; "
+                "connect-src 'self' wss:;"
+            ),
+        }
+
+        async def dispatch(self, request: _Req, call_next):
+            response = await call_next(request)
+            for header, value in self._HEADERS.items():
+                response.headers[header] = value
+            return response
+
+    app.add_middleware(_SecurityHeaders)
+
+
+def setup_metrics_middleware(app: FastAPI):
+    """Add Prometheus HTTP metrics middleware."""
+    try:
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from core.metrics import make_metrics_middleware
+        app.add_middleware(BaseHTTPMiddleware, dispatch=make_metrics_middleware())
+        logger.info("Prometheus metrics middleware registered")
+    except Exception as exc:
+        logger.warning("Metrics middleware not available: %s", exc)
 
 
 # Startup event
@@ -147,14 +208,49 @@ async def startup_event():
     logger.info("=" * 70)
 
     try:
+        # ── Environment validation ────────────────────────────────────────────
+        # Set dev defaults before validation so the app can start in dev mode.
+        if not os.getenv('CONFIG_ENCRYPTION_KEY'):
+            logger.warning("CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)")
+            os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
+        if not os.getenv('SECURITY_JWT_SECRET'):
+            logger.warning("SECURITY_JWT_SECRET not set — using dev default (not for production)")
+            os.environ['SECURITY_JWT_SECRET'] = 'dev-jwt-secret-minimum-32-characters-long!!'
+
+        try:
+            from core.env_validator import validate_and_report
+            validate_and_report(strict=False, exit_on_error=False)
+        except Exception as _ve:
+            logger.warning("Env validator unavailable: %s", _ve)
+
         # Initialize configuration
         logger.info("Loading configuration...")
         encryption_key = os.getenv('CONFIG_ENCRYPTION_KEY')
-        if not encryption_key:
-            logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development.")
-            os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
 
-        app_state.config = initialize_config()
+        _raw_config = initialize_config()
+        # initialize_config() may return a dict — wrap it in a namespace so
+        # attribute access works throughout the app.
+        if isinstance(_raw_config, dict):
+            class _DB:
+                """Minimal database config object."""
+                connection_pool_size = 5
+                max_overflow = 10
+                def get_connection_string(self):
+                    return os.getenv('DATABASE_URL', 'sqlite:///hopefx.db')
+
+            class _ConfigNS:
+                def __init__(self, d):
+                    for k, v in d.items():
+                        setattr(self, k, v)
+                    if not hasattr(self, 'environment'):
+                        self.environment = os.getenv('APP_ENV', 'development')
+                    # Always replace database with a proper object
+                    self.database = _DB()
+                    if not hasattr(self, 'api_configs'):
+                        self.api_configs = {}
+            app_state.config = _ConfigNS(_raw_config)
+        else:
+            app_state.config = _raw_config
         logger.info(f"✓ Configuration loaded: {app_state.config.environment}")
 
         # Initialize database
@@ -166,12 +262,21 @@ async def startup_event():
             max_overflow=app_state.config.database.max_overflow,
         )
         try:
-            Base.metadata.create_all(app_state.db_engine)
-            logger.info("✓ Database initialized")
+            # Run Alembic migrations instead of create_all so schema changes
+            # are tracked and applied incrementally.
+            from alembic.config import Config as AlembicConfig
+            from alembic import command as alembic_command
+            alembic_cfg = AlembicConfig("alembic.ini")
+            alembic_cfg.set_main_option("sqlalchemy.url", connection_string)
+            alembic_command.upgrade(alembic_cfg, "head")
+            logger.info("✓ Database migrations applied (alembic upgrade head)")
         except Exception as e:
-            logger.warning(f"⚠ Database initialization had issues: {e}")
-            # Continue anyway - database might already exist or have compatibility issues
-            logger.info("Continuing with existing database state...")
+            logger.warning(f"⚠ Alembic migration failed ({e}), falling back to create_all")
+            try:
+                Base.metadata.create_all(app_state.db_engine)
+                logger.info("✓ Database initialized via create_all fallback")
+            except Exception as e2:
+                logger.warning(f"⚠ create_all also failed: {e2}")
         
         app_state.db_session_factory = sessionmaker(bind=app_state.db_engine)
 
@@ -268,6 +373,134 @@ async def startup_event():
             logger.warning(f"⚠ News router not available: {e}")
             log_activity(f"News router unavailable: {e}")
 
+        # ── Auth Service ─────────────────────────────────────────────────────
+        try:
+            from database.user_models import User, UserSession, LoginAttempt
+            # Ensure user tables exist
+            from database.models import Base as _Base
+            User.__table__.create(app_state.db_engine, checkfirst=True)
+            UserSession.__table__.create(app_state.db_engine, checkfirst=True)
+            LoginAttempt.__table__.create(app_state.db_engine, checkfirst=True)
+
+            from auth.service import AuthService
+            auth_svc = AuthService(session_factory=app_state.db_session_factory)
+            set_auth_service(auth_svc)
+            app_state.auth_service = auth_svc
+            logger.info("✓ Auth Service initialized")
+            log_activity("Auth Service initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Auth Service not available: {e}")
+            app_state.auth_service = None
+
+        # ── Risk Manager ─────────────────────────────────────────────────────
+        try:
+            from risk.manager import RiskManager, RiskConfig
+            risk_config = RiskConfig(
+                max_position_size_pct=float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.02")),
+                max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
+                daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
+            )
+            app_state.risk_manager = RiskManager(config=risk_config)
+            logger.info("✓ Risk Manager initialized")
+            log_activity("Risk Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Risk Manager not available: {e}")
+            app_state.risk_manager = None
+
+        # ── Compliance Manager ───────────────────────────────────────────────
+        try:
+            from compliance.compliance_manager import ComplianceManager
+            app_state.compliance_manager = ComplianceManager(
+                session_factory=app_state.db_session_factory
+            )
+            logger.info("✓ Compliance Manager initialized (DB-backed)")
+            log_activity("Compliance Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Compliance Manager not available: {e}")
+            app_state.compliance_manager = None
+
+        # ── AML Gate ─────────────────────────────────────────────────────────
+        try:
+            from compliance.aml import init_aml_gate
+            init_aml_gate(session_factory=app_state.db_session_factory)
+            logger.info("✓ AML Gate initialized (DB-backed)")
+            log_activity("AML Gate initialized")
+        except Exception as e:
+            logger.warning(f"⚠ AML Gate not available: {e}")
+
+        # ── Strategy Brain ───────────────────────────────────────────────────
+        try:
+            from strategies.strategy_brain import StrategyBrain
+            from strategies.base import StrategyConfig
+            from strategies.ma_crossover import MovingAverageCrossover
+            from strategies.rsi_strategy import RSIStrategy
+            from strategies.macd_strategy import MACDStrategy
+            from strategies.bollinger_bands import BollingerBandsStrategy
+
+            def _cfg(name, symbol="XAUUSD", tf="1h"):
+                return StrategyConfig(name=name, symbol=symbol, timeframe=tf)
+
+            brain = StrategyBrain()
+            brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
+            brain.register_strategy(RSIStrategy(_cfg("RSI")))
+            brain.register_strategy(MACDStrategy(_cfg("MACD")))
+            brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
+            app_state.strategy_brain = brain
+            logger.info("✓ Strategy Brain initialized with 4 strategies")
+            log_activity("Strategy Brain initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Strategy Brain not available: {e}")
+            app_state.strategy_brain = None
+
+        # ── Wallet Manager ───────────────────────────────────────────────────
+        try:
+            from payments.wallet import WalletManager
+            app_state.wallet_manager = WalletManager(
+                session_factory=app_state.db_session_factory
+            )
+            logger.info("✓ Wallet Manager initialized (DB-backed)")
+            log_activity("Wallet Manager initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Wallet Manager not available: {e}")
+            app_state.wallet_manager = None
+
+        # ── Social / Copy Trading ────────────────────────────────────────────
+        try:
+            from social import copy_trading_engine, marketplace, leaderboard_manager
+            app_state.copy_trading_engine = copy_trading_engine
+            app_state.marketplace = marketplace
+            app_state.leaderboard_manager = leaderboard_manager
+            logger.info("✓ Social trading initialized")
+            log_activity("Social trading initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Social trading not available: {e}")
+
+        # ── Signal Engine (StrategyBrain → broker loop) ──────────────────────
+        try:
+            from core.signal_engine import run_signal_engine
+            asyncio.create_task(run_signal_engine(app_state))
+            logger.info("✓ Signal engine started")
+            log_activity("Signal engine started")
+        except Exception as e:
+            logger.warning(f"⚠ Signal engine not started: {e}")
+
+        # ── Position Reconciliation Loop ──────────────────────────────────────
+        try:
+            from core.position_reconciler import PositionReconciler
+            interval = int(os.getenv("RECONCILER_INTERVAL_SECONDS", "30"))
+            reconciler = PositionReconciler(
+                session_factory=app_state.db_session_factory,
+                broker=getattr(app_state, "broker", None),
+                ws_manager=getattr(app_state, "ws_manager", None),
+                interval_seconds=interval,
+            )
+            await reconciler.start()
+            app_state.reconciler = reconciler
+            logger.info("✓ Position reconciler started (interval=%ds)", interval)
+            log_activity("Position reconciler started")
+        except Exception as e:
+            logger.warning(f"⚠ Position reconciler not started: {e}")
+
         # Apply any risk settings persisted from a previous run
         apply_persisted_risk_settings()
 
@@ -356,6 +589,49 @@ async def startup_event():
                 logger.warning(f"⚠ ML Predictions router not available: {e}")
                 log_activity(f"ML Predictions router unavailable: {e}")
 
+        # ── Mobile API ────────────────────────────────────────────────────────
+        try:
+            from mobile.api import MobileAPIServer
+            from mobile.push_notifications import PushNotificationManager
+            mobile_api_server = MobileAPIServer()
+            # Register mobile routes under /api/mobile prefix
+            if hasattr(mobile_api_server, 'router'):
+                app.include_router(mobile_api_server.router, prefix="/api/mobile", tags=["Mobile"])
+            elif hasattr(mobile_api_server, 'app'):
+                # MobileAPIServer wraps its own FastAPI app — mount it
+                app.mount("/api/mobile", mobile_api_server.app)
+            app_state.mobile_api = mobile_api_server
+
+            push_manager = PushNotificationManager()
+            app_state.push_notifications = push_manager
+            logger.info("✓ Mobile API + Push Notifications initialized")
+            log_activity("Mobile API initialized")
+        except Exception as e:
+            logger.warning(f"⚠ Mobile API not available: {e}")
+
+        # ── Hyperopt router ───────────────────────────────────────────────────
+        try:
+            from backtesting.hyperopt import create_hyperopt_router
+            app.include_router(create_hyperopt_router())
+            logger.info("✓ Hyperopt router registered")
+            log_activity("Hyperopt router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Hyperopt router not available: {e}")
+
+        # ── Telegram Bot ──────────────────────────────────────────────────────
+        try:
+            from notifications.telegram_bot import init_telegram_bot
+            tg_bot = init_telegram_bot(app_state)
+            if tg_bot:
+                asyncio.create_task(tg_bot.start())
+                app_state.telegram_bot = tg_bot
+                logger.info("✓ Telegram bot started")
+                log_activity("Telegram bot started")
+            else:
+                logger.info("Telegram bot skipped (TELEGRAM_BOT_TOKEN not set)")
+        except Exception as e:
+            logger.warning(f"⚠ Telegram bot not available: {e}")
+
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)
@@ -388,37 +664,60 @@ async def shutdown_event():
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """
-    Health check endpoint
-
-    Returns the health status of all system components
+    Health check endpoint — probes each component and reports real status.
     """
-    components = {
-        "api": "healthy",
-        "config": "healthy" if app_state.config else "unavailable",
-        "database": "healthy" if app_state.db_engine else "unavailable",
-    }
-    
-    # Cache is optional for health check
+    components: dict = {"api": "healthy"}
+
+    # Config
+    components["config"] = "healthy" if app_state.config else "unavailable"
+
+    # Database — run a lightweight query
+    if app_state.db_engine:
+        try:
+            from sqlalchemy import text as _text
+            with app_state.db_engine.connect() as _conn:
+                _conn.execute(_text("SELECT 1"))
+            components["database"] = "healthy"
+        except Exception as _dbe:
+            logger.warning("DB health probe failed: %s", _dbe)
+            components["database"] = "degraded"
+    else:
+        components["database"] = "unavailable"
+
+    # Cache (Redis) — optional
     if app_state.cache:
         try:
-            cache_healthy = app_state.cache.health_check() if hasattr(app_state.cache, 'health_check') else True
-            components["cache"] = "healthy" if cache_healthy else "degraded"
-        except Exception as e:
-            logger.warning(f"Cache health check failed: {e}")
+            ok = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
+            components["cache"] = "healthy" if ok else "degraded"
+        except Exception:
             components["cache"] = "degraded"
     else:
         components["cache"] = "unavailable"
 
-    # Consider system healthy if API and config are available
-    # Database and cache are optional for basic health
-    critical_components = ["api", "config"]
+    # Auth service
+    components["auth"] = "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
+
+    # Risk manager
+    components["risk_manager"] = "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
+
+    # Compliance manager
+    components["compliance"] = "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
+
+    # Strategy brain
+    components["strategy_brain"] = "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
+
+    # WebSocket manager
+    components["websocket"] = "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
+
+    # Overall: degraded if any critical component is not healthy
+    critical = ["api", "config", "database"]
     overall_status = "healthy" if all(
-        components.get(c) == "healthy" for c in critical_components
+        components.get(c) == "healthy" for c in critical
     ) else "degraded"
 
     return HealthResponse(
         status=overall_status,
-        version="1.0.0",
+        version="2.0.0",
         environment=app_state.config.environment if app_state.config else "unknown",
         components=components,
     )
@@ -453,6 +752,18 @@ async def get_status():
         cache_connected=cache_connected,
         api_configs=len(app_state.config.api_configs) if app_state.config else 0,
     )
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics", tags=["System"], include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus text-format metrics. Scraped by Prometheus server."""
+    try:
+        from core.metrics import metrics_response
+        body, content_type = metrics_response()
+        return Response(content=body, media_type=content_type)
+    except Exception as exc:
+        return PlainTextResponse(f"# metrics error: {exc}\n", status_code=500)
 
 
 # Root endpoint
@@ -555,8 +866,10 @@ async def global_exception_handler(request, exc):
     )
 
 
-# Setup CORS
+# Setup CORS, security headers, and metrics middleware
 setup_cors(app)
+setup_security_headers(app)
+setup_metrics_middleware(app)
 
 
 def run_server():

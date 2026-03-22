@@ -1,82 +1,92 @@
 """
-User Profile Management
-
-Handles user profiles, verification, and social connections.
+Trader Profiles Management
+- Profile creation and updates
+- Performance statistics
+- Verification system
 """
 
-from typing import Dict, Optional
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, Dict
 
+@dataclass
+class TraderProfile:
+    """Complete trader profile"""
+    trader_id: str
+    username: str
+    email: str
+    bio: str = ""
+    avatar_url: Optional[str] = None
+    website: Optional[str] = None
+    verified: bool = False
+    verification_date: Optional[datetime] = None
+    created_at: datetime = None
+    updated_at: datetime = None
+    
+    # Statistics
+    total_followers: int = 0
+    total_following: int = 0
+    total_trades: int = 0
+    win_rate: float = 0.0
+    total_pnl: float = 0.0
+    avg_win: float = 0.0
+    avg_loss: float = 0.0
+    sharpe_ratio: float = 0.0
+    
+    def to_dict(self) -> Dict:
+        """Convert to dictionary"""
+        return {
+            'trader_id': self.trader_id,
+            'username': self.username,
+            'email': self.email,
+            'bio': self.bio,
+            'avatar_url': self.avatar_url,
+            'website': self.website,
+            'verified': self.verified,
+            'verification_date': self.verification_date.isoformat() if self.verification_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'total_followers': self.total_followers,
+            'total_following': self.total_following,
+            'total_trades': self.total_trades,
+            'win_rate': self.win_rate,
+            'total_pnl': self.total_pnl,
+            'avg_win': self.avg_win,
+            'avg_loss': self.avg_loss,
+            'sharpe_ratio': self.sharpe_ratio,
+        }
 
-class UserProfile:
-    """User profile data"""
-    def __init__(self, user_id: str, display_name: str):
-        self.user_id = user_id
-        self.display_name = display_name
-        self.bio = ""
-        self.avatar_url = ""
-        self.verification_level = "none"
-        self.followers_count = 0
-        self.following_count = 0
-        self.created_at = datetime.now(timezone.utc)
-
-
-class ProfileManager:
-    """Manages user profiles and social connections"""
-
+class TraderProfileManager:
+    """Manage trader profiles"""
+    
     def __init__(self):
-        self.profiles: Dict[str, UserProfile] = {}
-        self.following: Dict[str, set] = {}  # user_id -> set of following_ids
-
-    def create_profile(self, user_id: str, display_name: str) -> UserProfile:
-        """Create a new user profile"""
-        profile = UserProfile(user_id, display_name)
-        self.profiles[user_id] = profile
+        self.profiles: Dict[str, TraderProfile] = {}
+    
+    def create_profile(self, trader_id: str, username: str, email: str) -> TraderProfile:
+        """Create new trader profile"""
+        profile = TraderProfile(
+            trader_id=trader_id,
+            username=username,
+            email=email,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        self.profiles[trader_id] = profile
         return profile
-
-    def get_profile(self, user_id: str) -> Optional[UserProfile]:
-        """Get user profile"""
-        return self.profiles.get(user_id)
-
-    def update_profile(self, user_id: str, **kwargs) -> bool:
-        """Update user profile"""
-        if user_id not in self.profiles:
-            return False
-
-        profile = self.profiles[user_id]
+    
+    def update_profile(self, trader_id: str, **kwargs) -> Optional[TraderProfile]:
+        """Update trader profile"""
+        if trader_id not in self.profiles:
+            return None
+        
+        profile = self.profiles[trader_id]
         for key, value in kwargs.items():
             if hasattr(profile, key):
                 setattr(profile, key, value)
-
-        return True
-
-    def follow_user(self, follower_id: str, following_id: str) -> bool:
-        """Follow another user"""
-        if follower_id not in self.following:
-            self.following[follower_id] = set()
-
-        if following_id not in self.following[follower_id]:
-            self.following[follower_id].add(following_id)
-
-            # Update counts
-            if follower_id in self.profiles:
-                self.profiles[follower_id].following_count += 1
-            if following_id in self.profiles:
-                self.profiles[following_id].followers_count += 1
-
-            return True
-        return False
-
-    def unfollow_user(self, follower_id: str, following_id: str) -> bool:
-        """Unfollow a user"""
-        if follower_id in self.following and following_id in self.following[follower_id]:
-            self.following[follower_id].remove(following_id)
-
-            # Update counts
-            if follower_id in self.profiles:
-                self.profiles[follower_id].following_count -= 1
-            if following_id in self.profiles:
-                self.profiles[following_id].followers_count -= 1
-
-            return True
-        return False
+        
+        profile.updated_at = datetime.now()
+        return profile
+    
+    def get_profile(self, trader_id: str) -> Optional[TraderProfile]:
+        """Get trader profile"""
+        return self.profiles.get(trader_id)

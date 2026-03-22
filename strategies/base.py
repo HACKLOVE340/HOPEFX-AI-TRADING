@@ -86,10 +86,30 @@ class BaseStrategy(ABC):
             'total_signals': 0,
             'winning_signals': 0,
             'losing_signals': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
             'total_pnl': 0.0,
+            'win_rate': 0.0,
         }
 
         logger.info(f"Initialized strategy: {config.name} for {config.symbol}")
+
+    @property
+    def name(self) -> str:
+        return self.config.name
+
+    @property
+    def symbol(self) -> str:
+        return self.config.symbol
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == StrategyStatus.RUNNING
+
+    @property
+    def performance(self) -> dict:
+        """Alias for performance_metrics."""
+        return self.performance_metrics
 
     @abstractmethod
     def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -191,7 +211,8 @@ class BaseStrategy(ABC):
 
         return metrics
 
-    def update_performance(self, signal_id: int, pnl: float, is_winner: bool):
+    def update_performance(self, signal_id_or_pnl=None, pnl_or_side=None,
+                           is_winner=None, profit_loss=None, pnl=None, signal_type=None):
         """
         Update performance metrics after trade completion.
 
@@ -200,12 +221,37 @@ class BaseStrategy(ABC):
             pnl: Profit/Loss from trade
             is_winner: Whether trade was profitable
         """
+        # Support multiple calling conventions:
+        # (profit_loss=X, signal_type=Y)  — keyword style
+        # (pnl, side_str)                 — positional 2-arg
+        # (signal_id, pnl, is_winner)     — positional 3-arg
+        if pnl is not None and profit_loss is None:
+            profit_loss = pnl
+        if profit_loss is not None:
+            pnl = float(profit_loss)
+            is_winner = pnl > 0 if is_winner is None else is_winner
+        elif is_winner is None and pnl_or_side is not None:
+            pnl = float(signal_id_or_pnl)
+            is_winner = pnl > 0
+        elif is_winner is None:
+            pnl = float(signal_id_or_pnl) if signal_id_or_pnl is not None else 0.0
+            is_winner = pnl > 0
+        else:
+            pnl = float(pnl_or_side) if pnl_or_side is not None else 0.0
+
+        self.performance_metrics['total_signals'] += 1
         self.performance_metrics['total_pnl'] += pnl
 
         if is_winner:
             self.performance_metrics['winning_signals'] += 1
+            self.performance_metrics['winning_trades'] += 1
         else:
             self.performance_metrics['losing_signals'] += 1
+            self.performance_metrics['losing_trades'] += 1
+
+        total = self.performance_metrics['total_signals']
+        wins = self.performance_metrics['winning_trades']
+        self.performance_metrics['win_rate'] = (wins / total * 100.0) if total > 0 else 0.0
 
     def __repr__(self) -> str:
         return (

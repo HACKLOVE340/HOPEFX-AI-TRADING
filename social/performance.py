@@ -1,62 +1,49 @@
-"""
-Performance Tracking
+"""Performance tracking for social trading."""
 
-Tracks and analyzes trader performance metrics.
-"""
-
-from typing import Dict, List
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional
 
 
+@dataclass
 class PerformanceMetric:
-    """Performance metric data"""
-    def __init__(self, user_id: str, period: str):
-        self.user_id = user_id
-        self.period = period
-        self.total_return = Decimal('0.0')
-        self.win_rate = Decimal('0.0')
-        self.profit_factor = Decimal('0.0')
-        self.sharpe_ratio = Decimal('0.0')
-        self.max_drawdown = Decimal('0.0')
-        self.total_trades = 0
-        self.updated_at = datetime.now(timezone.utc)
+    user_id: str
+    period: str = "all"
+    total_return: Decimal = field(default_factory=lambda: Decimal("0.0"))
+    total_trades: int = 0
+    winning_trades: int = 0
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PerformanceTracker:
-    """Tracks user performance metrics"""
+    """Tracks per-user trading performance."""
 
     def __init__(self):
-        self.metrics: Dict[str, PerformanceMetric] = {}
+        # (user_id, period) -> PerformanceMetric
+        self.metrics: Dict[tuple, PerformanceMetric] = {}
 
-    def record_trade(
-        self,
-        user_id: str,
-        profit: Decimal,
-        period: str = "all_time"
-    ) -> None:
-        """Record a trade result"""
-        key = f"{user_id}_{period}"
+    def _key(self, user_id: str, period: str) -> tuple:
+        return (user_id, period)
 
+    def record_trade(self, user_id: str, pnl: Decimal, period: str = "all") -> None:
+        key = self._key(user_id, period)
         if key not in self.metrics:
-            self.metrics[key] = PerformanceMetric(user_id, period)
+            self.metrics[key] = PerformanceMetric(user_id=user_id, period=period)
+        m = self.metrics[key]
+        m.total_return += pnl
+        m.total_trades += 1
+        if pnl > 0:
+            m.winning_trades += 1
+        m.updated_at = datetime.now(timezone.utc)
 
-        metric = self.metrics[key]
-        metric.total_trades += 1
-        metric.total_return += profit
-        metric.updated_at = datetime.now(timezone.utc)
+    def get_performance(self, user_id: str, period: str = "all") -> PerformanceMetric:
+        key = self._key(user_id, period)
+        if key not in self.metrics:
+            return PerformanceMetric(user_id=user_id, period=period)
+        return self.metrics[key]
 
-    def get_performance(
-        self,
-        user_id: str,
-        period: str = "all_time"
-    ) -> PerformanceMetric:
-        """Get performance metrics for a user"""
-        key = f"{user_id}_{period}"
-        return self.metrics.get(key, PerformanceMetric(user_id, period))
-
-    def calculate_win_rate(self, user_id: str, winning_trades: int, total_trades: int) -> Decimal:
-        """Calculate win rate"""
-        if total_trades == 0:
-            return Decimal('0.0')
-        return Decimal(winning_trades) / Decimal(total_trades) * Decimal('100.0')
+    def calculate_win_rate(self, user_id: str, wins: int, total: int) -> Decimal:
+        if total == 0:
+            return Decimal("0.0")
+        return Decimal(str(round(wins / total * 100, 1)))

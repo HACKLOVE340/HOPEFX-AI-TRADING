@@ -1,0 +1,17 @@
+{
+  "symbol": "GC=F",
+  "trained_at": "2026-03-21T18:13:28.801347",
+  "period": "6mo",
+  "rows": 125,
+  "models": {
+    "random_forest": {
+      "path": "ml/saved_models/GCF/random_forest_model.pkl",
+      "metrics": {
+        "accuracy": 0.4666666666666667,
+        "precision": 0.36363636363636365,
+        "recall": 0.8,
+        "f1": 0.5
+      }
+    }
+  }
+}

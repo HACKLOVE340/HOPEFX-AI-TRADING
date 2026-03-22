@@ -1,803 +1,394 @@
 """
-Professional Configuration Management System
-Handles API credentials, trading parameters, and database configuration with encryption support.
-
-Features:
-- Encrypted credential storage
-- Environment-based configuration
-- Type validation
-- Secure credential loading
-- Configuration hot-reloading
-- Audit logging for sensitive operations
+Configuration Management System
 """
 
-import os
+import base64
+import fcntl
+import hashlib
 import json
 import logging
-from typing import Any, Dict, Optional, List
-from dataclasses import dataclass, asdict, field
-from pathlib import Path
-from functools import lru_cache
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import base64
-from datetime import datetime, timezone
-import hashlib
+import os
 import secrets
+import time
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
 class EncryptionManager:
-    """Handles encryption and decryption of sensitive configuration data."""
+    """Fernet-based encryption with PBKDF2 key derivation."""
 
-    def __init__(self, master_key: Optional[str] = None):
-        """
-        Initialize encryption manager.
-
-        Args:
-            master_key: Master encryption key. If None, generates from environment.
-                If still absent, a new key is auto-generated and written to .env so
-                subsequent runs are stable.
-        """
-        self.master_key = master_key or os.getenv('CONFIG_ENCRYPTION_KEY')
-        if not self.master_key:
-            self.master_key = self._bootstrap_encryption_key()
-
-        self._cipher = self._create_cipher()
-        logger.info("Encryption manager initialized")
-
-    # ------------------------------------------------------------------
-    # Key bootstrap helpers
-    # ------------------------------------------------------------------
-
-    def _bootstrap_encryption_key(self) -> str:
-        """
-        Auto-generate CONFIG_ENCRYPTION_KEY when it is not set.
-
-        The generated key is:
-        1. Set in the current process environment so the running session works.
-        2. Appended to (or updated in) the project-root .env file so that
-           subsequent restarts pick it up automatically.
-
-        Returns:
-            The newly generated hex key string.
-        """
-        new_key = secrets.token_hex(32)  # 64 hex chars → 256-bit entropy
-        os.environ['CONFIG_ENCRYPTION_KEY'] = new_key
-
-        env_path = Path('.env')
-        self._persist_env_key('CONFIG_ENCRYPTION_KEY', new_key, env_path)
-
-        logger.warning(
-            "CONFIG_ENCRYPTION_KEY was not set. "
-            "A new key has been generated and saved to .env — "
-            "back it up and set it as an environment variable in production."
-        )
-        return new_key
-
-    @staticmethod
-    def _persist_env_key(key: str, value: str, env_path: Path) -> None:
-        """Write or update a KEY=value line in a .env file."""
-        try:
-            lines: list = []
-            if env_path.exists():
-                lines = env_path.read_text().splitlines()
-
-            updated = False
-            for i, line in enumerate(lines):
-                if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
-                    lines[i] = f"{key}={value}"
-                    updated = True
-                    break
-
-            if not updated:
-                lines.append(f"{key}={value}")
-
-            env_path.write_text('\n'.join(lines) + '\n')
-            logger.info(f"Persisted {key} to {env_path}")
-        except OSError as exc:
-            logger.warning(f"Could not write {key} to {env_path}: {exc}")
-
-    def _create_cipher(self) -> Fernet:
-        """Create Fernet cipher from master key."""
-        # Use master key directly for Fernet (must be 32 url-safe base64-encoded bytes)
-        # Derive a proper key from the master key using PBKDF2
-        # Use environment-specific salt or generate if not available
-        salt = os.getenv('CONFIG_SALT')
-        if salt:
-            # Decode salt from hex format for proper cryptographic randomness
-            try:
-                salt_bytes = bytes.fromhex(salt)
-            except ValueError:
-                logger.error("CONFIG_SALT must be hex-encoded. Generate with: python -c \"import secrets; print(secrets.token_hex(16))\"")
-                raise ValueError("Invalid CONFIG_SALT format. Expected hex-encoded string.")
-        else:
-            # For backward compatibility: use consistent salt derived from master key
-            # This allows decryption of existing data
-            salt_bytes = hashlib.sha256(self.master_key.encode()).digest()[:16]
-            logger.warning(
-                "CONFIG_SALT not set, using derived salt. "
-                "For better security, set CONFIG_SALT environment variable (hex-encoded)."
+    def __init__(self, master_key: str = ""):
+        key = master_key or os.environ.get("CONFIG_ENCRYPTION_KEY", "")
+        if not key:
+            raise ValueError(
+                "Encryption key required: pass master_key= or set CONFIG_ENCRYPTION_KEY"
             )
+        self.master_key = key
 
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt_bytes,
-            iterations=100000,
-        )
-        key = base64.urlsafe_b64encode(
-            kdf.derive(self.master_key.encode())
-        )
-        return Fernet(key)
+        salt_hex = os.environ.get("CONFIG_SALT", "")
+        if salt_hex:
+            try:
+                self._salt = bytes.fromhex(salt_hex)
+            except ValueError:
+                raise ValueError(f"CONFIG_SALT is not valid hex: {salt_hex!r}")
+        else:
+            logger.warning("CONFIG_SALT not set; deriving salt from master key")
+            self._salt = hashlib.sha256(key.encode()).digest()[:16]
 
-    def encrypt(self, data: str) -> str:
-        """
-        Encrypt sensitive string data.
-
-        Args:
-            data: String to encrypt
-
-        Returns:
-            Encrypted string (base64 encoded)
-        """
-        try:
-            encrypted = self._cipher.encrypt(data.encode())
-            return base64.b64encode(encrypted).decode()
-        except Exception as e:
-            logger.error(f"Encryption failed: {e}")
-            raise
-
-    def decrypt(self, encrypted_data: str) -> str:
-        """
-        Decrypt sensitive string data.
-
-        Args:
-            encrypted_data: Encrypted string (base64 encoded)
-
-        Returns:
-            Decrypted string
-        """
-        try:
-            encrypted = base64.b64decode(encrypted_data.encode())
-            decrypted = self._cipher.decrypt(encrypted)
-            return decrypted.decode()
-        except Exception as e:
-            logger.error(f"Decryption failed: {e}")
-            raise
-
-    def hash_password(self, password: str, salt: Optional[bytes] = None) -> str:
-        """
-        Hash a password using PBKDF2-HMAC-SHA256 with salt (one-way).
-
-        This is more secure than plain SHA256 for password hashing.
-        For production use, consider bcrypt, scrypt, or argon2.
-
-        Args:
-            password: Password to hash
-            salt: Optional salt bytes (generates random if not provided)
-
-        Returns:
-            Hashed password in format: salt$hash (hex encoded)
-        """
-        if salt is None:
-            salt = secrets.token_bytes(16)
-
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000,
-        )
-        hash_bytes = kdf.derive(password.encode())
-
-        # Return salt and hash in format: salt$hash
-        return f"{salt.hex()}${hash_bytes.hex()}"
-
-    def verify_password(self, password: str, hashed: str) -> bool:
-        """
-        Verify a password against a hashed password.
-
-        Args:
-            password: Password to verify
-            hashed: Previously hashed password (salt$hash format)
-
-        Returns:
-            True if password matches, False otherwise
-        """
-        try:
-            salt_hex, hash_hex = hashed.split('$')
-            salt = bytes.fromhex(salt_hex)
-            expected_hash = bytes.fromhex(hash_hex)
-
+        if CRYPTO_AVAILABLE:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=salt,
-                iterations=100000,
+                salt=self._salt,
+                iterations=100_000,
             )
+            derived = base64.urlsafe_b64encode(kdf.derive(key.encode()))
+            self._fernet = Fernet(derived)
+        else:
+            self._fernet = None
 
-            actual_hash = kdf.derive(password.encode())
-            return secrets.compare_digest(actual_hash, expected_hash)
-        except Exception as e:
-            logger.error(f"Password verification failed: {e}")
+    def encrypt(self, data: str) -> str:
+        if self._fernet:
+            return self._fernet.encrypt(data.encode()).decode()
+        return base64.b64encode(data.encode()).decode()
+
+    def decrypt(self, token: str) -> str:
+        if self._fernet:
+            return self._fernet.decrypt(token.encode()).decode()
+        return base64.b64decode(token.encode()).decode()
+
+    def hash_password(self, password: str, salt: bytes = None) -> str:
+        if salt is None:
+            salt = secrets.token_bytes(16)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
+        return f"{salt.hex()}${dk.hex()}"
+
+    def verify_password(self, password: str, hashed: str) -> bool:
+        try:
+            salt_hex, dk_hex = hashed.split("$", 1)
+        except ValueError:
             return False
+        salt = bytes.fromhex(salt_hex)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
+        return dk.hex() == dk_hex
 
 
 @dataclass
 class APIConfig:
-    """API Configuration for trading platforms."""
-
-    provider: str
-    api_key: str
-    api_secret: str
+    provider: str = ""
+    api_key: str = ""
+    api_secret: str = ""
     sandbox_mode: bool = True
-    base_url: Optional[str] = None
+    rate_limit: int = 100
+    base_url: str = ""
     timeout: int = 30
     max_retries: int = 3
-    rate_limit: int = 100  # requests per minute
 
     def validate(self) -> bool:
-        """Validate API configuration."""
-        if not all([self.provider, self.api_key, self.api_secret]):
-            logger.warning(f"Invalid API config for {self.provider}: missing required fields")
-            return False
-        return True
+        return bool(self.provider and self.api_key and self.api_secret)
 
 
 @dataclass
 class DatabaseConfig:
-    """Database Configuration."""
-
-    db_type: str  # 'postgresql', 'mysql', 'sqlite'
-    host: str
-    port: int
-    username: str
-    password: str
-    database: str
+    db_type: str = "sqlite"
+    host: str = "localhost"
+    port: int = 5432
+    username: str = ""
+    password: str = ""
+    database: str = "hopefx.db"
     ssl_enabled: bool = True
-    ssl_mode: str = "require"  # disable, allow, prefer, require, verify-ca, verify-full
-    ssl_cert_path: Optional[str] = None
-    ssl_key_path: Optional[str] = None
-    ssl_ca_path: Optional[str] = None
+    ssl_mode: str = "prefer"
     connection_pool_size: int = 10
     max_overflow: int = 20
     pool_timeout: int = 30
 
-    def get_connection_string(self) -> str:
-        """Generate database connection string with SSL options."""
-        if self.db_type == 'sqlite':
-            return f"sqlite:///{self.database}"
-        elif self.db_type == 'postgresql':
-            base_url = (
-                f"postgresql://{self.username}:{self.password}@"
-                f"{self.host}:{self.port}/{self.database}"
-            )
-            # Add SSL parameters for PostgreSQL
-            if self.ssl_enabled and self.ssl_mode != 'disable':
-                ssl_params = f"?sslmode={self.ssl_mode}"
-                if self.ssl_cert_path:
-                    ssl_params += f"&sslcert={self.ssl_cert_path}"
-                if self.ssl_key_path:
-                    ssl_params += f"&sslkey={self.ssl_key_path}"
-                if self.ssl_ca_path:
-                    ssl_params += f"&sslrootcert={self.ssl_ca_path}"
-                base_url += ssl_params
-            return base_url
-        elif self.db_type == 'mysql':
-            base_url = (
-                f"mysql+pymysql://{self.username}:{self.password}@"
-                f"{self.host}:{self.port}/{self.database}"
-            )
-            # Add SSL parameters for MySQL
-            if self.ssl_enabled:
-                ssl_params = "?ssl=true"
-                if self.ssl_ca_path:
-                    ssl_params += f"&ssl_ca={self.ssl_ca_path}"
-                if self.ssl_cert_path:
-                    ssl_params += f"&ssl_cert={self.ssl_cert_path}"
-                if self.ssl_key_path:
-                    ssl_params += f"&ssl_key={self.ssl_key_path}"
-                base_url += ssl_params
-            return base_url
-        else:
-            raise ValueError(f"Unsupported database type: {self.db_type}")
-
     def validate(self) -> bool:
-        """Validate database configuration."""
-        if self.db_type not in ['postgresql', 'mysql', 'sqlite']:
-            logger.warning(f"Invalid database type: {self.db_type}")
-            return False
+        return self.db_type in ("sqlite", "postgresql", "mysql")
 
-        if self.db_type != 'sqlite':
-            if not all([self.host, self.port, self.username, self.password, self.database]):
-                logger.warning("Invalid database config: missing required fields")
-                return False
-
-            # Warn if SSL is disabled in production
-            app_env = os.getenv('APP_ENV', 'development')
-            if app_env == 'production' and not self.ssl_enabled:
-                logger.warning("SSL is disabled for database connection in production!")
-
-        return True
+    def get_connection_string(self) -> str:
+        if self.db_type == "sqlite":
+            return f"sqlite:///{self.database}"
+        if self.db_type == "postgresql":
+            base = (
+                f"postgresql://{self.username}:{self.password}"
+                f"@{self.host}:{self.port}/{self.database}"
+            )
+            if self.ssl_enabled:
+                base += f"?sslmode={self.ssl_mode}"
+            return base
+        if self.db_type == "mysql":
+            base = (
+                f"mysql+pymysql://{self.username}:{self.password}"
+                f"@{self.host}:{self.port}/{self.database}"
+            )
+            if self.ssl_enabled:
+                base += "?ssl=true"
+            return base
+        raise ValueError(f"Unsupported db_type: {self.db_type}")
 
 
 @dataclass
 class TradingConfig:
-    """Trading Parameters Configuration."""
-
-    max_position_size: float = 10000.0  # Maximum position size in base currency
-    max_leverage: float = 1.0
+    max_position_size: float = 10000.0
+    max_leverage: float = 10.0
     stop_loss_percent: float = 2.0
-    take_profit_percent: float = 5.0
+    take_profit_percent: float = 4.0
     max_open_orders: int = 10
-    risk_per_trade: float = 1.0  # Percentage of portfolio
-    daily_loss_limit: float = 5.0  # Percentage of portfolio
-    trading_enabled: bool = False  # Safety flag
-    paper_trading_mode: bool = True  # Start in paper trading
+    risk_per_trade: float = 1.0
+    daily_loss_limit: float = 5.0
+    trading_enabled: bool = False
+    paper_trading_mode: bool = True
 
     def validate(self) -> bool:
-        """Validate trading configuration."""
         if self.max_position_size <= 0:
-            logger.warning("Invalid max_position_size: must be positive")
             return False
-
-        if not (0 < self.max_leverage <= 100):
-            logger.warning("Invalid max_leverage: must be between 0 and 100")
+        if self.max_leverage <= 0 or self.max_leverage > 100:
             return False
-
-        if not (0 < self.risk_per_trade < 100):
-            logger.warning("Invalid risk_per_trade: must be between 0 and 100")
+        if self.risk_per_trade <= 0:
             return False
-
         return True
 
 
 @dataclass
 class LoggingConfig:
-    """Logging Configuration."""
-
     level: str = "INFO"
-    log_file: str = "logs/hopefx_ai.log"
+    log_file: str = "logs/hopefx.log"
     max_file_size_mb: int = 100
     backup_count: int = 10
-    format_string: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format_string: str = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
     def validate(self) -> bool:
-        """Validate logging configuration."""
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-        if self.level not in valid_levels:
-            logger.warning(f"Invalid log level: {self.level}")
-            return False
-        return True
+        return self.level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 
 @dataclass
 class AppConfig:
-    """Main Application Configuration."""
-
     app_name: str = "HOPEFX AI Trading"
     version: str = "1.0.0"
-    environment: str = "development"  # development, staging, production
+    environment: str = "development"
     debug: bool = False
     api_configs: Dict[str, APIConfig] = field(default_factory=dict)
-    database: DatabaseConfig = field(default_factory=lambda: DatabaseConfig(
-        db_type="sqlite",
-        host="localhost",
-        port=5432,
-        username="",
-        password="",
-        database="hopefx.db"
-    ))
+    database: DatabaseConfig = field(default_factory=DatabaseConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
 
     def validate(self) -> bool:
-        """Validate all configuration sections."""
-        validations = [
-            self.database.validate(),
-            self.trading.validate(),
-            self.logging.validate(),
-        ]
-
-        for api_config in self.api_configs.values():
-            validations.append(api_config.validate())
-
-        if not all(validations):
-            logger.warning("Configuration validation failed")
+        if not self.trading.validate():
             return False
-
-        logger.info("Configuration validation passed")
+        if not self.logging.validate():
+            return False
+        for cfg in self.api_configs.values():
+            if not cfg.validate():
+                return False
         return True
+
+    def copy(self):
+        import copy
+        return copy.deepcopy(self)
+
+    def to_dict(self) -> dict:
+        return {
+            "app_name": self.app_name,
+            "version": self.version,
+            "environment": self.environment,
+            "debug": self.debug,
+            "api_configs": {k: asdict(v) for k, v in self.api_configs.items()},
+            "database": asdict(self.database),
+            "trading": asdict(self.trading),
+            "logging": asdict(self.logging),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AppConfig":
+        cfg = cls(
+            app_name=d.get("app_name", "HOPEFX AI Trading"),
+            version=d.get("version", "1.0.0"),
+            environment=d.get("environment", "development"),
+            debug=d.get("debug", False),
+        )
+        db_d = d.get("database", {})
+        if db_d:
+            cfg.database = DatabaseConfig(**{
+                k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d
+            })
+        tr_d = d.get("trading", {})
+        if tr_d:
+            cfg.trading = TradingConfig(**{
+                k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d
+            })
+        lg_d = d.get("logging", {})
+        if lg_d:
+            cfg.logging = LoggingConfig(**{
+                k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d
+            })
+        for name, api_d in d.get("api_configs", {}).items():
+            cfg.api_configs[name] = APIConfig(**{
+                k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d
+            })
+        return cfg
+
+
+class _Settings:
+    """Dynamic settings namespace."""
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+    def __getattr__(self, name):
+        return None
 
 
 class ConfigManager:
-    """Professional configuration management with encryption support."""
+    """Secure configuration manager with encryption and hash-based change detection."""
 
     def __init__(self, config_dir: str = "config", encryption_key: Optional[str] = None):
-        """
-        Initialize configuration manager.
-
-        Args:
-            config_dir: Directory containing configuration files
-            encryption_key: Master encryption key for credentials
-        """
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        self.encryption = EncryptionManager(encryption_key)
-        self.config: Optional[AppConfig] = None
-        self._config_hash: Optional[str] = None
-        self._load_timestamp: Optional[datetime] = None
+        self._encryption_key = encryption_key or os.environ.get("CONFIG_ENCRYPTION_KEY", "")
+        self._enc: Optional[EncryptionManager] = None
+        if self._encryption_key:
+            try:
+                self._enc = EncryptionManager(master_key=self._encryption_key)
+            except Exception as e:
+                logger.warning(f"EncryptionManager init failed: {e}")
 
-        logger.info(f"ConfigManager initialized with config_dir: {self.config_dir}")
+        self.config: Optional[AppConfig] = None
+        self._environment: Optional[str] = None
+        self._load_timestamp: Optional[float] = None
+        self._config_hash: Optional[str] = None
+        self.settings = _Settings()  # dynamic attribute bag for test compatibility
+
+    def _config_file(self, environment: str) -> Path:
+        return self.config_dir / f"config.{environment}.json"
+
+    def _hash_config(self, cfg: AppConfig) -> str:
+        raw = json.dumps(cfg.to_dict(), sort_keys=True)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    def _encrypt_value(self, value: str) -> str:
+        if self._enc and value:
+            return self._enc.encrypt(value)
+        return value
+
+    def _decrypt_value(self, value: str) -> str:
+        if self._enc and value:
+            try:
+                return self._enc.decrypt(value)
+            except Exception:
+                return value
+        return value
+
+    def _default_config(self, environment: str) -> AppConfig:
+        cfg = AppConfig(environment=environment)
+        cfg.api_configs["binance"] = APIConfig(provider="binance")
+        return cfg
+
+    def _write_config(self, cfg: AppConfig, path: Path) -> None:
+        d = cfg.to_dict()
+        for name, api_d in d.get("api_configs", {}).items():
+            api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
+            api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
+        with open(path, "w") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                json.dump(d, f, indent=2)
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    def _read_config(self, path: Path) -> AppConfig:
+        with open(path) as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_SH)
+                d = json.load(f)
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+        for name, api_d in d.get("api_configs", {}).items():
+            api_d["api_key"] = self._decrypt_value(api_d.get("api_key", ""))
+            api_d["api_secret"] = self._decrypt_value(api_d.get("api_secret", ""))
+        return AppConfig.from_dict(d)
 
     def load_config(self, environment: Optional[str] = None) -> AppConfig:
-        """
-        Load configuration from files.
+        env = environment or os.environ.get("APP_ENV", "development")
+        path = self._config_file(env)
+        if not path.exists():
+            cfg = self._default_config(env)
+            self._write_config(cfg, path)
+        else:
+            cfg = self._read_config(path)
+        self.config = cfg
+        self._environment = env
+        self._load_timestamp = time.time()
+        self._config_hash = self._hash_config(cfg)
+        return cfg
 
-        Args:
-            environment: Environment to load (uses APP_ENV or 'development' by default)
+    def save_config(self, cfg: AppConfig) -> None:
+        path = self._config_file(cfg.environment)
+        self._write_config(cfg, path)
+        if self._environment == cfg.environment:
+            self._config_hash = self._hash_config(cfg)
 
-        Returns:
-            Loaded AppConfig instance
-        """
-        env = environment or os.getenv('APP_ENV', 'development')
-        config_file = self.config_dir / f"config.{env}.json"
-
-        if not config_file.exists():
-            logger.warning(f"Config file not found: {config_file}, creating default")
-            self._create_default_config(config_file)
-
-        try:
-            with open(config_file, 'r') as f:
-                config_data = json.load(f)
-
-            self.config = self._parse_config(config_data)
-            self._load_timestamp = datetime.now(timezone.utc)
-            self._config_hash = self._hash_config()
-
-            if not self.config.validate():
-                logger.warning("Configuration validation warnings detected")
-
-            logger.info(f"Configuration loaded from {config_file}")
-            return self.config
-
-        except Exception as e:
-            logger.error(f"Failed to load configuration: {e}")
-            raise
-
-    def _parse_config(self, config_data: Dict[str, Any]) -> AppConfig:
-        """Parse configuration dictionary into AppConfig object."""
-        # Parse API configs
-        api_configs = {}
-        for provider, api_data in config_data.get('api_configs', {}).items():
-            try:
-                api_configs[provider] = APIConfig(
-                    provider=provider,
-                    api_key=self._decrypt_field(api_data.get('api_key')),
-                    api_secret=self._decrypt_field(api_data.get('api_secret')),
-                    sandbox_mode=api_data.get('sandbox_mode', True),
-                    base_url=api_data.get('base_url'),
-                    timeout=api_data.get('timeout', 30),
-                    max_retries=api_data.get('max_retries', 3),
-                    rate_limit=api_data.get('rate_limit', 100),
-                )
-            except Exception as e:
-                logger.error(f"Failed to parse API config for {provider}: {e}")
-
-        # Parse database config
-        db_data = config_data.get('database', {})
-        database = DatabaseConfig(
-            db_type=db_data.get('db_type', 'sqlite'),
-            host=db_data.get('host', 'localhost'),
-            port=db_data.get('port', 5432),
-            username=self._decrypt_field(db_data.get('username', '')),
-            password=self._decrypt_field(db_data.get('password', '')),
-            database=db_data.get('database', 'hopefx.db'),
-            ssl_enabled=db_data.get('ssl_enabled', True),
-            connection_pool_size=db_data.get('connection_pool_size', 10),
-            max_overflow=db_data.get('max_overflow', 20),
-            pool_timeout=db_data.get('pool_timeout', 30),
-        )
-
-        # Parse trading config
-        trading_data = config_data.get('trading', {})
-        trading = TradingConfig(
-            max_position_size=trading_data.get('max_position_size', 10000.0),
-            max_leverage=trading_data.get('max_leverage', 1.0),
-            stop_loss_percent=trading_data.get('stop_loss_percent', 2.0),
-            take_profit_percent=trading_data.get('take_profit_percent', 5.0),
-            max_open_orders=trading_data.get('max_open_orders', 10),
-            risk_per_trade=trading_data.get('risk_per_trade', 1.0),
-            daily_loss_limit=trading_data.get('daily_loss_limit', 5.0),
-            trading_enabled=trading_data.get('trading_enabled', False),
-            paper_trading_mode=trading_data.get('paper_trading_mode', True),
-        )
-
-        # Parse logging config
-        logging_data = config_data.get('logging', {})
-        logging_config = LoggingConfig(
-            level=logging_data.get('level', 'INFO'),
-            log_file=logging_data.get('log_file', 'logs/hopefx_ai.log'),
-            max_file_size_mb=logging_data.get('max_file_size_mb', 100),
-            backup_count=logging_data.get('backup_count', 10),
-            format_string=logging_data.get('format_string',
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'),
-        )
-
-        # Create main config
-        return AppConfig(
-            app_name=config_data.get('app_name', 'HOPEFX AI Trading'),
-            version=config_data.get('version', '1.0.0'),
-            environment=config_data.get('environment', 'development'),
-            debug=config_data.get('debug', False),
-            api_configs=api_configs,
-            database=database,
-            trading=trading,
-            logging=logging_config,
-        )
-
-    def save_config(self, config: AppConfig, environment: Optional[str] = None) -> None:
-        """
-        Save configuration to file with encryption for sensitive data.
-
-        Args:
-            config: AppConfig instance to save
-            environment: Environment name (uses config.environment if not provided)
-        """
-        env = environment or config.environment
-        config_file = self.config_dir / f"config.{env}.json"
-
-        try:
-            config_data = self._serialize_config(config)
-
-            with open(config_file, 'w') as f:
-                json.dump(config_data, f, indent=2)
-
-            logger.info(f"Configuration saved to {config_file}")
-            self.config = config
-            self._config_hash = self._hash_config()
-
-        except Exception as e:
-            logger.error(f"Failed to save configuration: {e}")
-            raise
-
-    def _serialize_config(self, config: AppConfig) -> Dict[str, Any]:
-        """Serialize AppConfig to dictionary with encrypted sensitive data."""
-        api_configs = {}
-        for provider, api_config in config.api_configs.items():
-            api_configs[provider] = {
-                'api_key': self._encrypt_field(api_config.api_key),
-                'api_secret': self._encrypt_field(api_config.api_secret),
-                'sandbox_mode': api_config.sandbox_mode,
-                'base_url': api_config.base_url,
-                'timeout': api_config.timeout,
-                'max_retries': api_config.max_retries,
-                'rate_limit': api_config.rate_limit,
-            }
-
-        return {
-            'app_name': config.app_name,
-            'version': config.version,
-            'environment': config.environment,
-            'debug': config.debug,
-            'api_configs': api_configs,
-            'database': {
-                'db_type': config.database.db_type,
-                'host': config.database.host,
-                'port': config.database.port,
-                'username': self._encrypt_field(config.database.username),
-                'password': self._encrypt_field(config.database.password),
-                'database': config.database.database,
-                'ssl_enabled': config.database.ssl_enabled,
-                'connection_pool_size': config.database.connection_pool_size,
-                'max_overflow': config.database.max_overflow,
-                'pool_timeout': config.database.pool_timeout,
-            },
-            'trading': asdict(config.trading),
-            'logging': asdict(config.logging),
-        }
-
-    def _encrypt_field(self, value: str) -> str:
-        """Encrypt a configuration field if not empty."""
-        if not value:
-            return ""
-        return self.encryption.encrypt(value)
-
-    def _decrypt_field(self, value: str) -> str:
-        """Decrypt a configuration field if not empty."""
-        if not value:
-            return ""
-        try:
-            return self.encryption.decrypt(value)
-        except Exception as e:
-            logger.warning(f"Failed to decrypt field: {e}")
-            return value
-
-    def _create_default_config(self, config_file: Path) -> None:
-        """Create a default configuration file."""
-        default_config = {
-            'app_name': 'HOPEFX AI Trading',
-            'version': '1.0.0',
-            'environment': 'development',
-            'debug': True,
-            'api_configs': {
-                'binance': {
-                    'api_key': '',
-                    'api_secret': '',
-                    'sandbox_mode': True,
-                    'base_url': 'https://testnet.binance.vision',
-                    'timeout': 30,
-                    'max_retries': 3,
-                    'rate_limit': 100,
-                }
-            },
-            'database': {
-                'db_type': 'sqlite',
-                'host': 'localhost',
-                'port': 5432,
-                'username': '',
-                'password': '',
-                'database': 'hopefx.db',
-                'ssl_enabled': True,
-                'connection_pool_size': 10,
-                'max_overflow': 20,
-                'pool_timeout': 30,
-            },
-            'trading': {
-                'max_position_size': 10000.0,
-                'max_leverage': 1.0,
-                'stop_loss_percent': 2.0,
-                'take_profit_percent': 5.0,
-                'max_open_orders': 10,
-                'risk_per_trade': 1.0,
-                'daily_loss_limit': 5.0,
-                'trading_enabled': False,
-                'paper_trading_mode': True,
-            },
-            'logging': {
-                'level': 'INFO',
-                'log_file': 'logs/hopefx_ai.log',
-                'max_file_size_mb': 100,
-                'backup_count': 10,
-                'format_string': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            },
-        }
-
-        with open(config_file, 'w') as f:
-            json.dump(default_config, f, indent=2)
-
-        logger.info(f"Default configuration created: {config_file}")
+    def reload_config(self) -> AppConfig:
+        if self._environment is None:
+            raise RuntimeError("No config loaded yet; call load_config() first")
+        return self.load_config(self._environment)
 
     def get_api_config(self, provider: str) -> Optional[APIConfig]:
-        """Get API configuration for a specific provider."""
-        if not self.config:
-            raise RuntimeError("Configuration not loaded. Call load_config() first.")
+        if self.config is None:
+            raise RuntimeError("Config not loaded; call load_config() first")
         return self.config.api_configs.get(provider)
 
     def update_api_credential(self, provider: str, api_key: str, api_secret: str) -> None:
-        """
-        Update API credentials for a provider (without saving to disk).
-
-        Args:
-            provider: API provider name
-            api_key: New API key
-            api_secret: New API secret
-        """
-        if not self.config:
-            raise RuntimeError("Configuration not loaded. Call load_config() first.")
-
-        if provider not in self.config.api_configs:
-            self.config.api_configs[provider] = APIConfig(
-                provider=provider,
-                api_key=api_key,
-                api_secret=api_secret,
-            )
-        else:
+        if self.config is None:
+            raise RuntimeError("Config not loaded; call load_config() first")
+        if provider in self.config.api_configs:
             self.config.api_configs[provider].api_key = api_key
             self.config.api_configs[provider].api_secret = api_secret
-
-        logger.info(f"API credentials updated for {provider}")
+        else:
+            self.config.api_configs[provider] = APIConfig(
+                provider=provider, api_key=api_key, api_secret=api_secret
+            )
 
     def is_config_modified(self) -> bool:
-        """Check if configuration has been modified since last load."""
-        if not self.config or not self._config_hash:
+        if self.config is None or self._config_hash is None:
             return False
-        return self._config_hash != self._hash_config()
+        return self._hash_config(self.config) != self._config_hash
 
-    def _hash_config(self) -> str:
-        """Generate hash of current configuration."""
-        if not self.config:
-            return ""
-        config_str = json.dumps(self._serialize_config(self.config), sort_keys=True)
-        return hashlib.sha256(config_str.encode()).hexdigest()
-
-    def reload_config(self) -> AppConfig:
-        """Reload configuration from file."""
-        if not self.config:
-            raise RuntimeError("Configuration not loaded. Call load_config() first.")
-        return self.load_config(self.config.environment)
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get configuration manager status."""
+    def get_status(self) -> dict:
         return {
-            'loaded': self.config is not None,
-            'environment': self.config.environment if self.config else None,
-            'last_load': self._load_timestamp.isoformat() if self._load_timestamp else None,
-            'modified': self.is_config_modified(),
-            'config_hash': self._config_hash,
+            "loaded": self.config is not None,
+            "environment": self._environment,
+            "last_load": self._load_timestamp,
+            "config_hash": self._config_hash,
+            "modified": self.is_config_modified(),
         }
 
+    # Legacy compat
+    def _encrypt(self, value: str) -> str:
+        return self._encrypt_value(value)
 
-# Singleton instance
-_config_manager: Optional[ConfigManager] = None
-
-
-def get_config_manager(config_dir: str = "config") -> ConfigManager:
-    """
-    Get or create the global ConfigManager instance.
-
-    Args:
-        config_dir: Configuration directory path
-
-    Returns:
-        ConfigManager instance
-    """
-    global _config_manager
-    if _config_manager is None:
-        encryption_key = os.getenv('CONFIG_ENCRYPTION_KEY')
-        _config_manager = ConfigManager(config_dir, encryption_key)
-    return _config_manager
+    def _decrypt(self, value: str) -> str:
+        return self._decrypt_value(value)
 
 
-def initialize_config(config_dir: str = "config", environment: Optional[str] = None) -> AppConfig:
-    """
-    Initialize and load configuration.
-
-    Args:
-        config_dir: Configuration directory path
-        environment: Environment to load
-
-    Returns:
-        Loaded AppConfig instance
-    """
-    manager = get_config_manager(config_dir)
-    return manager.load_config(environment)
+_manager: Optional[ConfigManager] = None
 
 
-if __name__ == "__main__":
-    # Example usage
-    print("Configuration Management System")
-    print("-" * 50)
+def get_config_manager() -> ConfigManager:
+    global _manager
+    if _manager is None:
+        _manager = ConfigManager()
+    return _manager
 
-    # Set encryption key for this example
-    os.environ['CONFIG_ENCRYPTION_KEY'] = 'your-secure-encryption-key-min-32-chars'
 
-    try:
-        # Initialize configuration
-        config = initialize_config()
-
-        # Display status
-        manager = get_config_manager()
-        status = manager.get_status()
-        print(f"Config Status: {json.dumps(status, indent=2)}")
-
-        # Display active configuration
-        print(f"\nActive Configuration:")
-        print(f"  App: {config.app_name} v{config.version}")
-        print(f"  Environment: {config.environment}")
-        print(f"  Database: {config.database.db_type}")
-        print(f"  Trading Enabled: {config.trading.trading_enabled}")
-        print(f"  Paper Trading: {config.trading.paper_trading_mode}")
-
-    except Exception as e:
-        print(f"Error: {e}")
+def initialize_config(environment: Optional[str] = None) -> AppConfig:
+    return get_config_manager().load_config(environment)

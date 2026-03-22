@@ -1,0 +1,19 @@
+{
+  "dataset": "XAUUSD_2Y synthetic (2022-01-03 \u2013 2023-12-29)",
+  "model": "RandomForestClassifier (200 trees, depth 6)",
+  "backtest_period": "2024-01-08 \u2013 2024-10-18",
+  "initial_capital": 100000.0,
+  "final_equity": 100676.62,
+  "total_return_pct": 0.68,
+  "n_trades": 17,
+  "win_rate_pct": 47.06,
+  "profit_factor": 1.446,
+  "avg_win_usd": 274.42,
+  "avg_loss_usd": -168.75,
+  "max_drawdown_pct": -0.6,
+  "sharpe_ratio": 2.778,
+  "calmar_ratio": 1.134,
+  "ml_test_accuracy": 0.483,
+  "ml_up_precision": 0.451,
+  "ml_up_recall": 0.423
+}

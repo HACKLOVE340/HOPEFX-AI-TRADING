@@ -4,9 +4,31 @@ Simulated Execution Handler
 Simulates order execution with realistic fills, slippage, and commissions.
 """
 
+import hashlib
 import logging
+from datetime import datetime
 from typing import Optional
+
 from backtesting.events import OrderEvent, FillEvent
+from backtesting.engine import Order, OrderStatus
+
+
+class OrderResult:
+    """Simple result wrapper for audit log compatibility."""
+    def __init__(self, success: bool, fill_price: float = 0.0, message: str = ""):
+        self.success = success
+        self.fill_price = fill_price
+        self.message = message
+
+
+def create_audit_log(order: Order, result: OrderResult) -> dict:
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "order_hash": hashlib.sha256(str(order).encode()).hexdigest(),
+        "success": result.success,
+        "fill_price": result.fill_price,
+        "compliance_version": "1.0",
+    }
 
 logger = logging.getLogger(__name__)
 
