@@ -115,7 +115,7 @@ class BaseMLModel(ABC):
                 metrics['precision'] = precision_score(y_test, np.round(predictions), average='weighted')
                 metrics['recall'] = recall_score(y_test, np.round(predictions), average='weighted')
                 metrics['f1'] = f1_score(y_test, np.round(predictions), average='weighted')
-            except:
+            except Exception:
                 pass  # Skip if not applicable
 
         return metrics

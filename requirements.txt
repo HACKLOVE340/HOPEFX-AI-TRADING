@@ -88,3 +88,12 @@ circuitbreaker>=2.0.0
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
 hypothesis>=6.0.0
+
+# ── System / process monitoring ───────────────────────────────────────────────
+psutil>=5.9.0
+
+# ── JWT / auth ────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+
+# ── Deep learning (optional – install manually for GPU nodes) ─────────────────
+# torch>=2.1.0  # Uncomment and install separately: pip install torch --index-url https://download.pytorch.org/whl/cpu

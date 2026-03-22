@@ -44,7 +44,7 @@ class DashboardServer:
                         'events': self.event_bus.get_metrics()
                     })
                     await asyncio.sleep(1)
-            except:
+            except Exception:
                 self.clients.remove(websocket)
     
     def _html(self):

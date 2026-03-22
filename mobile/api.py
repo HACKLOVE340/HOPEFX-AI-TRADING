@@ -602,7 +602,7 @@ class MobileAPIServer:
                                     'ask': float(quote['ask']),
                                     'timestamp': datetime.utcnow().isoformat()
                                 }
-                            except:
+                            except Exception:
                                 pass
                     
                     if quotes:
