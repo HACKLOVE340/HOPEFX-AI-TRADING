@@ -178,7 +178,7 @@ class HopeFXUltimateIntegrated:
         if not cfg_path.exists():
             return None
         try:
-            with cfg_path.open() as fh:
+            with cfg_path.open(encoding="utf-8") as fh:
                 data = json.load(fh)
             enabled = data.get("enabled", False)
             firm = data.get("active_firm", "")

@@ -111,7 +111,7 @@ class MockRiskManager:
     def position_size(self, price: float, stop_distance_pips: float = 20.0) -> float:
         """Kelly-lite position sizing (capped)."""
         risk_usd = self.balance * self.RISK_PER_TRADE_PCT
-        pip_value = 0.1  # rough USD per pip per 0.01 lot for XAUUSD
+        pip_value = 1.0  # USD per pip per 0.01 lot for XAUUSD (standard contract)
         raw_lots = risk_usd / (stop_distance_pips * pip_value * 100)
         return min(round(raw_lots, 2), self.MAX_POSITION_LOTS)
 
@@ -433,10 +433,12 @@ class ForwardTestHarness:
         if trades:
             avg_win = sum(t["pnl"] for t in wins) / len(wins) if wins else 0
             avg_loss = sum(t["pnl"] for t in losses) / len(losses) if losses else 0
+            total_wins = sum(t["pnl"] for t in wins)
+            total_losses = abs(sum(t["pnl"] for t in losses))
             logger.info("Avg win (USD)        : %.2f", avg_win)
             logger.info("Avg loss (USD)       : %.2f", avg_loss)
-            if avg_loss != 0:
-                logger.info("Profit factor        : %.2f", abs(avg_win / avg_loss) if avg_loss else float("inf"))
+            profit_factor = total_wins / total_losses if total_losses > 0 else float("inf")
+            logger.info("Profit factor        : %.2f", profit_factor)
 
         logger.info("=" * 60)
 
