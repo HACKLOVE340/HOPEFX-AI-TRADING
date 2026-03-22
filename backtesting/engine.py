@@ -1,6 +1,4 @@
-# Phase 1.1: Event-Driven Backtesting Engine
-
-code = '''"""
+"""
 HOPEFX Backtesting Engine - Event-Driven Architecture
 Production-grade backtesting with transaction cost modeling
 """
@@ -783,12 +781,3 @@ if __name__ == "__main__":
     # Example usage
     print("HOPEFX Backtesting Engine")
     print("Import this module and create your strategy")
-'''
-
-# Save the file
-with open('backtesting/engine.py', 'w') as f:
-    f.write(code)
-
-print("✅ Created: backtesting/engine.py")
-print(f"   Lines: {len(code.splitlines())}")
-print(f"   Size: {len(code)} bytes")

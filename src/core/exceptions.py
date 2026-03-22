@@ -4,7 +4,7 @@ from __future__ import annotations
 
 class HopeFXError(Exception):
     """Base exception."""
-    def __init__(self, message: str, context: dict | None = None) -> None:
+    def __init__(self, message: str = "", context: dict | None = None, **kwargs) -> None:
         super().__init__(message)
         self.message = message
         self.context = context or {}
@@ -37,7 +37,11 @@ class CircuitBreakerError(HopeFXError):
 
 class RiskLimitError(HopeFXError):
     """Risk limit exceeded."""
-    pass
+    def __init__(self, message="Risk limit exceeded", rule=None, limit=None, actual=None, **kwargs):
+        super().__init__(message, **kwargs)
+        self.rule = rule
+        self.limit = limit
+        self.actual = actual
 
 
 class ExecutionError(HopeFXError):
@@ -53,3 +57,20 @@ class ModelError(HopeFXError):
 class DriftDetectedError(HopeFXError):
     """Model drift threshold exceeded."""
     pass
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+RiskViolation = RiskLimitError
+BrokerError = ExecutionError
+BrokerConnectionError = BrokerError
+TradingError = ExecutionError
+ConfigurationError = HopeFXError
+NetworkError = HopeFXError
+TimeoutError = HopeFXError
+FeedError = HopeFXError
+DataError = DataValidationError
+DatabaseError = HopeFXError
+CacheError = HopeFXError
+InfrastructureError = HopeFXError
+EncryptionError = HopeFXError
+ValidationFailed = DataValidationError

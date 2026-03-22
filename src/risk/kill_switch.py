@@ -10,8 +10,15 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Callable, Awaitable
 
-import aioredis
-from aioredis.sentinel import Sentinel
+try:
+    import aioredis
+    from aioredis.sentinel import Sentinel
+    _AIOREDIS_AVAILABLE = True
+except Exception:
+    aioredis = None  # type: ignore
+    Sentinel = None  # type: ignore
+    _AIOREDIS_AVAILABLE = False
+
 import structlog
 
 logger = structlog.get_logger()
@@ -70,11 +77,18 @@ class DistributedKillSwitch:
     
     def __init__(
         self,
-        sentinel_hosts: list[tuple[str, int]],
+        sentinel_hosts: list = None,
         password: str | None = None,
-        consensus_nodes: int = 3
+        consensus_nodes: int = 3,
+        auto_triggers: list = None,
+        **kwargs
     ) -> None:
-        self.sentinel = Sentinel(sentinel_hosts, password=password)
+        if sentinel_hosts is None:
+            sentinel_hosts = [("localhost", 26379)]
+        try:
+            self.sentinel = Sentinel(sentinel_hosts, password=password)
+        except Exception:
+            self.sentinel = None
         self.master: aioredis.Redis | None = None
         self.replicas: list[aioredis.Redis] = []
         
@@ -88,7 +102,7 @@ class DistributedKillSwitch:
         self._callbacks: list[Callable[[KillCommand], Awaitable[None]]] = []
         self._listeners: set[asyncio.Task] = set()
         self._heartbeat_task: asyncio.Task | None = None
-        self._lock = asyncio.RLock()
+        self._lock = asyncio.Lock()
         self._secret: str | None = None
         self._node_id = f"node_{hashlib.sha256(str(time.time()).encode()).hexdigest()[:8]}"
         self._consensus_nodes = consensus_nodes
@@ -337,7 +351,39 @@ class DistributedKillSwitch:
         }
 
 
-# Singleton
-kill_switch = DistributedKillSwitch(
-    sentinel_hosts=[("localhost", 26379), ("localhost", 26380), ("localhost", 26381)]
-)
+# Singleton — only instantiate if aioredis is available
+if _AIOREDIS_AVAILABLE:
+    kill_switch = DistributedKillSwitch(
+        sentinel_hosts=[("localhost", 26379), ("localhost", 26380), ("localhost", 26381)]
+    )
+else:
+    kill_switch = None  # type: ignore
+
+class KillSwitch:
+    """Simple sync kill switch for use in RiskManager and tests."""
+
+    def __init__(self):
+        self._active = False
+        self._reason: str = ""
+
+    @property
+    def is_active(self) -> bool:
+        return self._active
+
+    def trigger(self, reason: str = "") -> None:
+        self._active = True
+        self._reason = reason
+
+    def reset(self, manual: bool = False) -> bool:
+        if not manual:
+            return False
+        self._active = False
+        self._reason = ""
+        return True
+
+    def check(self) -> bool:
+        """Return True if trading is allowed (kill switch not active)."""
+        return not self._active
+
+
+KillSwitchState = KillScope

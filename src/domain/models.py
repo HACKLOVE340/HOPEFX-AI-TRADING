@@ -173,3 +173,6 @@ class Account(BaseModel):
     max_drawdown: Decimal = Field(default=Decimal("0"))
     prop_firm: PropFirm = Field(default=PropFirm.NONE)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Aliases expected by src.strategies.base and tests
+MarketData = OHLCV

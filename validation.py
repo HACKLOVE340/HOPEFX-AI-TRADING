@@ -1,7 +1,4 @@
-
-# File 5: validation.py - Complete order validation logic
-
-validation_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 HOPEFX Order Validation Module
 Prevents bad trades through pre-execution checks.
@@ -340,9 +337,3 @@ if __name__ == '__main__':
     prop.record_pnl(-3000)  # $3k loss
     valid, msg = prop.check_limits(current_equity=97000.0)
     print(f"After $3k loss: {valid} - {msg}")
-'''
-
-with open('/mnt/output/hopefx_upgrade/validation.py', 'w') as f:
-    f.write(validation_content)
-
-print("✅ validation.py created - Order validation with risk checks")

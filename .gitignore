@@ -41,7 +41,7 @@ venv.bak/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb
+# *.ipynb  — tracked for examples/
 
 # Environment variables
 .env
@@ -66,7 +66,7 @@ yarn-error.log*
 
 # ML trained model artifacts (not source code)
 /models/
-*.pkl
+# *.pkl  — tracked for ml/saved_models/ example artifacts
 *.joblib
 *.h5
 *.pt

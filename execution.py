@@ -1,6 +1,4 @@
-# File 6: execution.py - Complete execution logic with safety checks
-
-execution_content = '''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 HOPEFX Execution Module
 Smart order execution with slippage modeling and safety checks.
@@ -456,9 +454,3 @@ if __name__ == '__main__':
     bad_order = Order(symbol='INVALID', side='buy', qty=0.01)
     result = executor.submit_order(bad_order, current_price=100.0)
     print(f"\\nInvalid order: {result.status.value} - {result.message}")
-'''
-
-with open('/mnt/kimi/output/hopefx_upgrade/execution.py', 'w') as f:
-    f.write(execution_content)
-
-print("✅ execution.py created - Order execution with slippage and safety")

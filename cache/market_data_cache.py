@@ -98,6 +98,7 @@ class CacheStatistics:
             'total_misses': self.total_misses,
             'total_evictions': self.total_evictions,
             'total_keys': self.total_keys,
+            'memory_usage_bytes': self.memory_usage_bytes,
             'memory_usage_mb': self.memory_usage_bytes / 1024 / 1024,
             'hit_rate_percent': round(self.hit_rate, 2),
             'last_update': self.last_update
@@ -139,7 +140,7 @@ class MarketDataCache:
         decode_responses: bool = True,
         max_retries: int = 3,
         retry_delay: float = 1.0,
-        enable_fallback: bool = True
+        enable_fallback: bool = False
     ):
         self.host = host
         self.port = port
@@ -167,14 +168,47 @@ class MarketDataCache:
         # Redis client (initialized on first use)
         self._redis_client: Optional[Redis] = None
         self._connection_failed = False
-        
+
+        # Attempt connection at init time (tests patch this method)
+        self._redis_client = self._connect_with_retry()
+
         logger.info(f"MarketDataCache initialized (Redis: {host}:{port})")
     
+    def _connect_with_retry(self) -> Optional[Redis]:
+        """Attempt Redis connection with retries; return client or None on failure."""
+        for attempt in range(self.max_retries):
+            try:
+                client = redis.Redis(
+                    host=self.host,
+                    port=self.port,
+                    db=self.db,
+                    password=self.password,
+                    socket_timeout=self.socket_timeout,
+                    socket_connect_timeout=self.socket_connect_timeout,
+                    decode_responses=self.decode_responses,
+                )
+                client.ping()
+                self._connection_failed = False
+                self._using_fallback = False
+                if attempt > 0:
+                    logger.info(f"Redis connected after {attempt} retries")
+                return client
+            except Exception as e:
+                logger.warning(f"Redis connection attempt {attempt + 1} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay * (2 ** attempt))
+        self._connection_failed = True
+        self._using_fallback = True
+        if self.enable_fallback:
+            logger.warning("Using in-memory fallback for cache")
+            return None
+        raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
+
     def _get_redis(self) -> Optional[Redis]:
         """Get or create Redis connection with retry"""
         if self._connection_failed and not self.enable_fallback:
             return None
-        
+
         if self._redis_client is not None:
             try:
                 self._redis_client.ping()
@@ -182,7 +216,7 @@ class MarketDataCache:
                 return self._redis_client
             except Exception:
                 pass  # Connection lost, will retry
-        
+
         # Try to connect
         for attempt in range(self.max_retries):
             try:
@@ -467,6 +501,158 @@ class MarketDataCache:
     
     # Statistics
     
+    @property
+    def stats(self) -> CacheStatistics:
+        """Public accessor for cache statistics (mutable)."""
+        return self._stats
+
+    @stats.setter
+    def stats(self, value: CacheStatistics) -> None:
+        self._stats = value
+
+    # ------------------------------------------------------------------
+    # Batch / multi-timeframe helpers expected by tests
+    # ------------------------------------------------------------------
+
+    def cache_ticks(self, symbol: str, ticks: list, ttl: int = 3600, max_size: int = 1000) -> bool:
+        """Cache a list of TickData objects using {"data": [...], "count": N} envelope."""
+        try:
+            data = [t.to_dict() if hasattr(t, "to_dict") else t for t in ticks]
+            if len(data) > max_size:
+                data = data[-max_size:]
+            envelope = {
+                "data": data,
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "count": len(data),
+            }
+            key = self._build_tick_key(symbol)
+            serialized = json.dumps(envelope)
+            redis_client = self._get_redis()
+            if redis_client:
+                redis_client.setex(key, ttl, serialized)
+            else:
+                self._local_cache[key] = serialized
+                self._local_ttl[key] = time.time() + ttl
+            return True
+        except Exception as e:
+            logger.error(f"cache_ticks error: {e}")
+            return False
+
+    def get_ticks(self, symbol: str) -> Optional[list]:
+        """Retrieve cached tick list; returns list of TickData or None."""
+        key = self._build_tick_key(symbol)
+        try:
+            redis_client = self._get_redis()
+            raw = None
+            if redis_client:
+                raw = redis_client.get(key)
+            elif self._is_local_key_valid(key):
+                raw = self._local_cache.get(key)
+            if raw is None:
+                with self._stats_lock:
+                    self._stats.total_misses += 1
+                return None
+            with self._stats_lock:
+                self._stats.total_hits += 1
+            envelope = json.loads(raw)
+            items = envelope.get("data", envelope) if isinstance(envelope, dict) else envelope
+            return [TickData.from_dict(d) if isinstance(d, dict) else d for d in items]
+        except Exception as e:
+            logger.error(f"get_ticks error: {e}")
+            return None
+
+    def append_ohlcv(self, symbol: str, timeframe: Timeframe, candle: OHLCVData,
+                     ttl: int = None, max_size: int = 1000) -> bool:
+        """Append a single candle to an existing OHLCV list in cache."""
+        key = self._build_key(symbol, timeframe, "ohlcv")
+        if ttl is None:
+            ttl = self.DEFAULT_TTL.get(timeframe, 86400)
+        try:
+            redis_client = self._get_redis()
+            raw = None
+            if redis_client:
+                raw = redis_client.get(key)
+            elif self._is_local_key_valid(key):
+                raw = self._local_cache.get(key)
+            if raw:
+                envelope = json.loads(raw)
+                existing = envelope.get("data", []) if isinstance(envelope, dict) else envelope
+            else:
+                existing = []
+            existing.append(candle.to_dict() if hasattr(candle, "to_dict") else candle)
+            if len(existing) > max_size:
+                existing = existing[-max_size:]
+            new_envelope = {
+                "data": existing,
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+            }
+            serialized = json.dumps(new_envelope)
+            if redis_client:
+                redis_client.setex(key, ttl, serialized)
+            else:
+                self._local_cache[key] = serialized
+                self._local_ttl[key] = time.time() + ttl
+            return True
+        except Exception as e:
+            logger.error(f"append_ohlcv error: {e}")
+            return False
+
+    def cache_multi_timeframe(self, symbol: str, data: dict, ttl=None) -> bool:
+        """Cache OHLCV data for multiple timeframes.
+
+        ttl can be an int (applied to all) or a dict mapping Timeframe -> int.
+        """
+        success = True
+        for tf, candles in data.items():
+            tf_ttl = ttl.get(tf) if isinstance(ttl, dict) else ttl
+            if not self.cache_ohlcv(symbol, tf, candles, ttl=tf_ttl):
+                success = False
+        return success
+
+    def get_multi_timeframe(self, symbol: str, timeframes: list) -> dict:
+        """Retrieve OHLCV data for multiple timeframes."""
+        return {tf: self.get_ohlcv(symbol, tf) for tf in timeframes}
+
+    def invalidate_ohlcv(self, symbol: str, timeframe: Timeframe) -> bool:
+        """Invalidate OHLCV cache for a specific symbol/timeframe."""
+        key = self._build_key(symbol, timeframe, "ohlcv")
+        try:
+            redis_client = self._get_redis()
+            deleted = False
+            if redis_client:
+                deleted = bool(redis_client.delete(key))
+            elif key in self._local_cache:
+                del self._local_cache[key]
+                self._local_ttl.pop(key, None)
+                deleted = True
+            if deleted:
+                with self._stats_lock:
+                    self._stats.total_evictions += 1
+            return deleted
+        except Exception as e:
+            logger.error(f"invalidate_ohlcv error: {e}")
+            return False
+
+    def invalidate_tick(self, symbol: str) -> bool:
+        """Invalidate tick cache for a symbol."""
+        key = self._build_tick_key(symbol)
+        try:
+            redis_client = self._get_redis()
+            deleted = False
+            if redis_client:
+                deleted = bool(redis_client.delete(key))
+            elif key in self._local_cache:
+                del self._local_cache[key]
+                self._local_ttl.pop(key, None)
+                deleted = True
+            if deleted:
+                with self._stats_lock:
+                    self._stats.total_evictions += 1
+            return deleted
+        except Exception as e:
+            logger.error(f"invalidate_tick error: {e}")
+            return False
+
     def get_statistics(self) -> CacheStatistics:
         """Get cache statistics"""
         try:
@@ -534,10 +720,13 @@ class MarketDataCache:
     def health_check(self) -> bool:
         """Check Redis connection health (sync version)"""
         try:
+            if self._redis_client:
+                result = self._redis_client.ping()
+                return bool(result)
             redis_client = self._get_redis()
             if redis_client:
-                return redis_client.ping()
-            return self.enable_fallback  # Fallback is "healthy" if enabled
+                return bool(redis_client.ping())
+            return False
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             return False
@@ -562,3 +751,6 @@ class MarketDataCache:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+# Alias expected by tests
+CachedTickData = TickData

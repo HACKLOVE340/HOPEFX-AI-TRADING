@@ -10,7 +10,7 @@ from .drawing_tools import DrawingToolkit, Drawing, DrawingType
 from .timeframes import TimeframeManager
 from .templates import TemplateManager
 
-chart_engine = ChartEngine(symbol="XAUUSD")
+chart_engine = ChartEngine()
 indicator_library = IndicatorLibrary()
 drawing_toolkit = DrawingToolkit()
 timeframe_manager = TimeframeManager()

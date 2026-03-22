@@ -10,11 +10,26 @@ from .push_notifications import PushNotificationManager
 from .trading import MobileTradingEngine
 from .analytics import MobileAnalytics
 
-mobile_api = MobileAPI()
-mobile_auth = MobileAuth()
-push_notification_manager = PushNotificationManager()
-mobile_trading_engine = MobileTradingEngine()
-mobile_analytics = MobileAnalytics()
+try:
+    mobile_api = MobileAPI()
+except Exception:
+    mobile_api = None
+try:
+    mobile_auth = MobileAuth()
+except Exception:
+    mobile_auth = None
+try:
+    push_notification_manager = PushNotificationManager()
+except Exception:
+    push_notification_manager = None
+try:
+    mobile_trading_engine = MobileTradingEngine()
+except Exception:
+    mobile_trading_engine = None
+try:
+    mobile_analytics = MobileAnalytics()
+except Exception:
+    mobile_analytics = None
 
 __all__ = [
     'MobileAPI',

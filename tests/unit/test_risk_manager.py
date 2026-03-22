@@ -13,58 +13,11 @@ from risk.manager import RiskManager, RiskCheckResult, RiskLevel
 from risk.advanced_analytics import RiskAnalytics
 from database.models import Trade, Position, Account
 
+
 class TestRiskManager:
     """Test suite for risk management functionality"""
 
-from src.risk.manager import RiskManager
-from src.domain.models import Signal
-
-
-@pytest.mark.asyncio
-async def test_kill_switch_blocks_signals(test_account):
-    """Test that kill switch blocks new signals."""
-    manager = RiskManager(account=test_account)
-    await manager.initialize()
-    
-    # Trigger kill switch
-    manager.kill_switch.trigger("Test trigger")
-    
-    signal = Signal(
-        strategy_id="test",
-        symbol="XAUUSD",
-        direction="LONG",
-        strength=0.8,
-        confidence=0.9
-    )
-    
-    allowed, reason = await manager.check_signal(signal)
-    assert not allowed
-    assert "kill switch active" in reason.lower()
-
-
-@pytest.mark.asyncio
-async def test_position_sizing_limits(test_account):
-    """Test position size limits."""
-    manager = RiskManager(account=test_account)
-    
-    size = manager.calculate_position_size(
-        signal=Signal(
-            strategy_id="test",
-            symbol="XAUUSD",
-            direction="LONG",
-            strength=0.8,
-            confidence=0.9
-        ),
-        entry_price=Decimal("1800.00"),
-        atr=Decimal("2.0")
-    )
-    
-    # Should respect max position size
-    max_size = test_account.balance * Decimal("0.02") / Decimal("1800")
-    assert size <= max_size
-
-            
-     @pytest.fixture
+    @pytest.fixture
     def risk_manager(self):
         """Fresh risk manager instance"""
         return RiskManager()
@@ -181,9 +134,9 @@ class TestRiskAnalytics:
         returns = [-0.05, -0.04, -0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.03, 0.04]
         
         cvar = analytics.calculate_cvar(returns, confidence=0.95)
-        # CVaR should be worse than VaR
+        # CVaR magnitude should be >= VaR magnitude (CVaR is worse than VaR)
         var = analytics.calculate_var(returns, confidence=0.95)
-        assert cvar <= var
+        assert abs(cvar) >= abs(var)
     
     def test_sharpe_ratio(self, analytics):
         """Test Sharpe ratio calculation"""

@@ -4,12 +4,15 @@ MACD (Moving Average Convergence Divergence) Trading Strategy
 This strategy uses MACD indicator for trend-following signals.
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from strategies.base import BaseStrategy
+from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+
+logger = logging.getLogger(__name__)
 
 
 class MACDStrategy(BaseStrategy):
@@ -19,27 +22,61 @@ class MACDStrategy(BaseStrategy):
     Generates signals based on MACD line crossing signal line.
     """
 
-    def __init__(self, name: str, symbol: str, config,
+    def __init__(self, config: StrategyConfig, *_args,
                  fast_period: int = 12, slow_period: int = 26, signal_period: int = 9):
         """
         Initialize MACD strategy.
 
         Args:
-            name: Strategy name
-            symbol: Trading symbol
-            config: Configuration manager
+            config: StrategyConfig with name, symbol, timeframe
             fast_period: Fast EMA period
             slow_period: Slow EMA period
             signal_period: Signal line EMA period
         """
-        super().__init__(name, symbol, config)
+        super().__init__(config)
         self.fast_period = fast_period
         self.slow_period = slow_period
         self.signal_period = signal_period
-        self.logger.info(
+        logger.info(
             f"MACD Strategy initialized: fast={fast_period}, "
             f"slow={slow_period}, signal={signal_period}"
         )
+
+    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute MACD from OHLCV data dict."""
+        prices = data.get("prices") or data.get("close")
+        if prices is None:
+            return {"macd": None, "signal_line": None, "histogram": None}
+        series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
+        macd_line, signal_line, histogram = self.calculate_macd(series)
+        return {
+            "macd": float(macd_line.iloc[-1]) if not macd_line.empty else None,
+            "signal_line": float(signal_line.iloc[-1]) if not signal_line.empty else None,
+            "histogram": float(histogram.iloc[-1]) if not histogram.empty else None,
+            "prev_macd": float(macd_line.iloc[-2]) if len(macd_line) > 1 else None,
+            "prev_signal": float(signal_line.iloc[-2]) if len(signal_line) > 1 else None,
+            "price": float(series.iloc[-1]),
+        }
+
+    def generate_signal(self, data) -> Any:
+        """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
+        if isinstance(data, pd.DataFrame):
+            return self._generate_dict_signal(data)
+        analysis = data
+        macd = analysis.get("macd")
+        sig = analysis.get("signal_line")
+        prev_macd = analysis.get("prev_macd")
+        prev_sig = analysis.get("prev_signal")
+        price = analysis.get("price", 0.0)
+        if any(v is None for v in (macd, sig, prev_macd, prev_sig)):
+            return None
+        if prev_macd <= prev_sig and macd > sig:
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(),
+                          confidence=0.85 if macd < 0 else 0.75)
+        if prev_macd >= prev_sig and macd < sig:
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(),
+                          confidence=0.85 if macd > 0 else 0.75)
+        return None
 
     def calculate_macd(self, prices: pd.Series) -> tuple:
         """
@@ -66,16 +103,8 @@ class MACDStrategy(BaseStrategy):
 
         return macd_line, signal_line, histogram
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Generate trading signal based on MACD.
-
-        Args:
-            market_data: DataFrame with OHLCV data
-
-        Returns:
-            Dictionary with signal type, confidence, and metadata
-        """
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+        """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             min_length = self.slow_period + self.signal_period
             if len(market_data) < min_length:

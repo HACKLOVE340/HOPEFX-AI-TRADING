@@ -74,3 +74,5 @@ class FeatureStore:
         """Retrieve recent feature vectors as numpy array."""
         # Implementation for batch retrieval
         pass
+
+FeatureEngineer = FeatureStore

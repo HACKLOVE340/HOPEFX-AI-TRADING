@@ -10,6 +10,11 @@ import json
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore
 from enum import Enum
 import queue
 import threading
@@ -63,8 +68,14 @@ class Notification:
 
 
 class NotificationChannel:
-    """Base notification channel"""
-    
+    """Base notification channel — also used as an enum-like namespace."""
+
+    # Enum-style constants used by tests
+    CONSOLE = "console"
+    DISCORD = "discord"
+    TELEGRAM = "telegram"
+    EMAIL = "email"
+
     def __init__(self, name: str, config: Dict[str, Any]):
         self.name = name
         self.config = config
@@ -339,8 +350,8 @@ class NotificationManager:
     - Deduplication
     """
     
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
+    def __init__(self, config: Dict[str, Any] = None):
+        self.config = config or {}
         self.channels: Dict[str, NotificationChannel] = {}
         self._notification_queue: asyncio.Queue = asyncio.Queue()
         self._processed_ids: set = set()
@@ -348,7 +359,19 @@ class NotificationManager:
         self._running = False
         self._worker_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
-        
+
+        # Sync API: list of enabled channel names
+        self.enabled_channels: List[str] = [NotificationChannel.CONSOLE]
+        if self.config.get("discord_enabled") or self.config.get("discord_webhook_url"):
+            self.enabled_channels.append(NotificationChannel.DISCORD)
+        if self.config.get("telegram_enabled") or self.config.get("telegram_bot_token"):
+            self.enabled_channels.append(NotificationChannel.TELEGRAM)
+        if self.config.get("email_enabled") or self.config.get("email_smtp_host"):
+            self.enabled_channels.append(NotificationChannel.EMAIL)
+
+        # Notification history for sync API
+        self.notification_history: List[Dict[str, Any]] = []
+
         self._initialize_channels()
     
     def _initialize_channels(self):
@@ -495,6 +518,165 @@ class NotificationManager:
             except Exception as e:
                 logger.error(f"Notification processor error: {e}")
     
+    # ------------------------------------------------------------------
+    # Sync API (used by tests)
+    # ------------------------------------------------------------------
+
+    def send(self, message: str, level: "NotificationLevel" = None,
+             channels: List[str] = None, metadata: Dict = None) -> None:
+        """Synchronous send — dispatches to each requested channel, swallowing errors."""
+        targets = channels if channels is not None else self.enabled_channels
+        for ch in targets:
+            try:
+                if ch == NotificationChannel.CONSOLE:
+                    self._send_console(message, level)
+                elif ch == NotificationChannel.DISCORD:
+                    self._send_discord(message, level, metadata)
+                elif ch == NotificationChannel.TELEGRAM:
+                    self._send_telegram(message, level, metadata)
+                elif ch == NotificationChannel.EMAIL:
+                    self._send_email(message, level, metadata)
+            except Exception as exc:
+                logger.error(f"Notification channel {ch} error: {exc}")
+        # Record in history
+        self.notification_history.append({
+            "message": message,
+            "level": getattr(level, "value", str(level)) if level else "INFO",
+            "channels": list(targets),
+            "metadata": metadata or {},
+        })
+
+    def notify_trade(self, symbol: str, price: float, quantity: float = 0,
+                     action: str = None, side: str = None, trade_id: str = None,
+                     pnl: float = None, channels: List[str] = None, **kwargs) -> None:
+        """Send a trade notification."""
+        direction = action or side or "TRADE"
+        msg = f"{direction} {quantity} {symbol} @ {price}"
+        if pnl is not None:
+            msg += f" | PnL: {pnl:+.2f}"
+        meta: Dict[str, Any] = {"symbol": symbol, "price": price, "quantity": quantity}
+        if action:
+            meta["action"] = action
+        if side:
+            meta["side"] = side
+        if trade_id:
+            meta["trade_id"] = trade_id
+        if pnl is not None:
+            meta["pnl"] = pnl
+        meta.update(kwargs)
+        self.send(msg, level=NotificationLevel.INFO, channels=channels, metadata=meta)
+
+    def notify_signal(self, symbol: str, signal_type: str, strategy: str = None,
+                      price: float = None, confidence: float = None,
+                      strength: float = None, channels: List[str] = None, **kwargs) -> None:
+        """Send a trading signal notification."""
+        msg = f"Signal: {signal_type} {symbol}"
+        if strategy:
+            msg += f" [{strategy}]"
+        conf = confidence if confidence is not None else strength
+        if conf is not None:
+            msg += f" conf={conf:.2f}"
+        meta: Dict[str, Any] = {"symbol": symbol, "signal_type": signal_type}
+        if strategy:
+            meta["strategy"] = strategy
+        if price is not None:
+            meta["price"] = price
+        if confidence is not None:
+            meta["confidence"] = confidence
+        if strength is not None:
+            meta["strength"] = strength
+        meta.update(kwargs)
+        self.send(msg, level=NotificationLevel.INFO, channels=channels, metadata=meta)
+
+    def _send_console(self, message: str, level: "NotificationLevel" = None) -> None:
+        """Log message to console at the appropriate level."""
+        lvl = getattr(level, "value", str(level)).upper() if level else "INFO"
+        log_fn = {
+            "DEBUG": logger.debug,
+            "INFO": logger.info,
+            "WARNING": logger.warning,
+            "ERROR": logger.error,
+            "CRITICAL": logger.critical,
+        }.get(lvl, logger.info)
+        log_fn(f"[NOTIFICATION] {message}")
+
+    def _send_discord(self, message: str, level: "NotificationLevel" = None,
+                      metadata: Dict = None) -> None:
+        """Send message to Discord webhook (sync)."""
+        if requests is None:
+            logger.warning("requests not installed; cannot send Discord notification")
+            return
+        webhook_url = self.config.get("discord_webhook_url", "")
+        if not webhook_url:
+            logger.debug("Discord webhook not configured; skipping")
+            return
+        if not webhook_url.startswith("https://"):
+            logger.warning(f"Rejecting non-HTTPS Discord webhook: {webhook_url}")
+            return
+        embed: Dict[str, Any] = {"description": message}
+        if metadata:
+            embed["fields"] = [{"name": str(k), "value": str(v), "inline": True}
+                                for k, v in metadata.items()]
+        payload: Dict[str, Any] = {"embeds": [embed]}
+        try:
+            resp = requests.post(webhook_url, json=payload, timeout=5)
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.error(f"Discord send failed: {exc}")
+
+    def _send_telegram(self, message: str, level: "NotificationLevel" = None,
+                       metadata: Dict = None) -> None:
+        """Send message via Telegram Bot API (sync)."""
+        if requests is None:
+            logger.warning("requests not installed; cannot send Telegram notification")
+            return
+        token = self.config.get("telegram_bot_token", "")
+        chat_id = self.config.get("telegram_chat_id", "")
+        if not token or not chat_id:
+            logger.debug("Telegram not configured; skipping")
+            return
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        text = message
+        if metadata:
+            text += "\n" + "\n".join(f"{k}: {v}" for k, v in metadata.items())
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        try:
+            resp = requests.post(url, json=payload, timeout=5)
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.error(f"Telegram send failed: {exc}")
+
+    def _send_email(self, message: str, level: "NotificationLevel" = None,
+                    metadata: Dict = None) -> None:
+        """Send email notification via SMTP (sync)."""
+        import smtplib
+        from email.mime.text import MIMEText
+        smtp_host = (self.config.get("smtp_host") or
+                     self.config.get("email_smtp_host") or
+                     ("localhost" if self.config.get("email_enabled") else ""))
+        smtp_port = int(self.config.get("smtp_port", 587))
+        username = self.config.get("smtp_username", "")
+        password = self.config.get("smtp_password", "")
+        to_addr = (self.config.get("smtp_to") or
+                   self.config.get("email_to") or username)
+        if not smtp_host or not username:
+            logger.debug("Email not configured; skipping")
+            return
+        body = message
+        if metadata:
+            body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in metadata.items())
+        msg = MIMEText(body)
+        msg["Subject"] = f"[HOPEFX] {getattr(level, 'value', 'INFO').upper()}: {message[:60]}"
+        msg["From"] = username
+        msg["To"] = to_addr
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(username, password)
+                server.sendmail(username, [to_addr], msg.as_string())
+        except Exception as exc:
+            logger.error(f"Email send failed: {exc}")
+
     def get_status(self) -> Dict[str, Any]:
         """Get notification manager status"""
         return {

@@ -67,14 +67,18 @@ class Trade(Base):
     __tablename__ = 'trades'
     
     id = Column(Integer, primary_key=True)
-    trade_id = Column(String(50), unique=True, nullable=False, index=True)
+    trade_id = Column(String(50), unique=True, nullable=True, index=True)
+    account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
-    side = Column(Enum(OrderSide), nullable=False)
-    
+    side = Column(String(20), nullable=True)
+    trade_type = Column(String(20), nullable=True)
+
     # Entry
     entry_time = Column(DateTime, default=datetime.utcnow)
-    entry_price = Column(Float, nullable=False)
-    entry_quantity = Column(Float, nullable=False)
+    entry_price = Column(Float, nullable=True)
+    entry_quantity = Column(Float, nullable=True)
+    size = Column(Float, nullable=True)  # alias for entry_quantity
+    timestamp = Column(DateTime, nullable=True)
     
     # Exit
     exit_time = Column(DateTime, nullable=True)
@@ -110,6 +114,9 @@ class Trade(Base):
     # Relationships
     orders = relationship("Order", back_populates="trade", lazy="dynamic")
     signals = relationship("Signal", back_populates="trade", lazy="dynamic")
+    account = relationship("Account", back_populates="trades",
+                           primaryjoin="Trade.account_id == Account.id",
+                           foreign_keys="[Trade.account_id]")
     
     def __repr__(self):
         return f"<Trade({self.trade_id}, {self.symbol}, {self.side.value}, PnL={self.total_pnl})>"
@@ -135,6 +142,7 @@ class Order(Base):
     
     id = Column(Integer, primary_key=True)
     order_id = Column(String(50), unique=True, nullable=False, index=True)
+    account_id = Column(Integer, nullable=True, index=True)
     trade_id = Column(String(50), ForeignKey('trades.trade_id'), nullable=True)
     symbol = Column(String(20), nullable=False, index=True)
     
@@ -168,6 +176,9 @@ class Order(Base):
     
     # Relationships
     trade = relationship("Trade", back_populates="orders")
+    account = relationship("Account", back_populates="orders",
+                           primaryjoin="Order.account_id == Account.id",
+                           foreign_keys="[Order.account_id]")
     
     def to_dict(self) -> dict:
         return {
@@ -352,10 +363,11 @@ class Account(Base):
     __tablename__ = 'accounts'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(50), nullable=False, index=True)
-    broker = Column(String(50), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    account_name = Column(String(100), nullable=True)
+    broker = Column(String(50), nullable=True)
     account_id = Column(String(100), nullable=True)
-    balance = Column(Float, nullable=False, default=0.0)
+    balance = Column(Float, nullable=True, default=0.0)
     equity = Column(Float, nullable=True)
     margin_used = Column(Float, nullable=True)
     margin_free = Column(Float, nullable=True)
@@ -363,17 +375,28 @@ class Account(Base):
     leverage = Column(Float, nullable=True)
     snapshot_at = Column(DateTime, default=datetime.utcnow, index=True)
 
+    user = relationship("User", back_populates="accounts")
+    trades = relationship("Trade", back_populates="account", lazy="dynamic",
+                          primaryjoin="Account.id == foreign(Trade.account_id)")
+    orders = relationship("Order", back_populates="account", lazy="dynamic",
+                          primaryjoin="Account.id == foreign(Order.account_id)")
+    positions = relationship("Position", back_populates="account", lazy="dynamic",
+                             primaryjoin="Account.id == foreign(Position.account_id)")
+
 
 class Position(Base):
     """Open trading position."""
     __tablename__ = 'positions'
 
-    id = Column(String(50), primary_key=True)
+    id = Column(String(50), primary_key=True, default=lambda: str(__import__('uuid').uuid4()))
+    account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
-    side = Column(String(10), nullable=False)          # buy / sell
-    quantity = Column(Float, nullable=False)
-    entry_price = Column(Float, nullable=False)
+    side = Column(String(10), nullable=True)
+    quantity = Column(Float, nullable=True)
+    size = Column(Float, nullable=True)          # alias for quantity
+    entry_price = Column(Float, nullable=True)
     current_price = Column(Float, nullable=True)
+    market_value = Column(Float, nullable=True)  # current market value
     unrealized_pnl = Column(Float, nullable=True)
     realized_pnl = Column(Float, default=0.0)
     stop_loss = Column(Float, nullable=True)
@@ -382,7 +405,11 @@ class Position(Base):
     user_id = Column(String(50), nullable=True, index=True)
     opened_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime, nullable=True)
-    status = Column(String(20), default='open')        # open, closed
+    status = Column(String(20), default='open')
+
+    account = relationship("Account", back_populates="positions",
+                           primaryjoin="Position.account_id == Account.id",
+                           foreign_keys="[Position.account_id]")
 
 
 class OrderBook(Base):
@@ -553,3 +580,119 @@ def drop_tables(engine):
     if SQLALCHEMY_AVAILABLE:
         Base.metadata.drop_all(engine)
         logger.info("Database tables dropped")
+
+
+# ── Proper enums expected by tests ───────────────────────────────────────────
+
+class AccountStatus(enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
+    CLOSED = "closed"
+
+
+class TradeType(enum.Enum):
+    LONG = "long"
+    SHORT = "short"
+    HEDGE = "hedge"
+
+
+class OrderStatus(enum.Enum):
+    PENDING = "pending"
+    OPEN = "open"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
+
+
+class OrderType(enum.Enum):
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
+    STOP_LIMIT = "stop_limit"
+
+
+class PositionStatus(enum.Enum):
+    OPEN = "open"
+    CLOSING = "closing"
+    CLOSED = "closed"
+
+
+class PredictionType(enum.Enum):
+    PRICE = "price"
+    DIRECTION = "direction"
+    VOLATILITY = "volatility"
+    TREND = "trend"
+
+
+class RiskLevel(enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class MarketDataType(enum.Enum):
+    OHLCV = "ohlcv"
+    TICK = "tick"
+    DEPTH = "depth"
+    NEWS = "news"
+
+
+# ── Proper SQLAlchemy models expected by tests ────────────────────────────────
+
+if SQLALCHEMY_AVAILABLE:
+    class User(Base):
+        __tablename__ = "users"
+        id = Column(Integer, primary_key=True)
+        username = Column(String(100), unique=True, nullable=False)
+        email = Column(String(255), unique=True, nullable=False)
+        password_hash = Column(String(255), nullable=False)
+        status = Column(String(50), default="active")
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        sessions = relationship("Session", back_populates="user", lazy="dynamic")
+        accounts = relationship("Account", back_populates="user", lazy="dynamic")
+
+    class Session(Base):
+        __tablename__ = "sessions"
+        id = Column(Integer, primary_key=True)
+        user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+        token = Column(String(512), unique=True, nullable=False)
+        expires_at = Column(DateTime, nullable=False)
+        created_at = Column(DateTime, default=datetime.utcnow)
+        user = relationship("User", back_populates="sessions")
+
+    # No relationship patches needed — Account.user_id is a string FK
+    # Trade/Order/Position already have account_id columns added above
+
+else:
+    # Stub models when SQLAlchemy not available
+    class User:
+        __tablename__ = "users"
+        __table__ = type("T", (), {"columns": []})()
+
+    class Session:
+        __tablename__ = "sessions"
+        __table__ = type("T", (), {"columns": []})()
+
+def _add_enum_value(enum_cls, name, value):
+    """Add a new member to an existing Enum if it doesn't already exist."""
+    if name in enum_cls._member_map_:
+        return
+    new_member = object.__new__(enum_cls)
+    new_member._name_ = name
+    new_member._value_ = value
+    enum_cls._member_map_[name] = new_member
+    enum_cls._value2member_map_[value] = new_member
+    # Bypass enum's __setattr__ which rejects new members
+    type.__setattr__(enum_cls, name, new_member)
+
+_add_enum_value(SignalSource, "PRICE", "price")
+_add_enum_value(SignalSource, "OHLCV", "ohlcv")
+_add_enum_value(SignalSource, "LOW", "low")
+_add_enum_value(TradeStatus, "ACTIVE", "active")
+_add_enum_value(TradeStatus, "CLOSING", "closing")
+_add_enum_value(TradeStatus, "PARTIALLY_FILLED", "partially_filled")
+_add_enum_value(OrderSide, "LONG", "long")

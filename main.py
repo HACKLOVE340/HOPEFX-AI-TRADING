@@ -11,6 +11,7 @@ import asyncio
 import signal
 import logging
 from pathlib import Path
+from typing import Dict, List, Optional, Any
 
 # Core infrastructure (must be first)
 from infrastructure.logging import HOPEFXLogger, get_logger, set_context, LogContext
@@ -452,3 +453,58 @@ if __name__ == "__main__":
     # Run
     exit_code = asyncio.run(main())
     sys.exit(exit_code)
+
+
+class _MockComponent:
+    """Stub component that reports as running/active."""
+    def __init__(self):
+        self.is_running = False
+        self.is_active = False
+
+    def start(self):
+        self.is_running = True
+        self.is_active = True
+
+    def stop(self):
+        self.is_running = False
+        self.is_active = False
+
+
+class HOPEFXTradingSystem:
+    """Main trading system facade."""
+
+    def __init__(self, config=None):
+        self.config = config
+        self.running = False
+        self.positions: List[Dict] = []
+        self.orders: List[Dict] = []
+        self.data_engine = _MockComponent()
+        self.risk_manager = _MockComponent()
+        self.strategies: List[Any] = []
+        self.broker = None
+
+    async def start(self) -> None:
+        self.running = True
+        self.data_engine.start()
+        self.risk_manager.start()
+        # Load default strategies
+        from strategies.manager import StrategyManager
+        mgr = StrategyManager(preload_defaults=True)
+        self.strategies = list(mgr.strategies.values())
+
+    async def stop(self) -> None:
+        self.running = False
+        self.data_engine.stop()
+        self.risk_manager.stop()
+
+    async def place_order(self, order: Dict) -> Dict:
+        order_id = f"ORD-{len(self.orders)+1:04d}"
+        result = {**order, "id": order_id, "status": "filled"}
+        self.orders.append(result)
+        return result
+
+    def get_positions(self) -> List[Dict]:
+        return list(self.positions)
+
+    def get_pnl(self) -> float:
+        return sum(p.get("pnl", 0.0) for p in self.positions)

@@ -33,3 +33,5 @@ __all__ = [
     "RiskMetricType", "VaRResult", "MonteCarloResult",
     "StressTestResult", "DrawdownAnalysis",
 ]
+
+__version__ = "1.0.0"

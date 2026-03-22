@@ -327,10 +327,11 @@ class StrategyManager:
     - Performance tracking per strategy
     """
     
-    def __init__(self):
+    def __init__(self, preload_defaults: bool = False):
         self.strategies: Dict[str, BaseStrategy] = {}
-        self._initialize_default_strategies()
-    
+        if preload_defaults:
+            self._initialize_default_strategies()
+
     def _initialize_default_strategies(self):
         """Initialize default strategies"""
         self.register_strategy(TrendFollowingStrategy({
@@ -351,6 +352,59 @@ class StrategyManager:
         """Register a strategy"""
         self.strategies[strategy.name] = strategy
         logger.info(f"Registered strategy: {strategy.name}")
+
+    def unregister_strategy(self, name: str) -> bool:
+        if name in self.strategies:
+            del self.strategies[name]
+            return True
+        return False
+
+    def start_strategy(self, name: str) -> bool:
+        if name not in self.strategies:
+            return False
+        from strategies.base import StrategyStatus
+        self.strategies[name].status = StrategyStatus.RUNNING
+        return True
+
+    def stop_strategy(self, name: str) -> bool:
+        if name not in self.strategies:
+            return False
+        from strategies.base import StrategyStatus
+        self.strategies[name].status = StrategyStatus.STOPPED
+        return True
+
+    def start_all(self) -> None:
+        from strategies.base import StrategyStatus
+        for s in self.strategies.values():
+            s.status = StrategyStatus.RUNNING
+
+    def stop_all(self) -> None:
+        from strategies.base import StrategyStatus
+        for s in self.strategies.values():
+            s.status = StrategyStatus.STOPPED
+
+    def get_strategy_performance(self, name: str = None) -> dict:
+        if name:
+            s = self.strategies.get(name)
+            return s.performance_metrics if s else {}
+        return {n: s.performance_metrics for n, s in self.strategies.items()}
+
+    @property
+    def performance_summary(self) -> dict:
+        """Aggregate performance across all registered strategies."""
+        from strategies.base import StrategyStatus
+        total = len(self.strategies)
+        active = sum(1 for s in self.strategies.values()
+                     if s.status == StrategyStatus.RUNNING)
+        total_pnl = 0.0
+        for s in self.strategies.values():
+            metrics = getattr(s, "performance_metrics", {})
+            total_pnl += metrics.get("total_pnl", 0.0)
+        return {
+            "total_strategies": total,
+            "active_strategies": active,
+            "total_pnl": total_pnl,
+        }
     
     def enable_strategy(self, name: str):
         """Enable a strategy"""
@@ -429,15 +483,7 @@ class StrategyManager:
         
         return list(seen.values())
     
-    def get_strategy_performance(self) -> Dict[str, Dict]:
-        """Get performance metrics for all strategies"""
-        return {
-            name: {
-                'enabled': strat.enabled,
-                **strat.performance
-            }
-            for name, strat in self.strategies.items()
-        }
+    # get_strategy_performance defined above (accepts optional name arg)
     
     def update_strategy_performance(self, strategy_name: str, trade_result: Dict):
         """Update performance for a strategy"""

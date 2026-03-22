@@ -61,13 +61,14 @@ class BacktestResult(BaseModel):
 
 _STRATEGY_MAP = {
     "MovingAverageCrossover": "strategies.ma_crossover.MovingAverageCrossover",
-    "RSIMeanReversion": "strategies.rsi_mean_reversion.RSIMeanReversionStrategy",
-    "BollingerBands": "strategies.bollinger_bands.BollingerBandsStrategy",
-    "MACDStrategy": "strategies.macd_strategy.MACDStrategy",
-    "SMCICTStrategy": "strategies.smc_ict.SMCICTStrategy",
-    "VWAPStrategy": "strategies.vwap_strategy.VWAPStrategy",
-    "IchimokuStrategy": "strategies.ichimoku.IchimokuStrategy",
-    "ATRBreakout": "strategies.atr_breakout.ATRBreakoutStrategy",
+    "RSIStrategy":            "strategies.rsi_strategy.RSIStrategy",
+    "MACDStrategy":           "strategies.macd_strategy.MACDStrategy",
+    "BollingerBands":         "strategies.bollinger_bands.BollingerBandsStrategy",
+    "SMCICTStrategy":         "strategies.smc_ict.SMCICTStrategy",
+    "EMAcrossover":           "strategies.ema_crossover.EMAcrossoverStrategy",
+    "MeanReversion":          "strategies.mean_reversion.MeanReversionStrategy",
+    "Breakout":               "strategies.breakout.BreakoutStrategy",
+    "Stochastic":             "strategies.stochastic.StochasticStrategy",
 }
 
 

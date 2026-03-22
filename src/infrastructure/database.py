@@ -307,3 +307,35 @@ async def close_db() -> None:
     if _db_manager:
         await _db_manager.close()
         _db_manager = None
+
+
+# ── Aliases expected by tests ─────────────────────────────────────────────────
+from sqlalchemy.ext.asyncio import create_async_engine as _cae, AsyncSession
+
+async def init_db(url: str = None) -> None:
+    """Initialise the database (creates tables if needed)."""
+    await get_db_manager()
+
+# Lazy engine proxy — resolves on first attribute access
+class _EngineProxy:
+    _real = None
+    def __getattr__(self, name):
+        if self._real is None:
+            import os
+            from sqlalchemy.ext.asyncio import create_async_engine
+            db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///hopefx.db")
+            self.__class__._real = create_async_engine(db_url, echo=False)
+        return getattr(self._real, name)
+
+engine = _EngineProxy()
+
+class _SessionProxy:
+    def __call__(self, *a, **kw):
+        return get_session(*a, **kw)
+
+AsyncSessionLocal = _SessionProxy()
+
+async def get_db():
+    """Alias for get_session — FastAPI dependency."""
+    async with get_session() as session:
+        yield session

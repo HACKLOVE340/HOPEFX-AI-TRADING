@@ -13,6 +13,7 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -430,15 +431,20 @@ async def startup_event():
         # ── Strategy Brain ───────────────────────────────────────────────────
         try:
             from strategies.strategy_brain import StrategyBrain
+            from strategies.base import StrategyConfig
             from strategies.ma_crossover import MovingAverageCrossover
             from strategies.rsi_strategy import RSIStrategy
             from strategies.macd_strategy import MACDStrategy
             from strategies.bollinger_bands import BollingerBandsStrategy
+
+            def _cfg(name, symbol="XAUUSD", tf="1h"):
+                return StrategyConfig(name=name, symbol=symbol, timeframe=tf)
+
             brain = StrategyBrain()
-            brain.register_strategy(MovingAverageCrossover())
-            brain.register_strategy(RSIStrategy())
-            brain.register_strategy(MACDStrategy())
-            brain.register_strategy(BollingerBandsStrategy())
+            brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
+            brain.register_strategy(RSIStrategy(_cfg("RSI")))
+            brain.register_strategy(MACDStrategy(_cfg("MACD")))
+            brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
             app_state.strategy_brain = brain
             logger.info("✓ Strategy Brain initialized with 4 strategies")
             log_activity("Strategy Brain initialized")
@@ -602,6 +608,29 @@ async def startup_event():
             log_activity("Mobile API initialized")
         except Exception as e:
             logger.warning(f"⚠ Mobile API not available: {e}")
+
+        # ── Hyperopt router ───────────────────────────────────────────────────
+        try:
+            from backtesting.hyperopt import create_hyperopt_router
+            app.include_router(create_hyperopt_router())
+            logger.info("✓ Hyperopt router registered")
+            log_activity("Hyperopt router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Hyperopt router not available: {e}")
+
+        # ── Telegram Bot ──────────────────────────────────────────────────────
+        try:
+            from notifications.telegram_bot import init_telegram_bot
+            tg_bot = init_telegram_bot(app_state)
+            if tg_bot:
+                asyncio.create_task(tg_bot.start())
+                app_state.telegram_bot = tg_bot
+                logger.info("✓ Telegram bot started")
+                log_activity("Telegram bot started")
+            else:
+                logger.info("Telegram bot skipped (TELEGRAM_BOT_TOKEN not set)")
+        except Exception as e:
+            logger.warning(f"⚠ Telegram bot not available: {e}")
 
         app_state.initialized = True
         log_activity("API server ready")

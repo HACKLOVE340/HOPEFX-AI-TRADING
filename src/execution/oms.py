@@ -169,3 +169,5 @@ class OMS:
         
         event = FillEvent(fill=fill)
         await event_bus.publish(event)
+
+OrderManagementSystem = OMS
