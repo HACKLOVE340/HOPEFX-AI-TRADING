@@ -8,22 +8,48 @@ __version__ = '1.0.0'
 __author__ = 'HOPEFX Team'
 __license__ = 'MIT'
 
-# Import main components
-from config import ConfigManager, initialize_config
-from cache import MarketDataCache, Timeframe
-from database import Base
+# Import main components — wrapped so partial installs don't break the package
+try:
+    from config import ConfigManager, initialize_config
+except Exception:  # pragma: no cover
+    pass
 
-# Import trading components
-from strategies import (
-    BaseStrategy, Signal, SignalType, StrategyStatus,
-    StrategyManager, MovingAverageCrossover
-)
-from risk import RiskManager, RiskConfig, PositionSize, PositionSizeMethod
-from brokers import (
-    BrokerConnector, Order, Position, AccountInfo,
-    OrderType, OrderSide, OrderStatus, PaperTradingBroker
-)
-from notifications import NotificationManager, NotificationLevel, NotificationChannel
+try:
+    from cache import MarketDataCache, Timeframe
+except Exception:  # pragma: no cover
+    pass
+
+try:
+    from database import Base
+except Exception:  # pragma: no cover
+    pass
+
+# Import trading components — wrapped so partial installs don't break the package
+try:
+    from strategies import (
+        BaseStrategy, Signal, SignalType, StrategyStatus,
+        StrategyManager, MovingAverageCrossover
+    )
+except Exception:  # pragma: no cover
+    pass
+
+try:
+    from risk import RiskManager, RiskConfig, PositionSize, PositionSizeMethod
+except Exception:  # pragma: no cover
+    pass
+
+try:
+    from brokers import (
+        BrokerConnector, Order, Position, AccountInfo,
+        OrderType, OrderSide, OrderStatus, PaperTradingBroker
+    )
+except Exception:  # pragma: no cover
+    pass
+
+try:
+    from notifications import NotificationManager, NotificationLevel, NotificationChannel
+except Exception:  # pragma: no cover
+    pass
 
 __all__ = [
     # Version info

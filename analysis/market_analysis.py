@@ -762,10 +762,11 @@ class SessionAnalyzer:
         current_time = utc_time.time()
 
         # Check if session is active
+        tz = utc_time.tzinfo  # preserve caller's tz (may be None)
         if start <= end:
             is_active = start <= current_time <= end
             if is_active:
-                end_dt = datetime.combine(utc_time.date(), end)
+                end_dt = datetime.combine(utc_time.date(), end, tzinfo=tz)
                 remaining = (end_dt - utc_time).seconds // 60
             else:
                 remaining = 0

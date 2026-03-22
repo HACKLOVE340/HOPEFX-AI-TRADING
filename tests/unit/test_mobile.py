@@ -2,9 +2,13 @@
 Tests for the mobile module.
 """
 
+import os
 import pytest
 from decimal import Decimal
 from datetime import datetime
+
+# Ensure JWT secret is set before importing mobile.api (which validates it at import)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-jwt-secret-minimum-32-characters-long!!")
 
 from mobile.api import MobileAPI
 from mobile.push_notifications import PushNotificationManager
