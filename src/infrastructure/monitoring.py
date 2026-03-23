@@ -2,8 +2,7 @@
 Prometheus metrics and health monitoring.
 """
 
-from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from prometheus_client import (
     Counter,
@@ -11,7 +10,6 @@ from prometheus_client import (
     Histogram,
     Info,
     generate_latest,
-    CONTENT_TYPE_LATEST,
 )
 from prometheus_client.registry import CollectorRegistry
 

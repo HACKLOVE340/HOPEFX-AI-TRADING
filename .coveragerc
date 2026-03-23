@@ -1,0 +1,13 @@
+[coverage]
+source = .
+omit =
+    */tests/*
+    */examples/*
+report_precision = 2
+fail_under = 80
+
+[html]
+directory = coverage_html_report
+
+[xml]
+directory = coverage_xml_report

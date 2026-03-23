@@ -2,7 +2,6 @@
 Stripe payment processing for strategy marketplace.
 """
 
-import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum

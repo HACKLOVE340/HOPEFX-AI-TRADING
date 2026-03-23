@@ -82,5 +82,5 @@ jobs:
         with:
           path: ./
           base: main
-          head: HEAD
+          head: ${{ github.event.before || 'HEAD' }}
           extra_args: --debug --only-verified

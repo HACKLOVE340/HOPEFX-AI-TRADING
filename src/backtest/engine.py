@@ -2,19 +2,17 @@
 Event-driven backtesting engine with realistic execution simulation.
 """
 
-import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Callable
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 
 from src.brokers.paper import PaperBroker
-from src.core.events import Event, get_event_bus
 from src.domain.enums import TradeDirection
-from src.domain.models import OHLCV, Order, Signal, TickData
+from src.domain.models import OHLCV, Signal, TickData
 from src.execution.oms import OrderManagementSystem
 from src.strategies.base import Strategy
 
