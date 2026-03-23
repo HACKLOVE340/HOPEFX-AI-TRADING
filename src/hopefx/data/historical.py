@@ -73,3 +73,13 @@ class DukascopySource:
         """Download from Dukascopy."""
         # Implementation for free tick data
         pass
+
+
+class TrueFXSource:
+    """TrueFX free tick data source."""
+
+    async def download(
+        self, symbol: str, start: datetime, end: datetime
+    ) -> List[TickSchema]:
+        """Download ticks from TrueFX."""
+        return []

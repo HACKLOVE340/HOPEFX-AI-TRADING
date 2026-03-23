@@ -51,7 +51,7 @@ class OrderBook:
         levels = self.bids if side == Side.BUY else self.asks
 
         # Find existing level
-        existing = next((l for l in levels if l.price == price), None)
+        existing = next((lvl for lvl in levels if lvl.price == price), None)
 
         if is_delete or volume <= 0:
             if existing:
@@ -103,8 +103,8 @@ class OrderBook:
     @property
     def imbalance_ratio(self) -> float:
         """Bid volume / Total volume - 0.5, range [-0.5, 0.5]."""
-        bid_vol = sum(l.volume for l in self.bids[:10])
-        ask_vol = sum(l.volume for l in self.asks[:10])
+        bid_vol = sum(lvl.volume for lvl in self.bids[:10])
+        ask_vol = sum(lvl.volume for lvl in self.asks[:10])
         total = bid_vol + ask_vol
         if total == 0:
             return 0.0
@@ -115,10 +115,10 @@ class OrderBook:
         """Microstructure trading signal."""
         # Weighted by price level (closer to mid = more important)
         bid_weighted = sum(
-            l.volume * (1.0 / (i + 1)) for i, l in enumerate(self.bids[:20])
+            lvl.volume * (1.0 / (i + 1)) for i, lvl in enumerate(self.bids[:20])
         )
         ask_weighted = sum(
-            l.volume * (1.0 / (i + 1)) for i, l in enumerate(self.asks[:20])
+            lvl.volume * (1.0 / (i + 1)) for i, lvl in enumerate(self.asks[:20])
         )
         total = bid_weighted + ask_weighted
         if total == 0:
@@ -138,10 +138,10 @@ class OrderBook:
             "book_imbalance": self.imbalance_ratio,
             "book_signal": self.book_imbalance_signal,
             "spread_bps": spread_bps,
-            "bid_depth_10": float(sum(l.volume for l in self.bids[:10])),
-            "ask_depth_10": float(sum(l.volume for l in self.asks[:10])),
-            "bid_depth_50": float(sum(l.volume for l in self.bids)),
-            "ask_depth_50": float(sum(l.volume for l in self.asks)),
+            "bid_depth_10": float(sum(lvl.volume for lvl in self.bids[:10])),
+            "ask_depth_10": float(sum(lvl.volume for lvl in self.asks[:10])),
+            "bid_depth_50": float(sum(lvl.volume for lvl in self.bids)),
+            "ask_depth_50": float(sum(lvl.volume for lvl in self.asks)),
             "update_frequency": self._update_count
             / max(1, asyncio.get_event_loop().time() - self._last_update),
         }

@@ -2,6 +2,8 @@
 Health check endpoints.
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 

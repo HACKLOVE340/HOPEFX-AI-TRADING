@@ -2,6 +2,8 @@
 Backtest API endpoints.
 """
 
+from decimal import Decimal
+
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, Field
 

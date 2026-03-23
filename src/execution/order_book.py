@@ -92,8 +92,8 @@ class OrderBook:
         Calculate order book imbalance.
         Positive = more bids (bullish), Negative = more asks (bearish)
         """
-        bid_volume = sum(l.volume for l in self._bids.values())
-        ask_volume = sum(l.volume for l in self._asks.values())
+        bid_volume = sum(lvl.volume for lvl in self._bids.values())
+        ask_volume = sum(lvl.volume for lvl in self._asks.values())
 
         total = bid_volume + ask_volume
         if total == 0:
@@ -156,14 +156,14 @@ class OrderBook:
             "symbol": self.symbol,
             "timestamp": self._last_update,
             "bids": [
-                {"price": float(l.price), "volume": float(l.volume)}
-                for l in sorted(
+                {"price": float(lvl.price), "volume": float(lvl.volume)}
+                for lvl in sorted(
                     self._bids.values(), key=lambda x: x.price, reverse=True
                 )[:10]
             ],
             "asks": [
-                {"price": float(l.price), "volume": float(l.volume)}
-                for l in sorted(self._asks.values(), key=lambda x: x.price)[:10]
+                {"price": float(lvl.price), "volume": float(lvl.volume)}
+                for lvl in sorted(self._asks.values(), key=lambda x: x.price)[:10]
             ],
             "spread_bps": self.get_spread_bps(),
             "imbalance": self.get_volume_imbalance(),

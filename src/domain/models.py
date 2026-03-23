@@ -70,10 +70,10 @@ class OHLCV(BaseModel):
     @field_validator("high")
     @classmethod
     def high_is_highest(cls, v: Decimal, info) -> Decimal:
-        o, l, c = info.data.get("open"), info.data.get("low"), info.data.get("close")
+        o, low, c = info.data.get("open"), info.data.get("low"), info.data.get("close")
         if o and v < o:
             raise ValueError("High must be >= open")
-        if l and v < l:
+        if low and v < low:
             raise ValueError("High must be >= low")
         if c and v < c:
             raise ValueError("High must be >= close")
