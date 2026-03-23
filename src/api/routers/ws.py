@@ -1,4 +1,5 @@
 """WebSocket endpoints."""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,19 +18,19 @@ router = APIRouter()
 async def websocket_stream(websocket: WebSocket):
     """Stream real-time events."""
     await websocket.accept()
-    
+
     # Subscribe to events
     queue: asyncio.Queue = asyncio.Queue()
-    
+
     async def tick_handler(event: TickEvent):
         await queue.put({"type": "tick", "data": event.tick.model_dump()})
-    
+
     async def signal_handler(event: SignalEvent):
         await queue.put({"type": "signal", "data": event.model_dump()})
-    
+
     event_bus.subscribe(TickEvent, tick_handler)
     event_bus.subscribe(SignalEvent, signal_handler)
-    
+
     try:
         while True:
             # Send queued messages
@@ -39,7 +40,7 @@ async def websocket_stream(websocket: WebSocket):
             except asyncio.TimeoutError:
                 # Send heartbeat
                 await websocket.send_json({"type": "heartbeat"})
-            
+
             # Receive client messages
             try:
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
@@ -50,9 +51,9 @@ async def websocket_stream(websocket: WebSocket):
                     pass
             except asyncio.TimeoutError:
                 pass
-            
+
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         if websocket.client_state != WebSocketState.DISCONNECTED:
             await websocket.close()

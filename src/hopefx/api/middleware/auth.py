@@ -8,7 +8,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 security = HTTPBearer()
 
-_SKIP_PATHS = {"/health", "/api/v1/health", "/docs", "/openapi.json", "/metrics", "/redoc"}
+_SKIP_PATHS = {
+    "/health",
+    "/api/v1/health",
+    "/docs",
+    "/openapi.json",
+    "/metrics",
+    "/redoc",
+}
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -28,9 +35,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 raise HTTPException(status_code=401, detail="Invalid scheme")
 
             import jwt as _jwt
+
             secret = os.environ.get("SECURITY_JWT_SECRET", "")
             if not secret:
                 from hopefx.config.settings import settings as _s
+
                 secret = _s.jwt_secret
             payload = _jwt.decode(token, secret, algorithms=["HS256"])
             request.state.user = payload.get("sub")

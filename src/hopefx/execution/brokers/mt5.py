@@ -53,7 +53,9 @@ class MT5Broker(BaseBroker):
 
         return OrderResult(
             order_id=str(response.get("ticket", "unknown")),
-            status=OrderStatus.FILLED if response.get("success") else OrderStatus.REJECTED,
+            status=OrderStatus.FILLED
+            if response.get("success")
+            else OrderStatus.REJECTED,
             filled_qty=order.quantity if response.get("success") else Decimal("0"),
             filled_price=Decimal(str(response.get("price", 0))),
             remaining_qty=Decimal("0") if response.get("success") else order.quantity,
@@ -75,8 +77,11 @@ class MT5Broker(BaseBroker):
             if success:
                 logger.info("mt5.order_cancelled", order_id=order_id)
             else:
-                logger.warning("mt5.cancel_failed", order_id=order_id,
-                               reason=response.get("error", "unknown"))
+                logger.warning(
+                    "mt5.cancel_failed",
+                    order_id=order_id,
+                    reason=response.get("error", "unknown"),
+                )
             return success
         except Exception as exc:
             logger.error("mt5.cancel_order_error", order_id=order_id, error=str(exc))

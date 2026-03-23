@@ -1,9 +1,10 @@
 """Strict type definitions for the trading system."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Literal, NewType
 
 from pydantic import BaseModel, Field, field_validator
@@ -63,6 +64,7 @@ class Venue(StrEnum):
 
 class Tick(BaseModel):
     """Normalized tick data."""
+
     symbol: Symbol
     timestamp: datetime
     bid: Decimal = Field(..., decimal_places=5)
@@ -70,7 +72,7 @@ class Tick(BaseModel):
     mid: Decimal = Field(..., decimal_places=5)
     volume: Decimal = Field(default=Decimal("0"), decimal_places=2)
     venue: Venue
-    
+
     @field_validator("mid", mode="before")
     @classmethod
     def compute_mid(cls, v: Decimal | None, info) -> Decimal:
@@ -82,6 +84,7 @@ class Tick(BaseModel):
 
 class OHLCV(BaseModel):
     """Candlestick data."""
+
     symbol: Symbol
     timestamp: datetime
     open: Decimal
@@ -94,6 +97,7 @@ class OHLCV(BaseModel):
 
 class Position(BaseModel):
     """Open position state."""
+
     id: PositionId
     symbol: Symbol
     side: Side
@@ -109,6 +113,7 @@ class Position(BaseModel):
 
 class Order(BaseModel):
     """Order state."""
+
     id: OrderId
     symbol: Symbol
     side: Side
@@ -127,6 +132,7 @@ class Order(BaseModel):
 
 class Fill(BaseModel):
     """Fill/execution report."""
+
     order_id: OrderId
     fill_id: str
     symbol: Symbol

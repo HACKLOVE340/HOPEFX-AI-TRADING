@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 from decimal import Decimal
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict
 
 import stripe
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from hopefx.config.settings import settings
 from hopefx.config.vault import vault
-from hopefx.database.models import (
-    Wallet, Transaction, Subscription, SubscriptionTier,
-    User, CopyTrading
-)
+from hopefx.database.models import SubscriptionTier, User, CopyTrading
 
 logger = structlog.get_logger()
 
@@ -30,48 +23,41 @@ class PaymentGateway:
     async def create_customer(self, user: User) -> str:
         """Create Stripe customer for user."""
         customer = stripe.Customer.create(
-            email=user.email,
-            metadata={"user_id": user.id}
+            email=user.email, metadata={"user_id": user.id}
         )
         return customer.id
 
     async def create_subscription(
-        self,
-        user: User,
-        tier: SubscriptionTier,
-        payment_method_id: str
+        self, user: User, tier: SubscriptionTier, payment_method_id: str
     ) -> Optional[str]:
         """Create subscription with trial."""
         if not user.wallet or not user.wallet.stripe_customer_id:
-            customer_id = await self.create_customer(user)
+            await self.create_customer(user)
             # Update wallet with customer_id
-        
+
         # Get price ID for tier
         price_id = self._get_price_id(tier)
-        
+
         subscription = stripe.Subscription.create(
             customer=user.wallet.stripe_customer_id,
             items=[{"price": price_id}],
             payment_behavior="default_incomplete",
             payment_settings={"save_default_payment_method": "on_subscription"},
             trial_period_days=7 if tier != SubscriptionTier.FREE else 0,
-            metadata={"user_id": user.id, "tier": tier.value}
+            metadata={"user_id": user.id, "tier": tier.value},
         )
-        
+
         return subscription.id
 
     async def process_copy_trading_fee(
-        self,
-        copy: CopyTrading,
-        amount: Decimal,
-        description: str
+        self, copy: CopyTrading, amount: Decimal, description: str
     ) -> bool:
         """Process performance fee from follower to leader."""
         try:
             # Create transfer from platform to leader
             follower_wallet = copy.follower.wallet
             leader_wallet = copy.leader.wallet
-            
+
             if not follower_wallet or not leader_wallet:
                 return False
 
@@ -86,8 +72,8 @@ class PaymentGateway:
                 metadata={
                     "type": "copy_trading_fee",
                     "copy_id": copy.id,
-                    "leader_id": copy.leader_id
-                }
+                    "leader_id": copy.leader_id,
+                },
             )
 
             # Transfer to leader (minus platform fee)
@@ -98,12 +84,12 @@ class PaymentGateway:
                 amount=int(leader_amount * 100),
                 currency="usd",
                 destination=leader_wallet.stripe_connect_account_id,
-                transfer_group=payment_intent.id
+                transfer_group=payment_intent.id,
             )
 
             # Record transaction
             await self._record_fee_transaction(copy, amount, platform_fee, transfer.id)
-            
+
             return True
 
         except stripe.error.StripeError as e:
@@ -116,23 +102,23 @@ class PaymentGateway:
             event = stripe.Webhook.construct_event(
                 payload, signature, self.webhook_secret
             )
-            
+
             if event["type"] == "invoice.payment_succeeded":
                 await self._handle_subscription_payment(event["data"]["object"])
             elif event["type"] == "transfer.paid":
                 await self._handle_payout(event["data"]["object"])
             elif event["type"] == "payment_intent.payment_failed":
                 await self._handle_payment_failure(event["data"]["object"])
-            
+
             return True
-            
+
         except stripe.error.SignatureVerificationError:
             logger.error("payments.invalid_webhook_signature")
             return False
 
     async def _handle_subscription_payment(self, invoice: Dict) -> None:
         """Update subscription on successful payment."""
-        subscription_id = invoice["subscription"]
+        invoice["subscription"]
         # Update database, extend period
         pass
 
@@ -150,7 +136,7 @@ class PaymentGateway:
         price_map = {
             SubscriptionTier.PRO: "price_pro_monthly",
             SubscriptionTier.ELITE: "price_elite_monthly",
-            SubscriptionTier.PROP_CHALLENGE: "price_prop_monthly"
+            SubscriptionTier.PROP_CHALLENGE: "price_prop_monthly",
         }
         return price_map.get(tier, "")
 
@@ -159,7 +145,7 @@ class PaymentGateway:
         copy: CopyTrading,
         amount: Decimal,
         platform_fee: Decimal,
-        stripe_transfer_id: str
+        stripe_transfer_id: str,
     ) -> None:
         """Record fee transaction in database."""
         pass
@@ -174,11 +160,7 @@ class WalletManager:
         pass
 
     async def withdraw(
-        self,
-        wallet_id: str,
-        amount: Decimal,
-        destination: str,
-        method: str
+        self, wallet_id: str, amount: Decimal, destination: str, method: str
     ) -> bool:
         """Process withdrawal with compliance checks."""
         # KYC/AML checks

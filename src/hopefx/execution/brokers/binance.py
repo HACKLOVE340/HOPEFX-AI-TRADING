@@ -13,7 +13,9 @@ logger = structlog.get_logger()
 class BinanceBroker(BaseBroker):
     """Binance Spot/Margin API."""
 
-    def __init__(self, api_key: str | None = None, secret: str | None = None, paper: bool = True) -> None:
+    def __init__(
+        self, api_key: str | None = None, secret: str | None = None, paper: bool = True
+    ) -> None:
         super().__init__("binance", paper)
         self.api_key = api_key
         self.secret = secret
@@ -39,7 +41,7 @@ class BinanceBroker(BaseBroker):
         )
 
         fill = result.get("fills", [{}])[0]
-        
+
         return OrderResult(
             order_id=str(result.get("orderId")),
             status=OrderStatus.FILLED,
@@ -61,15 +63,15 @@ class BinanceBroker(BaseBroker):
             open_orders = self._client.get_open_orders()
             for o in open_orders:
                 if str(o.get("orderId")) == str(order_id):
-                    self._client.cancel_order(
-                        symbol=o["symbol"], orderId=int(order_id)
-                    )
+                    self._client.cancel_order(symbol=o["symbol"], orderId=int(order_id))
                     logger.info("binance.order_cancelled", order_id=order_id)
                     return True
             logger.warning("binance.cancel_order_not_found", order_id=order_id)
             return False
         except Exception as exc:
-            logger.error("binance.cancel_order_failed", order_id=order_id, error=str(exc))
+            logger.error(
+                "binance.cancel_order_failed", order_id=order_id, error=str(exc)
+            )
             return False
 
     async def get_position(self, symbol: str) -> dict:

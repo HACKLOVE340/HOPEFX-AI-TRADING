@@ -9,14 +9,11 @@ from datetime import timezone
 import argparse
 import asyncio
 import signal
-import sys
-from contextlib import asynccontextmanager
 from decimal import Decimal
 
 import structlog
-from fastapi import FastAPI
 
-from hopefx.api.server import create_app, run_server
+from hopefx.api.server import run_server
 from hopefx.brain.engine import brain
 from hopefx.config.settings import settings
 from hopefx.config.vault import vault
@@ -24,9 +21,7 @@ from hopefx.data.feature_store import feature_store
 from hopefx.data.feed import feed_manager
 from hopefx.events.bus import event_bus
 from hopefx.execution.oms import oms
-from hopefx.execution.router import smart_router
 from hopefx.marketplace.copy_trading import copy_engine
-from hopefx.marketplace.payments import payments
 from hopefx.ml.pipeline import ml_pipeline
 from hopefx.monitoring.telemetry import telemetry
 from hopefx.risk.circuit_breaker import multi_breaker
@@ -117,11 +112,8 @@ class HopeFXApplication:
 
                 # Periodic status logging
                 await self._log_status()
-                
-                await asyncio.wait_for(
-                    self._shutdown_event.wait(),
-                    timeout=60.0
-                )
+
+                await asyncio.wait_for(self._shutdown_event.wait(), timeout=60.0)
 
             except asyncio.TimeoutError:
                 continue
@@ -146,7 +138,7 @@ class HopeFXApplication:
             checks["copy_engine"] = copy_engine._running
 
         all_healthy = all(checks.values())
-        
+
         return {
             "healthy": all_healthy,
             "checks": checks,
@@ -166,7 +158,7 @@ class HopeFXApplication:
         """Log current system status."""
         position_count = len(oms.get_all_positions())
         latest_tick = None
-        
+
         for feed in feed_manager._feeds.values():
             if feed._last_tick:
                 latest_tick = feed._last_tick
@@ -179,8 +171,10 @@ class HopeFXApplication:
             "event_queue_size": event_bus._queue.qsize(),
             "active_feeds": len(feed_manager._feeds),
             "latest_tick_age_ms": (
-                (datetime.now(timezone.utc) - latest_tick.timestamp).total_seconds() * 1000 
-                if latest_tick else None
+                (datetime.now(timezone.utc) - latest_tick.timestamp).total_seconds()
+                * 1000
+                if latest_tick
+                else None
             ),
         }
 
@@ -196,7 +190,7 @@ class HopeFXApplication:
         # Stop in reverse order
         for name, component in reversed(self._components):
             try:
-                if hasattr(component, 'stop'):
+                if hasattr(component, "stop"):
                     await asyncio.wait_for(component.stop(), timeout=10.0)
                     logger.info("component.stopped", name=name)
             except asyncio.TimeoutError:
@@ -210,15 +204,21 @@ class HopeFXApplication:
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="HOPEFX GodMode Trading Platform")
-    parser.add_argument("command", choices=[
-        "server", "api",           # Start API server
-        "worker",                # Start background worker
-        "bot",                   # Start XAUUSD bot
-        "init",                  # Initialize configuration
-        "migrate",               # Run database migrations
-        "shell",                 # Interactive shell
-    ])
-    parser.add_argument("--mode", choices=["paper", "live", "backtest"], default="paper")
+    parser.add_argument(
+        "command",
+        choices=[
+            "server",
+            "api",  # Start API server
+            "worker",  # Start background worker
+            "bot",  # Start XAUUSD bot
+            "init",  # Initialize configuration
+            "migrate",  # Run database migrations
+            "shell",  # Interactive shell
+        ],
+    )
+    parser.add_argument(
+        "--mode", choices=["paper", "live", "backtest"], default="paper"
+    )
     parser.add_argument("--capital", type=float, default=10000)
 
     args = parser.parse_args()
@@ -242,32 +242,35 @@ def main():
 
     if args.command in ("server", "api"):
         run_server()
-    
+
     elif args.command == "worker":
         app = HopeFXApplication()
         if asyncio.run(app.initialize()):
             asyncio.run(app.run())
-    
+
     elif args.command == "bot":
         # Import and run bot
         from scripts.xauusd_bot import XAUUSDBot
+
         bot = XAUUSDBot(mode=args.mode, capital=Decimal(str(args.capital)))
         if asyncio.run(bot.initialize()):
             asyncio.run(bot.run())
-    
+
     elif args.command == "init":
         # Initialize vault and config
         print("Initializing HOPEFX...")
         vault.store("initialized", True, persist=True)
         print("✓ Vault initialized")
         print("✓ Run 'docker-compose up' to start services")
-    
+
     elif args.command == "migrate":
         import alembic.config
+
         alembic.config.main(argv=["upgrade", "head"])
-    
+
     elif args.command == "shell":
         import IPython
+
         IPython.embed()
 
 
