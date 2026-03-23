@@ -1,0 +1,90 @@
+# helm/hopefx/values.yaml
+# Override any value with: helm install hopefx . -f my-values.yaml
+
+replicaCount: 1
+
+image:
+  repository: hopefx/trading-engine
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ── FastAPI service ──────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 8000
+
+# ── Redis sidecar ────────────────────────────────────────────────────────────
+redis:
+  image: redis:7-alpine
+  port: 6379
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# ── Persistent storage (models + SQLite DB) ──────────────────────────────────
+persistence:
+  enabled: true
+  storageClass: ""          # "" = cluster default
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  mountPath: /app/data
+
+# ── Resource requests/limits for the trading pod ────────────────────────────
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+# ── Environment variables (non-sensitive) ────────────────────────────────────
+env:
+  LOG_LEVEL: "INFO"
+  TRADING_MODE: "paper"          # paper | live
+  REDIS_URL: "redis://localhost:6379/0"
+  DB_PATH: "/app/data/hopefx.db"
+  PROP_FIRM_CONFIG: "/app/data/prop_firm_mode.json"
+  ML_MODEL_DIR: "/app/data/models"
+
+# ── Secret references (values injected at deploy time) ───────────────────────
+# Set these via: helm install hopefx . --set secrets.BINANCE_API_KEY=xxx
+secrets:
+  BINANCE_API_KEY: ""
+  BINANCE_SECRET: ""
+  MT5_LOGIN: ""
+  MT5_PASSWORD: ""
+  MT5_SERVER: ""
+  STRIPE_SECRET_KEY: ""
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_ID: ""
+  OPENAI_API_KEY: ""
+
+# ── Liveness / readiness probes ──────────────────────────────────────────────
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readiness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# ── Horizontal Pod Autoscaler ────────────────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
