@@ -15,7 +15,7 @@ class DatabaseSettings(BaseSettings):
     port: int = 5432
     name: str = "hopefx"
     user: str = "hopefx"
-    password: SecretStr
+    password: SecretStr = SecretStr("")
     pool_size: int = 20
     max_overflow: int = 10
     echo: bool = False
@@ -37,9 +37,9 @@ class RedisSettings(BaseSettings):
 
 class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
-    
-    encryption_key: SecretStr
-    jwt_secret: SecretStr
+
+    encryption_key: SecretStr = SecretStr("")
+    jwt_secret: SecretStr = SecretStr("")
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
     rate_limit_requests: int = 100
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     
     app_name: str = "HOPEFX Trading Platform"
     app_version: str = "3.0.0"
-    environment: Literal["development", "staging", "production"] = "development"
+    environment: Literal["development", "staging", "production", "testing"] = "development"
     debug: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     
