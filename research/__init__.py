@@ -548,9 +548,10 @@ def create_research_router(engine: 'ResearchNotebookEngine'):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
     from typing import Optional, List
+    from api.auth import require_role, TokenPayload
 
     router = APIRouter(prefix="/api/research", tags=["Research"])
 
@@ -599,16 +600,23 @@ def create_research_router(engine: 'ResearchNotebookEngine'):
         return {"cell_id": cell.cell_id, "status": cell.status.value}
 
     @router.post("/notebooks/{notebook_id}/cells/{cell_id}/execute")
-    async def execute_cell(notebook_id: str, cell_id: str):
-        """Execute a single notebook cell."""
+    async def execute_cell(
+        notebook_id: str,
+        cell_id: str,
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Execute a single notebook cell. Requires: role >= 'trader'."""
         result = engine.execute_cell(notebook_id, cell_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Notebook or cell not found")
         return result
 
     @router.post("/notebooks/{notebook_id}/execute")
-    async def execute_all(notebook_id: str):
-        """Execute all cells in a notebook."""
+    async def execute_all(
+        notebook_id: str,
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Execute all cells in a notebook. Requires: role >= 'trader'."""
         results = engine.execute_all(notebook_id)
         return {"notebook_id": notebook_id, "results": results}
 
