@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 
 from api.auth import TokenPayload, require_role
 
@@ -333,3 +334,31 @@ def _check_module(name: str) -> bool:
     """Return True if a module can be imported."""
     import importlib.util
     return importlib.util.find_spec(name) is not None
+
+
+# ── Admin HTML pages ──────────────────────────────────────────────────────────
+
+def _html_page(title: str, body: str) -> HTMLResponse:
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html><head><title>HOPEFX Admin — {title}</title></head>
+<body><h1>HOPEFX Admin — {title}</h1>{body}</body></html>""")
+
+
+@router.get("/", response_class=HTMLResponse)
+def admin_dashboard():
+    return _html_page("Dashboard", "<p>Dashboard</p>")
+
+
+@router.get("/strategies", response_class=HTMLResponse)
+def admin_strategies():
+    return _html_page("Strategies", "<p>Strategies</p>")
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def admin_settings_page():
+    return _html_page("Settings", "<p>Settings</p>")
+
+
+@router.get("/monitoring", response_class=HTMLResponse)
+def admin_monitoring():
+    return _html_page("Monitoring", "<p>Monitoring</p>")

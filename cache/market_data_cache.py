@@ -172,11 +172,11 @@ class _InMemoryStore:
         with self._lock:
             all_keys = [k for k in self._data if not self._is_expired(k)]
 
-    if match:
-        pattern = match.replace('*', '**')
-        all_keys = [k for k in all_keys if fnmatch.fnmatch(k, pattern)]
+            if match:
+                pattern = match.replace('*', '**')
+                all_keys = [k for k in all_keys if fnmatch.fnmatch(k, pattern)]
 
-        return 0, all_keys
+            return 0, all_keys
 
     def info(self, section: str = 'all') -> Dict[str, Any]:
         with self._lock:
@@ -216,12 +216,12 @@ class MarketDataCache:
         port: int = 6379,
         db: int = 0,
         password: Optional[str] = None,
-        socket_timeout: float = 5,
-        socket_connect_timeout: float = 5,
+        socket_timeout: float = 1,
+        socket_connect_timeout: float = 1,
         decode_responses: bool = True,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-        enable_fallback: bool = False
+        max_retries: int = 1,
+        retry_delay: float = 0.5,
+        enable_fallback: bool = True
     ):
         self.host = host
         self.port = port
@@ -267,6 +267,8 @@ class MarketDataCache:
                     socket_timeout=self.socket_timeout,
                     socket_connect_timeout=self.socket_connect_timeout,
                     decode_responses=self.decode_responses,
+                    retry_on_error=[],
+                    retry=None,
                 )
                 client.ping()
                 self._connection_failed = False
@@ -308,7 +310,9 @@ class MarketDataCache:
                     password=self.password,
                     socket_timeout=self.socket_timeout,
                     socket_connect_timeout=self.socket_connect_timeout,
-                    decode_responses=self.decode_responses
+                    decode_responses=self.decode_responses,
+                    retry_on_error=[],
+                    retry=None,
                 )
                 client.ping()
                 
@@ -799,7 +803,7 @@ class MarketDataCache:
     # Connection Management
     
     def health_check(self) -> bool:
-        """Check Redis connection health (sync version)"""
+        """Check cache health. Returns True when Redis is reachable or in-memory fallback is active."""
         try:
             if self._redis_client:
                 result = self._redis_client.ping()
@@ -807,10 +811,11 @@ class MarketDataCache:
             redis_client = self._get_redis()
             if redis_client:
                 return bool(redis_client.ping())
-            return False
+            # No Redis — healthy only if fallback is enabled and active
+            return self.enable_fallback and self._using_fallback
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            return False
+            return self.enable_fallback and self._using_fallback
     
     async def health_check_async(self) -> bool:
         """Async version of health check"""

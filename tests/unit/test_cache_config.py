@@ -94,7 +94,7 @@ class TestMarketDataCacheInit:
         assert cache.port == 6379
         assert cache.db == 0
         assert cache.decode_responses is True
-        assert cache.max_retries == 3
+        assert cache.max_retries == 1
 
     @patch.object(MarketDataCache, "_connect_with_retry")
     def test_init_custom_params(self, mock_connect):

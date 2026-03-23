@@ -288,7 +288,9 @@ async def startup_event():
             app_state.cache = MarketDataCache(
                 host=redis_host,
                 port=redis_port,
-                max_retries=3,
+                max_retries=1,
+                socket_connect_timeout=1,
+                enable_fallback=True,
             )
             logger.info("✓ Cache initialized")
         except Exception as e:

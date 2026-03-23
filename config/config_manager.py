@@ -31,8 +31,19 @@ class EncryptionManager:
     def __init__(self, master_key: str = ""):
         key = master_key or os.environ.get("CONFIG_ENCRYPTION_KEY", "")
         if not key:
-            raise ValueError(
-                "Encryption key required: pass master_key= or set CONFIG_ENCRYPTION_KEY"
+            # Auto-generate an ephemeral key; persist it to .encryption_key in cwd
+            # so the same key survives process restarts within the same directory.
+            key_file = Path(".encryption_key")
+            if key_file.exists():
+                key = key_file.read_text().strip()
+            else:
+                key = secrets.token_hex(32)
+                try:
+                    key_file.write_text(key)
+                except OSError:
+                    pass  # read-only fs — key is ephemeral for this process
+            logger.warning(
+                "CONFIG_ENCRYPTION_KEY not set — using auto-generated key (not for production)"
             )
         self.master_key = key
 
