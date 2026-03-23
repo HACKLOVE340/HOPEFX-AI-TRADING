@@ -277,23 +277,16 @@ class MT5Bridge:
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
+        # FINANCIAL SAFETY: validate stop-loss before sending
+        if order.stop_loss is None or order.stop_loss == 0.0:
+            raise ValueError(
+                f"Order for {order.symbol!r} rejected: stop_loss must be a non-zero value. "
+                "Set order.stop_loss to a valid price level."
+            )
         if order.stop_loss is not None:
             request["sl"] = float(order.stop_loss)
         if order.take_profit is not None:
             request["tp"] = float(order.take_profit)
-
-        # Enforce timeout
-        import threading
-        timed_out = threading.Event()
-
-        def _timeout_handler():
-            timed_out.set()
-            logger.error("mt5_bridge.send_order timeout symbol=%s", order.symbol)
-
-        timer = threading.Timer(order.timeout_sec, _timeout_handler)
-        timer.start()
-        try:
-            result = mt5.order_send(request)
         finally:
             timer.cancel()
 
