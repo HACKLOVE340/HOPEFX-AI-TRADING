@@ -608,18 +608,18 @@ async def index_handler(request):
         function updatePrices(prices) {
             const container = document.getElementById('prices-container');
             container.innerHTML = '';
-            
+
             Object.entries(prices).forEach(([symbol, data]) => {
                 const div = document.createElement('div');
                 div.className = 'metric-row';
-                div.innerHTML = `
-                    <span class="metric-label">${symbol}</span>
-                    <span class="metric-value">
-                        Bid: ${data.bid.toFixed(5)} | 
-                        Ask: ${data.ask.toFixed(5)} | 
-                        Spread: ${(data.spread * 10000).toFixed(1)}p
-                    </span>
-                `;
+                const label = document.createElement('span');
+                label.className = 'metric-label';
+                label.textContent = symbol;
+                const value = document.createElement('span');
+                value.className = 'metric-value';
+                value.textContent = `Bid: ${data.bid.toFixed(5)} | Ask: ${data.ask.toFixed(5)} | Spread: ${(data.spread * 10000).toFixed(1)}p`;
+                div.appendChild(label);
+                div.appendChild(value);
                 container.appendChild(div);
                 
                 // Update price history for chart
@@ -655,18 +655,25 @@ async def index_handler(request):
         function updatePositions(positions) {
             const tbody = document.getElementById('positions-tbody');
             tbody.innerHTML = '';
-            
+
             positions.forEach(pos => {
                 const tr = document.createElement('tr');
                 const pnlClass = pos.unrealized_pnl >= 0 ? 'positive' : 'negative';
-                tr.innerHTML = `
-                    <td>${pos.symbol}</td>
-                    <td class="${pos.side === 'long' ? 'positive' : 'negative'}">${pos.side.toUpperCase()}</td>
-                    <td>${pos.quantity.toFixed(2)}</td>
-                    <td>${pos.entry_price.toFixed(5)}</td>
-                    <td>${pos.current_price.toFixed(5)}</td>
-                    <td class="${pnlClass}">$${pos.unrealized_pnl.toFixed(2)}</td>
-                `;
+                const sideClass = pos.side === 'long' ? 'positive' : 'negative';
+                const cells = [
+                    [pos.symbol, ''],
+                    [pos.side.toUpperCase(), sideClass],
+                    [pos.quantity.toFixed(2), ''],
+                    [pos.entry_price.toFixed(5), ''],
+                    [pos.current_price.toFixed(5), ''],
+                    [`$${pos.unrealized_pnl.toFixed(2)}`, pnlClass],
+                ];
+                cells.forEach(([text, cls]) => {
+                    const td = document.createElement('td');
+                    if (cls) td.className = cls;
+                    td.textContent = text;
+                    tr.appendChild(td);
+                });
                 tbody.appendChild(tr);
             });
         }
@@ -674,20 +681,25 @@ async def index_handler(request):
         function updateRegime(regimes) {
             const container = document.getElementById('regime-container');
             container.innerHTML = '';
-            
+
+            const regimeColors = {
+                'trending_up': 'positive',
+                'trending_down': 'negative',
+                'ranging': 'neutral',
+                'volatile': 'negative'
+            };
+
             Object.entries(regimes).forEach(([symbol, regime]) => {
                 const div = document.createElement('div');
                 div.className = 'metric-row';
-                const regimeColors = {
-                    'trending_up': 'positive',
-                    'trending_down': 'negative',
-                    'ranging': 'neutral',
-                    'volatile': 'negative'
-                };
-                div.innerHTML = `
-                    <span class="metric-label">${symbol}</span>
-                    <span class="metric-value ${regimeColors[regime] || 'neutral'}">${regime.replace('_', ' ').toUpperCase()}</span>
-                `;
+                const label = document.createElement('span');
+                label.className = 'metric-label';
+                label.textContent = symbol;
+                const val = document.createElement('span');
+                val.className = `metric-value ${regimeColors[regime] || 'neutral'}`;
+                val.textContent = regime.replace('_', ' ').toUpperCase();
+                div.appendChild(label);
+                div.appendChild(val);
                 container.appendChild(div);
             });
         }
@@ -697,7 +709,17 @@ async def index_handler(request):
             const entry = document.createElement('div');
             entry.className = 'log-entry';
             const time = new Date().toLocaleTimeString();
-            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${level}">${message}</span>`;
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = `[${time}]`;
+            // level comes from our own WebSocket message schema — whitelist it
+            const safeLevel = ['info', 'warn', 'error', 'debug'].includes(level) ? level : 'info';
+            const msgSpan = document.createElement('span');
+            msgSpan.className = `log-${safeLevel}`;
+            msgSpan.textContent = message;
+            entry.appendChild(timeSpan);
+            entry.appendChild(document.createTextNode(' '));
+            entry.appendChild(msgSpan);
             log.insertBefore(entry, log.firstChild);
             if (log.children.length > 50) log.removeChild(log.lastChild);
         }

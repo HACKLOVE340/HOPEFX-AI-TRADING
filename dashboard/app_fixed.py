@@ -13,13 +13,17 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-# CORS middleware
+# CORS middleware — restrict to known origins; never use ["*"] with credentials
+import os as _os
+_raw_origins = _os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000")
+_allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update this to your allowed origins in production
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 @app.get("/healthcheck")
