@@ -180,7 +180,7 @@ class _InMemoryStore:
 
     def info(self, section: str = 'all') -> Dict[str, Any]:
         with self._lock:
-            return {'used_memory': sum(len(v) for v in self._data.values())}
+            return {'used_memory': sum(len(v) for v in self._data.values() if isinstance(v, (str, bytes)))}
 
     def close(self) -> None:
         pass
