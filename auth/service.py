@@ -40,14 +40,17 @@ class _TokenBlacklist:
     def __init__(self):
         self._redis = None
         self._mem: set = set()
-        self._try_connect()
+        self._connected: bool = False  # lazy — connect on first use
 
     def _try_connect(self):
+        if self._connected:
+            return
+        self._connected = True  # only attempt once
         try:
             import redis as _redis_lib
             host = os.getenv("REDIS_HOST", "localhost")
             port = int(os.getenv("REDIS_PORT", "6379"))
-            self._redis = _redis_lib.Redis(host=host, port=port, socket_connect_timeout=2, decode_responses=True)
+            self._redis = _redis_lib.Redis(host=host, port=port, socket_connect_timeout=0.5, decode_responses=True, retry_on_error=[], retry=None)
             self._redis.ping()
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
         except Exception:
@@ -56,6 +59,7 @@ class _TokenBlacklist:
 
     def revoke(self, jti: str, ttl_seconds: int) -> None:
         """Mark a token JTI as revoked for ttl_seconds."""
+        self._try_connect()
         if self._redis:
             try:
                 self._redis.setex(f"revoked:{jti}", ttl_seconds, "1")
@@ -65,6 +69,7 @@ class _TokenBlacklist:
         self._mem.add(jti)
 
     def is_revoked(self, jti: str) -> bool:
+        self._try_connect()
         if self._redis:
             try:
                 return bool(self._redis.exists(f"revoked:{jti}"))

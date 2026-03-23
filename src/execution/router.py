@@ -24,23 +24,38 @@ class SmartRouter:
             Venue.PAPER: Decimal("0"),
         }
 
-    def register_broker(self, venue: Venue, broker: Broker) -> None:
-        """Register broker for venue."""
-        self.brokers[venue] = broker
-        logger.info(f"Registered broker for {venue}")
+    def register_broker(self, venue_or_name, broker: Broker) -> None:
+        """Register broker for venue (accepts Venue enum or string name)."""
+        self.brokers[venue_or_name] = broker
+        logger.info(f"Registered broker for {venue_or_name}")
 
-    async def route_order(
-        self,
-        symbol: Symbol,
-        side: Side,
-        quantity: Decimal,
-        preference: Venue | None = None,
-    ) -> tuple[Venue, Broker]:
-        """Determine best venue for order."""
+    async def route_order(self, order_or_symbol, side=None, quantity=None, preference=None):
+        """Route an order, with failover across registered brokers.
+
+        Accepts either:
+          - route_order(order)           — Order object with .place_order() called on each broker
+          - route_order(symbol, side, quantity) — returns (venue, broker) tuple
+        """
+        from src.execution.brokers.base import OrderResult
+
+        # Called with an Order object — try each broker in registration order, failover on error
+        if hasattr(order_or_symbol, "symbol"):
+            order = order_or_symbol
+            last_exc: Exception | None = None
+            for venue, broker in self.brokers.items():
+                try:
+                    result = await broker.place_order(order)
+                    return result
+                except Exception as exc:
+                    logger.warning(f"Broker {venue} failed: {exc}, trying next")
+                    last_exc = exc
+            raise RuntimeError(f"All brokers failed. Last error: {last_exc}") from last_exc
+
+        # Called with (symbol, side, quantity) — return (venue, broker)
+        symbol = order_or_symbol
         if preference and preference in self.brokers:
             return preference, self.brokers[preference]
 
-        # Score venues
         scores = {}
         for venue, broker in self.brokers.items():
             score = await self._score_venue(venue, symbol, side, quantity)

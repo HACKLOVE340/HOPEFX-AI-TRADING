@@ -62,8 +62,10 @@ def _check_ip_rate_limit(ip: str) -> None:
         r = _redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
-            socket_connect_timeout=1,
+            socket_connect_timeout=0.5,
             decode_responses=True,
+            retry_on_error=[],
+            retry=None,
         )
         key = f"auth_rl:{ip}"
         pipe = r.pipeline()

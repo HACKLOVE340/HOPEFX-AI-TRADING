@@ -1,8 +1,9 @@
-"""hopefx.execution — merged with src/hopefx/execution via path extension."""
-import os as _os, sys as _sys
+"""hopefx.execution — delegates to src/execution."""
+import os as _os
 
-_src_exec = _os.path.join(_os.path.dirname(__file__), '..', '..', 'src', 'hopefx', 'execution')
-_src_exec = _os.path.normpath(_src_exec)
+_src_exec = _os.path.normpath(
+    _os.path.join(_os.path.dirname(__file__), '..', '..', 'src', 'execution')
+)
 if _src_exec not in __path__:
     __path__.append(_src_exec)
 

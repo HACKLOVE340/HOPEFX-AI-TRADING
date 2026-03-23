@@ -3,9 +3,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Any, Optional
 
-from src.core.types import Order, Position, Symbol
+from src.core.types import Order, OrderStatus, OrderType, Position, Symbol
+
+
+@dataclass
+class OrderResult:
+    """Result of a placed order."""
+    order_id: str
+    status: OrderStatus
+    filled_qty: Decimal
+    filled_price: Decimal
+    remaining_qty: Decimal
+    commission: Decimal
+    slippage: Decimal
+    timestamp: str
+    raw_response: Optional[Any] = None
 
 
 class Broker(ABC):
@@ -45,3 +61,7 @@ class Broker(ABC):
     async def stream_quotes(self, symbols: list[Symbol], callback: callable) -> None:
         """Stream quotes."""
         pass
+
+
+# Alias used by hopefx.execution.brokers.base imports
+BaseBroker = Broker

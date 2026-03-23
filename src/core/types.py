@@ -114,10 +114,26 @@ class Position(BaseModel):
 class Order(BaseModel):
     """Order state."""
 
-    id: OrderId
+    model_config = {"use_enum_values": False}
+
+    id: OrderId = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
     symbol: Symbol
     side: Side
     order_type: OrderType
+
+    @field_validator("side", mode="before")
+    @classmethod
+    def _coerce_side(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
+    @field_validator("order_type", mode="before")
+    @classmethod
+    def _coerce_order_type(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.upper()
+        return v
     quantity: Decimal
     price: Decimal | None = None
     stop_price: Decimal | None = None
@@ -126,7 +142,7 @@ class Order(BaseModel):
     avg_fill_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    venue: Venue
+    venue: Venue = Venue.PAPER
     client_order_id: str | None = None
 
 
