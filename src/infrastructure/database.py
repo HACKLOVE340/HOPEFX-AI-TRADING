@@ -4,7 +4,8 @@ circuit breakers, and comprehensive monitoring.
 """
 
 import asyncio
-import contextlib
+import os
+import random
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -206,7 +207,7 @@ class DatabaseManager:
                 if attempt == max_retries - 1:
                     raise DatabaseError(f"Max retries exceeded: {e}") from e
                 
-                wait = backoff_base * (2 ** attempt) + asyncio.random() * 0.1
+                wait = backoff_base * (2 ** attempt) + random.random() * 0.1
                 logger.warning(f"Database contention, retrying in {wait:.2f}s (attempt {attempt + 1})")
                 await asyncio.sleep(wait)
             
@@ -310,7 +311,6 @@ async def close_db() -> None:
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
-from sqlalchemy.ext.asyncio import create_async_engine as _cae, AsyncSession
 
 async def init_db(url: str = None) -> None:
     """Initialise the database (creates tables if needed)."""
@@ -321,8 +321,6 @@ class _EngineProxy:
     _real = None
     def __getattr__(self, name):
         if self._real is None:
-            import os
-            from sqlalchemy.ext.asyncio import create_async_engine
             db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///hopefx.db")
             self.__class__._real = create_async_engine(db_url, echo=False)
         return getattr(self._real, name)

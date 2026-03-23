@@ -4,7 +4,6 @@ A/B testing framework for ML model performance comparison.
 from __future__ import annotations
 
 import hashlib
-import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 

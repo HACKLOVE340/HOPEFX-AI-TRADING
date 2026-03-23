@@ -2,11 +2,10 @@
 Level 2 order book reconstruction.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable
 
-import numpy as np
 
 
 @dataclass(order=True)

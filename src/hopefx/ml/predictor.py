@@ -1,9 +1,7 @@
 import asyncio
 import hashlib
 import json
-import pickle
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import structlog
@@ -11,7 +9,7 @@ import xgboost as xgb
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import TimeSeriesSplit
 
-from hopefx.core.events import EventType, SignalEvent
+from hopefx.core.events import SignalEvent
 from hopefx.ml.drift import DriftDetector
 from hopefx.ml.features import FeatureEngineer
 

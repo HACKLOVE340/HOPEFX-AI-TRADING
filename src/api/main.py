@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
+from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -18,7 +18,6 @@ from src.risk.kill_switch import kill_switch, KillSource
 from src.ml.gpu_manager import gpu_manager
 from src.data.orderbook import MultiBookAggregator
 from src.brain.engine import BrainEngine
-from src.execution.reconciliation import ByzantineReconciler
 from configs.settings import get_settings
 
 logger = structlog.get_logger()

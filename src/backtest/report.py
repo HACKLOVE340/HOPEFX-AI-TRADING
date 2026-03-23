@@ -5,7 +5,6 @@ Backtest report generation in HTML/JSON formats.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots

@@ -4,7 +4,7 @@ Circuit breaker pattern for fault tolerance.
 import time
 import asyncio
 from enum import Enum
-from typing import Callable, Optional
+from typing import Optional
 import structlog
 
 logger = structlog.get_logger()

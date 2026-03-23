@@ -18,7 +18,7 @@ import structlog
 import websockets
 from anyio import create_task_group
 
-from src.core.events import TickEvent, Event
+from src.core.events import TickEvent
 from src.core.types import Tick, Venue, Symbol
 from src.data.validation import TickValidator
 from configs.settings import get_settings

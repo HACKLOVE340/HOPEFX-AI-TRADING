@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 from decimal import Decimal
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict
 
 import stripe
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from hopefx.config.settings import settings
 from hopefx.config.vault import vault
 from hopefx.database.models import (
-    Wallet, Transaction, Subscription, SubscriptionTier,
+    SubscriptionTier,
     User, CopyTrading
 )
 

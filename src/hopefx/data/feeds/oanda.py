@@ -12,12 +12,11 @@ from decimal import Decimal
 from typing import Any
 
 import aiohttp
-import tenacity
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from hopefx.config.settings import settings
 from hopefx.core.events import EventBus, TickEvent, get_event_bus
-from hopefx.data.feeds.base import BarData, DataFeed, TickData
+from hopefx.data.feeds.base import DataFeed, TickData
 from hopefx.data.validation import TickValidator
 
 import structlog

@@ -2,14 +2,12 @@
 Copy trading engine with risk-adjusted position sizing.
 """
 
-import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable
 
 from src.core.events import Event, get_event_bus
 from src.core.logging_config import get_logger
-from src.domain.models import Order, Signal
+from src.domain.models import Order
 
 logger = get_logger(__name__)
 

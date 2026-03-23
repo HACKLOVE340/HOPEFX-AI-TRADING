@@ -7,9 +7,8 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Generic, Optional, TypeVar
+from typing import Any, Dict, TypeVar
 
-import atomic  # Using atomic operations where possible
 
 from src.core.logging_config import get_logger
 

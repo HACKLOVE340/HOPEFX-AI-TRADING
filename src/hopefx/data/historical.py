@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Optional, AsyncIterator
+from typing import List
 
-import aiohttp
-import pandas as pd
 
-from hopefx.config.settings import settings
-from hopefx.database.models import TickData
 from hopefx.events.schemas import TickData as TickSchema
 
 

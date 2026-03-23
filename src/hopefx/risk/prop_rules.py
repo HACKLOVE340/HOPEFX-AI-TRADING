@@ -113,7 +113,7 @@ class MyForexFundsRuleEngine:
     ) -> tuple[bool, str]:
         """Validate trade."""
         if size > self.constraints.max_position_size:
-            return False, f"MFF: Position size exceeds limit"
+            return False, "MFF: Position size exceeds limit"
 
         return True, "approved"
 

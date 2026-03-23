@@ -8,8 +8,7 @@ from typing import Any
 from ib_insync import IB, Forex, MarketOrder
 
 from src.brokers.base import Broker
-from src.core.config import settings
-from src.core.exceptions import BrokerConnectionError, BrokerError
+from src.core.exceptions import BrokerConnectionError
 from src.domain.enums import BrokerType, OrderStatus, TradeDirection
 from src.domain.models import Account, Order, Position, TickData
 

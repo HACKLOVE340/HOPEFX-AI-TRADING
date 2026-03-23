@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import AsyncIterator, Callable, Optional, Dict, List
+from typing import Callable, Optional, Dict, List
 
 import aiohttp
 import aioredis

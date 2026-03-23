@@ -53,6 +53,6 @@ async def websocket_stream(websocket: WebSocket):
             
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         if websocket.client_state != WebSocketState.DISCONNECTED:
             await websocket.close()

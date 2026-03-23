@@ -4,7 +4,6 @@ Online learning worker for continuous model improvement.
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,7 +12,6 @@ from src.core.config import settings
 from src.core.logging_config import get_logger
 from src.data.features import FeatureEngineer
 from src.infrastructure.cache import get_cache
-from src.infrastructure.database import get_session
 from src.ml.drift import DriftDetector
 from src.ml.models.ensemble import EnsembleModel
 from src.ml.registry import ModelRegistry
