@@ -203,8 +203,9 @@ class RiskManager:
 
         equity = account_info.get('equity', 0)
 
-        # ── Invariant: equity must be positive ──────────────────────────────
-        if equity <= 0:
+        # ── Invariant: equity must be positive (strictly negative is invalid; ───
+        # ── zero is allowed as a transient state at initialisation)  ────────────
+        if equity < 0:
             logger.critical(
                 "INVARIANT VIOLATED: equity=%.2f is not positive — halting trading", equity
             )

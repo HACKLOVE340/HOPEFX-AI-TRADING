@@ -583,16 +583,18 @@ class DepthOfMarketService:
             # Derive tick size from the price ladder: use the smallest observed
             # gap between adjacent price levels, or fall back to a sensible
             # default per-instrument precision (0.01 for most FX/metals).
+            _MIN_PRICE_GAP_THRESHOLD = 1e-9  # gaps below this are float-noise
+            _TICK_SIZE_PRECISION = 10         # decimal places for tick rounding
             tick_size = 0.01
             if len(all_prices) >= 2:
                 sorted_prices = sorted(set(all_prices))
                 gaps = [
                     abs(sorted_prices[i + 1] - sorted_prices[i])
                     for i in range(len(sorted_prices) - 1)
-                    if abs(sorted_prices[i + 1] - sorted_prices[i]) > 1e-9
+                    if abs(sorted_prices[i + 1] - sorted_prices[i]) > _MIN_PRICE_GAP_THRESHOLD
                 ]
                 if gaps:
-                    tick_size = round(min(gaps), 10)
+                    tick_size = round(min(gaps), _TICK_SIZE_PRECISION)
 
             # Generate price ladder
             price = max_price
