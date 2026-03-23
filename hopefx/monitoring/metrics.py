@@ -6,7 +6,7 @@ Prometheus metrics, health checks, alerting
 from prometheus_client import Counter, Histogram, Gauge, Info, start_http_server
 import psutil
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Callable, List
 
 # ============================================================================
@@ -48,7 +48,7 @@ class MetricsCollector:
         self.event_queue_depth = Gauge('hopefx_event_queue_depth', 'Event queue size')
         self.event_latency = Histogram('hopefx_event_latency_seconds', 'Event processing time')
         
-        self._start_time = datetime.utcnow()
+        self._start_time = datetime.now(timezone.utc)
         self._alert_handlers: List[Callable] = []
     
     def start_server(self, port: int = 9090):
@@ -60,7 +60,7 @@ class MetricsCollector:
         """Start background metrics collection."""
         while True:
             # System metrics
-            self.uptime.set((datetime.utcnow() - self._start_time).total_seconds())
+            self.uptime.set((datetime.now(timezone.utc) - self._start_time).total_seconds())
             self.memory_usage.set(psutil.Process().memory_info().rss)
             self.cpu_usage.set(psutil.cpu_percent())
             self.open_files.set(len(psutil.Process().open_files()))
@@ -72,7 +72,7 @@ class MetricsCollector:
         if current > threshold:
             for handler in self._alert_handlers:
                 handler({
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'condition': condition,
                     'threshold': threshold,
                     'current': current,

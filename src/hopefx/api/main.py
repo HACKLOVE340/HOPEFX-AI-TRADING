@@ -32,88 +32,85 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
     # Startup
-    logger.info("api_startup", version=settings.version, environment=settings.environment.value)
-    
+    logger.info(
+        "api_startup", version=settings.version, environment=settings.environment.value
+    )
+
     # Initialize connections
     await get_redis_pool()
     event_bus = await get_event_bus()
     await event_bus.start()
-    
+
     metrics = get_metrics_exporter()
     metrics.health.set_ready("redis", True)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("api_shutdown")
     await event_bus.stop()
 
-    # CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.security.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],  # ✅ EXPLICIT
-        expose_headers=["X-Request-ID"],
-        max_age=600
+
+def create_app() -> FastAPI:
+    """Build and return the configured FastAPI application."""
+    _app = FastAPI(
+        title="HOPEFX API",
+        version=getattr(settings, "version", "1.0.0"),
+        lifespan=lifespan,
     )
-    
+
     # CORS
-    app.add_middleware(
+    _app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.security.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        max_age=600
+        expose_headers=["X-Request-ID"],
+        max_age=600,
     )
-    
+
     # Compression
-    app.add_middleware(GZipMiddleware, minimum_size=1000)
-    
+    _app.add_middleware(GZipMiddleware, minimum_size=1000)
+
     # Request logging
-    @app.middleware("http")
+    @_app.middleware("http")
     async def log_requests(request: Request, call_next):
         start = asyncio.get_event_loop().time()
-        
         response = await call_next(request)
-        
         duration = (asyncio.get_event_loop().time() - start) * 1000
-        
         logger.info(
             "http_request",
             method=request.method,
             path=request.url.path,
             status=response.status_code,
             duration_ms=duration,
-            client=request.client.host if request.client else None
+            client=request.client.host if request.client else None,
         )
-        
         return response
-    
+
     # Routes
-    app.include_router(health.router, prefix="/health", tags=["health"])
-    app.include_router(trading.router, prefix="/api/v1/trading", tags=["trading"])
-    app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
-    app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
-    app.include_router(websocket.router, prefix="/ws")
-    
+    _app.include_router(health.router, prefix="/health", tags=["health"])
+    _app.include_router(trading.router, prefix="/api/v1/trading", tags=["trading"])
+    _app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
+    _app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
+    _app.include_router(websocket.router, prefix="/ws")
+
     # Exception handlers
-    @app.exception_handler(Exception)
+    @_app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger.error(
             "unhandled_exception",
             path=request.url.path,
             error=str(exc),
-            exc_info=True
+            exc_info=True,
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"}
+            content={"detail": "Internal server error"},
         )
-    
-    return app
+
+    return _app
 
 
 app = create_app()
@@ -124,9 +121,9 @@ async def root():
     """API root."""
     return {
         "name": "HOPEFX API",
-        "version": settings.version,
+        "version": getattr(settings, "version", "1.0.0"),
         "environment": settings.environment.value,
-        "status": "operational"
+        "status": "operational",
     }
 
 

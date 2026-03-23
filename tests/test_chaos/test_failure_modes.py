@@ -2,6 +2,8 @@
 
 import pytest
 import asyncio
+from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 
@@ -9,18 +11,20 @@ from unittest.mock import patch, MagicMock
 async def test_broker_failover():
     """Test failover when primary broker fails."""
     from hopefx.execution.router import SmartRouter
-    from hopefx.execution.brokers.base import BaseBroker
-    
+    from hopefx.execution.brokers.base import BaseBroker, Order, OrderResult, OrderStatus, OrderType
+
     router = SmartRouter()
-    
-    # Create mock brokers
+
+    # Create mock brokers using AsyncMock so await works
+    from unittest.mock import AsyncMock as _AsyncMock
+
     primary = MagicMock(spec=BaseBroker)
     primary.connected = True
-    primary.place_order = MagicMock(side_effect=Exception("Network error"))
-    
+    primary.place_order = _AsyncMock(side_effect=Exception("Network error"))
+
     backup = MagicMock(spec=BaseBroker)
     backup.connected = True
-    backup.place_order = MagicMock(return_value=OrderResult(
+    backup.place_order = _AsyncMock(return_value=OrderResult(
         order_id="backup_123",
         status=OrderStatus.FILLED,
         filled_qty=Decimal("1.0"),
@@ -31,14 +35,14 @@ async def test_broker_failover():
         timestamp="",
         raw_response=None
     ))
-    
+
     router.register_broker("primary", primary)
     router.register_broker("backup", backup)
-    
+
     # Route should failover to backup
     order = Order(symbol="XAUUSD", side="buy", quantity=Decimal("1.0"), order_type=OrderType.MARKET)
     result = await router.route_order(order)
-    
+
     assert result.order_id == "backup_123"
     backup.place_order.assert_called_once()
 
@@ -47,18 +51,21 @@ async def test_broker_failover():
 async def test_ml_model_failure_graceful_degradation():
     """Test system continues when ML model fails."""
     from hopefx.ml.pipeline import ml_pipeline
-    
+    from hopefx.events.schemas import TickData, Event, EventType
+    from hopefx.events.bus import event_bus
+
     # Corrupt model
     ml_pipeline.models = {}
-    
+
     # System should still process ticks (rule-based fallback)
     tick = TickData(
         symbol="XAUUSD",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         bid=Decimal("2000"),
         ask=Decimal("2000.10"),
-        volume=Decimal("100")
+        volume=Decimal("100"),
     )
-    
+
     # Should not raise exception
     await event_bus.publish(Event(type=EventType.TICK, payload=tick, source="test"))
+

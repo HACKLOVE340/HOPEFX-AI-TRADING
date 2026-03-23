@@ -73,6 +73,7 @@ class SecureConfig:
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     try:
-        # Add main execution flow here
+        # Placeholder: add main execution flow here
+        logging.info("trader_full starting up (no-op placeholder)")
     except Exception as e:
         logging.error(f'An error occurred: {e}')

@@ -38,7 +38,7 @@ class TradingMode(str, Enum):
 
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_")
-    
+
     url: str = Field(default="postgresql+asyncpg://localhost:5432/hopefx")
     echo: bool = Field(default=False)
     pool_size: int = Field(default=20)
@@ -49,7 +49,7 @@ class DatabaseSettings(BaseSettings):
 
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="REDIS_")
-    
+
     url: str = Field(default="redis://localhost:6379/0")
     socket_connect_timeout: float = Field(default=5.0)
     socket_keepalive: bool = Field(default=True)
@@ -59,7 +59,7 @@ class RedisSettings(BaseSettings):
 
 class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
-    
+
     encryption_key: str = Field(default_factory=lambda: secrets.token_hex(32))
     jwt_secret: str = Field(default_factory=lambda: secrets.token_hex(32))
     jwt_algorithm: str = Field(default="HS256")
@@ -73,7 +73,7 @@ class SecuritySettings(BaseSettings):
 
 class RiskSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RISK_")
-    
+
     max_position_size_pct: float = Field(default=0.02, gt=0, le=1.0)
     max_daily_loss_pct: float = Field(default=0.05, gt=0, le=1.0)
     max_drawdown_pct: float = Field(default=0.10, gt=0, le=1.0)
@@ -87,7 +87,7 @@ class RiskSettings(BaseSettings):
 
 class BrokerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BROKER_")
-    
+
     default_broker: str = Field(default="paper")
     oanda_account_id: str | None = Field(default=None)
     oanda_api_key: str | None = Field(default=None, repr=False)
@@ -104,7 +104,7 @@ class BrokerSettings(BaseSettings):
 
 class MLSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ML_")
-    
+
     model_registry_uri: str = Field(default="sqlite:///mlflow.db")
     feature_lookback: int = Field(default=100, ge=10)
     retrain_interval_hours: int = Field(default=24, ge=1)
@@ -120,14 +120,14 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-    
+
     app_name: str = Field(default="HOPEFX-AI-TRADING")
     app_version: str = Field(default="2.0.0")
     environment: Environment = Field(default=Environment.DEVELOPMENT)
     debug: bool = Field(default=False)
     log_level: LogLevel = Field(default=LogLevel.INFO)
     trading_mode: TradingMode = Field(default=TradingMode.PAPER)
-    
+
     # Sub-settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
@@ -135,32 +135,37 @@ class Settings(BaseSettings):
     risk: RiskSettings = Field(default_factory=RiskSettings)
     broker: BrokerSettings = Field(default_factory=BrokerSettings)
     ml: MLSettings = Field(default_factory=MLSettings)
-    
+
     # Paths
     data_dir: Path = Field(default=Path("./data"))
     logs_dir: Path = Field(default=Path("./logs"))
     models_dir: Path = Field(default=Path("./models"))
-    
+
     @field_validator("data_dir", "logs_dir", "models_dir", mode="before")
     @classmethod
     def ensure_path(cls, v: str | Path) -> Path:
         path = Path(v) if isinstance(v, str) else v
         path.mkdir(parents=True, exist_ok=True)
         return path
-    
+
     @model_validator(mode="after")
     def validate_production(self) -> Self:
         if self.environment == Environment.PRODUCTION:
             if self.debug:
                 raise ValueError("Debug cannot be True in production")
-            if self.trading_mode == TradingMode.PAPER and not self.broker.default_broker == "paper":
-                raise ValueError("Paper trading mode requires paper broker in production")
+            if (
+                self.trading_mode == TradingMode.PAPER
+                and not self.broker.default_broker == "paper"
+            ):
+                raise ValueError(
+                    "Paper trading mode requires paper broker in production"
+                )
         return self
-    
+
     @property
     def is_production(self) -> bool:
         return self.environment == Environment.PRODUCTION
-    
+
     @property
     def is_development(self) -> bool:
         return self.environment == Environment.DEVELOPMENT

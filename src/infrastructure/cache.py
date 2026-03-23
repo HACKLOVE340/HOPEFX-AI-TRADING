@@ -8,18 +8,23 @@ from typing import Any
 try:
     import aioredis
     from aioredis import Redis
+
     _AIOREDIS_OK = True
 except Exception:
     aioredis = None  # type: ignore
-    Redis = object   # type: ignore
+    Redis = object  # type: ignore
     _AIOREDIS_OK = False
 
 try:
     from circuitbreaker import circuit
 except ImportError:
+
     def circuit(*a, **kw):  # type: ignore
-        def decorator(fn): return fn
+        def decorator(fn):
+            return fn
+
         return decorator
+
 
 from src.core.config import settings
 from src.core.exceptions import CacheError
@@ -30,17 +35,17 @@ logger = get_logger(__name__)
 
 class RedisCache:
     """Production Redis cache with health checks."""
-    
+
     def __init__(self) -> None:
         self._pool: Redis | None = None
         self._lock = asyncio.Lock()
-    
+
     async def connect(self) -> None:
         """Initialize Redis connection."""
         async with self._lock:
             if self._pool is not None:
                 return
-            
+
             try:
                 self._pool = aioredis.from_url(
                     settings.redis.url,
@@ -54,21 +59,21 @@ class RedisCache:
                 logger.info("Redis connected")
             except Exception as e:
                 raise CacheError(f"Redis connection failed: {e}")
-    
+
     async def disconnect(self) -> None:
         """Close Redis connection."""
         if self._pool:
             await self._pool.close()
             self._pool = None
             logger.info("Redis disconnected")
-    
+
     @property
     def client(self) -> Redis:
         """Get Redis client."""
         if self._pool is None:
             raise CacheError("Redis not connected")
         return self._pool
-    
+
     @circuit(failure_threshold=5, recovery_timeout=60)
     async def get(self, key: str) -> Any:
         """Get value from cache."""
@@ -78,14 +83,10 @@ class RedisCache:
         except Exception as e:
             logger.error(f"Cache get error: {e}")
             raise CacheError(f"Failed to get {key}: {e}")
-    
+
     @circuit(failure_threshold=5, recovery_timeout=60)
     async def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: int | None = None,
-        nx: bool = False
+        self, key: str, value: Any, ttl: int | None = None, nx: bool = False
     ) -> bool:
         """Set value in cache."""
         try:
@@ -93,7 +94,7 @@ class RedisCache:
         except Exception as e:
             logger.error(f"Cache set error: {e}")
             raise CacheError(f"Failed to set {key}: {e}")
-    
+
     @circuit(failure_threshold=5, recovery_timeout=60)
     async def delete(self, key: str) -> int:
         """Delete key from cache."""
@@ -102,7 +103,7 @@ class RedisCache:
         except Exception as e:
             logger.error(f"Cache delete error: {e}")
             raise CacheError(f"Failed to delete {key}: {e}")
-    
+
     async def health_check(self) -> bool:
         """Check Redis health."""
         try:

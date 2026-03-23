@@ -2,6 +2,8 @@
 Health check endpoints.
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -26,7 +28,7 @@ async def health_check():
         "status": "healthy",
         "version": "2.0.0",
         "checks": {},
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -34,20 +36,20 @@ async def health_check():
 async def readiness_check():
     """Readiness probe with dependency checks."""
     checker = HealthChecker()
-    
+
     # Register checks
     async def check_db():
         async with get_db() as db:
             await db.execute("SELECT 1")
             return True
-    
+
     async def check_cache():
         cache = await get_cache()
         return await cache.health_check()
-    
+
     checker.register("database", check_db)
     checker.register("cache", check_cache)
-    
+
     result = await checker.check()
-    
+
     return result

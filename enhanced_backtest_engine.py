@@ -748,7 +748,7 @@ class MarketMicrostructureAnalyzer:
         try:
             slope = np.polyfit(log_lags, log_tau, 1)[0]
             self.hurst_exponent = max(0, min(1, slope))
-        except:
+        except Exception:
             self.hurst_exponent = 0.5
     
     def get_execution_recommendation(self) -> Dict[str, Any]:

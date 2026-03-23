@@ -17,7 +17,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import hmac
 import hashlib
@@ -83,7 +83,7 @@ class PropFirmMetrics:
     monthly_loss_limit: float
     remaining_monthly_loss: float
     leverage: int = 100
-    last_update: datetime = field(default_factory=datetime.utcnow)
+    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 @dataclass
 class PropFirmTrade:
@@ -96,7 +96,7 @@ class PropFirmTrade:
     quantity: float = 0.0
     pnl: float = 0.0
     pnl_percentage: float = 0.0
-    entry_time: datetime = field(default_factory=datetime.utcnow)
+    entry_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     exit_time: Optional[datetime] = None
     duration_seconds: int = 0
     status: str = "open"  # open, closed, cancelled
@@ -200,7 +200,7 @@ class FTMOBroker(BasePropFirmBroker):
     
     def _generate_signature(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, str]:
         """Generate FTMO API signature"""
-        timestamp = str(int(datetime.utcnow().timestamp() * 1000))
+        timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
         self._nonce += 1
         
         sig_string = f"{method.upper()}{endpoint}{timestamp}{self._nonce}"

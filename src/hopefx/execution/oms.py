@@ -58,7 +58,10 @@ class OrderManagementSystem:
         # Cancel all pending orders
         async with self._lock:
             for order_id, state in self._orders.items():
-                if state.status in [OMSStatus.PENDING_RISK, OMSStatus.PENDING_EXECUTION]:
+                if state.status in [
+                    OMSStatus.PENDING_RISK,
+                    OMSStatus.PENDING_EXECUTION,
+                ]:
                     logger.info("oms.cancelling_pending", order_id=order_id)
         logger.info("oms.stopped")
 
@@ -110,7 +113,9 @@ class OrderManagementSystem:
             symbol=state.signal.symbol,
             side=state.signal.direction,
             quantity=state.signal.size,
-            order_type=OrderType.MARKET if state.signal.order_type == "market" else OrderType.LIMIT,
+            order_type=OrderType.MARKET
+            if state.signal.order_type == "market"
+            else OrderType.LIMIT,
             price=state.signal.limit_price,
             stop_price=state.signal.stop_price,
             client_order_id=order_id,
@@ -159,10 +164,12 @@ class OrderManagementSystem:
             if not state or state.status != OMSStatus.PENDING_EXECUTION:
                 return False
 
-            state.amendments.append({
-                "time": asyncio.get_event_loop().time(),
-                "updates": updates,
-            })
+            state.amendments.append(
+                {
+                    "time": asyncio.get_event_loop().time(),
+                    "updates": updates,
+                }
+            )
 
             # Apply updates
             if "stop_price" in updates:

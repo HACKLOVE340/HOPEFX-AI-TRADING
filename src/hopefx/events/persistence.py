@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Any, Callable
 
 import asyncpg
@@ -26,11 +26,9 @@ class EventStore:
     async def initialize(self) -> None:
         """Create connection pool and tables."""
         self._pool = await asyncpg.create_pool(
-            settings.async_database_url,
-            min_size=5,
-            max_size=20
+            settings.async_database_url, min_size=5, max_size=20
         )
-        
+
         # Create tables if not exist
         async with self._pool.acquire() as conn:
             await conn.execute("""
@@ -68,7 +66,7 @@ class EventStore:
     async def append(self, event: Event) -> None:
         """Persist event to store with optional compression."""
         payload = json.dumps(event.payload, default=str).encode()
-        
+
         if self._compression:
             payload = zlib.compress(payload)
 
@@ -86,7 +84,7 @@ class EventStore:
                 event.source,
                 event.priority,
                 event.trace_id,
-                event.correlation_id
+                event.correlation_id,
             )
 
     async def get_stream(
@@ -96,7 +94,7 @@ class EventStore:
         end_time: Optional[datetime] = None,
         trace_id: Optional[str] = None,
         limit: int = 1000,
-        decompress: bool = True
+        decompress: bool = True,
     ) -> List[Event]:
         """Query event stream with filters."""
         conditions = []
@@ -124,7 +122,7 @@ class EventStore:
             param_idx += 1
 
         where_clause = " AND ".join(conditions) if conditions else "TRUE"
-        
+
         query = f"""
             SELECT id, type, timestamp, payload, source, priority, trace_id, correlation_id
             FROM event_store
@@ -139,66 +137,70 @@ class EventStore:
 
         events = []
         for row in rows:
-            payload = row['payload']
+            payload = row["payload"]
             if decompress and self._compression:
                 payload = zlib.decompress(payload)
-            
-            events.append(Event(
-                id=row['id'],
-                type=EventType(row['type']),
-                timestamp=row['timestamp'],
-                payload=json.loads(payload),
-                source=row['source'],
-                priority=row['priority'],
-                trace_id=row['trace_id'],
-                correlation_id=row['correlation_id']
-            ))
+
+            events.append(
+                Event(
+                    id=row["id"],
+                    type=EventType(row["type"]),
+                    timestamp=row["timestamp"],
+                    payload=json.loads(payload),
+                    source=row["source"],
+                    priority=row["priority"],
+                    trace_id=row["trace_id"],
+                    correlation_id=row["correlation_id"],
+                )
+            )
 
         return events
 
-    async def create_snapshot(self, aggregate_id: str, sequence: int, state: Any) -> None:
+    async def create_snapshot(
+        self, aggregate_id: str, sequence: int, state: Any
+    ) -> None:
         """Create snapshot for fast replay."""
         state_bytes = json.dumps(state, default=str).encode()
         if self._compression:
             state_bytes = zlib.compress(state_bytes)
 
         async with self._pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO event_snapshots (aggregate_id, sequence, state)
                 VALUES ($1, $2, $3)
                 ON CONFLICT (aggregate_id) 
                 DO UPDATE SET sequence = $2, state = $3, created_at = NOW()
-            """, aggregate_id, sequence, state_bytes)
+            """,
+                aggregate_id,
+                sequence,
+                state_bytes,
+            )
 
     async def get_latest_snapshot(self, aggregate_id: str) -> Optional[dict]:
         """Get latest snapshot for aggregate."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT sequence, state FROM event_snapshots WHERE aggregate_id = $1",
-                aggregate_id
+                aggregate_id,
             )
 
         if not row:
             return None
 
-        state = row['state']
+        state = row["state"]
         if self._compression:
             state = zlib.decompress(state)
 
-        return {
-            "sequence": row['sequence'],
-            "state": json.loads(state)
-        }
+        return {"sequence": row["sequence"], "state": json.loads(state)}
 
     async def replay_from_snapshot(
-        self,
-        aggregate_id: str,
-        handler: Callable[[Event], Any]
+        self, aggregate_id: str, handler: Callable[[Event], Any]
     ) -> Any:
         """Fast replay using snapshot + delta."""
         # Get snapshot
         snapshot = await self.get_latest_snapshot(aggregate_id)
-        
+
         if snapshot:
             # Apply snapshot
             state = await handler.apply_snapshot(snapshot["state"])
@@ -209,30 +211,34 @@ class EventStore:
 
         # Get events after snapshot
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch("""
+            rows = await conn.fetch(
+                """
                 SELECT id, type, timestamp, payload, source, priority, trace_id, correlation_id
                 FROM event_store
                 WHERE id LIKE $1 AND CAST(SUBSTRING(id FROM '[0-9]+') AS INTEGER) > $2
                 ORDER BY timestamp
-            """, f"{aggregate_id}%", start_sequence)
+            """,
+                f"{aggregate_id}%",
+                start_sequence,
+            )
 
         # Replay events
         for row in rows:
-            payload = row['payload']
+            payload = row["payload"]
             if self._compression:
                 payload = zlib.decompress(payload)
 
             event = Event(
-                id=row['id'],
-                type=EventType(row['type']),
-                timestamp=row['timestamp'],
+                id=row["id"],
+                type=EventType(row["type"]),
+                timestamp=row["timestamp"],
                 payload=json.loads(payload),
-                source=row['source'],
-                priority=row['priority'],
-                trace_id=row['trace_id'],
-                correlation_id=row['correlation_id']
+                source=row["source"],
+                priority=row["priority"],
+                trace_id=row["trace_id"],
+                correlation_id=row["correlation_id"],
             )
-            
+
             state = await handler(event)
 
         return state
@@ -241,7 +247,8 @@ class EventStore:
         """Archive old events to cold storage."""
         async with self._pool.acquire() as conn:
             # Move to archive table
-            result = await conn.execute("""
+            result = await conn.execute(
+                """
                 WITH moved AS (
                     DELETE FROM event_store
                     WHERE timestamp < $1
@@ -249,30 +256,35 @@ class EventStore:
                 )
                 INSERT INTO event_archive
                 SELECT *, NOW() FROM moved
-            """, before_date)
+            """,
+                before_date,
+            )
 
         # Also upload to S3/Glacier for long-term
         # Implementation depends on cloud provider
-        
+
         return int(result.split()[-1]) if result else 0
 
     async def get_event_statistics(self, days: int = 7) -> dict:
         """Get event statistics for monitoring."""
-        start = datetime.utcnow() - timedelta(days=days)
-        
+        start = datetime.now(timezone.utc) - timedelta(days=days)
+
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch("""
+            rows = await conn.fetch(
+                """
                 SELECT type, COUNT(*) as count, 
                        AVG(EXTRACT(EPOCH FROM (timestamp - LAG(timestamp) OVER (ORDER BY timestamp)))) as avg_interval
                 FROM event_store
                 WHERE timestamp > $1
                 GROUP BY type
-            """, start)
+            """,
+                start,
+            )
 
         return {
-            row['type']: {
-                'count': row['count'],
-                'avg_interval_seconds': row['avg_interval']
+            row["type"]: {
+                "count": row["count"],
+                "avg_interval_seconds": row["avg_interval"],
             }
             for row in rows
         }

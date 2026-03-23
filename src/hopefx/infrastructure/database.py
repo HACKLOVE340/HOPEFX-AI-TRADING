@@ -2,6 +2,7 @@
 """
 Async database layer with SQLModel and connection pooling.
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager

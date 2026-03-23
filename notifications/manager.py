@@ -9,7 +9,7 @@ import time
 import json
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 try:
     import requests
@@ -142,7 +142,7 @@ class DiscordChannel(NotificationChannel):
             "title": notification.title,
             "description": notification.message[:2000],  # Discord limit
             "color": colors.get(notification.level, 0x808080),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "fields": []
         }
         

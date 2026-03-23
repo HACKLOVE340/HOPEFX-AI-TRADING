@@ -1,15 +1,14 @@
-"""hopefx.events — re-exports from src.core.events"""
-from src.core.events import (
-    Event, EventBus, TickEvent as TickReceived,
-    SignalEvent, OrderEvent, FillEvent, PositionEvent,
-    RiskEvent, HealthEvent, TradingEvent,
-    get_event_bus,
+"""hopefx.events — merged with src/hopefx/events via path extension."""
+import os as _os
+
+_src_events = _os.path.normpath(
+    _os.path.join(_os.path.dirname(__file__), '..', '..', 'src', 'hopefx', 'events')
 )
+if _src_events not in __path__:
+    __path__.append(_src_events)
 
-event_bus = get_event_bus()
-
-__all__ = [
-    "Event", "EventBus", "TickReceived", "SignalEvent", "OrderEvent",
-    "FillEvent", "PositionEvent", "RiskEvent", "HealthEvent",
-    "TradingEvent", "event_bus", "get_event_bus",
-]
+# Re-export common symbols so `from hopefx.events import event_bus` works
+try:
+    from hopefx.events.bus import event_bus  # noqa: F401
+except Exception:
+    pass

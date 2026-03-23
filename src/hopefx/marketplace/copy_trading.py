@@ -6,9 +6,7 @@ from typing import Dict, List, Optional
 
 import structlog
 
-from hopefx.database.models import (
-    CopyTrading
-)
+from hopefx.database.models import CopyTrading
 from hopefx.events.bus import event_bus
 from hopefx.events.schemas import Event, EventType, OrderFill
 from hopefx.execution.brokers.base import Order, OrderType
@@ -46,15 +44,15 @@ class CopyTradingEngine:
             return
 
         fill: OrderFill = event.payload
-        
+
         # Find original trade to get leader info
         # Query database for trade and its strategy/user
         # This is simplified - in production, include leader_id in OrderFill event
-        
+
         async with self._lock:
             # Get all active copy relationships for this leader
             copies = await self._get_active_copies_for_trade(fill)
-            
+
             for copy in copies:
                 asyncio.create_task(self._replicate_trade(copy, fill))
 
@@ -69,9 +67,7 @@ class CopyTradingEngine:
         try:
             # Calculate follower position size
             follower_size = self._calculate_follower_size(
-                copy, 
-                leader_fill.filled_qty,
-                leader_fill.filled_price
+                copy, leader_fill.filled_qty, leader_fill.filled_price
             )
 
             if follower_size < copy.min_trade_size:
@@ -79,7 +75,7 @@ class CopyTradingEngine:
                     "copy_trading.size_too_small",
                     copy_id=copy.id,
                     calculated_size=float(follower_size),
-                    min_size=float(copy.min_trade_size)
+                    min_size=float(copy.min_trade_size),
                 )
                 return
 
@@ -89,13 +85,15 @@ class CopyTradingEngine:
                 logger.error("copy_trading.no_price", symbol=leader_fill.symbol)
                 return
 
-            slippage = abs(current_price - leader_fill.filled_price) / leader_fill.filled_price
+            slippage = (
+                abs(current_price - leader_fill.filled_price) / leader_fill.filled_price
+            )
             if slippage > copy.max_slippage_pct:
                 logger.warning(
                     "copy_trading.slippage_exceeded",
                     copy_id=copy.id,
                     slippage=float(slippage),
-                    max_slippage=float(copy.max_slippage_pct)
+                    max_slippage=float(copy.max_slippage_pct),
                 )
                 return
 
@@ -112,32 +110,31 @@ class CopyTradingEngine:
             if result.status.value == "filled":
                 # Record copy trade
                 await self._record_copy_trade(copy, leader_fill, result, slippage)
-                
+
                 # Update copy relationship equity
                 await self._update_copy_equity(copy, result)
-                
+
                 logger.info(
                     "copy_trading.replicated",
                     copy_id=copy.id,
                     symbol=leader_fill.symbol,
                     follower_size=float(follower_size),
-                    slippage=float(slippage)
+                    slippage=float(slippage),
                 )
             else:
                 logger.error(
                     "copy_trading.replication_failed",
                     copy_id=copy.id,
-                    reason=result.raw_response
+                    reason=result.raw_response,
                 )
 
         except Exception as e:
-            logger.exception("copy_trading.replication_error", copy_id=copy.id, error=str(e))
+            logger.exception(
+                "copy_trading.replication_error", copy_id=copy.id, error=str(e)
+            )
 
     def _calculate_follower_size(
-        self, 
-        copy: CopyTrading, 
-        leader_size: Decimal,
-        leader_price: Decimal
+        self, copy: CopyTrading, leader_size: Decimal, leader_price: Decimal
     ) -> Decimal:
         """Calculate position size for follower based on allocation type."""
         leader_notional = leader_size * leader_price
@@ -152,7 +149,9 @@ class CopyTradingEngine:
         elif copy.allocation_type == "proportional":
             # Proportional to account sizes
             # This requires knowing leader's account size
-            follower_ratio = copy.allocation_amount / Decimal("100000")  # Assume 100k leader
+            follower_ratio = copy.allocation_amount / Decimal(
+                "100000"
+            )  # Assume 100k leader
             return leader_size * follower_ratio
 
         return Decimal("0")
@@ -160,6 +159,7 @@ class CopyTradingEngine:
     async def _get_current_price(self, symbol: str) -> Optional[Decimal]:
         """Get current market price."""
         from hopefx.data.feed import feed_manager
+
         tick = feed_manager.get_best_price(symbol)
         return tick.mid if tick else None
 
@@ -168,7 +168,7 @@ class CopyTradingEngine:
         copy: CopyTrading,
         leader_fill: OrderFill,
         follower_result: any,
-        slippage: Decimal
+        slippage: Decimal,
     ) -> None:
         """Record the copied trade in database."""
         # Insert CopyTrade record
@@ -184,13 +184,13 @@ class CopyTradingEngine:
         while self._running:
             try:
                 await asyncio.sleep(3600)  # Hourly fee calculation
-                
+
                 # Calculate performance fees for profitable copies
                 await self._calculate_performance_fees()
-                
+
                 # Process subscription fees
                 await self._process_subscription_fees()
-                
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -211,7 +211,7 @@ class CopyTradingEngine:
         follower_id: str,
         leader_id: str,
         allocation_amount: Decimal,
-        allocation_type: str = "proportional"
+        allocation_type: str = "proportional",
     ) -> Optional[CopyTrading]:
         """Start a new copy relationship."""
         # Validate leader allows copying

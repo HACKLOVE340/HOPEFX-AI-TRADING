@@ -4,14 +4,110 @@ Base Broker Connector
 Abstract base class for all broker integrations.
 """
 
+import asyncio
+import functools
+import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable, TypeVar
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exception,)):
+    """
+    Decorator: retry a broker call up to *max_attempts* times with exponential
+    backoff.  Works on both sync and async callables.
+
+    Args:
+        max_attempts: Maximum number of attempts (default 3).
+        backoff: Base backoff in seconds, doubled each attempt (default 1.0).
+        exceptions: Exception types to catch and retry on.
+    """
+    def decorator(fn: _F) -> _F:
+        if asyncio.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def async_wrapper(*args, **kwargs):
+                delay = backoff
+                last_exc: Exception = RuntimeError("no attempts made")
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        return await fn(*args, **kwargs)
+                    except exceptions as exc:
+                        last_exc = exc
+                        if attempt < max_attempts:
+                            logger.warning(
+                                "%s attempt %d/%d failed (%s); retrying in %.1fs",
+                                fn.__qualname__, attempt, max_attempts, exc, delay,
+                            )
+                            await asyncio.sleep(delay)
+                            delay *= 2
+                        else:
+                            logger.error(
+                                "%s failed after %d attempts: %s",
+                                fn.__qualname__, max_attempts, exc,
+                            )
+                raise last_exc
+            return async_wrapper  # type: ignore[return-value]
+        else:
+            @functools.wraps(fn)
+            def sync_wrapper(*args, **kwargs):
+                delay = backoff
+                last_exc: Exception = RuntimeError("no attempts made")
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        return fn(*args, **kwargs)
+                    except exceptions as exc:
+                        last_exc = exc
+                        if attempt < max_attempts:
+                            logger.warning(
+                                "%s attempt %d/%d failed (%s); retrying in %.1fs",
+                                fn.__qualname__, attempt, max_attempts, exc, delay,
+                            )
+                            time.sleep(delay)
+                            delay *= 2
+                        else:
+                            logger.error(
+                                "%s failed after %d attempts: %s",
+                                fn.__qualname__, max_attempts, exc,
+                            )
+                raise last_exc
+            return sync_wrapper  # type: ignore[return-value]
+    return decorator
+
+
+class RateLimiter:
+    """
+    Token-bucket rate limiter for broker API calls.
+
+    Args:
+        calls_per_second: Maximum calls allowed per second (default 10).
+    """
+
+    def __init__(self, calls_per_second: float = 10.0) -> None:
+        self._rate = calls_per_second
+        self._tokens = calls_per_second
+        self._last: float = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        """Block until a token is available."""
+        async with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last
+            self._last = now
+            self._tokens = min(self._rate, self._tokens + elapsed * self._rate)
+            if self._tokens < 1.0:
+                wait = (1.0 - self._tokens) / self._rate
+                await asyncio.sleep(wait)
+                self._tokens = 0.0
+            else:
+                self._tokens -= 1.0
 
 
 class OrderType(Enum):
@@ -113,8 +209,12 @@ class BrokerConnector(ABC):
         self.config = config
         self.connected = False
         self.name = self.__class__.__name__
+        # Per-connector rate limiter (default 10 req/s; override in subclass)
+        self.rate_limiter = RateLimiter(
+            calls_per_second=float(config.get("rate_limit_rps", 10.0))
+        )
 
-        logger.info(f"Initialized {self.name} broker connector")
+        logger.info("Initialized %s broker connector", self.name)
 
     @abstractmethod
     def connect(self) -> bool:

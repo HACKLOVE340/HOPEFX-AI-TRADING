@@ -12,7 +12,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 import anyio
 import structlog
@@ -25,27 +25,30 @@ T = TypeVar("T", bound="Event")
 
 class EventPriority(Enum):
     """Event processing priority."""
-    CRITICAL = 0   # Risk events, circuit breakers
-    HIGH = 1       # Order fills, position updates
-    NORMAL = 2     # Market data, signals
-    LOW = 3        # Analytics, logging
-    BACKGROUND = 4 # ML training, reports
+
+    CRITICAL = 0  # Risk events, circuit breakers
+    HIGH = 1  # Order fills, position updates
+    NORMAL = 2  # Market data, signals
+    LOW = 3  # Analytics, logging
+    BACKGROUND = 4  # ML training, reports
 
 
 class Event(BaseModel):
     """Base event with metadata."""
+
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = Field(default_factory=time.time)
     priority: EventPriority = EventPriority.NORMAL
     source: str = "unknown"
     trace_id: str | None = None
-    
+
     class Config:
         frozen = True
 
 
 class TickEvent(Event):
     """Market tick data."""
+
     symbol: str
     bid: float
     ask: float
@@ -55,6 +58,7 @@ class TickEvent(Event):
 
 class BarEvent(Event):
     """OHLCV bar completion."""
+
     symbol: str
     timeframe: str
     open: float
@@ -66,6 +70,7 @@ class BarEvent(Event):
 
 class SignalEvent(Event):
     """Trading signal generated."""
+
     symbol: str
     direction: Literal["LONG", "SHORT", "FLAT"]
     confidence: float
@@ -75,6 +80,7 @@ class SignalEvent(Event):
 
 class OrderEvent(Event):
     """Order lifecycle event."""
+
     order_id: str
     action: Literal["SUBMITTED", "FILLED", "PARTIAL", "CANCELLED", "REJECTED"]
     symbol: str
@@ -86,6 +92,7 @@ class OrderEvent(Event):
 
 class RiskEvent(Event):
     """Risk threshold breach."""
+
     event_type: Literal["POSITION_LIMIT", "DRAWDOWN", "VAR_LIMIT", "LATENCY"]
     severity: Literal["WARNING", "CRITICAL", "EMERGENCY"]
     current_value: float
@@ -95,18 +102,18 @@ class RiskEvent(Event):
 
 class EventHandler(ABC, Generic[T]):
     """Abstract event handler."""
-    
+
     @property
     @abstractmethod
     def event_type(self) -> type[T]:
         """Event type this handler processes."""
         pass
-    
+
     @abstractmethod
     async def handle(self, event: T) -> None:
         """Process the event."""
         pass
-    
+
     async def on_error(self, event: T, error: Exception) -> None:
         """Handle processing errors."""
         logger.error(
@@ -114,7 +121,7 @@ class EventHandler(ABC, Generic[T]):
             event_type=event.__class__.__name__,
             event_id=event.event_id,
             error=str(error),
-            handler=self.__class__.__name__
+            handler=self.__class__.__name__,
         )
 
 
@@ -123,11 +130,9 @@ class EventBus:
     High-performance async event bus with priority queues,
     back-pressure handling, and circuit breaker integration.
     """
-    
+
     def __init__(
-        self,
-        max_queue_size: int = 10000,
-        max_handlers_per_event: int = 100
+        self, max_queue_size: int = 10000, max_handlers_per_event: int = 100
     ) -> None:
         self._queues: dict[EventPriority, asyncio.Queue[Event]] = {
             priority: asyncio.Queue(maxsize=max_queue_size)
@@ -143,7 +148,7 @@ class EventBus:
             "errors": 0,
         }
         self._max_handlers = max_handlers_per_event
-    
+
     def subscribe(self, handler: EventHandler) -> None:
         """Register an event handler."""
         event_type = handler.event_type
@@ -153,15 +158,15 @@ class EventBus:
         logger.info(
             "handler_subscribed",
             event_type=event_type.__name__,
-            handler=handler.__class__.__name__
+            handler=handler.__class__.__name__,
         )
-    
+
     def unsubscribe(self, handler: EventHandler) -> None:
         """Remove an event handler."""
         event_type = handler.event_type
         if handler in self._handlers[event_type]:
             self._handlers[event_type].remove(handler)
-    
+
     async def publish(self, event: Event) -> bool:
         """
         Publish event to appropriate priority queue.
@@ -177,10 +182,10 @@ class EventBus:
             logger.warning(
                 "event_dropped_queue_full",
                 event_type=event.__class__.__name__,
-                priority=event.priority.name
+                priority=event.priority.name,
             )
             return False
-    
+
     async def start(self) -> None:
         """Start event processing loops."""
         self._running = True
@@ -189,11 +194,11 @@ class EventBus:
             for priority in EventPriority:
                 tg.start_soon(self._process_queue, priority)
             logger.info("event_bus_started")
-    
+
     async def stop(self) -> None:
         """Graceful shutdown with drain."""
         self._running = False
-        
+
         # Drain queues with timeout
         for priority in EventPriority:
             queue = self._queues[priority]
@@ -202,16 +207,14 @@ class EventBus:
             except asyncio.TimeoutError:
                 remaining = queue.qsize()
                 logger.warning(
-                    "queue_drain_timeout",
-                    priority=priority.name,
-                    remaining=remaining
+                    "queue_drain_timeout", priority=priority.name, remaining=remaining
                 )
-        
+
         if self._task_group:
             self._task_group.cancel_scope.cancel()
-        
+
         logger.info("event_bus_stopped", metrics=self._metrics)
-    
+
     async def _process_queue(self, priority: EventPriority) -> None:
         """Process events from a priority queue."""
         queue = self._queues[priority]
@@ -225,22 +228,22 @@ class EventBus:
             except Exception as e:
                 self._metrics["errors"] += 1
                 logger.error("queue_processing_error", error=str(e))
-    
+
     async def _dispatch(self, event: Event) -> None:
         """Dispatch event to all registered handlers."""
         event_type = type(event)
         handlers = self._handlers.get(event_type, [])
-        
+
         if not handlers:
             return
-        
+
         # Execute handlers concurrently with error isolation
         async with anyio.create_task_group() as tg:
             for handler in handlers:
                 tg.start_soon(self._execute_handler, handler, event)
-        
+
         self._metrics["events_processed"] += 1
-    
+
     async def _execute_handler(self, handler: EventHandler, event: Event) -> None:
         """Execute single handler with error handling."""
         try:

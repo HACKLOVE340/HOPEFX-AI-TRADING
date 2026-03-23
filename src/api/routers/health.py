@@ -1,4 +1,5 @@
 """Health check endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -19,8 +20,7 @@ class HealthResponse(BaseModel):
 async def health_check():
     """Basic health check."""
     return HealthResponse(
-        status="healthy",
-        components={"api": "up", "database": "up", "redis": "up"}
+        status="healthy", components={"api": "up", "database": "up", "redis": "up"}
     )
 
 

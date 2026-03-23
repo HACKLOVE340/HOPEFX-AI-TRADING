@@ -56,18 +56,18 @@ class MultiTierCache:
         value: Any,
         ttl_l1: int = 60,
         ttl_l2: int = 300,
-        ttl_l3: int = 3600
+        ttl_l3: int = 3600,
     ) -> None:
         """Set across all tiers."""
         now = asyncio.get_event_loop().time()
-        
+
         # L1
         self._l1[key] = CacheItem(value, 0, now + ttl_l1)
-        
+
         # L2
         if self._l2:
             await self._l2.setex(key, ttl_l2, value)
-        
+
         # L3
         await self._set_to_disk(key, value, ttl_l3)
 
@@ -85,11 +85,11 @@ class MultiTierCache:
         total = sum(self._hit_stats.values())
         if total == 0:
             return self._hit_stats
-        
+
         return {
             **self._hit_stats,
             "hit_rate": (total - self._hit_stats["miss"]) / total,
             "tier_distribution": {
                 k: v / total for k, v in self._hit_stats.items() if k != "miss"
-            }
+            },
         }

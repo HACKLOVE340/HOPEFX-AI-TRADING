@@ -8,7 +8,12 @@ import time
 from functools import wraps
 from typing import Callable, Any
 import psutil
-import torch
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
 
 
 def async_retry(max_attempts: int = 3, delay: float = 1.0):
@@ -60,8 +65,8 @@ class PerformanceProfiler:
             'cpu_percent': psutil.cpu_percent(interval=1),
             'memory_percent': psutil.virtual_memory().percent,
             'disk_io': psutil.disk_io_counters()._asdict() if psutil.disk_io_counters() else {},
-            'gpu_memory': torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0,
-            'gpu_memory_cached': torch.cuda.memory_reserved() / 1e9 if torch.cuda.is_available() else 0
+            'gpu_memory': torch.cuda.memory_allocated() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0,
+            'gpu_memory_cached': torch.cuda.memory_reserved() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0
         }
     
     def log(self, component: str, metric: str, value: float):

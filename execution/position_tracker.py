@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -25,15 +25,15 @@ class Position:
     unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
     commission: float = 0.0
-    opened_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     
     def update_price(self, new_price: float):
         """Update position with new price"""
         self.current_price = new_price
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         
         # Calculate unrealized P&L
         if self.side == 'long':
@@ -81,7 +81,7 @@ class PositionTracker:
                 if hasattr(pos, key):
                     setattr(pos, key, value)
             
-            pos.updated_at = datetime.utcnow()
+            pos.updated_at = datetime.now(timezone.utc)
             return True
     
     async def close_position(self, position_id: str, exit_price: float, 

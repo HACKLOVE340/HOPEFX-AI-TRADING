@@ -12,6 +12,7 @@ from src.domain.enums import PropFirm
 @dataclass
 class PropFirmRules:
     """Prop firm trading constraints."""
+
     firm: PropFirm
     max_daily_loss_pct: Decimal
     max_total_drawdown_pct: Decimal
@@ -21,7 +22,7 @@ class PropFirmRules:
     news_trading_allowed: bool
     weekend_holding_allowed: bool
     consistency_rule: bool  # Best day < 30% of total profits
-    
+
     # Time restrictions
     trading_start: time = time(0, 0)
     trading_end: time = time(23, 59)
@@ -31,7 +32,7 @@ class PropFirmCompliance:
     """
     Prop firm rule enforcement for FTMO, MFF, The5ers, TopStep.
     """
-    
+
     RULES = {
         PropFirm.FTMO: PropFirmRules(
             firm=PropFirm.FTMO,
@@ -42,7 +43,7 @@ class PropFirmCompliance:
             max_position_size=Decimal("100"),  # Lots
             news_trading_allowed=True,
             weekend_holding_allowed=True,
-            consistency_rule=True
+            consistency_rule=True,
         ),
         PropFirm.MY_FOREX_FUNDS: PropFirmRules(
             firm=PropFirm.MY_FOREX_FUNDS,
@@ -53,7 +54,7 @@ class PropFirmCompliance:
             max_position_size=Decimal("50"),
             news_trading_allowed=False,
             weekend_holding_allowed=False,
-            consistency_rule=False
+            consistency_rule=False,
         ),
         PropFirm.THE5ERS: PropFirmRules(
             firm=PropFirm.THE5ERS,
@@ -64,7 +65,7 @@ class PropFirmCompliance:
             max_position_size=Decimal("200"),
             news_trading_allowed=True,
             weekend_holding_allowed=True,
-            consistency_rule=False
+            consistency_rule=False,
         ),
         PropFirm.TOPSTEP: PropFirmRules(
             firm=PropFirm.TOPSTEP,
@@ -75,16 +76,16 @@ class PropFirmCompliance:
             max_position_size=Decimal("30"),  # Micros
             news_trading_allowed=False,
             weekend_holding_allowed=False,
-            consistency_rule=True
+            consistency_rule=True,
         ),
     }
-    
+
     def __init__(self, firm: PropFirm = PropFirm.NONE):
         self.firm = firm
         self.rules = self.RULES.get(firm)
         self._daily_pnl: dict[datetime, Decimal] = {}
         self._trading_days: set[datetime] = set()
-    
+
     def check_trade_allowed(
         self,
         current_balance: Decimal,
@@ -92,62 +93,65 @@ class PropFirmCompliance:
         total_pnl: Decimal,
         position_size: Decimal,
         is_news_time: bool = False,
-        is_weekend: bool = False
+        is_weekend: bool = False,
     ) -> tuple[bool, str | None]:
         """
         Check if trade complies with prop firm rules.
         """
         if self.firm == PropFirm.NONE or not self.rules:
             return True, None
-        
+
         # Daily loss limit
         daily_loss_pct = abs(daily_pnl) / current_balance
         if daily_loss_pct >= self.rules.max_daily_loss_pct:
             return False, f"Daily loss limit: {daily_loss_pct:.2%}"
-        
+
         # Total drawdown
         total_return_pct = total_pnl / current_balance
         if total_return_pct <= -self.rules.max_total_drawdown_pct:
             return False, f"Max drawdown reached: {total_return_pct:.2%}"
-        
+
         # Position size
         if position_size > self.rules.max_position_size:
-            return False, f"Position size limit: {position_size} > {self.rules.max_position_size}"
-        
+            return (
+                False,
+                f"Position size limit: {position_size} > {self.rules.max_position_size}",
+            )
+
         # News trading
         if is_news_time and not self.rules.news_trading_allowed:
             return False, "News trading not allowed"
-        
+
         # Weekend holding
         if is_weekend and not self.rules.weekend_holding_allowed:
             return False, "Weekend holding not allowed"
-        
+
         return True, None
-    
+
     def check_consistency(self, daily_pnls: list[Decimal]) -> tuple[bool, float]:
         """
         Check FTMO consistency rule: best day < 30% of total profit.
         """
         if not self.rules or not self.rules.consistency_rule:
             return True, 0.0
-        
+
         if len(daily_pnls) < 2:
             return True, 0.0
-        
+
         total_profit = sum(max(0, pnl) for pnl in daily_pnls)
         if total_profit <= 0:
             return True, 0.0
-        
+
         best_day = max(daily_pnls)
         consistency_ratio = best_day / total_profit
-        
+
         return consistency_ratio < Decimal("0.30"), float(consistency_ratio)
-    
+
     def get_status(self) -> dict:
         """Get current compliance status."""
         if not self.rules:
             return {"firm": "NONE", "active": False}
-        
+
         return {
             "firm": self.firm.value,
             "active": True,
@@ -156,7 +160,11 @@ class PropFirmCompliance:
                 "max_drawdown": f"{self.rules.max_total_drawdown_pct:.2%}",
                 "profit_target": f"{self.rules.profit_target_pct:.2%}",
                 "min_trading_days": self.rules.min_trading_days,
-                "news_trading": "allowed" if self.rules.news_trading_allowed else "forbidden",
-                "weekend_holding": "allowed" if self.rules.weekend_holding_allowed else "forbidden",
-            }
+                "news_trading": "allowed"
+                if self.rules.news_trading_allowed
+                else "forbidden",
+                "weekend_holding": "allowed"
+                if self.rules.weekend_holding_allowed
+                else "forbidden",
+            },
         }

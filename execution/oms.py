@@ -7,7 +7,7 @@ Institutional-grade OMS with order lifecycle management
 import asyncio
 from typing import Dict, List, Optional, Set, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum, auto
 import uuid
@@ -48,8 +48,8 @@ class Order:
     status: OrderStatus = OrderStatus.CREATED
     filled_quantity: Decimal = Decimal("0")
     avg_fill_price: Optional[Decimal] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
     parent_order_id: Optional[str] = None  # For OCO, bracket orders
     child_orders: List[str] = field(default_factory=list)
@@ -167,7 +167,7 @@ class OrderLifecycleManager:
             total_value = (prev_filled * order.avg_fill_price) + (fill_qty * fill_price)
             order.avg_fill_price = total_value / order.filled_quantity
         
-        order.updated_at = datetime.utcnow()
+        order.updated_at = datetime.now(timezone.utc)
         
         # Determine new status
         if order.filled_quantity >= order.quantity:
@@ -189,7 +189,7 @@ class OrderLifecycleManager:
     
     def expire_orders(self):
         """Expire GTD and DAY orders"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for order_id in list(self.active_orders):
             order = self.orders[order_id]
             if order.expires_at and now > order.expires_at:
@@ -206,11 +206,11 @@ class OrderLifecycleManager:
         
         # Execute transition
         order.status = new_status
-        order.updated_at = datetime.utcnow()
+        order.updated_at = datetime.now(timezone.utc)
         
         # Log
         event = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'order_id': order.id,
             'from_status': current.name,
             'to_status': new_status.name,
@@ -261,7 +261,7 @@ class OrderLifecycleManager:
             'symbol': symbol,
             'bids': sorted(buys, key=lambda x: x['price'] or 0, reverse=True),
             'asks': sorted(sells, key=lambda x: x['price'] or float('inf')),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
 

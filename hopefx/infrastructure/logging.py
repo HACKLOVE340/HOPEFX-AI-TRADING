@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 import gzip
@@ -162,7 +162,7 @@ class AuditLogger:
         import hashlib
         
         entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": action,
             "user_id": user_id,
             "resource_type": resource_type,

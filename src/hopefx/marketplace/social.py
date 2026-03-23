@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 
 import structlog
 
-from hopefx.database.models import (
-    User, LeaderboardEntry, Trade
-)
+from hopefx.database.models import User, LeaderboardEntry, Trade
 
 logger = structlog.get_logger()
 
@@ -21,47 +19,48 @@ class LeaderboardEngine:
         self._last_update: Optional[datetime] = None
         self._update_interval = timedelta(minutes=5)
 
-    async def calculate_rankings(self, period: str = "monthly") -> List[LeaderboardEntry]:
+    async def calculate_rankings(
+        self, period: str = "monthly"
+    ) -> List[LeaderboardEntry]:
         """Calculate trader rankings for period."""
         # Complex scoring algorithm combining multiple factors
-        
-        score_formula = """
-        Score = (Return * 0.4) + (Sharpe * 0.25) + (WinRate * 0.15) + 
-                (1/MaxDrawdown * 0.1) + (SocialScore * 0.1)
-        """
-        
+
         # Query all active strategies with performance data
         # Calculate composite score
         # Rank and store
-        
+
         return []
 
     def _calculate_social_score(
-        self,
-        followers: int,
-        copiers: int,
-        copied_volume: Decimal
+        self, followers: int, copiers: int, copied_volume: Decimal
     ) -> Decimal:
         """Calculate social influence score."""
         # Log-scaled social metrics
-        follower_score = Decimal(str(min(followers, 10000))).ln() if followers > 0 else Decimal("0")
-        copier_score = Decimal(str(min(copiers, 1000))).ln() if copiers > 0 else Decimal("0")
-        volume_score = (copied_volume / Decimal("1000000")).ln() if copied_volume > 0 else Decimal("0")
-        
+        follower_score = (
+            Decimal(str(min(followers, 10000))).ln() if followers > 0 else Decimal("0")
+        )
+        copier_score = (
+            Decimal(str(min(copiers, 1000))).ln() if copiers > 0 else Decimal("0")
+        )
+        volume_score = (
+            (copied_volume / Decimal("1000000")).ln()
+            if copied_volume > 0
+            else Decimal("0")
+        )
+
         return (follower_score + copier_score + volume_score) / Decimal("3")
 
     async def get_leaderboard(
         self,
         period: str = "monthly",
         limit: int = 100,
-        strategy_type: Optional[str] = None
+        strategy_type: Optional[str] = None,
     ) -> List[dict]:
         """Get cached or fresh leaderboard."""
-        cache_key = f"{period}_{strategy_type}_{limit}"
-        
+
         if self._should_refresh():
             await self.calculate_rankings(period)
-        
+
         # Return from cache or database
         return []
 
@@ -69,7 +68,7 @@ class LeaderboardEngine:
         """Check if cache needs refresh."""
         if not self._last_update:
             return True
-        return datetime.utcnow() - self._last_update > self._update_interval
+        return datetime.now(timezone.utc) - self._last_update > self._update_interval
 
     async def get_trader_profile(self, user_id: str) -> Optional[dict]:
         """Get public trader profile with stats."""

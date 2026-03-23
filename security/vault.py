@@ -160,7 +160,7 @@ class HSMVault:
             iterations=0,
             algorithm="AES-256-GCM",
             key_id=key_id,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
     
     def decrypt(self, secret: EncryptedSecret) -> str:
@@ -247,15 +247,15 @@ class APICredentialManager:
         credential_data = json.dumps({
             'api_key': api_key,
             'api_secret': api_secret,
-            'created_at': datetime.utcnow().isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat()
         })
         
         encrypted = self.vault.encrypt(credential_data, key_id=f"credential_{name}")
         self.credentials[name] = encrypted
         
         # Schedule rotation
-        from datetime import timedelta
-        self.rotation_schedule[name] = datetime.utcnow() + timedelta(days=rotation_days)
+        from datetime import timedelta, timezone
+        self.rotation_schedule[name] = datetime.now(timezone.utc) + timedelta(days=rotation_days)
         
         print(f"🔐 Credential '{name}' encrypted and stored")
     
@@ -265,7 +265,7 @@ class APICredentialManager:
             raise KeyError(f"Credential '{name}' not found")
         
         # Check rotation
-        if datetime.utcnow() > self.rotation_schedule.get(name, datetime.utcnow()):
+        if datetime.now(timezone.utc) > self.rotation_schedule.get(name, datetime.now(timezone.utc)):
             print(f"⚠️ Credential '{name}' needs rotation!")
         
         encrypted = self.credentials[name]

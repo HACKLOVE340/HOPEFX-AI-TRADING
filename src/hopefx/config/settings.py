@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536
     argon2_parallelism: int = 4
-    
+
     # Cloud Secrets
     secrets_provider: str = "local"  # local, aws, azure, gcp, hashicorp
     aws_region: str = "us-east-1"
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_workers: int = 4
     ws_heartbeat_interval: int = 30
-    
+
     # Rate Limiting
     rate_limit_requests_per_minute: int = 100
     rate_limit_burst: int = 20
@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     health_check_interval: int = 30
     enable_distributed_tracing: bool = True
     jaeger_endpoint: Optional[str] = None
-    
+
     # Compliance
     enable_auto_compliance_reporting: bool = True
     mifid_firm_id: Optional[str] = None

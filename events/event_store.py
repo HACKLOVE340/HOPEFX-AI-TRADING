@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from collections import defaultdict
 import asyncio
@@ -89,7 +89,7 @@ class DomainEvent:
             event_type=event_type,
             aggregate_id=aggregate_id,
             aggregate_type=aggregate_type,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             version=1,  # Would be incremented for aggregate versioning
             payload=payload,
             metadata=metadata or {}

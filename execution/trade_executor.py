@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from infrastructure.metrics import get_metrics_registry
@@ -36,7 +36,7 @@ class ExecutionResult:
     status: OrderStatus
     message: str
     latency_ms: float
-    timestamp: datetime = datetime.utcnow()
+    timestamp: datetime = datetime.now(timezone.utc)
 
 
 class TradeExecutor:

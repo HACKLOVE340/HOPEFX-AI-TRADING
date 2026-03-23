@@ -22,7 +22,7 @@ async def purchase_license(
     strategy_id: str,
     license_type: LicenseType,
     user_id: str,
-    payment_method: dict[str, Any]
+    payment_method: dict[str, Any],
 ):
     """Purchase strategy license."""
     # Create payment intent
@@ -30,45 +30,40 @@ async def purchase_license(
         LicenseType.TRIAL: 0,
         LicenseType.BASIC: 99,
         LicenseType.PRO: 299,
-        LicenseType.ENTERPRISE: 999
+        LicenseType.ENTERPRISE: 999,
     }
-    
+
     amount = prices.get(license_type, 0)
-    
+
     if amount > 0:
         payment = await payment_processor.create_payment_intent(
-            amount=amount,
-            currency="USD",
-            user_id=user_id,
-            strategy_id=strategy_id
+            amount=amount, currency="USD", user_id=user_id, strategy_id=strategy_id
         )
-        
+
         # In real implementation, wait for payment confirmation
         # For now, issue license immediately
         license = license_manager.issue_license(
-            strategy_id=strategy_id,
-            user_id=user_id,
-            license_type=license_type
+            strategy_id=strategy_id, user_id=user_id, license_type=license_type
         )
-        
+
         return {
             "license_id": license.license_id,
             "payment_intent": payment.payment_id,
-            "status": "pending_payment"
+            "status": "pending_payment",
         }
-    
+
     # Free trial
     license = license_manager.issue_license(
         strategy_id=strategy_id,
         user_id=user_id,
         license_type=license_type,
-        duration_days=7
+        duration_days=7,
     )
-    
+
     return {
         "license_id": license.license_id,
         "expires_at": license.expires_at.isoformat(),
-        "features": license.features
+        "features": license.features,
     }
 
 
@@ -88,15 +83,15 @@ async def start_copy_trading(config: dict[str, Any]):
         copy_ratio=config.get("copy_ratio", 1.0),
         max_position_size=config.get("max_position_size", 100),
         risk_adjustment=config.get("risk_adjustment", "proportional"),
-        stop_copy_if_drawdown=config.get("stop_copy_if_drawdown", 0.2)
+        stop_copy_if_drawdown=config.get("stop_copy_if_drawdown", 0.2),
     )
-    
+
     await copy_engine.register_copier(copier)
-    
+
     return {
         "copier_id": copier.trader_id,
         "leader_id": copier.leader_id,
-        "status": "active"
+        "status": "active",
     }
 
 
@@ -113,7 +108,7 @@ async def list_leaders():
                 "sharpe_ratio": 1.8,
                 "max_drawdown": 0.08,
                 "followers": 150,
-                "monthly_fee": 50
+                "monthly_fee": 50,
             }
         ]
     }
