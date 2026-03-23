@@ -11,7 +11,6 @@ from typing import Callable, Literal
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from src.core.exceptions import FeedError
 from src.core.logging_config import get_logger
 from src.data.feeds.base import DataFeed
 from src.data.validators import TickValidator

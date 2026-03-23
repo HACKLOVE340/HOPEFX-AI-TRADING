@@ -2,12 +2,11 @@
 XAUUSD ML-powered trading strategy.
 """
 
-import numpy as np
 import pandas as pd
 from datetime import datetime
 
 from src.domain.enums import SignalStrength, TradeDirection
-from src.domain.models import Account, MarketData, OHLCV, Signal
+from src.domain.models import MarketData, OHLCV, Signal
 from src.ml.features import FeatureEngineer
 from src.ml.models.ensemble import EnsembleModel
 from src.strategies.base import Strategy

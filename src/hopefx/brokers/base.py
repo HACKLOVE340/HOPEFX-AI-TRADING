@@ -3,10 +3,8 @@
 Abstract broker with circuit breaker protection.
 """
 from abc import ABC, abstractmethod
-from typing import Any
 
 from circuitbreaker import circuit
-import tenacity
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from hopefx.data.feeds.base import TickData

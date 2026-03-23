@@ -8,8 +8,7 @@ from typing import Any
 import zmq.asyncio
 
 from src.brokers.base import Broker
-from src.core.config import settings
-from src.core.exceptions import BrokerError, BrokerConnectionError
+from src.core.exceptions import BrokerConnectionError
 from src.domain.enums import BrokerType, OrderStatus, TradeDirection
 from src.domain.models import Account, Order, Position, TickData
 

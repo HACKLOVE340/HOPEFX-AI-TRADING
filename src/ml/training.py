@@ -1,7 +1,6 @@
 """Training pipeline with walk-forward optimization and PurgedKFold."""
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any
 

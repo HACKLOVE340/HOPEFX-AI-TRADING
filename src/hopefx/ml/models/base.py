@@ -8,11 +8,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Generic, TypeVar
 
 import numpy as np
 import structlog
-import torch
 
 logger = structlog.get_logger()
 

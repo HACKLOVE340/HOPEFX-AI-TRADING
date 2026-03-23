@@ -3,7 +3,6 @@ Ensemble model combining XGBoost and LSTM predictions.
 """
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 

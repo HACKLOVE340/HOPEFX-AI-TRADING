@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
-from typing import Optional
 
 import structlog
 from ib_async import IB, Stock, Forex, Future, Order as IBJavaOrder

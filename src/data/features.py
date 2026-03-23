@@ -5,7 +5,6 @@ Feature engineering for XAUUSD ML pipeline.
 import numpy as np
 import pandas as pd
 import ta
-from typing import Literal
 
 
 class FeatureEngineer:

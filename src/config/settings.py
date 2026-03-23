@@ -3,10 +3,9 @@ Institutional-grade configuration management.
 Pydantic v2 with strict validation and secrets handling.
 """
 from functools import lru_cache
-from typing import Literal, List, Optional
+from typing import Literal, Optional
 from pydantic import Field, field_validator, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
 
 
 class DatabaseSettings(BaseSettings):

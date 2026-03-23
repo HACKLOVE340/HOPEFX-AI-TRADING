@@ -9,11 +9,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable, Coroutine
 
 import structlog
 
-from hopefx.core.events import EventBus, OrderEvent, EventPriority, get_event_bus
+from hopefx.core.events import EventBus, OrderEvent, get_event_bus
 from hopefx.execution.oms import OrderManager
 
 logger = structlog.get_logger()

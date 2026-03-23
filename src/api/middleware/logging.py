@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Callable
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.core.logging_config import get_logger

@@ -11,8 +11,6 @@ from typing import Callable
 import zmq
 import zmq.asyncio
 
-from src.core.config import settings
-from src.core.exceptions import FeedError
 from src.core.logging_config import get_logger
 from src.data.feeds.base import DataFeed
 from src.domain.models import TickData

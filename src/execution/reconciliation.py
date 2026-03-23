@@ -11,7 +11,7 @@ from typing import Any
 
 import structlog
 
-from src.core.types import Position, OrderStatus
+from src.core.types import Position
 from src.execution.brokers.base import Broker
 from src.risk.kill_switch import kill_switch, KillSource
 

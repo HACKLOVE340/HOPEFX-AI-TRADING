@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 import random
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable
 
 import structlog
 
-from hopefx.config.settings import settings
 from hopefx.events.bus import event_bus
 from hopefx.events.schemas import Event, EventType, OrderFill, TickData
-from hopefx.execution.brokers.base import BaseBroker, Order, OrderResult, OrderStatus, OrderType
+from hopefx.execution.brokers.base import BaseBroker, Order, OrderResult, OrderStatus
 from hopefx.risk.circuit_breaker import multi_breaker
 
 logger = structlog.get_logger()

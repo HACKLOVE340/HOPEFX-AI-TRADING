@@ -10,7 +10,7 @@ from typing import Any
 from src.core.config import settings
 from src.core.events import Event, RiskEvent, get_event_bus
 from src.core.logging_config import get_logger
-from src.domain.enums import RiskLevel, TradeDirection
+from src.domain.enums import RiskLevel
 from src.domain.models import Account, Signal
 from src.risk.kill_switch import KillSwitch
 from src.risk.position_sizing import PositionSizer
