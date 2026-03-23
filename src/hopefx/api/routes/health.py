@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from hopefx.config.settings import settings
@@ -27,11 +27,16 @@ async def health_check() -> HealthStatus:
 
     # Check all brokers
     from hopefx.execution.router import smart_router
+
     for name, broker in smart_router.brokers.items():
-        components[f"broker_{name}"] = "connected" if broker.connected else "disconnected"
+        components[f"broker_{name}"] = (
+            "connected" if broker.connected else "disconnected"
+        )
 
     return HealthStatus(
-        status="healthy" if all(v == "up" or v == "connected" for v in components.values()) else "degraded",
+        status="healthy"
+        if all(v == "up" or v == "connected" for v in components.values())
+        else "degraded",
         version="9.5.0",
         environment=settings.environment.value,
         components=components,

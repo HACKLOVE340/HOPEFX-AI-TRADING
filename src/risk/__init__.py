@@ -1,5 +1,6 @@
 """Risk management module."""
 
+
 def __getattr__(name):
     _map = {
         "RiskManager": ("src.risk.manager", "RiskManager"),
@@ -12,9 +13,18 @@ def __getattr__(name):
     }
     if name in _map:
         import importlib
+
         mod = importlib.import_module(_map[name][0])
         return getattr(mod, _map[name][1])
     raise AttributeError(f"module 'src.risk' has no attribute {name!r}")
 
-__all__ = ["RiskManager","PositionSizer","RiskMetrics","KillSwitch",
-           "KillSwitchState","PropFirmCompliance","PropFirmRules"]
+
+__all__ = [
+    "RiskManager",
+    "PositionSizer",
+    "RiskMetrics",
+    "KillSwitch",
+    "KillSwitchState",
+    "PropFirmCompliance",
+    "PropFirmRules",
+]

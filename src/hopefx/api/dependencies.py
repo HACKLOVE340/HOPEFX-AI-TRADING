@@ -3,11 +3,11 @@
 FastAPI auth dependencies — delegates to the main app's auth.service so both
 entry points share the same JWT logic and secret.
 """
+
 from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -39,9 +39,11 @@ def _decode(token: str) -> dict:
     """Decode a JWT using SECURITY_JWT_SECRET (shared with main app)."""
     try:
         import jwt as _jwt
+
         secret = os.environ.get("SECURITY_JWT_SECRET", "")
         if not secret:
             from hopefx.config.settings import settings as _s
+
             secret = _s.jwt_secret
         return _jwt.decode(token, secret, algorithms=["HS256"])
     except Exception as exc:
@@ -56,7 +58,9 @@ def verify_token(token: str) -> TokenData:
     payload = _decode(token)
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
     return TokenData(
         user_id=user_id,
         email=payload.get("email", ""),
@@ -80,6 +84,7 @@ def require_roles(required_roles: list[str]):
                 detail=f"Required roles: {required_roles}",
             )
         return user
+
     return role_checker
 
 

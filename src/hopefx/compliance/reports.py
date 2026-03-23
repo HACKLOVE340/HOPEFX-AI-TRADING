@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, date
 from decimal import Decimal
-from typing import List, Dict
+from typing import List
 from dataclasses import dataclass
-
-import pandas as pd
 
 
 @dataclass
 class TradeReport:
     """Individual trade for regulatory reporting."""
+
     trade_id: str
     timestamp: datetime
     symbol: str
@@ -35,7 +33,7 @@ class MiFID2Reporter:
     async def generate_daily_report(self, report_date: date) -> str:
         """Generate RTS 22 transaction report."""
         trades = await self._get_trades_for_date(report_date)
-        
+
         # Format per RTS 22
         report_lines = []
         for trade in trades:

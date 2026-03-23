@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -72,7 +71,7 @@ class WAFMiddleware(BaseHTTPMiddleware):
         if request.method in ("POST", "PUT", "PATCH"):
             body = await request.body()
             body_str = body.decode("utf-8", errors="ignore")
-            
+
             if self._check_sqli(body_str) or self._check_xss(body_str):
                 await self._block(request, "injection_attempt")
                 raise HTTPException(403, "Security violation detected")

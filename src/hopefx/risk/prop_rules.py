@@ -23,11 +23,13 @@ class PropConstraint:
 class PropRuleEngine(Protocol):
     """Protocol for prop firm rule engines."""
 
-    def validate_trade(self, symbol: str, size: Decimal, stop_loss: Decimal | None) -> tuple[bool, str]:
-        ...
+    def validate_trade(
+        self, symbol: str, size: Decimal, stop_loss: Decimal | None
+    ) -> tuple[bool, str]: ...
 
-    def validate_account_state(self, equity: Decimal, daily_pnl: Decimal, total_pnl: Decimal) -> tuple[bool, str]:
-        ...
+    def validate_account_state(
+        self, equity: Decimal, daily_pnl: Decimal, total_pnl: Decimal
+    ) -> tuple[bool, str]: ...
 
 
 class FTMORuleEngine:
@@ -58,7 +60,10 @@ class FTMORuleEngine:
 
         # Check position size
         if size > self.constraints.max_position_size:
-            return False, f"FTMO: Position size {size} exceeds max {self.constraints.max_position_size}"
+            return (
+                False,
+                f"FTMO: Position size {size} exceeds max {self.constraints.max_position_size}",
+            )
 
         return True, "approved"
 
@@ -89,7 +94,9 @@ class FTMORuleEngine:
 
     def check_min_trading_days(self) -> tuple[bool, int]:
         """Check if minimum trading days met."""
-        return len(self._trading_days) >= self.constraints.min_trading_days, len(self._trading_days)
+        return len(self._trading_days) >= self.constraints.min_trading_days, len(
+            self._trading_days
+        )
 
 
 class MyForexFundsRuleEngine:
@@ -113,7 +120,7 @@ class MyForexFundsRuleEngine:
     ) -> tuple[bool, str]:
         """Validate trade."""
         if size > self.constraints.max_position_size:
-            return False, f"MFF: Position size exceeds limit"
+            return False, "MFF: Position size exceeds limit"
 
         return True, "approved"
 
@@ -145,12 +152,16 @@ class PropRuleManager:
         self._active_engine = firm
         logger.info("prop_rules.set_firm", firm=firm)
 
-    def validate(self, symbol: str, size: Decimal, stop_loss: Decimal | None) -> tuple[bool, str]:
+    def validate(
+        self, symbol: str, size: Decimal, stop_loss: Decimal | None
+    ) -> tuple[bool, str]:
         """Validate against active rules."""
         engine = self.engines[self._active_engine]
         return engine.validate_trade(symbol, size, stop_loss)
 
-    def check_account(self, equity: Decimal, daily_pnl: Decimal, total_pnl: Decimal) -> tuple[bool, str]:
+    def check_account(
+        self, equity: Decimal, daily_pnl: Decimal, total_pnl: Decimal
+    ) -> tuple[bool, str]:
         """Check account compliance."""
         engine = self.engines[self._active_engine]
         return engine.validate_account_state(equity, daily_pnl, total_pnl)

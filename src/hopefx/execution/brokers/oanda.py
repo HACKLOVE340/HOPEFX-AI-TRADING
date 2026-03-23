@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from decimal import Decimal
 
 import aiohttp
@@ -43,10 +42,13 @@ class OandaBroker(BaseBroker):
         # Test connection
         try:
             from oandapyV20.endpoints.accounts import AccountSummary
+
             r = AccountSummary(self.account_id)
             self.api.request(r)
             self._connected = True
-            logger.info("oanda.connected", environment=environment, account=self.account_id)
+            logger.info(
+                "oanda.connected", environment=environment, account=self.account_id
+            )
         except V20Error as e:
             logger.exception("oanda.connection_failed", error=str(e))
             raise
@@ -62,6 +64,7 @@ class OandaBroker(BaseBroker):
             raise RuntimeError("Not connected to OANDA")
 
         import time
+
         start_time = time.time()
 
         try:
@@ -69,11 +72,21 @@ class OandaBroker(BaseBroker):
             if order.order_type == OrderType.MARKET:
                 ordr = MarketOrderRequest(
                     instrument=order.symbol,
-                    units=float(order.quantity) if order.side == "buy" else -float(order.quantity),
+                    units=float(order.quantity)
+                    if order.side == "buy"
+                    else -float(order.quantity),
                 )
             elif order.order_type in (OrderType.LIMIT, OrderType.STOP):
-                from oandapyV20.contrib.requests import LimitOrderRequest, StopOrderRequest
-                units = float(order.quantity) if order.side == "buy" else -float(order.quantity)
+                from oandapyV20.contrib.requests import (
+                    LimitOrderRequest,
+                    StopOrderRequest,
+                )
+
+                units = (
+                    float(order.quantity)
+                    if order.side == "buy"
+                    else -float(order.quantity)
+                )
                 if order.price is None:
                     raise ValueError("price is required for LIMIT/STOP orders")
                 if order.order_type == OrderType.LIMIT:
@@ -89,7 +102,9 @@ class OandaBroker(BaseBroker):
                         price=str(order.price),
                     )
             else:
-                raise NotImplementedError(f"Order type {order.order_type} not supported")
+                raise NotImplementedError(
+                    f"Order type {order.order_type} not supported"
+                )
 
             r = OrderCreate(self.account_id, data=ordr.data)
             response = self.api.request(r)
@@ -99,8 +114,12 @@ class OandaBroker(BaseBroker):
 
             # Parse response
             order_id = response.get("orderFillTransaction", {}).get("id", "unknown")
-            filled_qty = Decimal(str(response.get("orderFillTransaction", {}).get("units", 0)))
-            filled_price = Decimal(str(response.get("orderFillTransaction", {}).get("price", 0)))
+            filled_qty = Decimal(
+                str(response.get("orderFillTransaction", {}).get("units", 0))
+            )
+            filled_price = Decimal(
+                str(response.get("orderFillTransaction", {}).get("price", 0))
+            )
 
             return OrderResult(
                 order_id=order_id,
@@ -134,6 +153,7 @@ class OandaBroker(BaseBroker):
             return False
         try:
             from oandapyV20.endpoints.orders import OrderCancel
+
             r = OrderCancel(accountID=self.account_id, orderID=order_id)
             self.api.request(r)
             logger.info("oanda.order_cancelled", order_id=order_id)
@@ -145,6 +165,7 @@ class OandaBroker(BaseBroker):
     async def get_position(self, symbol: str) -> dict:
         """Get position."""
         from oandapyV20.endpoints.positions import PositionDetails
+
         r = PositionDetails(accountID=self.account_id, instrument=symbol)
         try:
             response = self.api.request(r)
@@ -155,5 +176,6 @@ class OandaBroker(BaseBroker):
     async def get_account(self) -> dict:
         """Get account summary."""
         from oandapyV20.endpoints.accounts import AccountSummary
+
         r = AccountSummary(self.account_id)
         return self.api.request(r)

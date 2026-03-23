@@ -1,5 +1,6 @@
 """Core infrastructure module."""
 
+
 def __getattr__(name):
     _map = {
         "Settings": ("src.core.config", "Settings"),
@@ -18,10 +19,23 @@ def __getattr__(name):
     if name in _map:
         mod_path, attr = _map[name]
         import importlib
+
         mod = importlib.import_module(mod_path)
         return getattr(mod, attr)
     raise AttributeError(f"module 'src.core' has no attribute {name!r}")
 
-__all__ = ["Settings","get_settings","settings","Event","EventBus","get_event_bus",
-           "HopeFXError","configure_logging","get_logger","TradingEngine",
-           "LifecycleManager","LifecycleState"]
+
+__all__ = [
+    "Settings",
+    "get_settings",
+    "settings",
+    "Event",
+    "EventBus",
+    "get_event_bus",
+    "HopeFXError",
+    "configure_logging",
+    "get_logger",
+    "TradingEngine",
+    "LifecycleManager",
+    "LifecycleState",
+]

@@ -2,15 +2,14 @@ from __future__ import annotations
 from datetime import timezone
 
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from hopefx.brain.engine import brain
 from hopefx.config.settings import settings
-from hopefx.database.models import Trade, Strategy
-from hopefx.execution.oms import oms, OrderState
+from hopefx.execution.oms import oms
 from hopefx.risk.prop_rules import prop_rules
 
 router = APIRouter()
@@ -39,19 +38,20 @@ class TradeResponse(BaseModel):
 @router.post("/trades", response_model=TradeResponse)
 async def create_trade(request: TradeRequest, background_tasks: BackgroundTasks):
     """Execute new trade with full risk validation."""
-    
+
     # Prop firm validation
     if settings.trading_mode == "prop_challenge":
         approved, reason = prop_rules.check_account(
             brain.state.equity,
             brain.state.daily_pnl,
-            Decimal("0")  # total_pnl from DB
+            Decimal("0"),  # total_pnl from DB
         )
         if not approved:
             raise HTTPException(403, f"Prop challenge violation: {reason}")
 
     # Build signal
     from hopefx.events.schemas import Signal
+
     signal = Signal(
         symbol=request.symbol,
         timestamp=datetime.now(timezone.utc),
@@ -64,7 +64,7 @@ async def create_trade(request: TradeRequest, background_tasks: BackgroundTasks)
         metadata={
             "take_profit": request.take_profit,
             "strategy_id": request.strategy_id,
-        }
+        },
     )
 
     # Submit to OMS
@@ -83,7 +83,7 @@ async def create_trade(request: TradeRequest, background_tasks: BackgroundTasks)
         filled_qty=0,
         filled_price=None,
         commission=0,
-        message="Order submitted for processing"
+        message="Order submitted for processing",
     )
 
 
@@ -94,17 +94,23 @@ async def get_trades(status: Optional[str] = None, limit: int = 100):
     for order_id, state in oms._orders.items():
         if status and state.status.name.lower() != status:
             continue
-        trades.append({
-            "order_id": order_id,
-            "status": state.status.name,
-            "symbol": state.signal.symbol if state.signal else None,
-            "side": state.signal.direction if state.signal else None,
-            "size": float(state.signal.size) if state.signal else 0,
-            "created_at": state.created_at,
-            "risk_approved": state.risk_approved,
-            "filled_qty": float(state.execution_result.filled_qty) if state.execution_result else 0,
-            "filled_price": float(state.execution_result.filled_price) if state.execution_result else None,
-        })
+        trades.append(
+            {
+                "order_id": order_id,
+                "status": state.status.name,
+                "symbol": state.signal.symbol if state.signal else None,
+                "side": state.signal.direction if state.signal else None,
+                "size": float(state.signal.size) if state.signal else 0,
+                "created_at": state.created_at,
+                "risk_approved": state.risk_approved,
+                "filled_qty": float(state.execution_result.filled_qty)
+                if state.execution_result
+                else 0,
+                "filled_price": float(state.execution_result.filled_price)
+                if state.execution_result
+                else None,
+            }
+        )
     return {"trades": trades[-limit:]}
 
 
@@ -114,12 +120,14 @@ async def get_trade(order_id: str):
     state = oms.get_order(order_id)
     if not state:
         raise HTTPException(404, "Trade not found")
-    
+
     return {
         "order_id": order_id,
         "status": state.status.name,
         "signal": state.signal.model_dump() if state.signal else None,
-        "execution": state.execution_result.__dict__ if state.execution_result else None,
+        "execution": state.execution_result.__dict__
+        if state.execution_result
+        else None,
         "amendments": state.amendments,
     }
 
@@ -129,7 +137,9 @@ async def cancel_trade(order_id: str):
     """Cancel pending trade."""
     success = await oms.cancel_order(order_id)
     if not success:
-        raise HTTPException(400, "Cannot cancel order - may already be filled or rejected")
+        raise HTTPException(
+            400, "Cannot cancel order - may already be filled or rejected"
+        )
     return {"message": "Order cancelled"}
 
 
@@ -188,7 +198,7 @@ async def get_equity():
         "cash": float(brain.state.cash),
         "daily_pnl": float(brain.state.daily_pnl),
         "open_positions_value": sum(
-            float(pos.get("unrealized_pnl", 0)) 
+            float(pos.get("unrealized_pnl", 0))
             for pos in oms.get_all_positions().values()
         ),
         "buying_power": float(brain.state.cash * Decimal("30")),  # Leverage

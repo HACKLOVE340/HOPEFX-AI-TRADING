@@ -14,8 +14,7 @@ logger = structlog.get_logger()
 class TickValidator(Protocol):
     """Protocol for tick validation strategies."""
 
-    def validate(self, tick: TickData) -> bool:
-        ...
+    def validate(self, tick: TickData) -> bool: ...
 
 
 class XAUUSDValidator:
@@ -30,7 +29,7 @@ class XAUUSDValidator:
     def validate(self, tick: TickData) -> bool:
         """Validate XAUUSD tick."""
         self._validation_count += 1
-        
+
         # Basic sanity checks
         if tick.bid <= 0 or tick.ask <= 0:
             self._rejection_count += 1
@@ -47,7 +46,7 @@ class XAUUSDValidator:
             logger.warning(
                 "validation.excessive_spread",
                 spread=tick.spread,
-                threshold=settings.xauusd_spread_threshold
+                threshold=settings.xauusd_spread_threshold,
             )
             return False
 
@@ -64,7 +63,7 @@ class XAUUSDValidator:
                         "validation.price_jump",
                         deviation=float(deviation),
                         last_price=last_mid,
-                        current_price=mid
+                        current_price=mid,
                     )
                     return False
 
@@ -77,7 +76,9 @@ class XAUUSDValidator:
             "total": self._validation_count,
             "rejected": self._rejection_count,
             "rejection_rate": (
-                self._rejection_count / self._validation_count if self._validation_count > 0 else 0
+                self._rejection_count / self._validation_count
+                if self._validation_count > 0
+                else 0
             ),
         }
 
@@ -108,7 +109,7 @@ class MultiLayerValidator:
                             "validation.high_rejection_rate",
                             rate=rejection_rate,
                             rejected=self._rejection_count,
-                            total=self._total_count
+                            total=self._total_count,
                         )
                 return False
 
@@ -120,6 +121,8 @@ class MultiLayerValidator:
             "total": self._total_count,
             "rejected": self._rejection_count,
             "rejection_rate": (
-                self._rejection_count / self._total_count if self._total_count > 0 else 0
+                self._rejection_count / self._total_count
+                if self._total_count > 0
+                else 0
             ),
         }

@@ -35,39 +35,32 @@ class EnsembleOptimizer:
             ensemble_returns = np.zeros(self.lookback)
             for i, perf in enumerate(performances):
                 ensemble_returns += weights[i] * np.array(perf.recent_returns)
-            
+
             if np.std(ensemble_returns) == 0:
                 return 0
-            
+
             sharpe = np.mean(ensemble_returns) / np.std(ensemble_returns)
             return -sharpe  # Minimize negative Sharpe
 
         # Constraints: weights sum to 1, each weight >= 0
-        constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
+        constraints = {"type": "eq", "fun": lambda w: np.sum(w) - 1}
         bounds = [(0, 1) for _ in performances]
-        
+
         # Initial guess: equal weights
         x0 = np.ones(len(performances)) / len(performances)
 
         result = minimize(
-            negative_sharpe,
-            x0,
-            method='SLSQP',
-            bounds=bounds,
-            constraints=constraints
+            negative_sharpe, x0, method="SLSQP", bounds=bounds, constraints=constraints
         )
 
         self.current_weights = {
-            perf.model_id: weight 
-            for perf, weight in zip(performances, result.x)
+            perf.model_id: weight for perf, weight in zip(performances, result.x)
         }
 
         return self.current_weights
 
     def get_confidence_adjusted_prediction(
-        self,
-        predictions: Dict[str, float],
-        confidences: Dict[str, float]
+        self, predictions: Dict[str, float], confidences: Dict[str, float]
     ) -> float:
         """Weight predictions by model confidence."""
         total_weight = 0
@@ -77,7 +70,7 @@ class EnsembleOptimizer:
             weight = self.current_weights.get(model_id, 0.5)
             confidence = confidences.get(model_id, 0.5)
             adjusted_weight = weight * confidence
-            
+
             weighted_sum += pred * adjusted_weight
             total_weight += adjusted_weight
 

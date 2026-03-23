@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -122,7 +122,7 @@ class RiskViolation(BaseModel):
         "leverage_limit",
         "concentration_limit",
         "margin_call",
-        "prop_rule_breach"
+        "prop_rule_breach",
     ]
     current_value: float
     limit_value: float

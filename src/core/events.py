@@ -1,4 +1,5 @@
 """Pydantic-based event definitions for the event bus."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -9,15 +10,15 @@ from pydantic import BaseModel, Field
 
 _T = TypeVar("_T")
 
-from src.core.types import (
-    Tick, Order, Fill, Position, 
-    SignalType, OrderId, PositionId, Symbol
-)
+from src.core.types import Tick, Order, Fill, Position, SignalType, Symbol
 
 
 class Event(BaseModel, Generic[_T]):
     """Base event — supports Event[PayloadType] generic syntax."""
-    event_id: str = Field(default_factory=lambda: f"evt_{datetime.now(timezone.utc).timestamp()}")
+
+    event_id: str = Field(
+        default_factory=lambda: f"evt_{datetime.now(timezone.utc).timestamp()}"
+    )
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     event_type: str
     payload: Any = None
@@ -38,12 +39,14 @@ class Event(BaseModel, Generic[_T]):
 
 class TickEvent(Event):
     """New market tick."""
+
     event_type: Literal["TICK"] = "TICK"
     tick: Tick
 
 
 class SignalEvent(Event):
     """Trading signal from brain."""
+
     event_type: Literal["SIGNAL"] = "SIGNAL"
     symbol: Symbol
     signal: SignalType
@@ -54,6 +57,7 @@ class SignalEvent(Event):
 
 class OrderEvent(Event):
     """Order state change."""
+
     event_type: Literal["ORDER"] = "ORDER"
     order: Order
     previous_status: str | None = None
@@ -61,12 +65,14 @@ class OrderEvent(Event):
 
 class FillEvent(Event):
     """Order fill/execution."""
+
     event_type: Literal["FILL"] = "FILL"
     fill: Fill
 
 
 class PositionEvent(Event):
     """Position update."""
+
     event_type: Literal["POSITION"] = "POSITION"
     position: Position
     action: Literal["OPENED", "UPDATED", "CLOSED"]
@@ -74,6 +80,7 @@ class PositionEvent(Event):
 
 class RiskEvent(Event):
     """Risk limit breach."""
+
     event_type: Literal["RISK"] = "RISK"
     risk_type: Literal["VAR_LIMIT", "POSITION_LIMIT", "DAILY_LOSS", "CIRCUIT_BREAKER"]
     severity: Literal["WARNING", "CRITICAL", "FATAL"]
@@ -83,6 +90,7 @@ class RiskEvent(Event):
 
 class DriftEvent(Event):
     """Model drift detected."""
+
     event_type: Literal["DRIFT"] = "DRIFT"
     model_id: str
     drift_score: float
@@ -92,6 +100,7 @@ class DriftEvent(Event):
 
 class HealthEvent(Event):
     """Component health status."""
+
     event_type: Literal["HEALTH"] = "HEALTH"
     component: str
     status: Literal["HEALTHY", "DEGRADED", "UNHEALTHY"]
@@ -100,7 +109,16 @@ class HealthEvent(Event):
 
 
 # Union type for type hints
-TradingEvent = TickEvent | SignalEvent | OrderEvent | FillEvent | PositionEvent | RiskEvent | DriftEvent | HealthEvent
+TradingEvent = (
+    TickEvent
+    | SignalEvent
+    | OrderEvent
+    | FillEvent
+    | PositionEvent
+    | RiskEvent
+    | DriftEvent
+    | HealthEvent
+)
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
@@ -140,9 +158,7 @@ class EventBus:
     def unsubscribe(self, event_type, handler: _Callable):
         key = self._key(event_type)
         if key in self._handlers:
-            self._handlers[key] = [
-                h for h in self._handlers[key] if h is not handler
-            ]
+            self._handlers[key] = [h for h in self._handlers[key] if h is not handler]
 
     async def publish(self, event: "Event"):
         # Match by event_type field, class name, or parent class names
@@ -195,11 +211,13 @@ def get_event_bus() -> EventBus:
 
 class TickReceived(BaseModel):
     """Lightweight tick payload used by tests and simple consumers."""
+
     symbol: str
     bid: float
     ask: float
     volume: float = 0.0
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 # Additional aliases
 KillSwitchTriggered = RiskEvent

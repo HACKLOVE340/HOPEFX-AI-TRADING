@@ -55,11 +55,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     # Subscribe to events
     async def event_handler(event: Event) -> None:
-        await manager.broadcast({
-            "type": event.type.value,
-            "timestamp": event.timestamp.isoformat(),
-            "data": event.payload.model_dump() if hasattr(event.payload, "model_dump") else event.payload,
-        })
+        await manager.broadcast(
+            {
+                "type": event.type.value,
+                "timestamp": event.timestamp.isoformat(),
+                "data": event.payload.model_dump()
+                if hasattr(event.payload, "model_dump")
+                else event.payload,
+            }
+        )
 
     # Subscribe to relevant events
     unsub_tick = event_bus.subscribe(EventType.TICK, event_handler)

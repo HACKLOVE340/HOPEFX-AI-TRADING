@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from hopefx.api.routes import health, trading, backtest, ml, websocket
@@ -32,7 +32,9 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
     # Startup
-    logger.info("api_startup", version=settings.version, environment=settings.environment.value)
+    logger.info(
+        "api_startup", version=settings.version, environment=settings.environment.value
+    )
 
     # Initialize connections
     await get_redis_pool()
