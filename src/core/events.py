@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio as _asyncio
+import logging as _logging
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Literal, Any, Generic, TypeVar
+from typing import Any, Callable as _Callable, Dict as _Dict, Generic, List as _List, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -122,10 +124,6 @@ TradingEvent = (
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
-import asyncio as _asyncio
-import logging as _logging
-from typing import Callable as _Callable, Dict as _Dict, List as _List
-
 _ebus_logger = _logging.getLogger(__name__)
 
 

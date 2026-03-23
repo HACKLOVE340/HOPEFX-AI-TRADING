@@ -124,24 +124,24 @@ class ByzantineReconciler:
         for symbol in all_symbols:
             o = oms.get(symbol)
             b = broker.get(symbol)
-            l = ledger.get(symbol)
+            ledger_pos = ledger.get(symbol)
 
             # Byzantine: all three differ
-            if o and b and l:
-                if o.hash != b.hash and b.hash != l.hash and o.hash != l.hash:
+            if o and b and ledger_pos:
+                if o.hash != b.hash and b.hash != ledger_pos.hash and o.hash != ledger_pos.hash:
                     diffs.append(
                         {
                             "symbol": symbol,
                             "severity": ReconciliationSeverity.BYZANTINE,
                             "oms": o,
                             "broker": b,
-                            "ledger": l,
+                            "ledger": ledger_pos,
                         }
                     )
                     self._byzantine_faults += 1
 
                 # Two agree, one differs
-                elif o.hash == b.hash and o.hash != l.hash:
+                elif o.hash == b.hash and o.hash != ledger_pos.hash:
                     diffs.append(
                         {
                             "symbol": symbol,
@@ -151,7 +151,7 @@ class ByzantineReconciler:
                             "expected": o,
                         }
                     )
-                elif o.hash == l.hash and o.hash != b.hash:
+                elif o.hash == ledger_pos.hash and o.hash != b.hash:
                     diffs.append(
                         {
                             "symbol": symbol,
@@ -161,7 +161,7 @@ class ByzantineReconciler:
                             "expected": o,
                         }
                     )
-                elif b.hash == l.hash and b.hash != o.hash:
+                elif b.hash == ledger_pos.hash and b.hash != o.hash:
                     diffs.append(
                         {
                             "symbol": symbol,

@@ -43,7 +43,7 @@ class EventBus:
 
         self._running = True
         self._task = asyncio.create_task(self._process_loop())
-        logger.info("event_bus.started", max_queue=max_queue_size)
+        logger.info("event_bus.started", max_queue=self._queue.maxsize)
 
     async def stop(self) -> None:
         """Stop the event processor gracefully."""

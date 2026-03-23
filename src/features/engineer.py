@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -21,11 +21,13 @@ except ImportError:
     HAS_TORCH = False
 from numba import cuda, float32
 
-from src.core.types import Tick, OHLCV
+from src.core.types import OHLCV, Tick
 from src.features.transforms import CyclicalEncoder, RobustFeatureScaler
 
 if TYPE_CHECKING:
     from torch import Tensor
+
+    from src.features.store import FeatureVector
 
 logger = structlog.get_logger()
 
