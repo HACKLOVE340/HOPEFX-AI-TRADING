@@ -1,0 +1,18 @@
+# Snyk Configuration
+
+version: "1.0"
+
+# This configuration file is for Snyk security scanning.
+
+enable:
+  - vulnerabilities
+  - open-source
+  
+# Define the target files or directory to scan
+project:
+  name: "HOPEFX-AI-TRADING"
+  path: "./"
+
+action:
+  strategy: "monitor"  # Defines the scanning strategy
+  frequency: "daily"  # Adjust frequency as per requirement  
