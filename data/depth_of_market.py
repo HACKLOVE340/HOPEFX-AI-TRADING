@@ -253,6 +253,19 @@ class DepthOfMarketService:
         self._max_levels = self.config.get('max_levels', 50)
         self._volume_threshold = self.config.get('volume_threshold', 0.1)
 
+        # Per-symbol tick size overrides.  Keys are symbol strings (e.g. "XAUUSD").
+        # Values are the minimum price increment for that instrument.
+        # When a symbol is not listed here the tick size is inferred automatically
+        # from the smallest non-zero gap between consecutive order-book price levels.
+        self._symbol_tick_sizes: Dict[str, float] = self.config.get('symbol_tick_sizes', {
+            'XAUUSD': 0.01,
+            'EURUSD': 0.00001,
+            'GBPUSD': 0.00001,
+            'USDJPY': 0.001,
+            'BTCUSDT': 0.01,
+            'ETHUSDT': 0.01,
+        })
+
         logger.info("Depth of Market Service initialized")
 
     # ================================================================
@@ -535,6 +548,46 @@ class DepthOfMarketService:
             return 'weak'
 
     # ================================================================
+    # TICK SIZE RESOLUTION
+    # ================================================================
+
+    def _get_tick_size(self, symbol: str, order_book: 'OrderBook') -> float:
+        """
+        Return the tick size (minimum price increment) for `symbol`.
+
+        Resolution order:
+          1. Explicit override in self._symbol_tick_sizes (set via config or
+             register_tick_size()).
+          2. Inferred from the smallest non-zero gap between consecutive bid
+             price levels in the live order book.
+          3. Fall back to 0.01 if the order book has fewer than two levels.
+        """
+        # 1. Explicit config override
+        if symbol in self._symbol_tick_sizes:
+            return self._symbol_tick_sizes[symbol]
+
+        # 2. Infer from live bid levels (bids are sorted descending)
+        prices = [level.price for level in order_book.bids if level.price > 0]
+        if len(prices) >= 2:
+            gaps = [
+                abs(round(prices[i] - prices[i + 1], 10))
+                for i in range(len(prices) - 1)
+            ]
+            non_zero_gaps = [g for g in gaps if g > 0]
+            if non_zero_gaps:
+                inferred = min(non_zero_gaps)
+                # Cache for future calls so we don't re-compute every frame
+                self._symbol_tick_sizes[symbol] = inferred
+                return inferred
+
+        # 3. Safe default
+        return 0.01
+
+    def register_tick_size(self, symbol: str, tick_size: float) -> None:
+        """Explicitly register the tick size for a symbol."""
+        self._symbol_tick_sizes[symbol] = tick_size
+
+    # ================================================================
     # VISUALIZATION DATA
     # ================================================================
 
@@ -580,7 +633,7 @@ class DepthOfMarketService:
 
             # Build ladder
             ladder = []
-            tick_size = 0.01  # TODO: Get from symbol config
+            tick_size = self._get_tick_size(symbol, order_book)
 
             # Generate price ladder
             price = max_price
