@@ -33,14 +33,8 @@ def cmd_init(args):
     """Initialize the application"""
     logger.info("Initializing HOPEFX AI Trading Framework...")
 
-    # Check for encryption key
-    if not os.getenv('CONFIG_ENCRYPTION_KEY'):
-        logger.error("CONFIG_ENCRYPTION_KEY environment variable not set!")
-        logger.info("Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"")
-        return 1
-
     try:
-        # Initialize config
+        # Initialize config (auto-generates CONFIG_ENCRYPTION_KEY if missing)
         config = initialize_config(environment=args.environment)
         logger.info(f"✓ Configuration initialized: {config.environment}")
 
@@ -84,7 +78,12 @@ def cmd_status(args):
 
         # Check cache
         try:
-            cache = MarketDataCache()
+            cache = MarketDataCache(
+                socket_timeout=2,
+                socket_connect_timeout=2,
+                max_retries=1,
+                retry_delay=0.0,
+            )
             if cache.health_check():
                 stats = cache.get_statistics()
                 logger.info(f"✓ Cache: Connected (hit rate: {stats.hit_rate:.2f}%)")

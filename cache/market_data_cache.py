@@ -105,6 +105,87 @@ class CacheStatistics:
         }
 
 
+class _InMemoryStore:
+    """
+    Minimal Redis-compatible in-memory store used as a fallback when Redis
+    is unavailable.  Only the subset of commands used by MarketDataCache is
+    implemented.
+    """
+
+    def __init__(self) -> None:
+        self._data: Dict[str, Any] = {}
+        self._expiry: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _is_expired(self, key: str) -> bool:
+        exp = self._expiry.get(key)
+        if exp is None:
+            return False
+        return time.time() > exp
+
+    def _clean(self, key: str) -> None:
+        if self._is_expired(key):
+            self._data.pop(key, None)
+            self._expiry.pop(key, None)
+
+    # ------------------------------------------------------------------
+    # Redis-compatible API subset
+    # ------------------------------------------------------------------
+
+    def ping(self) -> bool:
+        return True
+
+    def setex(self, name: str, time_secs: int, value: str) -> bool:
+        with self._lock:
+            self._data[name] = value
+            self._expiry[name] = time.time() + time_secs
+        return True
+
+    def get(self, name: str) -> Optional[str]:
+        with self._lock:
+            self._clean(name)
+            return self._data.get(name)
+
+    def delete(self, *names: str) -> int:
+        removed = 0
+        with self._lock:
+            for name in names:
+                if name in self._data:
+                    del self._data[name]
+                    self._expiry.pop(name, None)
+                    removed += 1
+        return removed
+
+    def scan(
+        self,
+        cursor: int = 0,
+        match: Optional[str] = None,
+        count: int = 100,
+    ) -> Tuple[int, List[str]]:
+        """Single-pass SCAN (always returns cursor=0, all matching keys)."""
+        import fnmatch
+
+        with self._lock:
+            all_keys = [k for k in self._data if not self._is_expired(k)]
+
+    if match:
+        pattern = match.replace('*', '**')
+        all_keys = [k for k in all_keys if fnmatch.fnmatch(k, pattern)]
+
+        return 0, all_keys
+
+    def info(self, section: str = 'all') -> Dict[str, Any]:
+        with self._lock:
+            return {'used_memory': sum(len(v) for v in self._data.values() if isinstance(v, (str, bytes)))}
+
+    def close(self) -> None:
+        pass
+
+
 class MarketDataCache:
     """
     Redis-based cache with thread safety and circuit breaker

@@ -149,13 +149,28 @@ class ChartReplayEngine:
         logger.info(f"Loaded {len(self.data_cache.get(data_key, []))} bars for {data_key}")
     
     def _generate_sample_data(self, session: ReplaySession) -> List[ReplayBar]:
-        """Generate sample data for testing."""
+        """
+        Generate bar data for replay.
+
+        Attempts to fetch real historical data via yfinance; falls back to a
+        simple random-walk simulation when yfinance is unavailable.
+        """
+        # ------------------------------------------------------------------
+        # Try yfinance first
+        # ------------------------------------------------------------------
+        bars = self._fetch_yfinance_data(session)
+        if bars:
+            return bars
+
+        # ------------------------------------------------------------------
+        # Fallback: random-walk simulation
+        # ------------------------------------------------------------------
         import random
-        
+
         bars = []
         current_time = session.start_date
         price = 1950.0  # Starting price for XAUUSD
-        
+
         # Map timeframe to timedelta
         tf_map = {
             '1M': timedelta(minutes=1),
@@ -167,16 +182,15 @@ class ChartReplayEngine:
             '1D': timedelta(days=1),
         }
         delta = tf_map.get(session.timeframe, timedelta(hours=1))
-        
+
         while current_time <= session.end_date:
-            # Generate OHLCV data
             change = random.uniform(-0.5, 0.5)
             open_price = price
             close_price = price + change
             high_price = max(open_price, close_price) + random.uniform(0, 0.3)
             low_price = min(open_price, close_price) - random.uniform(0, 0.3)
             volume = random.uniform(1000, 10000)
-            
+
             bars.append(ReplayBar(
                 timestamp=current_time,
                 open=open_price,
@@ -185,11 +199,80 @@ class ChartReplayEngine:
                 close=close_price,
                 volume=volume
             ))
-            
+
             price = close_price
             current_time += delta
-        
+
         return bars
+
+    def _fetch_yfinance_data(self, session: ReplaySession) -> List[ReplayBar]:
+        """
+        Fetch real OHLCV data from yfinance for the replay session.
+
+        Returns an empty list if yfinance is not installed or the download fails.
+        """
+        try:
+            import yfinance as yf
+
+            # Map internal symbol to yfinance ticker (e.g. XAUUSD → GC=F)
+            _SYMBOL_MAP: Dict[str, str] = {
+                'XAUUSD': 'GC=F',
+                'XAGUSD': 'SI=F',
+                'EURUSD': 'EURUSD=X',
+                'GBPUSD': 'GBPUSD=X',
+                'USDJPY': 'JPY=X',
+            }
+            ticker = _SYMBOL_MAP.get(session.symbol.upper(), session.symbol)
+
+            # Map replay timeframe to yfinance interval
+            _TF_MAP: Dict[str, str] = {
+                '1M': '1m',
+                '5M': '5m',
+                '15M': '15m',
+                '30M': '30m',
+                '1H': '1h',
+                '4H': '1h',  # yfinance has no 4H; use 1H and downsample if needed
+                '1D': '1d',
+            }
+            interval = _TF_MAP.get(session.timeframe, '1d')
+
+            logger.info(
+                f"Fetching {ticker} [{interval}] "
+                f"{session.start_date.date()} → {session.end_date.date()} via yfinance"
+            )
+            df = yf.download(
+                ticker,
+                start=session.start_date,
+                end=session.end_date,
+                interval=interval,
+                progress=False,
+                auto_adjust=True,
+            )
+
+            if df is None or df.empty:
+                logger.warning(f"yfinance returned no data for {ticker}")
+                return []
+
+            bars: List[ReplayBar] = []
+            for ts, row in df.iterrows():
+                bars.append(ReplayBar(
+                    timestamp=ts.to_pydatetime(),
+                    open=float(row['Open']),
+                    high=float(row['High']),
+                    low=float(row['Low']),
+                    close=float(row['Close']),
+                    volume=float(row.get('Volume', 0)),
+                ))
+
+            logger.info(f"Loaded {len(bars)} bars from yfinance for {ticker}")
+            return bars
+
+        except ImportError:
+            logger.warning("yfinance not installed — using simulated replay data.")
+            return []
+        except Exception as exc:
+            logger.warning(f"yfinance fetch failed ({exc}) — using simulated replay data.")
+            return []
     
     def play(self, session_id: Optional[str] = None) -> bool:
         """Start or resume replay."""
