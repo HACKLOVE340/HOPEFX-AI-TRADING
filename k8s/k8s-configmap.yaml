@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  REDIS_HOST: "redis://localhost:6379"
+  DATABASE_URL: "postgres://user:password@localhost:5432/mydatabase"
+  API_KEY: "your_api_key_here"
+  APP_SETTING_1: "some_setting"
+  APP_SETTING_2: "another_setting"
