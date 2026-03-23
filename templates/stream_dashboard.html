@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOPEFX – Live Stream Dashboard</title>
+    <style>
+        :root {
+            --bg-primary:   #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card:      #1c2128;
+            --border:       #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-gold:  #FFD700;
+            --accent-green: #3fb950;
+            --accent-red:   #f85149;
+            --accent-blue:  #58a6ff;
+            --accent-cyan:  #39d0d8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .logo { font-size: 20px; font-weight: 700; color: var(--accent-gold); letter-spacing: .5px; }
+        .live-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(248,81,73,.15);
+            border: 1px solid rgba(248,81,73,.4);
+            border-radius: 20px; padding: 4px 12px;
+            font-size: 12px; font-weight: 600; color: var(--accent-red);
+        }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--accent-red);
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: .3; }
+        }
+
+        .ws-status {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-secondary);
+        }
+        .ws-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #555; transition: background .3s;
+        }
+        .ws-dot.connected    { background: var(--accent-green); }
+        .ws-dot.disconnected { background: var(--accent-red); }
+        .ws-dot.connecting   { background: var(--accent-gold); animation: pulse 1s infinite; }
+
+        /* ── Layout ── */
+        .main { display: grid; grid-template-columns: 1fr 360px; gap: 0; height: calc(100vh - 57px); }
+
+        /* ── Left panel ── */
+        .left-panel { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+        /* ── Price ticker strip ── */
+        .ticker-strip {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+        }
+        .ticker-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px; padding: 16px;
+            transition: border-color .2s;
+        }
+        .ticker-card.up   { border-color: rgba(63,185,80,.5); }
+        .ticker-card.down { border-color: rgba(248,81,73,.5); }
+        .ticker-symbol { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+        .ticker-price  { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .ticker-price.up   { color: var(--accent-green); }
+        .ticker-price.down { color: var(--accent-red); }
+        .ticker-price.flat { color: var(--text-primary); }
+        .ticker-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+        .ticker-change { font-weight: 600; }
+        .ticker-change.up   { color: var(--accent-green); }
+        .ticker-change.down { color: var(--accent-red); }
+        .ticker-time { margin-top: 4px; font-size: 11px; color: var(--text-secondary); }
+
+        /* ── Tick log ── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px; padding: 16px;
+            flex: 1; display: flex; flex-direction: column; min-height: 0;
+        }
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+        .card-badge {
+            background: rgba(88,166,255,.15);
+            border: 1px solid rgba(88,166,255,.3);
+            border-radius: 10px; padding: 2px 8px;
+            font-size: 11px; color: var(--accent-blue);
+        }
+        .tick-log {
+            overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 4px;
+        }
+        .tick-row {
+            display: grid; grid-template-columns: 80px 1fr 90px 90px 70px;
+            align-items: center; padding: 6px 8px; border-radius: 6px;
+            font-size: 12px; font-family: monospace;
+            background: rgba(255,255,255,.02);
+            transition: background .15s;
+        }
+        .tick-row:hover { background: rgba(255,255,255,.05); }
+        .tick-time  { color: var(--text-secondary); }
+        .tick-sym   { font-weight: 600; color: var(--accent-gold); }
+        .tick-price { text-align: right; font-weight: 700; }
+        .tick-price.up   { color: var(--accent-green); }
+        .tick-price.down { color: var(--accent-red); }
+        .tick-price.flat { color: var(--text-primary); }
+        .tick-chg   { text-align: right; font-size: 11px; }
+        .tick-chg.up   { color: var(--accent-green); }
+        .tick-chg.down { color: var(--accent-red); }
+        .tick-tag {
+            text-align: center; font-size: 10px; padding: 2px 6px; border-radius: 4px;
+            font-weight: 600;
+        }
+        .tick-tag.up   { background: rgba(63,185,80,.2);  color: var(--accent-green); }
+        .tick-tag.down { background: rgba(248,81,73,.2);  color: var(--accent-red); }
+        .tick-tag.flat { background: rgba(139,148,158,.1); color: var(--text-secondary); }
+
+        /* ── Right panel ── */
+        .right-panel {
+            border-left: 1px solid var(--border);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .right-section {
+            display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .right-section:last-child { border-bottom: none; }
+        .section-title {
+            font-size: 13px; font-weight: 600; color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: .8px;
+            margin-bottom: 10px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .feed { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+        /* Signals */
+        .signal-item {
+            background: rgba(255,255,255,.02);
+            border-left: 3px solid var(--border);
+            border-radius: 0 6px 6px 0; padding: 8px 10px;
+            font-size: 12px;
+        }
+        .signal-item.buy  { border-color: var(--accent-green); }
+        .signal-item.sell { border-color: var(--accent-red); }
+        .signal-item.hold { border-color: var(--text-secondary); }
+        .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .signal-symbol { font-weight: 700; color: var(--accent-gold); }
+        .signal-dir {
+            font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+        }
+        .signal-dir.buy  { background: rgba(63,185,80,.2);  color: var(--accent-green); }
+        .signal-dir.sell { background: rgba(248,81,73,.2);  color: var(--accent-red); }
+        .signal-dir.hold { background: rgba(139,148,158,.1); color: var(--text-secondary); }
+        .signal-meta { color: var(--text-secondary); font-size: 11px; }
+
+        /* Alerts */
+        .alert-item {
+            display: flex; align-items: flex-start; gap: 8px;
+            background: rgba(255,255,255,.02); border-radius: 6px; padding: 8px 10px;
+            font-size: 12px;
+        }
+        .alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+        .alert-body { flex: 1; }
+        .alert-msg  { color: var(--text-primary); margin-bottom: 2px; }
+        .alert-time { color: var(--text-secondary); font-size: 10px; }
+
+        /* Empty state */
+        .empty {
+            color: var(--text-secondary); font-size: 12px; text-align: center;
+            padding: 20px 0; font-style: italic;
+        }
+
+        /* ── Nav links ── */
+        .nav-links { display: flex; gap: 12px; }
+        .nav-link {
+            font-size: 12px; color: var(--text-secondary); text-decoration: none;
+            padding: 4px 10px; border-radius: 6px; transition: background .2s, color .2s;
+        }
+        .nav-link:hover { background: rgba(255,255,255,.07); color: var(--text-primary); }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <span class="logo">⚡ HOPEFX</span>
+        <div class="live-badge"><span class="live-dot"></span> LIVE</div>
+    </div>
+    <div class="nav-links">
+        <a class="nav-link" href="/admin/">Dashboard</a>
+        <a class="nav-link" href="/paper-trading">Paper Trading</a>
+        <a class="nav-link" href="/docs">API Docs</a>
+    </div>
+    <div class="ws-status">
+        <span class="ws-dot connecting" id="wsDot"></span>
+        <span id="wsLabel">Connecting…</span>
+    </div>
+</div>
+
+<div class="main">
+    <!-- ═══ LEFT PANEL ═══ -->
+    <div class="left-panel">
+
+        <!-- Price ticker cards -->
+        <div class="ticker-strip">
+            <div class="ticker-card" id="card-XAUUSD">
+                <div class="ticker-symbol">XAU/USD · Gold</div>
+                <div class="ticker-price flat" id="price-XAUUSD">—</div>
+                <div class="ticker-meta">
+                    <span class="ticker-change flat" id="chg-XAUUSD">—</span>
+                    <span id="bid-XAUUSD" style="color:var(--accent-cyan)">B —</span>
+                    <span id="ask-XAUUSD" style="color:var(--accent-red)">A —</span>
+                </div>
+                <div class="ticker-time" id="time-XAUUSD">—</div>
+            </div>
+            <div class="ticker-card" id="card-EURUSD">
+                <div class="ticker-symbol">EUR/USD</div>
+                <div class="ticker-price flat" id="price-EURUSD">—</div>
+                <div class="ticker-meta">
+                    <span class="ticker-change flat" id="chg-EURUSD">—</span>
+                    <span id="bid-EURUSD" style="color:var(--accent-cyan)">B —</span>
+                    <span id="ask-EURUSD" style="color:var(--accent-red)">A —</span>
+                </div>
+                <div class="ticker-time" id="time-EURUSD">—</div>
+            </div>
+            <div class="ticker-card" id="card-BTCUSD">
+                <div class="ticker-symbol">BTC/USD · Bitcoin</div>
+                <div class="ticker-price flat" id="price-BTCUSD">—</div>
+                <div class="ticker-meta">
+                    <span class="ticker-change flat" id="chg-BTCUSD">—</span>
+                    <span id="bid-BTCUSD" style="color:var(--accent-cyan)">B —</span>
+                    <span id="ask-BTCUSD" style="color:var(--accent-red)">A —</span>
+                </div>
+                <div class="ticker-time" id="time-BTCUSD">—</div>
+            </div>
+        </div>
+
+        <!-- Tick log -->
+        <div class="card" style="flex:1">
+            <div class="card-header">
+                <span class="card-title">📊 Live Price Ticks</span>
+                <span class="card-badge" id="tickCount">0 ticks</span>
+            </div>
+            <div class="tick-log" id="tickLog">
+                <div class="empty" id="tickEmpty">Waiting for price stream…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ RIGHT PANEL ═══ -->
+    <div class="right-panel">
+
+        <!-- Signals -->
+        <div class="right-section" style="flex:1.2">
+            <div class="section-title">🤖 AI Signals</div>
+            <div class="feed" id="signalFeed">
+                <div class="empty">Waiting for signals…</div>
+            </div>
+        </div>
+
+        <!-- Alerts / news -->
+        <div class="right-section" style="flex:1">
+            <div class="section-title">🔔 Alerts &amp; News</div>
+            <div class="feed" id="alertFeed">
+                <div class="empty">Waiting for alerts…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── helpers ─────────────────────────────────────────────────────────────────
+function fmtTime(isoOrDate) {
+    const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function dirClass(change) {
+    if (change > 0) return 'up';
+    if (change < 0) return 'down';
+    return 'flat';
+}
+
+function fmtChange(change, pct) {
+    if (change === undefined || change === null || change === 0) return '±0.00 (0.00%)';
+    const sign = change > 0 ? '+' : '';
+    return `${sign}${change.toFixed(4)} (${sign}${(pct || 0).toFixed(2)}%)`;
+}
+
+function prependRow(container, el, max = 200) {
+    // Remove empty placeholder
+    const empties = container.querySelectorAll('.empty');
+    empties.forEach(e => e.remove());
+
+    container.insertBefore(el, container.firstChild);
+    // Trim excess rows
+    while (container.children.length > max) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+// ── Per-symbol state ─────────────────────────────────────────────────────────
+const prevPrices = {};
+let tickCount = 0;
+
+function updateTicker(symbol, price, bid, ask, change, changePct, ts) {
+    const dir = dirClass(change);
+
+    // Card border
+    const card = document.getElementById('card-' + symbol);
+    if (card) {
+        card.className = 'ticker-card ' + dir;
+    }
+    // Price
+    const priceEl = document.getElementById('price-' + symbol);
+    if (priceEl) {
+        priceEl.textContent = price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+        priceEl.className = 'ticker-price ' + dir;
+    }
+    // Change
+    const chgEl = document.getElementById('chg-' + symbol);
+    if (chgEl) {
+        chgEl.textContent = fmtChange(change, changePct);
+        chgEl.className = 'ticker-change ' + dir;
+    }
+    // Bid/ask
+    const bidEl = document.getElementById('bid-' + symbol);
+    if (bidEl) bidEl.textContent = 'B ' + (bid || price).toFixed(4);
+    const askEl = document.getElementById('ask-' + symbol);
+    if (askEl) askEl.textContent = 'A ' + (ask || price).toFixed(4);
+    // Timestamp
+    const timeEl = document.getElementById('time-' + symbol);
+    if (timeEl) timeEl.textContent = ts ? fmtTime(ts) : fmtTime(new Date());
+}
+
+function addTickRow(symbol, price, change, changePct, ts) {
+    tickCount++;
+    document.getElementById('tickCount').textContent = tickCount + ' tick' + (tickCount !== 1 ? 's' : '');
+
+    const dir = dirClass(change);
+    const row = document.createElement('div');
+    row.className = 'tick-row';
+    row.innerHTML = `
+        <span class="tick-time">${ts ? fmtTime(ts) : fmtTime(new Date())}</span>
+        <span class="tick-sym">${symbol}</span>
+        <span class="tick-price ${dir}">${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
+        <span class="tick-chg ${dir}">${fmtChange(change, changePct)}</span>
+        <span class="tick-tag ${dir}">${dir === 'up' ? '▲ BUY' : dir === 'down' ? '▼ SELL' : '— FLAT'}</span>
+    `;
+    prependRow(document.getElementById('tickLog'), row, 300);
+}
+
+function addSignalItem(data) {
+    const dir = (data.direction || 'hold').toLowerCase();
+    const item = document.createElement('div');
+    item.className = 'signal-item ' + dir;
+
+    const conf = data.confidence !== undefined ? (data.confidence * 100).toFixed(0) + '%' : '—';
+    const price = data.price ? data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 }) : '—';
+    const ts = data.timestamp ? fmtTime(data.timestamp) : fmtTime(new Date());
+
+    item.innerHTML = `
+        <div class="signal-header">
+            <span class="signal-symbol">${data.symbol || '—'}</span>
+            <span class="signal-dir ${dir}">${(data.direction || 'HOLD').toUpperCase()}</span>
+        </div>
+        <div class="signal-meta">
+            Conf: ${conf} · Price: ${price} · Strength: ${data.strength || '—'} · ${ts}
+        </div>
+    `;
+    prependRow(document.getElementById('signalFeed'), item, 50);
+}
+
+function addAlertItem(icon, msg) {
+    const item = document.createElement('div');
+    item.className = 'alert-item';
+    item.innerHTML = `
+        <span class="alert-icon">${icon}</span>
+        <div class="alert-body">
+            <div class="alert-msg">${msg}</div>
+            <div class="alert-time">${fmtTime(new Date())}</div>
+        </div>
+    `;
+    prependRow(document.getElementById('alertFeed'), item, 50);
+}
+
+// ── WebSocket connection ─────────────────────────────────────────────────────
+const dot   = document.getElementById('wsDot');
+const label = document.getElementById('wsLabel');
+
+function setWsStatus(state, text) {
+    dot.className = 'ws-dot ' + state;
+    label.textContent = text;
+}
+
+let ws = null;
+let reconnectDelay = 2000;
+
+function connectWS() {
+    const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl  = `${proto}://${location.host}/ws`;
+    setWsStatus('connecting', 'Connecting…');
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        setWsStatus('connected', 'Connected');
+        reconnectDelay = 2000;
+
+        // Subscribe to all price and signal channels
+        ['prices:XAUUSD', 'prices:EURUSD', 'prices:BTCUSD', 'prices:all',
+         'signals:all', 'alerts'].forEach(ch => {
+            ws.send(JSON.stringify({ action: 'subscribe', channel: ch }));
+        });
+        addAlertItem('✅', 'WebSocket connected — streaming live data');
+    };
+
+    ws.onmessage = (evt) => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+
+        const event   = msg.event || '';
+        const channel = msg.channel || '';
+        const data    = msg.data || msg;
+
+        if (event === 'price' || channel.startsWith('prices:')) {
+            const sym   = data.symbol;
+            const price = parseFloat(data.price);
+            if (!sym || isNaN(price)) return;
+
+            const prev      = prevPrices[sym];
+            const change    = data.change !== undefined ? data.change : (prev !== undefined ? price - prev : 0);
+            const changePct = data.change_pct !== undefined ? data.change_pct : (prev ? change / prev * 100 : 0);
+            prevPrices[sym] = price;
+
+            updateTicker(sym, price, data.bid, data.ask, change, changePct, data.timestamp);
+            if (channel === 'prices:all') {
+                addTickRow(sym, price, change, changePct, data.timestamp);
+            }
+        }
+
+        if (event === 'signal' || channel.startsWith('signals:')) {
+            addSignalItem(data);
+        }
+
+        if (event === 'alert' || channel === 'alerts') {
+            const msgText = data.message || data.msg || JSON.stringify(data);
+            addAlertItem('🔔', msgText);
+        }
+
+        if (event === 'connected') {
+            setWsStatus('connected', 'Connected · id:' + (data.connection_id || '?').slice(0, 8));
+        }
+    };
+
+    ws.onclose = () => {
+        setWsStatus('disconnected', 'Disconnected – reconnecting…');
+        addAlertItem('⚠️', 'WebSocket disconnected — retrying in ' + (reconnectDelay / 1000) + 's');
+        setTimeout(connectWS, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
+    };
+
+    ws.onerror = () => {
+        setWsStatus('disconnected', 'Connection error');
+    };
+}
+
+// ── REST fallback: poll prices every 6 s when WS not streaming ───────────────
+// Guarantees ticks appear even when no external broker is broadcasting.
+const POLL_SYMBOLS = ['XAUUSD', 'EURUSD', 'BTCUSD'];
+let pollActive = false;
+
+async function pollPrices() {
+    if (pollActive) return;
+    pollActive = true;
+    for (const sym of POLL_SYMBOLS) {
+        try {
+            const r = await fetch(`/api/trading/market-price/${sym}`);
+            if (!r.ok) continue;
+            const d = await r.json();
+            const price = parseFloat(d.price);
+            if (isNaN(price)) continue;
+
+            const prev      = prevPrices[sym];
+            const change    = prev !== undefined ? price - prev : 0;
+            const changePct = prev ? change / prev * 100 : 0;
+            prevPrices[sym] = price;
+
+            updateTicker(sym, price, undefined, undefined, change, changePct, d.timestamp);
+            addTickRow(sym, price, change, changePct, d.timestamp);
+        } catch { /* ignore */ }
+    }
+    pollActive = false;
+}
+
+// Start polling immediately, then every 6 s
+pollPrices();
+const pollTimer = setInterval(pollPrices, 6000);
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+connectWS();
+</script>
+</body>
+</html>

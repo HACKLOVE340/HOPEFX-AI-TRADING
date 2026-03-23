@@ -303,6 +303,9 @@ async def startup_event():
             app_state.ws_manager = ws_manager
             logger.info("✓ WebSocket router registered")
             log_activity("WebSocket router registered")
+            # Start background price-streaming task
+            asyncio.create_task(_price_stream_loop(ws_manager))
+            logger.info("✓ Price streaming background task started")
         except Exception as e:
             logger.warning(f"⚠ WebSocket router not available: {e}")
             log_activity(f"WebSocket router unavailable: {e}")
@@ -782,6 +785,7 @@ async def root():
         "health": "/health",
         "status": "/status",
         "paper_trading": "/paper-trading",
+        "stream_dashboard": "/stream",
         "pricing": "/pricing",
         "admin_dashboard": "/admin",
         "component_map": "/api/trading/component-map",
@@ -853,6 +857,33 @@ async def paper_trading_dashboard():
             """,
             status_code=200
         )
+
+
+@app.get("/stream", response_class=HTMLResponse, tags=["Dashboard"])
+async def stream_dashboard():
+    """
+    Live Streaming Dashboard
+
+    Real-time dashboard that streams XAUUSD/EURUSD/BTCUSD prices,
+    trading signals, news, and alerts via WebSocket.
+    """
+    template_path = Path(__file__).parent / "templates" / "stream_dashboard.html"
+    if template_path.exists():
+        with open(template_path, "r") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(
+        content="""
+        <html>
+        <head><title>Live Stream</title></head>
+        <body style="background:#131722;color:#d1d4dc;font-family:sans-serif;padding:40px;text-align:center;">
+            <h1>🔴 Live Stream</h1>
+            <p>Template not found. Please ensure templates/stream_dashboard.html exists.</p>
+            <a href="/docs" style="color:#26a69a;">Go to API Docs</a>
+        </body>
+        </html>
+        """,
+        status_code=200,
+    )
 
 
 # Error handler
