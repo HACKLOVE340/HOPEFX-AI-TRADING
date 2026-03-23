@@ -172,9 +172,9 @@ class _InMemoryStore:
         with self._lock:
             all_keys = [k for k in self._data if not self._is_expired(k)]
 
-        if match:
-            pattern = match.replace('*', '**')
-            all_keys = [k for k in all_keys if fnmatch.fnmatch(k, match)]
+    if match:
+        pattern = match.replace('*', '**')
+        all_keys = [k for k in all_keys if fnmatch.fnmatch(k, pattern)]
 
         return 0, all_keys
 
