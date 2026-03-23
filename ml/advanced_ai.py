@@ -461,17 +461,15 @@ class OnlineRetrainer:
         Ingest a new OHLCV bar dict.
         Triggers online retraining when buffer is full.
         """
+        df = None
         with self._lock:
             self._buffer.append(bar)
             if len(self._buffer) >= self.buffer_size:
                 df = pd.DataFrame(self._buffer)
                 self._buffer.clear()
 
-        if len(df) >= self.buffer_size:
+        if df is not None and len(df) >= self.buffer_size:
             threading.Thread(
-                target=self._retrain_async,
-                args=(df,),
-                daemon=True,
                 name=f"OnlineRetrain-{self._retrain_count}",
             ).start()
 
