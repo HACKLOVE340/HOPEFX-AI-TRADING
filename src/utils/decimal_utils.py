@@ -3,7 +3,7 @@ Institutional-grade decimal arithmetic for financial calculations.
 Compliant with ISO 4217 and banking standards.
 """
 
-from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, Context, localcontext
+from decimal import Decimal, ROUND_HALF_UP, Context, localcontext
 from enum import Enum
 from typing import Union
 

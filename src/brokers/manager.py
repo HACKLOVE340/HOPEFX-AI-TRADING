@@ -2,12 +2,10 @@
 Broker manager with circuit breaker and failover.
 """
 import asyncio
-from typing import Dict, Optional, Type, List
-from decimal import Decimal
-from datetime import datetime
+from typing import Dict, Optional, List
 import structlog
 
-from src.brokers.base import BaseBroker, TickData, Order, OrderSide, Position
+from src.brokers.base import BaseBroker, TickData, Order, Position
 from src.core.circuit_breaker import CircuitBreaker
 from src.config.settings import get_settings
 

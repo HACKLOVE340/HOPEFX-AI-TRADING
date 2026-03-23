@@ -6,7 +6,6 @@ task supervision, and graceful degradation.
 import asyncio
 import functools
 import signal
-import sys
 import threading
 import weakref
 from contextlib import asynccontextmanager

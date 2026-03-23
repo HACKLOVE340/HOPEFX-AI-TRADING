@@ -5,18 +5,16 @@ import asyncio
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Callable
+from typing import Any
 
-import numpy as np
 import structlog
-from anyio import create_task_group
 
-from src.core.events import SignalEvent, TickEvent, RiskEvent, DriftEvent
+from src.core.events import SignalEvent, TickEvent, RiskEvent
 from src.core.types import SignalType, Symbol, Side, Tick
 from src.features.engineer import FeatureEngineer, FeatureVector
 from src.ml.ensemble import AdaptiveEnsemble
 from src.ml.regime import RegimeDetector, MarketRegime
-from src.risk.kill_switch import kill_switch, KillSource, KillScope
+from src.risk.kill_switch import kill_switch, KillSource
 from src.risk.sizing import DynamicPositionSizer
 from src.risk.breakers import RiskManager
 
@@ -104,7 +102,7 @@ class BrainEngine:
         # 3. Feature engineering (parallel GPU if available)
         try:
             features = await self.feature_engineer.compute_async(tick)
-        except Exception as e:
+        except Exception:
             self._consecutive_errors += 1
             if self._consecutive_errors >= self._max_errors:
                 await kill_switch.kill(

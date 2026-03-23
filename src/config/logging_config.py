@@ -3,10 +3,9 @@ Structured logging with structlog for institutional observability.
 """
 import sys
 import logging
-from typing import Any, Dict
 import structlog
 from structlog.stdlib import LoggerFactory
-from structlog.processors import JSONRenderer, TimeStamper
+from structlog.processors import JSONRenderer
 
 
 def configure_logging(log_level: str = "INFO", json_format: bool = False) -> None:

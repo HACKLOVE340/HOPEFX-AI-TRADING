@@ -3,7 +3,6 @@ Application entry points for trading engine, API, and worker modes.
 """
 
 import asyncio
-import sys
 from decimal import Decimal
 
 import click
@@ -101,7 +100,6 @@ def worker():
 def backtest(start: str, end: str, capital: float):
     """Run backtest."""
     async def run():
-        from datetime import datetime
         import pandas as pd
         
         # Load data

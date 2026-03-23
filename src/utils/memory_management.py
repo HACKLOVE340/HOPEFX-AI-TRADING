@@ -5,12 +5,10 @@ Prevents OOM crashes and ensures stable operation.
 
 import asyncio
 import gc
-import sys
 import tracemalloc
-import weakref
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Callable, Deque, Dict, Generic, Optional, TypeVar, List
+from typing import Callable, Deque, Dict, Generic, Optional, TypeVar, List
 
 import psutil
 

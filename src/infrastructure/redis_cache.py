@@ -5,8 +5,7 @@ Serialization uses JSON (not pickle) to prevent remote code execution
 if Redis is compromised.
 """
 import json
-from typing import Optional, Any, Union
-import asyncio
+from typing import Optional, Any
 
 import aioredis
 import structlog
@@ -122,7 +121,7 @@ class RedisCache:
             result = await self._redis.exists(key)
             self._circuit_breaker.record_success()
             return result > 0
-        except Exception as e:
+        except Exception:
             self._circuit_breaker.record_failure()
             return False
     
@@ -162,6 +161,6 @@ class RedisCache:
             await self._redis.expire(key, seconds)
             self._circuit_breaker.record_success()
             return True
-        except Exception as e:
+        except Exception:
             self._circuit_breaker.record_failure()
             return False

@@ -6,7 +6,6 @@ and vectorized fast path. Supports walk-forward optimization.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Coroutine, Literal
@@ -14,9 +13,8 @@ from typing import Callable, Coroutine, Literal
 import numpy as np
 import pandas as pd
 import structlog
-from scipy import stats
 
-from hopefx.core.events import EventBus, TickEvent, BarEvent, OrderEvent, EventPriority
+from hopefx.core.events import EventBus
 from hopefx.data.feeds.base import TickData, BarData
 from hopefx.execution.oms import OrderManager, Order, OrderStatus, OrderType
 

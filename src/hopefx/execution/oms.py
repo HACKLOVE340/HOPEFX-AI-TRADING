@@ -9,7 +9,6 @@ from uuid import uuid4
 
 import structlog
 
-from hopefx.config.settings import settings
 from hopefx.events.bus import event_bus
 from hopefx.events.schemas import Event, EventType, Signal
 from hopefx.execution.brokers.base import Order, OrderResult, OrderStatus, OrderType

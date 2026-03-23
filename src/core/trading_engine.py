@@ -4,13 +4,9 @@ Main trading engine orchestrating all components.
 
 import asyncio
 import signal
-from datetime import datetime, timezone
-from typing import Any
 
-import anyio
 
 from src.brokers.base import Broker
-from src.core.config import settings
 from src.core.events import (
     Event,
     KillSwitchTriggered,
@@ -20,7 +16,6 @@ from src.core.events import (
     TickReceived,
     get_event_bus,
 )
-from src.core.exceptions import TradingError
 from src.core.lifecycle import LifecycleManager
 from src.core.logging_config import get_logger
 from src.data.feeds.base import DataFeed

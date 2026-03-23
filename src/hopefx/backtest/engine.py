@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable
@@ -9,7 +8,6 @@ import numpy as np
 import pandas as pd
 import structlog
 
-from hopefx.config.settings import settings
 from hopefx.data.feature_store import FeatureStore
 from hopefx.events.schemas import TickData
 from hopefx.risk.sizing import PositionSizer

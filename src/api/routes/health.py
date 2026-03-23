@@ -2,7 +2,7 @@
 Health check endpoints.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from src.infrastructure.cache import get_cache

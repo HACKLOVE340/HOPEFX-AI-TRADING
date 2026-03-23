@@ -2,8 +2,7 @@
 Historical data loader with caching and validation.
 """
 
-import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -13,7 +12,6 @@ import pandas as pd
 from src.core.config import settings
 from src.core.exceptions import DataError
 from src.core.logging_config import get_logger
-from src.domain.models import OHLCV
 from src.infrastructure.cache import get_cache
 
 logger = get_logger(__name__)

@@ -13,12 +13,10 @@ from pydantic import BaseModel, Field, field_validator
 from hopefx.api.dependencies import (
     get_current_user,
     require_roles,
-    User,
-    get_rate_limit_key
+    User
 )
 from hopefx.execution.oms import OrderManager, OrderType
 from hopefx.risk.manager import RiskManager
-from hopefx.config.settings import settings
 
 router = APIRouter()
 

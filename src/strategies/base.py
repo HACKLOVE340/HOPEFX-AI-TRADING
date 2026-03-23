@@ -3,11 +3,10 @@ Abstract strategy interface with lifecycle management.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import Any
 
 from src.domain.enums import StrategyState
-from src.domain.models import Account, MarketData, Signal
+from src.domain.models import MarketData, Signal
 
 
 class Strategy(ABC):

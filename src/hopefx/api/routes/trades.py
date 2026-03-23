@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from hopefx.brain.engine import brain
 from hopefx.config.settings import settings
-from hopefx.database.models import Trade, Strategy
-from hopefx.execution.oms import oms, OrderState
+from hopefx.execution.oms import oms
 from hopefx.risk.prop_rules import prop_rules
 
 router = APIRouter()

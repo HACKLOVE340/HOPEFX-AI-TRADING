@@ -3,16 +3,11 @@ from __future__ import annotations
 import asyncio
 from decimal import Decimal
 from typing import Dict, List, Optional
-from datetime import datetime
 
 import structlog
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from hopefx.config.settings import settings
 from hopefx.database.models import (
-    CopyTrading, CopyTrade, Trade, User, UserProfile,
-    Wallet, Transaction, LeaderboardEntry
+    CopyTrading
 )
 from hopefx.events.bus import event_bus
 from hopefx.events.schemas import Event, EventType, OrderFill

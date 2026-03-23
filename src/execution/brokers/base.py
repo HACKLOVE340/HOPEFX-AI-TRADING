@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from decimal import Decimal
 from typing import Any
 
-from src.core.types import Order, Fill, Position, Side, OrderType, Symbol
+from src.core.types import Order, Position, Symbol
 
 
 class Broker(ABC):
