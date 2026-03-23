@@ -334,7 +334,13 @@ class DatabaseMigrationManager:
             
             for table_name in inspector.get_table_names():
                 try:
-                    result = session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    # quoted_name wraps the identifier in dialect-appropriate
+                    # quotes, preventing SQL injection via table names.
+                    from sqlalchemy.sql import quoted_name
+                    safe_name = quoted_name(table_name, quote=True)
+                    result = session.execute(
+                        text(f"SELECT COUNT(*) FROM {safe_name}")  # noqa: S608
+                    )
                     count = result.scalar()
                     stats[table_name] = count
                 except Exception as e:

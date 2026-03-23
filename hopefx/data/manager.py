@@ -5,8 +5,13 @@ Unified interface for: Database, Cache, File Storage, Message Queue
 
 import asyncio
 import json
-import pickle
+import pickle  # used only for local file storage (app-controlled paths)
 import zlib
+try:
+    import msgpack as _msgpack  # preferred for Redis tier (no code execution on load)
+    _HAVE_MSGPACK = True
+except ImportError:
+    _HAVE_MSGPACK = False
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Callable
@@ -392,17 +397,36 @@ class UnifiedDataManager:
     # =====================================================================
     
     def _serialize(self, obj: Any) -> bytes:
-        """Serialize with compression."""
-        pickled = pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
-        if len(pickled) > 1024:
-            return b"z" + zlib.compress(pickled)
-        return b"r" + pickled
-    
+        """Serialize for Redis storage.
+
+        Uses msgpack when available (safe: no arbitrary code execution on
+        load). Falls back to JSON for basic types. pickle is intentionally
+        NOT used here — Redis data is network-accessible and a compromised
+        or misconfigured Redis instance could deliver a malicious payload.
+        """
+        if _HAVE_MSGPACK:
+            if hasattr(obj, "to_dict"):
+                obj = obj.to_dict()
+            raw = _msgpack.packb(obj, use_bin_type=True)
+        else:
+            raw = json.dumps(obj, default=str).encode()
+
+        if len(raw) > 1024:
+            return b"z" + zlib.compress(raw)
+        return b"r" + raw
+
     def _deserialize(self, data: bytes) -> Any:
-        """Deserialize."""
-        if data[0:1] == b"z":
-            return pickle.loads(zlib.decompress(data[1:]))
-        return pickle.loads(data[1:])
+        """Deserialize Redis data.
+
+        Counterpart to _serialize — uses msgpack/JSON only, never pickle,
+        to prevent remote code execution via malicious Redis payloads.
+        """
+        compressed = data[0:1] == b"z"
+        raw = zlib.decompress(data[1:]) if compressed else data[1:]
+
+        if _HAVE_MSGPACK:
+            return _msgpack.unpackb(raw, raw=False)
+        return json.loads(raw.decode())
     
     async def _cache_maintenance(self):
         """Periodic cache cleanup."""
