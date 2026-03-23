@@ -6,7 +6,7 @@ and adds MCC integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 import numpy as np
@@ -48,7 +48,7 @@ class StrategySignal:
         self.stop_loss = stop_loss
         self.take_profit = take_profit
         self.metadata = metadata or {}
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
     
     def is_valid(self) -> bool:
         return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5

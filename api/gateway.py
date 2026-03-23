@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import jwt
 import hashlib
 
@@ -102,7 +102,7 @@ class APIGateway:
                     pass  # Redis unavailable — degrade gracefully, don't block traffic
             else:
                 # In-process fallback (single-worker only)
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 limit = self.rate_limits.get(client_ip, {'count': 0, 'reset_time': now})
                 if (now - limit['reset_time']).total_seconds() > _WINDOW:
                     limit = {'count': 0, 'reset_time': now}
@@ -130,7 +130,7 @@ class APIGateway:
         async def health():
             return {
                 'status': 'healthy',
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'version': '3.0',
                 'components': {
                     'mcc': self.mcc.health if hasattr(self.mcc, 'health') else 'unknown',
@@ -148,7 +148,7 @@ class APIGateway:
                 'system': self.mcc.get_status() if hasattr(self.mcc, 'get_status') else {},
                 'orchestra': self.orchestra.get_heatmap_data(),
                 'portfolio': self.pms.get_portfolio_summary(),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         
         # Strategy control
@@ -226,7 +226,7 @@ class APIGateway:
                 while True:
                     # Send portfolio updates
                     data = {
-                        'timestamp': datetime.utcnow().isoformat(),
+                        'timestamp': datetime.now(timezone.utc).isoformat(),
                         'portfolio': self.pms.get_portfolio_summary(),
                         'heatmap': self.orchestra.get_heatmap_data()
                     }
@@ -268,8 +268,8 @@ class APIGateway:
         payload = {
             'user_id': user_id,
             'role': role,
-            'iat': datetime.utcnow(),
-            'exp': datetime.utcnow() + timedelta(hours=expires_hours)
+            'iat': datetime.now(timezone.utc),
+            'exp': datetime.now(timezone.utc) + timedelta(hours=expires_hours)
         }
         
         return jwt.encode(payload, self.auth_secret, algorithm='HS256')

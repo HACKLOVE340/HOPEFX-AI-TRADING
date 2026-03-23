@@ -1,11 +1,9 @@
 """
-Production-hardened database layer with connection pooling, 
+Production-hardened database layer with connection pooling,
 circuit breakers, and comprehensive monitoring.
 """
 
 import asyncio
-import os
-import random
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -35,16 +33,16 @@ class DatabaseManager:
     - Automatic failover to read replicas
     - Comprehensive metrics
     """
-    
+
     def __init__(self):
         self._primary_engine = None
         self._replica_engines: list = []
         self._circuit_breaker = DatabaseCircuitBreaker()
         self._query_timeout = 30.0
-        
+
     async def initialize(self) -> None:
         """Initialize primary and replica connections."""
-        
+
         # Primary database with aggressive pooling
         self._primary_engine = create_async_engine(
             settings.database.url,
@@ -55,7 +53,6 @@ class DatabaseManager:
             pool_recycle=3600,  # Recycle after 1 hour
             pool_pre_ping=True,  # Health check on checkout
             echo=settings.database.echo,
-            
             # asyncpg-specific optimizations
             connect_args={
                 "command_timeout": self._query_timeout,
@@ -63,22 +60,22 @@ class DatabaseManager:
                     "jit": "off",
                     "application_name": "hopefx_trading",
                     "statement_timeout": "60000",  # 60s server-side
-                    "lock_timeout": "10000",       # 10s lock timeout
-                }
-            }
+                    "lock_timeout": "10000",  # 10s lock timeout
+                },
+            },
         )
-        
+
         # Add event listeners for monitoring
         @event.listens_for(self._primary_engine.sync_engine, "connect")
         def on_connect(dbapi_conn, connection_record):
             DB_CONNECTIONS_ACTIVE.inc()
             logger.debug("Database connection established")
-        
+
         @event.listens_for(self._primary_engine.sync_engine, "close")
         def on_close(dbapi_conn, connection_record):
             DB_CONNECTIONS_ACTIVE.dec()
             logger.debug("Database connection closed")
-        
+
         @event.listens_for(self._primary_engine.sync_engine, "checkout")
         def on_checkout(dbapi_conn, connection_record, connection_proxy):
             # Verify connection health
@@ -89,7 +86,7 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Unhealthy connection detected: {e}")
                 raise
-        
+
         # Initialize read replicas if configured
         for replica_url in settings.database.replica_urls or []:
             replica_engine = create_async_engine(
@@ -97,46 +94,44 @@ class DatabaseManager:
                 pool_size=10,
                 max_overflow=5,
                 pool_pre_ping=True,
-                connect_args={"command_timeout": 30.0}
+                connect_args={"command_timeout": 30.0},
             )
             self._replica_engines.append(replica_engine)
-        
+
         logger.info(
             f"Database initialized: pool_size={settings.database.pool_size}, "
             f"replicas={len(self._replica_engines)}"
         )
-    
+
     async def close(self) -> None:
         """Graceful shutdown with connection draining."""
         if self._primary_engine:
             await self._primary_engine.dispose()
-        
+
         for engine in self._replica_engines:
             await engine.dispose()
-        
+
         logger.info("Database connections closed")
-    
+
     @asynccontextmanager
     async def session(
-        self,
-        readonly: bool = False,
-        timeout: Optional[float] = None
+        self, readonly: bool = False, timeout: Optional[float] = None
     ) -> AsyncGenerator[AsyncSession, None]:
         """
         Get database session with automatic retry and circuit breaker.
-        
+
         Args:
             readonly: Use read replica if available
             timeout: Query timeout override
         """
         if self._circuit_breaker.is_open:
             raise InfrastructureError("Database circuit breaker is open")
-        
+
         engine = self._primary_engine
         if readonly and self._replica_engines:
             # Round-robin to replicas
             engine = self._replica_engines[0]  # Simplified - use proper load balancing
-        
+
         session_factory = async_sessionmaker(
             engine,
             class_=AsyncSession,
@@ -144,43 +139,43 @@ class DatabaseManager:
             autocommit=False,
             autoflush=False,
         )
-        
+
         session = session_factory()
         start_time = time.monotonic()
-        
+
         try:
             yield session
             await session.commit()
-            
+
             # Record metrics
             duration = time.monotonic() - start_time
             DB_QUERY_DURATION.observe(duration)
-            
+
             # Success - reset circuit breaker
             self._circuit_breaker.record_success()
-            
+
         except asyncio.TimeoutError as e:
             await session.rollback()
             self._circuit_breaker.record_failure()
-            raise DatabaseError(f"Query timeout after {timeout or self._query_timeout}s") from e
-            
+            raise DatabaseError(
+                f"Query timeout after {timeout or self._query_timeout}s"
+            ) from e
+
         except Exception as e:
             await session.rollback()
             self._circuit_breaker.record_failure()
             raise DatabaseError(f"Database error: {e}") from e
-            
+
         finally:
             await session.close()
-    
+
     @asynccontextmanager
     async def transaction(
-        self,
-        isolation_level: str = "SERIALIZABLE",
-        readonly: bool = False
+        self, isolation_level: str = "SERIALIZABLE", readonly: bool = False
     ) -> AsyncGenerator[AsyncSession, None]:
         """
         Transaction with specific isolation level.
-        
+
         Isolation levels:
         - READ COMMITTED: Default, good for most operations
         - REPEATABLE READ: For consistent reads
@@ -188,14 +183,13 @@ class DatabaseManager:
         """
         async with self.session(readonly=readonly) as session:
             # Set isolation level
-            await session.execute(text(f"SET TRANSACTION ISOLATION LEVEL {isolation_level}"))
+            await session.execute(
+                text(f"SET TRANSACTION ISOLATION LEVEL {isolation_level}")
+            )
             yield session
-    
+
     async def execute_with_retry(
-        self,
-        operation: callable,
-        max_retries: int = 3,
-        backoff_base: float = 1.0
+        self, operation: callable, max_retries: int = 3, backoff_base: float = 1.0
     ) -> any:
         """
         Execute database operation with exponential backoff retry.
@@ -206,11 +200,13 @@ class DatabaseManager:
             except (asyncpg.DeadlockDetectedError, asyncpg.LockNotAvailableError) as e:
                 if attempt == max_retries - 1:
                     raise DatabaseError(f"Max retries exceeded: {e}") from e
-                
-                wait = backoff_base * (2 ** attempt) + random.random() * 0.1
-                logger.warning(f"Database contention, retrying in {wait:.2f}s (attempt {attempt + 1})")
+
+                wait = backoff_base * (2**attempt) + asyncio.random() * 0.1
+                logger.warning(
+                    f"Database contention, retrying in {wait:.2f}s (attempt {attempt + 1})"
+                )
                 await asyncio.sleep(wait)
-            
+
             except asyncpg.ConnectionDoesNotExistError as e:
                 # Connection lost - reconnect
                 logger.error(f"Connection lost: {e}")
@@ -221,23 +217,23 @@ class DatabaseCircuitBreaker:
     """
     Circuit breaker for database operations.
     """
-    
+
     def __init__(
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
-        half_open_max_calls: int = 3
+        half_open_max_calls: int = 3,
     ):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
-        
+
         self._failures = 0
         self._last_failure_time: Optional[float] = None
         self._state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self._half_open_calls = 0
         self._lock = asyncio.Lock()
-    
+
     @property
     def is_open(self) -> bool:
         """Check if circuit is open."""
@@ -251,7 +247,7 @@ class DatabaseCircuitBreaker:
                     return False
             return True
         return False
-    
+
     def record_success(self) -> None:
         """Record successful operation."""
         with self._lock:
@@ -263,13 +259,13 @@ class DatabaseCircuitBreaker:
                     logger.info("Circuit breaker CLOSED")
             else:
                 self._failures = max(0, self._failures - 1)
-    
+
     def record_failure(self) -> None:
         """Record failed operation."""
         with self._lock:
             self._failures += 1
             self._last_failure_time = time.monotonic()
-            
+
             if self._state == "HALF_OPEN":
                 self._state = "OPEN"
                 logger.warning("Circuit breaker OPEN (half-open failure)")
@@ -293,8 +289,7 @@ async def get_db_manager() -> DatabaseManager:
 
 @asynccontextmanager
 async def get_session(
-    readonly: bool = False,
-    timeout: Optional[float] = None
+    readonly: bool = False, timeout: Optional[float] = None
 ) -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency for database sessions."""
     manager = await get_db_manager()
@@ -311,27 +306,38 @@ async def close_db() -> None:
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 async def init_db(url: str = None) -> None:
     """Initialise the database (creates tables if needed)."""
     await get_db_manager()
 
+
 # Lazy engine proxy — resolves on first attribute access
 class _EngineProxy:
     _real = None
+
     def __getattr__(self, name):
         if self._real is None:
+            import os
+            from sqlalchemy.ext.asyncio import create_async_engine
+
             db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///hopefx.db")
             self.__class__._real = create_async_engine(db_url, echo=False)
         return getattr(self._real, name)
 
+
 engine = _EngineProxy()
+
 
 class _SessionProxy:
     def __call__(self, *a, **kw):
         return get_session(*a, **kw)
 
+
 AsyncSessionLocal = _SessionProxy()
+
 
 async def get_db():
     """Alias for get_session — FastAPI dependency."""

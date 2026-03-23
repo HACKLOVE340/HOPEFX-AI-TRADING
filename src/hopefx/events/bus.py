@@ -17,7 +17,9 @@ class EventBus:
     """Async event bus with bounded queues and backpressure handling."""
 
     def __init__(self, max_queue_size: int = 100000) -> None:
-        self._subscribers: dict[EventType, list[Callable[[Event], Coroutine[Any, Any, None]]]] = defaultdict(list)
+        self._subscribers: dict[
+            EventType, list[Callable[[Event], Coroutine[Any, Any, None]]]
+        ] = defaultdict(list)
         self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=max_queue_size)
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -41,7 +43,7 @@ class EventBus:
 
         self._running = True
         self._task = asyncio.create_task(self._process_loop())
-        logger.info("event_bus.started", max_queue=max_queue_size)
+        logger.info("event_bus.started", max_queue=self._queue.maxsize)
 
     async def stop(self) -> None:
         """Stop the event processor gracefully."""
@@ -78,11 +80,11 @@ class EventBus:
         try:
             self._queue.put_nowait(event)
             self._metrics[f"published_{event.type.value}"] += 1
-            
+
             # Persist if configured
             if self._persistence and event.priority <= 3:
                 asyncio.create_task(self._persistence.append(event))
-            
+
             return True
         except asyncio.QueueFull:
             logger.error("event_bus.queue_full", event_type=event.type.value)
@@ -109,7 +111,7 @@ class EventBus:
         while self._running:
             try:
                 event = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                
+
                 # Process based on priority
                 if event.priority <= 2:
                     # Critical: process immediately
@@ -117,7 +119,7 @@ class EventBus:
                 else:
                     # Normal: can batch
                     asyncio.create_task(self._dispatch(event))
-                    
+
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -141,7 +143,7 @@ class EventBus:
     ) -> None:
         """Execute handler with error isolation and retry logic."""
         max_retries = 3 if event.priority <= 5 else 1
-        
+
         for attempt in range(max_retries):
             try:
                 await handler(event)
@@ -155,13 +157,13 @@ class EventBus:
                     attempt=attempt + 1,
                     error=str(e),
                 )
-                
+
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                    await asyncio.sleep(0.1 * (2**attempt))  # Exponential backoff
                 else:
                     # Max retries reached
                     self._metrics["handler_errors"] += 1
-                    
+
                     if self._dlq:
                         await self._dlq.enqueue(event, str(e), handler)
 
@@ -171,7 +173,7 @@ class EventBus:
             **dict(self._metrics),
             "queue_size": self._queue.qsize(),
             "queue_capacity": self._queue.maxsize,
-            "subscriber_count": sum(len(h) for h in self._subscribers.values())
+            "subscriber_count": sum(len(h) for h in self._subscribers.values()),
         }
 
 

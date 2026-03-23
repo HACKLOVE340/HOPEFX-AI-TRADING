@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from typing import Dict, List, Optional, Callable, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import numpy as np
 
 from hopefx.core.events import EventType, DomainEvent, event_bus
@@ -79,7 +79,7 @@ class Order:
     strategy_id: Optional[str] = None
     parent_order_id: Optional[str] = None       # For child orders
     user_id: str = "system"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def __post_init__(self):
         # Validate
@@ -198,7 +198,7 @@ class ExecutionEngine:
     
     async def _execute_twap(self, order: Order):
         """Time-Weighted Average Price execution."""
-        duration = (order.end_time or datetime.utcnow() + timedelta(hours=1)) - datetime.utcnow()
+        duration = (order.end_time or datetime.now(timezone.utc) + timedelta(hours=1)) - datetime.now(timezone.utc)
         num_slices = max(int(duration.total_seconds() / 60), 1)  # 1-minute slices
         slice_qty = order.quantity / num_slices
         
@@ -240,7 +240,7 @@ class ExecutionEngine:
         
         for slice_qty, target_time in slices:
             # Wait until target time
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if target_time > now:
                 await asyncio.sleep((target_time - now).total_seconds())
             
@@ -333,7 +333,7 @@ class ExecutionEngine:
             payload={
                 'order_id': order.order_id,
                 'reason': reason,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         ))
     
@@ -354,7 +354,7 @@ class ExecutionEngine:
     def _calculate_vwap_slices(self, total_qty: Decimal, profile: List[float]) -> List[Tuple[Decimal, datetime]]:
         """Calculate slice quantities and timing."""
         slices = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         for i, pct in enumerate(profile):
             qty = (total_qty * Decimal(str(pct))).quantize(Decimal('0.01'))

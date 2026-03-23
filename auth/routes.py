@@ -52,7 +52,7 @@ async def do_login(form_data: OAuth2PasswordRequestForm = Depends()):
     if not user or not fake_hash_password(form_data.password) == user['hashed_password']:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     # Create JWT token
-    token = jwt.encode({"sub": form_data.username, "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode({"sub": form_data.username, "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=30)}, SECRET_KEY, algorithm="HS256")
     return {"access_token": token, "token_type": "bearer"}
 
 # Dashboard route

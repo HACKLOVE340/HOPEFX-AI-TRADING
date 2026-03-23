@@ -90,7 +90,7 @@ def cmd_status(args):
                 logger.info(f"✓ Cache: Connected (hit rate: {stats.hit_rate:.2f}%)")
             else:
                 logger.warning("⚠ Cache: Connection failed")
-        except:
+        except Exception:
             logger.warning("⚠ Cache: Not available")
 
         # Check API configs

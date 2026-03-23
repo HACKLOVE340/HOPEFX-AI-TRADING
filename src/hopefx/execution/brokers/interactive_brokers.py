@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import structlog
@@ -21,7 +22,7 @@ class InteractiveBrokers(BaseBroker):
         host: str = "127.0.0.1",
         port: int = 7497,  # 7496 for TWS, 7497 for IB Gateway
         client_id: int = 1,
-        paper: bool = True
+        paper: bool = True,
     ) -> None:
         super().__init__("interactive_brokers", paper)
         self.host = host
@@ -34,16 +35,13 @@ class InteractiveBrokers(BaseBroker):
         """Connect to TWS/Gateway."""
         try:
             await asyncio.to_thread(
-                self._ib.connect,
-                self.host,
-                self.port,
-                clientId=self.client_id
+                self._ib.connect, self.host, self.port, clientId=self.client_id
             )
             self._connected = True
-            
+
             # Setup callbacks
             self._ib.orderStatusEvent += self._on_order_status
-            
+
             logger.info("ib.connected", host=self.host, port=self.port)
         except Exception as e:
             logger.exception("ib.connection_failed", error=str(e))
@@ -64,13 +62,13 @@ class InteractiveBrokers(BaseBroker):
         """Place order with IB."""
         # Map symbol to IB contract
         contract = self._get_contract(order.symbol)
-        
+
         # Create IB order
         ib_order = IBJavaOrder()
         ib_order.action = order.side.upper()
         ib_order.totalQuantity = float(order.quantity)
         ib_order.orderType = order.order_type.upper()
-        
+
         if order.price:
             ib_order.lmtPrice = float(order.price)
         if order.stop_price:
@@ -78,22 +76,26 @@ class InteractiveBrokers(BaseBroker):
 
         # Submit order
         trade = self._ib.placeOrder(contract, ib_order)
-        
+
         # Wait for fill or timeout
         filled = await self._wait_for_fill(trade, timeout=30)
-        
+
         if filled:
             fill = trade.fills[0] if trade.fills else None
             return OrderResult(
                 order_id=str(trade.order.orderId),
                 status=OrderStatus.FILLED,
                 filled_qty=Decimal(str(trade.filled())),
-                filled_price=Decimal(str(fill.execution.price)) if fill else Decimal("0"),
+                filled_price=Decimal(str(fill.execution.price))
+                if fill
+                else Decimal("0"),
                 remaining_qty=Decimal(str(trade.remaining())),
-                commission=Decimal(str(fill.commissionReport.commission)) if fill and fill.commissionReport else Decimal("0"),
+                commission=Decimal(str(fill.commissionReport.commission))
+                if fill and fill.commissionReport
+                else Decimal("0"),
                 slippage=self._calculate_slippage(order, fill),
-                timestamp=datetime.utcnow().isoformat(),
-                raw_response=trade
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                raw_response=trade,
             )
         else:
             # Cancel if not filled
@@ -106,20 +108,20 @@ class InteractiveBrokers(BaseBroker):
                 remaining_qty=Decimal(str(trade.remaining())),
                 commission=Decimal("0"),
                 slippage=Decimal("0"),
-                timestamp=datetime.utcnow().isoformat(),
-                raw_response="Timeout"
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                raw_response="Timeout",
             )
 
     def _get_contract(self, symbol: str):
         """Get IB contract for symbol."""
         if symbol == "XAUUSD":
             # Gold CFD or futures
-            return Future('GC', exchange='COMEX')
+            return Future("GC", exchange="COMEX")
         elif len(symbol) == 6 and symbol.isalpha():
             # Forex pair
-            return Forex(symbol[:3] + '.' + symbol[3:])
+            return Forex(symbol[:3] + "." + symbol[3:])
         else:
-            return Stock(symbol, 'SMART', 'USD')
+            return Stock(symbol, "SMART", "USD")
 
     async def _wait_for_fill(self, trade, timeout: int) -> bool:
         """Wait for order fill."""
@@ -147,11 +149,7 @@ class InteractiveBrokers(BaseBroker):
         positions = self._ib.positions()
         for pos in positions:
             if pos.contract.symbol == symbol:
-                return {
-                    "symbol": symbol,
-                    "qty": pos.position,
-                    "avg_cost": pos.avgCost
-                }
+                return {"symbol": symbol, "qty": pos.position, "avg_cost": pos.avgCost}
         return {}
 
     async def get_account(self) -> dict:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable, Optional, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import aiohttp
 import aioredis
@@ -80,7 +82,7 @@ class PriceFeed(ABC):
             logger.warning(
                 "feed.high_spread_alert",
                 spread=tick.spread,
-                threshold=settings.xauusd_spread_threshold
+                threshold=settings.xauusd_spread_threshold,
             )
 
         # Emit to callbacks
@@ -97,7 +99,7 @@ class PriceFeed(ABC):
                     type=EventType.TICK,
                     payload=tick,
                     source=self.__class__.__name__,
-                    priority=2  # High priority
+                    priority=2,  # High priority
                 )
             )
         )
@@ -111,7 +113,9 @@ class OandaFeed(PriceFeed):
         self._session: Optional[aiohttp.ClientSession] = None
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
 
-    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=60))
+    @retry(
+        stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=60)
+    )
     async def connect(self) -> None:
         """Connect to OANDA streaming API."""
         if not self.config.api_key:
@@ -128,7 +132,11 @@ class OandaFeed(PriceFeed):
             logger.info("oanda_feed.connected", symbol=self.config.symbol)
         except Exception as e:
             self._reconnect_count += 1
-            logger.exception("oanda_feed.connection_failed", error=str(e), attempt=self._reconnect_count)
+            logger.exception(
+                "oanda_feed.connection_failed",
+                error=str(e),
+                attempt=self._reconnect_count,
+            )
             raise
 
     async def disconnect(self) -> None:
@@ -156,12 +164,13 @@ class OandaFeed(PriceFeed):
                     continue
 
                 import time
+
                 start = time.time()
-                
+
                 message = await self._ws.recv()
-                
+
                 self._latency_ms = (time.time() - start) * 1000
-                
+
                 tick = await self._parse_message(message)
 
                 if tick:
@@ -185,7 +194,7 @@ class OandaFeed(PriceFeed):
             price_data = msg.get("price", {})
             return TickData(
                 symbol=price_data.get("instrument", self.config.symbol),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 bid=Decimal(str(price_data.get("bids", [{}])[0].get("price", 0))),
                 ask=Decimal(str(price_data.get("asks", [{}])[0].get("price", 0))),
                 volume=Decimal(str(price_data.get("tradeableUnits", 0))),
@@ -211,21 +220,21 @@ class MT5Feed(PriceFeed):
         import zmq.asyncio
 
         self._zmq_context = zmq.asyncio.Context()
-        
+
         while not self._connected:
             try:
                 self._socket = self._zmq_context.socket(zmq.SUB)
                 self._socket.connect(self.config.ws_endpoint or "tcp://localhost:5555")
                 self._socket.setsockopt_string(zmq.SUBSCRIBE, "")
-                
+
                 self._running = True
                 self._connected = True
                 self._connection_task = asyncio.create_task(self._receive_loop())
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-                
+
                 logger.info("mt5_feed.connected")
                 break
-                
+
             except Exception as e:
                 logger.error("mt5_feed.connect_error", error=str(e))
                 await asyncio.sleep(5)
@@ -234,10 +243,10 @@ class MT5Feed(PriceFeed):
         """Disconnect from MT5."""
         self._running = False
         self._connected = False
-        
+
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
-        
+
         if self._socket:
             self._socket.close()
         if self._zmq_context:
@@ -249,11 +258,11 @@ class MT5Feed(PriceFeed):
             try:
                 msg = await self._socket.recv_json()
                 tick = await self._parse_message(json.dumps(msg))
-                
+
                 if tick:
                     self._emit_tick(tick)
                     self._last_heartbeat = asyncio.get_event_loop().time()
-                    
+
             except Exception as e:
                 logger.exception("mt5_feed.receive_error", error=str(e))
                 await asyncio.sleep(0.1)
@@ -262,7 +271,7 @@ class MT5Feed(PriceFeed):
         """Monitor connection health."""
         while self._running:
             await asyncio.sleep(10)
-            
+
             if asyncio.get_event_loop().time() - self._last_heartbeat > 30:
                 logger.warning("mt5_feed.heartbeat_timeout")
                 self._connected = False
@@ -275,7 +284,7 @@ class MT5Feed(PriceFeed):
             msg = json.loads(data)
             return TickData(
                 symbol=msg.get("symbol", self.config.symbol),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 bid=Decimal(str(msg.get("bid", 0))),
                 ask=Decimal(str(msg.get("ask", 0))),
                 volume=Decimal(str(msg.get("volume", 0))),
@@ -302,7 +311,7 @@ class BinanceFeed(PriceFeed):
         self._running = True
         self._connected = True
         self._connection_task = asyncio.create_task(self._receive_loop())
-        
+
         logger.info("binance_feed.connected")
 
     async def disconnect(self) -> None:
@@ -317,19 +326,19 @@ class BinanceFeed(PriceFeed):
             try:
                 msg = await self._ws.recv()
                 data = json.loads(msg)
-                
+
                 # Convert trade to tick-like format
                 tick = TickData(
                     symbol=self.config.symbol,
-                    timestamp=datetime.utcfromtimestamp(data['T'] / 1000),
-                    bid=Decimal(str(data['p'])),
-                    ask=Decimal(str(data['p'])),  # Trade price as both
-                    volume=Decimal(str(data['q'])),
-                    source="binance"
+                    timestamp=datetime.utcfromtimestamp(data["T"] / 1000),
+                    bid=Decimal(str(data["p"])),
+                    ask=Decimal(str(data["p"])),  # Trade price as both
+                    volume=Decimal(str(data["q"])),
+                    source="binance",
                 )
-                
+
                 self._emit_tick(tick)
-                
+
             except Exception as e:
                 logger.exception("binance_feed.error", error=str(e))
                 await asyncio.sleep(1)
@@ -366,12 +375,12 @@ class PriceFeedManager:
         """Add price feed to manager."""
         if symbol not in self._feeds:
             self._feeds[symbol] = []
-        
+
         self._feeds[symbol].append(feed)
-        
+
         if primary:
             self._primary_feed[symbol] = feed
-        
+
         feed.on_tick(self._cache_tick)
 
     def _cache_tick(self, tick: TickData) -> None:
@@ -379,30 +388,32 @@ class PriceFeedManager:
         if not self._redis:
             return
 
-        asyncio.create_task(self._redis.setex(
-            f"tick:{tick.symbol}",
-            60,
-            tick.model_dump_json(),
-        ))
+        asyncio.create_task(
+            self._redis.setex(
+                f"tick:{tick.symbol}",
+                60,
+                tick.model_dump_json(),
+            )
+        )
 
     async def start(self) -> None:
         """Start all feeds and health monitoring."""
         self._running = True
-        
+
         for symbol_feeds in self._feeds.values():
             for feed in symbol_feeds:
                 await feed.connect()
-        
+
         self._health_check_task = asyncio.create_task(self._health_check_loop())
         logger.info("feed_manager.started")
 
     async def stop(self) -> None:
         """Stop all feeds."""
         self._running = False
-        
+
         if self._health_check_task:
             self._health_check_task.cancel()
-        
+
         for symbol_feeds in self._feeds.values():
             for feed in symbol_feeds:
                 await feed.disconnect()
@@ -417,17 +428,19 @@ class PriceFeedManager:
                 for feed in feeds:
                     # Check if feed is stale
                     if feed._last_tick:
-                        age = (datetime.utcnow() - feed._last_tick.timestamp).total_seconds()
+                        age = (
+                            datetime.now(timezone.utc) - feed._last_tick.timestamp
+                        ).total_seconds()
                         if age > 60:
                             logger.warning(
                                 "feed_manager.stale_feed",
                                 source=feed.__class__.__name__,
                                 symbol=symbol,
-                                age_seconds=age
+                                age_seconds=age,
                             )
                             # Attempt reconnection
                             asyncio.create_task(self._reconnect_feed(feed))
-            
+
             await asyncio.sleep(30)
 
     async def _reconnect_feed(self, feed: PriceFeed) -> None:
@@ -454,28 +467,32 @@ class PriceFeedManager:
 
     def get_aggregated_price(self, symbol: str) -> Optional[TickData]:
         """Aggregate prices from multiple feeds (VWAP)."""
-        ticks = [f._last_tick for f in self._feeds.get(symbol, []) if f._last_tick and f._connected]
-        
+        ticks = [
+            f._last_tick
+            for f in self._feeds.get(symbol, [])
+            if f._last_tick and f._connected
+        ]
+
         if not ticks:
             return None
-        
+
         # Calculate VWAP
         total_bid_volume = sum(t.volume for t in ticks)
         total_ask_volume = sum(t.volume for t in ticks)
-        
+
         if total_bid_volume == 0 or total_ask_volume == 0:
             return ticks[0]  # Fallback to first
-        
+
         vwap_bid = sum(t.bid * t.volume for t in ticks) / total_bid_volume
         vwap_ask = sum(t.ask * t.volume for t in ticks) / total_ask_volume
-        
+
         return TickData(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=vwap_bid,
             ask=vwap_ask,
             volume=sum(t.volume for t in ticks),
-            source="aggregated"
+            source="aggregated",
         )
 
     def get_feed_stats(self) -> dict:
@@ -485,8 +502,12 @@ class PriceFeedManager:
             stats[symbol] = {
                 "feed_count": len(feeds),
                 "connected": sum(1 for f in feeds if f._connected),
-                "primary_latency_ms": self._primary_feed.get(symbol, type('obj', (object,), {'_latency_ms': 0}))._latency_ms,
-                "best_spread": min((f._last_tick.spread for f in feeds if f._last_tick), default=None)
+                "primary_latency_ms": self._primary_feed.get(
+                    symbol, type("obj", (object,), {"_latency_ms": 0})
+                )._latency_ms,
+                "best_spread": min(
+                    (f._last_tick.spread for f in feeds if f._last_tick), default=None
+                ),
             }
         return stats
 

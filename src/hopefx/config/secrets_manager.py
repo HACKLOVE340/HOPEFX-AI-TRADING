@@ -43,6 +43,7 @@ class CloudSecretsManager:
                 result = await self._get_vault_secret(name)
             elif self.provider == "local":
                 from hopefx.config.vault import vault
+
                 result = vault.retrieve(name)
 
             # Update cache
@@ -56,18 +57,18 @@ class CloudSecretsManager:
         try:
             if not self._client:
                 self._client = boto3.client(
-                    'secretsmanager',
-                    region_name=settings.aws_region
+                    "secretsmanager", region_name=settings.aws_region
                 )
 
             response = self._client.get_secret_value(SecretId=name)
-            
-            if 'SecretString' in response:
-                return response['SecretString']
+
+            if "SecretString" in response:
+                return response["SecretString"]
             else:
                 import base64
-                return base64.b64decode(response['SecretBinary']).decode()
-                
+
+                return base64.b64decode(response["SecretBinary"]).decode()
+
         except ClientError as e:
             logger.error("aws_secrets.error", name=name, error=str(e))
             return None
@@ -81,13 +82,12 @@ class CloudSecretsManager:
             if not self._client:
                 credential = DefaultAzureCredential()
                 self._client = SecretClient(
-                    vault_url=settings.azure_keyvault_url,
-                    credential=credential
+                    vault_url=settings.azure_keyvault_url, credential=credential
                 )
 
             secret = await asyncio.to_thread(self._client.get_secret, name)
             return secret.value
-            
+
         except Exception as e:
             logger.error("azure_secrets.error", name=name, error=str(e))
             return None
@@ -104,12 +104,11 @@ class CloudSecretsManager:
             secret_path = f"projects/{project_id}/secrets/{name}/versions/latest"
 
             response = await asyncio.to_thread(
-                self._client.access_secret_version,
-                request={"name": secret_path}
+                self._client.access_secret_version, request={"name": secret_path}
             )
-            
+
             return response.payload.data.decode("UTF-8")
-            
+
         except Exception as e:
             logger.error("gcp_secrets.error", name=name, error=str(e))
             return None
@@ -121,18 +120,17 @@ class CloudSecretsManager:
 
             if not self._client:
                 self._client = hvac.Client(
-                    url=settings.vault_url,
-                    token=settings.vault_token
+                    url=settings.vault_url, token=settings.vault_token
                 )
 
             secret = await asyncio.to_thread(
                 self._client.secrets.kv.v2.read_secret_version,
                 path=name,
-                mount_point=settings.vault_mount_point
+                mount_point=settings.vault_mount_point,
             )
-            
+
             return secret["data"]["data"]["value"]
-            
+
         except Exception as e:
             logger.error("vault_secrets.error", name=name, error=str(e))
             return None
@@ -141,10 +139,7 @@ class CloudSecretsManager:
         """Trigger cloud secret rotation."""
         try:
             if self.provider == "aws":
-                await asyncio.to_thread(
-                    self._client.rotate_secret,
-                    SecretId=name
-                )
+                await asyncio.to_thread(self._client.rotate_secret, SecretId=name)
                 return True
             return False
         except Exception as e:
@@ -156,9 +151,7 @@ class CloudSecretsManager:
         try:
             if self.provider == "aws":
                 await asyncio.to_thread(
-                    self._client.create_secret,
-                    Name=name,
-                    SecretString=value
+                    self._client.create_secret, Name=name, SecretString=value
                 )
                 return True
             return False

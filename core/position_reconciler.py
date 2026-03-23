@@ -1,10 +1,10 @@
 """
 Position reconciliation loop.
 
-Runs as a background asyncio task. Every `interval_seconds` it:
+Runs as a background asyncio task. Every `interval_seconds` (default: 10) it:
 1. Loads open positions from the DB (positions table)
 2. Compares them against the in-memory broker/paper state
-3. Logs discrepancies and optionally corrects them
+3. Logs discrepancies and alerts on gaps (RECONCILE_GAP)
 4. Updates unrealized P&L on each position using latest market price
 
 This is intentionally conservative: it logs and alerts on mismatches but
@@ -23,11 +23,18 @@ logger = logging.getLogger(__name__)
 
 _reconciler_task: Optional[asyncio.Task] = None
 
+# How many consecutive mismatches for the same symbol before escalating to ERROR
+_MISMATCH_ALERT_THRESHOLD = 3
+
 
 class PositionReconciler:
     """
     Lightweight reconciler that keeps the DB positions table in sync with
     the in-memory broker state and refreshes unrealized P&L.
+
+    Polls every ``interval_seconds`` (default 10 s per the problem spec).
+    Emits a WARNING for each mismatch and escalates to ERROR after
+    ``_MISMATCH_ALERT_THRESHOLD`` consecutive mismatches for the same symbol.
     """
 
     def __init__(
@@ -35,7 +42,7 @@ class PositionReconciler:
         session_factory,
         broker=None,
         ws_manager=None,
-        interval_seconds: int = 30,
+        interval_seconds: int = 10,
     ):
         self._sf = session_factory
         self._broker = broker
@@ -44,6 +51,8 @@ class PositionReconciler:
         self._running = False
         self._cycles = 0
         self._mismatches = 0
+        # Track consecutive mismatches per symbol for gap alerting
+        self._consecutive_mismatches: dict[str, int] = {}
 
     async def start(self) -> None:
         self._running = True
@@ -101,13 +110,28 @@ class PositionReconciler:
                     session.commit()
                     updated += 1
 
-            # Check for broker mismatch
-            if broker_positions and pos.symbol not in broker_positions:
-                self._mismatches += 1
-                logger.warning(
-                    "RECONCILE: position %s (%s) in DB but not in broker state",
-                    pos.id, pos.symbol,
-                )
+            # Check for broker mismatch and alert on gaps
+            if broker_positions:
+                if pos.symbol not in broker_positions:
+                    self._mismatches += 1
+                    self._consecutive_mismatches[pos.symbol] = (
+                        self._consecutive_mismatches.get(pos.symbol, 0) + 1
+                    )
+                    count = self._consecutive_mismatches[pos.symbol]
+                    if count >= _MISMATCH_ALERT_THRESHOLD:
+                        logger.error(
+                            "RECONCILE_GAP: position %s (%s) missing from broker "
+                            "for %d consecutive cycles — manual review required",
+                            pos.id, pos.symbol, count,
+                        )
+                    else:
+                        logger.warning(
+                            "RECONCILE: position %s (%s) in DB but not in broker state",
+                            pos.id, pos.symbol,
+                        )
+                else:
+                    # Symbol is present — reset its consecutive mismatch counter
+                    self._consecutive_mismatches.pop(pos.symbol, None)
 
         if updated:
             logger.debug("Reconciler cycle %d: updated P&L for %d positions", self._cycles, updated)
@@ -149,7 +173,7 @@ class PositionReconciler:
         return {"cycles": self._cycles, "mismatches": self._mismatches, "running": self._running}
 
 
-def start_reconciler(session_factory, broker=None, ws_manager=None, interval_seconds: int = 30) -> PositionReconciler:
+def start_reconciler(session_factory, broker=None, ws_manager=None, interval_seconds: int = 10) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
     global _reconciler_task
     rec = PositionReconciler(

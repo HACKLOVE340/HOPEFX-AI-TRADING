@@ -37,8 +37,7 @@ async def get_oms():
 
 @router.post("/orders", response_model=OrderResponse)
 async def submit_order(
-    request: OrderRequest,
-    oms: OrderManagementSystem = Depends(get_oms)
+    request: OrderRequest, oms: OrderManagementSystem = Depends(get_oms)
 ):
     """Submit trading order."""
     try:
@@ -47,15 +46,15 @@ async def submit_order(
             direction=request.direction,
             quantity=Decimal(str(request.quantity)),
             order_type=request.order_type,
-            price=Decimal(str(request.price)) if request.price else None
+            price=Decimal(str(request.price)) if request.price else None,
         )
-        
+
         return {
             "order_id": str(order.id),
             "status": order.status.value,
-            "broker_id": order.broker_id
+            "broker_id": order.broker_id,
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -71,8 +70,8 @@ async def get_positions():
 async def emergency_kill():
     """Trigger emergency kill switch."""
     from src.risk.kill_switch import KillSwitch
-    
+
     kill_switch = KillSwitch()
     kill_switch.trigger("Manual API trigger")
-    
+
     return {"status": "kill_switch_triggered"}

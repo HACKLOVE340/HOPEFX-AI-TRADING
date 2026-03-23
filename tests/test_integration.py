@@ -59,9 +59,9 @@ async def test_full_trading_cycle(paper_broker, risk_manager, strategy_manager):
 @pytest.mark.asyncio
 async def test_risk_manager_integration(risk_manager, paper_broker):
     """Test risk manager with actual broker"""
-    
-    # Get account info
-    account = await paper_broker.get_account_info()
+
+    # get_account_info is sync
+    account = paper_broker.get_account_info()
     
     # Update risk manager with equity
     risk_manager.update_equity(account['equity'])
@@ -119,16 +119,16 @@ async def test_trade_execution_flow(paper_broker, risk_manager):
     assert order.average_fill_price > 0
     
     # Verify position created
-    positions = await paper_broker.get_positions()
+    positions = paper_broker.get_positions()
     assert len(positions) > 0
-    
+
     # Close position
     position_id = positions[0].id
-    success = await paper_broker.close_position(position_id)
+    success = paper_broker.close_position(position_id)
     assert success == True
-    
+
     # Verify closed
-    positions = await paper_broker.get_positions()
+    positions = paper_broker.get_positions()
     assert len(positions) == 0
 
 

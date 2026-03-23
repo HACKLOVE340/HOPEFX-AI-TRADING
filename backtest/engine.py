@@ -218,7 +218,7 @@ class SimulatedBroker:
                 }
         else:
             # Sell
-                       self.cash += (cost - commission)
+            self.cash += (cost - commission)
             
             if symbol in self.positions:
                 pos = self.positions[symbol]

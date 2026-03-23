@@ -6,7 +6,7 @@ with advanced features. Non-breaking integration.
 
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -122,7 +122,7 @@ class MasterControlCore:
                 mcc_settings = self.config_manager.get('mcc', {})
                 self.config.max_strategies_active = mcc_settings.get('max_strategies', 5)
                 self.config.emergency_drawdown_pct = Decimal(str(mcc_settings.get('max_drawdown', 0.10)))
-        except:
+        except Exception:
             pass  # Use defaults
     
     def register_strategy(self, strategy: EnhancedStrategy, 
@@ -247,7 +247,7 @@ class MasterControlCore:
         Call this from your existing price feed handler.
         MCC distributes to all strategies.
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         # Store price
         self.current_prices[symbol] = price

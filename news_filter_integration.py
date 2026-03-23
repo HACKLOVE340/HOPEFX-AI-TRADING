@@ -1,7 +1,7 @@
 import requests
 import redis
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class NewsFilterIntegration:
     def __init__(self, redis_host='localhost', redis_port=6379, event_cache_duration=300):
@@ -20,7 +20,7 @@ class NewsFilterIntegration:
             return []
 
     def filter_events(self, events):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         upcoming_events = []
         for event in events:
             event_time = datetime.strptime(event['date'], '%Y-%m-%d %H:%M:%S')

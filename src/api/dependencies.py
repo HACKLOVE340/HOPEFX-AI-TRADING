@@ -19,54 +19,55 @@ class DependencyContainer:
     """
     Singleton dependency container with connection pooling.
     """
-    
+
     def __init__(self):
         self._broker: Broker | None = None
         self._oms: OrderManagementSystem | None = None
         self._risk_manager: RiskManager | None = None
         self._initialized = False
-    
+
     async def initialize(self) -> None:
         """Initialize all dependencies."""
         if self._initialized:
             return
-        
+
         # Initialize broker
         if settings.trading_mode == "paper":
             self._broker = PaperBroker(initial_balance=settings.initial_capital)
         elif settings.broker.default_broker == "oanda":
             from src.brokers.oanda import OandaBroker
+
             self._broker = OandaBroker()
-        
+
         await self._broker.connect()
-        
+
         # Initialize OMS
         self._oms = OrderManagementSystem(self._broker)
-        
+
         # Initialize risk manager
         self._risk_manager = RiskManager()
         await self._risk_manager.initialize()
-        
+
         self._initialized = True
-    
+
     async def shutdown(self) -> None:
         """Cleanup resources."""
         if self._broker:
             await self._broker.disconnect()
         self._initialized = False
-    
+
     def get_broker(self) -> Broker:
         """Get broker instance."""
         if not self._broker:
             raise RuntimeError("Container not initialized")
         return self._broker
-    
+
     def get_oms(self) -> OrderManagementSystem:
         """Get OMS instance."""
         if not self._oms:
             raise RuntimeError("Container not initialized")
         return self._oms
-    
+
     def get_risk_manager(self) -> RiskManager:
         """Get risk manager instance."""
         if not self._risk_manager:

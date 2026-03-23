@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict
 from dataclasses import dataclass
@@ -32,7 +32,7 @@ class PropEnforcementEngine:
         self._active_challenges: Dict[str, PropChallenge] = {}
         self._monitoring_task: Optional[asyncio.Task] = None
         self._running = False
-        
+
         # Rule configurations by firm
         self._firm_rules = {
             "ftmo": {
@@ -54,7 +54,7 @@ class PropEnforcementEngine:
                 "required_stop_loss": False,
                 "no_weekend_holding": True,
                 "max_position_size": Decimal("100"),
-            }
+            },
         }
 
     async def start(self) -> None:
@@ -78,7 +78,7 @@ class PropEnforcementEngine:
             "prop_enforcement.challenge_registered",
             challenge_id=challenge.id,
             firm=challenge.firm,
-            account_size=float(challenge.account_size)
+            account_size=float(challenge.account_size),
         )
 
     async def _on_trade(self, event: Event) -> None:
@@ -87,7 +87,7 @@ class PropEnforcementEngine:
             return
 
         fill = event.payload
-        
+
         # Find if this trade belongs to a prop challenge
         for challenge in self._active_challenges.values():
             if await self._is_challenge_trade(challenge, fill):
@@ -113,51 +113,63 @@ class PropEnforcementEngine:
         # Daily loss limit
         daily_loss_pct = abs(challenge.daily_pnl) / challenge.account_size
         if daily_loss_pct > rules["daily_loss_limit"]:
-            breaches.append(PropBreach(
-                rule="daily_loss_limit",
-                severity="violation" if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.2") else "warning",
-                current_value=daily_loss_pct,
-                limit_value=rules["daily_loss_limit"],
-                timestamp=datetime.utcnow(),
-                auto_action="close_positions" if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.5") else None
-            ))
+            breaches.append(
+                PropBreach(
+                    rule="daily_loss_limit",
+                    severity="violation"
+                    if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.2")
+                    else "warning",
+                    current_value=daily_loss_pct,
+                    limit_value=rules["daily_loss_limit"],
+                    timestamp=datetime.now(timezone.utc),
+                    auto_action="close_positions"
+                    if daily_loss_pct > rules["daily_loss_limit"] * Decimal("1.5")
+                    else None,
+                )
+            )
 
         # Total loss limit
         total_loss_pct = abs(challenge.total_pnl) / challenge.account_size
         if total_loss_pct > rules["total_loss_limit"]:
-            breaches.append(PropBreach(
-                rule="total_loss_limit",
-                severity="termination",
-                current_value=total_loss_pct,
-                limit_value=rules["total_loss_limit"],
-                timestamp=datetime.utcnow(),
-                auto_action="disable_trading"
-            ))
+            breaches.append(
+                PropBreach(
+                    rule="total_loss_limit",
+                    severity="termination",
+                    current_value=total_loss_pct,
+                    limit_value=rules["total_loss_limit"],
+                    timestamp=datetime.now(timezone.utc),
+                    auto_action="disable_trading",
+                )
+            )
 
         # Profit target reached
         if challenge.total_pnl / challenge.account_size >= rules["profit_target"]:
             if challenge.trading_days_count >= rules["min_trading_days"]:
-                breaches.append(PropBreach(
-                    rule="profit_target",
-                    severity="success",
-                    current_value=challenge.total_pnl / challenge.account_size,
-                    limit_value=rules["profit_target"],
-                    timestamp=datetime.utcnow(),
-                    auto_action="promote_to_funded"
-                ))
+                breaches.append(
+                    PropBreach(
+                        rule="profit_target",
+                        severity="success",
+                        current_value=challenge.total_pnl / challenge.account_size,
+                        limit_value=rules["profit_target"],
+                        timestamp=datetime.now(timezone.utc),
+                        auto_action="promote_to_funded",
+                    )
+                )
 
         # Max trading days
-        days_active = (datetime.utcnow() - challenge.start_date).days
+        days_active = (datetime.now(timezone.utc) - challenge.start_date).days
         if days_active > rules["max_trading_days"] and challenge.status == "active":
             if challenge.total_pnl / challenge.account_size < rules["profit_target"]:
-                breaches.append(PropBreach(
-                    rule="max_trading_days",
-                    severity="termination",
-                    current_value=days_active,
-                    limit_value=rules["max_trading_days"],
-                    timestamp=datetime.utcnow(),
-                    auto_action="challenge_failed"
-                ))
+                breaches.append(
+                    PropBreach(
+                        rule="max_trading_days",
+                        severity="termination",
+                        current_value=days_active,
+                        limit_value=rules["max_trading_days"],
+                        timestamp=datetime.now(timezone.utc),
+                        auto_action="challenge_failed",
+                    )
+                )
 
         # Process breaches
         for breach in breaches:
@@ -165,7 +177,9 @@ class PropEnforcementEngine:
 
         return breaches
 
-    async def _handle_breach(self, challenge: PropChallenge, breach: PropBreach) -> None:
+    async def _handle_breach(
+        self, challenge: PropChallenge, breach: PropBreach
+    ) -> None:
         """Handle compliance breach."""
         logger.warning(
             "prop_enforcement.breach",
@@ -173,19 +187,21 @@ class PropEnforcementEngine:
             rule=breach.rule,
             severity=breach.severity,
             current=float(breach.current_value),
-            limit=float(breach.limit_value)
+            limit=float(breach.limit_value),
         )
 
         # Record violation
-        challenge.violations.append({
-            "rule": breach.rule,
-            "severity": breach.severity,
-            "timestamp": breach.timestamp.isoformat(),
-            "values": {
-                "current": float(breach.current_value),
-                "limit": float(breach.limit_value)
+        challenge.violations.append(
+            {
+                "rule": breach.rule,
+                "severity": breach.severity,
+                "timestamp": breach.timestamp.isoformat(),
+                "values": {
+                    "current": float(breach.current_value),
+                    "limit": float(breach.limit_value),
+                },
             }
-        })
+        )
 
         # Auto-actions
         if breach.auto_action == "close_positions":
@@ -237,12 +253,12 @@ class PropEnforcementEngine:
             try:
                 # Daily report generation
                 await self._generate_daily_reports()
-                
+
                 # Check for stale challenges
                 await self._check_stale_challenges()
-                
+
                 await asyncio.sleep(3600)  # Hourly checks
-                
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -256,15 +272,15 @@ class PropEnforcementEngine:
                 continue
 
             report = {
-                "date": datetime.utcnow().isoformat(),
+                "date": datetime.now(timezone.utc).isoformat(),
                 "challenge_id": challenge.id,
                 "equity": float(challenge.current_equity),
                 "daily_pnl": float(challenge.daily_pnl),
                 "total_pnl": float(challenge.total_pnl),
                 "trading_days": challenge.trading_days_count,
-                "violations": len(challenge.violations)
+                "violations": len(challenge.violations),
             }
-            
+
             # Store report, email to user
             logger.info("prop_enforcement.daily_report", **report)
 

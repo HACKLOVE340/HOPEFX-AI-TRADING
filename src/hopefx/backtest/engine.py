@@ -60,9 +60,7 @@ class EventDrivenBacktest:
 
         for tick in ticks:
             # Update features
-            await self._feature_store._on_tick(
-                type("Event", (), {"payload": tick})()
-            )
+            await self._feature_store._on_tick(type("Event", (), {"payload": tick})())
 
             features = self._feature_store.get_latest_features(tick.symbol)
             if not features:
@@ -84,7 +82,9 @@ class EventDrivenBacktest:
                 await self._check_exits(tick)
 
             # Record equity
-            self.equity_curve.append((pd.Timestamp(tick.timestamp), self._current_equity))
+            self.equity_curve.append(
+                (pd.Timestamp(tick.timestamp), self._current_equity)
+            )
 
         # Close any open position at end
         if self._position and ticks:
@@ -184,7 +184,7 @@ class EventDrivenBacktest:
             return {"error": "No trades executed"}
 
         pnls = [float(t.pnl) for t in self.trades]
-        returns = pd.Series(pnls).cumsum()
+        pd.Series(pnls).cumsum()
 
         winning_trades = [p for p in pnls if p > 0]
         losing_trades = [p for p in pnls if p < 0]
@@ -209,7 +209,9 @@ class EventDrivenBacktest:
             "winning_trades": len(winning_trades),
             "losing_trades": len(losing_trades),
             "win_rate": len(winning_trades) / len(self.trades) if self.trades else 0,
-            "profit_factor": abs(sum(winning_trades) / sum(losing_trades)) if losing_trades else float('inf'),
+            "profit_factor": abs(sum(winning_trades) / sum(losing_trades))
+            if losing_trades
+            else float("inf"),
             "max_drawdown": float(max_dd),
             "sharpe_ratio": float(sharpe),
             "avg_trade": np.mean(pnls),

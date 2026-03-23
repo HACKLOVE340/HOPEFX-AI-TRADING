@@ -16,18 +16,26 @@ from prometheus_client import Counter, Gauge, Histogram
 logger = structlog.get_logger()
 
 # Prometheus metrics
-TRADE_COUNTER = Counter("hopefx_trades_total", "Total trades", ["symbol", "side", "status"])
-LATENCY_HISTOGRAM = Histogram("hopefx_latency_seconds", "Operation latency", ["operation"])
+TRADE_COUNTER = Counter(
+    "hopefx_trades_total", "Total trades", ["symbol", "side", "status"]
+)
+LATENCY_HISTOGRAM = Histogram(
+    "hopefx_latency_seconds", "Operation latency", ["operation"]
+)
 EQUITY_GAUGE = Gauge("hopefx_equity", "Current equity")
 POSITION_GAUGE = Gauge("hopefx_positions", "Open positions", ["symbol"])
-PREDICTION_COUNTER = Counter("hopefx_predictions_total", "ML predictions", ["model", "direction"])
+PREDICTION_COUNTER = Counter(
+    "hopefx_predictions_total", "ML predictions", ["model", "direction"]
+)
 
 
 class Telemetry:
     """OpenTelemetry + Prometheus telemetry."""
 
     def __init__(self) -> None:
-        self._resource = Resource.create({"service.name": "hopefx", "service.version": "9.5.0"})
+        self._resource = Resource.create(
+            {"service.name": "hopefx", "service.version": "9.5.0"}
+        )
 
         # Traces
         self._tracer_provider = TracerProvider(resource=self._resource)
@@ -35,7 +43,9 @@ class Telemetry:
 
         # Metrics
         reader = PrometheusMetricReader()
-        self._meter_provider = MeterProvider(resource=self._resource, metric_readers=[reader])
+        self._meter_provider = MeterProvider(
+            resource=self._resource, metric_readers=[reader]
+        )
 
     def record_trade(self, symbol: str, side: str, status: str) -> None:
         """Record trade metric."""

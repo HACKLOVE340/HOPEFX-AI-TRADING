@@ -12,7 +12,7 @@ try:
     _HAVE_MSGPACK = True
 except ImportError:
     _HAVE_MSGPACK = False
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Callable
 import hashlib
@@ -42,14 +42,14 @@ class DataConfig:
 class UnifiedDataManager:
     """
     Single interface for ALL data operations.
-    
+
     Tiers:
     1. L1: In-memory cache (fastest, smallest)
     2. L2: Redis (distributed, fast)
     3. L3: Database (persistent, relational)
     4. L4: File storage (blobs, large objects)
     """
-    
+
     def __init__(self, config: DataConfig):
         self.config = config
         self._engine = None
@@ -57,12 +57,12 @@ class UnifiedDataManager:
         self._redis: Optional[redis.Redis] = None
         self._local_cache: Dict[str, tuple] = {}  # key -> (value, expiry)
         self._subscribers: List[Callable] = []
-        
+
         # Ensure directories
         Path(self.config.storage_path).mkdir(parents=True, exist_ok=True)
         for subdir in ['trades', 'models', 'reports', 'logs', 'audit']:
             Path(self.config.storage_path) / subdir.mkdir(exist_ok=True)
-    
+
     async def initialize(self):
         """Initialize all connections."""
         # Database
@@ -73,49 +73,49 @@ class UnifiedDataManager:
             echo=False
         )
         self._session_maker = sessionmaker(
-            self._engine, 
+            self._engine,
             class_=AsyncSession,
             expire_on_commit=False
         )
-        
+
         # Redis
         self._redis = await redis.from_url(
             self.config.redis_url,
             decode_responses=False
         )
-        
+
         # Start maintenance tasks
         asyncio.create_task(self._cache_maintenance())
-    
+
     async def shutdown(self):
         """Graceful shutdown."""
         if self._redis:
             await self._redis.close()
         if self._engine:
             await self._engine.dispose()
-    
+
     # =====================================================================
     # TIER 1: Local Cache (sub-millisecond)
     # =====================================================================
-    
+
     def local_get(self, key: str) -> Optional[Any]:
         """Get from local memory cache."""
         if key in self._local_cache:
             value, expiry = self._local_cache[key]
-            if expiry > datetime.utcnow().timestamp():
+            if expiry > datetime.now(timezone.utc).timestamp():
                 return value
             del self._local_cache[key]
         return None
-    
+
     def local_set(self, key: str, value: Any, ttl_seconds: int = 60):
         """Set in local cache."""
-        expiry = datetime.utcnow().timestamp() + ttl_seconds
+        expiry = datetime.now(timezone.utc).timestamp() + ttl_seconds
         self._local_cache[key] = (value, expiry)
-    
+
     # =====================================================================
     # TIER 2: Redis Cache (milliseconds)
     # =====================================================================
-    
+
     async def redis_get(self, key: str) -> Optional[Any]:
         """Get from Redis."""
         try:
@@ -125,11 +125,11 @@ class UnifiedDataManager:
         except redis.RedisError:
             pass
         return None
-    
+
     async def redis_set(
-        self, 
-        key: str, 
-        value: Any, 
+        self,
+        key: str,
+        value: Any,
         ttl: int = 300,
         nx: bool = False
     ) -> bool:
@@ -142,7 +142,7 @@ class UnifiedDataManager:
             return await self._redis.setex(key, ttl, serialized)
         except redis.RedisError:
             return False
-    
+
     async def redis_delete(self, pattern: str):
         """Delete keys matching pattern."""
         try:
@@ -151,43 +151,43 @@ class UnifiedDataManager:
                 await self._redis.delete(*keys)
         except redis.RedisError:
             pass
-    
+
     # =====================================================================
     # TIER 3: Database (persistent)
     # =====================================================================
-    
+
     async def db_execute(self, statement):
         """Execute database statement."""
         async with self._session_maker() as session:
             async with session.begin():
                 result = await session.execute(statement)
                 return result
-    
+
     async def db_fetch_one(self, statement):
         """Fetch single result."""
         result = await self.db_execute(statement)
         return result.scalar_one_or_none()
-    
+
     async def db_fetch_many(self, statement):
         """Fetch multiple results."""
         result = await self.db_execute(statement)
         return result.scalars().all()
-    
+
     async def db_insert(self, table, values: Dict) -> str:
         """Insert record."""
         stmt = insert(table).values(**values).returning(table.id)
         result = await self.db_execute(stmt)
         return result.scalar_one()
-    
+
     async def db_update(self, table, id: str, values: Dict):
         """Update record."""
         stmt = update(table).where(table.id == id).values(**values)
         await self.db_execute(stmt)
-    
+
     # =====================================================================
     # TIER 4: File Storage (large objects)
     # =====================================================================
-    
+
     def file_save(
         self,
         category: str,
@@ -198,15 +198,15 @@ class UnifiedDataManager:
     ) -> Path:
         """
         Save to organized file storage.
-        
+
         Categories: trades, models, reports, logs, audit
         """
         base_path = Path(self.config.storage_path) / category
         base_path.mkdir(exist_ok=True)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         filename = f"{name}_{timestamp}"
-        
+
         # Determine format
         if format == "auto":
             if isinstance(data, pd.DataFrame):
@@ -217,10 +217,10 @@ class UnifiedDataManager:
                 format = "bin"
             else:
                 format = "pkl"
-        
+
         # Save
         path = base_path / f"{filename}.{format}"
-        
+
         if format == "parquet":
             data.to_parquet(path, compression="zstd", engine="pyarrow")
         elif format == "json":
@@ -231,19 +231,19 @@ class UnifiedDataManager:
         else:
             with open(path, "wb") as f:
                 pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
+
         # Metadata
         if metadata:
             meta_path = base_path / f"{filename}.meta.json"
             with open(meta_path, "w") as f:
                 json.dump(metadata, f, indent=2, default=str)
-        
+
         return path
-    
+
     def file_load(self, path: Path) -> Any:
         """Load from file storage."""
         suffix = path.suffix.lstrip(".")
-        
+
         if suffix == "parquet":
             return pd.read_parquet(path)
         elif suffix == "json":
@@ -254,9 +254,9 @@ class UnifiedDataManager:
                 return pickle.load(f)
         elif suffix == "bin":
             return path.read_bytes()
-        
+
         raise ValueError(f"Unknown format: {suffix}")
-    
+
     def file_list(
         self,
         category: str,
@@ -265,21 +265,21 @@ class UnifiedDataManager:
     ) -> List[Path]:
         """List files in category."""
         base_path = Path(self.config.storage_path) / category
-        
+
         if not base_path.exists():
             return []
-        
+
         files = list(base_path.glob(f"*{pattern or '*'}*"))
-        
+
         if since:
             files = [f for f in files if datetime.fromtimestamp(f.stat().st_mtime) > since]
-        
+
         return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
-    
+
     # =====================================================================
     # UNIFIED INTERFACE (Auto-tier selection)
     # =====================================================================
-    
+
     async def get(
         self,
         key: str,
@@ -287,7 +287,7 @@ class UnifiedDataManager:
     ) -> Optional[Any]:
         """
         Get with automatic tier selection.
-        
+
         Order: L1 -> L2 -> L3 -> miss
         """
         # L1
@@ -295,7 +295,7 @@ class UnifiedDataManager:
             val = self.local_get(key)
             if val is not None:
                 return val
-        
+
         # L2
         if source in ("auto", "l2"):
             val = await self.redis_get(key)
@@ -303,9 +303,9 @@ class UnifiedDataManager:
                 # Promote to L1
                 self.local_set(key, val, 60)
                 return val
-        
+
         return None
-    
+
     async def set(
         self,
         key: str,
@@ -316,21 +316,21 @@ class UnifiedDataManager:
         """Set in all tiers."""
         self.local_set(key, value, l1_ttl)
         await self.redis_set(key, value, l2_ttl)
-    
+
     async def invalidate(self, pattern: str):
         """Invalidate across all caches."""
         # L1
         for k in list(self._local_cache.keys()):
             if pattern in k:
                 del self._local_cache[k]
-        
+
         # L2
         await self.redis_delete(pattern)
-    
+
     # =====================================================================
     # SPECIALIZED METHODS
     # =====================================================================
-    
+
     async def cache_market_data(
         self,
         symbol: str,
@@ -340,7 +340,7 @@ class UnifiedDataManager:
         """Cache OHLCV data."""
         key = f"md:{symbol}:{timeframe}"
         await self.set(key, data, l1_ttl=30, l2_ttl=300)
-    
+
     async def get_market_data(
         self,
         symbol: str,
@@ -349,7 +349,7 @@ class UnifiedDataManager:
         """Get cached market data."""
         key = f"md:{symbol}:{timeframe}"
         return await self.get(key)
-    
+
     def save_model(
         self,
         name: str,
@@ -359,14 +359,14 @@ class UnifiedDataManager:
     ) -> Path:
         """Save ML model with metadata."""
         metadata = {
-            "saved_at": datetime.utcnow().isoformat(),
+            "saved_at": datetime.now(timezone.utc).isoformat(),
             "metrics": metrics,
             "features": features,
             "model_type": type(model).__name__
         }
-        
+
         return self.file_save("models", name, model, metadata)
-    
+
     def save_equity_curve(
         self,
         strategy_name: str,
@@ -380,7 +380,7 @@ class UnifiedDataManager:
             "trades": trades,
             "metrics": metrics
         }
-        
+
         return self.file_save(
             "trades",
             f"backtest_{strategy_name}",
@@ -391,18 +391,16 @@ class UnifiedDataManager:
                 "final_equity": equity_curve['equity'].iloc[-1] if len(equity_curve) > 0 else 0
             }
         )
-    
+
     # =====================================================================
     # INTERNAL
     # =====================================================================
-    
+
     def _serialize(self, obj: Any) -> bytes:
         """Serialize for Redis storage.
 
         Uses msgpack when available (safe: no arbitrary code execution on
-        load). Falls back to JSON for basic types. pickle is intentionally
-        NOT used here — Redis data is network-accessible and a compromised
-        or misconfigured Redis instance could deliver a malicious payload.
+        load). Falls back to JSON. pickle is intentionally NOT used here.
         """
         if _HAVE_MSGPACK:
             if hasattr(obj, "to_dict"):
@@ -410,33 +408,27 @@ class UnifiedDataManager:
             raw = _msgpack.packb(obj, use_bin_type=True)
         else:
             raw = json.dumps(obj, default=str).encode()
-
         if len(raw) > 1024:
             return b"z" + zlib.compress(raw)
         return b"r" + raw
 
     def _deserialize(self, data: bytes) -> Any:
-        """Deserialize Redis data.
-
-        Counterpart to _serialize — uses msgpack/JSON only, never pickle,
-        to prevent remote code execution via malicious Redis payloads.
-        """
+        """Deserialize Redis data — msgpack/JSON only, never pickle."""
         compressed = data[0:1] == b"z"
         raw = zlib.decompress(data[1:]) if compressed else data[1:]
-
         if _HAVE_MSGPACK:
             return _msgpack.unpackb(raw, raw=False)
         return json.loads(raw.decode())
-    
+
     async def _cache_maintenance(self):
         """Periodic cache cleanup."""
         while True:
             await asyncio.sleep(60)
-            
+
             # Clean expired L1 entries
-            now = datetime.utcnow().timestamp()
+            now = datetime.now(timezone.utc).timestamp()
             expired = [
-                k for k, (_, exp) in self._local_cache.items() 
+                k for k, (_, exp) in self._local_cache.items()
                 if exp < now
             ]
             for k in expired:

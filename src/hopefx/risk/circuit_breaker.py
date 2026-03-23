@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Callable
 
@@ -17,7 +17,7 @@ logger = structlog.get_logger()
 
 class BreakerState(Enum):
     CLOSED = auto()  # Normal operation
-    OPEN = auto()    # Rejecting requests
+    OPEN = auto()  # Rejecting requests
     HALF_OPEN = auto()  # Testing if recovered
 
 
@@ -61,7 +61,10 @@ class CircuitBreaker:
         """Execute coroutine with circuit breaker protection."""
         async with self._lock:
             if self._state == BreakerState.OPEN:
-                if time.time() - self._metrics.last_failure_time > self.recovery_timeout:
+                if (
+                    time.time() - self._metrics.last_failure_time
+                    > self.recovery_timeout
+                ):
                     self._transition_to(BreakerState.HALF_OPEN)
                     self._half_open_calls = 0
                 else:
@@ -69,17 +72,20 @@ class CircuitBreaker:
 
             if self._state == BreakerState.HALF_OPEN:
                 if self._half_open_calls >= self.half_open_max_calls:
-                    raise CircuitBreakerOpen(f"Circuit {self.name} HALF_OPEN limit reached")
+                    raise CircuitBreakerOpen(
+                        f"Circuit {self.name} HALF_OPEN limit reached"
+                    )
                 self._half_open_calls += 1
 
         try:
             result = await coro
             await self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             await self._on_failure()
             raise
-        async def _on_success(self) -> None:
+
+    async def _on_success(self) -> None:
         """Handle successful call."""
         async with self._lock:
             self._metrics.successes += 1
@@ -103,17 +109,19 @@ class CircuitBreaker:
                 self._transition_to(BreakerState.OPEN)
 
                 # Publish circuit breaker event
-                asyncio.create_task(event_bus.publish(
-                    Event(
-                        type=EventType.CIRCUIT_BREAKER,
-                        payload=CircuitBreakerEvent(
-                            breaker_name=self.name,
-                            state="open",
-                            metrics=self._metrics,
-                        ),
-                        source="circuit_breaker",
+                asyncio.create_task(
+                    event_bus.publish(
+                        Event(
+                            type=EventType.CIRCUIT_BREAKER,
+                            payload=CircuitBreakerEvent(
+                                breaker_name=self.name,
+                                state="open",
+                                metrics=self._metrics,
+                            ),
+                            source="circuit_breaker",
+                        )
                     )
-                ))
+                )
 
     def _transition_to(self, new_state: BreakerState) -> None:
         """Transition to new state."""
@@ -146,6 +154,7 @@ class CircuitBreaker:
 
 class CircuitBreakerOpen(Exception):
     """Circuit breaker is open."""
+
     pass
 
 
@@ -154,8 +163,12 @@ class MultiCircuitBreaker:
 
     def __init__(self) -> None:
         self.breakers: dict[str, CircuitBreaker] = {
-            "pnl": CircuitBreaker("pnl", failure_threshold=1),  # Immediate on large loss
-            "latency": CircuitBreaker("latency", failure_threshold=5, recovery_timeout=60),
+            "pnl": CircuitBreaker(
+                "pnl", failure_threshold=1
+            ),  # Immediate on large loss
+            "latency": CircuitBreaker(
+                "latency", failure_threshold=5, recovery_timeout=60
+            ),
             "slippage": CircuitBreaker("slippage", failure_threshold=3),
             "disconnect": CircuitBreaker("disconnect", failure_threshold=2),
         }
@@ -192,5 +205,3 @@ class MultiCircuitBreaker:
 
 # Global circuit breakers
 multi_breaker = MultiCircuitBreaker()
-
-  

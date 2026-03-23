@@ -8,7 +8,7 @@ and comprehensive API documentation following best practices [^22^][^24^].
 import os
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks, Query
@@ -327,7 +327,7 @@ async def health_check():
     """Detailed health check with component status"""
     return {
         "status": "healthy" if app_state.is_initialized else "unhealthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "components": {
             "price_engine": app_state.price_engine is not None,
             "ml_predictor": app_state.ml_predictor is not None,

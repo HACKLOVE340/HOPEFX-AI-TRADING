@@ -7,7 +7,7 @@ Ultra-low latency tick processing with normalization
 import asyncio
 from typing import Dict, List, Callable, Optional, Set
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 import struct
 import numpy as np
@@ -65,7 +65,7 @@ class FeedHandler:
     
     def _on_exchange_tick(self, raw_data: Dict, exchange_name: str):
         """Process raw tick from exchange"""
-        start_ns = datetime.utcnow().timestamp() * 1e9
+        start_ns = datetime.now(timezone.utc).timestamp() * 1e9
         
         # Normalize to common format
         tick = self._normalize(raw_data, exchange_name)
@@ -77,7 +77,7 @@ class FeedHandler:
         self.tick_buffer.append(tick)
         
         # Calculate latency
-        latency_ns = datetime.utcnow().timestamp() * 1e9 - start_ns
+        latency_ns = datetime.now(timezone.utc).timestamp() * 1e9 - start_ns
         self.stats['latency_ns'] = 0.9 * self.stats['latency_ns'] + 0.1 * latency_ns
         
         # Distribute
@@ -104,7 +104,7 @@ class FeedHandler:
     def _parse_oanda(self, raw: Dict, exchange: str) -> Tick:
         return Tick(
             symbol=raw.get('instrument', '').replace('_', ''),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=float(raw.get('bids', [{}])[0].get('price', 0)),
             ask=float(raw.get('asks', [{}])[0].get('price', 0)),
             bid_size=float(raw.get('bids', [{}])[0].get('liquidity', 0)),
@@ -147,7 +147,7 @@ class FeedHandler:
     def _parse_generic(self, raw: Dict, exchange: str) -> Tick:
         return Tick(
             symbol=str(raw.get('symbol', '')),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             bid=float(raw.get('bid', 0)),
             ask=float(raw.get('ask', 0)),
             bid_size=float(raw.get('bidSize', 0)),

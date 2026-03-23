@@ -7,7 +7,7 @@ Live correlation, regime detection, and risk visualization
 import numpy as np
 from typing import Dict, List
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import deque
 
 
@@ -73,7 +73,7 @@ class RealtimeHeatmapEngine:
         
         if regime != self.orchestra.current_regime:
             self.orchestra.current_regime = regime
-            self.regime_history.append((datetime.utcnow(), regime))
+            self.regime_history.append((datetime.now(timezone.utc), regime))
     
     def _calculate_adx(self, prices: List[float], period: int = 14) -> float:
         """Average Directional Index"""
@@ -155,5 +155,5 @@ class RealtimeHeatmapEngine:
             },
             'risk': risk_data,
             'regime_timeline': regime_timeline,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }

@@ -3,7 +3,7 @@ Institutional REST API & WebSocket Server
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
@@ -99,7 +99,7 @@ async def health_check():
     return {
         "status": "healthy",
         "version": "4.0.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "components": {
             "database": "connected",
             "redis": "connected",
@@ -137,7 +137,7 @@ async def create_order(
         return {
             "order_id": order_id,
             "status": "accepted",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:

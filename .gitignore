@@ -131,3 +131,6 @@ trading_logs/
 # cache/ is a source code package — not ignored
 # Ignore only runtime cache artifacts:
 *.cache
+
+# Kill switch runtime flag
+kill_switch.flag

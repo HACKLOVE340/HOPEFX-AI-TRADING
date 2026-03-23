@@ -7,7 +7,7 @@ drawdown monitoring, and automated trading halts.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Callable, Any
 from collections import deque
@@ -153,7 +153,7 @@ class CircuitBreaker:
             return
         
         # Check order rate limits
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cutoff_minute = now - timedelta(minutes=1)
         cutoff_hour = now - timedelta(hours=1)
         
@@ -187,7 +187,7 @@ class CircuitBreaker:
             
             # Record breach
             breach = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "reason": reason,
                 "message": message,
                 "severity": severity,
@@ -330,7 +330,7 @@ class CircuitBreaker:
                 return False, f"Correlation limit would be breached for {symbol}"
             
             # Record order for rate limiting
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             self.orders_last_minute.append(now)
             self.orders_last_hour.append(now)
             
@@ -362,7 +362,7 @@ class CircuitBreaker:
             logger.critical(f"🔧 MANUAL OVERRIDE {action} by {authorized_by}: {reason}")
             
             audit_record = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "action": f"MANUAL_OVERRIDE_{action}",
                 "authorized_by": authorized_by,
                 "reason": reason,
@@ -385,7 +385,7 @@ class CircuitBreaker:
                 "peak_balance": self.peak_balance,
                 "consecutive_losses": self.consecutive_losses,
                 "breach_history": json.dumps(self.breach_history[-10:]),  # Last 10
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
             try:
                 self.redis.hset("circuit_breaker:state", mapping=state_data)

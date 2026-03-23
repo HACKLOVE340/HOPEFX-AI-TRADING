@@ -8,7 +8,7 @@ import time
 import asyncio
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 import json
 import socket
@@ -18,7 +18,7 @@ import socket
 class Metric:
     name: str
     value: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     labels: Dict[str, str] = field(default_factory=dict)
     metric_type: str = "gauge"  # gauge, counter, histogram
 
@@ -124,7 +124,7 @@ class HealthChecker:
                     results[name] = {
                         'status': 'unhealthy',
                         'reason': f'Dependency {dep} unhealthy',
-                        'timestamp': datetime.utcnow()
+                        'timestamp': datetime.now(timezone.utc)
                     }
                     checked.add(name)
                     return results[name]
@@ -134,18 +134,18 @@ class HealthChecker:
                 is_healthy = await self.checks[name]()
                 results[name] = {
                     'status': 'healthy' if is_healthy else 'unhealthy',
-                    'timestamp': datetime.utcnow()
+                    'timestamp': datetime.now(timezone.utc)
                 }
             except Exception as e:
                 results[name] = {
                     'status': 'error',
                     'reason': str(e),
-                    'timestamp': datetime.utcnow()
+                    'timestamp': datetime.now(timezone.utc)
                 }
             
             checked.add(name)
             self.status[name] = results[name]['status']
-            self.last_check[name] = datetime.utcnow()
+            self.last_check[name] = datetime.now(timezone.utc)
             return results[name]
         
         for name in self.checks:
@@ -194,7 +194,7 @@ class AlertManager:
             try:
                 if rule['condition'](context):
                     alert = {
-                        'timestamp': datetime.utcnow(),
+                        'timestamp': datetime.now(timezone.utc),
                         'message': rule['message'],
                         'severity': rule['severity'],
                         'context': context

@@ -426,7 +426,7 @@ class AdvancedFeatureEngineer:
             
             entropy = -np.sum(probs * np.log(probs + 1e-10))
             return entropy
-        except:
+        except Exception:
             return 0
     
     def _calculate_permutation_entropy(self, prices: np.ndarray, order: int = 3) -> float:
@@ -445,7 +445,7 @@ class AdvancedFeatureEngineer:
             entropy = -np.sum(probs * np.log(probs + 1e-10))
             
             return entropy / np.log(np.math.factorial(order))
-        except:
+        except Exception:
             return 0
     
     def _calculate_hurst(self, prices: np.ndarray) -> float:
@@ -472,7 +472,7 @@ class AdvancedFeatureEngineer:
                 return max(0, min(hurst, 1))
             
             return 0.5
-        except:
+        except Exception:
             return 0.5
     
     def _calculate_dfa(self, prices: np.ndarray) -> float:
@@ -493,5 +493,5 @@ class AdvancedFeatureEngineer:
             fluctuation = np.sqrt(np.mean((cumulative - trend) ** 2))
             
             return fluctuation
-        except:
+        except Exception:
             return 0.5

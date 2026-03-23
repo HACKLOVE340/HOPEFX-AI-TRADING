@@ -17,12 +17,10 @@ from structlog.stdlib import (
 
 
 def configure_logging(
-    log_level: str = "INFO",
-    json_output: bool = True,
-    log_file: Path | None = None
+    log_level: str = "INFO", json_output: bool = True, log_file: Path | None = None
 ) -> None:
     """Configure structured logging."""
-    
+
     shared_processors = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -40,11 +38,12 @@ def configure_logging(
             }
         ),
     ]
-    
+
     if json_output:
         # Production JSON logging
         structlog.configure(
-            processors=shared_processors + [
+            processors=shared_processors
+            + [
                 structlog.processors.dict_tracebacks,
                 structlog.processors.JSONRenderer(),
             ],
@@ -56,7 +55,8 @@ def configure_logging(
     else:
         # Development console logging
         structlog.configure(
-            processors=shared_processors + [
+            processors=shared_processors
+            + [
                 structlog.dev.ConsoleRenderer(colors=True),
             ],
             context_class=dict,
@@ -64,14 +64,14 @@ def configure_logging(
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )
-    
+
     # Configure standard library logging
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
         level=getattr(logging, log_level),
     )
-    
+
     # Add file handler if specified
     if log_file:
         file_handler = logging.handlers.RotatingFileHandler(
@@ -81,7 +81,7 @@ def configure_logging(
         )
         root_logger = logging.getLogger()
         root_logger.addHandler(file_handler)
-    
+
     # Silence noisy libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)

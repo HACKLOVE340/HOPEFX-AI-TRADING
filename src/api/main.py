@@ -1,4 +1,5 @@
 """Production-grade FastAPI with all enhancements."""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,40 +30,40 @@ security = HTTPBearer()
 async def lifespan(app: FastAPI):
     """Enhanced lifespan with all components."""
     settings = get_settings()
-    
+
     # 1. Event store (audit)
     app.state.event_store = EventStore(settings.redis.url.get_secret_value())
     await app.state.event_store.initialize()
-    
+
     # 2. GPU manager
     if gpu_manager.device.type == "cuda":
         logger.info(f"GPU ready: {gpu_manager.get_stats()}")
-    
+
     # 3. Kill switch (distributed)
     await kill_switch.initialize(settings.security.jwt_secret.get_secret_value())
     await kill_switch.check_recovery()
-    
+
     if kill_switch.is_killed():
         logger.critical("System starting in KILLED state")
-    
+
     # 4. Order book aggregator
     app.state.orderbooks = MultiBookAggregator()
-    
+
     # 5. Brain engine
     app.state.brain = BrainEngine()
     await app.state.brain.initialize()
-    
+
     # 6. Event bus
     await event_bus.start()
-    
+
     # 7. Reconciliation (if live trading)
     # app.state.reconciler = ByzantineReconciler(...)
     # await app.state.reconciler.start()
-    
+
     logger.info("All systems operational")
-    
+
     yield
-    
+
     # Shutdown
     await event_bus.stop()
     await kill_switch.reset("shutdown")  # Cleanup
@@ -81,7 +82,9 @@ app.add_exception_handler(429, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://dashboard.hopefx.io"] if get_settings().env == "production" else ["*"],
+    allow_origins=["https://dashboard.hopefx.io"]
+    if get_settings().env == "production"
+    else ["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -94,20 +97,19 @@ FastAPIInstrumentor.instrument_app(app)
 async def health_check():
     """Deep health check."""
     gpu_stats = gpu_manager.get_stats() if gpu_manager.device.type == "cuda" else None
-    
+
     return {
         "status": "healthy" if not kill_switch.is_killed() else "killed",
         "kill_switch": kill_switch.get_metrics(),
         "gpu": gpu_stats,
         "event_bus": event_bus.get_stats(),
-        "timestamp": asyncio.get_event_loop().time()
+        "timestamp": asyncio.get_event_loop().time(),
     }
 
 
 @app.post("/admin/kill")
 async def admin_kill(
-    reason: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    reason: str, credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """Emergency kill endpoint."""
     # Verify admin token...
@@ -120,15 +122,14 @@ async def market_stream(websocket: WebSocket):
     """Real-time market data with order book."""
     await websocket.accept()
     orderbooks = websocket.app.state.orderbooks
-    
+
     try:
         while True:
             # Get consolidated view
             xau = orderbooks.get_consolidated("XAUUSD")
-            await websocket.send_json({
-                "orderbook": xau,
-                "timestamp": asyncio.get_event_loop().time()
-            })
+            await websocket.send_json(
+                {"orderbook": xau, "timestamp": asyncio.get_event_loop().time()}
+            )
             await asyncio.sleep(0.1)  # 10Hz
     except Exception:
         await websocket.close()
@@ -138,19 +139,20 @@ async def market_stream(websocket: WebSocket):
 async def brain_stream(websocket: WebSocket):
     """Brain decision stream."""
     await websocket.accept()
-    brain = websocket.app.state.brain
-    
+
     # Subscribe to brain decisions
     async def on_decision(decision):
-        await websocket.send_json({
-            "signal": decision.signal.value,
-            "confidence": decision.confidence,
-            "regime": decision.regime.name,
-            "latency_us": decision.reasoning.get("latency_us")
-        })
-    
+        await websocket.send_json(
+            {
+                "signal": decision.signal.value,
+                "confidence": decision.confidence,
+                "regime": decision.regime.name,
+                "latency_us": decision.reasoning.get("latency_us"),
+            }
+        )
+
     # Register callback...
-    
+
     try:
         while True:
             await asyncio.sleep(1)

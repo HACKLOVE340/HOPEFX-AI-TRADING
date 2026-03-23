@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
@@ -28,23 +28,23 @@ class SecurityAuditor:
         details: dict,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        risk_score: int = 0
+        risk_score: int = 0,
     ) -> None:
         """Create immutable audit record."""
-        
+
         # Create chain hash for tamper evidence
         record_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "user_id": user_id,
             "action": action,
             "details": details,
             "previous_hash": self._chain_hash,
         }
-        
+
         current_hash = hashlib.sha256(
             json.dumps(record_data, sort_keys=True).encode()
         ).hexdigest()
-        
+
         self._chain_hash = current_hash
 
         # Store in database
@@ -56,9 +56,9 @@ class SecurityAuditor:
             details={
                 **details,
                 "_chain_hash": current_hash,
-                "_integrity": self._verify_integrity()
+                "_integrity": self._verify_integrity(),
             },
-            risk_score=risk_score
+            risk_score=risk_score,
         )
 
         # Async write to DB
@@ -81,12 +81,8 @@ class SecurityAuditor:
         # - Unusual trading patterns
         # - Large withdrawals after password change
         # - Access from new devices
-        
-        return {
-            "risk_score": 0,
-            "anomalies": [],
-            "recommendation": "none"
-        }
+
+        return {"risk_score": 0, "anomalies": [], "recommendation": "none"}
 
     async def _persist(self, entry: AuditLog) -> None:
         """Persist to database."""
