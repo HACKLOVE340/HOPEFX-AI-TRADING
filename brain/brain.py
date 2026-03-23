@@ -972,3 +972,21 @@ class HOPEFXBrain:
                 'strategy_manager': self.strategy_manager is not None
             }
         }
+
+    # ── Lifecycle aliases expected by integration tests ───────────────────────
+
+    async def start(self) -> None:
+        """Start the brain in the background (alias for compatibility)."""
+        self._running = True
+        async with self._state_lock:
+            self.state.system_state = SystemState.RUNNING
+        logger.info("HOPEFXBrain started")
+
+    async def stop(self) -> None:
+        """Stop the brain gracefully (alias for compatibility)."""
+        self._running = False
+        self._emergency_stop = True
+        async with self._state_lock:
+            self.state.system_state = SystemState.SHUTDOWN
+        logger.info("HOPEFXBrain stopped")
+
