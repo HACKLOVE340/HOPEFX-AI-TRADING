@@ -165,14 +165,22 @@ def _get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(_be
         raise HTTPException(status_code=401, detail="Not authenticated",
                             headers={"WWW-Authenticate": "Bearer"})
     try:
-        import jwt, os
-        secret = os.getenv("SECURITY_JWT_SECRET", "")
+        import jwt
+        from auth.service import _get_secret
+        secret = _get_secret()  # raises RuntimeError if unset or too short
         payload = jwt.decode(credentials.credentials, secret, algorithms=["HS256"],
                              options={"require": ["sub", "exp"]})
         if payload.get("type") != "access":
             raise ValueError("Not an access token")
         return payload["sub"]
-    except Exception as exc:
+    except RuntimeError as exc:
+        # Misconfigured secret — do not mask as 401
+        logger.critical("JWT secret misconfiguration in auth router: %s", exc)
+        raise HTTPException(status_code=503, detail="Authentication service misconfigured")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired",
+                            headers={"WWW-Authenticate": "Bearer"})
+    except (jwt.InvalidTokenError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token",
                             headers={"WWW-Authenticate": "Bearer"})
 
