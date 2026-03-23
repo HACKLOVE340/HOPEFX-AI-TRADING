@@ -1,0 +1,16 @@
+# helm/hopefx/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hopefx.fullname" . }}-config
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+data:
+  prop_firm_mode.json: |
+    {
+      "daily_dd": 0.05,
+      "max_dd": 0.10,
+      "news_blackout": 5,
+      "weekend_close": true,
+      "breach_action": "pause"
+    }
