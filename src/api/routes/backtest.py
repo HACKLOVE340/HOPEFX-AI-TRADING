@@ -2,7 +2,7 @@
 Backtest API endpoints.
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from src.backtest.engine import EventDrivenBacktester
@@ -24,7 +24,6 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
     """Run backtest asynchronously."""
     # Load data
     import pandas as pd
-    from datetime import datetime
     
     # In production, load from database
     dates = pd.date_range(start=request.start_date, end=request.end_date, freq='1min')
@@ -47,7 +46,6 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
         initial_capital=Decimal(str(request.initial_capital))
     )
     
-    import asyncio
     result = await backtester.run(strategy, data)
     
     return {

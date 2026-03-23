@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -11,12 +10,10 @@ import pandas as pd
 import structlog
 import torch
 import torch.cuda.nvtx as nvtx
-from numba import cuda, float32, int32
-from numba.cuda import jit
+from numba import cuda, float32
 
 from src.core.types import Tick, OHLCV
 from src.features.transforms import CyclicalEncoder, RobustFeatureScaler
-from src.ml.gpu_manager import gpu_manager
 
 if TYPE_CHECKING:
     from torch import Tensor

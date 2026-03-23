@@ -5,7 +5,6 @@ Monte Carlo VaR/CVaR with historical and parametric methods.
 import numpy as np
 from scipy import stats
 
-from src.core.config import settings
 
 
 class RiskMetrics:

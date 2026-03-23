@@ -4,17 +4,18 @@ Cryptographic operations, vault, and secure credential management.
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 from base64 import urlsafe_b64encode
+from datetime import datetime, timedelta, timezone
 from typing import Self
 
+import jwt
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from src.core.config import settings
-from src.core.exceptions import EncryptionError
+from src.core.exceptions import AuthenticationError, EncryptionError
 
 
 class Vault:
@@ -104,8 +105,6 @@ class PasswordHasher:
 
 
 # JWT utilities
-import jwt
-from datetime import datetime, timedelta, timezone
 
 
 def create_jwt_token(

@@ -3,8 +3,7 @@ Redis cache with connection pooling and circuit breaker.
 """
 
 import asyncio
-from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 try:
     import aioredis

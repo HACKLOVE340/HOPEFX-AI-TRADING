@@ -8,14 +8,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import signal
-import sys
-from contextlib import asynccontextmanager
 from decimal import Decimal
 
 import structlog
-from fastapi import FastAPI
 
-from hopefx.api.server import create_app, run_server
+from hopefx.api.server import run_server
 from hopefx.brain.engine import brain
 from hopefx.config.settings import settings
 from hopefx.config.vault import vault
@@ -23,9 +20,7 @@ from hopefx.data.feature_store import feature_store
 from hopefx.data.feed import feed_manager
 from hopefx.events.bus import event_bus
 from hopefx.execution.oms import oms
-from hopefx.execution.router import smart_router
 from hopefx.marketplace.copy_trading import copy_engine
-from hopefx.marketplace.payments import payments
 from hopefx.ml.pipeline import ml_pipeline
 from hopefx.monitoring.telemetry import telemetry
 from hopefx.risk.circuit_breaker import multi_breaker

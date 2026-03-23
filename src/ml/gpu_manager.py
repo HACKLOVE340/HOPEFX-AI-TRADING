@@ -5,7 +5,7 @@ import gc
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Generator
+from typing import Generator
 
 import torch
 import structlog

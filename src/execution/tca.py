@@ -10,7 +10,7 @@ from typing import Any, Callable
 import numpy as np
 import structlog
 
-from src.core.types import Fill, Order, Side, Tick
+from src.core.types import Fill, Side, Tick
 
 logger = structlog.get_logger()
 

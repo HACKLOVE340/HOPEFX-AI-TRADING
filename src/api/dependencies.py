@@ -2,10 +2,9 @@
 FastAPI dependency injection container with lifecycle management.
 """
 
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Annotated
+from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends
 
 from src.brokers.base import Broker
 from src.brokers.paper import PaperBroker

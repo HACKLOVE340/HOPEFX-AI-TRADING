@@ -1,20 +1,110 @@
 """
-Subscription Management
+monetization/subscription.py
+=============================
+Stripe-backed subscription management with license validation and FastAPI router.
 
-This module handles user subscriptions, including creation, updates,
-cancellations, and feature access control.
+Tiers:
+  FREE         — paper trading only, no RL agent, no live execution
+  PROFESSIONAL — live trading + RL agent + all ML features
+  ENTERPRISE   — everything + white-label + dedicated support
+
+Key components:
+  LicenseValidator       — validates API keys against Stripe subscription state
+  SubscriptionManager    — creates / renews / cancels subscriptions via Stripe
+  create_subscription_router() — mounts /subscribe, /webhook, /license endpoints
+
+Dependencies:
+    pip install stripe fastapi pydantic
 """
 
+import hashlib
+import hmac
 import logging
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List
+from typing import Any, Optional, Dict, List
 from enum import Enum
 from decimal import Decimal
 
 from .pricing import SubscriptionTier, pricing_manager
 
+# ---------------------------------------------------------------------------
+# Optional Stripe import
+# ---------------------------------------------------------------------------
+try:
+    import stripe as _stripe  # type: ignore
+    _STRIPE_AVAILABLE = True
+except ImportError:
+    _stripe = None  # type: ignore
+    _STRIPE_AVAILABLE = False
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("stripe package not installed — payment processing disabled. pip install stripe")
+
+# ---------------------------------------------------------------------------
+# Tier feature gates (mirrors pricing.py, adds RL/live flags)
+# ---------------------------------------------------------------------------
+_TIER_FEATURES: dict[SubscriptionTier, dict[str, Any]] = {
+    SubscriptionTier.FREE: {
+        "live_trading": False,
+        "rl_agent": False,
+        "ml_features": False,
+        "max_strategies": 1,
+        "api_access": False,
+        "news_rag": False,
+        "paper_trading": True,
+    },
+    SubscriptionTier.PROFESSIONAL: {
+        "live_trading": True,
+        "rl_agent": True,
+        "ml_features": True,
+        "max_strategies": 10,
+        "api_access": True,
+        "news_rag": True,
+        "paper_trading": True,
+    },
+    SubscriptionTier.ENTERPRISE: {
+        "live_trading": True,
+        "rl_agent": True,
+        "ml_features": True,
+        "max_strategies": -1,
+        "api_access": True,
+        "news_rag": True,
+        "paper_trading": True,
+        "white_label": True,
+        "dedicated_support": True,
+    },
+}
+
+# Stripe Price IDs — override via environment variables
+_STRIPE_PRICE_IDS: dict[SubscriptionTier, str] = {
+    SubscriptionTier.PROFESSIONAL: os.getenv("STRIPE_PRICE_PROFESSIONAL", "price_professional"),
+    SubscriptionTier.ENTERPRISE: os.getenv("STRIPE_PRICE_ENTERPRISE", "price_enterprise"),
+}
+
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# License key helpers
+# ---------------------------------------------------------------------------
+
+def _generate_license_key(user_id: str, tier: SubscriptionTier) -> str:
+    """
+    Deterministic, opaque license key: HOPEFX-<TIER>-<HEX16>.
+    Derived from user_id + tier + server-side secret.
+    """
+    secret = os.getenv("LICENSE_SECRET", "hopefx-default-secret")
+    payload = f"{user_id}:{tier.value}:{secret}"
+    digest = hashlib.sha256(payload.encode()).hexdigest()[:16].upper()
+    return f"HOPEFX-{tier.value.upper()[:3]}-{digest}"
+
+
+def _verify_license_key(license_key: str, user_id: str, tier: SubscriptionTier) -> bool:
+    """Constant-time comparison to prevent timing attacks."""
+    expected = _generate_license_key(user_id, tier)
+    return hmac.compare_digest(license_key, expected)
 
 
 class SubscriptionStatus(str, Enum):
@@ -39,7 +129,10 @@ class Subscription:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         access_code: Optional[str] = None,
-        auto_renew: bool = True
+        auto_renew: bool = True,
+        stripe_subscription_id: Optional[str] = None,
+        stripe_customer_id: Optional[str] = None,
+        license_key: Optional[str] = None,
     ):
         self.subscription_id = subscription_id
         self.user_id = user_id
@@ -49,16 +142,24 @@ class Subscription:
         self.end_date = end_date or (self.start_date + timedelta(days=30))
         self.access_code = access_code
         self.auto_renew = auto_renew
+        self.stripe_subscription_id = stripe_subscription_id
+        self.stripe_customer_id = stripe_customer_id
+        self.license_key = license_key or _generate_license_key(user_id, tier)
         self.created_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
 
     def is_active(self) -> bool:
         """Check if subscription is active"""
-        if self.status != SubscriptionStatus.ACTIVE:
+        if self.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL):
             return False
-
         now = datetime.now(timezone.utc)
         return self.start_date <= now <= self.end_date
+
+    def has_feature(self, feature: str) -> bool:
+        """Return True if this subscription's tier includes `feature`."""
+        if not self.is_active():
+            return False
+        return bool(_TIER_FEATURES.get(self.tier, {}).get(feature, False))
 
     def is_expired(self) -> bool:
         """Check if subscription is expired"""
@@ -112,8 +213,11 @@ class Subscription:
             'end_date': self.end_date.isoformat(),
             'access_code': self.access_code,
             'auto_renew': self.auto_renew,
+            'stripe_subscription_id': self.stripe_subscription_id,
+            'license_key': self.license_key,
             'is_active': self.is_active(),
             'days_remaining': self.days_remaining(),
+            'features': _TIER_FEATURES.get(self.tier, {}),
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -297,5 +401,398 @@ class SubscriptionManager:
         return [sub for sub in self._subscriptions.values() if sub.is_expired()]
 
 
+    def create_subscription(
+        self,
+        user_id: str,
+        tier: SubscriptionTier,
+        duration_days: int = 30,
+        access_code: Optional[str] = None,
+        auto_renew: bool = True,
+        stripe_subscription_id: Optional[str] = None,
+        stripe_customer_id: Optional[str] = None,
+    ) -> 'Subscription':
+        """Create a new subscription (overrides base to add Stripe fields)."""
+        import uuid as _uuid
+        subscription_id = f"SUB-{_uuid.uuid4().hex[:12].upper()}"
+        start_date = datetime.now(timezone.utc)
+        end_date = start_date + timedelta(days=duration_days)
+
+        subscription = Subscription(
+            subscription_id=subscription_id,
+            user_id=user_id,
+            tier=tier,
+            status=SubscriptionStatus.ACTIVE if tier == SubscriptionTier.FREE else SubscriptionStatus.PENDING,
+            start_date=start_date,
+            end_date=end_date,
+            access_code=access_code,
+            auto_renew=auto_renew,
+            stripe_subscription_id=stripe_subscription_id,
+            stripe_customer_id=stripe_customer_id,
+        )
+
+        self._subscriptions[subscription_id] = subscription
+        self._user_subscriptions[user_id] = subscription_id
+        logger.info("subscription.created id=%s user=%s tier=%s", subscription_id, user_id, tier.value)
+        return subscription
+
+    # ------------------------------------------------------------------
+    # Stripe checkout session
+    # ------------------------------------------------------------------
+
+    def create_checkout_session(
+        self,
+        user_id: str,
+        tier: SubscriptionTier,
+        success_url: str = "https://hopefx.ai/success",
+        cancel_url: str = "https://hopefx.ai/cancel",
+        email: Optional[str] = None,
+    ) -> dict:
+        """
+        Create a Stripe Checkout Session for the given tier.
+        Returns dict with `session_id` and `checkout_url`.
+        """
+        if not _STRIPE_AVAILABLE:
+            raise RuntimeError("stripe package not installed. pip install stripe")
+
+        _stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+        price_id = _STRIPE_PRICE_IDS.get(tier)
+        if not price_id:
+            raise ValueError(f"No Stripe price configured for tier {tier.value}")
+
+        session_params: dict = {
+            "mode": "subscription",
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            "cancel_url": cancel_url,
+            "metadata": {"user_id": user_id, "tier": tier.value},
+        }
+        if email:
+            session_params["customer_email"] = email
+
+        session = _stripe.checkout.Session.create(**session_params)
+        logger.info("stripe.checkout.created user=%s tier=%s", user_id, tier.value)
+        return {"session_id": session.id, "checkout_url": session.url}
+
+    # ------------------------------------------------------------------
+    # Stripe webhook handler
+    # ------------------------------------------------------------------
+
+    def handle_stripe_webhook(self, payload: bytes, sig_header: str) -> dict:
+        """
+        Verify and process a Stripe webhook event.
+
+        Handles:
+          checkout.session.completed    → activate subscription
+          customer.subscription.deleted → cancel subscription
+          invoice.payment_failed        → suspend subscription
+        """
+        if not _STRIPE_AVAILABLE:
+            raise RuntimeError("stripe package not installed")
+
+        webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+        try:
+            event = _stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        except _stripe.error.SignatureVerificationError as exc:
+            logger.warning("stripe.webhook.invalid_signature: %s", exc)
+            raise ValueError("Invalid Stripe webhook signature") from exc
+
+        event_type = event["type"]
+        data = event["data"]["object"]
+
+        if event_type == "checkout.session.completed":
+            user_id = data.get("metadata", {}).get("user_id", "")
+            tier_str = data.get("metadata", {}).get("tier", "free")
+            stripe_sub_id = data.get("subscription")
+            stripe_cust_id = data.get("customer")
+            tier = SubscriptionTier(tier_str)
+
+            existing = self.get_user_subscription(user_id)
+            if existing:
+                existing.tier = tier
+                existing.stripe_subscription_id = stripe_sub_id
+                existing.stripe_customer_id = stripe_cust_id
+                existing.status = SubscriptionStatus.ACTIVE
+                existing.end_date = datetime.now(timezone.utc) + timedelta(days=30)
+                existing.updated_at = datetime.now(timezone.utc)
+            else:
+                sub = self.create_subscription(
+                    user_id=user_id,
+                    tier=tier,
+                    stripe_subscription_id=stripe_sub_id,
+                    stripe_customer_id=stripe_cust_id,
+                )
+                sub.status = SubscriptionStatus.ACTIVE
+            logger.info("stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier_str)
+
+        elif event_type == "customer.subscription.deleted":
+            stripe_sub_id = data.get("id")
+            for sub in self._subscriptions.values():
+                if sub.stripe_subscription_id == stripe_sub_id:
+                    sub.cancel()
+                    logger.info("stripe.webhook.subscription_deleted sub=%s", stripe_sub_id)
+                    break
+
+        elif event_type == "invoice.payment_failed":
+            stripe_cust_id = data.get("customer")
+            for sub in self._subscriptions.values():
+                if sub.stripe_customer_id == stripe_cust_id:
+                    sub.suspend()
+                    logger.warning("stripe.webhook.payment_failed customer=%s", stripe_cust_id)
+                    break
+
+        return {"status": "processed", "event_type": event_type}
+
+
+# ---------------------------------------------------------------------------
+# License validator
+# ---------------------------------------------------------------------------
+
+class LicenseValidator:
+    """
+    Validates a license key against the active subscription.
+
+    Free tier: paper trading only — always allowed, no key required.
+    Paid tiers: key must match the active subscription record.
+
+    Usage:
+        validator = LicenseValidator(subscription_manager)
+        result = validator.validate(user_id="u123", license_key="HOPEFX-PRO-ABCD1234")
+        if result.valid and result.allows_live:
+            # proceed with live trading
+    """
+
+    class Result:
+        def __init__(
+            self,
+            valid: bool,
+            tier: SubscriptionTier,
+            allows_live: bool,
+            allows_rl: bool,
+            reason: str = "",
+        ) -> None:
+            self.valid = valid
+            self.tier = tier
+            self.allows_live = allows_live
+            self.allows_rl = allows_rl
+            self.reason = reason
+
+        def to_dict(self) -> dict:
+            return {
+                "valid": self.valid,
+                "tier": self.tier.value,
+                "allows_live": self.allows_live,
+                "allows_rl": self.allows_rl,
+                "reason": self.reason,
+            }
+
+    def __init__(self, manager: SubscriptionManager) -> None:
+        self._manager = manager
+
+    def validate(
+        self,
+        user_id: str,
+        license_key: Optional[str] = None,
+    ) -> "LicenseValidator.Result":
+        """
+        Validate a user's license.
+
+        - No key / free tier → paper-only access.
+        - Valid key + active paid subscription → full access per tier.
+        """
+        sub = self._manager.get_user_subscription(user_id)
+
+        if sub is None or not sub.is_active():
+            return self.Result(
+                valid=True,
+                tier=SubscriptionTier.FREE,
+                allows_live=False,
+                allows_rl=False,
+                reason="No active subscription — free tier (paper only)",
+            )
+
+        if sub.tier == SubscriptionTier.FREE:
+            return self.Result(
+                valid=True,
+                tier=SubscriptionTier.FREE,
+                allows_live=False,
+                allows_rl=False,
+                reason="Free tier",
+            )
+
+        if license_key is None:
+            return self.Result(
+                valid=False,
+                tier=sub.tier,
+                allows_live=False,
+                allows_rl=False,
+                reason="License key required for paid tier",
+            )
+
+        if not _verify_license_key(license_key, user_id, sub.tier):
+            return self.Result(
+                valid=False,
+                tier=sub.tier,
+                allows_live=False,
+                allows_rl=False,
+                reason="Invalid license key",
+            )
+
+        features = _TIER_FEATURES.get(sub.tier, {})
+        return self.Result(
+            valid=True,
+            tier=sub.tier,
+            allows_live=bool(features.get("live_trading", False)),
+            allows_rl=bool(features.get("rl_agent", False)),
+            reason="OK",
+        )
+
+
+# ---------------------------------------------------------------------------
+# FastAPI router factory
+# ---------------------------------------------------------------------------
+
+def create_subscription_router(manager: Optional[SubscriptionManager] = None):
+    """
+    Build and return a FastAPI APIRouter with subscription endpoints.
+
+    Endpoints:
+      POST /subscribe              — create Stripe checkout session (or free activation)
+      POST /webhook                — Stripe webhook receiver
+      GET  /license/validate       — validate a license key
+      GET  /subscription/{user_id} — get subscription status
+      DELETE /subscription/{user_id} — cancel subscription
+
+    Mount in your FastAPI app:
+        app.include_router(create_subscription_router(), prefix="/billing")
+    """
+    try:
+        from fastapi import APIRouter, Header, HTTPException, Request
+        from pydantic import BaseModel
+    except ImportError:
+        raise ImportError("fastapi and pydantic are required. pip install fastapi pydantic")
+
+    _mgr = manager or subscription_manager
+    _validator = LicenseValidator(_mgr)
+    router = APIRouter(tags=["Subscriptions"])
+
+    class SubscribeRequest(BaseModel):
+        user_id: str
+        tier: str = "professional"
+        email: Optional[str] = None
+        success_url: str = "https://hopefx.ai/success"
+        cancel_url: str = "https://hopefx.ai/cancel"
+
+    class LicenseValidateResponse(BaseModel):
+        valid: bool
+        tier: str
+        allows_live: bool
+        allows_rl: bool
+        reason: str
+
+    @router.post("/subscribe")
+    async def subscribe(req: SubscribeRequest):
+        """
+        Activate free tier immediately, or create a Stripe Checkout Session
+        for PROFESSIONAL / ENTERPRISE tiers.
+        """
+        try:
+            tier = SubscriptionTier(req.tier.lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+
+        if tier == SubscriptionTier.FREE:
+            sub = _mgr.create_subscription(req.user_id, SubscriptionTier.FREE)
+            return {
+                "tier": "free",
+                "subscription_id": sub.subscription_id,
+                "license_key": sub.license_key,
+                "message": "Free tier activated — paper trading only",
+            }
+
+        if not _STRIPE_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Payment processing unavailable — stripe package not installed",
+            )
+
+        try:
+            session = _mgr.create_checkout_session(
+                user_id=req.user_id,
+                tier=tier,
+                success_url=req.success_url,
+                cancel_url=req.cancel_url,
+                email=req.email,
+            )
+        except Exception as exc:
+            logger.exception("subscribe endpoint error: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        return session
+
+    @router.post("/webhook")
+    async def stripe_webhook(
+        request: Request,
+        stripe_signature: Optional[str] = Header(None, alias="stripe-signature"),
+    ):
+        """Receive and process Stripe webhook events."""
+        payload = await request.body()
+        if not stripe_signature:
+            raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+
+        try:
+            result = _mgr.handle_stripe_webhook(payload, stripe_signature)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            logger.exception("webhook processing error: %s", exc)
+            raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+        return result
+
+    @router.get("/license/validate", response_model=LicenseValidateResponse)
+    async def validate_license(user_id: str, license_key: Optional[str] = None):
+        """
+        Validate a license key for a user.
+        Free tier requires no key. Paid tiers require a matching key.
+        """
+        result = _validator.validate(user_id=user_id, license_key=license_key)
+        return LicenseValidateResponse(
+            valid=result.valid,
+            tier=result.tier.value,
+            allows_live=result.allows_live,
+            allows_rl=result.allows_rl,
+            reason=result.reason,
+        )
+
+    @router.get("/subscription/{user_id}")
+    async def get_subscription(user_id: str):
+        """Return the current subscription state for a user."""
+        sub = _mgr.get_user_subscription(user_id)
+        if not sub:
+            return {
+                "user_id": user_id,
+                "tier": "free",
+                "status": "none",
+                "features": _TIER_FEATURES[SubscriptionTier.FREE],
+            }
+        return sub.to_dict()
+
+    @router.delete("/subscription/{user_id}")
+    async def cancel_subscription(user_id: str):
+        """Cancel the active subscription for a user."""
+        sub = _mgr.get_user_subscription(user_id)
+        if not sub:
+            raise HTTPException(status_code=404, detail="No subscription found")
+        _mgr.cancel_subscription(sub.subscription_id)
+        return {"status": "cancelled", "subscription_id": sub.subscription_id}
+
+    return router
+
+
+# ---------------------------------------------------------------------------
+# Module-level singletons
+# ---------------------------------------------------------------------------
+
 # Global subscription manager instance
 subscription_manager = SubscriptionManager()
+license_validator = LicenseValidator(subscription_manager)
