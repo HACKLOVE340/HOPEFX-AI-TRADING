@@ -1,25 +1,96 @@
-# Corrected syntax for DataFrame, dictionary access, pd.concat, and candlestick chart implementation
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict
+import plotly.graph_objs as go
 import pandas as pd
-import plotly.graph_objects as go
 
-def create_candlestick_chart(data):
-    fig = go.Figure(data=[
-        go.Candlestick(
-            x=data['date'],
-            open=data['open'],
-            high=data['high'],
-            low=data['low'],
-            close=data['close'],
-        )
-    ])
-    fig.update_layout(xaxis_title='Date', yaxis_title='Price')
-    return fig
+# DashboardDataManager manages market data
+class DashboardDataManager:
+    def __init__(self):
+        self.data = {}  # In-memory data storage
 
-# Example DataFrame
+    def update_data(self, symbol: str, market_data: List[Dict]):
+        # Update market data for the given symbol
+        self.data[symbol] = market_data
 
-# Example dictionary access
-# Assuming 'data_dict' is a predefined dictionary with stock data
+    def get_market_data(self, symbol: str):
+        if symbol not in self.data:
+            raise HTTPException(status_code=404, detail="Symbol not found")
+        return self.data[symbol]
 
-# Example pd.concat usage
+# ChartGenerator creates visualizations
+class ChartGenerator:
+    @staticmethod
+    def generate_candlestick_chart(symbol: str, data: List[Dict]):
+        fig = go.Figure(data=[
+            go.Candlestick(x=[d['date'] for d in data],
+                           open=[d['open'] for d in data],
+                           high=[d['high'] for d in data],
+                           low=[d['low'] for d in data],
+                           close=[d['close'] for d in data])
+        ])
+        fig.update_layout(title=f"Candlestick chart for {symbol}")
+        return fig.to_html(full_html=False)
 
-# Create and display candlestick chart
+    @staticmethod
+    def generate_line_chart(symbol: str, data: List[Dict]):
+        fig = go.Figure(data=[
+            go.Scatter(x=[d['date'] for d in data], y=[d['close'] for d in data], mode='lines')
+        ])
+        fig.update_layout(title=f"Line chart for {symbol}")
+        return fig.to_html(full_html=False)
+
+    @staticmethod
+    def generate_volume_chart(symbol: str, data: List[Dict]):
+        fig = go.Figure(data=[
+            go.Bar(x=[d['date'] for d in data], y=[d['volume'] for d in data])
+        ])
+        fig.update_layout(title=f"Volume chart for {symbol}")
+        return fig.to_html(full_html=False)
+
+# DashboardApp initializes the FastAPI app
+class DashboardApp:
+    def __init__(self):
+        self.app = FastAPI()
+        self.data_manager = DashboardDataManager()
+        self.setup_routes()
+
+    def setup_routes(self):
+        @self.app.post('/api/market-data')
+        async def update_market_data(symbol: str, market_data: List[Dict]):
+            self.data_manager.update_data(symbol, market_data)
+            return {"message": "Market data updated"}
+
+        @self.app.get('/api/statistics/{symbol}')
+        async def get_statistics(symbol: str):
+            data = self.data_manager.get_market_data(symbol)
+            # Here you can add logic to calculate statistics
+            return {"statistics": "Sample statistics"}
+
+        @self.app.get('/api/chart/candlestick/{symbol}')
+        async def get_candlestick_chart(symbol: str):
+            data = self.data_manager.get_market_data(symbol)
+            return ChartGenerator.generate_candlestick_chart(symbol, data)
+
+        @self.app.get('/api/chart/line/{symbol}')
+        async def get_line_chart(symbol: str):
+            data = self.data_manager.get_market_data(symbol)
+            return ChartGenerator.generate_line_chart(symbol, data)
+
+        @self.app.get('/api/chart/volume/{symbol}')
+        async def get_volume_chart(symbol: str):
+            data = self.data_manager.get_market_data(symbol)
+            return ChartGenerator.generate_volume_chart(symbol, data)
+
+        @self.app.get('/health')
+        async def health_check():
+            return {"status": "Healthy"}
+
+        @self.app.get('/')
+        async def root():
+            return "<html><body><h1>Dashboard</h1><p>Dark Theme UI</p></body></html>"
+
+# Start the application
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(DashboardApp().app, host='0.0.0.0', port=8000)
