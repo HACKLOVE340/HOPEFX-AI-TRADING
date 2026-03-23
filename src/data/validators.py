@@ -8,7 +8,6 @@ from statistics import mean, stdev
 from typing import Deque
 
 from src.domain.models import TickData
-from src.core.exceptions import ValidationFailed
 
 
 class TickValidator:

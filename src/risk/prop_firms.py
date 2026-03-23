@@ -5,7 +5,6 @@ Prop firm compliance rules engine.
 from dataclasses import dataclass
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Literal
 
 from src.domain.enums import PropFirm
 

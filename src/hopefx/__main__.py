@@ -7,15 +7,14 @@ from __future__ import annotations
 import asyncio
 import signal
 import sys
-from contextlib import AsyncExitStack, suppress
+from contextlib import AsyncExitStack
 
-import anyio
 from typing import Any 
 import structlog
 
 from pydantic import SecretStr
 from hopefx.config.settings import get_settings, VaultSecretProvider
-from hopefx.core.events import get_event_bus, EventBus
+from hopefx.core.events import get_event_bus
 from hopefx.core.distributed_kill_switch import DistributedKillSwitch
 from hopefx.data.feeds.oanda import OandaFeed
 from hopefx.execution.oms import OrderManager

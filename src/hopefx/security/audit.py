@@ -5,13 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import structlog
-from sqlalchemy import insert
 
 from hopefx.database.models import AuditLog
-from hopefx.config.settings import settings
 
 logger = structlog.get_logger()
 

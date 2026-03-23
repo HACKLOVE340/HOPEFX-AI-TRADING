@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional, Dict
 from dataclasses import dataclass
 
 import structlog
-from sqlalchemy import select, and_
 
-from hopefx.config.settings import settings
-from hopefx.database.models import PropChallenge, Trade, AuditLog
+from hopefx.database.models import PropChallenge
 from hopefx.events.bus import event_bus
 from hopefx.events.schemas import Event, EventType, RiskViolation
 

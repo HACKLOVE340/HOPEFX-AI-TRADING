@@ -4,10 +4,9 @@ Abstract base class for ML models.
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 import numpy as np
-import pandas as pd
 
 
 class ModelProtocol(Protocol):

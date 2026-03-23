@@ -5,7 +5,6 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -157,7 +156,6 @@ class OMS:
     async def _emit_order_event(self, order: Order, previous: OrderStatus | None) -> None:
         """Emit order event."""
         from src.core.bus import event_bus
-        from src.core.events import OrderEvent
         
         event = OrderEvent(order=order, previous_status=previous.value if previous else None)
         await event_bus.publish(event)
@@ -165,7 +163,6 @@ class OMS:
     async def _emit_fill_event(self, fill: Fill) -> None:
         """Emit fill event."""
         from src.core.bus import event_bus
-        from src.core.events import FillEvent
         
         event = FillEvent(fill=fill)
         await event_bus.publish(event)

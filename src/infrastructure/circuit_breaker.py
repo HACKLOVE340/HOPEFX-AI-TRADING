@@ -5,9 +5,9 @@ adaptive thresholds, and comprehensive metrics.
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from src.core.logging_config import get_logger
 from src.infrastructure.monitoring import CIRCUIT_BREAKER_STATE

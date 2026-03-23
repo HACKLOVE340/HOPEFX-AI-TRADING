@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 import secrets
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict

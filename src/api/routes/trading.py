@@ -3,13 +3,11 @@ Trading API endpoints.
 """
 
 from decimal import Decimal
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from src.domain.enums import OrderType, TradeDirection
-from src.domain.models import Order
 from src.execution.oms import OrderManagementSystem
 from src.brokers.paper import PaperBroker
 

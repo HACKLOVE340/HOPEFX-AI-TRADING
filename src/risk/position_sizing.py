@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Literal
 
 from src.core.config import settings
-from src.domain.models import Account, Signal
+from src.domain.models import Account
 
 
 class PositionSizer:

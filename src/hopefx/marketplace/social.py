@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
 import structlog
-from sqlalchemy import select, func, desc
 
 from hopefx.database.models import (
-    User, UserProfile, Strategy, StrategyPerformance,
-    LeaderboardEntry, CopyTrading, Trade
+    User, LeaderboardEntry, Trade
 )
 
 logger = structlog.get_logger()

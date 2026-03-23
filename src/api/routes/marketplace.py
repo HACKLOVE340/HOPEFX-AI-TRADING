@@ -4,7 +4,7 @@ Marketplace API endpoints for copy trading and strategy licensing.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter
 
 from src.marketplace.licensing import LicenseManager, LicenseType
 from src.marketplace.replication import CopyTradingEngine, CopyTrader

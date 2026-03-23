@@ -23,7 +23,7 @@ async def retry_with_backoff(
     for attempt in range(max_retries):
         try:
             return await func(**kwargs) if asyncio.iscoroutinefunction(func) else func(**kwargs)
-        except exceptions as e:
+        except exceptions:
             if attempt == max_retries - 1:
                 raise
             
@@ -99,7 +99,7 @@ class CircuitBreaker:
             result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
             self._on_success()
             return result
-        except self.expected_exception as e:
+        except self.expected_exception:
             self._on_failure()
             raise
     

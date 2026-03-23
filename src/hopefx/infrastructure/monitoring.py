@@ -5,9 +5,7 @@ Production monitoring with Prometheus metrics and health probes.
 
 from __future__ import annotations
 
-import asyncio
 import time
-from collections import deque
 from typing import Literal
 
 import structlog

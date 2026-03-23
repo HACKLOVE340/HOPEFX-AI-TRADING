@@ -4,12 +4,11 @@ Advanced stress testing with regime-switching models and tail risk analysis.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal, Callable
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.optimize import minimize
 
 from src.core.logging_config import get_logger
 

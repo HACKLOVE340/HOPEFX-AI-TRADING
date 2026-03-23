@@ -2,11 +2,9 @@
 Paper trading broker with realistic slippage simulation.
 """
 
-import asyncio
 import random
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
 from uuid import uuid4
 
 from src.brokers.base import Broker
