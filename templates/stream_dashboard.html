@@ -463,8 +463,7 @@ function connectWS() {
             prevPrices[sym] = price;
 
             updateTicker(sym, price, data.bid, data.ask, change, changePct, data.timestamp);
-            // Only add one row per tick (prices:all fires once per symbol)
-            if (channel === 'prices:all' || channel === 'prices:' + sym) {
+            if (channel === 'prices:all') {
                 addTickRow(sym, price, change, changePct, data.timestamp);
             }
         }
