@@ -3,7 +3,6 @@ Abstract broker interface.
 """
 
 from abc import ABC, abstractmethod
-from decimal import Decimal
 from typing import Any
 
 from src.domain.enums import BrokerType

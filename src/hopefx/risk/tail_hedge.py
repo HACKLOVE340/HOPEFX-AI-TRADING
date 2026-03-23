@@ -7,10 +7,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-import numpy as np
 import structlog
 
-from hopefx.config.settings import settings
 
 logger = structlog.get_logger()
 

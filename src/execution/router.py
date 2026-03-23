@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
 
 import structlog
 
-from src.core.types import Order, Venue, Side, Symbol
+from src.core.types import Venue, Side, Symbol
 from src.execution.brokers.base import Broker
 
 logger = structlog.get_logger()

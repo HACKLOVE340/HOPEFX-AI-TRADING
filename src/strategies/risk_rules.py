@@ -4,15 +4,13 @@ Advanced strategy-level risk rules with dynamic adjustment.
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 from typing import Callable, Literal
 
 import numpy as np
-import pandas as pd
 
 from src.core.events import Event, RiskEvent, get_event_bus
 from src.core.logging_config import get_logger
-from src.domain.enums import RiskLevel, SignalStrength, TradeDirection
+from src.domain.enums import RiskLevel
 from src.domain.models import Signal
 
 logger = get_logger(__name__)

@@ -1,7 +1,7 @@
 """Health check endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from src.monitoring.health import HealthChecker

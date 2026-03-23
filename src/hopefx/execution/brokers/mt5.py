@@ -64,10 +64,33 @@ class MT5Broker(BaseBroker):
         )
 
     async def cancel_order(self, order_id: str) -> bool:
-        return True  # TODO: Implement
+        """Send TRADE_ACTION_REMOVE for a pending order via ZeroMQ."""
+        if not self._socket:
+            raise RuntimeError("Not connected")
+
+        request = {"action": "CANCEL", "ticket": int(order_id)}
+        await self._socket.send_json(request)
+        response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+        return bool(response.get("success", False))
 
     async def get_position(self, symbol: str) -> dict:
-        return {}  # TODO: Implement
+        """Return aggregated open position for `symbol` (empty dict if flat)."""
+        if not self._socket:
+            raise RuntimeError("Not connected")
+
+        request = {"action": "GET_POSITION", "symbol": symbol}
+        await self._socket.send_json(request)
+        response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+        # Expected response keys: symbol, side, volume, avg_entry_price, unrealized_pnl
+        return response if response.get("symbol") else {}
 
     async def get_account(self) -> dict:
-        return {}  # TODO: Implement
+        """Return current account snapshot from MT5 via ZeroMQ."""
+        if not self._socket:
+            raise RuntimeError("Not connected")
+
+        request = {"action": "GET_ACCOUNT"}
+        await self._socket.send_json(request)
+        response = await asyncio.wait_for(self._socket.recv_json(), timeout=10.0)
+        # Expected keys: balance, equity, margin, margin_free, leverage, currency
+        return response

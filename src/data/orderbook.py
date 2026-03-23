@@ -6,10 +6,9 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Callable
 
-import numpy as np
 import structlog
 
-from src.core.types import Tick, Side
+from src.core.types import Side
 
 logger = structlog.get_logger()
 

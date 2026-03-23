@@ -1,6 +1,5 @@
 import numpy as np
 from scipy import stats
-from scipy.spatial.distance import jensenshannon
 
 
 class DriftDetector:

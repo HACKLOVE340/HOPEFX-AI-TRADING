@@ -1,0 +1,13 @@
+apiVersion: v2
+name: hopefx
+description: HOPEFX AI Trading Engine
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - trading
+  - forex
+  - gold
+  - ai
+maintainers:
+  - name: HOPEFX Team

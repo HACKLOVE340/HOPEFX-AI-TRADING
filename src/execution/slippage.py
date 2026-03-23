@@ -9,7 +9,7 @@ from typing import Literal
 
 import numpy as np
 
-from src.domain.enums import OrderType, TradeDirection
+from src.domain.enums import TradeDirection
 from src.domain.models import Order
 
 
