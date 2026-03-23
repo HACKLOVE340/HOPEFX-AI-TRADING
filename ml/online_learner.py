@@ -104,9 +104,12 @@ class OnlineLearner:
         self.batch_size = 32
         
         # Learning rate scheduler
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='max', factor=0.5, patience=10
-        )
+        if self.optimizer is not None and torch is not None:
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, mode='max', factor=0.5, patience=10
+            )
+        else:
+            self.scheduler = None
         
         # Metrics
         self.train_losses = []
