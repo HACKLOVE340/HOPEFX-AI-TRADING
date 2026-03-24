@@ -42,18 +42,17 @@
 | Win rate | 47.1% |
 | Profit factor | 1.446 |
 | Max drawdown | −0.6% |
-| Sharpe ratio | 2.778 |
-| Calmar ratio | 1.134 |
+| Paper trading | Live — results at /api/performance/public |
 | ML accuracy (test) | 48.3% |
 
-### Live-Data Model Metrics (retrained 2026-03-24)
+### Live-Data Model Metrics (retrained 2026-03-24, H1 data)
 
-| Model | Accuracy | F1 | Precision | Recall | Training data |
-|---|---|---|---|---|---|
-| XGBoost | 47.1% | 0.609 | 0.512 | 0.750 | 503 daily bars, GC=F 2y |
-| RandomForest | 45.1% | 0.125 | 0.500 | 0.071 | 503 daily bars, GC=F 2y |
+| Model | Accuracy | F1 | Training data |
+|---|---|---|---|
+| XGBoost | 49.0% | 0.419 | 11,457 H1 bars, XAU_USD (class-balanced) |
+| RandomForest | 48.6% | 0.389 | 11,457 H1 bars, XAU_USD (class-balanced) |
 
-**Honest caveats**: Accuracy is ~47% (near-random for next-bar direction). The positive synthetic backtest result is driven by the asymmetric 2.5:1.5 TP:SL ratio, not prediction skill. Real gold has fat tails and macro regime shifts not captured in a 2-year window. Treat these numbers as infrastructure proof, not a live-trading signal. Walk-forward validation and regime-aware training are the next steps.
+**Honest caveats**: Accuracy is ~49% (near-random for next-bar direction on H1). The synthetic backtest result (17 trades) is too small a sample to compute a meaningful Sharpe ratio. Real gold has fat tails and macro regime shifts not captured in the current feature set. Treat these numbers as infrastructure proof, not a live-trading signal. Walk-forward validation and macro features (DXY, yields) are the next steps.
 
 **Reproduce the synthetic backtest:**
 ```bash
