@@ -14,7 +14,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "hopefx_account_equity",
+          "expr": "hopefx_equity",
           "legendFormat": "Equity"
         }
       ],
@@ -33,7 +33,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "hopefx_open_positions_total",
+          "expr": "hopefx_active_positions",
           "legendFormat": "Positions"
         }
       ]
@@ -46,7 +46,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "hopefx_daily_pnl_usd",
+          "expr": "hopefx_pnl_realized",
           "legendFormat": "Daily P&L"
         }
       ],
@@ -99,7 +99,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "hopefx_max_drawdown_pct",
+          "expr": "hopefx_drawdown_current",
           "legendFormat": "Max DD"
         }
       ],

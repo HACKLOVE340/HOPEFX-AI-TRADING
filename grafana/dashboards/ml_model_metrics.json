@@ -87,7 +87,7 @@
       "targets": [
         {
           "datasource": "Prometheus",
-          "expr": "hopefx_feature_drift_score",
+          "expr": "hopefx_model_drift_score",
           "legendFormat": "Drift"
         }
       ],
