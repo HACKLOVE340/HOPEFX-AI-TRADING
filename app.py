@@ -39,6 +39,7 @@ from auth.router import router as auth_router, set_auth_service
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from api.backtesting import router as backtesting_router
+from api.chat import router as chat_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -67,6 +68,7 @@ app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
 app.include_router(backtesting_router)
+app.include_router(chat_router)
 
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
@@ -357,6 +359,12 @@ async def startup_event():
 
     try:
         # ── Environment validation ────────────────────────────────────────────
+        # Warn about optional but important keys so operators notice early.
+        if not os.getenv('OPENAI_API_KEY'):
+            logger.warning(
+                "OPENAI_API_KEY not set — /api/chat will return 503 until configured"
+            )
+
         # Set dev defaults before validation so the app can start in dev mode.
         if not os.getenv('CONFIG_ENCRYPTION_KEY'):
             logger.warning("CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)")
