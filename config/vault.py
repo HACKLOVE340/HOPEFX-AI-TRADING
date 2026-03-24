@@ -13,7 +13,7 @@ import keyring
 from cryptography.fernet import Fernet, InvalidToken
 from passlib.context import CryptContext
 
-from src.core.exceptions import VaultError, AuthenticationError
+from core.exceptions import VaultError, AuthenticationError
 
 
 class SecureVault:

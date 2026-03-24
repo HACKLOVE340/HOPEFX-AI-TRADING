@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.domain.enums import (
+from core.domain_enums import (
     BrokerType,
     DataFrequency,
     OrderStatus,

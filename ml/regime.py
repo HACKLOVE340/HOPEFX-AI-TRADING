@@ -13,7 +13,12 @@ import structlog
 from hmmlearn.hmm import GaussianHMM
 from sklearn.mixture import GaussianMixture
 
-from src.features.engineer import FeatureVector
+try:
+    from src.features.engineer import FeatureVector
+except ImportError:
+    # Fallback when src/ package is not present — FeatureVector is only used
+    # as a type hint in this module; a plain dict is accepted at runtime.
+    FeatureVector = dict  # type: ignore[assignment,misc]
 
 logger = structlog.get_logger()
 
