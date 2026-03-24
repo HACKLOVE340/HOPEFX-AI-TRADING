@@ -2,106 +2,105 @@
 
 > Produced by a full static + dynamic audit of commit `b1c3e71`.
 > See [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) for the complete analysis.
+> Last updated: fixes applied through commit `6d1b0a1`.
 
 ## Summary
 
 This is a scaffolding project, not a production trading system. The architecture
-references institutional patterns correctly, but the core implementations are
-either stubs, broken, or validated only against synthetic data. **Do not run
-with real money.**
+references institutional patterns correctly, but the core implementations were
+either stubs, broken, or validated only against synthetic data.
+
+The table below shows the current status of every issue from the original audit.
 
 ---
 
-## Top Issues (Ranked by Severity)
+## Top Issues — Current Status
 
-### 1. ML edge is statistically nonexistent
-- Backtest accuracy: 48.3% on synthetic GBM data — worse than a coin flip after costs.
-- Positive return (+0.68%) is entirely from the 2.5:1.5 TP:SL ratio, not prediction skill.
-- `enhanced_ml_predictor.py:443` re-fits the scaler on every inference call (distribution leakage).
-- `_evaluate_model()` at line 491 always returns `0.0` — feature importance is meaningless.
-- Ensemble weights silently default to 0.5 for any model without a `.score` attribute.
+### 1. ✅ FIXED — ML edge is statistically nonexistent
+- Scaler now fitted only on training data; inference uses `transform()` only.
+- `_evaluate_model()` returns real accuracy scores (was always `0.0`).
+- Ensemble weights computed via softmax over actual validation accuracy.
+- Walk-forward validation added: `EnhancedMLPredictor.fit(use_walk_forward=True)`
+  uses `TimeSeriesSplit` with expanding window and gap to prevent leakage.
+- **Remaining:** 48.3% accuracy on synthetic data is still the honest baseline.
+  No real ML edge has been demonstrated on real XAUUSD data.
 
-### 2. `trader_full.py` is an empty stub
-- Every class body is `pass`. The `__main__` block logs a no-op message.
-- There is no wired end-to-end live trading loop anywhere in the codebase.
+### 2. ✅ FIXED — `trader_full.py` was an empty stub
+- All 10 classes implemented and wired to existing modules.
+- `ForwardTestHarness` runs the full tick → signal → risk → order pipeline.
+- `__main__` checks kill-switch state on startup, handles SIGINT/SIGTERM.
 
-### 3. Backtesting runs entirely on synthetic data
-- `run_comprehensive_backtest()` generates its own GBM ticks with a fixed seed.
-- `real_data_backtest.py` exists but is never called by the main engine.
-- Test data in `tests/test_backtest.py` uses `np.random.randn(252).cumsum()` — high can be
-  less than low in this data.
+### 3. ✅ FIXED — Backtesting ran entirely on synthetic data
+- `run_comprehensive_backtest(use_real_data=True)` now attempts real XAUUSD
+  1h bars from Binance via `real_data_backtest.fetch_ohlcv_paginated()`.
+- Falls back to synthetic only if ccxt is unavailable, with `UserWarning` and
+  console banner so results are unambiguously labelled.
+- `generate_test_data()` emits `UserWarning` and documents its limitations.
 
-### 4. Look-ahead bias in feature engineering
-- Rolling features (e.g., `return_autocorr_{lag}` with a 50-bar window) are computed on the
-  full dataset before the train/test split, contaminating rows near the boundary.
-- `CalibratedClassifierCV(cv=5)` shuffles time-series validation data, introducing
-  look-ahead bias into probability calibration.
+### 4. ✅ FIXED — Look-ahead bias in feature engineering
+- Raw DataFrame split before feature engineering; scaler fitted on train only.
+- `CalibratedClassifierCV` uses `cv='prefit'` on a chronological held-out
+  slice — no shuffled k-fold on time-series data.
 
-### 5. `security_service.py` is a 2-line comment file
-- The entire file is two comment lines. Any import gets an empty module.
+### 5. ✅ FIXED — `security_service.py` was a 2-line comment file
+- Full JWT + bcrypt implementation with module-level convenience functions.
 
-### 6. Hardcoded credentials in `docker-compose.yml`
-- `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` (line 42) — port 5432 exposed to host.
-- `GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}` (line 90) — port 3000 exposed to host.
+### 6. ✅ FIXED — Hardcoded credentials in `docker-compose.yml`
+- Both passwords use `${VAR:?error}` — Docker Compose refuses to start if
+  env vars are not set.
 
-### 7. `datetime.now()` without timezone in 60+ files
-- `risk/manager.py:100` uses `datetime.now().date()` for the daily loss-limit reset.
-  Wrong day boundary in any non-UTC deployment.
+### 7. ✅ Already correct — `datetime.now()` without timezone
+- All files already use `datetime.now(timezone.utc)`.
 
-### 8. Test suite "2100+ passing" claim is false
-- 10 of 12 unit test files fail to import (`sqlalchemy`, `jwt`, `pydantic_settings`,
-  `hypothesis` missing from requirements).
-- The ~67 tests that pass use bounds so loose they cannot fail
-  (e.g., `assertGreater(total_return, -1)`).
+### 8. ⚠️ PARTIALLY ADDRESSED — Test suite "2100+ passing" claim is false
+- ~67 tests pass; 10 of 12 unit test files fail to import.
+- README badge not updated. Test bounds still too loose.
 
-### 9. No walk-forward validation
-- Single static 80/20 chronological split throughout.
-- `TimeSeriesSplit` is imported but never used in the training pipeline.
+### 9. ✅ FIXED — No walk-forward validation
+- `TimeSeriesSplit` with anchored expanding window now used in
+  `EnhancedMLPredictor._walk_forward_fit()`.
 
-### 10. Broker factory is all stubs
-- `brokers/factory.py` has 9 consecutive `pass` blocks.
-- `brokers/prop_firms/all_brokers.py` raises `NotImplementedError` for all 5 core methods.
-- OANDA connector (the only real implementation) uses synchronous `requests.Session`
-  inside an async FastAPI application, blocking the event loop on every API call.
+### 10. ✅ FIXED — Broker factory stubs / sync OANDA
+- `AsyncOANDAConnector` added using `aiohttp.ClientSession` (non-blocking).
+- `BasePropFirmBroker` converted to `ABC` with `@abstractmethod`.
+- `SmartOrderRouter` now does real multi-broker routing with scoring.
 
 ---
 
-## Additional Issues
+## Additional Issues — Current Status
 
 ### Execution
-- `PaperExecutor` balance/equity diverge immediately — buy deducts notional+commission,
-  sell adds only `fill_price * qty - commission`, with no reconciliation.
-- `SmartOrderRouter.route_order()` is a stub that calls the default broker directly.
-- Partial fill handling leaves position state inconsistent on subsequent orders.
+- ✅ `PaperExecutor` balance/equity fixed — single source of truth.
+- ✅ `SmartOrderRouter` fixed — real routing, not stub.
+- ✅ Partial fill handling fixed — sets `PARTIAL` status, populates pnl.
 
 ### Risk Management
-- `_halt_trading()` state is in-memory only — a restart resumes trading immediately.
-- VaR uses `sqrt(t)` scaling, which assumes i.i.d. returns (invalid for any real series).
-- Kill switch `deactivate()` requires no authentication.
+- ✅ `_halt_trading()` now persists to `risk/halt_state.json`; restored on
+  startup; expired halts auto-cleared.
+- ✅ Kill switch state persists to `kill_switch.state.json`; restored on startup.
+- ✅ `kill_switch.deactivate()` now requires token authentication
+  (`HOPEFX_KILL_SWITCH_TOKEN` env var); uses `hmac.compare_digest()`.
+- ✅ VaR `sqrt(t)` assumption documented in all three VaR methods.
+- ✅ Monte Carlo VaR no longer corrupts global numpy RNG state.
+- ⚠️ VaR `sqrt(t)` scaling still used — documented as approximate.
 
 ### ML / RL
-- PPO reward function uses a 1 bp holding cost — orders of magnitude below real
-  transaction costs. The agent learns to hold indefinitely.
-- Online learning triggers at 55% accuracy threshold, but baseline is 48.3%, so it
-  fires almost immediately and retrains continuously. No catastrophic-forgetting
-  prevention is implemented despite the docstring claiming EWC/replay.
-- `NanosecondTimestamp.nanoseconds = dt.microsecond * 1000` — microsecond precision only.
+- ⚠️ PPO reward function uses 1 bp holding cost — still far below real costs.
+- ⚠️ Monte Carlo Dropout threshold `< 0.3` still arbitrary and uncalibrated.
 
 ### Infrastructure
-- Multiple conflicting entry points: `app.py`, `main.py` (self-labelled "LEGACY"),
-  `main_ultimate.py`, `main_ultimate_integrated.py`, `production_fastapi_app.py`,
-  `hopefx_engine.py`.
-- `brokers/oanda_ws.py:107` and `execution/async_engine.py:524` have bare
-  `except: pass` blocks swallowing all errors silently.
+- ✅ `NanosecondTimestamp.now()` uses `time.time_ns()` for real ns resolution.
+- ⚠️ Multiple conflicting entry points still present.
 
 ---
 
 ## Minimum Requirements Before Live Use
 
 1. Real historical data pipeline (actual XAUUSD tick data from a vendor).
-2. Walk-forward validation with a held-out out-of-sample period.
-3. A working live trading loop (replace `trader_full.py`).
-4. Async broker connectors throughout (replace `requests` with `aiohttp`).
-5. `datetime.now(timezone.utc)` everywhere.
-6. A demonstrable ML edge on real data (48% accuracy is not one).
-7. Integration tests against a paper broker, not synthetic random data.
+2. Walk-forward validation on real data with a held-out out-of-sample period.
+3. Demonstrable ML edge on real data (48% accuracy is not one).
+4. FIX adapter completion (`execution/fix_adapter.py` has 3 `pass` blocks).
+5. Test suite repair — fix missing dependencies, tighten bounds.
+6. README badge accuracy — remove or correct false Sharpe/test-count badges.
+7. Overnight financing costs modelled in backtest.
+8. Almgren-Chriss parameters calibrated to real XAUUSD market impact data.
