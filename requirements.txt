@@ -97,6 +97,18 @@ ta>=0.11.0
 # ── Circuit breaker ───────────────────────────────────────────────────────────
 circuitbreaker>=2.0.0
 
+# ── FIX protocol ─────────────────────────────────────────────────────────────
+# quickfix is a C-extension and the preferred backend for production.
+# pyfixmsg is a pure-Python fallback used when quickfix cannot be compiled
+# (e.g. CI environments without a C compiler).
+# execution/fix_adapter.py tries quickfix first, then pyfixmsg.
+#
+# quickfix requires a C compiler and the quickfix C++ library headers.
+# On Ubuntu/Debian: sudo apt-get install libquickfix-dev
+# On macOS:         brew install quickfix
+quickfix>=1.15.1; sys_platform != "win32"
+pyfixmsg>=0.0.14
+
 # ── Dev / test ────────────────────────────────────────────────────────────────
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
