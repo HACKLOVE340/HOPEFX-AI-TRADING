@@ -1,0 +1,67 @@
+import '@testing-library/jest-dom';
+
+// Mock lightweight-charts (canvas not available in jsdom)
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn(() => ({
+    addSeries: vi.fn(() => ({ setData: vi.fn(), update: vi.fn() })),
+    timeScale: vi.fn(() => ({ fitContent: vi.fn(), scrollToRealTime: vi.fn() })),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+    resize: vi.fn(),
+  })),
+  AreaSeries:        { type: 'Area' },
+  LineSeries:        { type: 'Line' },
+  CandlestickSeries: { type: 'Candlestick' },
+  ColorType: { Solid: 'solid', VerticalGradient: 'gradient' },
+}));
+
+// Mock ResizeObserver
+(globalThis as typeof globalThis & { ResizeObserver: unknown }).ResizeObserver = class ResizeObserver {
+  observe()    { /* noop */ }
+  unobserve()  { /* noop */ }
+  disconnect() { /* noop */ }
+};
+
+// Mock WebSocket
+class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN       = 1;
+  static CLOSING    = 2;
+  static CLOSED     = 3;
+
+  readyState = MockWebSocket.CONNECTING;
+  onopen:    ((e: Event) => void) | null = null;
+  onmessage: ((e: MessageEvent) => void) | null = null;
+  onerror:   ((e: Event) => void) | null = null;
+  onclose:   ((e: CloseEvent) => void) | null = null;
+
+  constructor(public url: string) {
+    setTimeout(() => {
+      this.readyState = MockWebSocket.OPEN;
+      this.onopen?.(new Event('open'));
+    }, 0);
+  }
+
+  send(_data: string) { /* noop */ }
+  close() {
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.(new CloseEvent('close'));
+  }
+}
+
+(globalThis as typeof globalThis & { WebSocket: unknown }).WebSocket = MockWebSocket as unknown as typeof WebSocket;
+
+// Suppress console.error noise in tests
+const originalError = console.error;
+beforeAll(() => {
+  console.error = (...args: unknown[]) => {
+    const msg = String(args[0] ?? '');
+    if (
+      msg.includes('Warning: ReactDOM.render') ||
+      msg.includes('act(') ||
+      msg.includes('Not implemented')
+    ) return;
+    originalError(...args);
+  };
+});
+afterAll(() => { console.error = originalError; });
