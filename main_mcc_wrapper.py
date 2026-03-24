@@ -1,64 +1,13 @@
-# main_mcc_wrapper.py
 """
-LEGACY — do not use as an entry point.
+DEPRECATED — do not use.
 
-This file is kept as a usage example showing how to integrate the
-MasterControlCore (MCC) with a strategy loop. The canonical entry
-point is app.py, which wires MCC via brain/brain.py at startup.
+This file is kept for git history only. The canonical entry point is app.py.
+MCC integration is handled by brain/brain.py, wired at startup in app.py.
 
-Wrapper that integrates MCC with your existing HOPEFX main.py
-WITHOUT breaking anything.
+    uvicorn app:app --host 0.0.0.0 --port 8000
 """
-
-from core.mcc.master_control import MasterControlCore, MCCConfig
-from config.config_manager import ConfigManager
-from cache.market_data_cache import MarketDataCache
-
-# Import canonical strategies
-from strategies.ma_crossover import MovingAverageCrossover as YourExistingStrategy
-
-
-def main_with_mcc():
-    """Your existing main.py enhanced with MCC"""
-    
-    # 1. Initialize your existing components (UNCHANGED)
-    config = ConfigManager()
-    cache = MarketDataCache()
-    
-    # 2. Initialize MCC with your components
-    mcc = MasterControlCore(MCCConfig(
-        max_strategies_active=3,
-        emergency_drawdown_pct=0.10
-    ))
-    mcc.initialize(config, cache)
-    
-    # 3. Register your existing strategies (NO CHANGES NEEDED)
-    strategy1 = YourExistingStrategy()
-    mcc.register_strategy(strategy1, max_allocation=0.30)
-    
-    # 4. Add new strategies if you want
-    # from strategies.new_strategy import NewStrategy
-    # mcc.register_strategy(NewStrategy(), max_allocation=0.20)
-    
-    # 5. Activate strategies
-    mcc.activate_strategy(strategy1.config.name)
-    
-    # 6. Your existing price feed loop - just add one line!
-    print("\n🔄 Starting price feed (your existing code)...")
-    
-    try:
-        while True:
-            # YOUR EXISTING CODE:
-            price = get_price_from_your_feed()  # Your existing function
-            
-            # ADD THIS ONE LINE to enable MCC:
-            mcc.on_price_update("XAUUSD", price)
-            
-            # Your existing processing continues...
-            
-    except KeyboardInterrupt:
-        mcc.stop()
-
+import sys
 
 if __name__ == "__main__":
-    main_with_mcc()
+    print("ERROR: main_mcc_wrapper.py is deprecated. Use: uvicorn app:app --host 0.0.0.0 --port 8000")
+    sys.exit(1)

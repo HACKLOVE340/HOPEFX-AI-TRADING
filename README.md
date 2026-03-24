@@ -1,5 +1,22 @@
 # HOPEFX-AI-TRADING
 
+## START HERE
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+uvicorn app:app --host 0.0.0.0 --port 8000
+
+# API docs
+open http://localhost:8000/docs
+```
+
+> **Single entry point:** `app.py` — all other `main*.py` files are deprecated stubs.
+
+---
+
 <div align="center">
 
 <img src="docs/assets/banner.svg" alt="HOPEFX — Institutional-Grade AI Gold Trading Platform" width="100%"/>
@@ -8,7 +25,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00c853.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-79%20passed-brightgreen.svg?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-2239%20passed-brightgreen.svg?style=for-the-badge)](tests/)
 [![Paper Trading](https://img.shields.io/badge/Paper_Trading-Active-orange.svg?style=for-the-badge)](docs/)
 [![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-00e5ff.svg?style=for-the-badge)](docs/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
