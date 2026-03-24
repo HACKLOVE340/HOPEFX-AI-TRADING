@@ -1,810 +1,327 @@
-# 👑 HOPEFX — THE ULTIMATE MASTER BUILD PLAN
+# HOPEFX V2 — TRUTH REPORT
 
-## GOAT Edition: Beat Every Competitor, Own Every Gap, Launch Ready
+## “How true is the Grafana claim?” + Full Test & Deployment Audit
 
-**Date:** 2026-03-24  
-**Goal:** Superior to QuantConnect, Trade Ideas, TrendSpider, Tickeron, MetaStock  
-**Reality Check:** You have 3 codebases, broken CI, stale data, and 0 live users — but the architecture bones are stronger than any of them started with. This plan fixes everything in sequence.
+**Date:** 2026-03-24 | **Version analyzed:** v2 (second ZIP upload)
 
 -----
 
-# PART 1: WHAT YOU HAVE vs WHAT THEY HAVE
+## THE GRAFANA CLAIM — VERDICT: HALF TRUE ⚠️
 
-## Complete Gap Inventory — Every Single Item
+> *“The Grafana dashboards reference Prometheus metric names that need to be emitted by prometheus_monitoring.py. The dashboard panels will show ‘No data’ until those metrics are instrumented — the dashboards are structurally correct and will populate once the metrics exist.”*
 
-### 🔴 BROKEN IN YOUR APP RIGHT NOW (Must Fix First)
+**What’s true:** The Grafana provisioning infrastructure is now real and structurally correct. The datasource config, dashboard loader, and 4 dashboard JSON files all exist and are properly wired in docker-compose. The statement that “dashboards are structurally correct” is accurate.
 
-|# |Gap                                                                            |Severity|They Have It?                           |
-|--|-------------------------------------------------------------------------------|--------|----------------------------------------|
-|1 |3 parallel codebases (root/, src/, hopefx/) — nothing talks to each other      |FATAL   |✅ All of them: 1 codebase               |
-|2 |6 conflicting entry points — nobody knows how to run the app                   |FATAL   |✅ All of them: 1 entry point            |
-|3 |CI broken since day 1 — targets src/hopefx/ which doesn’t exist                |FATAL   |✅ All of them: green CI                 |
-|4 |3 conflicting requirements.txt with circular include                           |FATAL   |✅ All of them: 1 requirements file      |
-|5 |ML model: 46.7% accuracy (worse than coin flip)                                |FATAL   |✅ Trade Ideas Holly: audited performance|
-|6 |ML training data ends Oct 2024 — 17 months stale, gold at $1,668 vs $3,100+ now|FATAL   |✅ All of them: real-time data           |
-|7 |manifest.json points to random_forest_model.pkl — file does not exist          |FATAL   |✅ All of them                           |
-|8 |FEATURE_ML_PREDICTIONS=false (headline feature disabled by default)            |CRITICAL|✅ All of them: AI on by default         |
-|9 |FEATURE_LIVE_TRADING=false                                                     |CRITICAL|✅ All of them                           |
-|10|FIX adapter has 5 `pass` blocks — failed orders silently disappear             |CRITICAL|✅ QuantConnect: full FIX                |
-|11|No Grafana dashboards provisioned — monitoring is cosmetic                     |HIGH    |✅ All of them                           |
-|12|pyproject.toml declares hopefx package at src/hopefx/ — that dir doesn’t exist |HIGH    |✅ All of them                           |
-|13|`@app.on_event("startup")` deprecated — breaks FastAPI 0.115+                  |HIGH    |✅ All of them                           |
-|14|nocode/, transparency/, explainability/, replay/ = **init**.py only (stubs)    |HIGH    |⚠️ TrendSpider: no-code ✅                |
-|15|Zero verified live broker connections tested                                   |HIGH    |✅ All of them                           |
-|16|VaR uses √t scaling (documented approximate, not corrected)                    |MEDIUM  |✅ QuantConnect: rigorous                |
-|17|PPO RL reward: 1bp cost vs real 30-50bp XAUUSD spread                          |MEDIUM  |✅ QuantConnect                          |
-|18|Monte Carlo Dropout threshold 0.3 — arbitrary, uncalibrated                    |MEDIUM  |✅ QuantConnect                          |
-|19|No overnight swap/financing in backtest                                        |MEDIUM  |✅ All of them                           |
-|20|Almgren-Chriss market impact parameters hardcoded                              |MEDIUM  |✅ QuantConnect                          |
-|21|README badges: “2.78+ Sharpe” and “2100+ tests” — both false                   |MEDIUM  |✅ All of them: honest badges            |
-|22|Test coverage ~67 real tests, CI demands 95% — will always fail                |HIGH    |✅ All of them                           |
+**What’s not true:** The claim implies `prometheus_monitoring.py` just needs to emit the metrics. In reality, `prometheus_monitoring.py` is a **2-line stub** — it contains only a comment and nothing else:
 
------
-
-### 🟡 FEATURES YOU HAVE (CODE EXISTS) BUT NOT WIRED / TESTED
-
-|# |Feature                                                    |Status              |Fix Needed                     |
-|--|-----------------------------------------------------------|--------------------|-------------------------------|
-|23|Prop firm compliance (FTMO, The5ers, TopStep, MyForexFunds)|Code exists         |Wire to live risk manager      |
-|24|Copy trading engine                                        |Code exists         |Wire to social module + test   |
-|25|Leaderboards                                               |Code exists         |Wire to real trade data        |
-|26|Marketplace (buy/sell strategies)                          |Code exists         |Wire Stripe + test             |
-|27|Telegram alerts                                            |Code exists         |Wire to alert engine           |
-|28|AML / KYC gate                                             |Code exists         |Wire to payment flow           |
-|29|Whitelabel system                                          |Code exists         |Wire to config system          |
-|30|No-code strategy builder (nocode/)                         |26KB in **init**    |Extract + build UI             |
-|31|AI Explainability (explainability/)                        |23KB in **init**    |Extract + build UI             |
-|32|Transparency engine (transparency/)                        |18KB in **init**    |Extract + build UI             |
-|33|Replay engine (replay/)                                    |22KB in **init**    |Extract + build UI             |
-|34|Vector RAG / Research (research/vector_store.py)           |16KB                |Wire to LLM + FAISS            |
-|35|GraphQL API (graphql/schema.py)                            |Code exists         |Wire to FastAPI                |
-|36|Teams module                                               |Code exists         |Wire to auth system            |
-|37|News sentiment (news/)                                     |5 files exist       |Wire to signal engine          |
-|38|Geopolitical risk (news/geopolitical_risk.py)              |Code exists         |Wire to signal engine          |
-|39|Economic calendar (news/economic_calendar.py)              |Code exists         |Wire + test                    |
-|40|Mobile PWA (mobile/ + service-worker.js)                   |Files exist         |Build real PWA UI              |
-|41|Dashboard React app (dashboard/src/)                       |10 TSX files        |Build + bundle with Vite       |
-|42|OANDA async connector                                      |Built               |Test with real practice account|
-|43|Alpaca connector                                           |Built               |Test with paper account        |
-|44|Binance connector                                          |Built               |Test with testnet              |
-|45|Interactive Brokers connector                              |Built               |Test with paper account        |
-|46|MT5 connector                                              |Built (Windows only)|Add Linux bridge               |
-|47|GPU acceleration                                           |Code exists         |Uncomment + test               |
-|48|RL/PPO agent                                               |Code exists         |Fix reward function + train    |
-|49|LSTM model                                                 |Code exists         |Train on real H1 data          |
-|50|Online learner                                             |Code exists         |Wire to live signal pipeline   |
-|51|Prometheus metrics                                         |Connected           |Add Grafana dashboards         |
-|52|Walk-forward validation                                    |Built               |Run on real data               |
-|53|Kill switch (HMAC authenticated)                           |Built               |Wire to UI                     |
-|54|Crypto payments (BTC, ETH, USDT)                           |Code exists         |Wire to Stripe/Flutterwave     |
-|55|Flutterwave / Paystack                                     |Code exists         |Wire + test (Africa market!)   |
-|56|K8s / Helm deployment                                      |Configs exist       |Test end-to-end                |
-
------
-
-### 🔵 FEATURES YOU DON’T HAVE AT ALL (Need to Build)
-
-*(Everything the top platforms have that has zero code in your repo)*
-
-|#  |Feature                                                                  |Who Has It                           |Priority                       |
-|---|-------------------------------------------------------------------------|-------------------------------------|-------------------------------|
-|57 |Live audited AI performance track record (public dashboard)              |Trade Ideas, Tickeron                |🔴 CRITICAL                     |
-|58 |TradingView Lightweight Charts integration                               |TrendSpider, Tickeron                |🔴 CRITICAL                     |
-|59 |Real-time market data feed (Polygon.io or OANDA REST/Stream) wired & live|All of them                          |🔴 CRITICAL                     |
-|60 |H1 historical XAUUSD data — 3+ years current                             |All of them                          |🔴 CRITICAL                     |
-|61 |Daily data update job (cron/scheduler)                                   |All of them                          |🔴 CRITICAL                     |
-|62 |Pattern recognition scanner with confidence score                        |TrendSpider (150+ patterns), Tickeron|🔴 HIGH                         |
-|63 |AI probability forecast display (e.g. “72% chance bullish next 4h”)      |Tickeron, MetaStock                  |🔴 HIGH                         |
-|64 |Overnight gap / economic event detection                                 |All of them                          |🔴 HIGH                         |
-|65 |One-click trade execution from AI signal                                 |Trade Ideas, Tickeron                |🔴 HIGH                         |
-|66 |Heatmap of market conditions                                             |TrendSpider                          |🔴 HIGH                         |
-|67 |Strategy performance comparison table (live vs backtest)                 |QuantConnect, Trade Ideas            |🔴 HIGH                         |
-|68 |Drawdown chart (not just equity curve)                                   |All of them                          |🔴 HIGH                         |
-|69 |Trade journal with tagging and review                                    |TradingView, TrendSpider             |🟡 MEDIUM                       |
-|70 |Multi-timeframe analysis view (M15 + H1 + H4 simultaneously)             |TrendSpider, MetaStock               |🟡 MEDIUM                       |
-|71 |Candlestick annotation / drawing tools on live chart                     |TrendSpider, MetaStock               |🟡 MEDIUM                       |
-|72 |Backtesting visual replay (step through trades on chart)                 |TrendSpider                          |🟡 MEDIUM                       |
-|73 |Portfolio heat map (multi-symbol exposure view)                          |QuantConnect                         |🟡 MEDIUM                       |
-|74 |Risk-per-trade calculator (visual, interactive)                          |Trade Ideas                          |🟡 MEDIUM                       |
-|75 |Strategy marketplace with ratings + reviews                              |QuantConnect (5K+ algos)             |🟡 MEDIUM                       |
-|76 |Broker connection wizard (step-by-step UI)                               |Trade Ideas, Tickeron                |🟡 MEDIUM                       |
-|77 |Automated strategy report (PDF export)                                   |QuantConnect, MetaStock              |🟡 MEDIUM                       |
-|78 |Public results leaderboard (verified live performance)                   |Tickeron                             |🟡 MEDIUM                       |
-|79 |XAUUSD-specific macro signals (DXY, bond yields, CPI impact)             |MetaStock                            |🟡 MEDIUM                       |
-|80 |News impact scoring per event type (NFP, FOMC, CPI)                      |Trade Ideas                          |🟡 MEDIUM                       |
-|81 |Prop firm challenge tracker dashboard (visual daily P&L vs limits)       |NOBODY — your moat                   |🔴 CRITICAL                     |
-|82 |Auto-pause trading on news event (configurable buffer)                   |Trade Ideas                          |🟡 MEDIUM                       |
-|83 |Mobile push notifications (iOS/Android)                                  |Tickeron, Trade Ideas                |🟡 MEDIUM                       |
-|84 |Dark/light mode toggle                                                   |All of them                          |🟢 LOW                          |
-|85 |Internationalization / multi-language                                    |MetaStock                            |🟢 LOW                          |
-|86 |Two-factor authentication (TOTP) UI                                      |All of them                          |🟡 MEDIUM                       |
-|87 |API key management UI                                                    |QuantConnect                         |🟡 MEDIUM                       |
-|88 |Webhook outbound alerts (Discord, Slack, email)                          |TrendSpider                          |🟡 MEDIUM                       |
-|89 |Strategy version history / rollback                                      |QuantConnect                         |🟡 MEDIUM                       |
-|90 |Paper → Live migration checklist UI                                      |Nobody — your gap                    |🟡 MEDIUM                       |
-|91 |Session replay (what did the AI decide and why, step by step)            |Nobody                               |🟡 MEDIUM                       |
-|92 |Social feed (signal sharing, comments)                                   |TradingView                          |🟢 LOW                          |
-|93 |Affiliate / referral program UI                                          |Tickeron                             |🟢 LOW                          |
-|94 |Onboarding flow (guided setup wizard)                                    |All of them                          |🟡 MEDIUM                       |
-|95 |Free tier / trial mode                                                   |All of them                          |🔴 CRITICAL for user acquisition|
-|96 |Live chat / support widget                                               |All of them                          |🟢 LOW                          |
-|97 |Documentation site (MkDocs/Gitbook)                                      |All of them                          |🟡 MEDIUM                       |
-|98 |Status page (uptime monitoring)                                          |All of them                          |🟢 LOW                          |
-|99 |XAUUSD correlation dashboard (Gold vs DXY vs Yields vs Oil)              |MetaStock                            |🟡 MEDIUM                       |
-|100|Regime detection dashboard (“We’re in risk-off mode”)                    |QuantConnect                         |🟡 MEDIUM                       |
-
------
-
-# PART 2: THE MASTER BUILD SEQUENCE
-
-## Every Fix + Every Feature — In Exact Order
-
------
-
-## 🏗️ PHASE 0: CONSOLIDATION (Week 1)
-
-*“You can’t build a skyscraper on 3 foundations.”*
-
-### STEP 0.1 — PICK ONE CODEBASE AND DELETE THE REST
-
-**Decision:** `src/` is the canonical codebase. It has clean DI, typed domain models, proper async, and the production trading engine.
-
-**Action:**
-
-```
-KEEP:   src/           → rename to become the app root
-KEEP:   dashboard/     → React frontend (already has Vite + components)
-KEEP:   templates/     → Jinja2 for server-side pages
-MERGE:  root/risk/     → src/risk/ (it has more complete kill switch, AML, prop firms)
-MERGE:  root/brokers/  → src/brokers/ (it has OANDA async, smart router)
-MERGE:  root/social/   → src/social/
-MERGE:  root/payments/ → src/payments/ (Flutterwave, Paystack, crypto wallet)
-MERGE:  root/compliance/ → src/compliance/
-DELETE: hopefx/        → third codebase, nothing unique not already in src/
-DELETE: root/ duplicate modules (api/, auth/, backtesting/, brain/, cache/, etc.)
+```python
+# Prometheus monitoring setup for metrics
+# ... code implementation ...
 ```
 
-### STEP 0.2 — SINGLE requirements.txt
+That file has zero implementation. It is not the missing piece. The real issue is deeper — **20 out of 21 metric names in the Grafana dashboards don’t match what the codebase actually emits.** The problem is a naming mismatch across the entire codebase, not a single missing file.
 
-Merge all 3 files. Remove circular `-r` include. Final deps:
+-----
 
-```
-fastapi>=0.110.0          # lifespan support
-uvicorn[standard]>=0.27.0
-sqlalchemy>=2.0.0
-alembic>=1.13.0
-redis>=5.0.0
-# ML
-scikit-learn>=1.4.0
-xgboost>=2.0.0
-lightgbm>=4.3.0
-# optional: tensorflow, torch (install separately for GPU)
-# Brokers
-oandapyV20>=0.6.3
-ccxt>=4.2.0
-alpaca-trade-api>=3.0.2
-ib-insync>=0.9.71
-# Data
-polygon-api-client>=1.12.0
-yfinance>=0.2.40
-pandas>=2.2.0
-numpy>=1.26.0
-# Payments
-stripe>=7.0.0
-# ... (one clean list)
-```
+## THE EXACT METRIC GAP
 
-### STEP 0.3 — FIX CI
+The codebase emits real metrics. Grafana asks for different names. Here is the full mismatch table:
 
-Change `ci.yml`:
+|Grafana Dashboard Asks For           |Code Actually Emits                         |Fix Needed                   |
+|-------------------------------------|--------------------------------------------|-----------------------------|
+|`hopefx_account_equity`              |`hopefx_equity`                             |Rename or alias              |
+|`hopefx_open_positions_total`        |`hopefx_active_positions`                   |Rename or alias              |
+|`hopefx_daily_pnl_usd`               |`hopefx_pnl_realized`                       |Rename or alias              |
+|`hopefx_max_drawdown_pct`            |`hopefx_drawdown_current`                   |Rename or alias              |
+|`hopefx_feature_drift_score`         |`hopefx_model_drift_score`                  |Rename or alias              |
+|`hopefx_order_latency_ms_bucket`     |`hopefx_order_latency_seconds`              |Unit change (ms→s) + rename  |
+|`hopefx_broker_latency_ms_bucket`    |`hopefx_latency_order_submit_seconds`       |Rename + make Histogram      |
+|`hopefx_db_pool_active`              |`hopefx_db_connections_active`              |Rename                       |
+|`hopefx_signals_total`               |*(closest: `hopefx_events_processed_total`)*|Instrument from signal engine|
+|`hopefx_broker_connected`            |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_broker_failover_total`       |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_broker_rejections_total`     |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_fix_last_heartbeat_timestamp`|*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_market_regime`               |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_model_accuracy_pct`          |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_model_inference_ms_bucket`   |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_model_last_trained_timestamp`|*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_signal_confidence_bucket`    |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_smart_router_active_broker`  |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_win_rate_pct`                |*(nothing)*                                 |**Must build from scratch**  |
+|`hopefx_orders_total`                |`hopefx_orders_total`                       |✅ **THIS ONE MATCHES**       |
+
+**Score: 1 out of 21 Grafana metrics match what the code emits.**
+
+The fix is two-part:
+
+1. **Quick renames (10 metrics):** Change metric names in `infrastructure/metrics.py` to match Grafana, or edit the Grafana dashboard JSON to match the code. Editing Grafana JSON is faster.
+1. **New instrumentation (10 metrics):** Add new `Gauge`/`Counter`/`Histogram` registration calls in the appropriate modules (broker manager, ML predictor, signal engine, smart router).
+
+-----
+
+## WHAT ACTUALLY CHANGED IN V2
+
+Here are all the real changes between your first upload and this one:
+
+### ✅ GENUINELY FIXED IN V2
+
+|Fix                         |What Changed                                                                                                                 |Verdict                                          |
+|----------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------|
+|**Grafana provisioning**    |`grafana/` directory added with 4 dashboards, datasource config, dashboard loader, mounted in docker-compose                 |✅ Real fix — structure is correct                |
+|**RL agent reward function**|`commission = 0.0035` (35 bps) — fixed from 1bp to realistic XAUUSD cost                                                     |✅ Real fix                                       |
+|**Kill switch REST API**    |FastAPI router added to `kill_switch.py` with GET/POST endpoints for status, activate, deactivate                            |✅ Real addition                                  |
+|**CI codebase targeting**   |`ci.yml` now runs `mypy` and `ruff` on root packages (`api/ auth/ brokers/`) instead of `src/`                               |✅ Real fix — CI will no longer fail on wrong path|
+|**CI coverage threshold**   |Dropped from `95%` → `70%` — achievable target now                                                                           |✅ Real fix                                       |
+|**pyproject.toml**          |Switched from `hatchling` to `setuptools`, uses `packages.find` to auto-discover root packages, excludes `src/` and `hopefx/`|✅ Real fix — package discovery now works         |
+|**No-code builder**         |`nocode/builder.py` (468 lines), `nocode/models.py`, `nocode/router.py` — real implementation                                |✅ Real new feature                               |
+|**Replay engine**           |`replay/engine.py` (473 lines), `replay/models.py`, `replay/router.py` — real implementation                                 |✅ Real new feature                               |
+|**AI Explainability**       |`explainability/explainer.py` (446 lines), `explainability/models.py`, `explainability/router.py`                            |✅ Real new feature                               |
+|**Transparency engine**     |`transparency/engine.py`, `transparency/models.py`, `transparency/router.py`                                                 |✅ Real new feature                               |
+|**Data scheduler**          |`data/scheduler.py` (309 lines) — OANDA H1 data fetch with yfinance fallback                                                 |✅ Real new feature                               |
+|**Data validator**          |`data/validator.py` (230 lines) — price sanity, gap detection, stale data                                                    |✅ Real new feature                               |
+
+### ❌ STILL NOT FIXED IN V2
+
+|Issue                            |Status                                                                                                       |
+|---------------------------------|-------------------------------------------------------------------------------------------------------------|
+|**FIX adapter 5 `pass` blocks**  |Unchanged — all 5 silent exception swallowers still there at lines 242, 256, 260, 264, 278                   |
+|**prometheus_monitoring.py**     |Still 2-line stub: `# ... code implementation ...`                                                           |
+|**ML model stale data**          |Data still ends Oct 2024, gold still at $1,668 in training set                                               |
+|**ML accuracy 46.7%**            |No retrain, no new data, same model                                                                          |
+|**manifest.json broken path**    |`random_forest_model.pkl` still missing from `ml/saved_models/GCF/`                                          |
+|**3 parallel codebases**         |`root/`, `src/`, `hopefx/` all still present                                                                 |
+|**DIAGNOSTIC_REPORT.md replaced**|The V2 file replaced the real diagnostic report with the Master Build Plan — the fix tracking history is gone|
+
+-----
+
+## TEST SUITE — FULL ANALYSIS
+
+### The Numbers
+
+|Metric                                   |Count    |
+|-----------------------------------------|---------|
+|Total test functions found (static parse)|**2,178**|
+|Total test files                         |69       |
+|Files with zero tests (empty/skeleton)   |6        |
+|Files with syntax errors                 |0        |
+
+### The Critical Question: Are These Real Tests?
+
+Yes and no — it depends on the file. Here’s the breakdown:
+
+**Tests that import and test real production code (GOOD):**
+
+- `test_api.py` — imports from `api/trading.py`, `api/admin.py`, uses `TestClient`
+- `test_ml_models.py` — imports from `ml/models/base.py`, `ml/models/ensemble.py`, `ml/features/technical.py`
+- `test_risk_manager.py` — imports from `risk/manager.py`, `database/models.py`
+- `test_strategies.py` — imports from `strategies/`, uses real strategy classes
+- `test_broker_connectors.py` — imports real broker connectors, stubs only the external SDKs (MT5, OANDA) which is correct testing practice
+
+**Tests that are heavily mocked (ACCEPTABLE but limited):**
+
+- Most broker connector tests inject stub modules for `MetaTrader5`, `oandapyV20`, `alpaca_trade_api` — this is the right approach since you can’t run live broker tests in CI. The underlying broker logic is still exercised.
+
+**Tests that are empty (BAD — need filling):**
+
+- `test_copy_trading.py` — 0 tests
+- `test_integration.py` — 0 tests
+- `test_trading_flow.py` — 0 tests
+- `test_failure_modes.py` — 0 tests
+- `test_full_pipeline.py` — 0 tests
+- `test_broker.py` (integration) — 0 tests
+
+### Why Tests Still Can’t Run in CI
+
+The CI installs from `requirements-dev.txt` which includes `pytest-asyncio`. But `requirements.txt` was changed in V2 to **remove** `aiosqlite`, `asyncpg`, and all dev dependencies. This creates a mismatch:
+
+- Tests import `pytest_asyncio` → needs `pytest-asyncio` installed
+- Tests import `asyncpg` for DB → was removed from `requirements.txt`
+- Tests import `fastapi` → not in base `requirements.txt` for CI
+
+The CI step `pip install -r requirements-dev.txt` should pull in everything via `-r requirements.txt` at the top of that file, but if that circular reference was removed, the chain breaks.
+
+**Estimated real passing tests when run with all deps installed: ~180–250** (not 2,178 — the remainder will fail on import errors from missing optional packages like `tensorflow`, `torch`, `MetaTrader5`).
+
+-----
+
+## DEPLOYMENT ISSUES — FULL DIAGNOSIS
+
+### Issue 1: Grafana Mounted Paths Wrong ⚠️
+
+`docker-compose.yml` mounts:
 
 ```yaml
-- name: Run mypy
-  run: mypy src/ --ignore-missing-imports  # remove --strict until stubs exist
-- name: Run tests
-  run: pytest tests/ --cov=src --cov-fail-under=70  # realistic target to start
+- ./grafana/provisioning:/etc/grafana/provisioning:ro
+- ./grafana/dashboards:/etc/grafana/dashboards:ro
 ```
 
-Add `src/hopefx/__init__.py` OR fix pyproject.toml to point at actual `src/`.
+But the dashboard JSON files are in `grafana/dashboards/` and the provisioning config points to `/etc/grafana/dashboards`. **This is correct and will work** — the files are in the right place. ✅
 
-### STEP 0.4 — ONE ENTRY POINT
+### Issue 2: Grafana `GF_SECURITY_ADMIN_PASSWORD` still uses `${VAR:?error}` ✅
 
-`app.py` is the Dockerfile entry. Delete all others. Add a single `README.md` section: **“How to Run in 3 Commands”**.
+Good — Docker Compose will refuse to start without it set. This is correct.
 
-### STEP 0.5 — FIX FastAPI STARTUP
+### Issue 3: `prometheus_monitoring.py` is a stub — Prometheus starts but custom metrics never register ❌
 
-Replace deprecated `@app.on_event("startup")` with lifespan context manager:
+The Prometheus service will start and scrape `http://app:8000/metrics`. The app does emit some metrics via `infrastructure/metrics.py`. But the 20 trading-specific metrics the dashboards need don’t exist in code. Dashboards show “No data” on all 20 panels.
+
+### Issue 4: Data scheduler not wired to app startup ⚠️
+
+`data/scheduler.py` exists and is real (309 lines). But it’s never called from `app.py` startup. The data update job won’t run unless explicitly started.
+
+**Fix:** Add to `app.py` startup sequence:
 
 ```python
-from contextlib import asynccontextmanager
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await startup()
-    yield
-    await shutdown()
-app = FastAPI(lifespan=lifespan)
+from data.scheduler import DataScheduler
+scheduler = DataScheduler()
+app_state.background_tasks.append(asyncio.create_task(scheduler.start()))
 ```
 
-**Phase 0 output:** One app. One entry point. Green CI. Deployable Docker image.
+### Issue 5: New routers (nocode, replay, explainability, transparency) not wired to FastAPI ❌
+
+All four new modules have real `router.py` files. None are imported or registered in `app.py`. The features exist in Python but are not accessible via any API endpoint.
+
+**Fix for each:** Add to `app.py`:
+
+```python
+from nocode.router import router as nocode_router
+from replay.router import router as replay_router
+from explainability.router import router as explainability_router
+from transparency.router import router as transparency_router
+
+app.include_router(nocode_router)
+app.include_router(replay_router)
+app.include_router(explainability_router)
+app.include_router(transparency_router)
+```
+
+### Issue 6: kill_switch router also not wired ❌
+
+The new `create_kill_switch_router()` function was added to `kill_switch.py`. It’s not called from `app.py`. The REST endpoints (`/api/kill-switch/status`, `/api/kill-switch/activate`) don’t exist at runtime.
+
+### Issue 7: pyproject.toml has duplicate `[build-system]` note ⚠️
+
+The diff shows a comment “# duplicate [build-system] removed” but the file may have a stale section. Run `python -m build --check` to confirm it parses cleanly.
+
+### Issue 8: requirements.txt removed `aiosqlite` and `asyncpg` ⚠️
+
+These were removed in V2. But `database/connection.py` imports `asyncpg`. If anyone runs `pip install -r requirements.txt` and then starts the app with PostgreSQL, it will crash on import. They need to go back in.
 
 -----
 
-## 📡 PHASE 1: DATA (Week 2)
+## UPDATED FIX PRIORITY LIST
 
-*“Without real data, you have a race car with no fuel.”*
+### 🔴 DO THESE THIS now (Deployment Blockers)
 
-### STEP 1.1 — LIVE DATA FEED (OANDA Practice — Free)
-
-Wire `src/data/feeds/oanda.py` to OANDA practice REST API:
-
-- Fetch H1 XAUUSD back to 2021 (OANDA provides 5 years free)
-- Save to `data/XAUUSD_5Y_H1.csv`
-- Build a scheduler job (APScheduler or Celery beat) to append new bars daily
-
-### STEP 1.2 — TICK DATA OPTION (Polygon.io — $29/month)
-
-Wire `src/data/feeds/polygon.py` (already exists):
-
-- Tick-level XAUUSD / XAU_USD
-- Enables realistic backtesting, order flow analysis, DOM simulation
-
-### STEP 1.3 — MACRO DATA FEEDS (Free)
-
-Add to `src/data/feeds/`:
-
-- DXY (Dollar Index) — from FRED API (free)
-- US 10Y Treasury yield — from FRED API (free)
-- Gold futures term structure — from Quandl/FRED (free)
-- CPI, FOMC dates — from FRED API (free)
-
-These are XAUUSD’s primary macro drivers. MetaStock charges for this. You can offer it free.
-
-### STEP 1.4 — ECONOMIC CALENDAR (Wire existing code)
-
-`news/economic_calendar.py` exists. Wire it to:
-
-- ForexFactory API or Investing.com scraper
-- Flag high-impact events (NFP, CPI, FOMC) on charts
-- Auto-pause trading 15min before / after (configurable)
-
-### STEP 1.5 — DATA VALIDATION LAYER
-
-Add data quality checks:
-
-- Price sanity bounds (reject $0 gold or $10,000 gold)
-- Gap detection (weekend gaps expected, 5% gaps on weekdays = alert)
-- Stale data detection (if no new bar in 2h during market hours = alert)
-
-**Phase 1 output:** Live, validated, multi-source real-time data. The data problem is gone.
-
------
-
-## 🧠 PHASE 2: ML ENGINE (Week 3)
-
-*“Make the AI actually smart.”*
-
-### STEP 2.1 — RETRAIN ON REAL CURRENT DATA
-
-With Phase 1 data in place, retrain `XAUUSDMLStrategy`:
-
-- 3 years H1 XAUUSD (2022–2025)
-- Walk-forward validation: 18-month training, 6-month test, step 3 months
-- Target: > 52% out-of-sample directional accuracy with real transaction costs
-- Features: price action, RSI, MACD, Bollinger, ATR, DXY, yield spread, volume
-
-### STEP 2.2 — FIX THE REWARD FUNCTION
-
-PPO RL agent uses 1bp cost. Fix to 35bp (XAUUSD realistic spread + commission):
+**FIX-1: Wire the 5 new routers into app.py**
 
 ```python
-TRANSACTION_COST = 0.0035  # 35 bps
+# Add to app.py after existing router includes:
+from nocode.router import router as nocode_router
+from replay.router import router as replay_router  
+from explainability.router import router as explainability_router
+from transparency.router import router as transparency_router
+from kill_switch import create_kill_switch_router
+
+app.include_router(nocode_router)
+app.include_router(replay_router)
+app.include_router(explainability_router)
+app.include_router(transparency_router)
+ks_router = create_kill_switch_router(app_state.kill_switch)
+if ks_router:
+    app.include_router(ks_router)
 ```
 
-### STEP 2.3 — CALIBRATE MONTE CARLO DROPOUT
-
-Replace arbitrary 0.3 threshold with calibrated confidence using isotonic regression on held-out validation set.
-
-### STEP 2.4 — AI PROBABILITY DISPLAY
-
-Every signal must output:
-
-```json
-{
-  "direction": "LONG",
-  "confidence": 0.71,
-  "predicted_move_pips": 18,
-  "regime": "trending",
-  "model": "ensemble_v2",
-  "explanation": "Strong DXY weakness + RSI divergence + break above H4 structure"
-}
-```
-
-This is what Tickeron shows. Display it on the dashboard.
-
-### STEP 2.5 — REGIME DETECTION (Wire existing src/ml/regime.py)
-
-- Trending / ranging / volatile / risk-off regime labels
-- Different strategy parameters per regime
-- Display current regime on dashboard header
-
-### STEP 2.6 — MODEL REGISTRY + VERSIONING (Wire src/ml/registry.py)
-
-Track every model version:
-
-- Accuracy, Sharpe, max drawdown, number of trades
-- Roll back to previous model if new one degrades
-- This is your competitive edge over “black box” competitors
-
-### STEP 2.7 — DRIFT DETECTION (Wire src/ml/drift.py + hopefx/ml/drift.py)
-
-Monitor for distribution shift between training and live data:
-
-- Alert when market regime is outside training distribution
-- This is what caused the 2024–2025 gold move to blindside most quant models
-
-**Phase 2 output:** AI that actually works. Confidence scores. Explainable decisions. Drift alerts.
-
------
-
-## ⚡ PHASE 3: EXECUTION ENGINE (Week 4)
-
-*“Make the trades actually happen.”*
-
-### STEP 3.1 — OANDA LIVE EXECUTION TEST
-
-Run 30 days of paper trading through OANDA practice API (not simulated):
-
-- Real API calls
-- Real latency measurements
-- Real partial fills, rejections, and margin calls handled
-
-### STEP 3.2 — FIX FIX ADAPTER (5 pass blocks → real error handling)
+**FIX-2: Wire data scheduler to app startup**
+In `app.py` startup function, after cache init:
 
 ```python
-# BEFORE (dangerous):
-except Exception:
-    pass
+from data.scheduler import DataScheduler
+scheduler = DataScheduler()
+task = asyncio.create_task(scheduler.start())
+app_state.background_tasks.append(task)
+logger.info("✓ Data scheduler started")
+```
 
-# AFTER (safe):
+**FIX-3: Fix the 20 Grafana metric mismatches**
+Fastest approach — edit the Grafana dashboard JSONs to use names the code already emits:
+
+|Change in Dashboard JSON|From                         |To                        |
+|------------------------|-----------------------------|--------------------------|
+|trading_performance.json|`hopefx_account_equity`      |`hopefx_equity`           |
+|trading_performance.json|`hopefx_open_positions_total`|`hopefx_active_positions` |
+|trading_performance.json|`hopefx_daily_pnl_usd`       |`hopefx_pnl_realized`     |
+|trading_performance.json|`hopefx_max_drawdown_pct`    |`hopefx_drawdown_current` |
+|ml_model_metrics.json   |`hopefx_feature_drift_score` |`hopefx_model_drift_score`|
+
+Then for the 10 metrics with no close match, add instrumentation to `infrastructure/metrics.py`:
+
+```python
+# Add these to the metrics registry setup:
+signals_total    = registry.create_counter("hopefx_signals_total", "Total signals generated")
+signal_conf      = registry.create_histogram("hopefx_signal_confidence_bucket", "Signal confidence distribution")
+model_accuracy   = registry.create_gauge("hopefx_model_accuracy_pct", "Rolling model accuracy %")
+market_regime    = registry.create_gauge("hopefx_market_regime", "Current market regime (0=ranging,1=trending,2=volatile)")
+model_trained_ts = registry.create_gauge("hopefx_model_last_trained_timestamp", "Unix ts of last model retrain")
+model_infer_ms   = registry.create_histogram("hopefx_model_inference_ms_bucket", "Model inference latency ms")
+broker_connected = registry.create_gauge("hopefx_broker_connected", "Broker connection status", ["broker"])
+broker_failover  = registry.create_counter("hopefx_broker_failover_total", "Broker failover events")
+broker_rejects   = registry.create_counter("hopefx_broker_rejections_total", "Broker order rejections")
+win_rate_pct     = registry.create_gauge("hopefx_win_rate_pct", "Rolling win rate %")
+```
+
+Then call `.set()` / `.inc()` at the appropriate places in the codebase.
+
+**FIX-4: Restore asyncpg and aiosqlite to requirements.txt**
+
+```
+asyncpg>=0.29.0
+aiosqlite>=0.19.0
+```
+
+**FIX-5: Add prometheus_monitoring.py real implementation**
+The file is 2 lines. Replace with actual metric registration that calls the infrastructure/metrics registry and exposes them. Or delete the file and use `infrastructure/metrics.py` directly (which already has the right architecture).
+
+**FIX-6: Fix FIX adapter pass blocks (still unfixed)**
+
+```python
+# In execution/fix_adapter.py, lines 242, 256, 260, 264, 278:
+# Replace every bare `pass` in exception handlers with:
 except Exception as e:
-    logger.error(f"FIX execution failed: {e}", exc_info=True)
-    order.status = OrderStatus.REJECTED
-    order.error_message = str(e)
-    await self._notify_rejection(order)
+    logger.error("FIX execution error at [location]: %s", e, exc_info=True)
+    # set order status appropriately
 ```
 
-### STEP 3.3 — SMART ORDER ROUTER VALIDATION
+### 🟡 DO THESE THIS now (Quality & Trust)
 
-Test `SmartOrderRouter` against all connected brokers:
+**FIX-7: Update XAUUSD data** — Run the new `data/scheduler.py` manually once to pull H1 data from 2024-10-18 to today. This is now easy — the scheduler is written. Just run it.
 
-- Latency scoring working
-- Failover working (broker A down → route to broker B)
-- Slippage tracking
+**FIX-8: Retrain ML model** — With current data from FIX-7, retrain. Use walk-forward validation already built. Measure real out-of-sample accuracy.
 
-### STEP 3.4 — ADD REALISTIC BACKTESTING COSTS (Wire src/execution/slippage.py)
+**FIX-9: Fix 6 empty test files** — Fill `test_copy_trading.py`, `test_integration.py`, and the 4 empty integration/e2e files.
 
-```python
-# Already exists — wire it:
-slippage_model = VolumeWeightedSlippage(base_spread_bps=30)
-overnight_financing = OvernightFinancing(rate_annualized=0.004)  # ~0.4% XAUUSD swap
-```
-
-### STEP 3.5 — EXECUTION ANALYTICS (Wire src/execution/tca.py)
-
-Transaction Cost Analysis already coded. Wire to dashboard:
-
-- Average slippage per trade
-- Fill quality score
-- Best execution evidence (required for institutional clients)
-
-**Phase 3 output:** Real execution. Real costs modelled. TCA reports. No silent failures.
+**FIX-10: Restore DIAGNOSTIC_REPORT.md** — The V2 upload replaced the real diagnostic report (with fix history) with the Master Build Plan. The fix tracking history is valuable — restore it or create a new `DIAGNOSTIC_REPORT_V2.md`.
 
 -----
 
-## 📊 PHASE 4: UI / DASHBOARD (Weeks 5–6)
+## OVERALL V2 ASSESSMENT
 
-*“The face of the product. Make it unforgettable.”*
+|Area                                                |V1 Score|V2 Score  |Change                                    |
+|----------------------------------------------------|--------|----------|------------------------------------------|
+|Grafana / Monitoring                                |0/10    |5/10      |+5 (structure real, metrics mismatched)   |
+|New features (nocode, replay, explain, transparency)|0/10    |6/10      |+6 (built but not wired)                  |
+|CI/CD                                               |1/10    |6/10      |+5 (right paths now, achievable threshold)|
+|RL agent reward                                     |2/10    |7/10      |+5 (35bps is realistic)                   |
+|Data pipeline                                       |1/10    |4/10      |+3 (scheduler written, not yet run)       |
+|FIX adapter                                         |1/10    |1/10      |0 (still 5 pass blocks)                   |
+|ML accuracy                                         |1/10    |1/10      |0 (same stale model)                      |
+|Tests (structural)                                  |3/10    |7/10      |+4 (2178 test functions, good structure)  |
+|Tests (runtime)                                     |1/10    |2/10      |+1 (still can’t run without deps)         |
+|**Overall**                                         |**3/10**|**5.5/10**|**+2.5**                                  |
 
-### STEP 4.1 — BUILD THE REACT DASHBOARD (dashboard/ already has Vite + components)
-
-The dashboard has 10 TSX components already. Wire them to real API:
-
-- `EquityChart.tsx` → connect to `/api/performance/equity-curve`
-- `PositionTable.tsx` → connect to WebSocket `/ws/positions`
-- `MLSignals.tsx` → connect to `/api/signals/latest`
-- `OrderPanel.tsx` → connect to `/api/trading/execute`
-- `RecentTrades.tsx` → connect to `/api/trades/history`
-
-### STEP 4.2 — ADD TRADINGVIEW LIGHTWEIGHT CHARTS
-
-```bash
-npm install lightweight-charts
-```
-
-This is free, open source, and what TradingView built. Add to dashboard:
-
-- Real-time XAUUSD candlestick chart
-- Overlay AI signals (BUY/SELL markers with confidence %)
-- Overlay support/resistance levels
-- Toggle: Pattern detection annotations
-
-### STEP 4.3 — PROP FIRM CHALLENGE DASHBOARD (Your Moat — Build This First)
-
-Nobody has this. This is what makes HOPEFX unique:
-
-```
-┌─────────────────────────────────────────────────────┐
-│  FTMO Challenge Tracker — $100K Account              │
-├──────────────┬────────────────────┬─────────────────┤
-│ Daily Loss   │ ████░░░░ 62% used  │ $310 of $500    │
-│ Max Drawdown │ ████████ 91% used  │ $910 of $1000   │ ← RED ALERT
-│ Profit Target│ ██░░░░░░ 24% done  │ $2,400 of $10K  │
-│ Trading Days │ ████░░░░ 50%       │ 15 of 30        │
-└──────────────┴────────────────────┴─────────────────┘
-│ AI Status: PAUSED (drawdown threshold 90% reached)  │
-└─────────────────────────────────────────────────────┘
-```
-
-### STEP 4.4 — AI EXPLANATION PANEL (Wire explainability/ module)
-
-Every signal shows WHY:
-
-- “Signal: LONG XAUUSD”
-- “Reason: DXY fell 0.4% (bearish dollar), RSI crossed 40 (oversold bounce), H4 candle closed above $3,050 resistance”
-- “Confidence: 74% | Expected move: +28 pips | Risk:Reward: 1:2.8”
-- SHAP feature importance bar chart
-
-### STEP 4.5 — MULTI-TIMEFRAME VIEW
-
-Three charts side by side: H4 (trend), H1 (entry), M15 (timing). TrendSpider charges $65/month for this. Build it with Lightweight Charts.
-
-### STEP 4.6 — DRAWDOWN CHART
-
-Every serious platform shows this. Add alongside equity curve:
-
-- Underwater equity curve (drawdown % over time)
-- Annotate max drawdown periods
-- Regime overlay (were you drawdown during risk-off?)
-
-### STEP 4.7 — MOBILE PWA (Wire existing mobile/ module)
-
-The service worker exists (`mobile/service-worker.js`). Wire the PWA:
-
-- Installable on iOS/Android homescreen
-- Push notifications for signals (use existing `mobile/push_notifications.py`)
-- Mobile-responsive dashboard views
-
-### STEP 4.8 — GRAFANA DASHBOARDS (Add provisioning configs)
-
-Create `grafana/provisioning/`:
-
-- Datasources: Prometheus + PostgreSQL
-- Dashboards: Trading performance, System health, ML model metrics, Broker connectivity
-  This makes the monitoring stack actually functional.
-
-**Phase 4 output:** Professional, beautiful, functional dashboard. Prop firm tracker nobody else has. Mobile PWA. Grafana monitoring live.
+**V2 is meaningfully better.** The Grafana claim is half-true — the infrastructure is real, but the metrics pipeline is broken in a specific, fixable way. The new modules (nocode, replay, explainability, transparency) are genuinely built — 1,600+ lines of new real code. The main gap now is wiring: 5 routers, 1 scheduler, and 20 metric names all need connecting before the app is fully functional.
 
 -----
 
-## 🔒 PHASE 5: TRUST & VERIFICATION (Week 7)
-
-*“People don’t trust AI they can’t verify.”*
-
-### STEP 5.1 — PUBLIC PAPER TRADE TRACK RECORD PAGE
-
-Build a public `/performance` page (no login required):
-
-- Live paper trading results, updated daily
-- Win rate, Sharpe, max drawdown, total trades
-- Entry/exit log with timestamps
-- “These are real paper trades through OANDA practice API, not simulations”
-
-This is what Tickeron does. It’s your credibility foundation.
-
-### STEP 5.2 — FIX README BADGES
-
-Remove false badges:
-
-```diff
-- [![Sharpe](badge: 2.78+)]
-- [![Tests](badge: 2100+ passing)]
-+ [![Paper Trading](badge: LIVE - 90 days)]
-+ [![Tests](badge: REAL NUMBER - 247 passing)]
-```
-
-### STEP 5.3 — REPAIR TEST SUITE
-
-Fix the 10 test files that fail to import. Target 200+ real tests:
-
-- Unit tests for every risk calculation
-- Integration tests: signal → risk check → order → fill pipeline
-- Paper broker regression tests
-- Walk-forward validation regression
-
-### STEP 5.4 — SECURITY AUDIT
-
-Run bandit, safety, pip-audit:
-
-```bash
-bandit -r src/ -ll
-safety check -r requirements.txt
-pip-audit -r requirements.txt
-```
-
-Fix all HIGH and CRITICAL findings. Show the clean report in the README.
-
-**Phase 5 output:** Verified, trusted, publicly audited performance. Real test coverage. Security clean bill of health.
-
------
-
-## 💰 PHASE 6: MONETIZATION (Week 8)
-
-*“Revenue before features.”*
-
-### STEP 6.1 — PRICING TIERS (Wire monetization/ module)
-
-```
-FREE TIER:
-- Paper trading only
-- 1 strategy, 1 broker connection
-- Basic dashboard
-- Community access
-
-PRO ($49/month):
-- Live trading (1 broker)
-- All strategies + AI signals
-- Prop firm compliance tracker
-- Telegram alerts
-- 90-day backtest
-
-ELITE ($149/month):
-- All brokers
-- Multi-strategy ensemble
-- Full AI explanation panel
-- Copy trading (follow top traders)
-- Priority support
-- API access
-
-PROP FIRM LICENSE ($499/month):
-- Whitelabel under their brand
-- All Elite features
-- Custom rule engine
-- Bulk trader management
-- Dedicated support
-```
-
-### STEP 6.2 — STRIPE INTEGRATION (Wire existing stripe_integration.py)
-
-- Subscription billing
-- Usage-based billing for API calls
-- Invoice generation (invoices.py exists)
-
-### STEP 6.3 — FLUTTERWAVE + PAYSTACK (Wire existing fintech/ module)
-
-You already have `payments/fintech/flutterwave.py` and `paystack.py`. This is gold — none of the competitors accept African payment methods. XAUUSD is huge in Nigeria, Kenya, Ghana, South Africa. This is a market none of them serve.
-
-### STEP 6.4 — CRYPTO PAYMENTS (Wire existing crypto/ module)
-
-`payments/crypto/` has BTC, ETH, USDT wallets. Wire to subscription system. Traders are crypto-native — offering USDT payments is a real differentiator.
-
-### STEP 6.5 — AFFILIATE PROGRAM (Wire monetization/affiliate.py)
-
-- 30% recurring commission for referrals
-- Affiliate dashboard with real-time earnings
-- Custom referral links
-- This is your distribution engine
-
-**Phase 6 output:** Revenue flowing. Africa market captured (competitors can’t take your money). Affiliate engine building word-of-mouth.
-
------
-
-## 🚀 PHASE 7: FEATURES THAT MAKE YOU SUPERIOR (Weeks 9–12)
-
-*“Now that the foundation is solid, build what nobody else has.”*
-
-### STEP 7.1 — PROP FIRM AUTO-PROTECTION SYSTEM (Your GOAT Feature)
-
-When a FTMO challenger is at 85% of their daily drawdown:
-
-1. AI automatically reduces position size to 50%
-1. At 95%: AI pauses all new trades
-1. At 99%: AI closes all open positions
-1. Sends Telegram alert: “Challenge protected — trading paused to preserve your account”
-
-No competitor does this. This saves trader accounts. This is the feature that gets viral word-of-mouth.
-
-### STEP 7.2 — MULTI-STRATEGY TOURNAMENT
-
-Monthly tournament:
-
-- 5 built-in strategies paper trade simultaneously
-- Winner is shown to subscribers that month
-- Users can vote to run their preferred strategy
-- Leaderboard of user-submitted strategies
-
-This is social + backtesting + engagement in one feature. TrendSpider doesn’t have it.
-
-### STEP 7.3 — XAUUSD MACRO INTELLIGENCE DASHBOARD
-
-Build what MetaStock sells at $200+/month:
-
-- DXY vs XAUUSD live correlation chart
-- US 10Y yield vs Gold live chart
-- CPI surprise index → expected gold impact
-- “Gold Regime Score” (bullish/bearish macro environment, 0–100)
-  All data from FRED (free). Display it beautifully.
-
-### STEP 7.4 — AI REGIME ALERTS
-
-“The AI detected a regime change. Gold shifted from ‘risk-off safe haven’ to ‘inflation hedge’ mode 6 hours ago. Your strategy has been reweighted for this environment.”
-
-This is what institutional desks pay millions for. Give it to retail traders.
-
-### STEP 7.5 — BACKTESTING VISUAL REPLAY (Wire replay/ module — 22KB exists)
-
-Step through every historical trade bar-by-bar:
-
-- See exactly what the AI saw
-- See why it triggered
-- Learn from it
-- Export as video for sharing
-
-TrendSpider has this at $65/month. Build it.
-
-### STEP 7.6 — NO-CODE STRATEGY BUILDER (Wire nocode/ module — 26KB exists)
-
-Drag-and-drop strategy builder:
-
-- Condition blocks: “IF RSI < 30 AND DXY falling AND price above 200 EMA”
-- Action blocks: “THEN BUY, SL = 30 pips, TP = 60 pips”
-- One-click backtest
-- One-click deploy to paper trading
-
-TrendSpider charges $65/month for this. This opens HOPEFX to non-coders — 10x your addressable market.
-
-### STEP 7.7 — SOCIAL SIGNAL SHARING
-
-When the AI fires a high-confidence signal:
-
-- Auto-post to HOPEFX community feed (opt-in)
-- Other users can one-click copy the trade
-- Attribution tracked for copy trading revenue share
-- Create viral growth loop
-
-### STEP 7.8 — DISCORD / SLACK WEBHOOKS
-
-```
-HOPEFX Alert → YOUR Discord:
-🟢 LONG XAUUSD @ $3,087.40
-Confidence: 78% | SL: $3,062 | TP: $3,137
-Regime: Bullish trending | DXY: -0.3%
-Expected duration: 4-8 hours
-```
-
-TrendSpider has this. Cost: ~2 days of work. Value: massive for communities.
-
-### STEP 7.9 — STRATEGY MARKETPLACE (Wire src/marketplace/ — 5 files exist)
-
-- Users can list their strategies for sale
-- Automated performance verification (paper trade for 30 days before listing)
-- Revenue split: 70% seller / 30% HOPEFX
-- QuantConnect has 5K+ community algos. Build toward that.
-
-### STEP 7.10 — ONBOARDING WIZARD
-
-Nobody gives you a guided setup. Build it:
-
-1. “Connect your broker” (broker wizard with API key guide per broker)
-1. “Choose your risk level” (conservative / moderate / aggressive)
-1. “Select your prop firm rules” (FTMO, The5ers, none)
-1. “Run your first backtest”
-1. “Start paper trading”
-
-This alone will double your activation rate vs competitors.
-
------
-
-## 📱 PHASE 8: LAUNCH PREPARATION (Weeks 11–12)
-
-### STEP 8.1 — DOCUMENTATION SITE
-
-Wire existing MkDocs setup (`mkdocs` is in requirements-dev.txt):
-
-- Getting Started (5 minutes to first paper trade)
-- Strategy guide
-- API reference (auto-generated)
-- Broker setup guides (screenshots per broker)
-- Prop firm rules explained
-
-### STEP 8.2 — STATUS PAGE
-
-Deploy uptime monitoring (UptimeRobot is free):
-
-- `status.hopefx.io`
-- API uptime, broker connectivity, ML model health
-- Incident history
-
-### STEP 8.3 — LANDING PAGE
-
-You have no landing page. Build one:
-
-- Hero: “The Only AI Trading Platform Built for Prop Firm Traders”
-- Live paper trading results (from Phase 5.1)
-- Feature comparison table vs competitors
-- Pricing (Phase 6.1 tiers)
-- Free trial CTA
-
-### STEP 8.4 — THE LAUNCH SEQUENCE
-
-1. Deploy to cloud (DigitalOcean $48/month or AWS/GCP)
-1. Run 30 days private beta (20 FTMO traders, free)
-1. Collect testimonials + real results
-1. Public launch on Product Hunt + trading forums (Forex Factory, Reddit r/Forex)
-1. Affiliate program live same day as launch
-
------
-
-# PART 3: THE FINAL SCORECARD
-
-## After All 8 Phases — Where HOPEFX Stands
-
-|Dimension               |Today   |After 90 Days|QuantConnect|Trade Ideas|TrendSpider|
-|------------------------|--------|-------------|------------|-----------|-----------|
-|Data quality            |1/10    |**9/10**     |10/10       |8/10       |8/10       |
-|AI accuracy (verified)  |1/10    |**7/10**     |N/A         |9/10       |6/10       |
-|Backtesting realism     |3/10    |**8/10**     |10/10       |7/10       |8/10       |
-|Live execution          |1/10    |**8/10**     |9/10        |8/10       |7/10       |
-|UI / UX                 |2/10    |**8/10**     |7/10        |8/10       |9/10       |
-|Prop firm compliance    |9/10    |**10/10**    |0/10        |0/10       |0/10       |
-|Social / copy trading   |4/10    |**9/10**     |3/10        |0/10       |0/10       |
-|Multi-broker routing    |4/10    |**9/10**     |9/10        |3/10       |5/10       |
-|Security / AML          |8/10    |**9/10**     |5/10        |5/10       |5/10       |
-|Africa / crypto payments|6/10    |**10/10**    |0/10        |0/10       |0/10       |
-|No-code builder         |0/10    |**7/10**     |0/10        |8/10       |9/10       |
-|Macro intelligence      |0/10    |**8/10**     |5/10        |4/10       |4/10       |
-|Explainability          |0/10    |**9/10**     |3/10        |3/10       |3/10       |
-|Mobile PWA              |2/10    |**7/10**     |0/10        |8/10       |8/10       |
-|Test coverage           |1/10    |**8/10**     |9/10        |9/10       |9/10       |
-|CI/CD                   |0/10    |**9/10**     |10/10       |9/10       |9/10       |
-|**OVERALL**             |**3/10**|**🏆 8.7/10** |8.5/10      |7.5/10     |7.8/10     |
-
------
-
-## THE NICHE YOU OWN THAT NOBODY CAN TAKE
-
-**XAUUSD + Prop Firm Traders**
-
-That user profile:
-
-- Trading gold (XAUUSD) — the world’s #1 traded commodity
-- Running FTMO / The5ers / TopStep challenges — $4B+ market
-- Based globally — including Africa (Nigeria, Kenya, SA) — massive underserved market
-- Needs AI that respects challenge rules, not just profit maximization
-- Needs one-click broker connection to OANDA (dominant XAUUSD retail broker)
-
-**None of QuantConnect, Trade Ideas, TrendSpider, Tickeron, or MetaStock serve this user.**
-
-HOPEFX can own this entirely. That’s not “starting” — that’s **a monopoly in a niche with millions of traders worldwide**.
-
------
-
-## TOTAL TASK COUNT
-
-|Phase                        |Tasks       |Weeks          |
-|-----------------------------|------------|---------------|
-|Phase 0: Consolidation       |5           |1              |
-|Phase 1: Data                |5           |1              |
-|Phase 2: ML Engine           |7           |1              |
-|Phase 3: Execution           |5           |1              |
-|Phase 4: UI/Dashboard        |8           |2              |
-|Phase 5: Trust & Verification|4           |1              |
-|Phase 6: Monetization        |5           |1              |
-|Phase 7: Superior Features   |10          |4              |
-|Phase 8: Launch              |4           |1–2            |
-|**TOTAL**                    |**53 tasks**|**12–14 weeks**|
-
------
-
-*This is the complete map. Every gap from every competitor is listed. Every fix is in sequence. Every feature that makes you superior is specified. Execute Phase 0 first — everything else depends on having one codebase. Then the rest becomes straightforward.*
-
-*You’re not behind. You’re pre-launch with more architecture than most platforms had after 2 years. The bones are right. Now build the muscle.*
+*The bones are stronger. The wiring is the job now.*
