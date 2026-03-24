@@ -175,11 +175,15 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
         self,
         on_exec_report: Callable[[FIXFillReport], None],
         circuit_breaker: CircuitBreaker,
+        username: str = "",
+        password: str = "",
     ) -> None:
         super().__init__()
         self._on_exec_report = on_exec_report
         self._cb = circuit_breaker
         self._send_times: dict[str, float] = {}  # cl_ord_id → send monotonic time
+        self._username = username
+        self._password = password
 
     # --- quickfix callbacks ---
 
@@ -193,10 +197,77 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
         logger.info("fix.logout session=%s", session_id)
 
     def toAdmin(self, message, session_id):
-        pass  # Heartbeats / logon handled by quickfix engine
+        """
+        Called before every admin message is sent (Logon, Heartbeat, etc.).
+
+        Injects Username (553) and Password (554) into Logon messages when
+        credentials are configured.  All other admin messages (Heartbeat,
+        TestRequest, ResendRequest, SequenceReset) are handled entirely by
+        the quickfix engine and require no application-level intervention.
+        """
+        if fix is None:
+            return
+        try:
+            msg_type = fix.MsgType()
+            message.getHeader().getField(msg_type)
+            if msg_type.getValue() == fix.MsgType_Logon:
+                if self._username:
+                    message.setField(fix.Username(self._username))
+                if self._password:
+                    message.setField(fix.Password(self._password))
+        except Exception as exc:
+            logger.warning("fix.toAdmin: could not inject credentials: %s", exc)
 
     def fromAdmin(self, message, session_id):
-        pass
+        """
+        Called for every inbound admin message (Logon, Logout, Heartbeat, etc.).
+
+        Logs session-level rejects and Logout messages with their reason text
+        so operators can diagnose authentication failures and forced disconnects.
+        """
+        if fix is None:
+            return
+        try:
+            msg_type = fix.MsgType()
+            message.getHeader().getField(msg_type)
+            mt = msg_type.getValue()
+
+            if mt == fix.MsgType_Logout:
+                text_f = fix.Text()
+                text = ""
+                try:
+                    message.getField(text_f)
+                    text = text_f.getString()
+                except Exception:
+                    pass
+                logger.warning(
+                    "fix.fromAdmin: Logout received session=%s text=%r",
+                    session_id, text,
+                )
+
+            elif mt == fix.MsgType_Reject:
+                ref_seq_f = fix.RefSeqNum()
+                reason_f = fix.SessionRejectReason()
+                text_f = fix.Text()
+                ref_seq, reason, text = "", "", ""
+                try:
+                    message.getField(ref_seq_f); ref_seq = ref_seq_f.getString()
+                except Exception:
+                    pass
+                try:
+                    message.getField(reason_f); reason = reason_f.getString()
+                except Exception:
+                    pass
+                try:
+                    message.getField(text_f); text = text_f.getString()
+                except Exception:
+                    pass
+                logger.error(
+                    "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
+                    ref_seq, reason, text,
+                )
+        except Exception as exc:
+            logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
     def toApp(self, message, session_id):
         # Record send time for latency measurement
@@ -293,12 +364,16 @@ class FIXAdapter:
         host: str = "127.0.0.1",
         port: int = 9876,
         latency_threshold_ms: float = 100.0,
+        username: str = "",
+        password: str = "",
     ) -> None:
         self.config_file = config_file
         self.sender_comp_id = sender_comp_id
         self.target_comp_id = target_comp_id
         self.host = host
         self.port = port
+        self._username = username
+        self._password = password
 
         self.circuit_breaker = CircuitBreaker(threshold_ms=latency_threshold_ms)
 
@@ -343,8 +418,10 @@ class FIXAdapter:
         if self._initiator:
             try:
                 self._initiator.stop()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Log but do not re-raise — stop() must always complete so
+                # the heartbeat thread and pending futures are cleaned up.
+                logger.error("fix_adapter.stop: initiator.stop() raised: %s", exc)
         logger.info("fix_adapter.stopped")
 
     def _start_quickfix(self) -> None:
@@ -352,6 +429,8 @@ class FIXAdapter:
         self._app = _QuickfixApp(
             on_exec_report=self._dispatch_exec_report,
             circuit_breaker=self.circuit_breaker,
+            username=self._username,
+            password=self._password,
         )
 
         import os
