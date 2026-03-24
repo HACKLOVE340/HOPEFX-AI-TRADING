@@ -12,6 +12,13 @@
     --color-red: #ef4444;
   }
 
+  /* Light mode overrides — activated by removing 'dark' class from <html> */
+  html:not(.dark) {
+    --color-bg: #f8fafc;
+    --color-surface: #ffffff;
+    --color-border: #e2e8f0;
+  }
+
   * {
     @apply border-slate-800;
   }
@@ -19,6 +26,11 @@
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  /* Light mode body */
+  html:not(.dark) body {
+    @apply bg-slate-50 text-slate-900;
   }
 
   /* Scrollbar styling */
