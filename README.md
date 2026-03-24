@@ -394,7 +394,7 @@ Expected: **79 passed, 2 skipped** (FastAPI skipped when not installed).
 | Document | Description |
 |---|---|
 | [INSTALLATION.md](./INSTALLATION.md) | Full installation guide |
-| [DIAGNOSTIC_REPORT_V2.md](./DIAGNOSTIC_REPORT_V2.md) | Fix history with commit hashes |
+| [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) | Audit findings + fix history with commit hashes |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide |
 | [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) | Pre-launch checklist |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guidelines |
