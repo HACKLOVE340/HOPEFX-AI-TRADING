@@ -367,6 +367,163 @@ class AdvancedRiskAnalytics:
             method='monte_carlo'
         )
 
+    def calculate_var_multiday(
+        self,
+        returns: np.ndarray,
+        confidence_level: float = None,
+        time_horizon: int = 10,
+        portfolio_value: float = None,
+        method: str = "overlapping",
+    ) -> "VaRResult":
+        """
+        Calculate multi-day VaR without the sqrt(t) i.i.d. assumption.
+
+        Two methods are supported:
+
+        overlapping (default)
+            Compute t-day overlapping returns directly from the return series.
+            Captures autocorrelation and fat tails at the cost of overlapping
+            observations (Christoffersen & Diebold, 1997).  Preferred when the
+            return series is long enough (≥ 5× time_horizon observations).
+
+        non_overlapping
+            Use non-overlapping t-day blocks.  Fewer observations but
+            statistically independent.  Preferred for regulatory reporting.
+
+        Both methods are strictly more accurate than sqrt(t) scaling for
+        assets with autocorrelation or fat tails (e.g. XAUUSD).
+
+        Args:
+            returns        : 1-day return series (numpy array)
+            confidence_level: VaR confidence level (default from config)
+            time_horizon   : Horizon in days
+            portfolio_value: Optional portfolio value for dollar VaR
+            method         : 'overlapping' or 'non_overlapping'
+
+        Returns:
+            VaRResult with method='multiday_<method>'
+        """
+        confidence_level = confidence_level or self.var_confidence
+
+        if time_horizon <= 1:
+            # Delegate to historical 1-day VaR
+            return self.calculate_var_historical(
+                returns, confidence_level, time_horizon=1,
+                portfolio_value=portfolio_value,
+            )
+
+        if method == "non_overlapping":
+            # Non-overlapping t-day blocks
+            n_blocks = len(returns) // time_horizon
+            if n_blocks < 10:
+                # Fall back to overlapping if too few blocks
+                method = "overlapping"
+            else:
+                blocks = [
+                    np.sum(returns[i * time_horizon:(i + 1) * time_horizon])
+                    for i in range(n_blocks)
+                ]
+                multiday_returns = np.array(blocks)
+
+        if method == "overlapping":
+            # Overlapping t-day cumulative returns
+            if len(returns) < time_horizon + 1:
+                # Not enough data — fall back to sqrt(t)
+                var_1d = np.percentile(returns, (1 - confidence_level) * 100)
+                var_scaled = var_1d * np.sqrt(time_horizon)
+                val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
+                return VaRResult(
+                    var_value=val,
+                    confidence_level=confidence_level,
+                    time_horizon=time_horizon,
+                    method="multiday_sqrtt_fallback",
+                )
+            multiday_returns = np.array([
+                np.sum(returns[i:i + time_horizon])
+                for i in range(len(returns) - time_horizon + 1)
+            ])
+
+        var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
+        val = abs(var_percentile * portfolio_value) if portfolio_value else abs(var_percentile)
+
+        return VaRResult(
+            var_value=val,
+            confidence_level=confidence_level,
+            time_horizon=time_horizon,
+            method=f"multiday_{method}",
+        )
+
+    def calculate_var_ewma(
+        self,
+        returns: np.ndarray,
+        confidence_level: float = None,
+        time_horizon: int = 1,
+        portfolio_value: float = None,
+        decay: float = 0.94,
+    ) -> "VaRResult":
+        """
+        EWMA (RiskMetrics) VaR — volatility-weighted historical simulation.
+
+        Uses exponentially weighted variance to scale each historical return
+        by the ratio of current volatility to historical volatility.  This
+        captures volatility clustering (GARCH-like) without requiring a full
+        GARCH fit.
+
+        decay = 0.94 is the RiskMetrics daily decay factor.
+        decay = 0.97 is recommended for weekly data.
+
+        Args:
+            returns        : 1-day return series
+            confidence_level: VaR confidence level
+            time_horizon   : Horizon in days (sqrt(t) applied after EWMA scaling)
+            portfolio_value: Optional portfolio value
+            decay          : EWMA decay factor λ (0 < λ < 1)
+
+        Returns:
+            VaRResult with method='ewma'
+        """
+        from scipy import stats as _stats
+
+        confidence_level = confidence_level or self.var_confidence
+
+        if len(returns) < 10:
+            return self.calculate_var_historical(
+                returns, confidence_level, time_horizon, portfolio_value
+            )
+
+        # Compute EWMA variance
+        ewma_var = np.zeros(len(returns))
+        ewma_var[0] = returns[0] ** 2
+        for t in range(1, len(returns)):
+            ewma_var[t] = decay * ewma_var[t - 1] + (1 - decay) * returns[t] ** 2
+
+        current_vol = np.sqrt(ewma_var[-1])
+        hist_vol = np.sqrt(np.mean(ewma_var))
+
+        if hist_vol == 0:
+            return self.calculate_var_historical(
+                returns, confidence_level, time_horizon, portfolio_value
+            )
+
+        # Scale historical returns by vol ratio (volatility-weighted HS)
+        vol_ratio = current_vol / hist_vol
+        scaled_returns = returns * vol_ratio
+
+        var_1d = np.percentile(scaled_returns, (1 - confidence_level) * 100)
+
+        # For multi-day: use sqrt(t) on the EWMA-scaled 1-day VaR.
+        # This is still an approximation but is more accurate than plain
+        # sqrt(t) because the 1-day VaR already reflects current vol regime.
+        var_scaled = var_1d * np.sqrt(time_horizon)
+        val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
+
+        return VaRResult(
+            var_value=val,
+            confidence_level=confidence_level,
+            time_horizon=time_horizon,
+            method="ewma",
+        )
+
     def calculate_cvar(
         self,
         returns: np.ndarray,

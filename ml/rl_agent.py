@@ -74,11 +74,12 @@ class ForexTradingEnv:
 
     def __init__(
         self,
-        candles:         List[Dict],
-        initial_balance: float = 10_000.0,
-        position_pct:    float = 0.10,
-        commission:      float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
-        reward_scaling:  float = 100.0,
+        candles:              List[Dict],
+        initial_balance:      float = 10_000.0,
+        position_pct:         float = 0.10,
+        commission:           float = 0.0035,   # 35 bps — realistic XAUUSD spread + commission
+        overnight_cost_daily: float = 0.0002,   # 2 bps/day ≈ 7.3% annualised (realistic XAUUSD swap)
+        reward_scaling:       float = 100.0,
     ):
         try:
             import gymnasium as gym
@@ -97,11 +98,12 @@ class ForexTradingEnv:
         df = df.sort_values("timestamp").reset_index(drop=True)
         self._df = df
 
-        self.initial_balance = initial_balance
-        self.position_pct    = position_pct
-        self.commission      = commission
-        self.reward_scaling  = reward_scaling
-        self._window         = W
+        self.initial_balance      = initial_balance
+        self.position_pct         = position_pct
+        self.commission           = commission
+        self.overnight_cost_daily = overnight_cost_daily  # per-bar holding cost
+        self.reward_scaling       = reward_scaling
+        self._window              = W
 
         # pre-compute feature vectors for every valid window
         self._features: List[np.ndarray] = []
@@ -162,6 +164,22 @@ class ForexTradingEnv:
         new_price  = self._prices[self._step_idx] if not done else price
         new_equity = self._equity(new_price)
         delta_pnl  = new_equity - prev_equity
+
+        # ── Overnight financing cost ──────────────────────────────────────────
+        # Deduct holding cost for every bar an open position is carried.
+        # overnight_cost_daily is expressed as a fraction of notional per bar.
+        # At 2 bps/day this is ~7.3% annualised — realistic for leveraged XAUUSD.
+        # The previous implementation used 0 bps, causing the agent to overhold
+        # positions that would be unprofitable in live trading.
+        if self._position != 0:
+            notional = (self._balance * self.position_pct)
+            holding_cost = notional * self.overnight_cost_daily
+            self._balance -= holding_cost
+            delta_pnl    -= holding_cost
+            self._steps_held += 1
+        else:
+            self._steps_held = 0
+
         self._pnl_history.append(delta_pnl)
 
         # Sharpe-like incremental reward
@@ -170,11 +188,6 @@ class ForexTradingEnv:
             reward = float(delta_pnl / std) * self.reward_scaling
         else:
             reward = float(delta_pnl / self.initial_balance) * self.reward_scaling
-
-        if self._position != 0:
-            self._steps_held += 1
-        else:
-            self._steps_held = 0
 
         info = {
             "equity":   new_equity,

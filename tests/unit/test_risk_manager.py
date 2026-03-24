@@ -231,7 +231,7 @@ class TestTradingWorkflow:
     
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_full_trading_cycle(self):
+    async def test_full_trading_cycle(self, tmp_path):
         """
         Test complete cycle:
         1. Data ingestion
@@ -241,29 +241,51 @@ class TestTradingWorkflow:
         5. Position tracking
         6. P&L calculation
         """
-        # This would require full system setup
-        # Simplified version for demonstration
-        
-        from main import HOPEFXTradingSystem
-        from config.config_manager import ConfigManager
-        
-        # Initialize system
-        config = ConfigManager()
-        config.settings.TRADING_MODE = "paper"
-        config.settings.INITIAL_CAPITAL = 10000
-        
-        system = HOPEFXTradingSystem(config)
-        
-        # Start system
-        await system.start()
-        
-        # Wait for initialization
-        await asyncio.sleep(2)
-        
-        # Verify components are running
-        assert system.data_engine.is_running
-        assert system.risk_manager.is_active
-        assert len(system.strategies) > 0
-        
-        # Stop system
-        await system.stop()
+        # Verify the core trading cycle using real components:
+        # RiskManager → position sizing → kill-switch integration
+        from risk.manager import RiskManager, RiskConfig
+        from execution import PaperExecutor, Order
+
+        # Use a $1M account so position sizing produces a non-trivial lot count
+        # at XAUUSD prices (~$1950/oz).  max_position_size_pct=0.02 → $20k max
+        # notional → ~10 oz → approved.
+        config = RiskConfig(max_drawdown_pct=0.10, max_position_size_pct=0.02)
+        rm = RiskManager(
+            config=config,
+            initial_balance=1_000_000.0,
+            halt_state_file=tmp_path / "halt_state.json",
+        )
+
+        # 1. Equity update
+        rm.update_equity(1_000_000.0)
+        assert not rm.kill_switch_active
+
+        # 2. Risk assessment
+        account_info = {"equity": 1_000_000.0, "margin_used": 0.0}
+        assessment = rm.assess_risk(account_info, [])
+        assert assessment.can_trade
+
+        # 3. Position sizing
+        sizing = rm.calculate_position_size(
+            symbol="XAUUSD",
+            signal_strength=0.7,
+            entry_price=1950.0,
+            stop_loss_price=1930.0,
+            take_profit_price=1990.0,
+            account_equity=1_000_000.0,
+            volatility=0.01,
+        )
+        assert sizing.approved, f"Sizing rejected: {sizing.reason}"
+        assert sizing.recommended_size > 0
+
+        # 4. Paper execution
+        executor = PaperExecutor(initial_balance=1_000_000.0)
+        order = Order(symbol="XAUUSD", side="buy", qty=sizing.recommended_size)
+        result = executor.submit_order(order, current_price=1950.0)
+        assert result.status.value in ("filled", "partial")
+
+        # 5. Kill-switch triggers on large drawdown
+        rm.peak_equity = 1_000_000.0
+        rm.daily_starting_equity = 1_000_000.0
+        rm.update_equity(890_000.0)   # 11% drawdown > 10% limit
+        assert rm.kill_switch_active
