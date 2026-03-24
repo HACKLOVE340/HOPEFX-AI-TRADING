@@ -80,7 +80,9 @@ class MemoryMappedEventStore:
         with self._lock:
             self._sequence += 1
             src_bytes = event.source.encode()
-            header = struct.pack('>QIH', self._sequence, event.timestamp, event.event_type)
+            # Header layout: sequence(Q=uint64) | timestamp(Q=uint64) | event_type(H=uint16)
+            # timestamp is nanoseconds since epoch — requires uint64, not uint32.
+            header = struct.pack('>QQH', self._sequence, event.timestamp, event.event_type)
             header += struct.pack('B', len(src_bytes)) + src_bytes
             header += struct.pack('>I', len(event.payload))
             record = header + event.payload
@@ -109,10 +111,12 @@ class MemoryMappedEventStore:
             return None
         with open(filename, 'rb') as f:
             f.seek(offset)
+            # Header: sequence(Q=8) | timestamp(Q=8) | event_type(H=2) = 18 bytes
             header = f.read(19)
             if len(header) < 19:
                 return None
-            seq, ts, evt_type, src_len = struct.unpack('>QIH', header[:13]) + (header[13],)
+            seq, ts, evt_type = struct.unpack('>QQH', header[:18])
+            src_len = header[18]
             src = f.read(src_len).decode()
             payload_len = struct.unpack('>I', f.read(4))[0]
             payload = f.read(payload_len)

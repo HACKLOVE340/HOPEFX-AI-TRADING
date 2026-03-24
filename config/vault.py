@@ -20,8 +20,10 @@ class SecureVault:
     """Hardware-backed or keyring-backed secure vault."""
     
     _instance: SecureVault | None = None
+    # passlib uses "argon2" as the scheme name (wraps argon2-cffi which
+    # defaults to Argon2id internally).
     _pwd_context = CryptContext(
-        schemes=["argon2id"],
+        schemes=["argon2"],
         deprecated="auto",
         argon2__time_cost=3,
         argon2__memory_cost=65536,

@@ -40,12 +40,12 @@ async def paper_broker():
 
 
 @pytest.fixture
-def risk_manager():
-    """Create risk manager for tests"""
-    return RiskManager(RiskConfig(
-        max_position_size_pct=0.02,
-        max_drawdown_pct=0.10
-    ))
+def risk_manager(tmp_path):
+    """Create risk manager for tests with isolated halt state."""
+    return RiskManager(
+        RiskConfig(max_position_size_pct=0.02, max_drawdown_pct=0.10),
+        halt_state_file=tmp_path / "halt_state.json",
+    )
 
 
 @pytest.fixture

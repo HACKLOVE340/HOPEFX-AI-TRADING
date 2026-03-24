@@ -16,7 +16,11 @@ from transparency.models import (
     ExecutionRecord,
     ExecutionReport,
 )
-from transparency.engine import ExecutionTransparencyEngine
+from transparency.engine import (
+    ExecutionTransparencyEngine,
+    FOREX_PIP_MULTIPLIER,
+    METAL_PIP_MULTIPLIER,
+)
 from transparency.router import create_transparency_router
 
 __all__ = [
@@ -25,4 +29,6 @@ __all__ = [
     "ExecutionRecord",
     "ExecutionReport",
     "create_transparency_router",
+    "FOREX_PIP_MULTIPLIER",
+    "METAL_PIP_MULTIPLIER",
 ]

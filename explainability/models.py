@@ -1,6 +1,6 @@
 """explainability/models.py — Data models for AI explainability."""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

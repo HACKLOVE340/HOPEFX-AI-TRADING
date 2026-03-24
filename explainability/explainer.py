@@ -1,6 +1,7 @@
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
+import numpy as np
 from datetime import datetime, timezone
 import logging
 

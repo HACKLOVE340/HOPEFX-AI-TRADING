@@ -254,7 +254,7 @@ class PaperExecutor:
                     avg_price=0.0,
                     slippage=0.0,
                     commission=0.0,
-                    message=f"Insufficient cash: need {total_cost:.2f}, have {self.cash:.2f}",
+                    message=f"Insufficient balance: need {total_cost:.2f}, have {self.cash:.2f}",
                     timestamp=timestamp,
                 )
 
@@ -292,17 +292,17 @@ class PaperExecutor:
 
         else:  # sell / short
             if order.symbol not in self.positions:
-                # Opening a new short position
-                self.cash -= commission  # commission only; notional is synthetic
-                self.positions[order.symbol] = {
-                    'symbol': order.symbol,
-                    'side': 'short',
-                    'qty': order.qty,
-                    'entry_price': fill_price,
-                    'entry_time': timestamp,
-                    'stop_loss': order.stop_loss,
-                    'take_profit': order.take_profit,
-                }
+                # No existing position — reject; paper trading does not support naked shorts.
+                return ExecutionResult(
+                    order_id=order_id,
+                    status=OrderStatus.REJECTED,
+                    filled_qty=0.0,
+                    avg_price=0.0,
+                    slippage=0.0,
+                    commission=0.0,
+                    message=f"No open position for {order.symbol}; cannot sell without a position",
+                    timestamp=timestamp,
+                )
             else:
                 pos = self.positions[order.symbol]
                 if pos['side'] != 'long':

@@ -1,9 +1,10 @@
 """replay/engine.py — ChartReplayEngine: step through historical bars."""
 
 from typing import Dict, List, Optional, Any, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
+import threading
 
 from replay.models import ReplaySpeed, ReplayState, ReplaySession, ReplayBar
 

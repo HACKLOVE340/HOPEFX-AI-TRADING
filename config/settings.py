@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from configs.vault import vault
+from config.vault import vault
 
 
 class DatabaseSettings(BaseSettings):

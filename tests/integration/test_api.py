@@ -23,9 +23,9 @@ if _import_error is not None:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
-    """Create a test client."""
+    """Create a single test client for the module (avoids repeated lifespan start/stop)."""
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
 
