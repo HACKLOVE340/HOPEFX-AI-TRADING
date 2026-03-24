@@ -1,0 +1,58 @@
+"""replay/models.py — Data models for chart replay."""
+
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+import logging
+
+logger = logging.getLogger(__name__)
+
+class ReplaySpeed(Enum):
+    """Replay speed options"""
+    PAUSED = 0
+    SPEED_1X = 1
+    SPEED_2X = 2
+    SPEED_5X = 5
+    SPEED_10X = 10
+    SPEED_50X = 50
+    SPEED_100X = 100
+
+
+class ReplayState(Enum):
+    """Replay state"""
+    IDLE = "idle"
+    PLAYING = "playing"
+    PAUSED = "paused"
+    FINISHED = "finished"
+
+
+@dataclass
+class ReplaySession:
+    """Replay session configuration"""
+    session_id: str
+    symbol: str
+    timeframe: str
+    start_date: datetime
+    end_date: datetime
+    current_date: datetime
+    speed: ReplaySpeed = ReplaySpeed.SPEED_1X
+    state: ReplayState = ReplayState.IDLE
+    initial_balance: float = 100000.0
+    current_balance: float = 100000.0
+    trades: List[Dict[str, Any]] = field(default_factory=list)
+    positions: List[Dict[str, Any]] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class ReplayBar:
+    """Single bar of replay data"""
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
