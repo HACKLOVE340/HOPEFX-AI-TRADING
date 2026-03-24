@@ -295,15 +295,143 @@ class DataScheduler:
 
 
 # ---------------------------------------------------------------------------
+# Historical backfill
+# ---------------------------------------------------------------------------
+
+# OANDA returns max 5000 candles per request.  For H1 that is ~208 days.
+# We chunk the backfill into 5000-bar windows and walk backwards from today.
+_OANDA_MAX_COUNT = 5000
+
+
+async def backfill(
+    symbol: str = _SYMBOL,
+    granularity: str = _TIMEFRAME,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+) -> int:
+    """
+    Backfill historical OHLCV data from OANDA practice API.
+
+    Fetches data in 5000-bar chunks from ``from_date`` to ``to_date``
+    (defaults: 8 years ago → now).  Skips bars already in the CSV.
+
+    Returns total bars appended.
+    """
+    now = datetime.now(timezone.utc)
+    if to_date is None:
+        to_date = now
+    if from_date is None:
+        from_date = now - timedelta(days=365 * 8)
+
+    tf_secs = {
+        "M1": 60, "M5": 300, "M15": 900,
+        "H1": 3600, "H4": 14400, "D": 86400,
+    }
+    bar_secs = tf_secs.get(granularity, 3600)
+    chunk_secs = _OANDA_MAX_COUNT * bar_secs
+
+    path = _csv_path(symbol, granularity)
+    total_appended = 0
+    cursor = from_date
+
+    logger.info(
+        "Backfill started: %s/%s from %s to %s",
+        symbol, granularity,
+        from_date.strftime("%Y-%m-%d"),
+        to_date.strftime("%Y-%m-%d"),
+    )
+
+    if not (_OANDA_KEY and _OANDA_ACCOUNT):
+        logger.warning(
+            "OANDA credentials not set — backfill requires OANDA_API_KEY and "
+            "OANDA_ACCOUNT_ID.  Set them in .env and retry.\n"
+            "  OANDA_API_KEY=your_practice_key\n"
+            "  OANDA_ACCOUNT_ID=your_account_id\n"
+            "Get a free practice account at https://www.oanda.com/register/"
+        )
+        return 0
+
+    while cursor < to_date:
+        chunk_end = min(cursor + timedelta(seconds=chunk_secs), to_date)
+        logger.info(
+            "  Fetching chunk %s → %s ...",
+            cursor.strftime("%Y-%m-%d"),
+            chunk_end.strftime("%Y-%m-%d"),
+        )
+
+        bars = await _fetch_oanda(symbol, granularity, _OANDA_MAX_COUNT, from_dt=cursor)
+        if not bars:
+            logger.warning("  No bars returned for chunk starting %s — stopping", cursor)
+            break
+
+        appended = _append_bars(path, bars)
+        total_appended += appended
+
+        # Advance cursor past the last bar we received
+        try:
+            last_ts = bars[-1]["timestamp"]
+            cursor = datetime.fromisoformat(last_ts).replace(tzinfo=timezone.utc)
+            cursor += timedelta(seconds=bar_secs)
+        except Exception:
+            cursor += timedelta(seconds=chunk_secs)
+
+        # Small delay to respect OANDA rate limits (120 req/min for practice)
+        await asyncio.sleep(0.6)
+
+    logger.info("Backfill complete: %d bars appended to %s", total_appended, path)
+    return total_appended
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import argparse
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    parser = argparse.ArgumentParser(description="HOPEFX data scheduler / backfill")
+    parser.add_argument("--backfill", action="store_true", help="Run historical backfill")
+    parser.add_argument("--symbol", default=_SYMBOL, help="Instrument (default: XAU_USD)")
+    parser.add_argument("--granularity", default=_TIMEFRAME, help="Timeframe (default: H1)")
+    parser.add_argument(
+        "--from",
+        dest="from_date",
+        default=None,
+        help="Backfill start date YYYY-MM-DD (default: 8 years ago)",
+    )
+    parser.add_argument(
+        "--to",
+        dest="to_date",
+        default=None,
+        help="Backfill end date YYYY-MM-DD (default: today)",
+    )
+    args = parser.parse_args()
+
     async def _main():
-        scheduler = DataScheduler()
-        count = await scheduler.run_once()
-        print(f"Fetched and appended {count} new bars.")
+        if args.backfill:
+            from_dt = (
+                datetime.fromisoformat(args.from_date).replace(tzinfo=timezone.utc)
+                if args.from_date
+                else None
+            )
+            to_dt = (
+                datetime.fromisoformat(args.to_date).replace(tzinfo=timezone.utc)
+                if args.to_date
+                else None
+            )
+            count = await backfill(
+                symbol=args.symbol,
+                granularity=args.granularity,
+                from_date=from_dt,
+                to_date=to_dt,
+            )
+            print(f"\nBackfill complete: {count} bars appended.")
+            print(f"Data saved to: data/{args.symbol}_{args.granularity}.csv")
+        else:
+            scheduler = DataScheduler(symbol=args.symbol, timeframe=args.granularity)
+            count = await scheduler.run_once()
+            print(f"Fetched and appended {count} new bars.")
 
     asyncio.run(_main())
