@@ -1100,35 +1100,47 @@ class EnsemblePredictor:
         X_train, X_val = X_features.iloc[:split_idx], X_features.iloc[split_idx:]
         y_train, y_val = y_aligned.iloc[:split_idx], y_aligned.iloc[split_idx:]
         
-        # Train each model
+        # Train each model — track val accuracy explicitly per model
         logger.info(f"Training {len(self.models)} models...")
+        val_scores: Dict[str, float] = {}
+
         for name, model in self.models.items():
             logger.info(f"Training {name}...")
-            
+            score: float = 0.5  # safe default before any evaluation
+
             if isinstance(model, DeepLearningModel):
                 result = model.fit(X_train.values, y_train.values, X_val.values, y_val.values)
+                score = result.get('best_val_accuracy', result.get('final_direction_accuracy', 0.5))
                 logger.info(f"  {name}: {result['epochs_trained']} epochs, "
-                          f"accuracy={result['final_direction_accuracy']:.3f}")
-            
+                            f"val_accuracy={score:.3f}")
+
             elif SKLEARN_AVAILABLE and hasattr(model, 'fit'):
                 model.fit(X_train, y_train)
-                
-                # Calibrate probabilities
-                if hasattr(model, 'predict_proba'):
-                    calibrated = CalibratedClassifierCV(model, method='isotonic', cv=5)
-                    calibrated.fit(X_val, y_val)
-                    self.calibrators[name] = calibrated
-                
-                # Evaluate
-                score = model.score(X_val, y_val)
-                logger.info(f"  {name}: accuracy={score:.3f}")
-            
-            # Record performance
-            self.performance_history[name].append(score if 'score' in dir() else 0.5)
+
+                # Calibrate probabilities using a held-out portion of the
+                # validation set — never shuffle time-series data.
+                if hasattr(model, 'predict_proba') and len(X_val) >= 20:
+                    cal_split = max(10, len(X_val) // 2)
+                    X_cal = X_val.iloc[cal_split:]
+                    y_cal = y_val.iloc[cal_split:]
+                    try:
+                        calibrated = CalibratedClassifierCV(
+                            model, method='isotonic', cv='prefit'
+                        )
+                        calibrated.fit(X_cal, y_cal)
+                        self.calibrators[name] = calibrated
+                    except Exception as cal_exc:
+                        logger.warning(f"  {name}: calibration failed ({cal_exc}), using raw probabilities")
+
+                score = float(model.score(X_val, y_val))
+                logger.info(f"  {name}: val_accuracy={score:.3f}")
+
+            val_scores[name] = score
+            self.performance_history[name].append(score)
         
-        # Optimize ensemble weights
+        # Optimize ensemble weights using the val scores collected above
         if optimize_weights:
-            self._optimize_weights(X_val, y_val)
+            self._optimize_weights(X_val, y_val, val_scores)
         
         # Aggregate feature importance
         self._aggregate_feature_importance(X_val)
@@ -1140,37 +1152,47 @@ class EnsemblePredictor:
         self.is_fitted = True
         logger.info("Ensemble training completed")
     
-    def _optimize_weights(self, X_val: pd.DataFrame, y_val: pd.Series):
-        """Optimize ensemble weights using validation performance"""
+    def _optimize_weights(
+        self,
+        X_val: pd.DataFrame,
+        y_val: pd.Series,
+        val_scores: Optional[Dict[str, float]] = None,
+    ):
+        """
+        Optimize ensemble weights from actual validation accuracy scores.
+
+        Strategy: softmax over val accuracies so that better models get
+        exponentially higher weight while no model is zeroed out entirely.
+        Falls back to uniform weights if no scores are available.
+        """
         logger.info("Optimizing ensemble weights...")
-        
-        # Collect predictions from all models
-        predictions = {}
-        for name, model in self.models.items():
-            if isinstance(model, DeepLearningModel):
-                preds = []
-                for i in range(len(X_val)):
-                    pred = model.predict(X_val.iloc[i:i+1].values)
-                    preds.append(pred.prediction)
-                predictions[name] = preds
-            else:
-                predictions[name] = model.predict(X_val)
-        
-        # Grid search for optimal weights
-        best_score = 0
-        best_weights = self.weights.copy()
-        
-        # Simple optimization: weight by validation accuracy
+
+        scores: Dict[str, float] = {}
         for name in self.models:
-            if name in self.performance_history and self.performance_history[name]:
-                recent_perf = np.mean(list(self.performance_history[name])[-10:])
-                self.weights[name] = max(0.1, recent_perf)
-        
-        # Normalize
-        total = sum(self.weights.values())
-        self.weights = {k: v/total for k, v in self.weights.items()}
-        
-        logger.info(f"Optimized weights: {self.weights}")
+            if val_scores and name in val_scores:
+                scores[name] = val_scores[name]
+            elif self.performance_history.get(name):
+                # Use mean of recent history if direct score not passed
+                scores[name] = float(np.mean(list(self.performance_history[name])[-10:]))
+            else:
+                scores[name] = 0.5  # neutral — no information
+
+        if not scores:
+            logger.warning("No validation scores available; using uniform weights")
+            n = len(self.models)
+            self.weights = {name: 1.0 / n for name in self.models}
+            return
+
+        # Softmax weighting: exp(score) / sum(exp(scores))
+        # Subtract max for numerical stability
+        names = list(scores.keys())
+        vals = np.array([scores[n] for n in names], dtype=float)
+        vals -= vals.max()
+        exp_vals = np.exp(vals)
+        softmax_weights = exp_vals / exp_vals.sum()
+
+        self.weights = {name: float(w) for name, w in zip(names, softmax_weights)}
+        logger.info(f"Optimized weights (softmax over val accuracy): {self.weights}")
     
     def _train_meta_learner(self, X_val: pd.DataFrame, y_val: pd.Series):
         """Train meta-learner for stacking"""
