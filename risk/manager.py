@@ -3,10 +3,12 @@ HOPEFX Risk Manager
 Comprehensive risk management with position sizing, exposure limits, and drawdown control
 """
 
+import json
 import logging
 import signal
 import sys
 import time
+from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -113,6 +115,15 @@ class RiskManager:
         self._trading_halted = False
         self._halt_reason: Optional[str] = None
         self._halt_until: Optional[datetime] = None
+
+        # Path for persisting halt state across restarts.
+        # Stored next to this module so it survives process restarts.
+        self._halt_state_file: Path = Path(__file__).parent / "halt_state.json"
+
+        # Restore any halt that was active before the last restart.
+        # This prevents a process restart from silently resuming trading
+        # after a drawdown-triggered halt.
+        self._restore_halt_state()
     
     def update_equity(self, equity: float):
         """Update equity and calculate drawdown"""
@@ -162,20 +173,101 @@ class RiskManager:
                 self._resume_trading()
     
     def _halt_trading(self, reason: str, duration_hours: float = 1.0):
-        """Halt trading"""
+        """
+        Halt trading and persist the halt state to disk.
+
+        Persisting to disk ensures that a process restart does not silently
+        resume trading after a drawdown-triggered halt.  The halt remains
+        active until either the duration expires or _resume_trading() is
+        called explicitly.
+        """
         self._trading_halted = True
         self._halt_reason = reason
-        self._halt_until = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
-        
-        logger.critical(f"🚫 TRADING HALTED: {reason} (until {self._halt_until})")
-    
+        self._halt_until = (
+            datetime.now(timezone.utc) + timedelta(hours=duration_hours)
+            if duration_hours > 0
+            else None
+        )
+        logger.critical(
+            "TRADING HALTED: %s (until %s)",
+            reason,
+            self._halt_until.isoformat() if self._halt_until else "manual resume only",
+        )
+        self._persist_halt_state()
+
     def _resume_trading(self):
-        """Resume trading"""
+        """Resume trading and remove the persisted halt state."""
         self._trading_halted = False
         self._halt_reason = None
         self._halt_until = None
-        
-        logger.info("✅ Trading resumed")
+        logger.info("Trading resumed")
+        self._clear_halt_state()
+
+    def _persist_halt_state(self) -> None:
+        """Write halt state to JSON so the next process restart can restore it."""
+        state = {
+            "halted": self._trading_halted,
+            "reason": self._halt_reason,
+            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
+            "persisted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            self._halt_state_file.write_text(json.dumps(state, indent=2))
+        except OSError as exc:
+            logger.warning("Could not persist halt state: %s", exc)
+
+    def _clear_halt_state(self) -> None:
+        """Remove the persisted halt state file after a successful resume."""
+        try:
+            if self._halt_state_file.exists():
+                self._halt_state_file.unlink()
+        except OSError as exc:
+            logger.warning("Could not remove halt state file: %s", exc)
+
+    def _restore_halt_state(self) -> None:
+        """
+        Restore halt state from disk on startup.
+
+        If the state file records an active halt whose expiry has not yet
+        passed, trading is re-halted immediately.  If the halt has expired,
+        the state file is removed and trading starts normally.
+        """
+        if not self._halt_state_file.exists():
+            return
+        try:
+            data = json.loads(self._halt_state_file.read_text())
+        except Exception as exc:
+            logger.warning("Could not read halt state file: %s", exc)
+            return
+
+        if not data.get("halted"):
+            self._clear_halt_state()
+            return
+
+        halt_until_str = data.get("halt_until")
+        if halt_until_str:
+            halt_until = datetime.fromisoformat(halt_until_str)
+            if datetime.now(timezone.utc) >= halt_until:
+                # Halt has expired — clear and start normally
+                logger.info(
+                    "Persisted halt has expired (was until %s) — resuming trading",
+                    halt_until.isoformat(),
+                )
+                self._clear_halt_state()
+                return
+            self._halt_until = halt_until
+        else:
+            # Indefinite halt (duration_hours=0) — stays halted until manual resume
+            self._halt_until = None
+
+        self._trading_halted = True
+        self._halt_reason = data.get("reason", "restored from persisted halt state")
+        logger.critical(
+            "Trading halt RESTORED from persisted state — reason: %s | "
+            "halt_until: %s",
+            self._halt_reason,
+            self._halt_until.isoformat() if self._halt_until else "manual resume only",
+        )
     
     def assess_risk(self, account_info: Dict, positions: List[Any]) -> RiskAssessment:
         """
