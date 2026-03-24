@@ -9,7 +9,8 @@ import {
   Settings,
   Menu,
   X,
-  Bell
+  Bell,
+  Shield
 } from 'lucide-react'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { ConnectionStatus } from './ConnectionStatus'
@@ -17,6 +18,7 @@ import { ConnectionStatus } from './ConnectionStatus'
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/trading', icon: TrendingUp, label: 'Trading' },
+  { path: '/prop-firm', icon: Shield, label: 'Prop Firm' },
   { path: '/copy-trading', icon: Users, label: 'Copy Trading' },
   { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { path: '/wallet', icon: Wallet, label: 'Wallet' },

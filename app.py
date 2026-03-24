@@ -40,6 +40,7 @@ from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from api.backtesting import router as backtesting_router
 from api.chat import router as chat_router
+from api.prop_firm import router as prop_firm_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -69,6 +70,7 @@ app.include_router(admin_router)
 app.include_router(monetization_router)
 app.include_router(backtesting_router)
 app.include_router(chat_router)
+app.include_router(prop_firm_router)
 
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
