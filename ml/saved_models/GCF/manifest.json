@@ -1,16 +1,25 @@
 {
   "symbol": "GC=F",
-  "trained_at": "2026-03-21T18:13:28.801347",
-  "period": "6mo",
-  "rows": 125,
+  "trained_at": "2026-03-24T08:16:11.503418+00:00",
+  "period": "2y",
+  "rows": 503,
   "models": {
+    "xgboost": {
+      "path": "ml/saved_models/GCF/xgboost_model.json",
+      "metrics": {
+        "accuracy": 0.47058823529411764,
+        "precision": 0.5121951219512195,
+        "recall": 0.75,
+        "f1": 0.6086956521739131
+      }
+    },
     "random_forest": {
       "path": "ml/saved_models/GCF/random_forest_model.pkl",
       "metrics": {
-        "accuracy": 0.4666666666666667,
-        "precision": 0.36363636363636365,
-        "recall": 0.8,
-        "f1": 0.5
+        "accuracy": 0.45098039215686275,
+        "precision": 0.5,
+        "recall": 0.07142857142857142,
+        "f1": 0.125
       }
     }
   }

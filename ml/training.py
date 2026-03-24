@@ -474,12 +474,18 @@ class XGBoostModel:
         if X_val is not None and y_val is not None:
             eval_set.append((X_val, y_val))
         
-        self.model.fit(
-            X_train, y_train,
-            eval_set=eval_set,
-            early_stopping_rounds=early_stopping_rounds if len(eval_set) > 1 else None,
-            verbose=False
-        )
+        fit_kwargs: Dict = {
+            "eval_set": eval_set,
+            "verbose": False,
+        }
+        # early_stopping_rounds moved to constructor in XGBoost >= 2.0;
+        # pass it to fit() only for older versions that still accept it there.
+        import xgboost as _xgb_ver
+        _xgb_major = int(_xgb_ver.__version__.split(".")[0])
+        if _xgb_major < 2 and len(eval_set) > 1:
+            fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
+
+        self.model.fit(X_train, y_train, **fit_kwargs)
         
         # Feature importance
         if hasattr(self.model, 'feature_importances_'):
