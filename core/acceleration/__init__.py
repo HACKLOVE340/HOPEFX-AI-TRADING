@@ -5,6 +5,8 @@ CUDA-powered inference for sub-millisecond predictions
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 try:
     import torch
     import torch.nn as nn
@@ -20,7 +22,6 @@ except ImportError:
     class nn:  # type: ignore[no-redef]
         Module = _FakeModule
         ModuleList = list
-
 
 
 @dataclass
