@@ -243,9 +243,27 @@ class AdvancedRiskAnalytics:
         # 1-day VaR at the requested confidence level
         var_percentile = np.percentile(returns, (1 - confidence_level) * 100)
 
-        # Scale to the requested horizon using sqrt(t).
-        # See docstring for the i.i.d. assumption caveat.
-        var_scaled = var_percentile * np.sqrt(time_horizon)
+        if time_horizon == 1:
+            var_scaled = var_percentile
+        else:
+            # Multi-day VaR via overlapping return windows (no sqrt(t) assumption).
+            # Compute t-day overlapping returns and take the percentile directly.
+            t = int(time_horizon)
+            if len(returns) >= t * 2:
+                multi_day = np.array([
+                    np.sum(returns[i:i + t]) for i in range(len(returns) - t + 1)
+                ])
+                var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
+            else:
+                # Insufficient history — fall back to sqrt(t) with a warning
+                import warnings as _w
+                _w.warn(
+                    f"calculate_var_historical: insufficient data for {t}-day window "
+                    f"({len(returns)} bars). Falling back to sqrt(t) scaling.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+                var_scaled = var_percentile * np.sqrt(time_horizon)
 
         if portfolio_value:
             var_value = abs(var_scaled * portfolio_value)
@@ -294,9 +312,16 @@ class AdvancedRiskAnalytics:
         # Calculate 1-day VaR
         var_value = -(mean_return + z_score * std_return)
 
-        # Scale to the requested horizon using sqrt(t).
-        # Valid only under i.i.d. normality — see calculate_var_historical docstring.
-        var_scaled = var_value * np.sqrt(time_horizon)
+        if time_horizon == 1:
+            var_scaled = var_value
+        else:
+            # Scale mean and std to the t-day horizon, then recompute VaR.
+            # Under normality: mu_t = mu*t, sigma_t = sigma*sqrt(t).
+            # This is more accurate than scaling the 1-day VaR by sqrt(t)
+            # because it correctly scales the mean component linearly.
+            mean_t  = mean_return * time_horizon
+            std_t   = std_return  * np.sqrt(time_horizon)
+            var_scaled = -(mean_t + z_score * std_t)
 
         # Convert to dollar value if portfolio value provided
         if portfolio_value:
