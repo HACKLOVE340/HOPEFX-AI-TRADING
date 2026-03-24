@@ -330,21 +330,36 @@ class PaperExecutor:
         # Update last-known price for equity mark-to-market
         self._last_prices[order.symbol] = fill_price
         
+        # Determine fill status: PARTIAL when only part of the requested qty
+        # was filled (e.g. closing a position smaller than the order qty).
+        actual_filled = order.qty
+        if order.side in ('sell', 'short') and order.symbol in self.positions:
+            # Position was partially closed — remaining qty still open
+            remaining = self.positions[order.symbol]['qty'] if order.symbol in self.positions else 0
+            actual_filled = order.qty - remaining if remaining < order.qty else order.qty
+
+        fill_status = (
+            OrderStatus.PARTIAL
+            if actual_filled < order.qty
+            else OrderStatus.FILLED
+        )
+
         result = ExecutionResult(
             order_id=order_id,
-            status=OrderStatus.FILLED,
-            filled_qty=order.qty,
+            status=fill_status,
+            filled_qty=actual_filled,
             avg_price=fill_price,
             slippage=slippage,
             commission=commission,
-            timestamp=timestamp
+            pnl=round(pnl, 6) if pnl != 0.0 else None,
+            timestamp=timestamp,
         )
-        
+
         self.order_history.append({
             'order': order,
             'result': result,
-            'balance_after': self.balance,
-            'equity_after': self.equity
+            'cash_after': self.cash,
+            'equity_after': self.equity,
         })
         
         logger.info(
