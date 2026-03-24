@@ -428,6 +428,19 @@ async def startup_event():
             logger.warning(f"⚠ Cache initialization failed: {e}")
             app_state.cache = None
 
+        # ── Data Scheduler ───────────────────────────────────────────────────
+        try:
+            from data.scheduler import DataScheduler
+            _data_scheduler = DataScheduler()
+            _ds_task = asyncio.create_task(_data_scheduler.start())
+            app_state.background_tasks.append(_ds_task)
+            app_state.data_scheduler = _data_scheduler
+            logger.info("✓ Data scheduler started")
+            log_activity("Data scheduler started")
+        except Exception as e:
+            logger.warning("⚠ Data scheduler not available: %s", e)
+            app_state.data_scheduler = None
+
         # Register optional routers with graceful degradation
         try:
             from api.websocket_server import WebSocketManager, create_websocket_router
