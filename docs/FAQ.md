@@ -43,7 +43,7 @@ HOPEFX AI Trading is an advanced, open-source AI-powered trading framework desig
 | Self-hosted | ✅ | ❌ | ✅ |
 | Free | ✅ | Paid | Free |
 
-See [COMPETITIVE_ANALYSIS.md](../COMPETITIVE_ANALYSIS.md) for detailed comparison.
+See [COMPETITIVE_ANALYSIS.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/docs/archive/COMPETITIVE_ANALYSIS.md) for detailed comparison.
 
 ### Is HOPEFX really free?
 
@@ -96,7 +96,7 @@ cp .env.example .env
 python cli.py init
 ```
 
-See [INSTALLATION.md](../INSTALLATION.md) for detailed instructions.
+See [INSTALLATION.md](INSTALLATION.md) for detailed instructions.
 
 ### Why am I getting import errors?
 
@@ -457,7 +457,7 @@ Just ensure you comply with local financial regulations.
 
 ### How do I contribute?
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md):
+See [CONTRIBUTING.md](CONTRIBUTING.md):
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
@@ -473,10 +473,10 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md):
 - **GitHub Discussions:** [Ask Questions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions)
 
 ### Documentation
-- [Installation Guide](../INSTALLATION.md)
+- [Installation Guide](INSTALLATION.md)
 - [API Guide](./API_GUIDE.md)
-- [Security Guide](../SECURITY.md)
-- [Debugging Guide](../DEBUGGING.md)
+- [Security Guide](SECURITY.md)
+- [Debugging Guide](DEBUGGING.md)
 
 ### Contact
 - **Email:** support@hopefx.com

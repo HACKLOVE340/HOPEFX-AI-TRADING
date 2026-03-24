@@ -95,7 +95,7 @@ Post in `#showcase` or tag us on social media.
 
 ### 3. Contribute to the Project
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 **Ways to contribute:**
 - 🐛 Report bugs
@@ -178,10 +178,10 @@ Submit your project to `#showcase` on Discord.
 
 ### Documentation
 
-- [Installation Guide](../INSTALLATION.md)
+- [Installation Guide](INSTALLATION.md)
 - [API Guide](./API_GUIDE.md)
 - [FAQ](./FAQ.md)
-- [Security Guide](../SECURITY.md)
+- [Security Guide](SECURITY.md)
 
 ### Video Tutorials
 
@@ -244,7 +244,7 @@ Report issues to moderators via DM.
 
 ### Emergency
 
-For security issues, see [SECURITY.md](../SECURITY.md)
+For security issues, see [SECURITY.md](SECURITY.md)
 
 ---
 
@@ -261,7 +261,7 @@ Vote on upcoming features:
 ### Roadmap
 
 See our public roadmap:
-- [ROADMAP.md](../ROADMAP.md)
+- [ROADMAP.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/ANALYSIS_AND_ROADMAP.md)
 - [GitHub Projects](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/projects)
 
 ### RFC Process

@@ -7,6 +7,10 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+
+# MkDocs generated site (built by CI, not committed)
+site/
+
 # Keep the built dashboard so the server can serve it without a build step
 !dashboard/dist/
 downloads/
