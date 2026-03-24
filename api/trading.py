@@ -685,3 +685,61 @@ try:
     router.include_router(_make_strategy_router())
 except Exception:
     pass
+
+
+# ── Regime status endpoint ────────────────────────────────────────────────────
+
+@router.get("/regime", summary="Current market regime and active strategy")
+async def get_regime_status():
+    """
+    Return the current detected market regime, confidence score, and the
+    strategy selected by the RegimeRouter for that regime.
+
+    Also returns recent regime transition history and per-regime backtest
+    performance from the manifest (if available).
+    """
+    try:
+        from app import app_state  # noqa: PLC0415
+        broker = getattr(app_state, "broker", None)
+        regime_router = getattr(app_state, "regime_router", None)
+
+        # If no router on app_state, create a transient one for the response
+        if regime_router is None:
+            from strategies.manager import StrategyManager
+            from strategies.regime_router import RegimeRouter
+            sm = getattr(app_state, "strategy_manager", None) or StrategyManager()
+            regime_router = RegimeRouter(sm)
+
+        # Try to detect regime from live price data
+        if broker is not None and hasattr(broker, "get_ohlcv"):
+            import pandas as pd
+            ohlcv = broker.get_ohlcv("XAUUSD", limit=100)
+            if ohlcv:
+                df = pd.DataFrame(ohlcv)
+                regime_router.route(df)
+
+        return regime_router.status()
+
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).warning("regime status error: %s", exc)
+        return {
+            "current_regime": "unknown",
+            "confidence": 0.0,
+            "selected_strategy": "TrendFollowing",
+            "manifest_entries": {},
+            "error": str(exc),
+        }
+
+
+@router.get("/regime/history", summary="Recent regime transition history")
+async def get_regime_history(limit: int = 20):
+    """Return the last N regime transitions with timestamps."""
+    try:
+        from app import app_state  # noqa: PLC0415
+        regime_router = getattr(app_state, "regime_router", None)
+        if regime_router is None:
+            return {"history": []}
+        return {"history": regime_router.regime_history(limit=limit)}
+    except Exception as exc:
+        return {"history": [], "error": str(exc)}
