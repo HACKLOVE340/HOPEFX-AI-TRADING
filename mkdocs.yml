@@ -73,6 +73,7 @@ nav:
     - Installation: INSTALLATION.md
     - Quick Start: QUICKSTART.md
     - OANDA Paper Trading: oanda_paper_trading_setup.md
+    - Live Trading Gate (30-day): live_trading_gate.md
   - Guides:
     - API Guide: API_GUIDE.md
     - Order Flow: ORDER_FLOW_GUIDE.md
