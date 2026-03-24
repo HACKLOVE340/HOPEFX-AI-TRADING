@@ -7,7 +7,7 @@ Multi-Gateway Payment Processor
 
 from enum import Enum
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import uuid
 
@@ -39,7 +39,7 @@ class Payment:
         self.user_id = user_id
         self.description = description
         self.status = PaymentStatus.PENDING
-        self.created_at = datetime.now()
+        self.created_at = datetime.now(timezone.utc)
         self.completed_at = None
         self.transaction_id = None
 
@@ -74,7 +74,7 @@ class PaymentGateway:
                 self._process_bank(payment)
             
             payment.status = PaymentStatus.SUCCESS
-            payment.completed_at = datetime.now()
+            payment.completed_at = datetime.now(timezone.utc)
             logger.info(f"Payment successful: {payment_id}")
             return True
         

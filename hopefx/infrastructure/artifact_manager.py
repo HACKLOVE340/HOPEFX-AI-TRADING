@@ -7,7 +7,7 @@ import json
 import pickle
 import joblib
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 import pandas as pd
 import plotly.graph_objects as go
@@ -27,7 +27,7 @@ class ArtifactManager:
     }
     
     def __init__(self, run_id: Optional[str] = None):
-        self.run_id = run_id or datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.run_id = run_id or datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         self._ensure_directories()
         
     def _ensure_directories(self):
@@ -141,7 +141,7 @@ class ArtifactManager:
         with open(meta_path, 'w') as f:
             json.dump({
                 'run_id': self.run_id,
-                'created_at': datetime.now().isoformat(),
+                'created_at': datetime.now(timezone.utc).isoformat(),
                 'metadata': metadata,
                 'trades_count': len(trades),
                 'final_equity': float(equity_data['equity'].iloc[-1]),
@@ -168,7 +168,7 @@ class ArtifactManager:
             model_type: 'xgboost', 'lstm', 'random_forest'
             performance: Dict with accuracy, precision, recall, f1, etc.
         """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         filename = f"{model_type}_{timestamp}.joblib"
         model_path = Path(self.BASE_DIRS['models']) / filename
         

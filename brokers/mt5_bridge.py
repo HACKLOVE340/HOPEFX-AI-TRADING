@@ -287,11 +287,18 @@ class MT5Bridge:
             request["sl"] = float(order.stop_loss)
         if order.take_profit is not None:
             request["tp"] = float(order.take_profit)
-        finally:
-            timer.cancel()
 
-        if timed_out.is_set():
-            raise TimeoutError(f"MT5 order_send timed out after {order.timeout_sec}s")
+        # Send with timeout guard
+        timed_out = getattr(order, '_timed_out', None)
+        timer = getattr(order, '_timer', None)
+        try:
+            result = mt5.order_send(request)
+        finally:
+            if timer is not None:
+                timer.cancel()
+
+        if timed_out is not None and timed_out.is_set():
+            raise TimeoutError(f"MT5 order_send timed out after {getattr(order, 'timeout_sec', 30)}s")
 
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             retcode = result.retcode if result else -1

@@ -11,7 +11,7 @@ Supported:
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 try:
@@ -255,7 +255,7 @@ class MT5Connector(BrokerConnector):
                 status=OrderStatus.FILLED if result.retcode == mt5.TRADE_RETCODE_DONE else OrderStatus.PENDING,
                 filled_quantity=result.volume if hasattr(result, 'volume') else quantity,
                 average_price=result.price if hasattr(result, 'price') else price,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={'mt5_order': result.order, 'mt5_deal': result.deal if hasattr(result, 'deal') else None}
             )
 
@@ -407,7 +407,7 @@ class MT5Connector(BrokerConnector):
                 margin_used=account.margin,
                 margin_available=account.margin_free,
                 positions_count=len(mt5.positions_get() or []),
-                timestamp=datetime.now()
+                timestamp=datetime.now(timezone.utc)
             )
 
         except Exception as e:

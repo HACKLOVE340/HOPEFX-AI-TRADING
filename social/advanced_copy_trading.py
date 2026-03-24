@@ -8,7 +8,7 @@ Advanced Copy Trading Engine
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 import uuid
 import json
@@ -146,7 +146,7 @@ class CopyTradingEngine:
         """Verify trader identity"""
         if trader_id in self.traders:
             self.traders[trader_id].verified = True
-            self.traders[trader_id].verification_date = datetime.now()
+            self.traders[trader_id].verification_date = datetime.now(timezone.utc)
             return True
         return False
     
@@ -218,7 +218,7 @@ class CopyTradingEngine:
                     stop_loss=signal.stop_loss,
                     take_profit=signal.take_profit,
                     status=TradeStatus.OPEN,
-                    entry_time=datetime.now()
+                    entry_time=datetime.now(timezone.utc)
                 )
                 
                 self.active_trades[follower.follower_id].append(trade)
@@ -291,7 +291,7 @@ class CopyTradingEngine:
                 trade.pnl_percent = pnl_percent
                 trade.commission = commission
                 trade.status = TradeStatus.CLOSED
-                trade.exit_time = datetime.now()
+                trade.exit_time = datetime.now(timezone.utc)
                 
                 # Move to history
                 self.trade_history.append(trade)

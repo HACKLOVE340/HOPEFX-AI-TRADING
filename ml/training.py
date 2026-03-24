@@ -5,7 +5,7 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Any, Union
 from pathlib import Path
 import json
@@ -942,12 +942,12 @@ class MLEvaluationReport:
     ) -> str:
         """Generate comprehensive evaluation report"""
         
-        report_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_time = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         report_path = self.output_dir / f"{model_name}_evaluation_{report_time}.json"
         
         report = {
             'model_name': model_name,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'metrics': metrics,
             'predictions_sample': {
                 'y_true': y_true[:20].tolist(),

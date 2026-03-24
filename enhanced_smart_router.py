@@ -8,7 +8,7 @@ import asyncio
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any, Callable, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
 from collections import deque, defaultdict
 from abc import ABC, abstractmethod
@@ -304,7 +304,7 @@ class TWAPStrategy(ExecutionStrategy):
             size=order.size,
             price=fill_price,
             venue=venue.name,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             fee=fee,
             is_maker=False,
             slippage_bps=slippage * 10000
@@ -586,7 +586,7 @@ class SmartOrderRouter:
             'total_fees': sum(f.fee for f in fills),
             'total_slippage_bps': np.mean([f.slippage_bps for f in fills]),
             'fills': len(fills),
-            'duration_seconds': (datetime.now() - order.created_at).total_seconds() if fills else 0
+            'duration_seconds': (datetime.now(timezone.utc) - order.created_at).total_seconds() if fills else 0
         }
     
     def _calculate_vwap(self, fills: List[Fill]) -> float:

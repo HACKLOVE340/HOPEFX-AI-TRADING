@@ -367,7 +367,7 @@ class EnsemblePredictor(BaseMLModel):
 
             self.is_trained = True
             self.training_history.append({
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'results': results,
                 'data_points': len(X_train)
             })

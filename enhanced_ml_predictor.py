@@ -908,7 +908,7 @@ class DeepLearningModel:
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model not trained")
         
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         # Ensure correct shape
         if len(X.shape) == 2:
@@ -958,11 +958,11 @@ class DeepLearningModel:
         epistemic = float(stats['direction']['std'].mean())  # Model uncertainty
         aleatoric = float(stats['volatility']['mean'][0][0])  # Data noise
         
-        inference_time = (datetime.now() - start_time).total_seconds() * 1000
+        inference_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
         
         return Prediction(
             symbol="unknown",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             target=PredictionTarget.DIRECTION,
             prediction=predicted_direction,
             confidence=confidence,
@@ -1254,7 +1254,7 @@ class EnsemblePredictor:
         if not self.is_fitted:
             raise RuntimeError("Ensemble not fitted")
         
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         # Create features
         X_features = self.feature_engineer.create_features(X)
@@ -1305,7 +1305,7 @@ class EnsemblePredictor:
         if not model_predictions:
             return Prediction(
                 symbol="unknown",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 target=PredictionTarget.DIRECTION,
                 prediction="neutral",
                 confidence=0.0,
@@ -1331,11 +1331,11 @@ class EnsemblePredictor:
         unique_preds = len(set(model_predictions))
         disagreement = (unique_preds - 1) / len(model_predictions) if model_predictions else 0
         
-        inference_time = (datetime.now() - start_time).total_seconds() * 1000
+        inference_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
         
         return Prediction(
             symbol="unknown",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             target=PredictionTarget.DIRECTION,
             prediction=final_prediction,
             confidence=confidence,
@@ -1576,11 +1576,11 @@ class EnhancedMLPredictor:
             logger.error("Predictor not fitted - call fit() first")
             return None
         
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         try:
             prediction = self.ensemble.predict(df)
-            prediction.inference_time_ms = (datetime.now() - start_time).total_seconds() * 1000
+            prediction.inference_time_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
             
             # Record prediction
             self.prediction_history.append(prediction)

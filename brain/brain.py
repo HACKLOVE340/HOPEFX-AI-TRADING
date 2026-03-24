@@ -715,7 +715,7 @@ class HOPEFXBrain:
             {
                 'equity': self.state.equity,
                 'open_positions': self.state.open_trades_count,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         )
         

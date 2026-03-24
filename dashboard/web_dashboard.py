@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 import random
 
@@ -82,7 +82,7 @@ class DashboardWebSocketManager:
                 data = await data_source.get_dashboard_data()
                 await self.broadcast({
                     'type': 'update',
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'data': data
                 })
                 
@@ -181,7 +181,7 @@ class DashboardDataSource:
                 'brain_state': brain_state,
                 'prices': price_data,
                 'recent_signals': recent_signals,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
         except Exception as e:
@@ -192,7 +192,7 @@ class DashboardDataSource:
         """Record trade for history"""
         self._trade_history.append({
             **trade,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
 
 

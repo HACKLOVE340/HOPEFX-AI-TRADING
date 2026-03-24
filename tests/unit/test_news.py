@@ -9,7 +9,7 @@ Tests for:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch, MagicMock
 
 
@@ -28,7 +28,7 @@ class TestEconomicEvent:
             title="Fed Interest Rate Decision",
             event_type=EventType.INTEREST_RATE,
             importance=EventImportance.CRITICAL,
-            scheduled_time=datetime.now(),
+            scheduled_time=datetime.now(timezone.utc),
             country="US",
             actual=5.5,
             forecast=5.25,
@@ -47,7 +47,7 @@ class TestEconomicEvent:
         """Test event serialization to dict."""
         from news.economic_calendar import EconomicEvent, EventType, EventImportance
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         event = EconomicEvent(
             title="GDP Release",
             event_type=EventType.GDP,
@@ -70,7 +70,7 @@ class TestEconomicEvent:
             title="Employment Report",
             event_type=EventType.EMPLOYMENT,
             importance=EventImportance.HIGH,
-            scheduled_time=datetime.now(),
+            scheduled_time=datetime.now(timezone.utc),
             country="US",
             actual=200000,
             forecast=150000,
@@ -87,7 +87,7 @@ class TestEconomicEvent:
             title="PMI",
             event_type=EventType.PMI,
             importance=EventImportance.MEDIUM,
-            scheduled_time=datetime.now(),
+            scheduled_time=datetime.now(timezone.utc),
             country="EU",
             actual=52.0,
             forecast=52.1,
@@ -104,7 +104,7 @@ class TestEconomicEvent:
             title="Pending Event",
             event_type=EventType.OTHER,
             importance=EventImportance.LOW,
-            scheduled_time=datetime.now(),
+            scheduled_time=datetime.now(timezone.utc),
             country="JP",
             actual=None,
             forecast=100
@@ -155,7 +155,7 @@ class TestEconomicCalendar:
             title="Test Event",
             event_type=EventType.OTHER,
             importance=EventImportance.LOW,
-            scheduled_time=datetime.now(),
+            scheduled_time=datetime.now(timezone.utc),
             country="US"
         )
 
@@ -173,7 +173,7 @@ class TestEconomicCalendar:
             title="Future Event",
             event_type=EventType.GDP,
             importance=EventImportance.HIGH,
-            scheduled_time=datetime.now() + timedelta(days=1),
+            scheduled_time=datetime.now(timezone.utc) + timedelta(days=1),
             country="US"
         )
         calendar.add_event(future_event)
@@ -192,7 +192,7 @@ class TestEconomicCalendar:
             title="Fed Decision",
             event_type=EventType.INTEREST_RATE,
             importance=EventImportance.CRITICAL,
-            scheduled_time=datetime.now() + timedelta(hours=1),
+            scheduled_time=datetime.now(timezone.utc) + timedelta(hours=1),
             country="US"
         )
         calendar.add_event(high_impact)
@@ -202,7 +202,7 @@ class TestEconomicCalendar:
             title="Minor Report",
             event_type=EventType.OTHER,
             importance=EventImportance.LOW,
-            scheduled_time=datetime.now() + timedelta(hours=2),
+            scheduled_time=datetime.now(timezone.utc) + timedelta(hours=2),
             country="US"
         )
         calendar.add_event(low_impact)
@@ -411,7 +411,7 @@ class TestNewsArticle:
             title="Gold Hits Record High",
             description="XAU/USD surges past $2000",
             source="Financial Times",
-            published_at=datetime.now(),
+            published_at=datetime.now(timezone.utc),
             url="https://example.com/article"
         )
 
@@ -426,7 +426,7 @@ class TestNewsArticle:
             title="Market Update",
             description="Daily recap",
             source="Reuters",
-            published_at=datetime.now(),
+            published_at=datetime.now(timezone.utc),
             url="https://example.com",
             author="John Doe",
             symbols=["XAUUSD", "EURUSD"]
@@ -445,7 +445,7 @@ class TestNewsArticle:
             title="Basic Article",
             description="No extras",
             source="Unknown",
-            published_at=datetime.now(),
+            published_at=datetime.now(timezone.utc),
             url="https://example.com"
         )
 
@@ -636,21 +636,21 @@ class TestNewsAggregator:
                 title="Gold Price Update",
                 description="Gold rises",
                 source="Source1",
-                published_at=datetime.now(),
+                published_at=datetime.now(timezone.utc),
                 url="https://example1.com"
             ),
             NewsArticle(
                 title="Gold Price Update",  # Duplicate title
                 description="Gold rises again",
                 source="Source2",
-                published_at=datetime.now(),
+                published_at=datetime.now(timezone.utc),
                 url="https://example2.com"
             ),
             NewsArticle(
                 title="Different News",
                 description="Other news",
                 source="Source3",
-                published_at=datetime.now(),
+                published_at=datetime.now(timezone.utc),
                 url="https://example3.com"
             ),
         ]

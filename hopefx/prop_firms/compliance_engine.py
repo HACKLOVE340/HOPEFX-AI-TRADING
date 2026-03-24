@@ -6,7 +6,7 @@ Supports: FTMO, MyForexFunds, The5ers, TopStep, True Forex Funds
 from enum import Enum
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -80,7 +80,7 @@ class PropFirmComplianceEngine:
         self.rules = self.RULES.get(config.firm, {})
         self.daily_pnl: Dict[str, float] = {}
         self.trades: List[Dict] = []
-        self.start_date = datetime.now()
+        self.start_date = datetime.now(timezone.utc)
         self.violation_handlers: List[Callable] = []
         
         # Load state if exists
@@ -133,7 +133,7 @@ class PropFirmComplianceEngine:
         worst_case_pnl = -trade['size'] * 100 * 10  # 100 pips against
         
         # Check daily loss limit
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         current_daily_loss = abs(min(0, self.daily_pnl.get(today, 0)))
         potential_daily_loss = current_daily_loss + abs(worst_case_pnl)
         
@@ -154,7 +154,7 @@ class PropFirmComplianceEngine:
             total_loss_used=abs(total_loss) / self.config.account_size,
             profit_progress=self._calculate_profit_progress(),
             days_traded=len(self.daily_pnl),
-            days_remaining=self.config.max_trading_days - (datetime.now() - self.start_date).days
+            days_remaining=self.config.max_trading_days - (datetime.now(timezone.utc) - self.start_date).days
         )
     
     def record_trade(self, trade: Dict, result: Dict):
@@ -163,11 +163,11 @@ class PropFirmComplianceEngine:
             **trade,
             'exit_price': result['exit_price'],
             'pnl': result['pnl'],
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
         # Update daily P&L
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         self.daily_pnl[today] = self.daily_pnl.get(today, 0) + result['pnl']
         
         self._save_state()
@@ -199,14 +199,14 @@ class PropFirmComplianceEngine:
                 violations.append(f"Profit target reached but only {len(self.daily_pnl)} trading days (min {self.config.min_trading_days})")
         
         # Check time limit
-        days_elapsed = (datetime.now() - self.start_date).days
+        days_elapsed = (datetime.now(timezone.utc) - self.start_date).days
         if days_elapsed > self.config.max_trading_days:
             violations.append("Maximum trading days exceeded - Challenge Failed")
         
         return ComplianceStatus(
             compliant=len([v for v in violations if 'Complete' not in v and 'Failed' not in v]) == 0,
             violations=violations,
-            daily_loss_used=abs(min(0, self.daily_pnl.get(datetime.now().strftime('%Y-%m-%d'), 0))) / self.config.account_size,
+            daily_loss_used=abs(min(0, self.daily_pnl.get(datetime.now(timezone.utc).strftime('%Y-%m-%d'), 0))) / self.config.account_size,
             total_loss_used=abs(sum(min(0, pnl) for pnl in self.daily_pnl.values())) / self.config.account_size,
             profit_progress=total_pnl / profit_target,
             days_traded=len(self.daily_pnl),

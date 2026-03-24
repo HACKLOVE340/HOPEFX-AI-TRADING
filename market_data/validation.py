@@ -5,7 +5,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -62,13 +62,13 @@ class MarketDataValidator:
         if tick_time:
             if isinstance(tick_time, (int, float)):
                 tick_time = datetime.fromtimestamp(tick_time)
-            age = datetime.now() - tick_time
+            age = datetime.now(timezone.utc) - tick_time
             if age > self.max_staleness:
                 issues.append({
                     'type': DataQualityIssue.STALE_DATA.value,
                     'severity': 'high',
                     'message': f'Data is {age.total_seconds()}s old (max {self.max_staleness.total_seconds()}s)',
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 })
             else:
                 checks_passed += 1
@@ -142,13 +142,13 @@ class MarketDataValidator:
         is_valid = len([i for i in issues if i['severity'] == 'critical']) == 0
         if is_valid and current_price:
             self.reference_prices[symbol] = current_price
-            self.last_valid_data[symbol] = datetime.now()
+            self.last_valid_data[symbol] = datetime.now(timezone.utc)
         
         result = ValidationResult(
             is_valid=is_valid and quality_score >= 0.8,
             quality_score=quality_score,
             issues=issues,
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
         
         self.quality_history.append(result)
@@ -212,7 +212,7 @@ class MarketDataValidator:
             is_valid=is_valid,
             quality_score=max(0, quality_score),
             issues=issues,
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     def get_quality_report(self) -> Dict:
@@ -230,5 +230,5 @@ class MarketDataValidator:
                 len([i for i in r.issues if i['severity'] == 'critical']) 
                 for r in recent
             ),
-            'last_updated': datetime.now().isoformat()
+            'last_updated': datetime.now(timezone.utc).isoformat()
         }

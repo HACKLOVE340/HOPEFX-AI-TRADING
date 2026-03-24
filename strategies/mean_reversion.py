@@ -7,7 +7,7 @@ expecting it to revert back to the average.
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from strategies.base import BaseStrategy
@@ -57,7 +57,7 @@ class MeanReversionStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'Insufficient data',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             # Calculate Bollinger Bands
@@ -119,7 +119,7 @@ class MeanReversionStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'price': current_price,
                     'sma': current_sma,
@@ -135,5 +135,5 @@ class MeanReversionStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

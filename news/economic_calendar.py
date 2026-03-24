@@ -14,7 +14,7 @@ import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class EconomicCalendar:
         Returns:
             List of upcoming events
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         cutoff = now + timedelta(hours=hours_ahead)
 
         upcoming = [
@@ -162,7 +162,7 @@ class EconomicCalendar:
         days_ahead: int = 7
     ) -> List[EconomicEvent]:
         """Get events for a specific currency"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         cutoff = now + timedelta(days=days_ahead)
 
         return [
@@ -225,7 +225,7 @@ class EconomicCalendar:
         """
         Create sample economic events for testing
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         sample_events = [
             EconomicEvent(

@@ -7,7 +7,7 @@ This strategy uses MACD indicator for trend-following signals.
 import logging
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
@@ -71,10 +71,10 @@ class MACDStrategy(BaseStrategy):
         if any(v is None for v in (macd, sig, prev_macd, prev_sig)):
             return None
         if prev_macd <= prev_sig and macd > sig:
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(),
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc),
                           confidence=0.85 if macd < 0 else 0.75)
         if prev_macd >= prev_sig and macd < sig:
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(),
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc),
                           confidence=0.85 if macd > 0 else 0.75)
         return None
 
@@ -112,7 +112,7 @@ class MACDStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': f'Insufficient data (need {min_length} periods)',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             close = market_data['close']
@@ -137,7 +137,7 @@ class MACDStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'MACD calculation resulted in NaN',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             signal_type = 'HOLD'
@@ -210,7 +210,7 @@ class MACDStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'macd': current_macd,
                     'signal': current_signal,
@@ -226,5 +226,5 @@ class MACDStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

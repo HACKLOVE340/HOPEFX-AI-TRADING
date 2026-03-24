@@ -6,7 +6,7 @@ This strategy uses the Stochastic Oscillator to identify overbought/oversold con
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from strategies.base import BaseStrategy
@@ -85,7 +85,7 @@ class StochasticStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': f'Insufficient data (need {min_length} periods)',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             # Calculate Stochastic
@@ -106,7 +106,7 @@ class StochasticStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'Stochastic calculation resulted in NaN',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             signal_type = 'HOLD'
@@ -175,7 +175,7 @@ class StochasticStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'k_percent': current_k,
                     'd_percent': current_d,
@@ -193,5 +193,5 @@ class StochasticStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

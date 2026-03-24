@@ -3,7 +3,7 @@ Backtest report generation in HTML/JSON formats.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -105,7 +105,7 @@ class BacktestReport:
         """Generate JSON report."""
         report = {
             "metadata": {
-                "generated_at": datetime.now().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "start_date": self.result.start_date.isoformat(),
                 "end_date": self.result.end_date.isoformat(),
                 "initial_capital": float(self.result.initial_capital),

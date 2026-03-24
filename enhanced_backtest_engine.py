@@ -1661,7 +1661,7 @@ class EnhancedBacktestEngine:
                 if dd > max_dd:
                     max_dd = dd
                     if dd_start is None:
-                        dd_start = ts.to_datetime() if hasattr(ts, 'to_datetime') else datetime.now()
+                        dd_start = ts.to_datetime() if hasattr(ts, 'to_datetime') else datetime.now(timezone.utc)
         
         # Advanced metrics
         def calculate_sortino(returns, target=0):
@@ -1678,7 +1678,7 @@ class EnhancedBacktestEngine:
         
         report = {
             'metadata': {
-                'generated_at': datetime.now().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'initial_capital': self.initial_capital,
                 'final_capital': self.capital,
                 'total_return_pct': (self.capital - self.initial_capital) / self.initial_capital * 100,
@@ -1790,7 +1790,7 @@ class EnhancedBacktestEngine:
         """Save complete engine state to disk"""
         state = {
             'metadata': {
-                'saved_at': datetime.now().isoformat(),
+                'saved_at': datetime.now(timezone.utc).isoformat(),
                 'version': '4.0',
                 'initial_capital': self.initial_capital
             },

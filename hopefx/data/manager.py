@@ -204,7 +204,7 @@ class UnifiedDataManager:
         base_path = Path(self.config.storage_path) / category
         base_path.mkdir(exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         filename = f"{name}_{timestamp}"
 
         # Determine format

@@ -5,7 +5,7 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import json
@@ -342,7 +342,7 @@ class PortfolioAnalytics:
         """Generate comprehensive portfolio report"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         
         # Calculate metrics
         metrics = self.calculate_risk_metrics(weights)
@@ -352,7 +352,7 @@ class PortfolioAnalytics:
         
         # Create report
         report = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'assets': self.assets,
             'weights': dict(zip(self.assets, weights.round(4))),
             'performance': {
@@ -522,7 +522,7 @@ class MultiAssetBacktester:
         """Save backtest results"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         
         # Save equity curve
         equity_df = pd.DataFrame(self.equity_history)

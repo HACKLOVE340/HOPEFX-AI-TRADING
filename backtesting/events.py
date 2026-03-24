@@ -6,7 +6,7 @@ Defines events used in event-driven backtesting architecture.
 
 from enum import Enum
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class EventType(Enum):
@@ -22,7 +22,7 @@ class Event:
 
     def __init__(self, event_type: EventType):
         self.type = event_type
-        self.timestamp = datetime.now()
+        self.timestamp = datetime.now(timezone.utc)
 
 
 class MarketEvent(Event):

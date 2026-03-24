@@ -5,7 +5,7 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import requests
 
@@ -294,7 +294,7 @@ class AlpacaConnector(BrokerConnector):
                     current_price=float(pos_data['current_price']),
                     unrealized_pnl=float(pos_data['unrealized_pl']),
                     realized_pnl=0.0,  # Not provided by Alpaca in position data
-                    timestamp=datetime.now()
+                    timestamp=datetime.now(timezone.utc)
                 )
                 positions.append(position)
 
@@ -373,7 +373,7 @@ class AlpacaConnector(BrokerConnector):
                 margin_used=float(account_data.get('initial_margin', 0)),
                 margin_available=float(account_data['buying_power']),
                 positions_count=int(account_data.get('position_count', 0)),
-                timestamp=datetime.now()
+                timestamp=datetime.now(timezone.utc)
             )
 
             return info

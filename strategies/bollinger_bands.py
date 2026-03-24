@@ -8,7 +8,7 @@ and potential reversals.
 import logging
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
@@ -81,10 +81,10 @@ class BollingerBandsStrategy(BaseStrategy):
             return None
         if price < lower:
             conf = 0.85 if price > prev_price else 0.70
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(), confidence=conf)
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc), confidence=conf)
         if price > upper:
             conf = 0.85 if price < prev_price else 0.70
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(), confidence=conf)
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc), confidence=conf)
         return None
 
     def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
@@ -95,7 +95,7 @@ class BollingerBandsStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'Insufficient data',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             close = market_data['close']
@@ -201,7 +201,7 @@ class BollingerBandsStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'price': current_price,
                     'upper_band': current_upper,
@@ -219,5 +219,5 @@ class BollingerBandsStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

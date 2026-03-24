@@ -386,7 +386,7 @@ async def get_liquidity(
         
         return LiquidityResponse(
             symbol=symbol,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             best_bid=report["aggregate"]["best_bid"],
             best_ask=report["aggregate"]["best_ask"],
             spread_bps=report["aggregate"]["spread_bps"],
@@ -424,7 +424,7 @@ async def submit_order(
     try:
         # Create order object
         order = Order(
-            id=f"order_{datetime.now().timestamp()}",
+            id=f"order_{datetime.now(timezone.utc).timestamp()}",
             symbol=request.symbol,
             side=OrderSide.BUY if request.side == "buy" else OrderSide.SELL,
             order_type=OrderType(request.order_type),
@@ -487,7 +487,7 @@ async def get_prediction(
             magnitude=0.0,
             regime="unknown",
             model_weights={"lstm": 0.33, "xgboost": 0.33, "random_forest": 0.34},
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     except Exception as e:
@@ -538,7 +538,7 @@ async def detect_regime(symbol: str):
         "symbol": symbol,
         "regime": regime.value,
         "stability": detector.get_regime_stability(),
-        "timestamp": datetime.now()
+        "timestamp": datetime.now(timezone.utc)
     }
 
 # Backtesting Endpoints
@@ -628,7 +628,7 @@ async def websocket_prices(websocket: WebSocket):
                             "symbol": symbol,
                             "bid": 1950.0,
                             "ask": 1950.08,
-                            "timestamp": datetime.now().isoformat()
+                            "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                         await websocket.send_json(price_data)
                     
@@ -647,7 +647,7 @@ async def global_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "timestamp": datetime.now().isoformat()}
+        content={"detail": "Internal server error", "timestamp": datetime.now(timezone.utc).isoformat()}
     )
 
 # ==================== MAIN ====================

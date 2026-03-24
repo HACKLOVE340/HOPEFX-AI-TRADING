@@ -7,7 +7,7 @@ Helps traders understand why the AI made specific predictions or recommendations
 
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import logging
 import numpy as np
@@ -134,7 +134,7 @@ class AIExplainer:
         Returns:
             Complete explanation object
         """
-        explanation_id = f"exp_{len(self.explanation_history) + 1}_{int(datetime.now().timestamp())}"
+        explanation_id = f"exp_{len(self.explanation_history) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
         
         # Calculate feature contributions
         feature_contributions = self._calculate_feature_importance(model, features, prediction)
@@ -161,7 +161,7 @@ class AIExplainer:
             prediction=prediction,
             prediction_class=prediction_class,
             confidence=confidence,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             feature_contributions=feature_contributions,
             decision_path=decision_path,
             confidence_interval=confidence_interval,

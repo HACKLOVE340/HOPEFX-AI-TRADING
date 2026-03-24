@@ -7,7 +7,7 @@ and strategy testing without risking real capital.
 
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 import time
@@ -114,7 +114,7 @@ class ChartReplayEngine:
         Returns:
             New replay session
         """
-        session_id = f"replay_{len(self.sessions) + 1}_{int(datetime.now().timestamp())}"
+        session_id = f"replay_{len(self.sessions) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
         
         session = ReplaySession(
             session_id=session_id,

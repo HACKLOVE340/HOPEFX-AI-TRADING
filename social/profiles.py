@@ -6,7 +6,7 @@ Trader Profiles Management
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict
 
 @dataclass
@@ -68,8 +68,8 @@ class TraderProfileManager:
             trader_id=trader_id,
             username=username,
             email=email,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         self.profiles[trader_id] = profile
         return profile
@@ -84,7 +84,7 @@ class TraderProfileManager:
             if hasattr(profile, key):
                 setattr(profile, key, value)
         
-        profile.updated_at = datetime.now()
+        profile.updated_at = datetime.now(timezone.utc)
         return profile
     
     def get_profile(self, trader_id: str) -> Optional[TraderProfile]:

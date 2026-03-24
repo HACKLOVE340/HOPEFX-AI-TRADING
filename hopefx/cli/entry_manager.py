@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from datetime import timezone
 """
 HOPEFX Unified Entry Point Manager
 Replaces: app.py, production_fastapi_app.py, main.py, main_ultimate*.py
@@ -135,7 +136,7 @@ class EntryPointManager:
         
         pipeline = TrainingPipeline(self.config)
         pipeline.train(model_type=model_type)
-        pipeline.save_model(f'outputs/models/{model_type}_{datetime.now():%Y%m%d}.pkl')
+        pipeline.save_model(f'outputs/models/{model_type}_{datetime.now(timezone.utc):%Y%m%d}.pkl')
 
 def main():
     parser = argparse.ArgumentParser(

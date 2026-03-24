@@ -5,7 +5,7 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import asyncio
 
@@ -31,7 +31,7 @@ class TestRiskManager:
             side="buy",
             size=10000,
             entry_price=1.0850,
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     def test_position_size_limit_check(self, risk_manager, sample_trade):
@@ -44,7 +44,7 @@ class TestRiskManager:
         # Test exceeding limit
         large_trade = Trade(
             id=2, symbol="EURUSD", side="buy", size=1000000,
-            entry_price=1.0850, timestamp=datetime.now()
+            entry_price=1.0850, timestamp=datetime.now(timezone.utc)
         )
         result = risk_manager.check_position_size(large_trade, max_pct=0.05)
         assert result.passed is False
@@ -224,7 +224,7 @@ End-to-end trading workflow tests
 
 import pytest
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 class TestTradingWorkflow:
     """Full system integration test"""

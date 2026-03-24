@@ -5,7 +5,7 @@ Reference: FIA 2024 Automated Trading Risk Controls Report
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Callable
 from enum import Enum
 import logging
@@ -41,7 +41,7 @@ class FIAComplianceManager:
         self.positions_intraday = {}
         self.last_order_time = None
         self.message_count = 0
-        self.message_window_start = datetime.now()
+        self.message_window_start = datetime.now(timezone.utc)
         
         # Callbacks
         self.kill_switch_callbacks: List[Callable] = []
@@ -59,7 +59,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_1.1_MAX_ORDER_SIZE",
                 message=f"Order size {order_size} exceeds max {max_size}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"requested": order_size, "limit": max_size}
             )
         
@@ -67,7 +67,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_1.1_MAX_ORDER_SIZE",
             message="Order size within limits",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
@@ -85,7 +85,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_1.2_MAX_INTRADAY_POSITION",
                 message=f"Position {projected} would exceed max {max_position}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"current": current, "projected": projected, "limit": max_position}
             )
         
@@ -94,7 +94,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_1.2_MAX_INTRADAY_POSITION",
             message="Position within limits",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
@@ -109,7 +109,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_1.3_PRICE_TOLERANCE",
                 message="Invalid reference price",
-                timestamp=datetime.now()
+                timestamp=datetime.now(timezone.utc)
             )
         
         deviation = abs(order_price - reference_price) / reference_price
@@ -119,7 +119,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_1.3_PRICE_TOLERANCE",
                 message=f"Price {order_price} deviates {deviation:.2%} from reference {reference_price}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"deviation": deviation, "tolerance": tolerance_pct}
             )
         
@@ -127,7 +127,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_1.3_PRICE_TOLERANCE",
             message="Price within tolerance",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
@@ -155,7 +155,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.KILL_SWITCH,
                 rule="FIA_1.5_KILL_SWITCH",
                 message=f"Daily loss {loss_pct:.2%} exceeded threshold {threshold_pct:.2%}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"daily_pnl": daily_pnl, "loss_pct": loss_pct}
             )
         
@@ -163,7 +163,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_1.5_KILL_SWITCH",
             message="Loss within limits",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     def register_kill_switch_callback(self, callback: Callable):
@@ -182,7 +182,7 @@ class FIAComplianceManager:
         if tick_time:
             if isinstance(tick_time, (int, float)):
                 tick_time = datetime.fromtimestamp(tick_time)
-            age = (datetime.now() - tick_time).total_seconds()
+            age = (datetime.now(timezone.utc) - tick_time).total_seconds()
             checks.append(("staleness", age < 30))  # 30 seconds max
         
         # Check price reasonability
@@ -202,7 +202,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_3.1_MARKET_DATA_VALIDATION",
                 message=f"Market data validation failed: {failed}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"failed_checks": failed, "tick_data": tick_data}
             )
         
@@ -210,7 +210,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_3.1_MARKET_DATA_VALIDATION",
             message="Market data valid",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
@@ -218,7 +218,7 @@ class FIAComplianceManager:
     # =========================================================================
     def check_message_throttle(self) -> RiskCheckResult:
         """Throttle message rate to prevent system overload"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         window_seconds = 1
         
         # Reset window
@@ -234,7 +234,7 @@ class FIAComplianceManager:
                 status=RiskControlStatus.BLOCK,
                 rule="FIA_3.4_MESSAGE_THROTTLE",
                 message=f"Message rate {self.message_count}/sec exceeds max {max_messages}",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={"count": self.message_count, "limit": max_messages}
             )
         
@@ -242,7 +242,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_3.4_MESSAGE_THROTTLE",
             message="Message rate within limits",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
@@ -267,7 +267,7 @@ class FIAComplianceManager:
                     status=RiskControlStatus.BLOCK,
                     rule="FIA_3.5_SELF_TRADE_PREVENTION",
                     message=f"Self-trade detected: buy {order_price} crosses sell {resting_price}",
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(timezone.utc),
                     metadata={"order": order, "resting": resting}
                 )
             elif order_side == 'sell' and order_price <= resting_price:
@@ -275,7 +275,7 @@ class FIAComplianceManager:
                     status=RiskControlStatus.BLOCK,
                     rule="FIA_3.5_SELF_TRADE_PREVENTION",
                     message=f"Self-trade detected: sell {order_price} crosses buy {resting_price}",
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(timezone.utc),
                     metadata={"order": order, "resting": resting}
                 )
         
@@ -283,7 +283,7 @@ class FIAComplianceManager:
             status=RiskControlStatus.PASS,
             rule="FIA_3.5_SELF_TRADE_PREVENTION",
             message="No self-trade detected",
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
     
     # =========================================================================
