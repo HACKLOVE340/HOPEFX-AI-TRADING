@@ -311,10 +311,10 @@ class FeatureFlags:
 
     ML_PREDICTIONS = _FeatureDef(
         "FEATURE_ML_PREDICTIONS",
-        default=True,
+        default=False,
         status=FeatureStatus.BETA,
         description="ML ensemble price-direction predictions (XGBoost/LightGBM/RF). "
-                    "On by default; retrain on current data before relying on signals.",
+                    "Off by default until models reach production accuracy threshold.",
     )
     ML_FEATURE_ENGINEERING = _FeatureDef(
         "FEATURE_ML_FEATURE_ENGINEERING",

@@ -89,7 +89,12 @@ class RiskManager:
     - Volatility-adjusted sizing
     """
     
-    def __init__(self, config: RiskConfig = None, initial_balance: float = 1_000_000.0):
+    def __init__(
+        self,
+        config: RiskConfig = None,
+        initial_balance: float = 1_000_000.0,
+        halt_state_file: Optional[Path] = None,
+    ):
         self.config = config or RiskConfig()
 
         # State tracking
@@ -117,8 +122,13 @@ class RiskManager:
         self._halt_until: Optional[datetime] = None
 
         # Path for persisting halt state across restarts.
-        # Stored next to this module so it survives process restarts.
-        self._halt_state_file: Path = Path(__file__).parent / "halt_state.json"
+        # Callers (e.g. tests) can supply a custom path via halt_state_file to
+        # avoid sharing state between test instances.
+        self._halt_state_file: Path = (
+            halt_state_file
+            if halt_state_file is not None
+            else Path(__file__).parent / "halt_state.json"
+        )
 
         # Restore any halt that was active before the last restart.
         # This prevents a process restart from silently resuming trading

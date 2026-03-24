@@ -84,30 +84,74 @@ class PortfolioManager:
             sharpe = port_ret / port_vol if port_vol > 0 else 0.0
             return {"weights": w, "expected_sharpe": sharpe}
 
-        # Random search for max Sharpe (fast, no scipy dependency)
+        # Random search for max Sharpe with guaranteed max_weight constraint.
         best_sharpe = -np.inf
         best_weights: Dict[str, float] = {}
         rng = np.random.default_rng(42)
+        cov = returns.cov().values
+        mu = returns.mean().values
 
-        for _ in range(5_000):
+        for _ in range(10_000):
             raw = rng.random(n)
-            raw = np.clip(raw, 0, max_weight * sum(raw))
-            raw /= raw.sum()
-            # Enforce max_weight constraint
-            raw = np.minimum(raw, max_weight)
-            raw /= raw.sum()
+            # Project onto the simplex with per-weight upper bound via
+            # iterative clipping (guaranteed to converge in ≤ n iterations).
+            w = self._project_simplex_bounded(raw, max_weight)
 
-            port_ret = float(np.dot(raw, returns.mean()))
-            port_vol = float(np.sqrt(raw @ returns.cov().values @ raw))
+            port_ret = float(np.dot(w, mu))
+            port_vol = float(np.sqrt(w @ cov @ w))
             if port_vol == 0:
                 continue
             sharpe = port_ret / port_vol
 
             if sharpe > best_sharpe:
                 best_sharpe = sharpe
-                best_weights = {a: float(raw[i]) for i, a in enumerate(assets)}
+                best_weights = {a: float(w[i]) for i, a in enumerate(assets)}
 
         return {"weights": best_weights, "expected_sharpe": best_sharpe}
+
+    @staticmethod
+    def _project_simplex_bounded(v: np.ndarray, max_w: float) -> np.ndarray:
+        """
+        Project v onto the probability simplex with per-element upper bound max_w.
+
+        Algorithm:
+        1. Clip each element to [0, max_w].
+        2. Normalise so weights sum to 1.
+        3. Any weight that now exceeds max_w is clamped; the excess is
+           redistributed to unclamped weights.  Repeat until stable.
+        4. Final truncation to max_w guarantees the constraint holds exactly
+           regardless of floating-point rounding.
+        """
+        n = len(v)
+        w = np.clip(v.astype(float), 0.0, max_w)
+        s = w.sum()
+        if s == 0:
+            return np.full(n, 1.0 / n)
+
+        w /= s  # initial normalise
+
+        for _ in range(200):
+            over = w > max_w
+            if not over.any():
+                break
+            excess = (w[over] - max_w).sum()
+            w[over] = max_w
+            free = ~over
+            if free.any():
+                w[free] += excess / free.sum()
+            else:
+                break
+
+        # Truncate any sub-epsilon overshoot from floating-point arithmetic,
+        # then renormalise so weights sum exactly to 1.
+        w = np.minimum(w, max_w)
+        s = w.sum()
+        if s > 0:
+            w /= s
+        # One final truncation: renormalisation can push a weight to
+        # max_w * (1 + ε).  Clamp and accept the tiny shortfall.
+        w = np.minimum(w, max_w)
+        return w
 
     # ── Risk contribution ────────────────────────────────────────────────────
 

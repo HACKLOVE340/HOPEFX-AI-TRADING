@@ -464,19 +464,23 @@ class RealTimePriceEngine:
         except Exception as e:
             logger.warning(f"REST fallback failed: {e}")
         
-        # Start primary WebSocket
-        try:
-            ws_task = asyncio.create_task(self._ws_feed.connect())
-            self._tasks.append(ws_task)
-            self._primary_active = True
-            
-            # Register for updates
-            self._ws_feed.register_callback(self._on_price_update)
-            
-            logger.info("WebSocket feed active")
-        except Exception as e:
-            logger.warning(f"WebSocket failed, using REST only: {e}")
-            self._primary_active = False
+        # Start primary WebSocket — skip when no URL is configured (e.g. tests)
+        ws_url = self.config.get("websocket_url", "")
+        if ws_url:
+            try:
+                ws_task = asyncio.create_task(self._ws_feed.connect())
+                self._tasks.append(ws_task)
+                self._primary_active = True
+
+                # Register for updates
+                self._ws_feed.register_callback(self._on_price_update)
+
+                logger.info("WebSocket feed active")
+            except Exception as e:
+                logger.warning(f"WebSocket failed, using REST only: {e}")
+                self._primary_active = False
+        else:
+            logger.info("No WebSocket URL configured — running REST-only mode")
         
         self.active = self._primary_active or self._fallback_active
         

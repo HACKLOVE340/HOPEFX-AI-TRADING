@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from core.domain_enums import TradeDirection
 from core.domain_models import Account, Signal
-from risk.manager import RiskManager
+from risk.manager import RiskManager, RiskConfig
 from risk.position_sizing import PositionSizer
 from kill_switch import KillSwitch
 
@@ -31,55 +31,53 @@ def test_account():
 def test_position_sizing_atr(test_account):
     """Test ATR-based position sizing."""
     sizer = PositionSizer(method="atr")
-    
+
     size = sizer.calculate_size(
         account=test_account,
         entry_price=Decimal("1800"),
         atr=Decimal("2.0")
     )
-    
+
     # Should be reasonable size
     assert size > 0
     assert size <= Decimal("100")  # Max position limit
 
 
-def test_kill_switch_trigger():
-    """Test kill switch activation."""
-    ks = KillSwitch()
-    
-    assert not ks.is_active
-    
-    ks.trigger("Test trigger")
-    assert ks.is_active
-    
-    # Should not allow reset during cooldown
-    assert not ks.reset(manual=False)
-    
-    # Manual reset should work
-    assert ks.reset(manual=True)
-    assert not ks.is_active
+def test_kill_switch_trigger(tmp_path):
+    """Test kill switch activation and manual reset."""
+    flag_file = tmp_path / "ks.flag"
+    ks = KillSwitch(flag_file=flag_file)
+
+    assert not ks.is_active()
+
+    ks.activate("Test trigger")
+    assert ks.is_active()
+
+    # Deactivation without a token should raise PermissionError
+    with pytest.raises(PermissionError):
+        ks.deactivate(token=None)
+
+    # Deactivation with the correct token should succeed
+    ks._deactivation_token = "test-secret"
+    ks.deactivate(token="test-secret")
+    assert not ks.is_active()
 
 
-@pytest.mark.asyncio
-async def test_risk_manager_signal_validation(test_account):
-    """Test risk manager signal validation."""
-    manager = RiskManager(account=test_account)
-    await manager.initialize()
-    
-    signal = Signal(
-        strategy_id="test",
-        symbol="XAUUSD",
-        direction=TradeDirection.LONG,
-        strength=0.8,
-        confidence=0.9
+def test_risk_manager_signal_validation(tmp_path):
+    """Test risk manager kill-switch integration via drawdown circuit breaker."""
+    config = RiskConfig(max_drawdown_pct=0.05)  # 5% max drawdown
+    manager = RiskManager(
+        config=config,
+        initial_balance=100_000.0,
+        halt_state_file=tmp_path / "halt_state.json",
     )
-    
-    allowed, reason = await manager.check_signal(signal)
-    assert allowed is True
-    
-    # Trigger kill switch
-    manager.kill_switch.trigger("Test")
-    
-    allowed, reason = await manager.check_signal(signal)
-    assert allowed is False
-    assert "kill switch" in reason.lower()
+
+    # Kill switch should not be active initially
+    assert not manager.kill_switch_active
+
+    # Establish peak equity then drop 7% to breach the 5% drawdown limit
+    manager.peak_equity = 100_000.0
+    manager.daily_starting_equity = 100_000.0
+    manager.update_equity(93_000.0)   # 7% drawdown > 5% limit
+
+    assert manager.kill_switch_active

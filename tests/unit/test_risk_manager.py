@@ -18,9 +18,9 @@ class TestRiskManager:
     """Test suite for risk management functionality"""
 
     @pytest.fixture
-    def risk_manager(self):
-        """Fresh risk manager instance"""
-        return RiskManager()
+    def risk_manager(self, tmp_path):
+        """Fresh risk manager instance with isolated halt state."""
+        return RiskManager(halt_state_file=tmp_path / "halt_state.json")
     
     @pytest.fixture
     def sample_trade(self):

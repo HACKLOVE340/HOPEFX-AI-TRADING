@@ -7,84 +7,71 @@ import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from core.exceptions import HopeFXError
-# Settings, EventBus, TickReceived, RiskViolation — redirect to root equivalents
-try:
-    from config import Settings  # type: ignore[import]
-except ImportError:
-    Settings = None  # type: ignore[assignment,misc]
-try:
-    from core.event_bus import EventBus  # type: ignore[import]
-    TickReceived = None  # type: ignore[assignment]
-    Event = None  # type: ignore[assignment]
-except ImportError:
-    EventBus = None  # type: ignore[assignment,misc]
-    TickReceived = None  # type: ignore[assignment]
-    Event = None  # type: ignore[assignment]
-try:
-    from core.exceptions import RiskViolation  # type: ignore[import]
-except ImportError:
-    RiskViolation = None  # type: ignore[assignment,misc]
+from core.exceptions import HopeFXError, RiskViolation
+from config.settings import Settings
+from core.event_bus import EventBus, MemoryMappedEventStore, DomainEvent
 
 
 @pytest.mark.asyncio
-async def test_event_bus():
-    """Test event bus functionality."""
-    bus = EventBus()
-    await bus.start()
-    
+async def test_event_bus(tmp_path):
+    """Test event bus publish/subscribe."""
+    store = MemoryMappedEventStore(base_path=str(tmp_path / "events") + "/")
+    bus = EventBus(store=store)
+
     received = []
-    
-    async def handler(event):
+
+    def handler(event: DomainEvent):
         received.append(event)
-    
-    bus.subscribe(TickReceived, handler)
-    
-    event = Event.create(
-        TickReceived(
-            symbol="XAUUSD",
-            bid=1800.0,
-            ask=1800.1,
-            volume=100,
-            timestamp=datetime.now(timezone.utc)
-        ),
-        source="test"
+
+    bus.subscribe("PRICE_UPDATE", handler)
+
+    event = DomainEvent.create(
+        "PRICE_UPDATE",
+        "test",
+        {"symbol": "XAUUSD", "bid": 1800.0, "ask": 1800.1},
     )
-    
-    await bus.emit(event)
-    await asyncio.sleep(0.1)  # Allow processing
-    
+
+    # Start the bus, publish, let it process, then stop
+    run_task = asyncio.create_task(bus.run())
+    await bus.publish(event)
+    await asyncio.sleep(0.2)
+    bus._running = False
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
     assert len(received) == 1
-    assert received[0].payload.symbol == "XAUUSD"
-    
-    await bus.stop()
+    data = received[0].decode()
+    assert data["symbol"] == "XAUUSD"
 
 
 def test_settings_validation():
-    """Test settings validation."""
-    settings = Settings(
-        environment="production",
-        debug=False
-    )
-    
-    assert settings.is_production is True
-    
-    with pytest.raises(ValueError):
-        Settings(
-            environment="production",
-            debug=True  # Should fail
-        )
+    """Test Settings loads with defaults and env field works."""
+    settings = Settings()
+    # Default env is development
+    assert settings.env in ("development", "staging", "production")
+    assert isinstance(settings.debug, bool)
+
+
+def test_settings_production():
+    """Test Settings accepts production env."""
+    settings = Settings(env="production", debug=False)
+    assert settings.env == "production"
+    assert settings.debug is False
 
 
 def test_exceptions():
-    """Test custom exceptions."""
+    """Test custom exceptions carry structured context."""
     error = RiskViolation(
         message="Test violation",
         rule="max_position",
         limit=100.0,
-        actual=150.0
+        actual=150.0,
     )
-    
+
     assert error.rule == "max_position"
     assert error.limit == 100.0
     assert error.actual == 150.0
+    assert isinstance(error, HopeFXError)

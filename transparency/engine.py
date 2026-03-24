@@ -1,8 +1,13 @@
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
+import statistics
+
+# Pip multipliers: 1 pip = 0.0001 for FX pairs, 0.01 for metals/indices
+FOREX_PIP_MULTIPLIER: float = 10_000.0   # e.g. EURUSD: 1 pip = 0.0001
+METAL_PIP_MULTIPLIER: float = 100.0      # e.g. XAUUSD: 1 pip = 0.01
 
 from transparency.models import (
     ExecutionQuality, ExecutionRecord, ExecutionReport,
@@ -122,11 +127,21 @@ class ExecutionTransparencyEngine:
         """
         period_end = period_end or datetime.now(timezone.utc)
         period_start = period_start or (period_end - timedelta(days=30))
-        
+
+        # Ensure both bounds are timezone-aware (UTC) for safe comparison.
+        if period_start.tzinfo is None:
+            period_start = period_start.replace(tzinfo=timezone.utc)
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=timezone.utc)
+
+        def _ts(dt: datetime) -> datetime:
+            """Return dt as UTC-aware, converting naive datetimes."""
+            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
         # Filter executions
         filtered = [
             e for e in self.executions
-            if period_start <= e.timestamp <= period_end
+            if period_start <= _ts(e.timestamp) <= period_end
         ]
         
         if symbol:
