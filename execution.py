@@ -443,29 +443,172 @@ class PaperExecutor:
 
 # Smart order router (stub for future multi-broker support)
 class SmartOrderRouter:
-    """Routes orders to best available broker/venue."""
-    
-    def __init__(self):
+    """
+    Multi-broker smart order router with latency tracking, cost scoring,
+    and automatic failover.
+
+    Routing algorithm
+    -----------------
+    Each registered broker is scored on every route call using:
+      score = w_cost * (1 - normalised_fee)
+            + w_latency * (1 - normalised_latency)
+            + w_reliability * recent_fill_rate
+            + w_spread * (1 - normalised_spread)
+
+    Weights are configurable; defaults favour cost (40%) and reliability (35%).
+    The broker with the highest score receives the order.  If it fails, the
+    router retries in score order until one succeeds or all are exhausted.
+
+    Metrics tracked per broker
+    --------------------------
+    - latency_ms: exponential moving average of round-trip time
+    - fill_rate:  fraction of last N orders that filled (not rejected/timeout)
+    - error_count: consecutive errors (triggers temporary exclusion after 3)
+    """
+
+    _ROUTING_WEIGHTS = {
+        'cost':        0.40,
+        'latency':     0.15,
+        'reliability': 0.35,
+        'spread':      0.10,
+    }
+    _MAX_LATENCY_MS   = 500.0   # normalisation ceiling
+    _MAX_FEE_BPS      = 10.0    # normalisation ceiling (10 bps)
+    _MAX_SPREAD_BPS   = 10.0
+    _FILL_HISTORY_LEN = 50
+    _ERROR_EXCLUSION  = 3       # consecutive errors before temporary exclusion
+
+    def __init__(self, routing_weights: Optional[Dict[str, float]] = None):
         self.brokers: Dict[str, Any] = {}
-        self.default_broker = None
-    
-    def register_broker(self, name: str, broker_instance, is_default: bool = False):
+        self.default_broker: Optional[str] = None
+        self._weights = routing_weights or self._ROUTING_WEIGHTS
+
+        # Per-broker metrics
+        self._latency_ema: Dict[str, float] = {}       # ms
+        self._fill_history: Dict[str, list] = {}       # deque of 0/1
+        self._fee_bps: Dict[str, float] = {}           # configured fee
+        self._spread_bps: Dict[str, float] = {}        # configured spread
+        self._error_count: Dict[str, int] = {}         # consecutive errors
+        self._excluded_until: Dict[str, float] = {}    # time.monotonic() deadline
+
+    def register_broker(
+        self,
+        name: str,
+        broker_instance: Any,
+        is_default: bool = False,
+        fee_bps: float = 3.0,
+        spread_bps: float = 3.0,
+    ) -> None:
         """Register a broker for routing."""
         self.brokers[name] = broker_instance
+        self._latency_ema[name] = 50.0          # optimistic initial estimate
+        self._fill_history[name] = []
+        self._fee_bps[name] = fee_bps
+        self._spread_bps[name] = spread_bps
+        self._error_count[name] = 0
+        self._excluded_until[name] = 0.0
         if is_default or self.default_broker is None:
             self.default_broker = name
-        logger.info(f"Registered broker: {name}")
-    
-    def route_order(self, order: Order, **kwargs) -> ExecutionResult:
-        """Route order to appropriate broker."""
-        if not self.brokers:
-            raise RuntimeError("No brokers registered")
-        
-        broker = self.brokers.get(self.default_broker)
-        if hasattr(broker, 'submit_order'):
-            return broker.submit_order(order, **kwargs)
+        logger.info(f"SmartOrderRouter: registered broker '{name}' (fee={fee_bps}bps, spread={spread_bps}bps)")
+
+    def _score_broker(self, name: str) -> float:
+        """Compute routing score for a broker (higher = preferred)."""
+        cost_score = 1.0 - min(self._fee_bps[name] / self._MAX_FEE_BPS, 1.0)
+        latency_score = 1.0 - min(self._latency_ema[name] / self._MAX_LATENCY_MS, 1.0)
+        spread_score = 1.0 - min(self._spread_bps[name] / self._MAX_SPREAD_BPS, 1.0)
+        hist = self._fill_history[name]
+        fill_rate = float(sum(hist) / len(hist)) if hist else 0.5
+        return (
+            self._weights['cost']        * cost_score
+            + self._weights['latency']   * latency_score
+            + self._weights['reliability'] * fill_rate
+            + self._weights['spread']    * spread_score
+        )
+
+    def _ranked_brokers(self) -> list:
+        """Return broker names sorted by score, excluding temporarily excluded ones."""
+        now = time.monotonic()
+        available = [
+            name for name in self.brokers
+            if self._excluded_until.get(name, 0.0) <= now
+        ]
+        return sorted(available, key=self._score_broker, reverse=True)
+
+    def _update_metrics(self, name: str, latency_ms: float, success: bool) -> None:
+        """Update EMA latency and fill history after an attempt."""
+        alpha = 0.2
+        self._latency_ema[name] = alpha * latency_ms + (1 - alpha) * self._latency_ema[name]
+        hist = self._fill_history[name]
+        hist.append(1 if success else 0)
+        if len(hist) > self._FILL_HISTORY_LEN:
+            hist.pop(0)
+        if success:
+            self._error_count[name] = 0
         else:
-            raise RuntimeError(f"Broker {self.default_broker} has no submit_order method")
+            self._error_count[name] += 1
+            if self._error_count[name] >= self._ERROR_EXCLUSION:
+                exclusion_secs = 60.0 * self._error_count[name]
+                self._excluded_until[name] = time.monotonic() + exclusion_secs
+                logger.warning(
+                    f"SmartOrderRouter: broker '{name}' excluded for "
+                    f"{exclusion_secs:.0f}s after {self._error_count[name]} consecutive errors"
+                )
+
+    def route_order(self, order: Any, **kwargs) -> ExecutionResult:
+        """
+        Route order to the highest-scoring available broker.
+        Retries in score order on failure; raises RuntimeError if all fail.
+        """
+        if not self.brokers:
+            raise RuntimeError("SmartOrderRouter: no brokers registered")
+
+        ranked = self._ranked_brokers()
+        if not ranked:
+            raise RuntimeError("SmartOrderRouter: all brokers are temporarily excluded")
+
+        last_error: Optional[Exception] = None
+        for name in ranked:
+            broker = self.brokers[name]
+            if not hasattr(broker, 'submit_order'):
+                logger.warning(f"SmartOrderRouter: broker '{name}' has no submit_order — skipping")
+                continue
+
+            t0 = time.monotonic()
+            try:
+                result: ExecutionResult = broker.submit_order(order, **kwargs)
+                latency_ms = (time.monotonic() - t0) * 1000
+                success = result.status == OrderStatus.FILLED
+                self._update_metrics(name, latency_ms, success)
+                logger.debug(
+                    f"SmartOrderRouter: routed to '{name}' "
+                    f"latency={latency_ms:.1f}ms status={result.status.value}"
+                )
+                return result
+            except Exception as exc:
+                latency_ms = (time.monotonic() - t0) * 1000
+                self._update_metrics(name, latency_ms, False)
+                logger.warning(f"SmartOrderRouter: broker '{name}' raised {exc!r} — trying next")
+                last_error = exc
+
+        raise RuntimeError(
+            f"SmartOrderRouter: all brokers failed. Last error: {last_error}"
+        )
+
+    def get_routing_stats(self) -> Dict[str, Any]:
+        """Return per-broker routing statistics for monitoring."""
+        stats = {}
+        for name in self.brokers:
+            hist = self._fill_history[name]
+            stats[name] = {
+                'score':          round(self._score_broker(name), 4),
+                'latency_ema_ms': round(self._latency_ema[name], 2),
+                'fill_rate':      round(sum(hist) / len(hist), 3) if hist else None,
+                'fee_bps':        self._fee_bps[name],
+                'spread_bps':     self._spread_bps[name],
+                'error_count':    self._error_count[name],
+                'excluded':       self._excluded_until.get(name, 0.0) > time.monotonic(),
+            }
+        return stats
 
 
 if __name__ == '__main__':
