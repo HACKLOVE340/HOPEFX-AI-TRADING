@@ -6,6 +6,7 @@ import { CopyTrading } from './pages/CopyTrading'
 import { Leaderboard } from './pages/Leaderboard'
 import { Wallet } from './pages/Wallet'
 import { Settings } from './pages/Settings'
+import PropFirmTracker from './pages/PropFirmTracker'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/wallet" element={<Wallet />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/prop-firm" element={<PropFirmTracker />} />
       </Routes>
     </Layout>
   )
