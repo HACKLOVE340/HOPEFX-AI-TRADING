@@ -1037,3 +1037,7 @@ if __name__ == "__main__":
         asyncio.run(run_realtime_test())
     except KeyboardInterrupt:
         print("\n\nTest interrupted by user")
+
+
+# Backward-compat alias used by comprehensive_test_framework.py
+MultiSourceAggregator = ConsensusAggregator

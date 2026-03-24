@@ -1648,3 +1648,7 @@ def run_ml_test():
 if __name__ == "__main__":
     run_ml_test()
 
+
+# Backward-compat alias used by comprehensive_test_framework.py
+FeatureEngineering = AdvancedFeatureEngineer
+

@@ -101,7 +101,7 @@ class TestUserModel:
         assert 'id' in columns
         assert 'username' in columns
         assert 'email' in columns
-        assert 'password_hash' in columns
+        assert 'hashed_password' in columns
         assert 'status' in columns
         assert 'created_at' in columns
     

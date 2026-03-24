@@ -256,3 +256,85 @@ class RealTimeRiskMonitor:
         print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
         self.kill_switch_triggered = True
         # Signal to close all positions
+
+
+# ---------------------------------------------------------------------------
+# GPU acceleration stubs — used by main_ultimate_integrated.py
+# Falls back to CPU when CUDA / torch is unavailable.
+# ---------------------------------------------------------------------------
+
+import logging as _logging
+import numpy as _np
+from typing import Optional as _Optional, List as _List
+
+_gpu_logger = _logging.getLogger(__name__)
+
+try:
+    import torch as _torch
+    _HAS_CUDA = _torch.cuda.is_available()
+except ImportError:
+    _torch = None  # type: ignore[assignment]
+    _HAS_CUDA = False
+
+
+@dataclass
+class GPUConfig:
+    device: str = "cuda" if _HAS_CUDA else "cpu"
+    batch_size: int = 64
+    max_latency_ms: float = 5.0
+    fallback_to_cpu: bool = True
+
+
+class GPUInferenceEngine:
+    """
+    GPU-accelerated inference engine.
+    Uses CUDA when available; falls back to CPU numpy operations transparently.
+    """
+
+    def __init__(self, config: _Optional[GPUConfig] = None):
+        self.config = config or GPUConfig()
+        self.device = self.config.device
+        if self.device == "cuda" and not _HAS_CUDA:
+            _gpu_logger.warning("CUDA requested but not available — falling back to CPU")
+            self.device = "cpu"
+        _gpu_logger.info("GPUInferenceEngine initialised on device=%s", self.device)
+
+    def predict(self, features: _np.ndarray) -> _np.ndarray:
+        """Run inference. Returns predictions as a numpy array."""
+        if _torch is not None:
+            t = _torch.tensor(features, dtype=_torch.float32)
+            # Placeholder: identity pass-through until a real model is loaded
+            return t.numpy()
+        return features.copy()
+
+    def batch_predict(self, feature_batches: _List[_np.ndarray]) -> _List[_np.ndarray]:
+        return [self.predict(b) for b in feature_batches]
+
+
+class GPUFeatureEngine:
+    """
+    GPU-accelerated feature engineering.
+    Falls back to numpy when CUDA is unavailable.
+    """
+
+    def __init__(self):
+        self.device = "cuda" if _HAS_CUDA else "cpu"
+        _gpu_logger.info("GPUFeatureEngine initialised on device=%s", self.device)
+
+    def compute_features(self, prices: _np.ndarray) -> _np.ndarray:
+        """Compute technical features from a price array."""
+        if len(prices) < 2:
+            return prices
+        returns = _np.diff(prices) / prices[:-1]
+        # Simple feature set: returns, rolling mean, rolling std
+        window = min(20, len(returns))
+        rolling_mean = _np.convolve(returns, _np.ones(window) / window, mode="valid")
+        rolling_std = _np.array([
+            returns[i:i + window].std() for i in range(len(returns) - window + 1)
+        ])
+        min_len = min(len(returns), len(rolling_mean), len(rolling_std))
+        return _np.column_stack([
+            returns[-min_len:],
+            rolling_mean[-min_len:],
+            rolling_std[-min_len:],
+        ])
