@@ -10,8 +10,11 @@ import {
   Menu,
   X,
   Bell,
-  Shield
+  Shield,
+  Sun,
+  Moon
 } from 'lucide-react'
+import { useTheme } from '../hooks/useTheme'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { ConnectionStatus } from './ConnectionStatus'
 
@@ -29,16 +32,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const { connected, latency } = useWebSocket()
+  const { isDark, toggle: toggleTheme } = useTheme()
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-slate-950 dark:bg-slate-950 text-slate-100 dark:text-slate-100">
       {/* Mobile header */}
       <div className="lg:hidden flex items-center justify-between p-4 border-b border-slate-800">
         <button onClick={() => setSidebarOpen(!sidebarOpen)}>
           {sidebarOpen ? <X /> : <Menu />}
         </button>
         <span className="font-bold text-xl">HOPEFX</span>
-        <Bell className="w-6 h-6" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+          <Bell className="w-6 h-6" />
+        </div>
       </div>
 
       <div className="flex">
@@ -79,7 +92,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800 space-y-3">
+            {/* Dark / Light mode toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors text-sm"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+            </button>
             <ConnectionStatus connected={connected} latency={latency} />
           </div>
         </aside>
