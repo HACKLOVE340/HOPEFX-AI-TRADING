@@ -1204,6 +1204,17 @@ setup_cors(app)
 setup_security_headers(app)
 setup_metrics_middleware(app)
 
+# Serve the React dashboard from dashboard/dist/ — mounted LAST so all /api/*
+# routes take precedence.  Falls back gracefully when dist/ doesn't exist yet.
+_dashboard_dist = Path(__file__).parent / "dashboard" / "dist"
+if _dashboard_dist.exists():
+    app.mount("/app", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard")
+    logger.info("React dashboard mounted at /app (dashboard/dist/)")
+else:
+    logger.warning(
+        "dashboard/dist/ not found — run 'cd dashboard && npm run build' to build the UI"
+    )
+
 
 def run_server():
     """Run the API server"""
