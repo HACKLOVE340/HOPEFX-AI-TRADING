@@ -7,6 +7,7 @@ import { CopyTrading } from './pages/CopyTrading'
 import { Leaderboard } from './pages/Leaderboard'
 import { Wallet } from './pages/Wallet'
 import { Settings } from './pages/Settings'
+import { Performance } from './pages/Performance'
 import PropFirmTracker from './pages/PropFirmTracker'
 import Onboarding from './pages/Onboarding'
 
@@ -37,6 +38,7 @@ function App() {
             <Route path="/copy-trading" element={<CopyTrading />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/wallet" element={<Wallet />} />
+            <Route path="/performance" element={<Performance />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Layout>
