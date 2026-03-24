@@ -5,13 +5,16 @@ import {
   Key, 
   Globe, 
   Smartphone,
-  Save
+  Save,
+  Link,
 } from 'lucide-react'
+import { BrokerWizard } from '../components/BrokerWizard'
 
 export function Settings() {
-  const [activeSection, setActiveSection] = useState('security')
+  const [activeSection, setActiveSection] = useState('broker')
 
   const sections = [
+    { id: 'broker', label: 'Broker', icon: Link },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'api', label: 'API Keys', icon: Key },
@@ -47,6 +50,8 @@ export function Settings() {
       {/* Content */}
       <div className="lg:col-span-3">
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+          {activeSection === 'broker' && <BrokerWizard />}
+
           {activeSection === 'security' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Security Settings</h3>

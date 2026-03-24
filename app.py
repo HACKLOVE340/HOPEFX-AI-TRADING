@@ -44,6 +44,7 @@ from api.prop_firm import router as prop_firm_router
 from api.performance import router as performance_router
 from api.explain import router as explain_router
 from api.macro import router as macro_router
+from api.broker import router as broker_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -77,6 +78,7 @@ app.include_router(prop_firm_router)
 app.include_router(performance_router)
 app.include_router(explain_router)
 app.include_router(macro_router)
+app.include_router(broker_router)
 
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
