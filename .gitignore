@@ -110,6 +110,7 @@ credentials/
 *.pem
 *.key
 *.crt
+.encryption_key
 
 # Temporary files
 tmp/
