@@ -331,6 +331,15 @@ async def lifespan(_app: FastAPI):
     """FastAPI lifespan handler — replaces deprecated @app.on_event."""
     await kill_switch.start()
     await startup_event()
+    # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
+    try:
+        from prometheus_monitoring import _sync_loop as _prom_sync_loop
+        import os as _os
+        _prom_interval = float(_os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
+        asyncio.create_task(_prom_sync_loop(_prom_interval))
+        logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
+    except Exception as _prom_err:
+        logger.warning("Prometheus sync loop not started: %s", _prom_err)
     yield
     await shutdown_event()
     await kill_switch.stop()
@@ -1052,17 +1061,7 @@ async def get_status():
     )
 
 
-# Prometheus metrics endpoint
-@app.get("/metrics", tags=["System"], include_in_schema=False)
-async def prometheus_metrics():
-    """Prometheus text-format metrics. Scraped by Prometheus server."""
-    try:
-        from core.metrics import metrics_response
-        body, content_type = metrics_response()
-        return Response(content=body, media_type=content_type)
-    except Exception as exc:
-        return PlainTextResponse(f"# metrics error: {exc}\n", status_code=500)
-
+# /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
 
 # Root endpoint
 @app.get("/", tags=["System"])
