@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any, Union, Callable, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum, auto
 from collections import deque, defaultdict
 from functools import lru_cache, partial
@@ -1617,13 +1617,71 @@ class EnhancedMLPredictor:
             'return': actual_return
         })
         
-        # Trigger online update if performance degrades
-        if len(self.performance_tracker) >= 20:
-            recent_accuracy = np.mean([p['correct'] for p in list(self.performance_tracker)[-20:]])
-            
-            if recent_accuracy < 0.55:  # Below random guess
-                logger.warning(f"Accuracy degraded to {recent_accuracy:.1%} - triggering online update")
-                # Would trigger async retraining here
+        # ── Online update trigger ─────────────────────────────────────────────
+        # Only evaluate after enough observations to be statistically meaningful.
+        # The threshold is set relative to the *baseline* accuracy established
+        # during training, not a fixed 55% that fires immediately when the
+        # baseline is already ~48%.
+        #
+        # Rules:
+        #   1. Need at least 50 recent predictions before triggering anything.
+        #   2. Compute a rolling 50-bar accuracy.
+        #   3. Trigger retraining only if accuracy drops MORE THAN 5 percentage
+        #      points below the training baseline AND stays there for 3
+        #      consecutive evaluation windows (to avoid noise-driven retrains).
+        #   4. Enforce a minimum 24-hour cooldown between retrains to prevent
+        #      continuous retraining on a model that has no real edge.
+        min_obs_for_trigger = 50
+        degradation_threshold = 0.05   # 5pp below baseline
+        consecutive_windows_required = 3
+
+        if len(self.performance_tracker) >= min_obs_for_trigger:
+            recent = list(self.performance_tracker)[-min_obs_for_trigger:]
+            recent_accuracy = float(np.mean([p['correct'] for p in recent]))
+
+            # Establish baseline from training report if available
+            baseline = getattr(self, '_training_baseline_accuracy', None)
+            if baseline is None:
+                # Fall back to first 50 observations as baseline estimate
+                first_50 = list(self.performance_tracker)[:min_obs_for_trigger]
+                baseline = float(np.mean([p['correct'] for p in first_50]))
+                self._training_baseline_accuracy = baseline
+
+            trigger_threshold = max(0.45, baseline - degradation_threshold)
+
+            if recent_accuracy < trigger_threshold:
+                self._consecutive_degraded_windows = getattr(
+                    self, '_consecutive_degraded_windows', 0
+                ) + 1
+                logger.warning(
+                    f"Accuracy degraded: recent={recent_accuracy:.1%} "
+                    f"baseline={baseline:.1%} "
+                    f"threshold={trigger_threshold:.1%} "
+                    f"(window {self._consecutive_degraded_windows}/{consecutive_windows_required})"
+                )
+
+                if self._consecutive_degraded_windows >= consecutive_windows_required:
+                    last_retrain = getattr(self, '_last_retrain_time', None)
+                    now = datetime.now(timezone.utc)
+                    cooldown_hours = 24
+                    if last_retrain is None or (now - last_retrain).total_seconds() > cooldown_hours * 3600:
+                        logger.warning(
+                            f"Triggering online update after {consecutive_windows_required} "
+                            f"consecutive degraded windows. "
+                            f"Accuracy {recent_accuracy:.1%} vs baseline {baseline:.1%}."
+                        )
+                        self._last_retrain_time = now
+                        self._consecutive_degraded_windows = 0
+                        # Caller should schedule async retraining; flag it here
+                        self._retrain_requested = True
+                    else:
+                        hours_remaining = cooldown_hours - (now - last_retrain).total_seconds() / 3600
+                        logger.info(
+                            f"Retrain suppressed by cooldown ({hours_remaining:.1f}h remaining)"
+                        )
+            else:
+                # Reset consecutive counter when performance recovers
+                self._consecutive_degraded_windows = 0
     
     def get_model_report(self) -> Dict[str, Any]:
         """Generate comprehensive model report"""
