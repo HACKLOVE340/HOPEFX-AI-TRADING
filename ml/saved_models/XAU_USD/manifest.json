@@ -1,0 +1,26 @@
+{
+  "symbol": "XAU_USD",
+  "trained_at": "2026-03-24T09:29:02.201539+00:00",
+  "data_source": "data/XAU_USD_H1.csv",
+  "rows": 11457,
+  "models": {
+    "xgboost": {
+      "path": "ml/saved_models/XAU_USD/xgboost_model.json",
+      "metrics": {
+        "accuracy": 0.4897413024085638,
+        "precision": 0.5302445302445302,
+        "recall": 0.3459277917716205,
+        "f1": 0.4186991869918699
+      }
+    },
+    "random_forest": {
+      "path": "ml/saved_models/XAU_USD/random_forest_model.pkl",
+      "metrics": {
+        "accuracy": 0.48617305976806424,
+        "precision": 0.5281385281385281,
+        "recall": 0.30730478589420657,
+        "f1": 0.3885350318471338
+      }
+    }
+  }
+}
