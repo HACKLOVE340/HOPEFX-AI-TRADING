@@ -29,6 +29,10 @@ class BacktestConfig:
     slippage_pips: float = 0.5
     allow_short: bool = True
     max_positions: int = 10
+    # Overnight financing: annualised swap rate charged per bar on open notional.
+    # ~0.4% p.a. is typical for XAUUSD long positions.
+    overnight_rate_annual: float = 0.004
+    bars_per_day: float = 24.0  # 24 for H1, 6 for H4, 1 for D
 
 
 @dataclass
@@ -148,11 +152,26 @@ class SimulatedBroker:
         self.trades: List[Dict] = []
         self.equity_curve: List[Dict] = []
         self.current_time: Optional[datetime] = None
-    
+        self.total_overnight_cost: float = 0.0
+
+        # Per-bar overnight financing rate
+        bars_per_day = getattr(config, "bars_per_day", 24.0)
+        annual_rate = getattr(config, "overnight_rate_annual", 0.004)
+        self._overnight_rate_per_bar = annual_rate / 365.0 / bars_per_day
+
     def update_time(self, timestamp: datetime):
-        """Update current simulation time"""
+        """Update current simulation time and apply overnight financing."""
         self.current_time = timestamp
-        
+
+        # Overnight financing: charged every bar on open position notional.
+        if self._overnight_rate_per_bar > 0 and self.positions:
+            for pos in self.positions.values():
+                price = pos.get("current_price", pos.get("avg_price", 0.0))
+                notional = abs(pos.get("quantity", 0.0) * price)
+                cost = notional * self._overnight_rate_per_bar
+                self.cash -= cost
+                self.total_overnight_cost += cost
+
         # Record equity
         equity = self.get_equity()
         self.equity_curve.append({

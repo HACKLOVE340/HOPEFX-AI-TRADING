@@ -279,14 +279,21 @@ class BacktestEngine:
     Event-driven backtesting engine
     Processes ticks/bars sequentially, executes orders, tracks performance
     """
-    
+
+    # Bars per day for common timeframes — used to scale the annual swap rate
+    _BARS_PER_DAY: Dict[str, float] = {
+        "tick": 86400.0, "1m": 1440.0, "5m": 288.0, "15m": 96.0,
+        "1h": 24.0, "4h": 6.0, "1d": 1.0,
+    }
+
     def __init__(
         self,
         initial_capital: float = 10000.0,
         transaction_costs: Optional[TransactionCostModel] = None,
         data_frequency: str = "tick",  # tick, 1m, 5m, 1h, 1d
         enable_fractional: bool = False,
-        leverage: float = 1.0
+        leverage: float = 1.0,
+        overnight_rate_annual: float = 0.004,  # ~0.4% p.a. XAUUSD long swap
     ):
         self.initial_capital = initial_capital
         self.capital = initial_capital
@@ -294,7 +301,13 @@ class BacktestEngine:
         self.data_frequency = data_frequency
         self.enable_fractional = enable_fractional
         self.leverage = leverage
-        
+        self.overnight_rate_annual = overnight_rate_annual
+        self.total_overnight_cost: float = 0.0
+
+        # Per-bar financing rate
+        bars_per_day = self._BARS_PER_DAY.get(data_frequency, 24.0)
+        self._overnight_rate_per_bar = overnight_rate_annual / 365.0 / bars_per_day
+
         # State
         self.positions: Dict[str, Position] = {}
         self.pending_orders: List[Order] = []
@@ -437,10 +450,19 @@ class BacktestEngine:
             self.pending_orders.remove(order)
     
     def _update_positions(self, tick: TickData):
-        """Update unrealized PnL for open positions"""
+        """Update unrealized PnL for open positions and apply overnight financing."""
         if tick.symbol in self.positions:
             position = self.positions[tick.symbol]
             position.update_unrealized_pnl(tick.mid)
+
+            # Overnight financing (swap): charged every bar on open notional.
+            # notional = price × quantity; long positions pay, short positions
+            # receive (simplified: both pay the same rate here).
+            if self._overnight_rate_per_bar > 0:
+                notional = abs(tick.mid * position.quantity)
+                cost = notional * self._overnight_rate_per_bar
+                self.capital -= cost
+                self.total_overnight_cost += cost
     
     def _record_equity(self, timestamp: datetime):
         """Record current equity state"""
