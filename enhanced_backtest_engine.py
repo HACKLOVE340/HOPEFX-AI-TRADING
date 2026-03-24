@@ -136,35 +136,59 @@ class RiskEventSeverity(IntEnum):
 
 @dataclass(frozen=True, slots=True)
 class NanosecondTimestamp:
-    """High-precision timestamp with nanosecond resolution"""
+    """
+    High-precision timestamp with true nanosecond resolution.
+
+    ``seconds``     — Unix epoch seconds (int)
+    ``nanoseconds`` — sub-second nanoseconds, 0–999_999_999 (int)
+
+    ``now()`` uses ``time.time_ns()`` which returns the wall-clock time in
+    nanoseconds as a single integer, giving genuine nanosecond granularity on
+    platforms that support it (Linux CLOCK_REALTIME, macOS mach_absolute_time).
+    The previous implementation used ``datetime.microsecond * 1000``, which
+    produced values that were always a multiple of 1 000 — microsecond
+    precision at best.
+
+    ``from_datetime()`` is limited to microsecond precision because Python's
+    ``datetime`` type does not carry sub-microsecond information.  Use
+    ``now()`` when real nanosecond resolution is required.
+    """
     seconds: int      # Unix epoch seconds
     nanoseconds: int  # 0-999,999,999
-    
+
     @classmethod
     def now(cls) -> 'NanosecondTimestamp':
-        """Create from current system time"""
-        now = datetime.now(timezone.utc)
-        seconds = int(now.timestamp())
-        nanoseconds = now.microsecond * 1000
+        """Create from current system time using time.time_ns() for nanosecond resolution."""
+        import time as _time
+        ns_total = _time.time_ns()
+        seconds = ns_total // 1_000_000_000
+        nanoseconds = ns_total % 1_000_000_000
         return cls(seconds, nanoseconds)
-    
+
     @classmethod
     def from_datetime(cls, dt: datetime) -> 'NanosecondTimestamp':
-        """Create from datetime"""
+        """
+        Create from a datetime object.
+
+        Resolution is limited to microseconds because datetime does not carry
+        sub-microsecond information.  The sub-microsecond nanosecond digits
+        will always be zero.
+        """
         seconds = int(dt.timestamp())
-        nanoseconds = dt.microsecond * 1000
+        # dt.microsecond gives 0-999999; convert to nanoseconds within the second
+        nanoseconds = dt.microsecond * 1_000
         return cls(seconds, nanoseconds)
-    
+
     def to_datetime(self) -> datetime:
-        """Convert to datetime"""
+        """Convert to UTC datetime (microsecond precision)."""
         return datetime.fromtimestamp(
-            self.seconds + self.nanoseconds / 1e9, 
+            self.seconds + self.nanoseconds / 1e9,
             tz=timezone.utc
         )
-    
+
     def __float__(self) -> float:
         return self.seconds + self.nanoseconds / 1e9
-    
+
     def __lt__(self, other: 'NanosecondTimestamp') -> bool:
         if self.seconds != other.seconds:
             return self.seconds < other.seconds
@@ -1857,43 +1881,67 @@ class EnhancedBacktestEngine:
 # =============================================================================
 
 def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[TickData]:
-    """Generate realistic synthetic tick data"""
+    """
+    Generate SYNTHETIC tick data for unit tests and engine smoke-tests ONLY.
+
+    WARNING — this data is NOT suitable for strategy validation or performance
+    reporting.  Specifically:
+      - Price path is a simple GBM with fixed seed — no fat tails, no regime
+        shifts, no liquidity gaps, no news events.
+      - The "GARCH-like" volatility clustering is a single-line approximation
+        that bears no resemblance to actual GARCH(1,1).
+      - Spread is uniform random — not microstructure-realistic.
+      - There are no overnight gaps, halts, or extreme events.
+
+    For real backtesting use real_data_backtest.py with actual XAUUSD tick data
+    from a vendor (e.g. Dukascopy, Tick Data Suite, OANDA history API).
+    """
+    warnings.warn(
+        "generate_test_data() produces SYNTHETIC GBM data. "
+        "Do not use for strategy validation or performance reporting. "
+        "Use real_data_backtest.py with actual tick data instead.",
+        UserWarning,
+        stacklevel=2,
+    )
+
     np.random.seed(42)
-    
+
     base_price = 1950.0
     volatility = 0.0002
-    
-    # Generate price path with GARCH-like volatility clustering
+
+    # Simple GBM with a single-step volatility-clustering approximation.
+    # This is NOT a real GARCH model — it is only here to produce non-i.i.d.
+    # looking data for engine smoke-tests.
     returns = np.random.normal(0, volatility, n_ticks)
     for i in range(1, n_ticks):
         returns[i] *= (1 + abs(returns[i-1]) * 5)
-    
+
     prices = base_price * np.exp(np.cumsum(returns))
-    
-    # Generate bid/ask with realistic spread
+
+    # Uniform random spread — not microstructure-realistic
     spreads = np.random.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for gold
-    
+
     ticks = []
     start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    
+
     for i in range(n_ticks):
         price = prices[i]
         spread = spreads[i]
-        
+
         tick = TickData(
             timestamp=NanosecondTimestamp.from_datetime(
-                start_time + timedelta(milliseconds=i*100)  # 10 ticks per second
+                start_time + timedelta(milliseconds=i * 100)  # 10 ticks/second
             ),
             symbol=symbol,
-            bid=price - spread/2,
-            ask=price + spread/2,
+            bid=price - spread / 2,
+            ask=price + spread / 2,
             bid_size=np.random.exponential(10.0),
             ask_size=np.random.exponential(10.0),
             volume=np.random.poisson(100),
-            source="synthetic"
+            source="synthetic",
         )
         ticks.append(tick)
-    
+
     return ticks
 
 
