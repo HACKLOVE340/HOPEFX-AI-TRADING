@@ -238,8 +238,9 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
                 try:
                     message.getField(text_f)
                     text = text_f.getString()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    # Text field is optional in Logout — absence is normal
+                    logger.debug("fix.fromAdmin: Logout Text field absent: %s", _e)
                 logger.warning(
                     "fix.fromAdmin: Logout received session=%s text=%r",
                     session_id, text,
@@ -252,16 +253,16 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
                 ref_seq, reason, text = "", "", ""
                 try:
                     message.getField(ref_seq_f); ref_seq = ref_seq_f.getString()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("fix.fromAdmin: Reject RefSeqNum field absent: %s", _e)
                 try:
                     message.getField(reason_f); reason = reason_f.getString()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("fix.fromAdmin: Reject SessionRejectReason field absent: %s", _e)
                 try:
                     message.getField(text_f); text = text_f.getString()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("fix.fromAdmin: Reject Text field absent: %s", _e)
                 logger.error(
                     "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
                     ref_seq, reason, text,
@@ -270,12 +271,13 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
     def toApp(self, message, session_id):
-        # Record send time for latency measurement
+        # Record send time for latency measurement.
+        # ClOrdID is absent on non-order admin messages — not an error.
         try:
             cl_ord_id = message.getField(fix.ClOrdID()).getString()
             self._send_times[cl_ord_id] = time.monotonic()
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("fix.toApp: ClOrdID not present in outbound message: %s", _e)
 
     def fromApp(self, message, session_id):
         msg_type = fix.MsgType()
@@ -356,15 +358,17 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
             try:
                 message.getField(text_f)
                 text = text_f.getString()
-            except Exception:
-                pass  # Text field is optional in OrderCancelReject
+            except Exception as _e:
+                # Text field is optional in OrderCancelReject
+                logger.debug("fix_adapter.OrderCancelReject: Text field absent: %s", _e)
 
             reason_code = ""
             try:
                 message.getField(cxl_rej_reason_f)
                 reason_code = cxl_rej_reason_f.getString()
-            except Exception:
-                pass  # CxlRejReason is optional
+            except Exception as _e:
+                # CxlRejReason is optional
+                logger.debug("fix_adapter.OrderCancelReject: CxlRejReason field absent: %s", _e)
 
             logger.error(
                 "fix_adapter.OrderCancelReject cl_ord_id=%s reason=%s text=%r",
