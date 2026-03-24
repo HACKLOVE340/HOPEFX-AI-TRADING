@@ -9,12 +9,14 @@ Endpoints:
 
 from __future__ import annotations
 
+import io
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -218,3 +220,198 @@ async def get_result(
     if run_id not in _results:
         raise HTTPException(status_code=404, detail="Result not found")
     return BacktestResult(**_results[run_id])
+
+
+@router.get(
+    "/{run_id}/report.pdf",
+    summary="Download backtest report as PDF",
+    response_class=StreamingResponse,
+)
+async def download_pdf_report(
+    run_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Generate and stream a PDF report for a completed backtest.
+
+    The report includes: strategy metadata, performance summary table,
+    key metrics (Sharpe, drawdown, win rate), and a disclaimer.
+    """
+    if run_id not in _results:
+        raise HTTPException(status_code=404, detail="Backtest result not found")
+
+    result = _results[run_id]
+    pdf_bytes = _build_pdf(result)
+
+    filename = f"backtest_{result['strategy']}_{result['symbol']}_{run_id[:8]}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── PDF builder ───────────────────────────────────────────────────────────────
+
+def _build_pdf(result: dict) -> bytes:
+    """Render a backtest result dict into a PDF and return raw bytes."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+        )
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"PDF generation unavailable: reportlab not installed ({exc})",
+        )
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "Title", parent=styles["Heading1"],
+        fontSize=20, spaceAfter=6, textColor=colors.HexColor("#1e3a5f"),
+    )
+    subtitle_style = ParagraphStyle(
+        "Subtitle", parent=styles["Normal"],
+        fontSize=11, textColor=colors.HexColor("#64748b"), spaceAfter=16,
+    )
+    section_style = ParagraphStyle(
+        "Section", parent=styles["Heading2"],
+        fontSize=13, spaceBefore=14, spaceAfter=6, textColor=colors.HexColor("#1e293b"),
+    )
+    body_style = ParagraphStyle(
+        "Body", parent=styles["Normal"],
+        fontSize=10, textColor=colors.HexColor("#334155"), leading=14,
+    )
+    disclaimer_style = ParagraphStyle(
+        "Disclaimer", parent=styles["Normal"],
+        fontSize=8, textColor=colors.HexColor("#94a3b8"), leading=11,
+    )
+
+    # ── Colour palette ────────────────────────────────────────────────────────
+    BLUE   = colors.HexColor("#3b82f6")
+    LIGHT  = colors.HexColor("#eff6ff")
+    BORDER = colors.HexColor("#cbd5e1")
+    GREEN  = colors.HexColor("#16a34a")
+    RED    = colors.HexColor("#dc2626")
+
+    story = []
+
+    # ── Title block ───────────────────────────────────────────────────────────
+    story.append(Paragraph("HOPEFX — Backtest Report", title_style))
+    story.append(Paragraph(
+        f"Strategy: <b>{result['strategy']}</b> &nbsp;·&nbsp; "
+        f"Symbol: <b>{result['symbol']}</b> &nbsp;·&nbsp; "
+        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+        subtitle_style,
+    ))
+    story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=12))
+
+    # ── Parameters table ──────────────────────────────────────────────────────
+    story.append(Paragraph("Backtest Parameters", section_style))
+    params_data = [
+        ["Parameter", "Value"],
+        ["Strategy",        result["strategy"]],
+        ["Symbol",          result["symbol"]],
+        ["Start date",      result["start_date"]],
+        ["End date",        result["end_date"]],
+        ["Initial capital", f"${result['initial_capital']:,.2f}"],
+        ["Run ID",          result["run_id"]],
+        ["Status",          result["status"].upper()],
+    ]
+    params_table = Table(params_data, colWidths=[5 * cm, 10 * cm])
+    params_table.setStyle(TableStyle([
+        ("BACKGROUND",  (0, 0), (-1, 0), BLUE),
+        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",    (0, 0), (-1, -1), 9),
+        ("BACKGROUND",  (0, 1), (-1, -1), LIGHT),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+        ("GRID",        (0, 0), (-1, -1), 0.5, BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING",  (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(params_table)
+    story.append(Spacer(1, 14))
+
+    # ── Performance summary ───────────────────────────────────────────────────
+    story.append(Paragraph("Performance Summary", section_style))
+
+    ret_pct = result.get("total_return_pct", 0)
+    ret_color = GREEN if ret_pct >= 0 else RED
+
+    perf_data = [
+        ["Metric", "Value"],
+        ["Final equity",       f"${result.get('final_equity', 0):,.2f}"],
+        ["Total return",       f"{ret_pct:+.2f}%"],
+        ["Max drawdown",       f"-{result.get('max_drawdown_pct', 0):.2f}%"],
+        ["Sharpe ratio",       f"{result.get('sharpe_ratio', 0):.3f}"],
+        ["Total trades",       str(result.get("total_trades", 0))],
+        ["Win rate",           f"{result.get('win_rate_pct', 0):.1f}%"],
+    ]
+    perf_table = Table(perf_data, colWidths=[7 * cm, 8 * cm])
+    perf_table.setStyle(TableStyle([
+        ("BACKGROUND",  (0, 0), (-1, 0), BLUE),
+        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME",    (0, 1), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE",    (0, 0), (-1, -1), 10),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+        ("GRID",        (0, 0), (-1, -1), 0.5, BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING",  (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        # Colour the return row
+        ("TEXTCOLOR",   (1, 2), (1, 2), ret_color),
+        ("FONTNAME",    (1, 2), (1, 2), "Helvetica-Bold"),
+    ]))
+    story.append(perf_table)
+    story.append(Spacer(1, 20))
+
+    # ── Interpretation ────────────────────────────────────────────────────────
+    story.append(Paragraph("Interpretation", section_style))
+    sharpe = result.get("sharpe_ratio", 0)
+    sharpe_note = (
+        "Excellent risk-adjusted returns (Sharpe > 2)." if sharpe > 2
+        else "Good risk-adjusted returns (Sharpe 1–2)." if sharpe > 1
+        else "Marginal risk-adjusted returns (Sharpe < 1). Consider parameter tuning."
+    )
+    dd = result.get("max_drawdown_pct", 0)
+    dd_note = (
+        "Drawdown is well-controlled (< 10%)." if dd < 10
+        else "Moderate drawdown (10–20%). Review position sizing." if dd < 20
+        else "High drawdown (> 20%). Risk management review recommended."
+    )
+    story.append(Paragraph(f"• Sharpe ratio {sharpe:.2f}: {sharpe_note}", body_style))
+    story.append(Paragraph(f"• Max drawdown {dd:.1f}%: {dd_note}", body_style))
+    story.append(Spacer(1, 20))
+
+    # ── Disclaimer ────────────────────────────────────────────────────────────
+    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceAfter=8))
+    story.append(Paragraph(
+        "DISCLAIMER: Past performance is not indicative of future results. "
+        "Backtesting results are hypothetical and do not account for slippage, "
+        "commissions, or market impact. This report is for informational purposes "
+        "only and does not constitute financial advice. Trading involves substantial "
+        "risk of loss.",
+        disclaimer_style,
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
