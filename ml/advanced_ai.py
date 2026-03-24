@@ -83,14 +83,35 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
     """
     Gymnasium environment wrapping a price DataFrame.
 
-    Observation: [returns(10), atr_norm, position, unrealised_pnl_norm]
+    Observation: [normalised returns(window), atr_norm, position, unrealised_pnl_norm]
     Action:      Discrete(3) — 0=flat, 1=long, 2=short
-    Reward:      Step P&L minus a small holding cost.
+    Reward:      Step P&L minus realistic transaction costs on position changes
+                 and a per-step overnight financing charge for held positions.
+
+    Transaction cost model (XAUUSD CFD defaults):
+      - spread_bps:    half-spread paid on entry/exit (default 3 bps each way)
+      - commission_bps: broker commission per trade (default 2 bps)
+      - financing_bps:  overnight financing per bar held (default 0.5 bps)
+
+    These defaults are calibrated to typical retail XAUUSD CFD conditions.
+    Institutional desks should lower spread_bps to ~0.5 and commission_bps to ~0.5.
     """
 
     metadata = {"render_modes": []}
 
-    def __init__(self, df: pd.DataFrame, window: int = 10) -> None:
+    # Realistic XAUUSD CFD cost defaults (in decimal, not bps)
+    DEFAULT_SPREAD      = 3e-4   # 3 bps half-spread each way
+    DEFAULT_COMMISSION  = 2e-4   # 2 bps per trade (round-turn = 4 bps)
+    DEFAULT_FINANCING   = 5e-5   # 0.5 bps per bar held (≈ 3% p.a. on H1 bars)
+
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        window: int = 10,
+        spread_bps: float = 3.0,
+        commission_bps: float = 2.0,
+        financing_bps_per_bar: float = 0.5,
+    ) -> None:
         if not _GYM_AVAILABLE:
             raise ImportError("gymnasium is required for TradingEnv")
 
@@ -98,6 +119,11 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         self.df = df.reset_index(drop=True)
         self.window = window
         self._n = len(df)
+
+        # Convert bps to decimal fractions
+        self._spread      = spread_bps      / 10_000
+        self._commission  = commission_bps  / 10_000
+        self._financing   = financing_bps_per_bar / 10_000
 
         # Observation: window returns + atr_norm + position + pnl_norm
         obs_dim = window + 3
@@ -121,21 +147,33 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         return self._obs(), {}
 
     def step(self, action: int):
-        action = int(action) - 1  # map {0,1,2} → {-1,0,1}
+        new_position = int(action) - 1  # map {0,1,2} → {-1,0,1}
 
-        row = self.df.iloc[self._step]
         prev_close = self.df["close"].iloc[self._step - 1]
-        curr_close = row["close"]
+        curr_close = self.df["close"].iloc[self._step]
         ret = (curr_close - prev_close) / (prev_close + 1e-9)
 
-        # P&L from existing position
+        # ── P&L from existing position ────────────────────────────────────────
         pnl = self._position * ret
-        holding_cost = abs(self._position) * 0.0001  # 1 bp/step
-        reward = float(pnl - holding_cost)
-        self._equity *= (1 + pnl - holding_cost)
 
-        # Update position
-        self._position = action
+        # ── Transaction costs ─────────────────────────────────────────────────
+        position_changed = new_position != self._position
+        trade_cost = 0.0
+        if position_changed:
+            # Spread cost: paid on both legs of a direction change
+            # (close old + open new), or just one leg if going flat/from flat
+            legs = 2 if (self._position != 0 and new_position != 0) else 1
+            trade_cost = legs * (self._spread + self._commission)
+
+        # Overnight financing: charged every bar a position is held
+        financing_cost = abs(self._position) * self._financing
+
+        total_cost = trade_cost + financing_cost
+        reward = float(pnl - total_cost)
+        self._equity *= (1 + pnl - total_cost)
+
+        # Update position after costs are assessed on the OLD position
+        self._position = new_position
 
         self._step += 1
         done = self._step >= self._n - 1
