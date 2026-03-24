@@ -227,16 +227,26 @@ class AdvancedRiskAnalytics:
 
         Returns:
             VaRResult object
+
+        Note on sqrt(t) scaling
+        -----------------------
+        Scaling 1-day VaR by sqrt(t) is the Basel II square-root-of-time rule.
+        It is only theoretically valid when returns are i.i.d. and normally
+        distributed — an assumption that is violated by real financial returns
+        (fat tails, autocorrelation, volatility clustering).  For gold/FX
+        intraday returns the error can be material at horizons beyond 1 day.
+        A more robust alternative is to compute multi-day VaR directly from
+        overlapping or non-overlapping multi-day return windows.
         """
         confidence_level = confidence_level or self.var_confidence
 
-        # Calculate VaR percentile
+        # 1-day VaR at the requested confidence level
         var_percentile = np.percentile(returns, (1 - confidence_level) * 100)
 
-        # Scale for time horizon (assuming sqrt(t) scaling)
+        # Scale to the requested horizon using sqrt(t).
+        # See docstring for the i.i.d. assumption caveat.
         var_scaled = var_percentile * np.sqrt(time_horizon)
 
-        # Convert to dollar value if portfolio value provided
         if portfolio_value:
             var_value = abs(var_scaled * portfolio_value)
         else:
@@ -281,10 +291,11 @@ class AdvancedRiskAnalytics:
         # Z-score for confidence level
         z_score = stats.norm.ppf(1 - confidence_level)
 
-        # Calculate VaR
+        # Calculate 1-day VaR
         var_value = -(mean_return + z_score * std_return)
 
-        # Scale for time horizon
+        # Scale to the requested horizon using sqrt(t).
+        # Valid only under i.i.d. normality — see calculate_var_historical docstring.
         var_scaled = var_value * np.sqrt(time_horizon)
 
         # Convert to dollar value if portfolio value provided
@@ -326,16 +337,18 @@ class AdvancedRiskAnalytics:
         confidence_level = confidence_level or self.var_confidence
         num_simulations = num_simulations or self.mc_simulations
 
-        # Estimate distribution parameters
         mean_return = np.mean(returns)
         std_return = np.std(returns)
 
-        # Simulate returns
-        np.random.seed(42)  # For reproducibility
-        simulated_returns = np.random.normal(
+        # Use a local Generator so we do not corrupt the global numpy RNG state.
+        # A fixed seed is intentionally NOT used here: each call should produce
+        # an independent Monte Carlo estimate.  If reproducibility is required
+        # for a specific test, pass a seeded Generator via the rng parameter.
+        rng = np.random.default_rng()
+        simulated_returns = rng.normal(
             mean_return * time_horizon,
             std_return * np.sqrt(time_horizon),
-            num_simulations
+            num_simulations,
         )
 
         # Calculate VaR from simulations
