@@ -14,6 +14,7 @@ Enterprise-grade implementations with:
 """
 
 import logging
+from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -113,9 +114,15 @@ class RiskLimits:
 
 # ============ BASE PROP FIRM BROKER ============
 
-class BasePropFirmBroker:
-    """Base class for all prop firm brokers"""
-    
+class BasePropFirmBroker(ABC):
+    """
+    Abstract base class for all prop firm broker integrations.
+
+    Subclasses must implement all five abstract methods.  Using ABC +
+    @abstractmethod means a subclass that omits any method raises TypeError
+    at instantiation time rather than at the first runtime call.
+    """
+
     def __init__(self,
                  api_key: str,
                  secret_key: str,
@@ -126,41 +133,41 @@ class BasePropFirmBroker:
         self.account_id = account_id
         self.firm_type = firm_type
         self.session: Optional[aiohttp.ClientSession] = None
-    
+
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
         return self
-    
+
     async def __aexit__(self, *args):
         if self.session:
             await self.session.close()
-    
+
+    @abstractmethod
     async def get_metrics(self) -> PropFirmMetrics:
-        """Get account metrics - must be implemented by subclass"""
-        raise NotImplementedError
-    
+        """Return current account metrics from the prop firm API."""
+
+    @abstractmethod
     async def place_order(self,
-                         symbol: str,
-                         side: str,
-                         quantity: float,
-                         order_type: str = "MARKET",
-                         price: Optional[float] = None,
-                         stop_loss: Optional[float] = None,
-                         take_profit: Optional[float] = None) -> Dict[str, Any]:
-        """Place order - must be implemented by subclass"""
-        raise NotImplementedError
-    
+                          symbol: str,
+                          side: str,
+                          quantity: float,
+                          order_type: str = "MARKET",
+                          price: Optional[float] = None,
+                          stop_loss: Optional[float] = None,
+                          take_profit: Optional[float] = None) -> Dict[str, Any]:
+        """Place an order and return the broker's response dict."""
+
+    @abstractmethod
     async def close_trade(self, trade_id: str) -> Dict[str, Any]:
-        """Close trade - must be implemented by subclass"""
-        raise NotImplementedError
-    
+        """Close an open trade by ID and return the broker's response dict."""
+
+    @abstractmethod
     async def get_open_trades(self) -> List[PropFirmTrade]:
-        """Get open trades - must be implemented by subclass"""
-        raise NotImplementedError
-    
+        """Return all currently open trades."""
+
+    @abstractmethod
     async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
-        """Get trade history - must be implemented by subclass"""
-        raise NotImplementedError
+        """Return the most recent closed trades, newest first."""
     
     async def check_risk_violations(self) -> Tuple[bool, Optional[str]]:
         """Check for risk limit violations"""
