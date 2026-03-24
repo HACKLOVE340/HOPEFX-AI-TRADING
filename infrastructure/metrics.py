@@ -258,6 +258,67 @@ class MetricsRegistry:
         self.create_counter("orders_submitted_total", "Orders submitted", ["symbol", "type"])
         self.create_counter("orders_filled_total", "Orders filled", ["symbol", "type"])
         self.create_counter("orders_rejected_total", "Orders rejected", ["symbol", "reason"])
+
+        # ── Grafana-aligned trading metrics ──────────────────────────────────
+        # Counters / gauges that Grafana dashboards query by name.
+        self.create_counter("hopefx_signals_total", "Total trading signals generated", ["direction"])
+        self.create_histogram(
+            "hopefx_signal_confidence_bucket",
+            "Signal confidence score distribution",
+            buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        )
+        self.create_gauge("hopefx_model_accuracy_pct", "Rolling model prediction accuracy (0–100)")
+        self.create_gauge(
+            "hopefx_market_regime",
+            "Current market regime: 0=ranging, 1=trending, 2=volatile",
+        )
+        self.create_gauge(
+            "hopefx_model_last_trained_timestamp",
+            "Unix timestamp of the last model retrain",
+        )
+        self.create_histogram(
+            "hopefx_model_inference_ms_bucket",
+            "Model inference latency in milliseconds",
+            buckets=[1, 2, 5, 10, 25, 50, 100, 250, 500],
+        )
+        self.create_gauge(
+            "hopefx_broker_connected",
+            "Broker connection status (1=connected, 0=disconnected)",
+            ["broker"],
+        )
+        self.create_counter("hopefx_broker_failover_total", "Number of broker failover events")
+        self.create_counter(
+            "hopefx_broker_rejections_total",
+            "Number of orders rejected by the broker",
+            ["broker"],
+        )
+        self.create_gauge("hopefx_win_rate_pct", "Rolling win rate percentage (0–100)")
+        self.create_gauge(
+            "hopefx_smart_router_active_broker",
+            "Index of the currently active broker in the smart router",
+        )
+        self.create_gauge(
+            "hopefx_fix_last_heartbeat_timestamp",
+            "Unix timestamp of the last FIX session heartbeat",
+        )
+        self.create_counter("hopefx_orders_total", "Total orders submitted", ["symbol", "side"])
+        self.create_histogram(
+            "hopefx_order_latency_ms_bucket",
+            "Order round-trip latency in milliseconds",
+            buckets=[1, 5, 10, 25, 50, 100, 250, 500, 1000],
+        )
+        self.create_histogram(
+            "hopefx_broker_latency_ms_bucket",
+            "Per-broker order submission latency in milliseconds",
+            ["broker"],
+            buckets=[1, 5, 10, 25, 50, 100, 250, 500, 1000],
+        )
+        self.create_gauge("hopefx_db_pool_active", "Active database connection pool connections")
+        self.create_gauge("hopefx_equity", "Current account equity in account currency")
+        self.create_gauge("hopefx_active_positions", "Number of currently open positions")
+        self.create_gauge("hopefx_pnl_realized", "Realized P&L for the current trading day")
+        self.create_gauge("hopefx_drawdown_current", "Current drawdown as a percentage (0–100)")
+        self.create_gauge("hopefx_model_drift_score", "Feature drift score (0=no drift, 1=full drift)")
     
     def create_counter(self, name: str, description: str, labels: Optional[List[str]] = None) -> Counter:
         """Create and register a counter"""
