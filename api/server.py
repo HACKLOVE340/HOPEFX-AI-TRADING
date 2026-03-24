@@ -5,6 +5,7 @@ FastAPI application with logging, health checks, and metrics
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -45,19 +46,44 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     import os
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request as StarletteRequest
 
+    # ── Config resolved before app construction ───────────────────────────────
+    _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+    _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    _ALLOWED_SYMBOLS = frozenset(
+        os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF").split(",")
+    )
+    _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
+
+    # ── Health checker resolved before lifespan ───────────────────────────────
+    if trading_app:
+        health_checker = get_health_checker(trading_app)
+    else:
+        health_checker = get_health_checker()
+
+    # ── Lifespan defined before FastAPI() so it can be passed at construction ─
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        logger.info("API server starting...")
+        if trading_app:
+            asyncio.create_task(health_checker.start_monitoring())
+        yield
+        logger.info("API server shutting down...")
+        health_checker.stop_monitoring()
+
+    # ── Single app construction ───────────────────────────────────────────────
     app = FastAPI(
         title="HOPEFX Trading API",
         description="Production trading system API",
         version="2.1.0",
-        # Disable docs in production
         docs_url=None if os.getenv("APP_ENV") == "production" else "/docs",
         redoc_url=None if os.getenv("APP_ENV") == "production" else "/redoc",
+        lifespan=lifespan,
     )
 
-    # CORS — restrict to configured origins, never wildcard in production
-    _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-    _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    # ── Middleware ────────────────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_allowed_origins,
@@ -65,10 +91,6 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         allow_methods=["GET", "POST", "DELETE", "PUT"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
-
-    # Security headers middleware
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.requests import Request as StarletteRequest
 
     class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: StarletteRequest, call_next):
@@ -83,7 +105,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Auth dependency
+    # ── Auth dependencies ─────────────────────────────────────────────────────
     _bearer = HTTPBearer(auto_error=True)
 
     def _get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
@@ -108,32 +130,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             raise HTTPException(status_code=403, detail="Role 'admin' required")
         return user
 
-    # Input validation helpers
-    _ALLOWED_SYMBOLS = frozenset(
-        os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF").split(",")
-    )
-    _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
-    
     # Store reference to trading app
     app.state.trading_app = trading_app
-    
-    # Initialize health checker
-    if trading_app:
-        health_checker = get_health_checker(trading_app)
-    else:
-        health_checker = get_health_checker()
-    
-    @app.on_event("startup")
-    async def startup():
-        logger.info("API server starting...")
-        # Start background health monitoring
-        if trading_app:
-            asyncio.create_task(health_checker.start_monitoring())
-    
-    @app.on_event("shutdown")
-    async def shutdown():
-        logger.info("API server shutting down...")
-        health_checker.stop_monitoring()
     
     # Health endpoints
     @app.get("/health")
