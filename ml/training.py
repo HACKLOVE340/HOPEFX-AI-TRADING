@@ -31,6 +31,13 @@ try:
 except ImportError:
     XGBOOST_AVAILABLE = False
 
+# Macro features (DXY, yields, CPI) — optional; degrades gracefully if FRED is unreachable
+try:
+    from data.feeds.macro import MacroFeed
+    MACRO_AVAILABLE = True
+except ImportError:
+    MACRO_AVAILABLE = False
+
 # TensorFlow/Keras
 try:
     import tensorflow as tf
@@ -1079,6 +1086,21 @@ def train_ml_pipeline(
     X_test, y_test_class, y_test_reg, _ = fe.create_features(
         df_test_raw, prediction_horizon=prediction_horizon
     )
+
+    # ── Macro features (DXY, 10Y yield, 2Y yield, yield spread, CPI) ─────────
+    # These are point-in-time macro values fetched once and broadcast across all
+    # rows.  They add cross-asset context that pure OHLCV features cannot capture
+    # and are the primary lever for pushing accuracy above 50%.
+    if MACRO_AVAILABLE:
+        try:
+            macro_features = MacroFeed().as_ml_features()
+            if macro_features:
+                for col, val in macro_features.items():
+                    X_train[col] = float(val) if val is not None else 0.0
+                    X_test[col]  = float(val) if val is not None else 0.0
+                print(f"Macro features merged: {list(macro_features.keys())}")
+        except Exception as _macro_exc:
+            print(f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping")
 
     # Scale: fit on train, transform both — never fit on test data
     X_train_scaled, X_test_scaled = fe.scale_features(X_train, X_test)
