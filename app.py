@@ -80,6 +80,14 @@ app.include_router(explain_router)
 app.include_router(macro_router)
 app.include_router(broker_router)
 
+# Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
+try:
+    from api.ws_live import router as ws_live_router
+    app.include_router(ws_live_router)
+    logger.info("✓ Live WebSocket router registered (/ws/live)")
+except Exception as _ws_live_err:
+    logger.warning("Live WebSocket router not registered: %s", _ws_live_err)
+
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
 #   from app import kill_switch
@@ -354,6 +362,13 @@ async def lifespan(_app: FastAPI):
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
         logger.warning("Prometheus sync loop not started: %s", _prom_err)
+    # Start live WebSocket broadcasters
+    try:
+        from api.ws_live import start_broadcasters
+        start_broadcasters()
+        logger.info("✓ Live WebSocket broadcasters started (/ws/live)")
+    except Exception as _ws_err:
+        logger.warning("Live WS broadcasters not started: %s", _ws_err)
     yield
     await shutdown_event()
     await kill_switch.stop()
