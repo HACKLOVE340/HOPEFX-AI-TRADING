@@ -498,12 +498,21 @@ class RiskManager:
         # Calculate position size
         risk_amount = account_equity * position_risk_pct
         position_size = risk_amount / risk_per_share if risk_per_share > 0 else 0
-        
-        # Round to standard lot sizes (1000 units for forex)
-        position_size = int(position_size / 1000) * 1000
-        
+
+        # Determine lot granularity by instrument type:
+        #   Forex pairs (entry < 500)  → 1000-unit micro lots
+        #   Metals / indices (entry ≥ 500) → 1-unit lots (oz for gold)
+        if entry_price >= 500:
+            lot_size = 1
+            min_lots = 1
+        else:
+            lot_size = 1000
+            min_lots = 1000
+
+        position_size = max(int(position_size / lot_size) * lot_size, 0)
+
         # Ensure minimum size
-        if position_size < 1000:
+        if position_size < min_lots:
             return PositionSizingResult(
                 recommended_size=0,
                 max_allowed_size=0,
@@ -514,7 +523,7 @@ class RiskManager:
                 approved=False,
                 reason="Position size too small after rounding"
             )
-        
+
         # Calculate max allowed based on exposure limits
         current_exposure = sum(
             p.get('quantity', 0) * p.get('current_price', 0)
@@ -522,19 +531,19 @@ class RiskManager:
         )
         max_additional_exposure = (account_equity * self.config.max_portfolio_exposure_pct) - current_exposure
         max_size_from_exposure = max_additional_exposure / entry_price if entry_price > 0 else 0
-        
+
         # Final position size is minimum of risk-based and exposure-based
         final_size = min(position_size, max_size_from_exposure)
-        
+
         # Ensure we don't exceed max position size
         max_position_value = account_equity * self.config.max_position_size_pct
         max_size_from_position_limit = max_position_value / entry_price if entry_price > 0 else 0
         final_size = min(final_size, max_size_from_position_limit)
-        
-        # Round again
-        final_size = int(final_size / 1000) * 1000
-        
-        if final_size < 1000:
+
+        # Round to lot granularity
+        final_size = max(int(final_size / lot_size) * lot_size, 0)
+
+        if final_size < min_lots:
             return PositionSizingResult(
                 recommended_size=0,
                 max_allowed_size=0,

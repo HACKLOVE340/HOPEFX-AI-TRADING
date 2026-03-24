@@ -38,6 +38,19 @@ try:
 except ImportError:
     MACRO_AVAILABLE = False
 
+# Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
+try:
+    from ml.macro_features import (
+        fetch_macro_history,
+        add_macro_features,
+        add_regime_features,
+        build_enhanced_feature_matrix,
+        MACRO_COLUMNS,
+    )
+    ENHANCED_MACRO_AVAILABLE = True
+except ImportError:
+    ENHANCED_MACRO_AVAILABLE = False
+
 # TensorFlow/Keras
 try:
     import tensorflow as tf
@@ -53,9 +66,19 @@ except ImportError:
 class FeatureEngineer:
     """Create features for ML models from OHLCV data"""
     
-    def __init__(self, include_indicators: bool = True, include_lags: bool = True):
+    def __init__(
+        self,
+        include_indicators: bool = True,
+        include_lags: bool = True,
+        include_macro: bool = True,
+        include_regime: bool = True,
+        macro_df: Optional[pd.DataFrame] = None,
+    ):
         self.include_indicators = include_indicators
         self.include_lags = include_lags
+        self.include_macro = include_macro and ENHANCED_MACRO_AVAILABLE
+        self.include_regime = include_regime and ENHANCED_MACRO_AVAILABLE
+        self.macro_df = macro_df  # pre-fetched macro data; None = skip macro
         self.scaler = StandardScaler()
         self.feature_names: List[str] = []
     
@@ -119,7 +142,31 @@ class FeatureEngineer:
                 data['volume_sma_20'] = data['volume'].rolling(window=20).mean()
                 data['volume_ratio'] = data['volume'] / data['volume_sma_20']
                 data['obv'] = self._calculate_obv(data)
-        
+
+        # ── Macro features (DXY, VIX, yields, SPX cross-asset) ───────────────
+        if self.include_macro and ENHANCED_MACRO_AVAILABLE:
+            try:
+                data = add_macro_features(
+                    data,
+                    macro_df=self.macro_df,
+                    lookback=lookback_window,
+                )
+            except Exception as _macro_exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "Macro feature injection failed (continuing without): %s", _macro_exc
+                )
+
+        # ── Regime features (trend, volatility, momentum, mean-reversion) ────
+        if self.include_regime and ENHANCED_MACRO_AVAILABLE:
+            try:
+                data = add_regime_features(data, lookback=lookback_window * 3)
+            except Exception as _reg_exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "Regime feature injection failed (continuing without): %s", _reg_exc
+                )
+
         # Target variable - future returns
         future_returns = data[target_col].pct_change(prediction_horizon).shift(-prediction_horizon)
         
