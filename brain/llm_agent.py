@@ -207,7 +207,7 @@ def _run_backtest(
     candles:         List[Dict],
     initial_balance: float = 10_000.0,
     position_pct:    float = 0.10,
-    commission:      float = 0.0002,
+    commission:      float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
 ) -> BacktestResult:
     """
     Walk-forward backtest on a list of OHLCV dicts.

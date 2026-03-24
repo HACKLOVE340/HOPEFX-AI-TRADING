@@ -32,7 +32,7 @@ class BacktestEngine:
         self,
         initial_balance: float = 100_000.0,
         position_size_pct: float = 0.10,
-        commission_pct: float = 0.0002,
+        commission_pct: float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
     ):
         self.initial_balance = initial_balance
         self.balance = initial_balance
