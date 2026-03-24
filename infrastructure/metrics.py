@@ -43,7 +43,7 @@ class MetricCollector:
         self.description = description
         self.labels = labels or []
         self._values: Dict[str, List[MetricValue]] = defaultdict(list)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock allows re-entry from inc()->observe()
     
     def observe(self, value: float, labels: Optional[Dict[str, str]] = None):
         """Record a value"""
