@@ -6,12 +6,12 @@
 
 <br/>
 
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00c853.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Sharpe Ratio](https://img.shields.io/badge/Sharpe-2.78%2B-FFD700.svg?style=for-the-badge)](examples/end_to_end.ipynb)
+[![Paper Trading](https://img.shields.io/badge/Paper_Trading-Pre--launch-orange.svg?style=for-the-badge)](docs/)
 [![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-00e5ff.svg?style=for-the-badge)](docs/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
-[![Tests](https://img.shields.io/badge/Tests-2100%2B_passing-00c853.svg?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-see_CI-blue.svg?style=for-the-badge)](tests/)
 
 <br/>
 
@@ -38,7 +38,7 @@
 | Win rate | 47.1% |
 | Profit factor | 1.446 |
 | Max drawdown | −0.6% |
-| Sharpe ratio | 2.778 |
+| Sharpe ratio | 2.778 (synthetic backtest — not audited live performance) |
 | Calmar ratio | 1.134 |
 | ML accuracy (test) | 48.3% |
 
