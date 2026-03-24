@@ -9,7 +9,11 @@ export function useWebSocket() {
   const updateEquity = useStore((state) => state.updateEquity)
 
   useEffect(() => {
-    const ws = new WebSocket(import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws')
+    // VITE_WS_URL takes precedence; fall back to a relative URL derived from
+    // the current page origin so the dashboard works behind any reverse proxy.
+    const wsUrl = import.meta.env.VITE_WS_URL ||
+      `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
+    const ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       setConnected(true)

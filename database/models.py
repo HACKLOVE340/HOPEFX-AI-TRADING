@@ -640,9 +640,13 @@ class MarketDataType(enum.Enum):
     NEWS = "news"
 
 
+# ── Re-export User from its canonical location ────────────────────────────────
+# User is defined in database/user_models.py. Import it here so that code doing
+# `from database.models import User` keeps working, and so SQLAlchemy resolves
+# the "User" string reference in Account.user without a second class definition.
+from database.user_models import User  # noqa: E402  (circular-safe: user_models imports Base from here)
+
 # ── Session model (used by master_control and other internal modules) ─────────
-# User is defined canonically in database/user_models.py — do NOT redefine it
-# here to avoid SQLAlchemy metadata collision on the "users" table.
 
 if SQLALCHEMY_AVAILABLE:
     class Session(Base):

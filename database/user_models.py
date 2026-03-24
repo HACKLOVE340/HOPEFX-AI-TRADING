@@ -70,6 +70,7 @@ class User(Base):
     # Relations
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     login_attempts = relationship("LoginAttempt", back_populates="user", cascade="all, delete-orphan")
+    accounts = relationship("Account", back_populates="user", lazy="dynamic")
 
     __table_args__ = (
         # email uniqueness enforced by Column(unique=True) — no separate index needed

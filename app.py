@@ -96,6 +96,8 @@ class AppState:
         self.nocode_builder = None
         self.replay_engine = None
         self.ml_feature_engineer = None
+        # Background asyncio tasks — populated at startup, cancelled at shutdown
+        self.background_tasks: list = []
 
 app_state = AppState()
 
@@ -200,6 +202,62 @@ def setup_metrics_middleware(app: FastAPI):
 
 
 # Startup event
+async def _oanda_price_poller(state):
+    """
+    Background task: polls OANDA's pricing endpoint and writes real bid/ask
+    into the active broker's price table via update_market_price().
+
+    Only runs when BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT are set.
+    Falls back silently if OANDA is unreachable so paper trading still works.
+    """
+    import asyncio as _asyncio
+
+    _SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
+    _SYMBOLS = [s.strip().upper() for s in _SYMBOLS]
+    _INTERVAL = float(os.getenv("OANDA_POLL_INTERVAL", "1.0"))
+
+    oanda_token   = os.getenv("BROKER_OANDA_TOKEN", "")
+    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "")
+    oanda_env     = os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
+
+    if not oanda_token or not oanda_account:
+        logger.info("OANDA price poller disabled — BROKER_OANDA_TOKEN/ACCOUNT not set")
+        return
+
+    try:
+        from brokers.oanda import OANDAConnector
+        oanda = OANDAConnector(
+            api_key=oanda_token,
+            account_id=oanda_account,
+            practice=(oanda_env != "live"),
+        )
+        if not oanda.connect():
+            logger.warning("OANDA price poller: connection failed — using static prices")
+            return
+        logger.info("OANDA price poller connected — symbols=%s interval=%.1fs", _SYMBOLS, _INTERVAL)
+    except Exception as exc:
+        logger.warning("OANDA price poller init failed: %s", exc)
+        return
+
+    while True:
+        try:
+            prices = oanda.get_live_prices(_SYMBOLS)
+            broker = getattr(state, "broker", None)
+            if broker is not None and prices:
+                for sym, tick in prices.items():
+                    mid = tick.get("mid", 0.0)
+                    if mid > 0 and hasattr(broker, "update_market_price"):
+                        broker.update_market_price(sym, mid)
+        except _asyncio.CancelledError:
+            logger.info("OANDA price poller stopped")
+            oanda.disconnect()
+            return
+        except Exception as exc:
+            logger.warning("OANDA price poller error: %s", exc)
+
+        await _asyncio.sleep(_INTERVAL)
+
+
 async def _price_stream_loop(ws_manager):
     """
     Background task: polls the paper broker for current prices and broadcasts
@@ -347,16 +405,37 @@ async def startup_event():
             app_state.ws_manager = ws_manager
             logger.info("✓ WebSocket router registered")
             log_activity("WebSocket router registered")
-            # Start background price-streaming task
-            asyncio.create_task(_price_stream_loop(ws_manager))
+            # Start background price-streaming task (broadcasts to WS clients)
+            _t = asyncio.create_task(_price_stream_loop(ws_manager))
+            app_state.background_tasks.append(_t)
             logger.info("✓ Price streaming background task started")
+            # Start OANDA price poller (writes real ticks into broker price table)
+            _t2 = asyncio.create_task(_oanda_price_poller(app_state))
+            app_state.background_tasks.append(_t2)
+            logger.info("✓ OANDA price poller task started")
         except Exception as e:
             logger.warning(f"⚠ WebSocket router not available: {e}")
             log_activity(f"WebSocket router unavailable: {e}")
 
         try:
             from notifications.alert_engine import AlertEngine, create_alert_router
-            alert_engine = AlertEngine()
+            _smtp_to_raw = os.getenv("SMTP_TO", "")
+            _smtp_to = [a.strip() for a in _smtp_to_raw.split(",") if a.strip()]
+            _alert_config = {
+                # SMTP email
+                "smtp_host":     os.getenv("SMTP_HOST", ""),
+                "smtp_port":     int(os.getenv("SMTP_PORT", "587")),
+                "smtp_username": os.getenv("SMTP_USERNAME", ""),
+                "smtp_password": os.getenv("SMTP_PASSWORD", ""),
+                "smtp_from":     os.getenv("SMTP_FROM", ""),
+                "smtp_to":       _smtp_to,
+                # Telegram
+                "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+                "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID", ""),
+                # Discord
+                "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
+            }
+            alert_engine = AlertEngine(config=_alert_config)
             app.include_router(create_alert_router(alert_engine))
             app_state.alert_engine = alert_engine
             logger.info("✓ Alert router registered")
@@ -541,7 +620,8 @@ async def startup_event():
         # ── Signal Engine (StrategyBrain → broker loop) ──────────────────────
         try:
             from core.signal_engine import run_signal_engine
-            asyncio.create_task(run_signal_engine(app_state))
+            _t = asyncio.create_task(run_signal_engine(app_state))
+            app_state.background_tasks.append(_t)
             logger.info("✓ Signal engine started")
             log_activity("Signal engine started")
         except Exception as e:
@@ -686,7 +766,8 @@ async def startup_event():
             from notifications.telegram_bot import init_telegram_bot
             tg_bot = init_telegram_bot(app_state)
             if tg_bot:
-                asyncio.create_task(tg_bot.start())
+                _t = asyncio.create_task(tg_bot.start())
+                app_state.background_tasks.append(_t)
                 app_state.telegram_bot = tg_bot
                 logger.info("✓ Telegram bot started")
                 log_activity("Telegram bot started")
@@ -711,6 +792,16 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down API server...")
+
+    # Cancel all tracked background tasks and wait for them to finish
+    tasks = getattr(app_state, "background_tasks", [])
+    if tasks:
+        logger.info("Cancelling %d background task(s)...", len(tasks))
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("✓ Background tasks cancelled")
 
     if app_state.db_engine:
         app_state.db_engine.dispose()
@@ -968,7 +1059,7 @@ def run_server():
     # Default to localhost for security, use 0.0.0.0 only when explicitly set
     # Set API_HOST=0.0.0.0 in production environment to bind to all interfaces
     host = os.getenv('API_HOST', '127.0.0.1')
-    port = int(os.getenv('API_PORT', 5000))
+    port = int(os.getenv('API_PORT', 8000))
     workers = int(os.getenv('API_WORKERS', 4))
     reload = os.getenv('ENVIRONMENT', 'development') == 'development'
 
