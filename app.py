@@ -132,6 +132,8 @@ class AppState:
         self.position_tracker = None
         self.trade_executor = None
         self.order_book = None
+        # Regime-aware strategy router
+        self.regime_router = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
@@ -780,6 +782,17 @@ async def startup_event():
             log_activity("Social trading initialized")
         except Exception as e:
             logger.warning(f"⚠ Social trading not available: {e}")
+
+        # ── Regime Router ────────────────────────────────────────────────────
+        try:
+            from strategies.regime_router import RegimeRouter
+            from strategies.manager import StrategyManager
+            _sm = app_state.strategy_brain or StrategyManager(preload_defaults=True)
+            app_state.regime_router = RegimeRouter(_sm)
+            logger.info("✓ RegimeRouter initialized")
+        except Exception as _re:
+            logger.warning("⚠ RegimeRouter not available: %s", _re)
+            app_state.regime_router = None
 
         # ── Signal Engine (StrategyBrain → broker loop) ──────────────────────
         try:
