@@ -7,6 +7,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# Keep the built dashboard so the server can serve it without a build step
+!dashboard/dist/
 downloads/
 eggs/
 .eggs/
