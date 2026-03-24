@@ -17,6 +17,7 @@ import asyncio
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -50,7 +51,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
+# Initialize FastAPI app — lifespan is wired below after it is defined
 app = FastAPI(
     title="HOPEFX AI Trading API",
     description="REST API for HOPEFX AI Trading Framework",
@@ -308,7 +309,18 @@ async def _price_stream_loop(ws_manager):
         await asyncio.sleep(_POLL_INTERVAL)
 
 
-@app.on_event("startup")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """FastAPI lifespan handler — replaces deprecated @app.on_event."""
+    await startup_event()
+    yield
+    await shutdown_event()
+
+
+# Wire lifespan now that the function is defined
+app.router.lifespan_context = lifespan
+
+
 async def startup_event():
     """Initialize application on startup"""
     logger.info("=" * 70)
@@ -882,8 +894,6 @@ async def startup_event():
         raise
 
 
-# Shutdown event
-@app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down API server...")
