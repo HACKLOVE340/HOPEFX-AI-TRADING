@@ -11,19 +11,24 @@ export default defineConfig({
         name: 'HOPEFX GodMode',
         short_name: 'HOPEFX',
         description: 'Professional AI Trading Platform',
-        theme_color: '#0f172a',
+        theme_color: '#FFD700',
         background_color: '#0f172a',
         display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: '/icon-192.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           },
           {
             src: '/icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       },
