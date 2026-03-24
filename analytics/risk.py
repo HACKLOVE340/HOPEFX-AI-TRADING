@@ -16,13 +16,27 @@ class RiskAnalyzer:
         confidence_level: float = 0.95,
         method: str = 'historical'
     ) -> float:
-        """Calculate Value at Risk"""
+        """Calculate 1-day Value at Risk.
+
+        Returns the loss threshold not exceeded with probability `confidence_level`
+        over a **1-day horizon**.
+
+        Multi-day scaling note
+        ----------------------
+        Extending to a t-day horizon via ``VaR_t = VaR_1 * sqrt(t)`` (the Basel II
+        square-root-of-time rule) is only valid when returns are i.i.d. and normally
+        distributed.  Real gold/FX returns exhibit fat tails, autocorrelation, and
+        volatility clustering — all of which violate this assumption.  For horizons
+        beyond 1 day, prefer computing VaR directly from overlapping or
+        non-overlapping t-day return windows.  See risk/advanced_analytics.py for
+        the full implementation with this caveat documented inline.
+        """
         if method == 'historical':
             sorted_returns = sorted(portfolio_returns)
             index = int((1 - confidence_level) * len(sorted_returns))
             return sorted_returns[index] if index < len(sorted_returns) else sorted_returns[0]
 
-        # Parametric VaR
+        # Parametric VaR — assumes normally distributed returns (fat tails not captured)
         mean = np.mean(portfolio_returns)
         std = np.std(portfolio_returns)
         z_score = 1.645 if confidence_level == 0.95 else 2.326
