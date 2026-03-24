@@ -437,21 +437,34 @@ class AdvancedFeatureEngineer:
         # Store feature names
         if fit or not self.is_fitted:
             self.feature_names = list(features.columns)
-        
-        # Scale features
+
+        # Scale features — fit ONLY during training, transform during inference.
+        # Re-fitting on inference data leaks the inference distribution into the
+        # scaling parameters, invalidating all downstream metrics.
         if fit:
             self.scaler.fit(features)
             self.is_fitted = True
-        
-        if self.is_fitted:
             features_scaled = pd.DataFrame(
                 self.scaler.transform(features),
                 index=features.index,
-                columns=self.feature_names
+                columns=self.feature_names,
             )
             return features_scaled
-        
-        return features
+
+        if self.is_fitted:
+            # Align columns to training schema; fill any new columns with 0
+            features = features.reindex(columns=self.feature_names, fill_value=0.0)
+            features_scaled = pd.DataFrame(
+                self.scaler.transform(features),
+                index=features.index,
+                columns=self.feature_names,
+            )
+            return features_scaled
+
+        raise RuntimeError(
+            "AdvancedFeatureEngineer: scaler not fitted. "
+            "Call create_features(df, fit=True) on training data first."
+        )
     
     def get_feature_importance(self, model: Any, X: pd.DataFrame) -> Dict[str, float]:
         """Extract feature importance from fitted model"""
