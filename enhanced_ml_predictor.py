@@ -1536,37 +1536,153 @@ class EnhancedMLPredictor:
         
         return best_config
     
-    def fit(self, 
-            df: pd.DataFrame, 
-            target_col: str = 'close',
-            validation_split: float = 0.2):
+    def fit(
+        self,
+        df: pd.DataFrame,
+        target_col: str = "close",
+        validation_split: float = 0.2,
+        use_walk_forward: bool = False,
+        n_splits: int = 5,
+        gap: int = 20,
+    ):
         """
         Fit predictor on historical data with automatic feature engineering.
+
+        Args:
+            df:               OHLCV DataFrame with DatetimeIndex.
+            target_col:       Column to predict (default 'close').
+            validation_split: Fraction held out for validation when
+                              use_walk_forward=False (default 0.2).
+            use_walk_forward: When True, use TimeSeriesSplit walk-forward
+                              cross-validation instead of a single static
+                              split.  Each fold trains on all data up to the
+                              fold boundary (expanding window) and evaluates
+                              on the next out-of-sample window.  The model
+                              is then re-fitted on the full dataset for
+                              production use.  Recommended for any dataset
+                              with more than ~500 bars.
+            n_splits:         Number of walk-forward folds (default 5).
+            gap:              Bars to skip between train end and test start
+                              to prevent leakage from rolling features
+                              (default 20).
         """
         if self.ensemble is None:
             self.build_ensemble()
-        
+
         # Create target (future returns)
-        df['target'] = df[target_col].pct_change(self.horizon).shift(-self.horizon)
-        df['target_class'] = pd.cut(
-            df['target'],
+        df = df.copy()
+        df["target"] = df[target_col].pct_change(self.horizon).shift(-self.horizon)
+        df["target_class"] = pd.cut(
+            df["target"],
             bins=[-np.inf, -0.001, 0.001, np.inf],
-            labels=[0, 1, 2]  # Down, Neutral, Up
+            labels=[0, 1, 2],  # Down, Neutral, Up
         )
-        
-        # Clean data
+
         df_clean = df.dropna()
-        
-        X = df_clean.drop(['target', 'target_class'], axis=1)
-        y = df_clean['target_class']
-        
-        logger.info(f"Fitting on {len(X)} samples...")
-        
-        # Fit ensemble
-        self.ensemble.fit(X, y, validation_split=validation_split)
+        X = df_clean.drop(["target", "target_class"], axis=1)
+        y = df_clean["target_class"]
+
+        if use_walk_forward:
+            self._walk_forward_fit(X, y, n_splits=n_splits, gap=gap)
+        else:
+            logger.info("Fitting on %d samples (single 80/20 split)...", len(X))
+            self.ensemble.fit(X, y, validation_split=validation_split)
+
         self.is_fitted = True
-        
         logger.info("Fitting completed successfully")
+
+    def _walk_forward_fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        n_splits: int = 5,
+        gap: int = 20,
+    ) -> None:
+        """
+        Walk-forward (anchored expanding-window) cross-validation.
+
+        Each fold:
+          1. Trains on all data up to the fold boundary (expanding window).
+          2. Skips ``gap`` bars to prevent leakage from rolling features.
+          3. Evaluates on the next out-of-sample window.
+
+        After all folds the ensemble is re-fitted on the full dataset so
+        the production model uses all available data.
+
+        The scaler is re-fitted from scratch on each training fold so that
+        test-fold statistics never contaminate the scaling parameters.
+        """
+        if not SKLEARN_AVAILABLE:
+            logger.warning(
+                "sklearn not available — falling back to single static split"
+            )
+            self.ensemble.fit(X, y, validation_split=0.2)
+            return
+
+        tscv = TimeSeriesSplit(n_splits=n_splits, gap=gap)
+        fold_scores: list = []
+
+        logger.info(
+            "Walk-forward validation: %d folds, gap=%d bars", n_splits, gap
+        )
+
+        for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+            X_train_raw = X.iloc[train_idx]
+            X_test_raw  = X.iloc[test_idx]
+            y_train     = y.iloc[train_idx]
+            y_test      = y.iloc[test_idx]
+
+            if len(X_train_raw) < 50 or len(X_test_raw) < 10:
+                logger.warning("Fold %d: insufficient data, skipping", fold + 1)
+                continue
+
+            # Fresh feature engineer per fold — prevents scaler contamination
+            fold_fe = AdvancedFeatureEngineer()
+            try:
+                X_train = fold_fe.create_features(X_train_raw, fit=True)
+                y_train = y_train.loc[X_train.index]
+                X_test  = fold_fe.create_features(X_test_raw, fit=False)
+                y_test  = y_test.loc[X_test.index]
+            except Exception as exc:
+                logger.warning("Fold %d: feature engineering failed (%s), skipping", fold + 1, exc)
+                continue
+
+            fold_val_scores: dict = {}
+            for name, model in self.ensemble.models.items():
+                try:
+                    if SKLEARN_AVAILABLE and hasattr(model, "fit"):
+                        model.fit(X_train, y_train)
+                        score = float(model.score(X_test, y_test))
+                        fold_val_scores[name] = score
+                except Exception as exc:
+                    logger.warning("Fold %d model %s failed: %s", fold + 1, name, exc)
+
+            if fold_val_scores:
+                mean_score = float(np.mean(list(fold_val_scores.values())))
+                fold_scores.append(mean_score)
+                logger.info(
+                    "Fold %d/%d — train=%d test=%d | scores=%s | mean=%.3f",
+                    fold + 1, n_splits,
+                    len(X_train), len(X_test),
+                    {k: f"{v:.3f}" for k, v in fold_val_scores.items()},
+                    mean_score,
+                )
+
+        if fold_scores:
+            logger.info(
+                "Walk-forward CV complete — mean accuracy=%.3f ± %.3f over %d folds",
+                float(np.mean(fold_scores)),
+                float(np.std(fold_scores)),
+                len(fold_scores),
+            )
+            self._wf_cv_mean = float(np.mean(fold_scores))
+            self._wf_cv_std  = float(np.std(fold_scores))
+        else:
+            logger.warning("Walk-forward CV produced no valid folds")
+
+        # Re-fit on the full dataset for production use
+        logger.info("Re-fitting ensemble on full dataset (%d bars) for production...", len(X))
+        self.ensemble.fit(X, y, validation_split=0.1)
     
     def predict(self, df: pd.DataFrame) -> Optional[Prediction]:
         """
