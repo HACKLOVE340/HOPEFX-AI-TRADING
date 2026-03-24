@@ -12,7 +12,8 @@ import {
   Bell,
   Shield,
   Sun,
-  Moon
+  Moon,
+  BarChart2,
 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -22,6 +23,7 @@ const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/trading', icon: TrendingUp, label: 'Trading' },
   { path: '/prop-firm', icon: Shield, label: 'Prop Firm' },
+  { path: '/performance', icon: BarChart2, label: 'Performance' },
   { path: '/copy-trading', icon: Users, label: 'Copy Trading' },
   { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { path: '/wallet', icon: Wallet, label: 'Wallet' },
