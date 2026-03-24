@@ -132,13 +132,12 @@ def setup_prometheus_monitoring(app: "FastAPI") -> None:
                     media_type=CONTENT_TYPE_LATEST,
                 )
 
-        @app.on_event("startup")
-        async def _start_sync() -> None:
-            asyncio.create_task(_sync_loop(interval))
-            logger.info(
-                "Prometheus monitoring active — /metrics ready (sync interval=%.0fs)",
-                interval,
-            )
+        # Background sync task is started from the lifespan context in app.py
+        # via asyncio.create_task(_sync_loop(interval)) — not here.
+        logger.info(
+            "Prometheus monitoring configured — /metrics ready (sync interval=%.0fs)",
+            interval,
+        )
 
     else:
         from fastapi import Response
