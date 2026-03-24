@@ -9,6 +9,7 @@ import {
   Shield
 } from 'lucide-react'
 import { EquityChart } from '../components/EquityChart'
+import { DrawdownChart } from '../components/DrawdownChart'
 import { RecentTrades } from '../components/RecentTrades'
 import { MLSignals } from '../components/MLSignals'
 
@@ -70,7 +71,10 @@ export function Dashboard() {
             <h3 className="font-semibold mb-4">Equity Curve</h3>
             <EquityChart />
           </div>
-          
+
+          {/* Drawdown chart — underwater equity curve below the equity panel */}
+          <DrawdownChart />
+
           <RecentTrades />
         </div>
 

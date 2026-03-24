@@ -1,0 +1,146 @@
+"""
+api/performance.py
+==================
+Public and authenticated performance endpoints.
+
+Routes
+------
+GET /api/performance/equity-curve   — equity curve time series (auth optional)
+GET /api/performance/public         — public summary stats (no auth required)
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+import time
+from typing import List
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/performance", tags=["Performance"])
+
+
+# ── models ────────────────────────────────────────────────────────────────────
+
+class EquityPoint(BaseModel):
+    time: float   # Unix timestamp (seconds)
+    value: float  # Equity in account currency
+
+
+class PublicPerformance(BaseModel):
+    total_trades: int
+    win_rate: float | None        # None until 50+ trades
+    avg_return_pct: float | None
+    sharpe: float | None          # None until 50+ trades
+    max_drawdown_pct: float
+    start_date: str
+    note: str
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def _load_equity_curve() -> List[EquityPoint]:
+    """
+    Load equity curve from the paper trading engine if available.
+    Falls back to an empty list — the frontend handles the empty case.
+    """
+    try:
+        from app import app_state  # noqa: PLC0415
+        broker = getattr(app_state, "broker", None)
+        if broker and hasattr(broker, "get_equity_history"):
+            history = broker.get_equity_history()
+            return [EquityPoint(time=float(t), value=float(v)) for t, v in history]
+    except Exception as exc:
+        logger.debug("equity curve load failed: %s", exc)
+    return []
+
+
+def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
+    """Compute honest public stats from the equity curve."""
+    if not curve:
+        return PublicPerformance(
+            total_trades=0,
+            win_rate=None,
+            avg_return_pct=None,
+            sharpe=None,
+            max_drawdown_pct=0.0,
+            start_date="—",
+            note="Paper trading not yet started. Deploy and run for 30+ days.",
+        )
+
+    values = [p.value for p in curve]
+    start = curve[0].value
+    end = values[-1]
+
+    # Max drawdown
+    peak = start
+    max_dd = 0.0
+    for v in values:
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        if dd > max_dd:
+            max_dd = dd
+
+    # Returns
+    returns = []
+    for i in range(1, len(values)):
+        if values[i - 1] > 0:
+            returns.append((values[i] - values[i - 1]) / values[i - 1])
+
+    avg_ret = (sum(returns) / len(returns) * 100) if returns else None
+
+    # Sharpe (annualised, daily returns assumed) — only after 50+ points
+    sharpe = None
+    if len(returns) >= 50:
+        mean_r = sum(returns) / len(returns)
+        variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+        std_r = math.sqrt(variance) if variance > 0 else 0
+        if std_r > 0:
+            sharpe = round((mean_r / std_r) * math.sqrt(252), 3)
+
+    import datetime
+    start_date = datetime.datetime.fromtimestamp(curve[0].time).strftime("%Y-%m-%d")
+
+    note = (
+        "Live paper trading results. Sharpe shown only after 50+ data points."
+        if len(returns) >= 50
+        else f"Accumulating data ({len(returns)}/50 points for Sharpe)."
+    )
+
+    return PublicPerformance(
+        total_trades=len(returns),
+        win_rate=round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1) if returns else None,
+        avg_return_pct=round(avg_ret, 4) if avg_ret is not None else None,
+        sharpe=sharpe,
+        max_drawdown_pct=round(max_dd * 100, 3),
+        start_date=start_date,
+        note=note,
+    )
+
+
+# ── routes ────────────────────────────────────────────────────────────────────
+
+@router.get("/equity-curve", response_model=List[EquityPoint], summary="Equity curve time series")
+async def equity_curve():
+    """
+    Return the equity curve as a list of {time, value} points.
+    Used by the dashboard equity chart and drawdown chart.
+    Returns an empty list when no paper trading data is available yet.
+    """
+    return _load_equity_curve()
+
+
+@router.get("/public", response_model=PublicPerformance, summary="Public performance summary")
+async def public_performance():
+    """
+    Public (no auth required) performance summary.
+    Sharpe ratio is only computed after 50+ data points to prevent
+    misleading statistics from small samples.
+    """
+    curve = _load_equity_curve()
+    return _compute_public_stats(curve)
