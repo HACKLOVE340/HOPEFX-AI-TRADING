@@ -42,6 +42,44 @@ import openai
 
 logger = logging.getLogger(__name__)
 
+
+def _load_recent_candles_from_csv(
+    symbol: str = "XAU_USD",
+    count: int = 60,
+) -> List[Dict]:
+    """
+    Load the most recent ``count`` H1 candles from the local CSV file.
+
+    Used as a fallback when no live candle fetcher is available, so the
+    RAG context can still be populated from historical data.
+    """
+    try:
+        from pathlib import Path
+        import pandas as pd
+
+        csv_path = Path("data") / f"{symbol}_H1.csv"
+        if not csv_path.exists():
+            return []
+
+        df = pd.read_csv(csv_path)
+        df.columns = [c.lower() for c in df.columns]
+        df = df.tail(count)
+
+        candles = []
+        for _, row in df.iterrows():
+            candles.append({
+                "timestamp": str(row.get("timestamp", "")),
+                "open":   float(row.get("open", 0)),
+                "high":   float(row.get("high", 0)),
+                "low":    float(row.get("low", 0)),
+                "close":  float(row.get("close", 0)),
+                "volume": int(row.get("volume", 0)),
+            })
+        return candles
+    except Exception:
+        return []
+
+
 # ── system prompt ─────────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = textwrap.dedent("""
@@ -315,6 +353,7 @@ class LLMAgent:
         max_iterations:  int           = 3,
         target_sharpe:   float         = 1.5,
         candle_fetcher:  Optional[Any] = None,
+        enable_rag:      bool          = True,
     ):
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
         if not key:
@@ -328,6 +367,8 @@ class LLMAgent:
         self.target_sharpe   = target_sharpe
         self.candle_fetcher  = candle_fetcher
         self._history: List[Dict[str, str]] = []
+        self._enable_rag     = enable_rag
+        self._vector_store   = None  # lazy-initialised on first chat call
 
     # ── public ────────────────────────────────────────────────────────────────
 
@@ -445,17 +486,116 @@ class LLMAgent:
     async def chat(self, message: str) -> str:
         """
         Free-form chat with the agent (maintains conversation history).
-        Useful for asking questions about strategies, markets, or code.
+
+        Before each LLM call, fetches similar historical market regimes from
+        the vector store (RAG) and prepends them to the system context so the
+        AI is aware of historical precedents when answering questions.
         """
         if not self._history:
             self._history = [{"role": "system", "content": _SYSTEM_PROMPT}]
-        self._history.append({"role": "user", "content": message})
-        code, error = await self._call_llm()
+
+        # ── RAG context injection ─────────────────────────────────────────────
+        rag_context = await self._fetch_rag_context()
+        if rag_context:
+            # Inject as a system message immediately before the user turn so
+            # it doesn't pollute the persistent conversation history.
+            messages_with_rag = list(self._history) + [
+                {"role": "system", "content": rag_context},
+                {"role": "user", "content": message},
+            ]
+        else:
+            self._history.append({"role": "user", "content": message})
+            messages_with_rag = None
+
+        if messages_with_rag:
+            # Call LLM with the RAG-augmented message list directly
+            code, error = await self._call_llm_with_messages(messages_with_rag)
+            if not error:
+                # Persist the exchange in history without the RAG injection
+                self._history.append({"role": "user", "content": message})
+                self._history.append({"role": "assistant", "content": code})
+        else:
+            code, error = await self._call_llm()
+
         if error:
             return f"Error: {error}"
         return code
 
+    async def _fetch_rag_context(self) -> str:
+        """
+        Retrieve similar historical regimes from the vector store.
+
+        Returns a formatted string for injection into the system prompt, or
+        an empty string if the vector store is unavailable or empty.
+        """
+        if not self._enable_rag:
+            return ""
+
+        try:
+            # Lazy-init vector store
+            if self._vector_store is None:
+                from research.vector_store import MarketVectorStore
+                persist_dir = os.getenv("VECTORDB_DIR", "data/vectordb")
+                self._vector_store = MarketVectorStore(persist_dir=persist_dir)
+
+            # Load recent candles for context
+            candles: List[Dict] = []
+            if self.candle_fetcher:
+                try:
+                    candles = await self.candle_fetcher("XAU_USD", "H1", 60)
+                except Exception:
+                    pass
+
+            if not candles:
+                # Try loading from local CSV as fallback
+                candles = _load_recent_candles_from_csv()
+
+            if not candles:
+                return ""
+
+            rag_text = self._vector_store.rag_context_for_llm(candles, top_k=3)
+            if "No similar" in rag_text:
+                return ""
+
+            return (
+                "## Market Context (RAG — similar historical setups)\n"
+                + rag_text
+                + "\n\nUse this historical context when answering questions about "
+                "current market conditions or trade decisions."
+            )
+
+        except Exception as exc:
+            logger.debug("RAG context fetch failed (non-fatal): %s", exc)
+            return ""
+
     # ── internals ─────────────────────────────────────────────────────────────
+
+    async def _call_llm_with_messages(
+        self, messages: List[Dict[str, str]]
+    ) -> Tuple[str, Optional[str]]:
+        """Call GPT-4 with an explicit message list (used for RAG injection)."""
+        try:
+            response = await self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=2048,
+            )
+            content = response.choices[0].message.content.strip()
+            if content.startswith("```"):
+                lines = content.splitlines()
+                content = "\n".join(
+                    l for l in lines if not l.startswith("```")
+                ).strip()
+            return content, None
+        except openai.AuthenticationError:
+            return "", "Invalid OpenAI API key"
+        except openai.RateLimitError:
+            return "", "OpenAI rate limit exceeded"
+        except openai.APIConnectionError as exc:
+            return "", f"OpenAI connection error: {exc}"
+        except Exception as exc:
+            return "", f"LLM call failed: {exc}"
 
     async def _call_llm(self) -> Tuple[str, Optional[str]]:
         """Call GPT-4 and return (content, error)."""
