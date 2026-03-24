@@ -1945,17 +1945,106 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
     return ticks
 
 
-def run_comprehensive_backtest():
-    """Run full backtest with all features"""
+def _load_real_ticks(symbol: str = "XAUUSD", max_bars: int = 5000) -> Optional[List["TickData"]]:
+    """
+    Attempt to load real OHLCV data via real_data_backtest.py and convert to
+    TickData objects for use by the backtest engine.
+
+    Returns None if real data is unavailable (ccxt not installed, network
+    error, or fewer than 100 bars returned).
+    """
+    try:
+        import importlib
+        rdb = importlib.import_module("real_data_backtest")
+        import ccxt as _ccxt
+
+        exchange = _ccxt.binance(
+            {"enableRateLimit": True, "options": {"defaultType": "spot"}}
+        )
+        since_ms = exchange.parse8601("2022-01-01T00:00:00Z")
+        df = rdb.fetch_ohlcv_paginated(
+            exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars
+        )
+        if df is None or len(df) < 100:
+            return None
+
+        ticks: List[TickData] = []
+        for ts, row in df.iterrows():
+            mid = float(row["close"])
+            spread = mid * 0.00005  # ~0.5 pip spread for gold
+            ticks.append(
+                TickData(
+                    timestamp=NanosecondTimestamp.from_datetime(ts),
+                    symbol=symbol,
+                    bid=mid - spread / 2,
+                    ask=mid + spread / 2,
+                    bid_size=100.0,
+                    ask_size=100.0,
+                    volume=float(row.get("volume", 0)),
+                    source="real/binance",
+                )
+            )
+        return ticks
+    except Exception as exc:
+        logger.warning("Could not load real tick data: %s", exc)
+        return None
+
+
+def run_comprehensive_backtest(use_real_data: bool = True):
+    """
+    Run full backtest with all engine features.
+
+    Args:
+        use_real_data: When True (default), attempt to fetch real XAUUSD 1h
+                       bars from Binance via real_data_backtest.py.  Falls
+                       back to synthetic GBM data only if the real feed is
+                       unavailable (no ccxt, no network, etc.).
+                       Pass False to force synthetic data (unit tests only).
+
+    WARNING: Results on synthetic data are NOT valid for strategy evaluation.
+    The synthetic GBM path exists only for engine smoke-tests.
+    """
     print("=" * 80)
     print("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
     print("=" * 80)
-    
-    # Generate data
-    print("\n[1] Generating synthetic tick data...")
-    ticks = generate_test_data(n_ticks=5000)
-    print(f"    Generated {len(ticks)} ticks")
-    print(f"    Time range: {ticks[0].timestamp.to_datetime()} to {ticks[-1].timestamp.to_datetime()}")
+
+    # ── Data loading ──────────────────────────────────────────────────────────
+    ticks: Optional[List[TickData]] = None
+    data_source = "synthetic"
+
+    if use_real_data:
+        print("\n[1] Attempting to load real XAUUSD data via real_data_backtest.py ...")
+        ticks = _load_real_ticks(max_bars=5000)
+        if ticks:
+            data_source = "real/binance"
+            print(f"    Loaded {len(ticks)} real ticks")
+            print(f"    Time range: {ticks[0].timestamp.to_datetime()} "
+                  f"to {ticks[-1].timestamp.to_datetime()}")
+        else:
+            print("    Real data unavailable — falling back to SYNTHETIC data.")
+            print()
+            print("    *** WARNING ***")
+            print("    Backtest results on synthetic GBM data are NOT valid for")
+            print("    strategy evaluation or performance reporting.  Install ccxt")
+            print("    and ensure network access to use real data.")
+            print()
+
+    if ticks is None:
+        print("\n[1] Generating SYNTHETIC tick data (smoke-test only)...")
+        warnings.warn(
+            "run_comprehensive_backtest() is using SYNTHETIC GBM data. "
+            "Results are not valid for strategy evaluation. "
+            "Pass use_real_data=True (default) and ensure ccxt is installed "
+            "to use real XAUUSD data.",
+            UserWarning,
+            stacklevel=2,
+        )
+        ticks = generate_test_data(n_ticks=5000)
+        print(f"    Generated {len(ticks)} synthetic ticks")
+        print(f"    Time range: {ticks[0].timestamp.to_datetime()} "
+              f"to {ticks[-1].timestamp.to_datetime()}")
+
+    print(f"    Data source: {data_source}")
     
     # Initialize engine with institutional settings
     print("\n[2] Initializing backtest engine...")
@@ -2127,7 +2216,8 @@ def run_comprehensive_backtest():
 
 
 if __name__ == "__main__":
-    # Run comprehensive test
-    engine, report = run_comprehensive_backtest()
+    # Attempt real data first; falls back to synthetic with a warning if
+    # ccxt is not installed or the network is unavailable.
+    engine, report = run_comprehensive_backtest(use_real_data=True)
 
     
