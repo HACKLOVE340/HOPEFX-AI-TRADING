@@ -280,13 +280,17 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
     def fromApp(self, message, session_id):
         msg_type = fix.MsgType()
         message.getHeader().getField(msg_type)
+        mt = msg_type.getValue()
 
-        if msg_type.getValue() == fix.MsgType_ExecutionReport:
+        if mt == fix.MsgType_ExecutionReport:
             self._handle_exec_report(message)
+        elif mt == "9":  # OrderCancelReject
+            self._handle_order_cancel_reject(message)
 
     # --- Internal ---
 
     def _handle_exec_report(self, message) -> None:
+        cl_ord_id = "<unknown>"
         try:
             cl_ord_id_f = fix.ClOrdID()
             order_id_f = fix.OrderID()
@@ -330,7 +334,65 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
             self._on_exec_report(report)
 
         except Exception as exc:
-            logger.exception("fix_adapter._handle_exec_report error: %s", exc)
+            logger.exception(
+                "fix_adapter._handle_exec_report error cl_ord_id=%s: %s", cl_ord_id, exc
+            )
+            # Resolve the pending future with an error so the caller gets an
+            # immediate exception instead of hanging for 30 s then timing out.
+            self._reject_pending(cl_ord_id, exc)
+
+    def _handle_order_cancel_reject(self, message) -> None:
+        """Handle OrderCancelReject (MsgType=9) — broker refused cancel/replace."""
+        cl_ord_id = "<unknown>"
+        try:
+            cl_ord_id_f = fix.ClOrdID()
+            text_f = fix.Text()
+            cxl_rej_reason_f = fix.CxlRejReason()
+
+            message.getField(cl_ord_id_f)
+            cl_ord_id = cl_ord_id_f.getString()
+
+            text = ""
+            try:
+                message.getField(text_f)
+                text = text_f.getString()
+            except Exception:
+                pass  # Text field is optional in OrderCancelReject
+
+            reason_code = ""
+            try:
+                message.getField(cxl_rej_reason_f)
+                reason_code = cxl_rej_reason_f.getString()
+            except Exception:
+                pass  # CxlRejReason is optional
+
+            logger.error(
+                "fix_adapter.OrderCancelReject cl_ord_id=%s reason=%s text=%r",
+                cl_ord_id, reason_code, text,
+            )
+            exc = RuntimeError(
+                f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
+                f"reason={reason_code} text={text!r}"
+            )
+            self._reject_pending(cl_ord_id, exc)
+
+        except Exception as exc:
+            logger.exception(
+                "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
+                cl_ord_id, exc,
+            )
+
+    def _reject_pending(self, cl_ord_id: str, exc: Exception) -> None:
+        """Resolve a pending future with an exception so the caller is not left hanging."""
+        with self._pending_lock:
+            future = self._pending.pop(cl_ord_id, None)
+        if future is not None and not future.done():
+            try:
+                future.get_event_loop().call_soon_threadsafe(future.set_exception, exc)
+            except Exception as inner:
+                logger.warning(
+                    "fix_adapter._reject_pending: could not set exception on future: %s", inner
+                )
 
 
 # ---------------------------------------------------------------------------
