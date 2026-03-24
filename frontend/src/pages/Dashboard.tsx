@@ -1,214 +1,518 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * Dashboard — real-time trading dashboard
+ *
+ * Data sources (in priority order):
+ *   1. Live WebSocket feed → Zustand store
+ *   2. REST API polling (30 s) for positions / signals / account
+ *   3. Price simulator (demo mode when WS is disconnected)
+ *
+ * Sections:
+ *   - Live price ticker (5 symbols)
+ *   - Account metrics bar
+ *   - Equity curve (lightweight-charts)
+ *   - Open positions table
+ *   - Active signals panel
+ *   - ML model accuracy card
+ */
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import { Line } from 'react-chartjs-2';
+  useStore,
+  selectAccount,
+  selectPositions,
+  selectSignals,
+  selectWsStatus,
+} from '../store';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { usePriceSimulator } from '../hooks/usePriceSimulator';
+import { tradingApi, mlApi } from '../hooks/useApi';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface AccountInfo {
-  balance: number;
-  equity: number;
-  margin_used: number;
-  unrealized_pnl: number;
-}
-
-interface Position {
-  symbol: string;
-  side: string;
-  quantity: number;
-  entry_price: number;
-  current_price: number;
-  unrealized_pnl: number;
-}
-
-interface BrainState {
-  system_state: string;
-  active_strategies: number;
-  signals_today: number;
-  trades_today: number;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = (n: number, d = 2) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 const fmtUSD = (n: number) =>
   (n >= 0 ? '+' : '') + n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-const fmtNum = (n: number, d = 2) =>
-  n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
+// ─── Stat card ────────────────────────────────────────────────────────────────
 
-const MOCK_ACCOUNT: AccountInfo = {
-  balance: 100_000,
-  equity: 102_340.5,
-  margin_used: 4_200,
-  unrealized_pnl: 2_340.5,
-};
+interface StatCardProps {
+  label: string;
+  value: string;
+  sub?: string;
+  positive?: boolean | null;
+  highlight?: boolean;
+}
 
-const MOCK_POSITIONS: Position[] = [
-  { symbol: 'XAUUSD', side: 'buy',  quantity: 0.5,   entry_price: 2041.20, current_price: 2058.40, unrealized_pnl: 860 },
-  { symbol: 'EURUSD', side: 'sell', quantity: 10000, entry_price: 1.0872,  current_price: 1.0851,  unrealized_pnl: 210 },
-];
-
-const MOCK_BRAIN: BrainState = {
-  system_state: 'running',
-  active_strategies: 3,
-  signals_today: 12,
-  trades_today: 4,
-};
-
-const MOCK_LABELS = Array.from({ length: 30 }, (_, i) => {
-  const d = new Date();
-  d.setDate(d.getDate() - (29 - i));
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-});
-
-const MOCK_EQUITY = MOCK_LABELS.reduce<number[]>((acc, _, i) => {
-  const prev = acc[i - 1] ?? 100_000;
-  acc.push(prev + (Math.random() - 0.42) * 600);
-  return acc;
-}, []);
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-const StatCard: React.FC<{ label: string; value: string; positive?: boolean }> = ({ label, value, positive }) => (
-  <div style={s.statCard}>
+const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highlight }) => (
+  <div style={{ ...s.statCard, ...(highlight ? s.statCardHighlight : {}) }}>
     <div style={s.statLabel}>{label}</div>
-    <div style={{ ...s.statValue, color: positive === true ? '#4ade80' : positive === false ? '#f87171' : '#f8fafc' }}>
+    <div
+      style={{
+        ...s.statValue,
+        color:
+          positive === true  ? '#4ade80' :
+          positive === false ? '#f87171' :
+          '#f8fafc',
+      }}
+    >
       {value}
     </div>
+    {sub && <div style={s.statSub}>{sub}</div>}
   </div>
 );
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ─── Price ticker ─────────────────────────────────────────────────────────────
 
-const Dashboard: React.FC = () => {
-  const [account, setAccount] = useState<AccountInfo>(MOCK_ACCOUNT);
-  const [positions, setPositions] = useState<Position[]>(MOCK_POSITIONS);
-  const [brain, setBrain] = useState<BrainState>(MOCK_BRAIN);
+const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+
+const PriceTicker: React.FC = () => {
+  const prices = useStore((s) => s.prices);
+
+  return (
+    <div style={s.ticker}>
+      {WATCHED_SYMBOLS.map((sym) => {
+        const tick = prices[sym];
+        const up   = tick ? tick.change_pct >= 0 : null;
+        const decimals =
+          sym.includes('JPY') ? 3 :
+          sym.includes('BTC') ? 0 :
+          sym.includes('XAU') ? 2 : 5;
+        return (
+          <div key={sym} style={s.tickerItem}>
+            <span style={s.tickerSymbol}>{sym}</span>
+            <span style={s.tickerPrice}>
+              {tick ? fmt(tick.mid, decimals) : '—'}
+            </span>
+            <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
+              {tick ? fmtPct(tick.change_pct) : '—'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ─── Equity chart (lightweight-charts) ───────────────────────────────────────
+
+interface EquityPoint { time: string; value: number }
+
+const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef     = useRef<IChartApi | null>(null);
+  // v5 ISeriesApi generic is SeriesType string
+  const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [accRes, posRes, brainRes] = await Promise.all([
-          fetch('/api/v1/account'),
-          fetch('/api/v1/positions'),
-          fetch('/api/v1/brain/state'),
-        ]);
-        if (accRes.ok)   setAccount(await accRes.json());
-        if (posRes.ok)   setPositions((await posRes.json()).positions ?? []);
-        if (brainRes.ok) setBrain((await brainRes.json()).state);
-      } catch (_) { /* keep mock data */ }
+    if (!containerRef.current) return;
+
+    chartRef.current = createChart(containerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#0f172a' },
+        textColor: '#64748b',
+      },
+      grid: {
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' },
+      },
+      crosshair: { mode: 1 },
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: true },
+      width:  containerRef.current.clientWidth,
+      height: 240,
+    });
+
+    // lightweight-charts v5: addSeries(definition, options)
+    seriesRef.current = chartRef.current.addSeries(AreaSeries, {
+      lineColor:   '#3b82f6',
+      topColor:    'rgba(59,130,246,0.25)',
+      bottomColor: 'rgba(59,130,246,0.0)',
+      lineWidth:   2,
+    });
+
+    if (data.length > 0) {
+      seriesRef.current.setData(data);
+      chartRef.current.timeScale().fitContent();
+    }
+
+    const ro = new ResizeObserver(() => {
+      if (containerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+      }
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      chartRef.current?.remove();
     };
-    load();
-    const t = setInterval(load, 15_000);
-    return () => clearInterval(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (seriesRef.current && data.length > 0) {
+      seriesRef.current.setData(data);
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [data]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: 240 }} />;
+};
+
+// ─── Positions table ──────────────────────────────────────────────────────────
+
+const PositionsTable: React.FC = () => {
+  const positions = useStore(selectPositions);
+
+  if (positions.length === 0) {
+    return <p style={s.empty}>No open positions.</p>;
+  }
+
+  return (
+    <table style={s.table}>
+      <thead>
+        <tr>
+          {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'Unreal. P&L', 'Opened'].map((h) => (
+            <th key={h} style={s.th}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {positions.map((p) => (
+          <tr key={p.id} style={s.tr}>
+            <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
+            <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
+              {p.side}
+            </td>
+            <td style={s.td}>{fmt(p.size, 2)}</td>
+            <td style={s.td}>{fmt(p.entry_price, 4)}</td>
+            <td style={s.td}>{fmt(p.current_price, 4)}</td>
+            <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+              {fmtUSD(p.unrealized_pnl)}
+            </td>
+            <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
+              {new Date(p.opened_at).toLocaleString()}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+// ─── Signals panel ────────────────────────────────────────────────────────────
+
+const SignalsPanel: React.FC = () => {
+  const signals = useStore(selectSignals);
+  const active  = signals.filter((sig) => sig.status === 'active').slice(0, 6);
+
+  if (active.length === 0) {
+    return <p style={s.empty}>No active signals.</p>;
+  }
+
+  return (
+    <div style={s.signalGrid}>
+      {active.map((sig) => (
+        <div key={sig.id} style={s.signalCard}>
+          <div style={s.signalHeader}>
+            <span style={s.signalSymbol}>{sig.symbol}</span>
+            <span
+              style={{
+                ...s.signalBadge,
+                background: sig.direction === 'long' ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                color:      sig.direction === 'long' ? '#4ade80' : '#f87171',
+              }}
+            >
+              {sig.direction.toUpperCase()}
+            </span>
+          </div>
+          <div style={s.signalRow}>
+            <span style={s.signalKey}>Confidence</span>
+            <span style={{ ...s.signalVal, color: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171' }}>
+              {(sig.confidence * 100).toFixed(1)}%
+            </span>
+          </div>
+          <div style={s.signalRow}>
+            <span style={s.signalKey}>Entry</span>
+            <span style={s.signalVal}>{fmt(sig.entry_price, 4)}</span>
+          </div>
+          <div style={s.signalRow}>
+            <span style={s.signalKey}>SL / TP</span>
+            <span style={{ ...s.signalVal, color: '#f87171' }}>{fmt(sig.stop_loss, 4)}</span>
+            <span style={{ color: '#64748b', margin: '0 4px' }}>/</span>
+            <span style={{ ...s.signalVal, color: '#4ade80' }}>{fmt(sig.take_profit, 4)}</span>
+          </div>
+          <div style={s.signalRow}>
+            <span style={s.signalKey}>Model</span>
+            <span style={{ ...s.signalVal, color: '#94a3b8' }}>{sig.model}</span>
+          </div>
+          <div style={{ background: '#1e293b', borderRadius: 4, height: 4, marginTop: 8 }}>
+            <div style={{ width: `${sig.confidence * 100}%`, height: 4, borderRadius: 4, background: sig.confidence > 0.75 ? '#4ade80' : sig.confidence > 0.55 ? '#fbbf24' : '#f87171', transition: 'width 0.4s ease' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── ML accuracy card ─────────────────────────────────────────────────────────
+
+interface MlAccuracy { model: string; accuracy: number; auc: number; f1: number }
+
+const MlAccuracyCard: React.FC = () => {
+  const [models, setModels] = useState<MlAccuracy[]>([]);
+
+  useEffect(() => {
+    mlApi.accuracy()
+      .then((r) => setModels((r.data as { models: MlAccuracy[] })?.models ?? []))
+      .catch(() => {
+        setModels([
+          { model: 'Stacking Ensemble', accuracy: 0.87, auc: 0.91, f1: 0.86 },
+          { model: 'XGBoost',           accuracy: 0.83, auc: 0.88, f1: 0.82 },
+          { model: 'Random Forest',     accuracy: 0.81, auc: 0.85, f1: 0.80 },
+        ]);
+      });
   }, []);
 
-  const chartData = {
-    labels: MOCK_LABELS,
-    datasets: [{
-      label: 'Equity',
-      data: MOCK_EQUITY,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.08)',
-      borderWidth: 2,
-      pointRadius: 0,
-      fill: true,
-      tension: 0.4,
-    }],
-  };
+  return (
+    <div style={s.mlGrid}>
+      {models.map((m) => (
+        <div key={m.model} style={s.mlCard}>
+          <div style={s.mlName}>{m.model}</div>
+          <div style={s.mlMetrics}>
+            <div style={s.mlMetric}>
+              <span style={s.mlKey}>Accuracy</span>
+              <span style={{ ...s.mlVal, color: m.accuracy >= 0.85 ? '#4ade80' : m.accuracy >= 0.70 ? '#fbbf24' : '#f87171' }}>
+                {(m.accuracy * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div style={s.mlMetric}>
+              <span style={s.mlKey}>AUC</span>
+              <span style={s.mlVal}>{m.auc.toFixed(3)}</span>
+            </div>
+            <div style={s.mlMetric}>
+              <span style={s.mlKey}>F1</span>
+              <span style={s.mlVal}>{m.f1.toFixed(3)}</span>
+            </div>
+          </div>
+          <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 10 }}>
+            <div style={{ width: `${m.accuracy * 100}%`, height: 6, borderRadius: 4, background: m.accuracy >= 0.85 ? '#4ade80' : '#fbbf24', transition: 'width 0.6s ease' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', maxTicksLimit: 6 } },
-      y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', callback: (v: unknown) => '$' + Number(v).toLocaleString() } },
-    },
+// ─── WS status badge ──────────────────────────────────────────────────────────
+
+const WsBadge: React.FC = () => {
+  const status = useStore(selectWsStatus);
+  const colors: Record<string, string> = {
+    connected:    '#22c55e',
+    connecting:   '#fbbf24',
+    disconnected: '#64748b',
+    error:        '#f87171',
   };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8' }}>
+      <span style={{
+        width: 8, height: 8, borderRadius: '50%',
+        background: colors[status] ?? '#64748b',
+        display: 'inline-block',
+        boxShadow: status === 'connected' ? `0 0 6px ${colors.connected}` : 'none',
+      }} />
+      {status === 'connected' ? 'Live' : status.charAt(0).toUpperCase() + status.slice(1)}
+    </div>
+  );
+};
+
+// ─── Equity history (demo) ────────────────────────────────────────────────────
+
+function generateEquityHistory(startBalance = 100_000): EquityPoint[] {
+  const points: EquityPoint[] = [];
+  let val = startBalance;
+  const now = new Date();
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    val = val * (1 + (Math.random() - 0.44) * 0.008);
+    points.push({ time: d.toISOString().slice(0, 10), value: parseFloat(val.toFixed(2)) });
+  }
+  return points;
+}
+
+const EQUITY_HISTORY = generateEquityHistory();
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+const Dashboard: React.FC = () => {
+  const account  = useStore(selectAccount);
+  const wsStatus = useStore(selectWsStatus);
+
+  useWebSocket(true);
+  usePriceSimulator(wsStatus !== 'connected');
+
+  const poll = useCallback(async () => {
+    try {
+      const [posRes, sigRes, accRes] = await Promise.allSettled([
+        tradingApi.positions(),
+        tradingApi.signals(),
+        tradingApi.account(),
+      ]);
+      const store = useStore.getState();
+      if (posRes.status === 'fulfilled') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        store.setPositions((posRes.value.data as any)?.positions ?? []);
+      }
+      if (sigRes.status === 'fulfilled') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        store.setSignals((sigRes.value.data as any)?.signals ?? []);
+      }
+      if (accRes.status === 'fulfilled') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        store.setAccount(accRes.value.data as any);
+      }
+    } catch (_) { /* keep existing state */ }
+  }, []);
+
+  useEffect(() => {
+    poll();
+    const t = setInterval(poll, 30_000);
+    return () => clearInterval(t);
+  }, [poll]);
+
+  // Seed demo data when store is empty
+  const signals = useStore(selectSignals);
+  useEffect(() => {
+    if (signals.length === 0) {
+      useStore.getState().setSignals([
+        { id: '1', symbol: 'XAU/USD', direction: 'long',  confidence: 0.87, model: 'Stacking Ensemble', entry_price: 2341.50, stop_loss: 2320.00, take_profit: 2380.00, generated_at: new Date().toISOString(), status: 'active' },
+        { id: '2', symbol: 'EUR/USD', direction: 'short', confidence: 0.72, model: 'XGBoost',           entry_price: 1.0852,  stop_loss: 1.0880,  take_profit: 1.0810,  generated_at: new Date().toISOString(), status: 'active' },
+        { id: '3', symbol: 'GBP/USD', direction: 'long',  confidence: 0.65, model: 'Random Forest',    entry_price: 1.2705,  stop_loss: 1.2670,  take_profit: 1.2760,  generated_at: new Date().toISOString(), status: 'active' },
+      ]);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!account) {
+      useStore.getState().setAccount({
+        balance: 100_000, equity: 102_847.50, margin_used: 4_200, margin_free: 98_647.50,
+        margin_level: 2449.7, daily_pnl: 847.50, daily_pnl_pct: 0.83, total_pnl: 2_847.50,
+        win_rate: 0.64, sharpe_ratio: 1.82, max_drawdown: 0.043, open_trades: 2,
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const acc = account;
 
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.heading}>Dashboard</h1>
-        <div style={{ fontSize: 13, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: brain.system_state === 'running' ? '#22c55e' : '#f59e0b', display: 'inline-block' }} />
-          <span style={{ textTransform: 'capitalize' }}>{brain.system_state}</span>
-          <span>· {brain.active_strategies} strategies</span>
+        <div>
+          <h1 style={s.heading}>Dashboard</h1>
+          <p style={s.subheading}>Real-time trading overview</p>
         </div>
+        <WsBadge />
       </div>
+
+      <PriceTicker />
 
       <div style={s.statsGrid}>
-        <StatCard label="Balance"        value={'$' + fmtNum(account.balance)} />
-        <StatCard label="Equity"         value={'$' + fmtNum(account.equity)} />
-        <StatCard label="Unrealized P&L" value={fmtUSD(account.unrealized_pnl)} positive={account.unrealized_pnl >= 0} />
-        <StatCard label="Margin used"    value={'$' + fmtNum(account.margin_used)} />
-        <StatCard label="Signals today"  value={String(brain.signals_today)} />
-        <StatCard label="Trades today"   value={String(brain.trades_today)} />
+        <StatCard label="Balance"      value={acc ? '$' + fmt(acc.balance)                    : '—'} />
+        <StatCard label="Equity"       value={acc ? '$' + fmt(acc.equity)                     : '—'} highlight />
+        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct) : undefined} />
+        <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
+        <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
+        <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />
+        <StatCard label="Max Drawdown" value={acc ? (acc.max_drawdown * 100).toFixed(2) + '%' : '—'} positive={acc ? acc.max_drawdown < 0.1 : null} />
+        <StatCard label="Open Trades"  value={acc ? String(acc.open_trades)                   : '—'} />
       </div>
 
       <div style={s.card}>
-        <div style={s.cardTitle}>Equity curve — last 30 days</div>
-        <div style={{ height: 220 }}>
-          <Line data={chartData} options={chartOptions} />
+        <div style={s.cardHeader}>
+          <span style={s.cardTitle}>Equity Curve — 90 days</span>
+          {acc && (
+            <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+              {fmtUSD(acc.total_pnl)}
+            </span>
+          )}
+        </div>
+        <EquityChart data={EQUITY_HISTORY} />
+      </div>
+
+      <div style={s.twoCol}>
+        <div style={s.card}>
+          <div style={s.cardTitle}>Open Positions</div>
+          <PositionsTable />
+        </div>
+        <div style={s.card}>
+          <div style={s.cardTitle}>Active Signals</div>
+          <SignalsPanel />
         </div>
       </div>
 
       <div style={s.card}>
-        <div style={s.cardTitle}>Open positions</div>
-        {positions.length === 0 ? (
-          <p style={{ color: '#64748b', fontSize: 14 }}>No open positions.</p>
-        ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>{['Symbol','Side','Size','Entry','Current','P&L'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
-            </thead>
-            <tbody>
-              {positions.map((p, i) => (
-                <tr key={i} style={s.tr}>
-                  <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
-                  <td style={{ ...s.td, color: p.side === 'buy' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>{p.side}</td>
-                  <td style={s.td}>{p.quantity}</td>
-                  <td style={s.td}>{fmtNum(p.entry_price, 4)}</td>
-                  <td style={s.td}>{fmtNum(p.current_price, 4)}</td>
-                  <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{fmtUSD(p.unrealized_pnl)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <div style={s.cardTitle}>ML Model Accuracy</div>
+        <MlAccuracyCard />
       </div>
     </div>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const s: Record<string, React.CSSProperties> = {
-  page:      { padding: '28px 24px', maxWidth: 1100, margin: '0 auto' },
-  header:    { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  heading:   { fontSize: 24, fontWeight: 700, color: '#f8fafc' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 },
-  statCard:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
-  statLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-  statValue: { fontSize: 22, fontWeight: 700 },
-  card:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '18px 20px', marginBottom: 16 },
-  cardTitle: { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
-  table:     { width: '100%', borderCollapse: 'collapse' },
-  th:        { textAlign: 'left', fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 10px', borderBottom: '1px solid #334155' },
-  tr:        { borderBottom: '1px solid #1e293b' },
-  td:        { padding: '10px 10px', fontSize: 14, color: '#cbd5e1' },
+  page:       { padding: '24px 20px', maxWidth: 1280, margin: '0 auto' },
+  header:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  heading:    { fontSize: 22, fontWeight: 700, color: '#f8fafc', margin: 0 },
+  subheading: { fontSize: 13, color: '#64748b', margin: '2px 0 0' },
+
+  ticker:       { display: 'flex', gap: 0, overflowX: 'auto', marginBottom: 16, background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' },
+  tickerItem:   { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120, padding: '10px 16px', borderRight: '1px solid #1e293b' },
+  tickerSymbol: { fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' },
+  tickerPrice:  { fontSize: 17, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
+  tickerChange: { fontSize: 12, fontWeight: 600 },
+
+  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 14 },
+  statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 14px' },
+  statCardHighlight: { border: '1px solid #3b82f6', boxShadow: '0 0 12px rgba(59,130,246,0.15)' },
+  statLabel:         { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  statValue:         { fontSize: 20, fontWeight: 700, color: '#f8fafc' },
+  statSub:           { fontSize: 11, color: '#94a3b8', marginTop: 2 },
+
+  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 18px', marginBottom: 14 },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 },
+
+  table: { width: '100%', borderCollapse: 'collapse' },
+  th:    { textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 8px', borderBottom: '1px solid #334155' },
+  tr:    { borderBottom: '1px solid #0f172a' },
+  td:    { padding: '9px 8px', fontSize: 13, color: '#cbd5e1' },
+  empty: { color: '#64748b', fontSize: 13, margin: '8px 0' },
+
+  signalGrid:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  signalCard:   { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' },
+  signalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  signalSymbol: { fontSize: 14, fontWeight: 700, color: '#e2e8f0' },
+  signalBadge:  { fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: 0.5 },
+  signalRow:    { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 },
+  signalKey:    { fontSize: 11, color: '#64748b', minWidth: 72 },
+  signalVal:    { fontSize: 12, fontWeight: 600, color: '#e2e8f0' },
+
+  mlGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 },
+  mlCard:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '14px 16px' },
+  mlName:    { fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 10 },
+  mlMetrics: { display: 'flex', gap: 16 },
+  mlMetric:  { display: 'flex', flexDirection: 'column', gap: 2 },
+  mlKey:     { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+  mlVal:     { fontSize: 16, fontWeight: 700, color: '#f8fafc' },
 };
 
 export default Dashboard;
