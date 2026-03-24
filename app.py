@@ -76,6 +76,14 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
+# Prometheus /metrics endpoint + background sync to MetricsRegistry
+try:
+    from prometheus_monitoring import setup_prometheus_monitoring
+    setup_prometheus_monitoring(app)
+except Exception as _prom_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("Prometheus monitoring setup failed: %s", _prom_err)
+
 # Global application state
 class AppState:
     """Application state container"""
