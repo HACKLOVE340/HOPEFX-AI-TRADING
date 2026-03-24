@@ -204,10 +204,26 @@ class Prediction:
     inference_time_ms: float = 0.0
     training_samples: int = 0
     
+    # Default uncertainty ceiling used by is_confident().
+    # This value (0.3) is a reasonable starting point but is NOT calibrated —
+    # it was chosen arbitrarily.  To calibrate it properly, run
+    # calibrate_uncertainty_threshold() on a held-out validation set and
+    # pass the returned value here (or store it in config).
+    # Calibration target: maximise F1 on the validation set by sweeping
+    # thresholds in [0.1, 0.9] and selecting the one with the best precision/
+    # recall trade-off for your risk tolerance.
+    DEFAULT_UNCERTAINTY_THRESHOLD: float = 0.3
+
     def is_confident(self, threshold: Optional[float] = None) -> bool:
-        """Check if prediction meets confidence threshold"""
-        thresh = threshold or 0.6
-        return self.confidence >= thresh and self.total_uncertainty < 0.3
+        """Return True if this prediction clears both confidence and uncertainty gates.
+
+        Args:
+            threshold: Override for the uncertainty ceiling.  If None, uses
+                       DEFAULT_UNCERTAINTY_THRESHOLD (0.3 — see calibration note
+                       on that constant before relying on it in production).
+        """
+        unc_thresh = threshold if threshold is not None else self.DEFAULT_UNCERTAINTY_THRESHOLD
+        return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -1368,6 +1384,66 @@ class EnsemblePredictor:
         if len(self.performance_history[list(self.models.keys())[0]]) % 50 == 0:
             # Would re-run weight optimization on recent validation data
             pass
+
+# =============================================================================
+# UNCERTAINTY THRESHOLD CALIBRATION
+# =============================================================================
+
+def calibrate_uncertainty_threshold(
+    predictions: List["Prediction"],
+    actuals: List[bool],
+    sweep: Optional[List[float]] = None,
+) -> float:
+    """
+    Find the uncertainty threshold that maximises F1 on a validation set.
+
+    This replaces the arbitrary 0.3 default in Prediction.DEFAULT_UNCERTAINTY_THRESHOLD
+    with a data-driven value.  Run this once after training on a held-out
+    validation set, then store the result in config and pass it to is_confident().
+
+    Args:
+        predictions: List of Prediction objects from the validation set.
+        actuals:     Ground-truth correctness labels (True = prediction was correct).
+        sweep:       Uncertainty values to try.  Defaults to 0.05 … 0.95 in steps of 0.05.
+
+    Returns:
+        The threshold value with the best F1 score.
+
+    Example::
+
+        threshold = calibrate_uncertainty_threshold(val_preds, val_labels)
+        # Store in config:
+        config["uncertainty_threshold"] = threshold
+        # Use at inference:
+        pred.is_confident(threshold=threshold)
+    """
+    if sweep is None:
+        sweep = [round(v * 0.05, 2) for v in range(2, 19)]  # 0.10 … 0.90
+
+    best_threshold = Prediction.DEFAULT_UNCERTAINTY_THRESHOLD
+    best_f1 = -1.0
+
+    for thresh in sweep:
+        tp = fp = fn = 0
+        for pred, actual in zip(predictions, actuals):
+            predicted_confident = pred.total_uncertainty < thresh
+            if predicted_confident and actual:
+                tp += 1
+            elif predicted_confident and not actual:
+                fp += 1
+            elif not predicted_confident and actual:
+                fn += 1
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = thresh
+
+    return best_threshold
+
 
 # =============================================================================
 # MAIN PREDICTOR INTERFACE
