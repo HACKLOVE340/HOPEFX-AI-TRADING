@@ -466,45 +466,95 @@ class AdvancedFeatureEngineer:
             "Call create_features(df, fit=True) on training data first."
         )
     
-    def get_feature_importance(self, model: Any, X: pd.DataFrame) -> Dict[str, float]:
-        """Extract feature importance from fitted model"""
-        importance_dict = {}
-        
+    def get_feature_importance(
+        self,
+        model: Any,
+        X: pd.DataFrame,
+        y: Optional[pd.Series] = None,
+        n_repeats: int = 5,
+    ) -> Dict[str, float]:
+        """
+        Extract feature importance from a fitted model.
+
+        Priority:
+        1. Native feature_importances_ (tree-based models) — fastest, exact.
+        2. Coefficient magnitude (linear models).
+        3. Permutation importance for all other models (including neural nets).
+           Permutation is repeated `n_repeats` times and averaged to reduce
+           variance from random shuffling.
+        """
+        importance_dict: Dict[str, float] = {}
+
         if hasattr(model, 'feature_importances_'):
-            # Tree-based models
-            for name, importance in zip(self.feature_names, model.feature_importances_):
-                importance_dict[name] = float(importance)
-        
+            for name, imp in zip(self.feature_names, model.feature_importances_):
+                importance_dict[name] = float(imp)
+
         elif hasattr(model, 'coef_'):
-            # Linear models
             coefs = np.abs(model.coef_)
             if len(coefs.shape) > 1:
                 coefs = coefs.mean(axis=0)
             for name, coef in zip(self.feature_names, coefs):
                 importance_dict[name] = float(coef)
-        
-        elif TENSORFLOW_AVAILABLE and isinstance(model, Model):
-            # Neural network - use permutation importance
-            baseline_score = self._evaluate_model(model, X)
+
+        else:
+            # Permutation importance — works for any model including TF/Torch
+            baseline_score = self._evaluate_model(model, X, y)
+            rng = np.random.default_rng(seed=42)
+
             for i, feature in enumerate(self.feature_names):
-                X_permuted = X.copy()
-                X_permuted.iloc[:, i] = np.random.permutation(X_permuted.iloc[:, i])
-                permuted_score = self._evaluate_model(model, X_permuted)
-                importance_dict[feature] = baseline_score - permuted_score
-        
-        # Sort by importance
-        self.feature_importance = dict(sorted(
-            importance_dict.items(),
-            key=lambda x: x[1],
-            reverse=True
-        ))
-        
+                drop_scores: List[float] = []
+                for _ in range(n_repeats):
+                    X_permuted = X.copy()
+                    X_permuted.iloc[:, i] = rng.permutation(X_permuted.iloc[:, i].values)
+                    drop_scores.append(self._evaluate_model(model, X_permuted, y))
+                # Positive value = feature helps; negative = feature hurts
+                importance_dict[feature] = baseline_score - float(np.mean(drop_scores))
+
+        self.feature_importance = dict(
+            sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
+        )
         return self.feature_importance
     
-    def _evaluate_model(self, model: Any, X: pd.DataFrame) -> float:
-        """Quick model evaluation for importance calculation"""
-        # Simplified - would use actual validation
-        return 0.0
+    def _evaluate_model(self, model: Any, X: pd.DataFrame, y: Optional[pd.Series] = None) -> float:
+        """
+        Evaluate model accuracy on X (and optionally y) for permutation importance.
+
+        For TensorFlow models the direction-output probability is used to derive
+        a pseudo-accuracy.  For sklearn-compatible models, score() is called when
+        y is available, otherwise the mean max-probability is used as a proxy.
+        """
+        try:
+            if TENSORFLOW_AVAILABLE and isinstance(model, Model):
+                preds = model.predict(X.values, verbose=0)
+                # preds may be a dict (multi-output) or an array
+                if isinstance(preds, dict):
+                    direction_probs = preds.get('direction', list(preds.values())[0])
+                else:
+                    direction_probs = preds
+                if len(direction_probs.shape) > 1:
+                    return float(np.mean(np.max(direction_probs, axis=1)))
+                return float(np.mean(np.abs(direction_probs - 0.5) + 0.5))
+
+            if y is not None and hasattr(model, 'score'):
+                return float(model.score(X, y))
+
+            if hasattr(model, 'predict_proba'):
+                probs = model.predict_proba(X)
+                return float(np.mean(np.max(probs, axis=1)))
+
+            if hasattr(model, 'predict'):
+                # Regression proxy: 1 - normalised MAE
+                preds = model.predict(X)
+                if y is not None:
+                    mae = np.mean(np.abs(preds - y.values))
+                    scale = np.std(y.values) + 1e-9
+                    return float(max(0.0, 1.0 - mae / scale))
+                return 0.5  # no ground truth available
+
+        except Exception as exc:
+            logger.warning("_evaluate_model failed: %s", exc)
+
+        return 0.5  # neutral fallback — better than returning 0.0
     
     def select_features(self, 
                       X: pd.DataFrame, 
