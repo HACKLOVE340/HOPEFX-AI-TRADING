@@ -140,8 +140,9 @@ class FeatureFlags:
         "FEATURE_LIVE_TRADING",
         default=False,
         status=FeatureStatus.STABLE,
-        description="Live order execution via connected broker APIs.  "
-                    "Off by default for safety; requires explicit opt-in.",
+        description="Live order execution via connected broker APIs. "
+                    "Intentionally off by default — set FEATURE_LIVE_TRADING=true "
+                    "only after verifying broker credentials and risk limits.",
     )
     RISK_MANAGER = _FeatureDef(
         "FEATURE_RISK_MANAGER",
@@ -310,9 +311,10 @@ class FeatureFlags:
 
     ML_PREDICTIONS = _FeatureDef(
         "FEATURE_ML_PREDICTIONS",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="LSTM/Transformer price-direction predictions.  Model training pipeline pending.",
+        default=True,
+        status=FeatureStatus.BETA,
+        description="ML ensemble price-direction predictions (XGBoost/LightGBM/RF). "
+                    "On by default; retrain on current data before relying on signals.",
     )
     ML_FEATURE_ENGINEERING = _FeatureDef(
         "FEATURE_ML_FEATURE_ENGINEERING",
