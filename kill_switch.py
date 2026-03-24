@@ -59,10 +59,22 @@ class KillSwitch:
         flag_file: Optional[Path] = None,
         poll_interval_sec: float = 1.0,
         event_bus=None,
+        deactivation_token: Optional[str] = None,
     ) -> None:
         self._flag_file: Path = flag_file or _DEFAULT_FLAG_FILE
+        # JSON state file sits next to the flag file and survives restarts.
+        self._state_file: Path = self._flag_file.with_suffix(".state.json")
         self._poll_interval: float = poll_interval_sec
         self._event_bus = event_bus
+
+        # Token required to call deactivate().  Loaded from the
+        # HOPEFX_KILL_SWITCH_TOKEN env var when not supplied directly.
+        # If neither is set, deactivation is disabled until a token is
+        # configured — this prevents accidental or unauthenticated resumption.
+        self._deactivation_token: Optional[str] = (
+            deactivation_token
+            or os.environ.get("HOPEFX_KILL_SWITCH_TOKEN")
+        )
 
         self._active: bool = False
         self._reason: str = ""
@@ -71,6 +83,11 @@ class KillSwitch:
         self._callbacks: List[Callable[[str], None]] = []
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
+
+        # Restore persisted state from the previous process before checking
+        # the env-var, so that a restart after an activation does not silently
+        # resume trading.
+        self._restore_state()
 
         # Check env-var on construction so callers can inspect `is_active()`
         # before calling `start()`.
@@ -85,19 +102,53 @@ class KillSwitch:
         """Activate the kill switch immediately."""
         self._activate_internal(reason)
 
-    def deactivate(self) -> None:
+    def deactivate(self, token: Optional[str] = None) -> None:
         """
         Deactivate the kill switch and allow trading to resume.
 
-        Note: The file flag (if present) must also be removed, otherwise the
-        background polling task will re-activate on the next poll cycle.
+        Args:
+            token: The deactivation token.  Must match the value set via
+                   ``deactivation_token`` constructor argument or the
+                   ``HOPEFX_KILL_SWITCH_TOKEN`` environment variable.
+                   If no token is configured, deactivation is refused to
+                   prevent accidental or unauthenticated resumption of trading.
+
+        Raises:
+            PermissionError: When the supplied token does not match or no
+                             token is configured.
+
+        Note: The flag file (if present) must also be removed manually,
+        otherwise the background polling task will re-activate on the next
+        poll cycle.  This is intentional — it forces an explicit operator
+        action before trading resumes.
         """
         if not self._active:
             return
+
+        # Authentication check — refuse if no token is configured or token
+        # does not match.  Use constant-time comparison to prevent timing attacks.
+        import hmac as _hmac
+        if not self._deactivation_token:
+            raise PermissionError(
+                "Kill switch deactivation is disabled: no HOPEFX_KILL_SWITCH_TOKEN "
+                "is configured.  Set the env var or pass deactivation_token= to "
+                "KillSwitch() to enable authenticated deactivation."
+            )
+        provided = (token or "").encode()
+        expected = self._deactivation_token.encode()
+        if not _hmac.compare_digest(provided, expected):
+            logger.critical(
+                "Kill switch deactivation REFUSED — invalid token supplied"
+            )
+            raise PermissionError("Kill switch deactivation refused: invalid token.")
+
         self._active = False
         self._reason = ""
         self._activated_at = None
-        logger.warning("🟢 Kill switch DEACTIVATED – trading may resume")
+        # Remove both the state file and the flag file so the next process
+        # restart starts clean and does not re-activate from stale files.
+        self._clear_state()
+        logger.warning("Kill switch DEACTIVATED — trading may resume")
 
     def is_active(self) -> bool:
         """Return True when trading must be halted."""
@@ -163,6 +214,9 @@ class KillSwitch:
             "activated_at": self._activated_at.isoformat() if self._activated_at else None,
             "flag_file": str(self._flag_file),
             "flag_file_exists": self._flag_file.exists(),
+            "state_file": str(self._state_file),
+            "state_file_exists": self._state_file.exists(),
+            "deactivation_token_configured": bool(self._deactivation_token),
         }
 
     # ---------------------------------------------------------------------- #
@@ -178,11 +232,11 @@ class KillSwitch:
         self._activated_at = datetime.now(timezone.utc)
 
         logger.critical(
-            "🚨 KILL SWITCH ACTIVATED — reason: %s | time: %s",
+            "KILL SWITCH ACTIVATED — reason: %s | time: %s",
             reason,
             self._activated_at.isoformat(),
         )
-        print(f"\n🚨 KILL SWITCH ACTIVATED: {reason}")
+        print(f"\nKILL SWITCH ACTIVATED: {reason}")
 
         # Notify callbacks
         for cb in self._callbacks:
@@ -202,6 +256,97 @@ class KillSwitch:
             )
         except OSError as exc:
             logger.warning("Could not write kill switch flag file: %s", exc)
+
+        # Persist state to JSON so the next process restart can restore it.
+        self._persist_state()
+
+    def _persist_state(self) -> None:
+        """
+        Write activation state to a JSON file next to the flag file.
+
+        This ensures that a process restart after activation does not silently
+        resume trading.  The state is read back in ``_restore_state()`` which
+        is called from ``__init__`` before any env-var checks.
+        """
+        import json as _json
+        state = {
+            "active": self._active,
+            "reason": self._reason,
+            "activated_at": self._activated_at.isoformat() if self._activated_at else None,
+        }
+        try:
+            self._state_file.write_text(_json.dumps(state, indent=2))
+        except OSError as exc:
+            logger.warning("Could not persist kill switch state: %s", exc)
+
+    def _restore_state(self) -> None:
+        """
+        Restore activation state from the JSON state file on startup.
+
+        If the state file records an active kill switch, the switch is
+        re-activated immediately so that a restart does not bypass the halt.
+        The flag file is also checked as a secondary signal.
+        """
+        import json as _json
+
+        # Primary: JSON state file (written by _persist_state)
+        if self._state_file.exists():
+            try:
+                data = _json.loads(self._state_file.read_text())
+                if data.get("active"):
+                    reason = data.get("reason", "persisted state from previous session")
+                    activated_at_str = data.get("activated_at")
+                    self._active = True
+                    self._reason = reason
+                    self._activated_at = (
+                        datetime.fromisoformat(activated_at_str)
+                        if activated_at_str
+                        else datetime.now(timezone.utc)
+                    )
+                    logger.critical(
+                        "Kill switch restored from persisted state — reason: %s | "
+                        "originally activated: %s",
+                        reason,
+                        self._activated_at.isoformat(),
+                    )
+                    return
+            except Exception as exc:
+                logger.warning("Could not read kill switch state file: %s", exc)
+
+        # Secondary: plain flag file (written by _activate_internal / external tools)
+        if self._flag_file.exists():
+            try:
+                content = self._flag_file.read_text()
+                reason = "flag file present at startup"
+                for line in content.splitlines():
+                    if line.startswith("reason="):
+                        reason = line.split("=", 1)[1].strip()
+                        break
+                self._active = True
+                self._reason = reason
+                self._activated_at = datetime.now(timezone.utc)
+                logger.critical(
+                    "Kill switch activated from flag file at startup — reason: %s",
+                    reason,
+                )
+                # Write the JSON state file so future restarts use the richer format
+                self._persist_state()
+            except Exception as exc:
+                logger.warning("Could not read kill switch flag file: %s", exc)
+
+    def _clear_state(self) -> None:
+        """
+        Remove both the state file and the flag file after a successful deactivation.
+
+        Both files must be removed so that the next process restart does not
+        re-activate the kill switch from stale on-disk state.
+        """
+        for path in (self._state_file, self._flag_file):
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError as exc:
+                logger.warning("Could not remove kill switch file %s: %s", path, exc)
 
     def _publish_event(self, reason: str) -> None:
         """Schedule a KILL_SWITCH event publication on the running event loop."""
