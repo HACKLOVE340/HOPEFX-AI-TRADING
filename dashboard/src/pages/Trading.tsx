@@ -42,10 +42,18 @@ export function Trading() {
     chartRef.current = chart
     seriesRef.current = series
 
-    // Load historical data
-    fetch('/api/v1/historical/XAUUSD')
+    // Load historical data from the real OHLCV endpoint
+    fetch('/api/trading/ohlcv/XAUUSD?timeframe=1h&limit=200')
       .then(r => r.json())
-      .then(data => series.setData(data))
+      .then(data => {
+        // Normalise to lightweight-charts CandlestickData shape
+        const candles = Array.isArray(data) ? data : (data.data ?? [])
+        series.setData(candles.map((c: any) => ({
+          time: (typeof c.timestamp === 'number' ? c.timestamp : new Date(c.timestamp).getTime() / 1000) as any,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        })))
+      })
+      .catch(() => { /* no historical data yet — chart starts empty */ })
 
     const handleResize = () => {
       chart.applyOptions({ width: chartContainerRef.current?.clientWidth })

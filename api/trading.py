@@ -12,10 +12,12 @@ Auth is enforced via Depends(require_role(...)) from api.auth.
 import csv
 import io
 import logging
+import os
+import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -30,6 +32,59 @@ from api.auth import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trading", tags=["Trading"])
+
+# ---------------------------------------------------------------------------
+# Per-user order rate limiting (sliding window, Redis-backed with in-memory fallback)
+# Default: 10 orders per 60 seconds per authenticated user.
+# Override via env: ORDER_RATE_LIMIT and ORDER_RATE_WINDOW.
+# ---------------------------------------------------------------------------
+_ORDER_RATE_LIMIT = int(os.getenv("ORDER_RATE_LIMIT", "10"))
+_ORDER_RATE_WINDOW = int(os.getenv("ORDER_RATE_WINDOW", "60"))  # seconds
+_order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
+
+
+def _check_order_rate_limit(user_id: str) -> None:
+    """Raise HTTP 429 if the user has exceeded the order rate limit."""
+    try:
+        import redis as _redis
+        r = _redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            socket_connect_timeout=0.5,
+            decode_responses=True,
+            retry_on_error=[],
+            retry=None,
+        )
+        key = f"order_rl:{user_id}"
+        now = time.time()
+        pipe = r.pipeline()
+        pipe.zremrangebyscore(key, 0, now - _ORDER_RATE_WINDOW)
+        pipe.zadd(key, {str(now): now})
+        pipe.zcard(key)
+        pipe.expire(key, _ORDER_RATE_WINDOW + 1)
+        results = pipe.execute()
+        count = results[2]
+        if count > _ORDER_RATE_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
+                headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # Redis unavailable — fall back to in-memory sliding window
+        now = time.time()
+        timestamps = _order_rl_cache.get(user_id, [])
+        timestamps = [t for t in timestamps if now - t < _ORDER_RATE_WINDOW]
+        timestamps.append(now)
+        _order_rl_cache[user_id] = timestamps
+        if len(timestamps) > _ORDER_RATE_LIMIT:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
+                headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -90,11 +145,26 @@ async def place_order(
     Place a new order.
 
     Requires: Bearer token with role >= 'trader'.
+    Rate-limited to ORDER_RATE_LIMIT orders per ORDER_RATE_WINDOW seconds per user.
     Passes through RiskManager.assess_risk() before broker execution.
     Symbol and quantity are validated against server-side allowlists.
     """
+    # ── Per-user order rate limit ────────────────────────────────────────────
+    _check_order_rate_limit(user.sub)
+
     if not app_state or not app_state.broker:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+
+    # ── Prop-firm rule enforcement ───────────────────────────────────────────
+    try:
+        from brokers.prop_firms.guard import check_prop_firm_rules
+        account_info = await app_state.broker.get_account_info()
+        check_prop_firm_rules(account_info)
+    except Exception as pf_exc:
+        from fastapi import HTTPException as _HTTPException
+        if isinstance(pf_exc, _HTTPException):
+            raise
+        logger.warning("Prop-firm guard error (allowing trade): %s", pf_exc)
 
     # ── Risk gate ────────────────────────────────────────────────────────────
     if hasattr(app_state, "risk_manager") and app_state.risk_manager is not None:

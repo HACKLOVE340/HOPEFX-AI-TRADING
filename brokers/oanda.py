@@ -187,6 +187,35 @@ class OANDAConnector(BrokerConnector):
     def _parse_order_status(self, state: str) -> OrderStatus:
         return self._STATUS_MAP.get(state.upper(), OrderStatus.OPEN)
 
+    def get_live_prices(self, symbols: List[str]) -> Dict[str, Dict[str, float]]:
+        """
+        Fetch live bid/ask for one or more instruments via OANDA pricing endpoint.
+        Returns {symbol: {"bid": float, "ask": float, "mid": float}}.
+        OANDA uses underscore notation (XAU_USD); this method accepts both forms.
+        """
+        if not self.connected or not self.session:
+            return {}
+        # Normalise to OANDA underscore format
+        instruments = ",".join(s.replace("/", "_") for s in symbols)
+        try:
+            r = self.session.get(
+                f"{self.base_url}/v3/accounts/{self.account_id}/pricing",
+                params={"instruments": instruments},
+                timeout=10,
+            )
+            r.raise_for_status()
+            out: Dict[str, Dict[str, float]] = {}
+            for price in r.json().get("prices", []):
+                raw = price.get("instrument", "")
+                sym = raw.replace("_", "")  # XAU_USD → XAUUSD
+                bid = float(price.get("bids", [{}])[0].get("price", 0))
+                ask = float(price.get("asks", [{}])[0].get("price", 0))
+                out[sym] = {"bid": bid, "ask": ask, "mid": round((bid + ask) / 2, 5)}
+            return out
+        except Exception as exc:
+            logger.warning("OANDA get_live_prices: %s", exc)
+            return {}
+
     def _parse_order_dict(self, data: Dict) -> Order:
         side = OrderSide.BUY if float(data.get("units", 1)) > 0 else OrderSide.SELL
         sm = {"PENDING": OrderStatus.OPEN, "FILLED": OrderStatus.FILLED,

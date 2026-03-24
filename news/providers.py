@@ -17,9 +17,21 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import requests
-import feedparser
+
+try:
+    import feedparser
+    _FEEDPARSER_AVAILABLE = True
+except ImportError:
+    feedparser = None  # type: ignore[assignment]
+    _FEEDPARSER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+if not _FEEDPARSER_AVAILABLE:
+    logger.warning(
+        "feedparser not installed — RSS news feed disabled. "
+        "Install with: pip install feedparser"
+    )
 
 
 @dataclass
@@ -304,6 +316,9 @@ class RSSFeedProvider(NewsProvider):
                 continue
 
             try:
+                if not _FEEDPARSER_AVAILABLE:
+                    self.logger.warning("feedparser not installed — skipping RSS feed '%s'", feed_name)
+                    continue
                 feed_url = self.feeds[feed_name]
                 feed = feedparser.parse(feed_url)
 

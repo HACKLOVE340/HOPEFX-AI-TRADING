@@ -11,7 +11,7 @@ export function OrderPanel() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const response = await fetch('/api/v1/trades', {
+    const response = await fetch('/api/trading/order', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -21,6 +21,7 @@ export function OrderPanel() {
         symbol: 'XAUUSD',
         side,
         quantity: parseFloat(size),
+        order_type: 'market',
         stop_loss: stopLoss ? parseFloat(stopLoss) : null,
         take_profit: takeProfit ? parseFloat(takeProfit) : null,
       })
