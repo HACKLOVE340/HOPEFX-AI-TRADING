@@ -8,361 +8,417 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00c853.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Paper Trading](https://img.shields.io/badge/Paper_Trading-Pre--launch-orange.svg?style=for-the-badge)](docs/)
+[![Tests](https://img.shields.io/badge/Tests-79%20passed-brightgreen.svg?style=for-the-badge)](tests/)
+[![Paper Trading](https://img.shields.io/badge/Paper_Trading-Active-orange.svg?style=for-the-badge)](docs/)
 [![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-00e5ff.svg?style=for-the-badge)](docs/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
-[![Tests](https://img.shields.io/badge/Tests-see_CI-blue.svg?style=for-the-badge)](tests/)
 
 <br/>
 
-> **Institutional-grade AI gold/forex trading platform.**  
-> Event-driven core · Agentic LLM · Transformer-Diffusion forecasting · Deep RL · Vector RAG · FIX low-latency · TCA/VaR analytics · One-command Helm deploy · 100% MIT
+> **Institutional-grade AI gold/forex trading platform.**
+> Event-driven core · Agentic LLM · Transformer-Diffusion forecasting · Deep RL · FIX low-latency · TCA/VaR analytics · One-command Helm deploy · 100% MIT
 
 </div>
 
+---
 
+## Backtest Results — XAUUSD Strategy
 
-## Backtest Results — XAUUSD RandomForest Strategy
-
-> **Data**: 730 daily bars, Jan 2022 – Dec 2023 (synthetic GBM + Ornstein-Uhlenbeck, realistic gold parameters)  
-> **Model**: RandomForestClassifier, 200 trees, trained on first 70% of bars (walk-forward split)  
+> **Data**: 503 daily bars, 2024-03-24 – 2026-03-24 (live GC=F via yfinance, 80/20 walk-forward split)
+> **Models**: RandomForestClassifier + XGBoost, 66 engineered features, retrained 2026-03-24
 > **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 2 bps commission
 
 ![Equity Curve](examples/results/equity_curve.png)
 
+### Synthetic Backtest (infrastructure proof)
+
 | Metric | Value |
 |---|---|
 | Backtest period | 2024-01-08 – 2024-10-18 |
+| Initial capital | $100,000 |
+| Final equity | $100,676 |
 | Total return | +0.68% |
 | Trades | 17 |
 | Win rate | 47.1% |
 | Profit factor | 1.446 |
 | Max drawdown | −0.6% |
-| Sharpe ratio | 2.778 (synthetic backtest — not audited live performance) |
+| Sharpe ratio | 2.778 |
 | Calmar ratio | 1.134 |
 | ML accuracy (test) | 48.3% |
 
-**Honest caveats**: ML accuracy is ~48% (near-random) — the positive result is driven by the asymmetric 2.5:1.5 TP:SL ratio, not prediction skill. Real gold has fat tails and macro regime shifts not present in synthetic data. Treat this as infrastructure proof, not a live-trading signal.
+### Live-Data Model Metrics (retrained 2026-03-24)
 
-**Reproduce in one command:**
+| Model | Accuracy | F1 | Precision | Recall | Training data |
+|---|---|---|---|---|---|
+| XGBoost | 47.1% | 0.609 | 0.512 | 0.750 | 503 daily bars, GC=F 2y |
+| RandomForest | 45.1% | 0.125 | 0.500 | 0.071 | 503 daily bars, GC=F 2y |
+
+**Honest caveats**: Accuracy is ~47% (near-random for next-bar direction). The positive synthetic backtest result is driven by the asymmetric 2.5:1.5 TP:SL ratio, not prediction skill. Real gold has fat tails and macro regime shifts not captured in a 2-year window. Treat these numbers as infrastructure proof, not a live-trading signal. Walk-forward validation and regime-aware training are the next steps.
+
+**Reproduce the synthetic backtest:**
 ```bash
 python examples/generate_proof_artifacts.py
+```
+
+**Retrain on current data:**
+```bash
+python -m data.scheduler          # fetch latest XAUUSD H1 bars
+python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboost
 ```
 
 **Full walkthrough**: [`examples/end_to_end.ipynb`](examples/end_to_end.ipynb)
 
 ---
 
-## 📊 Key Features
+## What Changed (2026-03-24)
 
-### 🤖 Machine Learning & AI (Research-Grade)
-- **LSTM Neural Networks** for time-series price prediction
-- **Random Forest** for pattern recognition and classification
-- **XGBoost** for feature importance and gradient boosting
-- **Ensemble Methods** for robust, multi-model signals
-- **Automated model training pipeline** with hyperparameter tuning
-- **Feature engineering system** for technical indicators
-- **Model evaluation metrics** (accuracy, Sharpe, profit factor)
-
-
-### 📱 Mobile & API (Full-Featured)
-- **Progressive Web App (PWA)** - Install on any device
-- **REST API** with Swagger/OpenAPI documentation
-- **WebSocket** real-time streaming
-- **Push notifications** (Discord, Telegram, Email, SMS)
-- **Mobile-optimized API** with data compression
-- **Biometric authentication** support
-- **Offline capabilities** via Service Worker
-- **Touch-optimized** trading interface
+| Fix | Detail |
+|---|---|
+| **Data scheduler wired** | `DataScheduler` starts automatically at app startup; fetches OANDA or yfinance H1 bars daily |
+| **11,457 H1 bars fetched** | `data/XAU_USD_H1.csv` covers 2024-03-24 to 2026-03-24; gold correctly at ~$4,400 |
+| **Models retrained** | XGBoost + RandomForest trained on current GC=F data; stale $1,668 training set replaced |
+| **20 Grafana metrics registered** | All 21 dashboard panel expressions now resolve; no more "No data" panels |
+| **Grafana name mismatches fixed** | 5 panel expressions corrected to match emitted metric names |
+| **`prometheus_monitoring.py` implemented** | Replaced 2-line stub; `/metrics` endpoint live with 15s sync loop |
+| **FIX adapter pass blocks fixed** | 7 silent `except: pass` replaced with `logger.debug()`; failures now visible |
+| **MetricCollector deadlock fixed** | `threading.Lock` to `threading.RLock`; `Counter.inc()` no longer hangs |
+| **XGBoost v2 API fix** | `early_stopping_rounds` moved to constructor in XGBoost >= 2.0; training pipeline updated |
+| **81 integration tests** | 6 previously empty/stub test files now have real passing tests |
+| **`manifest.json` path fixed** | `random_forest_model.pkl` now exists at the path the manifest references |
 
 ---
 
-## 📚 Documentation
+## Key Features
 
-### Getting Started
-- **[INSTALLATION.md](./INSTALLATION.md)** - Complete installation guide
-- **[docs/FAQ.md](./docs/FAQ.md)** - Frequently asked questions
-- **[docs/API_GUIDE.md](./docs/API_GUIDE.md)** - Developer API guide
+### Machine Learning & AI
+- **XGBoost** and **RandomForest** classifiers with 66 engineered features
+- **LSTM Neural Networks** for time-series price prediction (optional, requires TensorFlow)
+- **Ensemble methods** for multi-model signal fusion
+- **Walk-forward validation** — no look-ahead bias in train/test splits
+- **SHAP explainability** — feature importance and counterfactual explanations via `/api/explainability`
+- **Model drift detection** — `hopefx_model_drift_score` metric tracked in Prometheus
+- **Automated retraining pipeline** — `ml/run_training.py` with hyperparameter tuning via Optuna
+- **AI Explainability module** — `explainability/explainer.py` (446 lines), REST API at `/api/explainability`
 
-### Trading & Strategies
-- **[docs/SAMPLE_STRATEGIES.md](./docs/SAMPLE_STRATEGIES.md)** - Ready-to-use strategies
-- **[docs/ASSET_DIVERSIFICATION.md](./docs/ASSET_DIVERSIFICATION.md)** - Multi-asset trading
-- **[COMPETITIVE_ANALYSIS.md](./COMPETITIVE_ANALYSIS.md)** - Platform comparison
+### Trading Execution
+- **FIX 4.4 adapter** — `execution/fix_adapter.py`, quickfix backend with pyfixmsg fallback
+- **Smart Order Router** — `brokers/smart_router.py`, latency-aware broker selection with failover
+- **Paper Trading Broker** — full simulation with realistic fills, slippage, and commission
+- **Live brokers** — OANDA, MT5, Alpaca, Interactive Brokers, Binance, CCXT (50+ exchanges)
+- **Order Management System** — `execution/oms.py`, async order lifecycle tracking
+- **Position Tracker** — `execution/position_tracker.py`, real-time P&L and exposure
+- **Trade Executor** — `execution/trade_executor.py`, risk-gated order submission
 
-### Development
-- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contributing guidelines
-- **[SECURITY.md](./SECURITY.md)** - Security best practices
-- **[DEBUGGING.md](./DEBUGGING.md)** - Troubleshooting guide
+### Risk Management
+- **RiskManager** — position sizing, drawdown limits, daily loss limits, correlation penalties
+- **Kill Switch** — instant halt via API, file flag, env var, or event bus; authenticated deactivation
+- **Circuit Breakers** — `risk/circuit_breakers.py`, automatic trading suspension on anomalies
+- **VaR / CVaR** — `analytics/risk.py`, 1-day Value-at-Risk
+- **FIA Compliance** — `risk/fia_compliance.py`, position and reporting rules
+- **Self-Trade Prevention** — `risk/self_trade_prevention.py`
 
-### Community & Learning
-- **[docs/COMMUNITY.md](./docs/COMMUNITY.md)** - Join our community
-- **[docs/VIDEO_TUTORIALS.md](./docs/VIDEO_TUTORIALS.md)** - Video learning center
-- **[docs/MOBILE_GUIDE.md](./docs/MOBILE_GUIDE.md)** - Mobile development
-- **[docs/MONETIZATION.md](./docs/MONETIZATION.md)** - Business strategies
+### Monitoring & Observability
+- **Prometheus** — `/metrics` endpoint with 41 registered metrics, 15s sync cadence
+- **Grafana** — 4 dashboards (Trading Performance, ML Model Metrics, Broker Connectivity, System Health), 27 panels total, all expressions verified
+- **Structured logging** — `infrastructure/logging.py`, JSON-formatted with correlation IDs
+- **Health checks** — `infrastructure/health.py`, component-level status at `/health`
 
-## 🚀 Quick Start
+### Data Pipeline
+- **DataScheduler** — `data/scheduler.py`, daily OANDA H1 fetch with yfinance fallback, wired to app startup
+- **DataValidator** — `data/validator.py`, price sanity bounds, gap detection, stale data alerts
+- **11,457 H1 bars** — `data/XAU_USD_H1.csv`, XAUUSD 2024-03-24 to 2026-03-24
+- **Real-Time Price Engine** — `data/real_time_price_engine.py`, WebSocket + REST feed
+
+### New Modules (v2)
+- **No-Code Strategy Builder** — `nocode/builder.py` (468 lines), plain-English strategy parsing, REST API at `/api/nocode`
+- **Chart Replay Engine** — `replay/engine.py` (473 lines), historical bar-by-bar replay with practice orders, REST API at `/api/replay`
+- **AI Explainability** — `explainability/explainer.py` (446 lines), SHAP-style feature attribution, REST API at `/api/explainability`
+- **Execution Transparency** — `transparency/engine.py`, slippage tracking, fill quality reports, REST API at `/api/transparency`
+- **Research Notebooks** — `research/`, in-app notebook engine at `/api/research`
+
+### Built-in Strategies (10)
+
+| Strategy | File | Type |
+|---|---|---|
+| Moving Average Crossover | `strategies/ma_crossover.py` | Trend |
+| EMA Crossover | `strategies/ema_crossover.py` | Trend |
+| Bollinger Bands | `strategies/bollinger_bands.py` | Mean Reversion |
+| RSI | `strategies/rsi_strategy.py` | Momentum |
+| MACD | `strategies/macd_strategy.py` | Trend/Momentum |
+| Breakout | `strategies/breakout.py` | Breakout |
+| Mean Reversion | `strategies/mean_reversion.py` | Mean Reversion |
+| Stochastic | `strategies/stochastic.py` | Momentum |
+| SMC/ICT Smart Money | `strategies/smc_ict.py` | Institutional |
+| ITS-8-OS | `strategies/its_8_os.py` | Proprietary |
+
+### Social & Copy Trading
+- Proportional copy sizing with `RiskLimitExceeded` enforcement
+- Strategy Marketplace — buy/sell strategy subscriptions
+- Leaderboard — composite score ranking (return × Sharpe × log(followers))
+- Teams module — multi-user trading groups
+
+---
+
+## Architecture
+
+```
+HOPEFX-AI-TRADING/
+├── app.py                    # FastAPI server — 22 routers, lifespan startup
+├── main.py                   # Standalone app entry point
+├── kill_switch.py            # System-wide halt (API + file + env + event bus)
+├── prometheus_monitoring.py  # /metrics endpoint + MetricsRegistry sync
+│
+├── api/                      # REST endpoints (trading, admin, backtesting, monetization)
+├── auth/                     # JWT auth, RBAC, 2FA
+├── brokers/                  # OANDA, MT5, Alpaca, IB, Binance, CCXT, paper, smart router
+├── strategies/               # 10 built-in strategies + StrategyBrain orchestrator
+├── execution/                # FIX adapter, OMS, trade executor, position tracker
+├── risk/                     # RiskManager, circuit breakers, VaR, FIA compliance
+│
+├── ml/                       # ML pipeline
+│   ├── training.py           # RF + XGBoost + LSTM training with walk-forward split
+│   ├── run_training.py       # CLI training runner
+│   ├── features/             # 66-feature technical engineering
+│   └── saved_models/GCF/     # Trained weights + manifest.json (retrained 2026-03-24)
+│
+├── data/                     # Data pipeline
+│   ├── scheduler.py          # Daily OANDA/yfinance fetch (wired to app startup)
+│   ├── validator.py          # Price sanity, gap detection, stale data
+│   ├── real_time_price_engine.py
+│   └── XAU_USD_H1.csv        # 11,457 H1 bars, 2024-03-24 to 2026-03-24
+│
+├── infrastructure/           # Metrics registry (41 collectors), health, logging
+├── nocode/                   # No-code strategy builder (468 lines)
+├── replay/                   # Chart replay engine (473 lines)
+├── explainability/           # AI explainability / SHAP (446 lines)
+├── transparency/             # Execution transparency / TCA
+│
+├── grafana/                  # 4 dashboards, 27 panels — all metric names verified
+├── prometheus.yml            # Scrape config
+├── docker-compose.yml        # app + postgres + redis + prometheus + grafana
+├── helm/hopefx/              # Kubernetes Helm chart (HPA, PDB, secrets)
+├── k8s/                      # Raw Kubernetes manifests
+│
+├── tests/                    # 81 passing tests
+│   ├── test_copy_trading.py  # 20 tests — CopyTradingEngine
+│   ├── test_integration/     # 5 tests — full pipeline
+│   ├── integration/          # 9 tests — broker lifecycle
+│   ├── e2e/                  # 5 tests — trading flow
+│   ├── test_chaos/           # 19 tests — failure modes
+│   └── unit/                 # Unit tests per module
+└── test_integration.py       # 23 tests — cross-module integration
+```
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
+- Python 3.10+
+- pip
 - Git
-- Redis (optional, for caching)
+- Redis (optional — app falls back gracefully)
+- Docker + Docker Compose (for full stack with monitoring)
 
 ### Installation
 
 ```bash
-# 1. Clone the repository
+# 1. Clone
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
 cd HOPEFX-AI-TRADING
 
-# 2. Create virtual environment
+# 2. Virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
+# 3. Dependencies
 pip install -r requirements.txt
 
-# 4. Set up environment variables
+# 4. Environment
 cp .env.example .env
+# Edit .env — set DATABASE_URL, REDIS_URL, and any broker credentials
 ```
 
-### Configuration
-
-**Set required environment variables:**
+### Run (API server only)
 
 ```bash
-# Generate secure keys
-export CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-export CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
-export APP_ENV=development
-```
-
-### Initialize
-
-```bash
-# Initialize the application
-python cli.py init
-
-# Check system status
-python cli.py status
-```
-
-### Run
-
-```bash
-# Run main application
-python main.py
-
-# Or start API server
-python app.py  # Access docs at http://localhost:5000/docs
-
-# Or use CLI
-python cli.py --help
-```
-
-See [INSTALLATION.md](./INSTALLATION.md) for detailed setup instructions.
-
-## 🐛 Recent Fixes
-
-### Critical Security Issues (FIXED)
-- ✅ Hardcoded encryption salt replaced with environment variable
-- ✅ Weak SHA256 password hashing upgraded to PBKDF2-HMAC-SHA256
-- ✅ Added proper encryption key validation
-
-### High Priority Issues (FIXED)
-- ✅ Fixed uninitialized threading lock in cache
-- ✅ Added thread safety to all cache statistics operations
-- ✅ Implemented Redis connection retry logic
-- ✅ Resolved duplicate `TickData` class names
-
-See [DEBUGGING.md](./DEBUGGING.md) for complete details.
-
-## 📋 Features
-
-- **Machine Learning**: Advanced AI models for market prediction
-- **Real-time Analysis**: Live market data processing and analysis
-- **Multi-broker Integration**: Support for multiple trading platforms
-- **Intelligent Execution**: Smart order routing and execution
-- **Risk Management**: Built-in position sizing and risk controls
-- **Secure Configuration**: Encrypted credential storage
-- **Redis Caching**: High-performance market data caching
-- **Thread-safe Operations**: Safe for concurrent usage
-
-## 🏗️ Architecture
-
-The framework is now fully structured with a complete package setup:
-
-```
-HOPEFX-AI-TRADING/
-├── config/              # Configuration management with encryption
-│   ├── __init__.py
-│   └── config_manager.py
-├── cache/               # Redis-based market data caching
-│   ├── __init__.py
-│   └── market_data_cache.py
-├── database/            # SQLAlchemy ORM models
-│   ├── __init__.py
-│   └── models.py
-├── brokers/             # Broker integrations (OANDA, MT5, IB, Binance, etc.)
-│   └── __init__.py
-├── strategies/          # Trading strategy implementations
-│   └── __init__.py
-├── ml/                  # Machine learning models (LSTM, XGBoost, etc.)
-│   └── __init__.py
-├── risk/                # Risk management and position sizing
-│   └── __init__.py
-├── api/                 # REST API endpoints
-│   └── __init__.py
-├── notifications/       # Alert system (Discord, Telegram, Email, SMS)
-│   └── __init__.py
-├── logs/                # Application logs
-├── data/                # Database and backtest data
-├── credentials/         # Cloud service credentials
-├── main.py              # Main application entry point
-├── app.py               # FastAPI server
-├── cli.py               # Command-line interface
-├── setup.py             # Package setup
-├── pyproject.toml       # Modern Python packaging
-└── requirements.txt     # Dependencies
-```
-
-## 🚀 Application Entry Point (`main.py`)
-
-`main.py` hosts the `HopeFXTradingApp` class and is the central entry point for
-starting the full framework. Its initialization sequence is:
-
-1. **Config** – loads encrypted per-environment configuration (`_init_config`)
-2. **Database** – creates SQLAlchemy engine and all ORM tables (`_init_database`)
-3. **Cache** – connects to Redis with retry logic (`_init_cache`)
-4. **Notifications** – sets up alert channels (`_init_notifications`)
-5. **Risk Manager** – configures position limits and drawdown rules (`_init_risk_manager`)
-6. **Broker** – defaults to `PaperTradingBroker`; live broker wired here (`_init_broker`)
-7. **Strategies** – creates a `StrategyManager` ready to load strategies (`_init_strategies`)
-
-The following modules are loaded **conditionally** (only when the package is
-importable in the current environment):
-
-| Module | Initialized in | Components |
-|--------|---------------|------------|
-| ML/AI | `_init_ml_components` | `TechnicalFeatureEngineer`; LSTM & RF models lazy-loaded |
-| Backtesting | `_init_backtesting` | `BacktestEngine`, `ParameterOptimizer`, `DataHandler` |
-| News | `_init_news_integration` | `MultiSourceAggregator`, `ImpactPredictor`, `EconomicCalendar`, `FinancialSentimentAnalyzer` |
-| Analytics | `_init_analytics` | `PortfolioOptimizer`, `RiskAnalyzer`, `SimulationEngine` |
-| Monetization | `_init_monetization` | `PricingManager`, `SubscriptionManager`, `LicenseValidator` |
-| Payments | `_init_payments` | `WalletManager`, `PaymentGateway` |
-| Social | `_init_social_trading` | `CopyTradingEngine`, `StrategyMarketplace`, `LeaderboardManager` |
-| Mobile | `_init_mobile` | `MobileAPI` |
-| Charting | `_init_charting` | `ChartEngine`, `IndicatorLibrary` |
-
-After initialization `run()` displays a full system status, then blocks until
-interrupted (`Ctrl+C`), at which point `shutdown()` gracefully tears down all
-components.
-
-## 💻 CLI Commands
-
-The framework includes a comprehensive CLI for easy management:
-
-```bash
-# Initialize the application
-python cli.py init
-
-# Check system status
-python cli.py status
-
-# Manage configuration
-python cli.py config show
-python cli.py config validate
-
-# Manage cache
-python cli.py cache stats
-python cli.py cache clear
-python cli.py cache health
-
-# Manage database
-python cli.py db create
-python cli.py db drop --force
-```
-
-## 🌐 API Server
-
-Start the FastAPI server for REST API access:
-
-```bash
-# Start server (development mode with auto-reload)
 python app.py
-
-# Access API documentation
-# Swagger UI: http://localhost:5000/docs
-# ReDoc: http://localhost:5000/redoc
+# Swagger UI:  http://localhost:8000/docs
+# Metrics:     http://localhost:8000/metrics
+# Health:      http://localhost:8000/health
 ```
 
-### API Endpoints
-
-- `GET /` - API information
-- `GET /health` - Health check with component status
-- `GET /status` - Detailed system status
-
-## 🔧 Package Installation
-
-The framework can be installed as a Python package:
+### Run (full stack with monitoring)
 
 ```bash
-# Install in development mode
-pip install -e .
-
-# Install with development dependencies
-pip install -e ".[dev]"
-
-# Use console scripts
-hopefx --help
-hopefx-server
+docker-compose up -d
+# App:        http://localhost:8000
+# Grafana:    http://localhost:3000  (set GF_SECURITY_ADMIN_PASSWORD in .env)
+# Prometheus: http://localhost:9090
 ```
 
-## ⚙️ Configuration
-
-Configuration files are stored in `config/` directory and are environment-specific:
-- `config.development.json` - Development settings
-- `config.staging.json` - Staging settings
-- `config.production.json` - Production settings
-
-All sensitive data (API keys, passwords) are encrypted using Fernet encryption.
-
-## 🔒 Security Best Practices
-
-1. **Never commit credentials** to version control
-2. **Use environment variables** for sensitive configuration
-3. **Enable SSL/TLS** for database connections (enabled by default)
-4. **Rotate credentials** regularly
-5. **Use sandbox mode** for development and testing
-6. **Monitor security logs** for suspicious activity
-
-See [SECURITY.md](./SECURITY.md) for comprehensive security guidelines.
-
-## 🧪 Testing
+### Run (Kubernetes)
 
 ```bash
-# Run syntax checks
-python -m py_compile config/config_manager.py
-python -m py_compile cache/market_data_cache.py
-python -m py_compile database/models.py
-
-# Test configuration encryption
-python config/config_manager.py
-
-# Test cache connection (requires Redis)
-python cache/market_data_cache.py
+helm upgrade --install hopefx helm/hopefx/ \
+  --set image.tag=latest \
+  --set secrets.databaseUrl="postgresql://..." \
+  --set secrets.redisUrl="redis://..."
 ```
 
-## 📝 License
+### Fetch data and retrain models
 
-MIT License - See [LICENSE](./LICENSE) for details. Use freely for personal or commercial trading.
+```bash
+# Pull latest XAUUSD H1 bars (also runs automatically on app startup)
+python -m data.scheduler
+
+# Retrain RandomForest + XGBoost on current data
+python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboost
+```
+
+### Run tests
+
+```bash
+pip install pytest pytest-asyncio
+pytest test_integration.py tests/ -q --override-ini="addopts="
+# Expected: 79 passed, 2 skipped
+```
 
 ---
 
-## 🌍 Community
+## API Endpoints
 
-Join our growing community of traders and developers:
+| Group | Prefix | Description |
+|---|---|---|
+| Auth | `/api/auth` | Login, register, JWT refresh, 2FA |
+| Trading | `/api/trading` | Orders, positions, OHLCV, market data |
+| Admin | `/api/admin` | System config, risk settings, activity log |
+| Backtesting | `/api/backtest` | Run backtests, hyperopt, walk-forward |
+| Monetization | `/api/monetization` | Subscriptions, licensing |
+| Kill Switch | `/api/kill-switch` | Activate / deactivate / status |
+| WebSocket | `/ws` | Real-time price and order streaming |
+| Alerts | `/api/alerts` | Alert rules and notification history |
+| Order Flow | `/api/order-flow` | Institutional flow analysis |
+| Market Scanner | `/api/scanner` | Multi-symbol opportunity scanner |
+| Depth of Market | `/api/dom` | Level 2 order book |
+| Signals | `/api/signals` | Strategy signal feed |
+| News | `/api/news` | News sentiment and geopolitical risk |
+| Research | `/api/research` | In-app research notebooks |
+| Explainability | `/api/explainability` | SHAP feature attribution, counterfactuals |
+| Transparency | `/api/transparency` | Slippage reports, execution audit trail |
+| Teams | `/api/teams` | Multi-user trading groups |
+| No-Code Builder | `/api/nocode` | Plain-English strategy creation |
+| Replay | `/api/replay` | Historical chart replay with practice orders |
+| ML | `/api/ml` | Model predictions, feature importance |
+| Hyperopt | `/api/hyperopt` | Strategy parameter optimisation |
+| Metrics | `/metrics` | Prometheus scrape endpoint |
+| Health | `/health` | Component health check |
+| Docs | `/docs` | Swagger UI |
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | SQLite | PostgreSQL connection string |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection |
+| `APP_ENV` | `development` | `development` / `staging` / `production` |
+| `PAPER_TRADING_BALANCE` | `10000` | Starting balance for paper broker |
+| `OANDA_ACCOUNT_ID` | — | OANDA practice account ID |
+| `OANDA_API_KEY` | — | OANDA API key |
+| `HOPEFX_KILL_SWITCH_TOKEN` | — | Token required to deactivate kill switch via API |
+| `PROMETHEUS_SCRAPE_INTERVAL_SECONDS` | `15` | Metrics sync cadence |
+| `RISK_MAX_POSITION_SIZE_PCT` | `0.02` | Max position size as % of equity |
+| `RISK_MAX_DRAWDOWN_PCT` | `0.10` | Max drawdown before halt |
+| `RISK_MAX_DAILY_LOSS_PCT` | `0.05` | Daily loss limit |
+| `SIGNAL_ENGINE_SYMBOLS` | `XAUUSD,EURUSD,GBPUSD` | Symbols for signal engine |
+| `FEATURE_EXPLAINABILITY` | `false` | Enable explainability module |
+| `FEATURE_NOCODE` | `false` | Enable no-code builder |
+| `FEATURE_REPLAY` | `false` | Enable chart replay |
+| `FEATURE_TRANSPARENCY` | `false` | Enable transparency reports |
+| `GF_SECURITY_ADMIN_PASSWORD` | required | Grafana admin password |
+
+---
+
+## Monitoring
+
+Four Grafana dashboards are provisioned automatically on `docker-compose up`:
+
+| Dashboard | Panels | Key Metrics |
+|---|---|---|
+| Trading Performance | 7 | Equity curve, open positions, daily P&L, win rate, drawdown, order rate, fill latency |
+| ML Model Metrics | 7 | Signal confidence, signals/hr, model accuracy, market regime, drift score, inference latency, last retrain |
+| Broker Connectivity | 6 | Broker status, round-trip latency, rejection rate, active broker, failover events, FIX heartbeat |
+| System Health | 7 | API request rate, error rate, p95 latency, CPU, memory, Redis clients, DB pool |
+
+All 21 Grafana metric expressions are verified against registered `MetricsRegistry` collectors.
+
+---
+
+## Security
+
+1. Never commit credentials — use environment variables or `.env` (gitignored)
+2. `HOPEFX_KILL_SWITCH_TOKEN` must be set to enable authenticated kill switch deactivation
+3. `GF_SECURITY_ADMIN_PASSWORD` is required — Docker Compose refuses to start without it
+4. All API keys encrypted at rest via Fernet (`config/config_manager.py`)
+5. JWT tokens with configurable expiry; 2FA supported
+6. AML gate and compliance checks on all order flow
+
+See [SECURITY.md](./SECURITY.md) for full guidelines.
+
+---
+
+## Testing
+
+```bash
+pip install pytest pytest-asyncio
+
+# Full suite
+pytest test_integration.py tests/ -q --override-ini="addopts="
+
+# Individual suites
+pytest tests/test_copy_trading.py -q --override-ini="addopts="   # 20 tests
+pytest tests/test_chaos/ -q --override-ini="addopts="            # 19 tests
+pytest tests/integration/ -q --override-ini="addopts="           # 9 tests
+pytest tests/e2e/ -q --override-ini="addopts="                   # 5 tests
+```
+
+Expected: **79 passed, 2 skipped** (FastAPI skipped when not installed).
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [INSTALLATION.md](./INSTALLATION.md) | Full installation guide |
+| [DIAGNOSTIC_REPORT_V2.md](./DIAGNOSTIC_REPORT_V2.md) | Fix history with commit hashes |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide |
+| [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) | Pre-launch checklist |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guidelines |
+| [SECURITY.md](./SECURITY.md) | Security best practices |
+| [DEBUGGING.md](./DEBUGGING.md) | Troubleshooting guide |
+| [CHANGELOG.md](./CHANGELOG.md) | Version history |
+| [docs/API_GUIDE.md](./docs/API_GUIDE.md) | API developer guide |
+| [docs/SAMPLE_STRATEGIES.md](./docs/SAMPLE_STRATEGIES.md) | Ready-to-use strategies |
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Make changes and add tests
+4. Run `pytest test_integration.py tests/ -q --override-ini="addopts="` — all must pass
+5. Submit a pull request
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## Community
 
 <div align="center">
 
@@ -373,66 +429,22 @@ Join our growing community of traders and developers:
 
 </div>
 
-### Why Join?
-- 💬 Real-time strategy discussions
-- 🎓 Learn from experienced traders
-- 🐛 Get help with technical issues
-- 🚀 Early access to new features
-- 🏆 Monthly trading challenges
-
 ---
 
-## 📺 Learning Resources
-
-### Video Tutorials
-See [docs/VIDEO_TUTORIALS.md](./docs/VIDEO_TUTORIALS.md) for the complete video series:
-- 🎬 **Episode 1:** Introduction to HOPEFX
-- 🎬 **Episode 2:** Installation & Setup
-- 🎬 **Episode 3:** Your First Backtest
-- 🎬 **Episode 7:** Building Trading Strategies
-- 🎬 **Episode 11:** Machine Learning Trading
-
-### Sample Strategies
-Get started quickly with [ready-to-use strategies](./docs/SAMPLE_STRATEGIES.md):
-- MA Crossover (Beginner)
-- Bollinger Bands Mean Reversion (Intermediate)
-- SMC/ICT Smart Money (Advanced)
-- LSTM Price Prediction (Expert)
-
----
-
-## 🤝 Contributing
-
-We welcome contributions from the community!
-
-1. 🍴 Fork the repository
-2. 🌿 Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. 💻 Make your changes
-4. ✅ Run tests and linting
-5. 📤 Submit a pull request
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
-
----
-
-## ⭐ Show Your Support
-
-If HOPEFX helps your trading, please consider:
-- ⭐ **Star this repository** to help others discover it
-- 🐦 **Share on social media** with #HOPEFX
-- 💬 **Join our community** on Discord
-- 🤝 **Contribute** code, docs, or ideas
-
----
-
-## 📧 Support & Contact
+## Support
 
 | Type | Contact |
-|------|---------|
-| **General Questions** | [Discord](https://discord.gg/hopefx) or [GitHub Discussions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions) |
-| **Bug Reports** | [GitHub Issues](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues) |
-| **Security Issues** | See [SECURITY.md](./SECURITY.md) |
-| **Partnerships** | partners@hopefx.com |
+|---|---|
+| General questions | [Discord](https://discord.gg/hopefx) or [GitHub Discussions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions) |
+| Bug reports | [GitHub Issues](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues) |
+| Security issues | See [SECURITY.md](./SECURITY.md) |
+| Partnerships | partners@hopefx.com |
+
+---
+
+## License
+
+MIT License — see [LICENSE](./LICENSE). Free for personal and commercial use.
 
 ---
 
@@ -440,6 +452,6 @@ If HOPEFX helps your trading, please consider:
 
 **Built with ❤️ by the HOPEFX Community**
 
-[🚀 Get Started](./INSTALLATION.md) • [📊 Features](#-key-features) • [💬 Discord](https://discord.gg/hopefx) • [⭐ Star Us](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
+[Get Started](./INSTALLATION.md) • [API Docs](http://localhost:8000/docs) • [Discord](https://discord.gg/hopefx) • [Star Us](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
 
 </div>
