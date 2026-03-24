@@ -13,6 +13,7 @@ import { DrawdownChart } from '../components/DrawdownChart'
 import { RecentTrades } from '../components/RecentTrades'
 import { MLSignals } from '../components/MLSignals'
 import { SignalExplanation } from '../components/SignalExplanation'
+import { MacroPanel } from '../components/MacroPanel'
 
 export function Dashboard() {
   const equity = useStore((state) => state.equity)
@@ -84,6 +85,9 @@ export function Dashboard() {
 
           {/* AI signal explanation — SHAP features + plain English summary */}
           <SignalExplanation />
+
+          {/* Macro intelligence — DXY, yields, CPI, regime score */}
+          <MacroPanel />
           
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <h3 className="font-semibold mb-4">Risk Metrics</h3>
