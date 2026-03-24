@@ -96,6 +96,8 @@ class AppState:
         self.nocode_builder = None
         self.replay_engine = None
         self.ml_feature_engineer = None
+        # Price engine — set during startup, used by /api/trading/ohlcv and /prices
+        self.price_engine = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
@@ -548,6 +550,35 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Broker not available: {e}")
             app_state.broker = None
+
+        # ── Real-Time Price Engine ────────────────────────────────────────────
+        try:
+            from data.real_time_price_engine import RealTimePriceEngine
+            from brokers.paper_trading import PaperTradingBroker as _PTB
+            _symbols = [
+                s.strip().upper()
+                for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
+                if s.strip()
+            ]
+            _price_cfg = {
+                "symbols": _symbols,
+                "websocket_url": os.getenv("WS_PRICE_FEED_URL", ""),
+                "rest_url": os.getenv("REST_PRICE_FEED_URL", ""),
+            }
+            price_engine = RealTimePriceEngine(_price_cfg)
+            await price_engine.start()
+            app_state.price_engine = price_engine
+            # Connect paper broker to the price feed so get_market_price()
+            # returns live ticks instead of static startup values.
+            if isinstance(app_state.broker, _PTB):
+                app_state.broker.set_price_feed(price_engine)
+            logger.info(
+                "✓ RealTimePriceEngine started — symbols=%s", _symbols
+            )
+            log_activity("RealTimePriceEngine started")
+        except Exception as e:
+            logger.warning("⚠ RealTimePriceEngine not available: %s", e)
+            app_state.price_engine = None
 
         # ── Compliance Manager ───────────────────────────────────────────────
         try:
