@@ -12,6 +12,7 @@ import { EquityChart } from '../components/EquityChart'
 import { DrawdownChart } from '../components/DrawdownChart'
 import { RecentTrades } from '../components/RecentTrades'
 import { MLSignals } from '../components/MLSignals'
+import { SignalExplanation } from '../components/SignalExplanation'
 
 export function Dashboard() {
   const equity = useStore((state) => state.equity)
@@ -80,6 +81,9 @@ export function Dashboard() {
 
         <div className="space-y-6">
           <MLSignals />
+
+          {/* AI signal explanation — SHAP features + plain English summary */}
+          <SignalExplanation />
           
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <h3 className="font-semibold mb-4">Risk Metrics</h3>
