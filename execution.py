@@ -39,22 +39,55 @@ class ExecutionResult:
 
 
 class PaperExecutor:
-    """Paper trading executor with realistic fill simulation."""
-    
+    """
+    Paper trading executor with realistic fill simulation.
+
+    Accounting model
+    ----------------
+    cash   — free cash not tied up in positions.  Changes only when a
+             position is opened (cash decreases by notional + commission)
+             or closed (cash increases by proceeds - commission).
+    equity — mark-to-market account value = cash + sum(unrealised P&L).
+             Recomputed on every call to update_equity().
+
+    The previous implementation mutated both self.balance and self.equity
+    independently on every fill, causing them to diverge immediately.
+    """
+
     def __init__(
         self,
         initial_balance: float = 10000.0,
-        commission_per_lot: float = 3.5,  # Standard forex commission
-        slippage_model: str = 'variable'
+        commission_per_lot: float = 3.5,
+        slippage_model: str = 'variable',
     ):
-        self.balance = initial_balance
-        self.equity = initial_balance
+        self._initial_balance = initial_balance
+        self.cash = initial_balance          # free cash
         self.commission_per_lot = commission_per_lot
         self.slippage_model = slippage_model
         self.positions: Dict[str, Dict] = {}
         self.order_history: list = []
         self.validator = OrderValidator()
         self.order_counter = 0
+        self._last_prices: Dict[str, float] = {}  # for equity mark-to-market
+
+    @property
+    def balance(self) -> float:
+        """Alias for cash — kept for backward compatibility."""
+        return self.cash
+
+    @property
+    def equity(self) -> float:
+        """Mark-to-market equity = cash + sum of all unrealised P&L."""
+        total_upnl = sum(
+            self.get_unrealized_pnl(sym, self._last_prices[sym])
+            for sym in self.positions
+            if sym in self._last_prices
+        )
+        return self.cash + total_upnl
+
+    def update_prices(self, prices: Dict[str, float]) -> None:
+        """Update last-known prices for equity mark-to-market."""
+        self._last_prices.update(prices)
         
     def _generate_order_id(self) -> str:
         """Generate unique order ID."""
@@ -207,9 +240,13 @@ class PaperExecutor:
         notional = order.qty * fill_price
         total_cost = notional + commission
         
-        # Check balance for buys
+        # ── Cash sufficiency check ────────────────────────────────────────────
+        # For buys: require enough free cash to cover notional + commission.
+        # For sells: require an open position to close.
+        pnl: float = 0.0
+
         if order.side == 'buy':
-            if total_cost > self.balance:
+            if total_cost > self.cash:
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -217,24 +254,26 @@ class PaperExecutor:
                     avg_price=0.0,
                     slippage=0.0,
                     commission=0.0,
-                    message="Insufficient balance",
-                    timestamp=timestamp
+                    message=f"Insufficient cash: need {total_cost:.2f}, have {self.cash:.2f}",
+                    timestamp=timestamp,
                 )
-            
-            # Update balance and positions
-            self.balance -= total_cost
-            
-            # Close existing short if any
+
+            # Close existing short first (buy-to-cover)
             if order.symbol in self.positions and self.positions[order.symbol]['side'] == 'short':
                 old_pos = self.positions[order.symbol]
-                pnl = (old_pos['entry_price'] - fill_price) * old_pos['qty'] - commission
-                self.equity += pnl
-                del self.positions[order.symbol]
-                logger.info(f"Closed short position P&L: ${pnl:.2f}")
+                close_qty = min(order.qty, old_pos['qty'])
+                pnl = (old_pos['entry_price'] - fill_price) * close_qty - commission
+                # Return the original short notional to cash, add/subtract P&L
+                self.cash += old_pos['entry_price'] * close_qty + pnl
+                if close_qty >= old_pos['qty']:
+                    del self.positions[order.symbol]
+                else:
+                    old_pos['qty'] -= close_qty
+                logger.info(f"Closed short {order.symbol} qty={close_qty} P&L=${pnl:.2f}")
             else:
-                # Add to long position
+                # Open or add to long — deduct cash
+                self.cash -= total_cost
                 if order.symbol in self.positions:
-                    # Average into existing position
                     old = self.positions[order.symbol]
                     total_qty = old['qty'] + order.qty
                     avg_entry = (old['entry_price'] * old['qty'] + fill_price * order.qty) / total_qty
@@ -248,48 +287,48 @@ class PaperExecutor:
                         'entry_price': fill_price,
                         'entry_time': timestamp,
                         'stop_loss': order.stop_loss,
-                        'take_profit': order.take_profit
+                        'take_profit': order.take_profit,
                     }
-        
-        else:  # sell
+
+        else:  # sell / short
             if order.symbol not in self.positions:
-                return ExecutionResult(
-                    order_id=order_id,
-                    status=OrderStatus.REJECTED,
-                    filled_qty=0.0,
-                    avg_price=0.0,
-                    slippage=0.0,
-                    commission=0.0,
-                    message="No position to sell",
-                    timestamp=timestamp
-                )
-            
-            pos = self.positions[order.symbol]
-            if pos['side'] != 'long':
-                return ExecutionResult(
-                    order_id=order_id,
-                    status=OrderStatus.REJECTED,
-                    filled_qty=0.0,
-                    avg_price=0.0,
-                    slippage=0.0,
-                    commission=0.0,
-                    message=f"Cannot sell {pos['side']} position",
-                    timestamp=timestamp
-                )
-            
-            # Calculate P&L
-            if order.qty >= pos['qty']:
-                # Full close
-                pnl = (fill_price - pos['entry_price']) * pos['qty'] - commission
-                self.balance += fill_price * pos['qty'] - commission
-                self.equity += pnl
-                del self.positions[order.symbol]
+                # Opening a new short position
+                self.cash -= commission  # commission only; notional is synthetic
+                self.positions[order.symbol] = {
+                    'symbol': order.symbol,
+                    'side': 'short',
+                    'qty': order.qty,
+                    'entry_price': fill_price,
+                    'entry_time': timestamp,
+                    'stop_loss': order.stop_loss,
+                    'take_profit': order.take_profit,
+                }
             else:
-                # Partial close
-                pnl = (fill_price - pos['entry_price']) * order.qty - commission
-                self.balance += fill_price * order.qty - commission
-                self.equity += pnl
-                pos['qty'] -= order.qty
+                pos = self.positions[order.symbol]
+                if pos['side'] != 'long':
+                    return ExecutionResult(
+                        order_id=order_id,
+                        status=OrderStatus.REJECTED,
+                        filled_qty=0.0,
+                        avg_price=0.0,
+                        slippage=0.0,
+                        commission=0.0,
+                        message=f"Cannot sell into existing {pos['side']} position via this path",
+                        timestamp=timestamp,
+                    )
+
+                close_qty = min(order.qty, pos['qty'])
+                pnl = (fill_price - pos['entry_price']) * close_qty - commission
+                # Return original cost basis to cash, add realised P&L
+                self.cash += pos['entry_price'] * close_qty + pnl
+
+                if close_qty >= pos['qty']:
+                    del self.positions[order.symbol]
+                else:
+                    pos['qty'] -= close_qty
+
+        # Update last-known price for equity mark-to-market
+        self._last_prices[order.symbol] = fill_price
         
         result = ExecutionResult(
             order_id=order_id,
