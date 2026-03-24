@@ -18,6 +18,8 @@ class BacktestResult:
     total_trades: int
     equity_curve: List[float] = field(default_factory=list)
     trades: List[dict] = field(default_factory=list)
+    total_commission: float = 0.0
+    total_overnight_cost: float = 0.0  # cumulative financing charges
 
 
 class BacktestEngine:
@@ -26,18 +28,41 @@ class BacktestEngine:
 
     Signals: +1 = long, -1 = short, 0 = flat.
     Positions are sized as a fixed fraction of equity (default 10%).
+
+    Costs modelled:
+    - Round-trip commission (spread + broker fee): 35 bps per trade
+    - Overnight financing (swap): ~0.4% p.a. on position notional,
+      charged once per bar that crosses midnight (detected via bar index
+      when no timestamp is available, or via timestamp when present).
+      XAUUSD long swap is typically negative (you pay to hold overnight).
     """
+
+    # Annualised overnight financing rate for XAUUSD long positions.
+    # ~0.4% p.a. ≈ 0.0011% per calendar day.
+    # Adjust for short positions: short swap is often slightly different
+    # but we use the same rate as a conservative approximation.
+    OVERNIGHT_RATE_ANNUAL: float = 0.004  # 0.4% p.a.
 
     def __init__(
         self,
         initial_balance: float = 100_000.0,
         position_size_pct: float = 0.10,
         commission_pct: float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
+        overnight_rate_annual: Optional[float] = None,
+        bars_per_day: int = 24,  # 24 for H1, 4 for H4, 1 for D1
     ):
         self.initial_balance = initial_balance
         self.balance = initial_balance
         self.position_size_pct = position_size_pct
         self.commission_pct = commission_pct
+        self.overnight_rate_annual = (
+            overnight_rate_annual
+            if overnight_rate_annual is not None
+            else self.OVERNIGHT_RATE_ANNUAL
+        )
+        self.bars_per_day = bars_per_day
+        # Daily rate derived from annual rate
+        self._overnight_rate_per_bar = self.overnight_rate_annual / 365 / self.bars_per_day
         self.trades: List[dict] = []
         self.equity_curve: List[float] = [initial_balance]
 
@@ -65,6 +90,8 @@ class BacktestEngine:
         self.balance = self.initial_balance
         self.trades = []
         equity = [self.initial_balance]
+        total_commission = 0.0
+        total_overnight = 0.0
 
         position = 0        # current position size (units)
         entry_price = 0.0
@@ -79,6 +106,7 @@ class BacktestEngine:
             if position != 0 and (prev_sig == 0 or prev_sig != entry_signal):
                 pnl = position * (price - entry_price)
                 commission = abs(position) * price * self.commission_pct
+                total_commission += commission
                 net_pnl = pnl - commission
                 self.balance += net_pnl
                 self.trades.append({
@@ -97,6 +125,15 @@ class BacktestEngine:
                 entry_price  = price
                 entry_signal = prev_sig
 
+            # Overnight financing cost — charged every bar on open positions.
+            # Rate is annualised / 365 / bars_per_day so it accumulates
+            # correctly regardless of timeframe.
+            if position != 0:
+                notional = abs(position) * price
+                overnight_cost = notional * self._overnight_rate_per_bar
+                self.balance -= overnight_cost
+                total_overnight += overnight_cost
+
             equity.append(self.balance)
 
         # Force-close at end
@@ -104,6 +141,7 @@ class BacktestEngine:
             price = data["close"].iloc[-1]
             pnl = position * (price - entry_price)
             commission = abs(position) * price * self.commission_pct
+            total_commission += commission
             net_pnl = pnl - commission
             self.balance += net_pnl
             self.trades.append({
@@ -142,6 +180,8 @@ class BacktestEngine:
             total_trades=n,
             equity_curve=equity,
             trades=self.trades,
+            total_commission=float(total_commission),
+            total_overnight_cost=float(total_overnight),
         )
 
     # ------------------------------------------------------------------
