@@ -1034,22 +1034,40 @@ def train_ml_pipeline(
         Dictionary with trained models and evaluation metrics
     """
     Path(model_dir).mkdir(parents=True, exist_ok=True)
-    
+
     results = {}
-    
-    # Feature engineering
-    print("Creating features...")
+
+    # ── Look-ahead bias prevention ────────────────────────────────────────────
+    # Split the RAW dataframe FIRST, then run feature engineering separately on
+    # each split.  Computing rolling statistics (lags, MAs, volatility) on the
+    # full dataset before splitting contaminates rows near the boundary with
+    # future information that would not be available at prediction time.
+    print("Splitting raw data before feature engineering (prevents look-ahead bias)...")
+    split_idx_raw = int(len(df) * (1 - test_size))
+    df_train_raw = df.iloc[:split_idx_raw].copy()
+    df_test_raw  = df.iloc[split_idx_raw:].copy()
+
     fe = FeatureEngineer()
-    X, y_class, y_reg, full_data = fe.create_features(df, prediction_horizon=prediction_horizon)
-    
-    # Train/test split (time series aware)
-    split_idx = int(len(X) * (1 - test_size))
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_train_class, y_test_class = y_class.iloc[:split_idx], y_class.iloc[split_idx:]
-    y_train_reg, y_test_reg = y_reg.iloc[:split_idx], y_reg.iloc[split_idx:]
-    
-    # Scale features
+
+    print("Creating training features (fit)...")
+    X_train, y_train_class, y_train_reg, _ = fe.create_features(
+        df_train_raw, prediction_horizon=prediction_horizon
+    )
+
+    print("Creating test features (transform only)...")
+    # Re-use the same FeatureEngineer instance so lag/window parameters are
+    # identical; the scaler is fitted only on training data below.
+    X_test, y_test_class, y_test_reg, _ = fe.create_features(
+        df_test_raw, prediction_horizon=prediction_horizon
+    )
+
+    # Scale: fit on train, transform both — never fit on test data
     X_train_scaled, X_test_scaled = fe.scale_features(X_train, X_test)
+
+    print(
+        f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | "
+        f"Features: {X_train.shape[1]}"
+    )
     
     evaluator = MLEvaluationReport()
     

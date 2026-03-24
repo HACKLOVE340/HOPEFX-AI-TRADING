@@ -1090,15 +1090,31 @@ class EnsemblePredictor:
             validation_split: float = 0.2,
             optimize_weights: bool = True):
         """Train all models in ensemble"""
-        # Create features
-        logger.info("Engineering features...")
-        X_features = self.feature_engineer.create_features(X, fit=True)
-        y_aligned = y.loc[X_features.index]
-        
-        # Time-based split
-        split_idx = int(len(X_features) * (1 - validation_split))
-        X_train, X_val = X_features.iloc[:split_idx], X_features.iloc[split_idx:]
-        y_train, y_val = y_aligned.iloc[:split_idx], y_aligned.iloc[split_idx:]
+        # ── Look-ahead bias prevention ────────────────────────────────────────
+        # Split the RAW price dataframe FIRST, then fit the feature engineer
+        # exclusively on the training portion.  Computing rolling statistics
+        # (autocorrelations, z-scores, etc.) on the full dataset before
+        # splitting contaminates rows near the boundary with future information.
+        logger.info("Splitting data before feature engineering to prevent look-ahead bias...")
+        split_idx_raw = int(len(X) * (1 - validation_split))
+        X_raw_train = X.iloc[:split_idx_raw]
+        X_raw_val   = X.iloc[split_idx_raw:]
+        y_raw_train = y.iloc[:split_idx_raw]
+        y_raw_val   = y.iloc[split_idx_raw:]
+
+        # Fit scaler and feature schema on training data only
+        logger.info("Engineering features (fit on train only)...")
+        X_train = self.feature_engineer.create_features(X_raw_train, fit=True)
+        y_train = y_raw_train.loc[X_train.index]
+
+        # Transform validation data using the training-fitted scaler
+        X_val = self.feature_engineer.create_features(X_raw_val, fit=False)
+        y_val = y_raw_val.loc[X_val.index]
+
+        logger.info(
+            f"Train: {len(X_train)} bars | Val: {len(X_val)} bars | "
+            f"Features: {X_train.shape[1]}"
+        )
         
         # Train each model — track val accuracy explicitly per model
         logger.info(f"Training {len(self.models)} models...")
