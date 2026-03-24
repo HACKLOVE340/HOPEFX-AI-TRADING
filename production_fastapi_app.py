@@ -1,5 +1,11 @@
 production_fastapi_app = '''
 """
+LEGACY — do not use as an entry point.
+
+This file is kept for reference only. The canonical entry point is app.py.
+The enhanced components (backtest engine, ML predictor, smart router) are
+imported directly by app.py via the api/ routers.
+
 Production-Ready FastAPI Application for HOPEFX Trading Platform
 Integrates all enhanced components with proper architecture, dependency injection,
 and comprehensive API documentation following best practices [^22^][^24^].

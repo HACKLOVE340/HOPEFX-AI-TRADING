@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 """
+LEGACY — do not use as an entry point.
+
+This file is kept for reference only. The canonical entry point is app.py.
+All functionality here has been superseded by app.py + brain/brain.py.
+
 HOPEFX Ultimate Edition v2.0
 Master Control Core with Strategy Orchestra
 """

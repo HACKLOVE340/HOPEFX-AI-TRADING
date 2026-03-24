@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 """
+LEGACY — do not use as an entry point.
+
+This file is kept for reference. The canonical entry point is app.py.
+
+Components unique to this file (EventStore, HOPEFXBrain, PositionTracker,
+TradeExecutor, MultiSymbolOrderBook) have been migrated into app.py startup.
+Running this file will start a separate, incomplete application that does not
+share routes, middleware, or state with app.py.
+
 HOPEFX AI Trading Framework - COMPLETE PRODUCTION SYSTEM
 All components integrated and wired together
 """

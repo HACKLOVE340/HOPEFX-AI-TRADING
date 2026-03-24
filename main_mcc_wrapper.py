@@ -1,5 +1,11 @@
 # main_mcc_wrapper.py
 """
+LEGACY — do not use as an entry point.
+
+This file is kept as a usage example showing how to integrate the
+MasterControlCore (MCC) with a strategy loop. The canonical entry
+point is app.py, which wires MCC via brain/brain.py at startup.
+
 Wrapper that integrates MCC with your existing HOPEFX main.py
 WITHOUT breaking anything.
 """

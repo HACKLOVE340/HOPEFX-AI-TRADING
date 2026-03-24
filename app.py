@@ -98,6 +98,12 @@ class AppState:
         self.ml_feature_engineer = None
         # Price engine — set during startup, used by /api/trading/ohlcv and /prices
         self.price_engine = None
+        # Core trading components from main.py
+        self.event_store = None
+        self.brain = None
+        self.position_tracker = None
+        self.trade_executor = None
+        self.order_book = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
@@ -625,6 +631,64 @@ async def startup_event():
             logger.warning(f"⚠ Strategy Brain not available: {e}")
             app_state.strategy_brain = None
 
+        # ── Event Store ───────────────────────────────────────────────────────
+        try:
+            from events.event_store import get_event_store, EventType, publish_event
+            event_store = get_event_store()
+            await event_store.start()
+            app_state.event_store = event_store
+            logger.info("✓ Event store started")
+            log_activity("Event store started")
+        except Exception as e:
+            logger.warning("⚠ Event store not available: %s", e)
+            app_state.event_store = None
+
+        # ── Position Tracker & Trade Executor ─────────────────────────────────
+        try:
+            from execution.position_tracker import PositionTracker
+            from execution.trade_executor import TradeExecutor
+            position_tracker = PositionTracker()
+            app_state.position_tracker = position_tracker
+            if app_state.broker and app_state.risk_manager:
+                trade_executor = TradeExecutor(
+                    broker=app_state.broker,
+                    risk_manager=app_state.risk_manager,
+                    position_tracker=position_tracker,
+                )
+                app_state.trade_executor = trade_executor
+                logger.info("✓ PositionTracker + TradeExecutor initialized")
+            else:
+                logger.warning("⚠ TradeExecutor skipped — broker or risk_manager unavailable")
+            log_activity("PositionTracker initialized")
+        except Exception as e:
+            logger.warning("⚠ PositionTracker/TradeExecutor not available: %s", e)
+            app_state.position_tracker = None
+            app_state.trade_executor = None
+
+        # ── HOPEFXBrain (central intelligence) ────────────────────────────────
+        try:
+            from brain.brain import HOPEFXBrain
+            hopefx_brain = HOPEFXBrain(config={
+                "max_decision_history": 1000,
+                "regime_check_interval": 60,
+                "circuit_breaker_threshold": 5,
+            })
+            hopefx_brain.inject_components(
+                price_engine=app_state.price_engine,
+                risk_manager=app_state.risk_manager,
+                broker=app_state.broker,
+                strategy_manager=app_state.strategy_brain,
+                notification_manager=app_state.alert_engine,
+                position_tracker=app_state.position_tracker,
+                trade_executor=app_state.trade_executor,
+            )
+            app_state.brain = hopefx_brain
+            logger.info("✓ HOPEFXBrain initialized and wired")
+            log_activity("HOPEFXBrain initialized")
+        except Exception as e:
+            logger.warning("⚠ HOPEFXBrain not available: %s", e)
+            app_state.brain = None
+
         # ── Wallet Manager ───────────────────────────────────────────────────
         try:
             from payments.wallet import WalletManager
@@ -833,6 +897,13 @@ async def shutdown_event():
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("✓ Background tasks cancelled")
+
+    if app_state.event_store:
+        try:
+            await app_state.event_store.stop()
+            logger.info("✓ Event store stopped")
+        except Exception as e:
+            logger.warning("Event store stop error: %s", e)
 
     if app_state.db_engine:
         app_state.db_engine.dispose()

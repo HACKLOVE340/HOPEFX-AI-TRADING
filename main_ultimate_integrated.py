@@ -1,5 +1,11 @@
 # main_ultimate_integrated.py
 """
+LEGACY — do not use as an entry point.
+
+This file is kept for reference only. The canonical entry point is app.py.
+GPU acceleration stubs live in core/acceleration/gpu_engine.py.
+Risk engine lives in core/risk/advanced_engine.py.
+
 HOPEFX ULTIMATE INTEGRATED EDITION v3.0
 The World's Most Advanced AI Trading System
 
