@@ -424,3 +424,95 @@ class KillSwitch:
                 logger.error("Kill switch poll error: %s", exc)
 
             await asyncio.sleep(self._poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI router — wire into app.py with:
+#   from kill_switch import create_kill_switch_router
+#   app.include_router(create_kill_switch_router(kill_switch_instance))
+# ---------------------------------------------------------------------------
+
+def create_kill_switch_router(ks: "KillSwitch"):
+    """
+    Create a FastAPI router exposing the kill switch via REST.
+
+    Endpoints:
+        GET  /api/kill-switch/status   — current state (no auth required for monitoring)
+        POST /api/kill-switch/activate — halt all trading (admin only)
+        POST /api/kill-switch/deactivate — resume trading (admin only, requires token)
+
+    Authentication is enforced by the caller — pass an auth dependency when
+    including the router, or use the dependency injection shown below.
+    """
+    try:
+        from fastapi import APIRouter, HTTPException, Depends
+        from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+        from pydantic import BaseModel
+    except ImportError:
+        logger.warning("FastAPI not available — kill switch router not created")
+        return None
+
+    router = APIRouter(prefix="/api/kill-switch", tags=["Kill Switch"])
+    _bearer = HTTPBearer(auto_error=True)
+
+    def _require_admin(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+        """Minimal auth guard — replace with your real auth dependency."""
+        try:
+            from api.auth import _decode_token
+            user = _decode_token(credentials.credentials)
+            _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+            if _ROLE_RANK.get(getattr(user, "role", "user"), -1) < _ROLE_RANK["admin"]:
+                raise HTTPException(status_code=403, detail="Role 'admin' required")
+            return user
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired token",
+                                headers={"WWW-Authenticate": "Bearer"})
+
+    class ActivateRequest(BaseModel):
+        reason: str = "manual activation via API"
+
+    class DeactivateRequest(BaseModel):
+        token: str = ""
+
+    @router.get("/status")
+    async def get_status():
+        """Return current kill switch state. No authentication required."""
+        return ks.status()
+
+    @router.post("/activate")
+    async def activate(req: ActivateRequest, user=Depends(_require_admin)):
+        """
+        Halt all trading immediately.
+
+        Sets the kill switch active, cancels open orders, and blocks new
+        order submission until deactivated.  Requires role >= 'admin'.
+        """
+        if ks.is_active():
+            return {"status": "already_active", "reason": ks.reason}
+        ks.activate(f"[api:{getattr(user, 'sub', 'unknown')}] {req.reason}")
+        logger.critical(
+            "Kill switch ACTIVATED via API by user=%s reason=%r",
+            getattr(user, "sub", "unknown"), req.reason,
+        )
+        return {"status": "activated", "reason": ks.reason, "activated_at": ks.activated_at}
+
+    @router.post("/deactivate")
+    async def deactivate(req: DeactivateRequest, user=Depends(_require_admin)):
+        """
+        Resume trading after a kill switch event.
+
+        Requires role >= 'admin' and optionally an HMAC token (if the
+        KillSwitch was configured with one).  Requires role >= 'admin'.
+        """
+        if not ks.is_active():
+            return {"status": "already_inactive"}
+        ks.deactivate(token=req.token or None)
+        logger.warning(
+            "Kill switch DEACTIVATED via API by user=%s",
+            getattr(user, "sub", "unknown"),
+        )
+        return {"status": "deactivated"}
+
+    return router

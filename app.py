@@ -43,6 +43,7 @@ from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
 from database.models import Base
+from kill_switch import KillSwitch, create_kill_switch_router
 
 # Setup logging
 logging.basicConfig(
@@ -66,6 +67,14 @@ app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
 app.include_router(backtesting_router)
+
+# Kill switch — instantiated at module level so it can be imported by other
+# components (risk manager, order router, etc.) via:
+#   from app import kill_switch
+kill_switch = KillSwitch()
+_ks_router = create_kill_switch_router(kill_switch)
+if _ks_router is not None:
+    app.include_router(_ks_router)
 
 # Global application state
 class AppState:
@@ -312,9 +321,11 @@ async def _price_stream_loop(ws_manager):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """FastAPI lifespan handler — replaces deprecated @app.on_event."""
+    await kill_switch.start()
     await startup_event()
     yield
     await shutdown_event()
+    await kill_switch.stop()
 
 
 # Wire lifespan now that the function is defined
