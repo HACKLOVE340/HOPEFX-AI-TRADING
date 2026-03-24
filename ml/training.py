@@ -431,11 +431,12 @@ class XGBoostModel:
                 'eval_metric': ['logloss', 'auc'],
                 'max_depth': 6,
                 'learning_rate': 0.1,
-                'n_estimators': 100,
+                'n_estimators': 300,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
                 'random_state': 42,
                 'use_label_encoder': False
+                # scale_pos_weight is set dynamically in fit() from training labels
             }
         else:
             return {
@@ -443,7 +444,7 @@ class XGBoostModel:
                 'eval_metric': 'rmse',
                 'max_depth': 6,
                 'learning_rate': 0.1,
-                'n_estimators': 100,
+                'n_estimators': 300,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
                 'random_state': 42
@@ -469,11 +470,21 @@ class XGBoostModel:
         
         if self.model is None:
             self.build_model()
-        
+
+        # Set scale_pos_weight for classifiers to handle class imbalance.
+        # Ratio of negative (DOWN) to positive (UP) samples so the minority
+        # class receives proportionally higher gradient weight.
+        if self.model_type == 'classifier':
+            y_arr = np.asarray(y_train)
+            neg = int((y_arr == 0).sum())
+            pos = int((y_arr == 1).sum())
+            if pos > 0 and neg > 0:
+                self.model.set_params(scale_pos_weight=neg / pos)
+
         eval_set = [(X_train, y_train)]
         if X_val is not None and y_val is not None:
             eval_set.append((X_val, y_val))
-        
+
         fit_kwargs: Dict = {
             "eval_set": eval_set,
             "verbose": False,
@@ -601,7 +612,7 @@ class RandomForestModel:
     def __init__(
         self,
         model_type: str = 'classifier',
-        n_estimators: int = 100,
+        n_estimators: int = 200,
         max_depth: Optional[int] = None,
         min_samples_split: int = 2,
         random_state: int = 42,
@@ -625,6 +636,8 @@ class RandomForestModel:
                 max_depth=self.max_depth,
                 min_samples_split=self.min_samples_split,
                 random_state=self.random_state,
+                # Compensate for class imbalance (UP/DOWN rarely 50/50 in XAUUSD)
+                class_weight="balanced",
                 n_jobs=-1
             )
         else:

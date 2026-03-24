@@ -1,0 +1,7 @@
+{
+  "model_type": "classifier",
+  "n_estimators": 100,
+  "max_depth": null,
+  "min_samples_split": 2,
+  "model_name": "random_forest_model"
+}
