@@ -1179,10 +1179,139 @@ def train_ml_pipeline(
     return results
 
 
+def walk_forward_validate(
+    df: pd.DataFrame,
+    model_type: str = 'random_forest',
+    n_splits: int = 5,
+    gap: int = 20,
+    prediction_horizon: int = 1,
+    min_train_size: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Walk-forward (anchored expanding-window) cross-validation for time-series ML.
+
+    Each fold:
+      1. Trains on all data up to the fold boundary (expanding window).
+      2. Skips `gap` bars to prevent leakage from rolling features that look
+         backward into the training period.
+      3. Evaluates on the next out-of-sample window.
+
+    The scaler is re-fitted from scratch on each training fold so that test
+    data statistics never contaminate the scaling parameters.
+
+    Args:
+        df:                 OHLCV DataFrame with DatetimeIndex.
+        model_type:         'random_forest', 'xgboost', or 'lstm'.
+        n_splits:           Number of walk-forward folds.
+        gap:                Bars to skip between train end and test start.
+        prediction_horizon: Bars ahead to predict.
+        min_train_size:     Minimum training bars (defaults to 60% of data).
+
+    Returns:
+        Dict with per-fold metrics and aggregate statistics.
+    """
+    n = len(df)
+    min_train = min_train_size or int(n * 0.6)
+    fold_size = (n - min_train - gap) // n_splits
+
+    if fold_size <= 0:
+        raise ValueError(
+            f"Not enough data for {n_splits} folds with min_train={min_train} "
+            f"and gap={gap}. Need at least {min_train + gap + n_splits} bars, "
+            f"got {n}."
+        )
+
+    fold_results: List[Dict[str, Any]] = []
+    fe = FeatureEngineer()
+
+    for fold in range(n_splits):
+        train_end  = min_train + fold * fold_size
+        test_start = train_end + gap
+        test_end   = test_start + fold_size
+
+        if test_end > n:
+            break
+
+        df_train = df.iloc[:train_end].copy()
+        df_test  = df.iloc[test_start:test_end].copy()
+
+        # Fresh FeatureEngineer per fold — prevents scaler contamination
+        fe_fold = FeatureEngineer()
+        X_train, y_train_cls, _, _ = fe_fold.create_features(
+            df_train, prediction_horizon=prediction_horizon
+        )
+        X_test, y_test_cls, _, _ = fe_fold.create_features(
+            df_test, prediction_horizon=prediction_horizon
+        )
+
+        if len(X_train) < 10 or len(X_test) < 5:
+            continue
+
+        X_tr_sc, X_te_sc = fe_fold.scale_features(X_train, X_test)
+
+        # Train model
+        if model_type == 'random_forest':
+            model = RandomForestModel()
+            model.fit(X_tr_sc, y_train_cls.values)
+        elif model_type == 'xgboost' and XGBOOST_AVAILABLE:
+            model = XGBoostModel()
+            model.fit(X_tr_sc, y_train_cls.values, X_te_sc, y_test_cls.values)
+        else:
+            # Fallback to random forest
+            model = RandomForestModel()
+            model.fit(X_tr_sc, y_train_cls.values)
+
+        metrics = model.evaluate(X_te_sc, y_test_cls.values)
+        metrics['fold'] = fold
+        metrics['train_bars'] = len(X_train)
+        metrics['test_bars'] = len(X_test)
+        metrics['train_end_date'] = str(df.index[train_end - 1]) if hasattr(df.index, '__getitem__') else train_end
+        metrics['test_start_date'] = str(df.index[test_start]) if hasattr(df.index, '__getitem__') else test_start
+        fold_results.append(metrics)
+
+        print(
+            f"Fold {fold + 1}/{n_splits} | "
+            f"train={len(X_train)} test={len(X_test)} | "
+            f"accuracy={metrics.get('accuracy', 0):.3f} | "
+            f"f1={metrics.get('f1', 0):.3f}"
+        )
+
+    if not fold_results:
+        return {'error': 'No folds completed', 'fold_results': []}
+
+    # Aggregate
+    acc_scores  = [r.get('accuracy', 0) for r in fold_results]
+    f1_scores   = [r.get('f1', 0) for r in fold_results]
+
+    summary = {
+        'n_folds_completed': len(fold_results),
+        'mean_accuracy':     float(np.mean(acc_scores)),
+        'std_accuracy':      float(np.std(acc_scores)),
+        'min_accuracy':      float(np.min(acc_scores)),
+        'max_accuracy':      float(np.max(acc_scores)),
+        'mean_f1':           float(np.mean(f1_scores)),
+        'std_f1':            float(np.std(f1_scores)),
+        'fold_results':      fold_results,
+        'note': (
+            'Walk-forward validation with anchored expanding window. '
+            f'Gap={gap} bars between train end and test start to prevent '
+            'rolling-feature leakage.'
+        ),
+    }
+
+    print(
+        f"\nWalk-forward summary ({len(fold_results)} folds): "
+        f"accuracy={summary['mean_accuracy']:.3f} ± {summary['std_accuracy']:.3f} | "
+        f"f1={summary['mean_f1']:.3f} ± {summary['std_f1']:.3f}"
+    )
+    return summary
+
+
 if __name__ == "__main__":
     print("HOPEFX Machine Learning Pipeline")
     print("Models: LSTM, XGBoost, Random Forest")
     print("Features: Feature engineering, hyperparameter tuning, evaluation reports")
     print("\nUsage:")
-    print("  from ml.training import train_ml_pipeline")
-    print("  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_f'])")
+    print("  from ml.training import train_ml_pipeline, walk_forward_validate")
+    print("  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_forest'])")
+    print("  wf = walk_forward_validate(df, model_type='random_forest', n_splits=5, gap=20)")
