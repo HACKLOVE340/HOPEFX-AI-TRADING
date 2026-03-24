@@ -3,6 +3,7 @@ import { createChart, IChartApi, ISeriesApi, CandlestickData } from 'lightweight
 import { useStore } from '../store/useStore'
 import { OrderPanel } from '../components/OrderPanel'
 import { PositionTable } from '../components/PositionTable'
+import { MultiTimeframeChart } from '../components/MultiTimeframeChart'
 
 export function Trading() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
@@ -102,6 +103,9 @@ export function Trading() {
         </div>
         
         <PositionTable />
+
+        {/* Multi-timeframe synchronized chart panels */}
+        <MultiTimeframeChart symbol="XAUUSD" />
       </div>
       
       <div className="space-y-6">
