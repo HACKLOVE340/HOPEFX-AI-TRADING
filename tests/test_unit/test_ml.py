@@ -6,11 +6,16 @@ import numpy as np
 from datetime import datetime, timezone
 
 try:
-    from hopefx.ml.pipeline import XGBoostOnlineModel
-    from hopefx.ml.drift import DriftDetector, DriftResult
+    from ml.online_learner import XGBoostOnlineModel  # type: ignore[import]
+    from ml.robust_predictor import DriftDetector, DriftResult  # type: ignore[import]
     HAS_ML_DEPS = True
 except ImportError:
-    HAS_ML_DEPS = False
+    try:
+        # Fallback: check if xgboost is available at all
+        import xgboost  # noqa: F401
+        HAS_ML_DEPS = False  # modules exist but classes may differ
+    except ImportError:
+        HAS_ML_DEPS = False
     DriftResult = None  # type: ignore[assignment,misc]
 
 pytestmark = pytest.mark.skipif(

@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime
-from hopefx.social.marketplace import StrategyMarketplace, StrategyListing
+from social.marketplace import StrategyMarketplace, StrategyListing
 
 class TestStrategyMarketplace:
     
