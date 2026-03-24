@@ -5,7 +5,7 @@ End-to-end testing of trading system components
 
 import pytest
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from brain.brain import HOPEFXBrain, SystemState
 from brokers import PaperTradingBroker
@@ -98,7 +98,7 @@ async def test_trade_execution_flow(paper_broker, risk_manager):
             from data.real_time_price_engine import Tick
             return Tick(
                 symbol=symbol,
-                timestamp=datetime.now().timestamp(),
+                timestamp=datetime.now(timezone.utc).timestamp(),
                 bid=1.0850,
                 ask=1.0852,
                 mid=1.0851,

@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -150,7 +150,7 @@ class UnitTests:
         
         # Valid tick
         tick = TickData(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             bid=1950.0,
             ask=1950.05,
             bid_size=10.0,
@@ -162,7 +162,7 @@ class UnitTests:
         # Invalid tick should raise
         try:
             invalid = TickData(
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 bid=1950.0,
                 ask=1949.0,  # Invalid: ask < bid
                 bid_size=10.0,
@@ -666,7 +666,7 @@ class ComprehensiveTestFramework:
                 'failed': failed,
                 'pass_rate': passed / len(self.all_results) if self.all_results else 0,
                 'total_duration_sec': duration,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             },
             'by_category': by_category,
             'failed_tests': [

@@ -14,7 +14,7 @@ Author: HOPEFX Development Team
 
 import logging
 from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import requests
 
@@ -116,7 +116,7 @@ class NewsAPIProvider(NewsProvider):
         try:
             # Set default from_date to last 24 hours
             if from_date is None:
-                from_date = datetime.now() - timedelta(days=1)
+                from_date = datetime.now(timezone.utc) - timedelta(days=1)
 
             params = {
                 'q': query,
@@ -307,7 +307,7 @@ class RSSFeedProvider(NewsProvider):
         if feeds is None:
             feeds = list(self.feeds.keys())
 
-        cutoff_time = datetime.now() - timedelta(hours=hours_back)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
         all_articles = []
 
         for feed_name in feeds:
@@ -343,7 +343,7 @@ class RSSFeedProvider(NewsProvider):
     def format_article(self, entry: Any, source: str) -> NewsArticle:
         """Format RSS feed entry"""
         # Parse published date
-        published_at = datetime.now()
+        published_at = datetime.now(timezone.utc)
         if hasattr(entry, 'published_parsed') and entry.published_parsed:
             published_at = datetime(*entry.published_parsed[:6])
         elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:

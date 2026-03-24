@@ -5,7 +5,7 @@ Production-grade backtesting with transaction cost modeling
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import List, Dict, Callable, Optional, Tuple, Any
 from enum import Enum
@@ -99,7 +99,7 @@ class Order:
     
     def __post_init__(self):
         if self.order_id is None:
-            self.order_id = f"ORD_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            self.order_id = f"ORD_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
 
 
 @dataclass

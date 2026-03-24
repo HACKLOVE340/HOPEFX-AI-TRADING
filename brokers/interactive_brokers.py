@@ -6,7 +6,7 @@ Supports stocks, options, futures, forex, and more.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 try:
@@ -188,7 +188,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 quantity=quantity,
                 price=price,
                 status=OrderStatus.PENDING,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 metadata={'ib_order_id': trade.order.orderId}
             )
 
@@ -261,7 +261,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                     current_price=current_price,
                     unrealized_pnl=unrealized_pnl,
                     realized_pnl=0.0,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now(timezone.utc)
                 )
                 result.append(position)
 
@@ -337,7 +337,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 margin_used=margin_used,
                 margin_available=margin_available,
                 positions_count=positions,
-                timestamp=datetime.now()
+                timestamp=datetime.now(timezone.utc)
             )
 
         except Exception as e:
@@ -397,5 +397,5 @@ class InteractiveBrokersConnector(BrokerConnector):
             quantity=trade.order.totalQuantity,
             price=trade.order.lmtPrice if hasattr(trade.order, 'lmtPrice') else None,
             status=OrderStatus.OPEN if trade.orderStatus.status == 'Submitted' else OrderStatus.FILLED,
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )

@@ -7,7 +7,7 @@ strategy development, and data analysis.
 
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import logging
 import json
@@ -111,7 +111,7 @@ This notebook provides a structured approach to developing trading strategies.
 # Import required libraries
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Load market data
 # data = load_market_data('XAUUSD', '1H', days=365)
@@ -273,15 +273,15 @@ print("Feature engineering functions ready")
         Returns:
             New notebook object
         """
-        notebook_id = f"nb_{len(self.notebooks) + 1}_{int(datetime.now().timestamp())}"
+        notebook_id = f"nb_{len(self.notebooks) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
         
         notebook = ResearchNotebook(
             notebook_id=notebook_id,
             title=title,
             description=description,
             cells=[],
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
             author=author,
             is_template=is_template
         )
@@ -321,7 +321,7 @@ print("Feature engineering functions ready")
         )
         
         notebook.cells.append(cell)
-        notebook.updated_at = datetime.now()
+        notebook.updated_at = datetime.now(timezone.utc)
         
         return cell
     
@@ -358,7 +358,7 @@ print("Feature engineering functions ready")
         cell.status = CellStatus.RUNNING
         cell.execution_count += 1
         
-        start_time = datetime.now()
+        start_time = datetime.now(timezone.utc)
         
         try:
             # In production, this would use a sandboxed Python executor
@@ -374,7 +374,7 @@ print("Feature engineering functions ready")
             cell.error_message = str(e)
             cell.output = None
         
-        cell.execution_time = (datetime.now() - start_time).total_seconds()
+        cell.execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
         
         return {
             'cell_id': cell_id,

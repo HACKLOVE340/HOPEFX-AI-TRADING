@@ -9,7 +9,7 @@ Comprehensive tests for Phases 17-26 modules:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import numpy as np
 
@@ -737,8 +737,8 @@ class TestExecutionTransparencyExtended:
         # No symbol filter in API; use period instead
         from datetime import datetime, timedelta
         dist = engine.get_slippage_distribution(
-            period_start=datetime.now() - timedelta(hours=1),
-            period_end=datetime.now() + timedelta(hours=1),
+            period_start=datetime.now(timezone.utc) - timedelta(hours=1),
+            period_end=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         assert dist is not None
 
@@ -755,8 +755,8 @@ class TestExecutionTransparencyExtended:
     def test_latency_trend_with_limit(self, engine, sample_executions):
         from datetime import datetime, timedelta
         trend = engine.get_latency_trend(
-            period_start=datetime.now() - timedelta(hours=1),
-            period_end=datetime.now() + timedelta(hours=1),
+            period_start=datetime.now(timezone.utc) - timedelta(hours=1),
+            period_end=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         assert trend is not None
 
@@ -863,7 +863,7 @@ class TestTeamsExtended:
             team_with_owner.team_id, 'exp@x.com', UserRole.VIEWER, 'owner1'
         )
         # Force expiry
-        inv.expires_at = datetime.now() - timedelta(hours=1)
+        inv.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         result = manager.accept_invitation(inv.token, 'user4', 'User 4')
         assert result is None
 

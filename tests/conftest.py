@@ -8,7 +8,7 @@ import tempfile
 import pytest
 import asyncio
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Generator
 
 # Import core components for testing
@@ -59,7 +59,7 @@ def sample_tick():
     """Create sample price tick"""
     return Tick(
         symbol="EURUSD",
-        timestamp=datetime.now().timestamp(),
+        timestamp=datetime.now(timezone.utc).timestamp(),
         bid=1.0850,
         ask=1.0852,
         mid=1.0851,
@@ -72,7 +72,7 @@ def sample_ohlcv():
     """Create sample OHLCV data"""
     return [
         OHLCV(
-            timestamp=datetime.now().timestamp() - i * 3600,
+            timestamp=datetime.now(timezone.utc).timestamp() - i * 3600,
             open=1.0800 + i * 0.001,
             high=1.0810 + i * 0.001,
             low=1.0790 + i * 0.001,
@@ -125,7 +125,7 @@ def generate_ohlcv_from_close(closes: list) -> list:
         open_price = closes[i-1] if i > 0 else close
 
         ohlcv.append(OHLCV(
-            timestamp=datetime.now().timestamp() - (len(closes) - i) * 3600,
+            timestamp=datetime.now(timezone.utc).timestamp() - (len(closes) - i) * 3600,
             open=open_price,
             high=high,
             low=low,

@@ -7,7 +7,7 @@ This strategy uses RSI to identify overbought and oversold conditions.
 import logging
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
@@ -63,10 +63,10 @@ class RSIStrategy(BaseStrategy):
             return None
         price = analysis.get("price", 0.0)
         if rsi < self.oversold:
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(),
+            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc),
                           confidence=min(0.95, 0.5 + (self.oversold - rsi) / self.oversold * 0.4))
         if rsi > self.overbought:
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(),
+            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc),
                           confidence=min(0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4))
         return None
 
@@ -100,7 +100,7 @@ class RSIStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'Insufficient data for RSI calculation',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             # Calculate RSI
@@ -117,7 +117,7 @@ class RSIStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'RSI calculation resulted in NaN',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             signal_type = 'HOLD'
@@ -171,7 +171,7 @@ class RSIStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'rsi': current_rsi,
                     'previous_rsi': previous_rsi,
@@ -187,5 +187,5 @@ class RSIStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

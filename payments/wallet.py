@@ -8,7 +8,7 @@ Note: This wallet ONLY handles subscription fees and commission payments.
 Trading capital is managed directly by brokers/prop firms.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from decimal import Decimal
 import logging
@@ -50,8 +50,8 @@ class Wallet:
         self.commission_balance = commission_balance
         self.currency = currency
         self.status = status
-        self.created_at = created_at or datetime.now()
-        self.updated_at = updated_at or datetime.now()
+        self.created_at = created_at or datetime.now(timezone.utc)
+        self.updated_at = updated_at or datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict:
         """Convert wallet to dictionary"""
@@ -269,11 +269,11 @@ class WalletManager:
         else:
             return False, f"Invalid wallet type: {wallet_type}", None
 
-        wallet.updated_at = datetime.now()
+        wallet.updated_at = datetime.now(timezone.utc)
 
         # Record transaction
         transaction = {
-            'transaction_id': f"TXN-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            'transaction_id': f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             'type': transaction_type,
             'wallet_type': wallet_type,
             'amount': float(amount),
@@ -281,7 +281,7 @@ class WalletManager:
             'reference': reference,
             'balance_after': float(wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance),
             'status': 'completed',
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
 
         if user_id not in self._transaction_history:
@@ -351,18 +351,18 @@ class WalletManager:
         else:
             return False, f"Invalid wallet type: {wallet_type}", None
 
-        wallet.updated_at = datetime.now()
+        wallet.updated_at = datetime.now(timezone.utc)
 
         # Record transaction
         transaction = {
-            'transaction_id': f"TXN-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            'transaction_id': f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             'type': transaction_type,
             'wallet_type': wallet_type,
             'amount': float(amount),
             'reference': reference,
             'balance_after': float(wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance),
             'status': 'completed',
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
 
         if user_id not in self._transaction_history:
@@ -436,7 +436,7 @@ class WalletManager:
             return False, "Wallet not found"
 
         wallet.status = WalletStatus.FROZEN
-        wallet.updated_at = datetime.now()
+        wallet.updated_at = datetime.now(timezone.utc)
 
         logger.warning(f"Wallet frozen for user {user_id}")
         return True, "Wallet frozen successfully"
@@ -456,7 +456,7 @@ class WalletManager:
             return False, "Wallet not found"
 
         wallet.status = WalletStatus.ACTIVE
-        wallet.updated_at = datetime.now()
+        wallet.updated_at = datetime.now(timezone.utc)
 
         logger.info(f"Wallet unfrozen for user {user_id}")
         return True, "Wallet activated successfully"

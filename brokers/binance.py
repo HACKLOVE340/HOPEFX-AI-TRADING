@@ -5,7 +5,7 @@ Implements real crypto trading with Binance REST API and WebSocket.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import hmac
 import hashlib
@@ -356,7 +356,7 @@ class BinanceConnector(BrokerConnector):
                         current_price=0.0,  # Would need separate price call
                         unrealized_pnl=0.0,  # Not calculated for spot
                         realized_pnl=0.0,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now(timezone.utc)
                     )
                     positions.append(position)
 
@@ -475,7 +475,7 @@ class BinanceConnector(BrokerConnector):
                 margin_used=0.0,  # Not applicable for spot
                 margin_available=total_balance,
                 positions_count=positions_count,
-                timestamp=datetime.now()
+                timestamp=datetime.now(timezone.utc)
             )
 
             return info

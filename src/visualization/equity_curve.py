@@ -5,7 +5,7 @@ Production equity curve visualization with headless support.
 import os
 import json
 from typing import List, Dict, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from dataclasses import dataclass
 from pathlib import Path
@@ -403,7 +403,7 @@ class EquityCurveGenerator:
 <body>
     <div class="container">
         <h1>📊 HOPEFX Backtest Report</h1>
-        <p class="subtitle">Strategy: <strong>{strategy_name}</strong> | Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} UTC</p>
+        <p class="subtitle">Strategy: <strong>{strategy_name}</strong> | Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")} UTC</p>
         
         <div style="margin-bottom: 30px;">
             <span class="badge {"success" if metrics.get("total_return_pct", 0) > 0 else "danger"}">

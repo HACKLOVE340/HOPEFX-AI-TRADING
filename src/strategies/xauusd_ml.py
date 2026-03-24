@@ -3,7 +3,7 @@ XAUUSD ML-powered trading strategy.
 """
 
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.domain.enums import SignalStrength, TradeDirection
 from src.domain.models import MarketData, OHLCV, Signal
@@ -51,7 +51,7 @@ class XAUUSDMLStrategy(Strategy):
 
         # Check cooldown
         if self._last_signal_time:
-            time_since = (datetime.now() - self._last_signal_time).total_seconds() / 60
+            time_since = (datetime.now(timezone.utc) - self._last_signal_time).total_seconds() / 60
             if time_since < self._cooldown_minutes:
                 return None
 
@@ -113,7 +113,7 @@ class XAUUSDMLStrategy(Strategy):
             )
 
             self._metrics["signals_generated"] += 1
-            self._last_signal_time = datetime.now()
+            self._last_signal_time = datetime.now(timezone.utc)
 
             return signal
 

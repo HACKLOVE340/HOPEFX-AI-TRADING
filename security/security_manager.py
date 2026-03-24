@@ -8,7 +8,7 @@ Security Management
 
 import logging
 from typing import Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class SecurityManager:
     
     def check_rate_limit(self, user_id: str) -> bool:
         """Check if user exceeded rate limit"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         if user_id not in self.request_log:
             self.request_log[user_id] = []

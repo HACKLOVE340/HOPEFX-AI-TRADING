@@ -6,7 +6,7 @@ This strategy identifies and trades breakouts from consolidation periods.
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from strategies.base import BaseStrategy
@@ -98,7 +98,7 @@ class BreakoutStrategy(BaseStrategy):
                     'type': 'HOLD',
                     'confidence': 0.0,
                     'reason': 'Insufficient data',
-                    'timestamp': datetime.now()
+                    'timestamp': datetime.now(timezone.utc)
                 }
 
             # Identify levels
@@ -183,7 +183,7 @@ class BreakoutStrategy(BaseStrategy):
                 'type': signal_type,
                 'confidence': confidence,
                 'reason': reason,
-                'timestamp': datetime.now(),
+                'timestamp': datetime.now(timezone.utc),
                 'metadata': {
                     'price': current_price,
                     'support': support,
@@ -202,5 +202,5 @@ class BreakoutStrategy(BaseStrategy):
                 'type': 'HOLD',
                 'confidence': 0.0,
                 'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }

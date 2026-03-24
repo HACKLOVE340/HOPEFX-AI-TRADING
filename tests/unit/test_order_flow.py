@@ -9,7 +9,7 @@ Tests for:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class TestTrade:
@@ -20,7 +20,7 @@ class TestTrade:
         from analysis.order_flow import Trade
 
         trade = Trade(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             price=1950.00,
             size=100.0,
             side='buy'
@@ -34,8 +34,8 @@ class TestTrade:
         """Test buy trade detection."""
         from analysis.order_flow import Trade
 
-        buy_trade = Trade(datetime.now(), 1950.00, 100.0, 'buy')
-        sell_trade = Trade(datetime.now(), 1950.00, 100.0, 'sell')
+        buy_trade = Trade(datetime.now(timezone.utc), 1950.00, 100.0, 'buy')
+        sell_trade = Trade(datetime.now(timezone.utc), 1950.00, 100.0, 'sell')
 
         assert buy_trade.is_buy is True
         assert buy_trade.is_sell is False
@@ -291,7 +291,7 @@ class TestOrderFlowAnalyzer:
         analyzer = OrderFlowAnalyzer()
 
         # Add trades over time
-        base_time = datetime.now()
+        base_time = datetime.now(timezone.utc)
         for i in range(20):
             timestamp = base_time + timedelta(minutes=i)
             analyzer.add_trade('XAUUSD', 1950.00 + i * 0.01, 100.0, 'buy' if i % 2 == 0 else 'sell', timestamp)
@@ -348,8 +348,8 @@ class TestVolumeProfile:
 
         profile = VolumeProfile(
             symbol='XAUUSD',
-            start_time=datetime.now(),
-            end_time=datetime.now(),
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc),
             levels=levels,
             total_volume=1800,
             total_buy_volume=1000,
@@ -375,7 +375,7 @@ class TestOrderFlowAnalysis:
 
         analysis = OrderFlowAnalysis(
             symbol='XAUUSD',
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             total_volume=10000,
             buy_volume=6000,
             sell_volume=4000,

@@ -7,7 +7,7 @@ for collaborative trading environments.
 
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 import hashlib
@@ -209,8 +209,8 @@ class TeamManager:
         Returns:
             New team object
         """
-        team_id = f"team_{len(self.teams) + 1}_{int(datetime.now().timestamp())}"
-        owner_id = owner_id or f"user_{int(datetime.now().timestamp())}"
+        team_id = f"team_{len(self.teams) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        owner_id = owner_id or f"user_{int(datetime.now(timezone.utc).timestamp())}"
 
         # Create owner as first member
         owner = TeamMember(
@@ -218,8 +218,8 @@ class TeamManager:
             email=owner_email,
             display_name=owner_name,
             role=UserRole.OWNER,
-            joined_at=datetime.now(),
-            last_active=datetime.now()
+            joined_at=datetime.now(timezone.utc),
+            last_active=datetime.now(timezone.utc)
         )
 
         team = Team(
@@ -227,7 +227,7 @@ class TeamManager:
             name=name,
             owner_id=owner_id,
             members={owner_id: owner},
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
             settings={
                 'notifications_enabled': True,
                 'two_factor_required': False,
@@ -278,13 +278,13 @@ class TeamManager:
 
         # Create invitation
         invitation = TeamInvitation(
-            invitation_id=f"inv_{int(datetime.now().timestamp())}_{secrets.token_hex(4)}",
+            invitation_id=f"inv_{int(datetime.now(timezone.utc).timestamp())}_{secrets.token_hex(4)}",
             team_id=team_id,
             email=email,
             role=role,
             invited_by=invited_by,
-            created_at=datetime.now(),
-            expires_at=datetime.now() + timedelta(days=7),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             token=secrets.token_urlsafe(32)
         )
 
@@ -325,7 +325,7 @@ class TeamManager:
             logger.error("Invalid or expired invitation token")
             return None
 
-        if invitation.expires_at < datetime.now():
+        if invitation.expires_at < datetime.now(timezone.utc):
             logger.error("Invitation has expired")
             return None
 
@@ -340,8 +340,8 @@ class TeamManager:
             email=invitation.email,
             display_name=display_name,
             role=invitation.role,
-            joined_at=datetime.now(),
-            last_active=datetime.now()
+            joined_at=datetime.now(timezone.utc),
+            last_active=datetime.now(timezone.utc)
         )
 
         team.members[user_id] = member
@@ -589,7 +589,7 @@ class TeamManager:
             'key': api_key,
             'key_id': api_key_hash[:16],
             'name': name,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
 
     def verify_api_key(self, team_id: str, api_key: str) -> bool:
@@ -645,7 +645,7 @@ class TeamManager:
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
         self.activity_logs.append(log)
 

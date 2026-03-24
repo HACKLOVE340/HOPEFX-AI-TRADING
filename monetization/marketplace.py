@@ -391,7 +391,7 @@ class LicenseManager:
             user_id=user_id,
             strategy_id=strategy_id,
             subscription_id=subscription_id,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             is_active=True,
             max_activations=max_activations
@@ -448,7 +448,7 @@ class LicenseManager:
             return {'valid': False, 'message': 'License is deactivated', 'license': license_data}
         
         # Check expiration
-        if datetime.now() > license_data['expires_at']:
+        if datetime.now(timezone.utc) > license_data['expires_at']:
             return {'valid': False, 'message': 'License has expired', 'license': license_data}
         
         # Check user match if provided
@@ -481,7 +481,7 @@ class LicenseManager:
             SET current_activations = current_activations + 1,
                 last_used = ?
             WHERE license_id = ?
-        """, (datetime.now().isoformat(), license_id))
+        """, (datetime.now(timezone.utc).isoformat(), license_id))
         conn.commit()
         conn.close()
         
@@ -525,7 +525,7 @@ class SubscriptionManager:
         
         # Create subscription
         subscription_id = secrets.token_hex(16)
-        start_date = datetime.now()
+        start_date = datetime.now(timezone.utc)
         
         if billing_cycle == "monthly":
             end_date = start_date + timedelta(days=30)
@@ -610,7 +610,7 @@ class SubscriptionManager:
             SELECT * FROM subscriptions 
             WHERE user_id = ? AND strategy_id = ? AND is_active = 1
             AND end_date > ?
-        """, (user_id, strategy_id, datetime.now().isoformat()))
+        """, (user_id, strategy_id, datetime.now(timezone.utc).isoformat()))
         row = cursor.fetchone()
         conn.close()
         
@@ -646,8 +646,8 @@ class MarketplaceAPI:
             category=category,
             tags=tags,
             performance_metrics=performance_metrics,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         
         self.db.save_strategy(strategy)
@@ -660,7 +660,7 @@ class MarketplaceAPI:
         strategy = self.db.get_strategy(strategy_id)
         if strategy:
             strategy.status = StrategyStatus.ACTIVE
-            strategy.updated_at = datetime.now()
+            strategy.updated_at = datetime.now(timezone.utc)
             self.db.save_strategy(strategy)
             print(f"✅ Strategy {strategy_id} approved")
             return True
@@ -745,7 +745,7 @@ class PurchaseStatus(_enum.Enum):
 # Dataclass-style aliases
 from dataclasses import dataclass, field
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 @dataclass
 class MarketplaceStrategy:

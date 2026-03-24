@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import gzip
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/mobile", tags=["mobile"])
 
@@ -140,7 +140,7 @@ async def validate_mobile_order(order: MobileOrderRequest) -> dict:
     return {'allowed': True}
 
 def generate_order_id() -> str:
-    return f"mob-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    return f"mob-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
 async def execute_order_async(order: MobileOrderRequest):
     """Background order execution."""

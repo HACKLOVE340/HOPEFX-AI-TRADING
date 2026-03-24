@@ -6,7 +6,7 @@ Provides detailed analytics and transparency for trade execution quality.
 
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 import statistics
@@ -137,7 +137,7 @@ class ExecutionTransparencyEngine:
         fill_ratio = (executed_size / requested_size * 100) if requested_size > 0 else 100
         
         execution = ExecutionRecord(
-            execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now().timestamp())}",
+            execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now(timezone.utc).timestamp())}",
             order_id=order_id,
             symbol=symbol,
             side=side,
@@ -149,7 +149,7 @@ class ExecutionTransparencyEngine:
             slippage_cost=slippage_cost,
             latency_ms=latency_ms,
             fill_ratio=fill_ratio,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             broker=broker,
             market_conditions=market_conditions or {}
         )
@@ -177,7 +177,7 @@ class ExecutionTransparencyEngine:
         Returns:
             Execution report
         """
-        period_end = period_end or datetime.now()
+        period_end = period_end or datetime.now(timezone.utc)
         period_start = period_start or (period_end - timedelta(days=30))
         
         # Filter executions
@@ -195,7 +195,7 @@ class ExecutionTransparencyEngine:
             logger.warning("No executions found for the specified criteria")
             # Return empty report
             return ExecutionReport(
-                report_id=f"report_{int(datetime.now().timestamp())}",
+                report_id=f"report_{int(datetime.now(timezone.utc).timestamp())}",
                 period_start=period_start,
                 period_end=period_end,
                 total_executions=0,
@@ -236,7 +236,7 @@ class ExecutionTransparencyEngine:
         broker_comparison = self._compare_brokers(filtered)
         
         report = ExecutionReport(
-            report_id=f"report_{int(datetime.now().timestamp())}",
+            report_id=f"report_{int(datetime.now(timezone.utc).timestamp())}",
             period_start=period_start,
             period_end=period_end,
             total_executions=len(filtered),
@@ -335,7 +335,7 @@ class ExecutionTransparencyEngine:
         period_end: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Get slippage distribution data for visualization."""
-        period_end = period_end or datetime.now()
+        period_end = period_end or datetime.now(timezone.utc)
         period_start = period_start or (period_end - timedelta(days=30))
         
         filtered = [
@@ -383,7 +383,7 @@ class ExecutionTransparencyEngine:
         period_end: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Get latency trend over time."""
-        period_end = period_end or datetime.now()
+        period_end = period_end or datetime.now(timezone.utc)
         period_start = period_start or (period_end - timedelta(days=30))
         
         filtered = sorted([
@@ -491,7 +491,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_report(days: int = 30):
         """Generate an execution quality report for the last N days."""
         from datetime import datetime, timedelta
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         report = engine.generate_report(start, end)
         if report is None:
@@ -513,7 +513,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_slippage_distribution(days: int = 30):
         """Get slippage distribution data for charting."""
         from datetime import datetime, timedelta
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         return engine.get_slippage_distribution(start, end)
 
@@ -521,7 +521,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_latency_trend(days: int = 30):
         """Get daily latency trend data."""
         from datetime import datetime, timedelta
-        end = datetime.now()
+        end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         return engine.get_latency_trend(start, end)
 

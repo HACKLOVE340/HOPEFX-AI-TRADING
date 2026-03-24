@@ -8,7 +8,7 @@ Multi-User Team Management
 from dataclasses import dataclass
 from typing import Dict, List
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import uuid
 
@@ -38,13 +38,13 @@ class Team:
         self.name = name
         self.creator_id = creator_id
         self.members: Dict[str, TeamMember] = {}
-        self.created_at = datetime.now()
+        self.created_at = datetime.now(timezone.utc)
         self.strategies = []
     
     def add_member(self, user_id: str, username: str, email: str, 
                   role: UserRole = UserRole.TRADER) -> TeamMember:
         """Add team member"""
-        member = TeamMember(user_id, username, email, role, datetime.now())
+        member = TeamMember(user_id, username, email, role, datetime.now(timezone.utc))
         self.members[user_id] = member
         logger.info(f"Member added: {username} ({role.value})")
         return member

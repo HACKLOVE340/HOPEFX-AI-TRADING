@@ -7,7 +7,7 @@ without programming knowledge.
 
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import logging
 import json
@@ -337,7 +337,7 @@ class NoCodeStrategyBuilder:
         Returns:
             New strategy object
         """
-        strategy_id = f"strategy_{len(self.strategies) + 1}_{int(datetime.now().timestamp())}"
+        strategy_id = f"strategy_{len(self.strategies) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
         
         strategy = NoCodeStrategy(
             strategy_id=strategy_id,
@@ -422,7 +422,7 @@ class NoCodeStrategyBuilder:
         )
         
         strategy.rules.append(rule)
-        strategy.updated_at = datetime.now()
+        strategy.updated_at = datetime.now(timezone.utc)
         
         logger.info(f"Added rule '{name}' to strategy {strategy_id}")
         return rule
@@ -563,7 +563,7 @@ class NoCodeStrategyBuilder:
         code = f'''"""
 Auto-generated strategy: {strategy.name}
 Description: {strategy.description}
-Generated: {datetime.now().isoformat()}
+Generated: {datetime.now(timezone.utc).isoformat()}
 """
 
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig

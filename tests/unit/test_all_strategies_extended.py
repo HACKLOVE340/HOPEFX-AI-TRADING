@@ -321,7 +321,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.BUY,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             confidence=0.75,
             metadata={"reason": "test"},
         )
@@ -335,7 +335,7 @@ class TestBaseStrategyInterface:
                 signal_type=SignalType.BUY,
                 symbol="XAUUSD",
                 price=1900.0,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 confidence=1.5,
             )
 
@@ -344,7 +344,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.HOLD,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             confidence=0.0,
         )
         assert sig.confidence == 0.0
@@ -382,7 +382,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.BUY,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             confidence=0.8,
         )
 

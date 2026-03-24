@@ -14,7 +14,7 @@ import logging
 import random
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -45,7 +45,7 @@ class PaperBroker:
             'bid': self.price - 0.05,
             'ask': self.price + 0.05,
             'mid': self.price,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
     
     def place_order(self, symbol, side, qty, order_type='market'):
@@ -59,7 +59,7 @@ class PaperBroker:
             'side': side,
             'qty': qty,
             'price': fill_price,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'pnl': 0.0
         }
         
@@ -133,7 +133,7 @@ class SimpleMLModel:
             'signal': signal,
             'confidence': min(0.95, confidence),
             'target': target,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         self.prediction_history.append(prediction)
         return prediction
@@ -260,7 +260,7 @@ class XAUUSDBot:
         
         # Save results
         results = {
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'mode': self.mode,
             'duration_minutes': self.duration,
             'stats': self.stats,

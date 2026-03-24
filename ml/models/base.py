@@ -12,7 +12,7 @@ import numpy as np
 import pickle
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 
@@ -38,7 +38,7 @@ class BaseMLModel(ABC):
         self.is_trained = False
         self.training_history = []
         self.metadata = {
-            'created_at': datetime.now().isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat(),
             'version': '1.0.0',
             'name': name
         }

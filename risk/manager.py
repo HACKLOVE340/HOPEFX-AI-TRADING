@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import numpy as np
 
@@ -96,7 +96,7 @@ class RiskManager:
         self.daily_starting_equity = 0.0
         self.daily_pnl = 0.0
         self.daily_trades: int = 0
-        self.last_reset_date = datetime.now().date()
+        self.last_reset_date = datetime.now(timezone.utc).date()
 
         # Extended balance tracking (used by test_risk_notification_extended)
         self.initial_balance: float = initial_balance
@@ -117,7 +117,7 @@ class RiskManager:
     def update_equity(self, equity: float):
         """Update equity and calculate drawdown"""
         # Check for new day
-        today = datetime.now().date()
+        today = datetime.now(timezone.utc).date()
         if today != self.last_reset_date:
             self.daily_starting_equity = equity
             self.daily_pnl = 0.0
@@ -158,14 +158,14 @@ class RiskManager:
         
         # Check if halt should be lifted
         if self._trading_halted and self._halt_until:
-            if datetime.now() >= self._halt_until:
+            if datetime.now(timezone.utc) >= self._halt_until:
                 self._resume_trading()
     
     def _halt_trading(self, reason: str, duration_hours: float = 1.0):
         """Halt trading"""
         self._trading_halted = True
         self._halt_reason = reason
-        self._halt_until = datetime.now() + timedelta(hours=duration_hours)
+        self._halt_until = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
         
         logger.critical(f"🚫 TRADING HALTED: {reason} (until {self._halt_until})")
     
