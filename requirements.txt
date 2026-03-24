@@ -23,6 +23,7 @@ redis>=5.0.0
 # ── Auth & security ───────────────────────────────────────────────────────────
 PyJWT>=2.8.0
 passlib>=1.7.4
+bcrypt>=4.0.0
 cryptography>=41.0.0
 pyotp>=2.9.0
 pydantic[email]>=2.5.0
@@ -69,6 +70,9 @@ pydantic-settings>=2.0.0
 # ── Multi-exchange trading ────────────────────────────────────────────────────
 ccxt>=4.1.0
 
+# ── OANDA broker ─────────────────────────────────────────────────────────────
+oandapyV20>=0.6.3
+
 # ── Telegram bot ─────────────────────────────────────────────────────────────
 python-telegram-bot>=20.0
 
@@ -92,6 +96,7 @@ circuitbreaker>=2.0.0
 # ── Dev / test ────────────────────────────────────────────────────────────────
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
+pytest-timeout>=2.2.0
 hypothesis>=6.0.0
 
 # ── System / process monitoring ───────────────────────────────────────────────

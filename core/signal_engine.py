@@ -24,44 +24,60 @@ _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
 _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
-async def _fetch_market_data(symbol: str) -> Optional[dict]:
-    """Fetch latest OHLCV bar from yfinance."""
-    try:
-        import yfinance as yf
-        _TICKER_MAP = {
-            "XAUUSD": "GC=F",
-            "EURUSD": "EURUSD=X",
-            "BTCUSD": "BTC-USD",
-            "GBPUSD": "GBPUSD=X",
-            "USDJPY": "USDJPY=X",
-            "AUDUSD": "AUDUSD=X",
-            "USDCHF": "USDCHF=X",
-        }
-        ticker = _TICKER_MAP.get(symbol.upper(), symbol)
-        df = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
-        if df.empty:
-            return None
-        row = df.iloc[-1]
-        prices = df["Close"].dropna().tolist()
-        highs = df["High"].dropna().tolist()
-        lows = df["Low"].dropna().tolist()
-        volumes = df["Volume"].dropna().tolist()
-        return {
-            "symbol": symbol,
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
-            "volume": float(row["Volume"]),
-            "prices": prices,
-            "highs": highs,
-            "lows": lows,
-            "volumes": volumes,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as exc:
-        logger.warning("Market data fetch failed for %s: %s", symbol, exc)
-        return None
+async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[dict]:
+    """
+    Fetch latest OHLCV data for a symbol.
+
+    Uses the broker's get_market_data() so no external feed is required for
+    paper trading. Falls back to a synthetic bar built from the broker's spot
+    price when OHLCV history is unavailable.
+    """
+    broker = getattr(app_state, "broker", None) if app_state is not None else None
+
+    if broker is not None:
+        try:
+            bars = broker.get_market_data(symbol, timeframe="1h", limit=100)
+            if bars:
+                last = bars[-1]
+                prices = [float(b["close"]) for b in bars]
+                highs  = [float(b["high"])  for b in bars]
+                lows   = [float(b["low"])   for b in bars]
+                volumes = [float(b.get("volume", 0)) for b in bars]
+                return {
+                    "symbol": symbol,
+                    "open":   float(last["open"]),
+                    "high":   float(last["high"]),
+                    "low":    float(last["low"]),
+                    "close":  float(last["close"]),
+                    "volume": float(last.get("volume", 0)),
+                    "prices": prices,
+                    "highs":  highs,
+                    "lows":   lows,
+                    "volumes": volumes,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception as exc:
+            logger.warning("Broker OHLCV fetch failed for %s: %s", symbol, exc)
+
+        # Fallback: build a synthetic bar from the spot price
+        try:
+            price = broker.get_market_price(symbol)
+            if price:
+                return {
+                    "symbol": symbol,
+                    "open": price, "high": price, "low": price, "close": price,
+                    "volume": 0.0,
+                    "prices": [price],
+                    "highs":  [price],
+                    "lows":   [price],
+                    "volumes": [0.0],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception as exc:
+            logger.warning("Broker spot price fetch failed for %s: %s", symbol, exc)
+
+    logger.warning("No broker available — cannot fetch market data for %s", symbol)
+    return None
 
 
 async def run_signal_engine(app_state: Any):
@@ -94,7 +110,7 @@ async def _tick(app_state: Any):
 
     for symbol in _SYMBOLS:
         symbol = symbol.strip().upper()
-        data = await _fetch_market_data(symbol)
+        data = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
 

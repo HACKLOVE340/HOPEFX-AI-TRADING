@@ -200,6 +200,48 @@ def setup_metrics_middleware(app: FastAPI):
 
 
 # Startup event
+async def _price_stream_loop(ws_manager):
+    """
+    Background task: polls the paper broker for current prices and broadcasts
+    tick updates to all connected WebSocket clients.
+
+    Uses the broker's in-memory price table so no external feed is required for
+    paper trading. When a real broker (OANDA, etc.) is wired in, replace the
+    polling loop with the broker's native streaming callback.
+    """
+    _STREAM_SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
+    _POLL_INTERVAL = float(os.getenv("PRICE_STREAM_INTERVAL", "1.0"))
+
+    logger.info(
+        "Price stream loop started — symbols=%s interval=%.1fs",
+        _STREAM_SYMBOLS, _POLL_INTERVAL,
+    )
+
+    while True:
+        try:
+            broker = getattr(app_state, "broker", None)
+            if broker is not None:
+                for sym in _STREAM_SYMBOLS:
+                    sym = sym.strip().upper()
+                    price = broker.get_market_price(sym)
+                    if price:
+                        # Use a tiny synthetic spread for paper trading
+                        spread = price * 0.0001
+                        await ws_manager.broadcast_price_update(
+                            symbol=sym,
+                            price=price,
+                            bid=round(price - spread / 2, 5),
+                            ask=round(price + spread / 2, 5),
+                        )
+        except asyncio.CancelledError:
+            logger.info("Price stream loop stopped")
+            return
+        except Exception as exc:
+            logger.warning("Price stream error: %s", exc)
+
+        await asyncio.sleep(_POLL_INTERVAL)
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
@@ -411,6 +453,22 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Risk Manager not available: {e}")
             app_state.risk_manager = None
+
+        # ── Broker ───────────────────────────────────────────────────────────
+        try:
+            from brokers.paper_trading import PaperTradingBroker
+            initial_balance = float(os.getenv("PAPER_TRADING_BALANCE", "10000"))
+            paper_broker = PaperTradingBroker(
+                initial_balance=initial_balance,
+                session_factory=app_state.db_session_factory,
+            )
+            await paper_broker.connect()
+            app_state.broker = paper_broker
+            logger.info("✓ Paper Trading Broker connected (balance=$%.2f)", initial_balance)
+            log_activity("Paper Trading Broker connected")
+        except Exception as e:
+            logger.warning(f"⚠ Broker not available: {e}")
+            app_state.broker = None
 
         # ── Compliance Manager ───────────────────────────────────────────────
         try:
