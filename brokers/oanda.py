@@ -22,6 +22,14 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+# Circuit breaker — imported lazily to avoid circular imports at module load
+def _get_oanda_cb():
+    try:
+        from core.circuit_breaker import CircuitBreaker
+        return CircuitBreaker.get("oanda", failure_threshold=5, reset_timeout=60.0)
+    except Exception:
+        return None
+
 from brokers.base import (
     AccountInfo,
     BrokerConnector,
@@ -507,12 +515,21 @@ class AsyncOANDAConnector:
         }
         if price and order_type != OrderType.MARKET:
             body["order"]["price"] = str(price)
+        cb = _get_oanda_cb()
         try:
-            async with session.post(
-                f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
+            if cb:
+                async with cb:
+                    async with session.post(
+                        f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body
+                    ) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+            else:
+                async with session.post(
+                    f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
             return _parse_order_response(data, symbol, side, abs(quantity))
         except Exception as exc:
             logger.error("AsyncOANDAConnector place_order: %s", exc)
@@ -599,13 +616,23 @@ class AsyncOANDAConnector:
     ) -> List[Dict]:
         session = self._require_session()
         gran = _TF_MAP.get(timeframe, timeframe)
+        cb = _get_oanda_cb()
         try:
-            async with session.get(
-                f"{self.base_url}/v3/instruments/{symbol}/candles",
-                params={"granularity": gran, "count": limit},
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
+            if cb:
+                async with cb:
+                    async with session.get(
+                        f"{self.base_url}/v3/instruments/{symbol}/candles",
+                        params={"granularity": gran, "count": limit},
+                    ) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+            else:
+                async with session.get(
+                    f"{self.base_url}/v3/instruments/{symbol}/candles",
+                    params={"granularity": gran, "count": limit},
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
             return [
                 {
                     "timestamp": c.get("time"),
