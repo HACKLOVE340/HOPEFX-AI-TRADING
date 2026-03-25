@@ -236,7 +236,11 @@ class KillSwitch:
             reason,
             self._activated_at.isoformat(),
         )
-        print(f"\nKILL SWITCH ACTIVATED: {reason}")
+        # Also write to stderr so the message appears even if the log handler
+        # is misconfigured or the process is about to crash.
+        import sys as _sys
+        _sys.stderr.write(f"\nKILL SWITCH ACTIVATED: {reason}\n")
+        _sys.stderr.flush()
 
         # Notify callbacks
         for cb in self._callbacks:
@@ -445,7 +449,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
     including the router, or use the dependency injection shown below.
     """
     try:
-        from fastapi import APIRouter, HTTPException, Depends
+        from fastapi import APIRouter, HTTPException, Depends, Request
         from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
         from pydantic import BaseModel
     except ImportError:
@@ -456,19 +460,37 @@ def create_kill_switch_router(ks: "KillSwitch"):
     _bearer = HTTPBearer(auto_error=True)
 
     def _require_admin(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
-        """Minimal auth guard — replace with your real auth dependency."""
+        """
+        Verify the bearer token and require role >= 'admin'.
+        Raises 401 for invalid/expired tokens, 403 for insufficient role.
+        Logs all failures so auth errors are never silently swallowed.
+        """
         try:
             from api.auth import _decode_token
             user = _decode_token(credentials.credentials)
-            _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
-            if _ROLE_RANK.get(getattr(user, "role", "user"), -1) < _ROLE_RANK["admin"]:
-                raise HTTPException(status_code=403, detail="Role 'admin' required")
-            return user
         except HTTPException:
             raise
-        except Exception:
-            raise HTTPException(status_code=401, detail="Invalid or expired token",
-                                headers={"WWW-Authenticate": "Bearer"})
+        except Exception as exc:
+            # Misconfigured auth service — log at critical so it is never silent.
+            logger.critical(
+                "Kill switch auth dependency raised unexpected error: %s — "
+                "denying access (fail closed)",
+                exc,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Authentication service error — access denied",
+            )
+
+        _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+        if _ROLE_RANK.get(getattr(user, "role", "user"), -1) < _ROLE_RANK["admin"]:
+            logger.warning(
+                "Kill switch access denied: user=%s role=%s — admin required",
+                getattr(user, "sub", "unknown"),
+                getattr(user, "role", "unknown"),
+            )
+            raise HTTPException(status_code=403, detail="Role 'admin' required")
+        return user
 
     class ActivateRequest(BaseModel):
         reason: str = "manual activation via API"
@@ -481,37 +503,88 @@ def create_kill_switch_router(ks: "KillSwitch"):
         """Return current kill switch state. No authentication required."""
         return ks.status()
 
+    # In-memory rate limiter: max 5 activate/deactivate attempts per minute per user.
+    # Prevents brute-force token guessing against the deactivate endpoint.
+    import time as _time
+    from collections import defaultdict as _defaultdict
+    _ks_attempt_times: dict = _defaultdict(list)
+    _KS_RATE_LIMIT = 5
+    _KS_RATE_WINDOW = 60  # seconds
+
+    def _check_rate_limit(user_id: str) -> None:
+        now = _time.monotonic()
+        attempts = _ks_attempt_times[user_id]
+        # Purge attempts outside the window
+        _ks_attempt_times[user_id] = [t for t in attempts if now - t < _KS_RATE_WINDOW]
+        if len(_ks_attempt_times[user_id]) >= _KS_RATE_LIMIT:
+            logger.warning(
+                "Kill switch rate limit exceeded for user=%s (%d attempts in %ds)",
+                user_id, len(_ks_attempt_times[user_id]), _KS_RATE_WINDOW,
+            )
+            raise HTTPException(status_code=429, detail="Too many kill switch requests")
+        _ks_attempt_times[user_id].append(now)
+
     @router.post("/activate")
-    async def activate(req: ActivateRequest, user=Depends(_require_admin)):
+    async def activate(req: ActivateRequest, request: Request, user=Depends(_require_admin)):
         """
         Halt all trading immediately.
 
         Sets the kill switch active, cancels open orders, and blocks new
         order submission until deactivated.  Requires role >= 'admin'.
+        Rate limited to 5 requests per minute per user.
         """
+        user_id = getattr(user, "sub", "unknown")
+        _check_rate_limit(user_id)
+
         if ks.is_active():
+            logger.info("Kill switch activate called but already active (user=%s)", user_id)
             return {"status": "already_active", "reason": ks.reason}
-        ks.activate(f"[api:{getattr(user, 'sub', 'unknown')}] {req.reason}")
+
+        reason = f"[api:{user_id}] {req.reason}"
+        ks.activate(reason)
         logger.critical(
-            "Kill switch ACTIVATED via API by user=%s reason=%r",
-            getattr(user, "sub", "unknown"), req.reason,
+            "AUDIT: Kill switch ACTIVATED via API | user=%s | ip=%s | reason=%r",
+            user_id,
+            request.client.host if request.client else "unknown",
+            req.reason,
         )
-        return {"status": "activated", "reason": ks.reason, "activated_at": ks.activated_at}
+        return {
+            "status": "activated",
+            "reason": ks.reason,
+            "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+        }
 
     @router.post("/deactivate")
-    async def deactivate(req: DeactivateRequest, user=Depends(_require_admin)):
+    async def deactivate(req: DeactivateRequest, request: Request, user=Depends(_require_admin)):
         """
         Resume trading after a kill switch event.
 
-        Requires role >= 'admin' and optionally an HMAC token (if the
-        KillSwitch was configured with one).  Requires role >= 'admin'.
+        Requires role >= 'admin' AND the HMAC deactivation token configured
+        via HOPEFX_KILL_SWITCH_TOKEN.  Both checks must pass.
+        Rate limited to 5 requests per minute per user.
         """
+        user_id = getattr(user, "sub", "unknown")
+        _check_rate_limit(user_id)
+
         if not ks.is_active():
+            logger.info("Kill switch deactivate called but already inactive (user=%s)", user_id)
             return {"status": "already_inactive"}
-        ks.deactivate(token=req.token or None)
+
+        try:
+            ks.deactivate(token=req.token or None)
+        except PermissionError as exc:
+            logger.critical(
+                "AUDIT: Kill switch deactivation REFUSED | user=%s | ip=%s | reason=%s",
+                user_id,
+                request.client.host if request.client else "unknown",
+                exc,
+            )
+            raise HTTPException(status_code=403, detail=str(exc))
+
         logger.warning(
-            "Kill switch DEACTIVATED via API by user=%s",
-            getattr(user, "sub", "unknown"),
+            "AUDIT: Kill switch DEACTIVATED via API | user=%s | ip=%s",
+            user_id,
+            request.client.host if request.client else "unknown",
         )
         return {"status": "deactivated"}
 
