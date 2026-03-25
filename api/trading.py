@@ -646,11 +646,24 @@ def _make_strategy_router():
         else:
             risk_per_unit = req.entry_price * 0.01  # default 1%
         risk_amount = req.account_equity * req.risk_pct * req.confidence
-        size = risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0
+
+        # Apply FOMC regime multiplier (hawkish → 0.8×, dovish → 1.2×, neutral → 1.0×)
+        fomc_multiplier = 1.0
+        try:
+            from api.calendar import _fomc_regime_override
+            if _fomc_regime_override.get("active"):
+                fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
+        except Exception:
+            pass
+
+        size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
         tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
-        return PositionSizeResponse(size=round(size, 4), risk_amount=round(risk_amount, 2),
-                                    stop_loss_price=req.stop_loss_price,
-                                    take_profit_price=tp)
+        return PositionSizeResponse(
+            size=round(size, 4),
+            risk_amount=round(risk_amount * fomc_multiplier, 2),
+            stop_loss_price=req.stop_loss_price,
+            take_profit_price=tp,
+        )
 
     @_r.get("/risk-metrics")
     def get_risk_metrics():
