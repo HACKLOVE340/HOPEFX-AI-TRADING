@@ -234,6 +234,19 @@ async def place_order(
             except Exception as ws_exc:
                 logger.warning("WebSocket broadcast failed: %s", ws_exc)
 
+        # ── FCM push: trade filled ───────────────────────────────────────────
+        try:
+            from mobile.push_notifications import push_manager
+            push_manager.send_trade_filled(
+                user_id=user.sub,
+                symbol=order.symbol,
+                direction=order.side,
+                price=result.average_fill_price or 0.0,
+                lots=order.quantity,
+            )
+        except Exception as fcm_exc:
+            logger.debug("FCM trade push skipped: %s", fcm_exc)
+
         # Prometheus order metric
         try:
             from core.metrics import ORDERS_TOTAL
