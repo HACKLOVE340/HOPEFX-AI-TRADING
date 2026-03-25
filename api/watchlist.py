@@ -10,6 +10,7 @@ POST   /api/watchlist/{symbol}     — add symbol to watchlist
 DELETE /api/watchlist/{symbol}     — remove symbol from watchlist
 GET    /api/watchlist/prices       — live prices for all watchlist symbols
 
+All routes require a valid JWT bearer token (Depends(get_current_user)).
 Persistence: configurations table via api.db_store.
 Falls back to in-memory dict when DB is unavailable.
 """
@@ -21,9 +22,10 @@ import random
 import time
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel
 
+from api.auth import TokenPayload, get_current_user
 from api.db_store import db_get, db_set
 
 logger = logging.getLogger(__name__)
@@ -40,19 +42,6 @@ _BASE_PRICES: Dict[str, float] = {
     "USDJPY": 149.50, "BTCUSD": 67000.0, "ETHUSD": 3500.0,
     "USDCAD": 1.3600, "AUDUSD": 0.6550, "USDCHF": 0.8950, "NZDUSD": 0.6050,
 }
-
-
-def _get_user_id(request: Request) -> str:
-    try:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            import os, jwt as pyjwt
-            secret = os.getenv("JWT_SECRET_KEY", "hopefx-secret-key-change-in-production")
-            payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
-            return str(payload.get("sub", "demo"))
-    except Exception as exc:
-        logger.debug("Watchlist user extraction failed, using query param fallback: %s", exc)
-    return request.query_params.get("user_id", "demo")
 
 
 def _get_price(symbol: str) -> dict:
@@ -106,47 +95,51 @@ class WatchlistResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=WatchlistResponse)
-async def get_watchlist(request: Request) -> WatchlistResponse:
-    user_id = _get_user_id(request)
-    symbols = _load_watchlist(user_id)
+async def get_watchlist(
+    user: TokenPayload = Depends(get_current_user),
+) -> WatchlistResponse:
+    """Return the authenticated user's watchlist with live prices."""
+    symbols = _load_watchlist(user.sub)
     items = [WatchlistItem(**_get_price(s)) for s in symbols]
-    return WatchlistResponse(user_id=user_id, symbols=symbols, items=items)
+    return WatchlistResponse(user_id=user.sub, symbols=symbols, items=items)
 
 
 @router.post("/{symbol}", status_code=status.HTTP_201_CREATED)
 async def add_symbol(
-    request: Request,
     symbol: str = Path(..., min_length=3, max_length=12),
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    user_id = _get_user_id(request)
+    """Add a symbol to the authenticated user's watchlist."""
     sym = symbol.upper()
-    wl = _load_watchlist(user_id)
+    wl = _load_watchlist(user.sub)
     if sym in wl:
         raise HTTPException(status_code=409, detail=f"{sym} already in watchlist")
     if len(wl) >= 20:
         raise HTTPException(status_code=400, detail="Watchlist limit is 20 symbols")
     wl.append(sym)
-    _save_watchlist(user_id, wl)
+    _save_watchlist(user.sub, wl)
     return {"symbol": sym, "added": True, "persisted": True}
 
 
 @router.delete("/{symbol}")
 async def remove_symbol(
-    request: Request,
     symbol: str = Path(..., min_length=3, max_length=12),
+    user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    user_id = _get_user_id(request)
+    """Remove a symbol from the authenticated user's watchlist."""
     sym = symbol.upper()
-    wl = _load_watchlist(user_id)
+    wl = _load_watchlist(user.sub)
     if sym not in wl:
         raise HTTPException(status_code=404, detail=f"{sym} not in watchlist")
     wl.remove(sym)
-    _save_watchlist(user_id, wl)
+    _save_watchlist(user.sub, wl)
     return {"symbol": sym, "removed": True}
 
 
 @router.get("/prices", response_model=List[WatchlistItem])
-async def get_prices(request: Request) -> List[WatchlistItem]:
-    user_id = _get_user_id(request)
-    symbols = _load_watchlist(user_id)
+async def get_prices(
+    user: TokenPayload = Depends(get_current_user),
+) -> List[WatchlistItem]:
+    """Return live prices for all symbols in the authenticated user's watchlist."""
+    symbols = _load_watchlist(user.sub)
     return [WatchlistItem(**_get_price(s)) for s in symbols]
