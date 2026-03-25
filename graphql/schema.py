@@ -1,38 +1,10 @@
-import graphene
+"""
+Compatibility shim — real schema is in api/graphql_schema.py.
 
-class TradingData(graphene.ObjectType):
-    id = graphene.ID()
-    price = graphene.Float()
-    volume = graphene.Int()
-    timestamp = graphene.DateTime()
-
-class Query(graphene.ObjectType):
-    trading_data = graphene.List(TradingData)
-
-    def resolve_trading_data(self, info):
-        # Logic to fetch trading data
-        return []
-
-class CreateTradingData(graphene.Mutation):
-    class Arguments:
-        price = graphene.Float(required=True)
-        volume = graphene.Int(required=True)
-
-    trading_data = graphene.Field(TradingData)
-
-    def mutate(self, info, price, volume):
-        # Logic to create new trading data
-        trading_data = TradingData(id=1, price=price, volume=volume, timestamp='2026-03-22T08:46:44')
-        return CreateTradingData(trading_data=trading_data)
-
-class Mutation(graphene.ObjectType):
-    create_trading_data = CreateTradingData.Field()
-
-class Subscription(graphene.ObjectType):
-    trading_data_updated = graphene.Field(TradingData)
-
-    async def resolve_trading_data_updated(root, info):
-        # Logic for subscription to trading data updates
-        pass
-
-schema = graphene.Schema(query=Query, mutation=Mutation, subscription=Subscription)
+The graphql/ directory name shadows graphql-core when imported directly,
+so the schema was moved to api/graphql_schema.py. This file re-exports
+for any code that still imports from graphql.schema.
+"""
+# Do NOT import strawberry here — this module is loaded as part of the
+# graphql package namespace which conflicts with graphql-core.
+# Import from api.graphql_schema instead.

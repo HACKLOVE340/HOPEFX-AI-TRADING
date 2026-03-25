@@ -57,6 +57,15 @@ from api.journal import router as journal_router
 from api.profiles import router as profiles_router
 from api.social_feed import router as social_feed_router
 from api.mobile import router as mobile_router
+
+# GraphQL — strawberry-graphql (api/graphql_schema.py avoids shadowing graphql-core)
+try:
+    from api.graphql_schema import graphql_router as _graphql_router
+    _graphql_available = True
+except Exception as _gql_err:
+    _graphql_router = None
+    _graphql_available = False
+    logger.warning("GraphQL router not loaded: %s", _gql_err)
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -103,6 +112,11 @@ app.include_router(journal_router)
 app.include_router(profiles_router)
 app.include_router(social_feed_router)
 app.include_router(mobile_router)
+
+# Mount GraphQL at /graphql — GraphiQL playground available at GET /graphql
+if _graphql_available and _graphql_router is not None:
+    app.include_router(_graphql_router, prefix="/graphql")
+    logger.info("GraphQL endpoint mounted at /graphql")
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
