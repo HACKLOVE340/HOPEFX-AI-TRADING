@@ -464,6 +464,37 @@ class RiskManager:
             messages=messages,
         )
     
+    def check_cvar_pre_trade(self) -> Tuple[bool, str]:
+        """
+        Explicit CVaR gate for the order submission path.
+
+        Called directly in place_order() *before* broker execution so that
+        CVaR breaches block orders even when assess_risk() is bypassed or
+        the returns history has grown since the last assess_risk() call.
+
+        Returns:
+            (allowed, reason) — allowed=False means the order must be rejected.
+        """
+        if self._trading_halted:
+            return False, f"Trading halted: {self._halt_reason}"
+
+        if self._cvar_daily_limit <= 0:
+            return True, "CVaR limit disabled"
+
+        if len(self._returns_history) < 10:
+            return True, "Insufficient history for CVaR (< 10 observations)"
+
+        cvar = self._compute_cvar()
+        if cvar > self._cvar_daily_limit:
+            reason = (
+                f"Pre-trade CVaR check failed: CVaR={cvar:.4f} exceeds "
+                f"daily limit={self._cvar_daily_limit:.4f}"
+            )
+            logger.warning("ORDER BLOCKED — %s", reason)
+            return False, reason
+
+        return True, f"CVaR={cvar:.4f} within limit={self._cvar_daily_limit:.4f}"
+
     # ------------------------------------------------------------------
     # Position sizing helpers (Area 3 — split from _calculate_position_size_full)
     # ------------------------------------------------------------------
