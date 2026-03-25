@@ -4,11 +4,14 @@ HOPEFX Walk-Forward Backtesting Engine
 Prevents overfitting with rolling train/test splits
 """
 
+import logging
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Callable, Optional, Tuple
+from typing import Any, List, Dict, Callable, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,17 +44,19 @@ class WalkForwardEngine:
         self.step_size = step_size
         self.results: List[WalkForwardResult] = []
     
-    def run(self, 
-           data: pd.DataFrame,
-           strategy_factory: Callable,
-           parameter_grid: List[Dict]) -> List[WalkForwardResult]:
+    def run(
+        self,
+        data: pd.DataFrame,
+        strategy_factory: Callable[..., Any],
+        parameter_grid: List[Dict[str, Any]],
+    ) -> List[WalkForwardResult]:
         """
         Run walk-forward optimization.
-        
+
         Args:
-            data: Price data with datetime index
-            strategy_factory: Function that creates strategy with parameters
-            parameter_grid: List of parameter sets to test
+            data: Price data with datetime index.
+            strategy_factory: Callable that accepts parameter kwargs and returns a strategy.
+            parameter_grid: List of parameter dicts to evaluate on each training window.
         """
         n_samples = len(data)
         window_start = 0
@@ -70,8 +75,10 @@ class WalkForwardEngine:
             purge_data = data.iloc[purge_start:purge_end]  # Not used (embargo)
             test_data = data.iloc[test_start:test_end]
             
-            print(f"\nWindow: Train {train_start}-{train_end}, "
-                  f"Test {test_start}-{test_end} (purge: {purge_start}-{purge_end})")
+            logger.info(
+                "Window: Train %d-%d, Test %d-%d (purge: %d-%d)",
+                train_start, train_end, test_start, test_end, purge_start, purge_end,
+            )
             
             # Optimize on training data
             best_params, train_perf = self._optimize_parameters(
@@ -103,11 +110,13 @@ class WalkForwardEngine:
         
         return self.results
     
-    def _optimize_parameters(self, 
-                            train_data: pd.DataFrame,
-                            strategy_factory: Callable,
-                            parameter_grid: List[Dict]) -> Tuple[Dict, Dict]:
-        """Find best parameters on training data"""
+    def _optimize_parameters(
+        self,
+        train_data: pd.DataFrame,
+        strategy_factory: Callable[..., Any],
+        parameter_grid: List[Dict[str, Any]],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Find best parameters on training data."""
         best_score = -np.inf
         best_params = None
         best_perf = None
@@ -125,8 +134,8 @@ class WalkForwardEngine:
         
         return best_params, best_perf
     
-    def _evaluate_strategy(self, data: pd.DataFrame, strategy) -> Dict:
-        """Evaluate strategy performance"""
+    def _evaluate_strategy(self, data: pd.DataFrame, strategy: Any) -> Dict[str, Any]:
+        """Evaluate strategy performance."""
         trades = []
         position = 0
         equity = [1.0]
@@ -167,7 +176,7 @@ class WalkForwardEngine:
         }
     
     def _calculate_max_drawdown(self, equity: List[float]) -> float:
-        """Calculate maximum drawdown"""
+        """Calculate maximum drawdown."""
         peak = equity[0]
         max_dd = 0
         
@@ -180,8 +189,8 @@ class WalkForwardEngine:
         
         return max_dd
     
-    def _detect_overfit(self, train_perf: Dict, test_perf: Dict) -> bool:
-        """Detect if strategy is overfit"""
+    def _detect_overfit(self, train_perf: Dict[str, Any], test_perf: Dict[str, Any]) -> bool:
+        """Detect if strategy is overfit."""
         # Sharpe ratio degradation
         train_sharpe = train_perf.get('sharpe_ratio', 0)
         test_sharpe = test_perf.get('sharpe_ratio', 0)
@@ -198,8 +207,8 @@ class WalkForwardEngine:
         
         return False
     
-    def get_aggregate_stats(self) -> Dict:
-        """Aggregate statistics across all windows"""
+    def get_aggregate_stats(self) -> Dict[str, Any]:
+        """Aggregate statistics across all windows."""
         if not self.results:
             return {}
         

@@ -5,7 +5,7 @@ Event-driven backtesting with realistic execution simulation
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from collections import deque
@@ -13,6 +13,13 @@ import json
 
 import numpy as np
 import pandas as pd
+
+try:
+    from scipy import stats as _scipy_stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    _scipy_stats = None  # type: ignore[assignment]
+    SCIPY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +56,27 @@ class BacktestResult:
     equity_curve: List[Dict]
     trades: List[Dict]
     metrics: Dict[str, float]
+    # Extended risk-adjusted metrics (Area 1)
+    sortino_ratio: float = 0.0
+    calmar_ratio: float = 0.0
+    omega_ratio: float = 0.0
+    tail_ratio: float = 0.0
+    skewness: float = 0.0
+    kurtosis: float = 0.0
+    avg_mae: float = 0.0
+    avg_mfe: float = 0.0
+    # Statistical significance (Area 1)
+    t_statistic: float = 0.0
+    p_value: float = 1.0
+    is_significant: bool = False
+    sample_size: int = 0
+    # Monte Carlo (Area 1)
+    mc_median_final: float = 0.0
+    mc_p5_final: float = 0.0
+    mc_p95_final: float = 0.0
+    mc_ruin_probability: float = 0.0
+    # Regime breakdown (Area 1)
+    regime_breakdown: Dict[str, Any] = field(default_factory=dict)
 
 
 class HistoricalDataLoader:
@@ -194,11 +222,13 @@ class SimulatedBroker:
         symbol: str,
         side: str,
         quantity: float,
-        current_price: float
+        current_price: float,
+        bar_high: float = 0.0,
+        bar_low: float = 0.0,
     ) -> Dict:
         """Simulate market order execution"""
-        # Apply slippage
-        slippage = self._calculate_slippage(current_price)
+        # Apply slippage (variable model uses bar range)
+        slippage = self._calculate_slippage(current_price, bar_high, bar_low)
         
         if side == 'buy':
             fill_price = current_price * (1 + slippage)
@@ -269,17 +299,34 @@ class SimulatedBroker:
             'commission': commission
         }
     
-    def _calculate_slippage(self, price: float) -> float:
-        """Calculate execution slippage"""
+    def _calculate_slippage(self, price: float, bar_high: float = 0.0, bar_low: float = 0.0) -> float:
+        """
+        Calculate execution slippage.
+
+        'variable' model scales by the bar's high-low range relative to a 0.2%
+        base spread, with a multiplier clamped to [0.5, 3.0].  Wide bars (high
+        volatility) produce up to 3× the base slippage; narrow bars produce as
+        little as 0.5×.
+        """
         if self.config.slippage_model == 'none':
             return 0.0
-        
+
         if self.config.slippage_model == 'fixed':
-            # Fixed pips slippage
-            pip = 0.0001 if 'JPY' not in str(price) else 0.01
+            pip = 0.0001 if price > 10 else 0.01
             return (self.config.slippage_pips * pip) / price
-        
-        # Variable slippage based on volatility
+
+        if self.config.slippage_model == 'variable':
+            base_slippage = 0.002  # 0.2% base
+            if price > 0 and bar_high > bar_low:
+                bar_range_pct = (bar_high - bar_low) / price
+                # Normalise: a 0.2% range gives multiplier=1.0
+                multiplier = bar_range_pct / base_slippage
+                multiplier = max(0.5, min(3.0, multiplier))
+            else:
+                multiplier = 1.0
+            return base_slippage * multiplier * 0.5  # half-spread model
+
+        # Legacy random fallback
         return np.random.normal(0, self.config.slippage_pips * 0.0001)
     
     def _record_trade(self, symbol: str, action: str, quantity: float,
@@ -366,18 +413,24 @@ class BacktestEngine:
         for i, timestamp in enumerate(all_timestamps):
             self.broker.update_time(timestamp)
             
-            # Build current price snapshot
-            current_prices = {}
+            # Build current price snapshot and bar data for variable slippage
+            current_prices: Dict[str, float] = {}
+            current_bars: Dict[str, Dict] = {}
             for symbol, df in all_data.items():
-                # Find price at or before timestamp
                 mask = df['timestamp'] <= timestamp
                 if mask.any():
                     row = df[mask].iloc[-1]
-                    current_prices[symbol] = row['close']
-            
+                    current_prices[symbol] = float(row['close'])
+                    current_bars[symbol] = {
+                        'high': float(row.get('high', row['close'])),
+                        'low': float(row.get('low', row['close'])),
+                        'open': float(row.get('open', row['close'])),
+                        'close': float(row['close']),
+                    }
+
             # Update broker prices
             self.broker.update_prices(current_prices)
-            
+
             # Generate signals from strategies
             for strategy in self.strategies:
                 try:
@@ -386,10 +439,10 @@ class BacktestEngine:
                         prices=current_prices,
                         data=all_data
                     )
-                    
+
                     for signal in signals:
-                        self._process_signal(signal, timestamp, current_prices)
-                        
+                        self._process_signal(signal, timestamp, current_prices, current_bars)
+
                 except Exception as e:
                     logger.error(f"Strategy error at {timestamp}: {e}")
             
@@ -404,20 +457,34 @@ class BacktestEngine:
         
         return self.results
     
-    def _process_signal(self, signal: Dict, timestamp: datetime, prices: Dict[str, float]):
+    def _process_signal(
+        self,
+        signal: Dict,
+        timestamp: datetime,
+        prices: Dict[str, float],
+        bar_data: Optional[Dict[str, Dict]] = None,
+    ) -> None:
         """Process trading signal"""
         symbol = signal.get('symbol')
         action = signal.get('action')
-        
+
         if symbol not in prices:
             return
-        
+
         current_price = prices[symbol]
-        quantity = signal.get('size', 1000)  # Default size
-        
-        # Execute through simulated broker
-        result = self.broker.place_market_order(symbol, action, quantity, current_price)
-        
+        quantity = signal.get('size', 1000)
+
+        # Extract bar high/low for variable slippage
+        bar_high = bar_low = 0.0
+        if bar_data and symbol in bar_data:
+            bar_high = bar_data[symbol].get('high', 0.0)
+            bar_low = bar_data[symbol].get('low', 0.0)
+
+        result = self.broker.place_market_order(
+            symbol, action, quantity, current_price,
+            bar_high=bar_high, bar_low=bar_low,
+        )
+
         if result['success']:
             self.events.append({
                 'timestamp': timestamp.isoformat(),
@@ -425,13 +492,147 @@ class BacktestEngine:
                 'symbol': symbol,
                 'action': action,
                 'price': result['fill_price'],
-                'quantity': quantity
+                'quantity': quantity,
             })
     
+    # ------------------------------------------------------------------
+    # Monte Carlo simulation
+    # ------------------------------------------------------------------
+
+    def run_monte_carlo_simulation(
+        self,
+        trade_returns: np.ndarray,
+        n_simulations: int = 1000,
+        ruin_threshold: float = 0.5,
+    ) -> Dict[str, float]:
+        """
+        Bootstrap Monte Carlo over trade returns.
+
+        Args:
+            trade_returns: Array of per-trade return fractions.
+            n_simulations: Number of bootstrap paths.
+            ruin_threshold: Equity fraction below which a path is considered ruined.
+
+        Returns:
+            Dict with mc_median_final, mc_p5_final, mc_p95_final, mc_ruin_probability.
+        """
+        if len(trade_returns) == 0:
+            return {
+                'mc_median_final': 1.0,
+                'mc_p5_final': 1.0,
+                'mc_p95_final': 1.0,
+                'mc_ruin_probability': 0.0,
+            }
+
+        n_trades = len(trade_returns)
+        rng = np.random.default_rng(seed=42)
+        final_equities: List[float] = []
+        ruin_count = 0
+
+        for _ in range(n_simulations):
+            sampled = rng.choice(trade_returns, size=n_trades, replace=True)
+            equity = 1.0
+            ruined = False
+            for r in sampled:
+                equity *= (1.0 + r)
+                if equity <= ruin_threshold:
+                    ruined = True
+                    break
+            if ruined:
+                ruin_count += 1
+                final_equities.append(ruin_threshold)
+            else:
+                final_equities.append(equity)
+
+        arr = np.array(final_equities)
+        return {
+            'mc_median_final': float(np.median(arr)),
+            'mc_p5_final': float(np.percentile(arr, 5)),
+            'mc_p95_final': float(np.percentile(arr, 95)),
+            'mc_ruin_probability': ruin_count / n_simulations,
+        }
+
+    # ------------------------------------------------------------------
+    # Regime classification
+    # ------------------------------------------------------------------
+
+    def _classify_regime(
+        self,
+        equity_curve: List[Dict],
+        entry_idx: int,
+        lookback: int = 60,
+    ) -> str:
+        """
+        Classify the market regime at a trade entry using a 60-bar return lookback.
+
+        Regimes:
+          trending_bull  — positive trend, low volatility
+          trending_bear  — negative trend, low volatility
+          high_vol       — high volatility regardless of direction
+          ranging        — low trend, low volatility
+        """
+        start = max(0, entry_idx - lookback)
+        window = equity_curve[start:entry_idx + 1]
+        if len(window) < 2:
+            return 'ranging'
+
+        prices = np.array([e['equity'] for e in window])
+        returns = np.diff(prices) / prices[:-1]
+        if len(returns) == 0:
+            return 'ranging'
+
+        trend = float(np.mean(returns))
+        vol = float(np.std(returns))
+        vol_threshold = 0.005  # 0.5% per bar
+
+        if vol > vol_threshold:
+            return 'high_vol'
+        if trend > 0.001:
+            return 'trending_bull'
+        if trend < -0.001:
+            return 'trending_bear'
+        return 'ranging'
+
+    def _compute_regime_breakdown(
+        self,
+        trades: List[Dict],
+        equity_curve: List[Dict],
+    ) -> Dict[str, Any]:
+        """
+        Compute per-regime win_rate and avg_pnl across all trades.
+        Each trade's entry regime is classified using the equity curve index.
+        """
+        regime_trades: Dict[str, List[float]] = {
+            'trending_bull': [],
+            'trending_bear': [],
+            'ranging': [],
+            'high_vol': [],
+        }
+
+        for i, trade in enumerate(trades):
+            regime = self._classify_regime(equity_curve, i)
+            regime_trades[regime].append(trade.get('net_pnl', 0.0))
+
+        breakdown: Dict[str, Any] = {}
+        for regime, pnls in regime_trades.items():
+            if not pnls:
+                continue
+            arr = np.array(pnls)
+            breakdown[regime] = {
+                'count': len(arr),
+                'win_rate': float(np.mean(arr > 0)),
+                'avg_pnl': float(np.mean(arr)),
+            }
+        return breakdown
+
+    # ------------------------------------------------------------------
+    # Main results calculation
+    # ------------------------------------------------------------------
+
     def _calculate_results(self) -> BacktestResult:
-        """Calculate performance metrics"""
+        """Calculate performance metrics including all Area 1 additions."""
         trades = self.broker.trades
-        
+
         if not trades:
             return BacktestResult(
                 total_return=0,
@@ -444,58 +645,143 @@ class BacktestEngine:
                 sharpe_ratio=0,
                 equity_curve=self.broker.equity_curve,
                 trades=[],
-                metrics={}
+                metrics={},
             )
-        
-        # Basic stats
+
+        # ── Basic stats ───────────────────────────────────────────────
         total_trades = len(trades)
         winning_trades = sum(1 for t in trades if t['net_pnl'] > 0)
         losing_trades = total_trades - winning_trades
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
-        
-        # P&L
+
         total_pnl = sum(t['net_pnl'] for t in trades)
         gross_profit = sum(t['net_pnl'] for t in trades if t['net_pnl'] > 0)
         gross_loss = sum(t['net_pnl'] for t in trades if t['net_pnl'] < 0)
         profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else float('inf')
-        
-        # Returns
+
         initial_equity = self.config.initial_capital
         final_equity = self.broker.get_equity()
         total_return = (final_equity - initial_equity) / initial_equity
-        
-        # Drawdown
+
+        # ── Drawdown ──────────────────────────────────────────────────
         equity_values = [e['equity'] for e in self.broker.equity_curve]
         peak = initial_equity
-        max_drawdown = 0
-        
+        max_drawdown = 0.0
         for equity in equity_values:
             if equity > peak:
                 peak = equity
-            drawdown = (peak - equity) / peak
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-        
-        # Sharpe ratio (simplified)
+            dd = (peak - equity) / peak if peak > 0 else 0.0
+            if dd > max_drawdown:
+                max_drawdown = dd
+
+        # ── Bar returns for ratio calculations ────────────────────────
+        ann_factor = np.sqrt(252.0 * self.config.bars_per_day)
+        bar_returns = np.array([])
         if len(equity_values) > 1:
-            returns = np.diff(equity_values) / equity_values[:-1]
-            if len(returns) > 0 and np.std(returns) > 0:
-                sharpe = np.mean(returns) / np.std(returns) * np.sqrt(252 * 24)  # Hourly to annual
+            eq_arr = np.array(equity_values, dtype=float)
+            bar_returns = np.diff(eq_arr) / eq_arr[:-1]
+
+        # ── Sharpe ────────────────────────────────────────────────────
+        sharpe = 0.0
+        if len(bar_returns) > 0 and np.std(bar_returns) > 0:
+            sharpe = float(np.mean(bar_returns) / np.std(bar_returns) * ann_factor)
+
+        # ── Sortino ───────────────────────────────────────────────────
+        sortino = 0.0
+        if len(bar_returns) > 0:
+            downside = bar_returns[bar_returns < 0]
+            downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
+            if downside_std > 0:
+                sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
+
+        # ── Calmar ────────────────────────────────────────────────────
+        annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
+        calmar = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+
+        # ── Omega ─────────────────────────────────────────────────────
+        threshold = 0.0
+        gains = bar_returns[bar_returns > threshold] - threshold
+        losses = threshold - bar_returns[bar_returns <= threshold]
+        omega = float(np.sum(gains) / np.sum(losses)) if np.sum(losses) > 0 else float('inf')
+
+        # ── Tail ratio ────────────────────────────────────────────────
+        tail_ratio = 0.0
+        if len(bar_returns) > 0:
+            p95 = abs(float(np.percentile(bar_returns, 95)))
+            p5 = abs(float(np.percentile(bar_returns, 5)))
+            tail_ratio = p95 / p5 if p5 > 0 else 0.0
+
+        # ── Skewness / Kurtosis ───────────────────────────────────────
+        skewness = 0.0
+        kurtosis = 0.0
+        if len(bar_returns) > 3:
+            if SCIPY_AVAILABLE and _scipy_stats is not None:
+                skewness = float(_scipy_stats.skew(bar_returns))
+                kurtosis = float(_scipy_stats.kurtosis(bar_returns))
             else:
-                sharpe = 0
-        else:
-            sharpe = 0
-        
-        # Additional metrics
-        metrics = {
+                skewness = float(pd.Series(bar_returns).skew())
+                kurtosis = float(pd.Series(bar_returns).kurtosis())
+
+        # ── MAE / MFE ─────────────────────────────────────────────────
+        # Approximate: MAE = avg losing trade magnitude, MFE = avg winning trade magnitude
+        avg_mae = abs(gross_loss / losing_trades) if losing_trades > 0 else 0.0
+        avg_mfe = gross_profit / winning_trades if winning_trades > 0 else 0.0
+
+        # ── Statistical significance (t-test vs 0) ────────────────────
+        trade_returns_arr = np.array([t['net_pnl'] for t in trades])
+        t_stat = p_val = 0.0
+        is_significant = False
+        sample_size = len(trade_returns_arr)
+
+        if sample_size < 100:
+            logger.warning(
+                "Backtest significance test: sample_size=%d < 100 — results may not be reliable",
+                sample_size,
+            )
+
+        if sample_size >= 2:
+            if SCIPY_AVAILABLE and _scipy_stats is not None:
+                t_result = _scipy_stats.ttest_1samp(trade_returns_arr, popmean=0.0)
+                t_stat = float(t_result.statistic)
+                p_val = float(t_result.pvalue)
+                is_significant = bool(p_val < 0.05)
+            else:
+                # Manual t-statistic
+                mean_r = float(np.mean(trade_returns_arr))
+                std_r = float(np.std(trade_returns_arr, ddof=1))
+                if std_r > 0:
+                    t_stat = mean_r / (std_r / np.sqrt(sample_size))
+
+        # ── Monte Carlo ───────────────────────────────────────────────
+        trade_return_fracs = trade_returns_arr / initial_equity
+        mc = self.run_monte_carlo_simulation(trade_return_fracs)
+
+        # ── Regime breakdown ──────────────────────────────────────────
+        regime_breakdown = self._compute_regime_breakdown(trades, self.broker.equity_curve)
+
+        # ── Aggregate metrics dict ────────────────────────────────────
+        metrics: Dict[str, Any] = {
             'avg_trade_pnl': total_pnl / total_trades,
             'avg_winning_trade': gross_profit / winning_trades if winning_trades > 0 else 0,
             'avg_losing_trade': gross_loss / losing_trades if losing_trades > 0 else 0,
             'max_consecutive_wins': self._max_consecutive(trades, 'win'),
             'max_consecutive_losses': self._max_consecutive(trades, 'loss'),
-            'recovery_factor': total_return / max_drawdown if max_drawdown > 0 else 0
+            'recovery_factor': total_return / max_drawdown if max_drawdown > 0 else 0,
+            'sortino_ratio': sortino,
+            'calmar_ratio': calmar,
+            'omega_ratio': omega,
+            'tail_ratio': tail_ratio,
+            'skewness': skewness,
+            'kurtosis': kurtosis,
+            'avg_mae': avg_mae,
+            'avg_mfe': avg_mfe,
+            't_statistic': t_stat,
+            'p_value': p_val,
+            'is_significant': is_significant,
+            'sample_size': sample_size,
+            **{f'mc_{k}': v for k, v in mc.items()},
         }
-        
+
         return BacktestResult(
             total_return=total_return,
             total_trades=total_trades,
@@ -507,7 +793,24 @@ class BacktestEngine:
             sharpe_ratio=sharpe,
             equity_curve=self.broker.equity_curve,
             trades=trades,
-            metrics=metrics
+            metrics=metrics,
+            sortino_ratio=sortino,
+            calmar_ratio=calmar,
+            omega_ratio=omega,
+            tail_ratio=tail_ratio,
+            skewness=skewness,
+            kurtosis=kurtosis,
+            avg_mae=avg_mae,
+            avg_mfe=avg_mfe,
+            t_statistic=t_stat,
+            p_value=p_val,
+            is_significant=is_significant,
+            sample_size=sample_size,
+            mc_median_final=mc['mc_median_final'],
+            mc_p5_final=mc['mc_p5_final'],
+            mc_p95_final=mc['mc_p95_final'],
+            mc_ruin_probability=mc['mc_ruin_probability'],
+            regime_breakdown=regime_breakdown,
         )
     
     def _max_consecutive(self, trades: List[Dict], trade_type: str) -> int:
