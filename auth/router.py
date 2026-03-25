@@ -208,6 +208,16 @@ async def register(body: RegisterRequest, request: Request):
         except Exception as _e:
             logger.warning("Verification email failed: %s", _e)
 
+    # Auto-assign FREE tier so paper trading works immediately after signup
+    try:
+        from monetization.subscription import subscription_manager, SubscriptionTier
+        existing = subscription_manager.get_user_subscription(body.username)
+        if not existing:
+            subscription_manager.create_subscription(body.username, SubscriptionTier.FREE)
+            logger.info("FREE tier assigned to new user %s", body.username)
+    except Exception as _tier_err:
+        logger.debug("Free tier assignment skipped: %s", _tier_err)
+
     response = {"message": msg}
     # Expose token in non-production so devs can test without SMTP
     if verify_token and os.getenv("APP_ENV", "development") != "production":

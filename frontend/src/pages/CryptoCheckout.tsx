@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,24 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const [copied, setCopied] = useState(false);
   const [confirmations, setConfirmations] = useState(0);
   const [pollingTimer, setPollingTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+  // Flutterwave — shown as primary option for West/Central Africa
+  const [showFlutterwave, setShowFlutterwave] = useState(false);
+  const [flwLoading, setFlwLoading] = useState(false);
+  const [flwEnabled, setFlwEnabled] = useState(false);
+
+  // Detect region via IP geolocation to decide whether to show Flutterwave
+  useEffect(() => {
+    api.get<{ enabled: boolean }>('/api/payments/flutterwave/status')
+      .then(r => setFlwEnabled(r.data.enabled))
+      .catch(() => {});
+    // Use a free IP geo API to detect Africa
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then((d: { continent_code?: string }) => {
+        if (d.continent_code === 'AF') setShowFlutterwave(true);
+      })
+      .catch(() => {});
+  }, []);
 
   // Cleanup polling on unmount
   useEffect(() => () => { if (pollingTimer) clearInterval(pollingTimer); }, [pollingTimer]);
@@ -143,37 +162,16 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
     setLoadingAddress(true);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
-      const res = await fetch('/api/payments/crypto/address', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currency: selectedCrypto,
-          network,
-          plan_id: selectedPlan.id,
-          amount_usd: selectedPlan.price_usd,
-          user_id: 'demo_user',
-        }),
+      const res = await api.post<DepositAddress>('/api/payments/crypto/address', {
+        currency: selectedCrypto,
+        network,
+        plan_id: selectedPlan.id,
+        amount_usd: selectedPlan.price_usd,
+        user_id: 'demo_user',
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setDepositInfo(data);
-      } else {
-        // Fallback mock
-        const rate = MOCK_RATES[selectedCrypto];
-        const amount = selectedPlan.price_usd * rate;
-        const address = MOCK_ADDRESSES[selectedCrypto];
-        setDepositInfo({
-          address,
-          qr_code: address,
-          network: selectedCrypto === 'USDT' ? usdtNetwork : selectedCrypto.toLowerCase(),
-          min_deposit: amount,
-          confirmations_required: selectedCrypto === 'BTC' ? 3 : 12,
-          amount_crypto: amount,
-          expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        });
-      }
+      setDepositInfo(res.data);
     } catch (_) {
+      // Fallback mock when backend unavailable
       const rate = MOCK_RATES[selectedCrypto];
       const amount = selectedPlan.price_usd * rate;
       const address = MOCK_ADDRESSES[selectedCrypto];
@@ -190,6 +188,24 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
       setLoadingAddress(false);
     }
   }, [selectedCrypto, usdtNetwork, selectedPlan]);
+
+  const handleFlutterwavePay = async () => {
+    setFlwLoading(true);
+    try {
+      const res = await api.post<{ payment_link: string; tx_ref: string }>(
+        '/api/payments/flutterwave/init',
+        { amount: selectedPlan.price_usd, currency: 'USD', plan: selectedPlan.id }
+      );
+      // Redirect to Flutterwave hosted checkout
+      window.location.href = res.data.payment_link;
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      alert(detail ?? 'Flutterwave payment init failed. Please try crypto payment.');
+    } finally {
+      setFlwLoading(false);
+    }
+  };
 
   const handleProceed = async () => {
     await fetchDepositAddress();
@@ -277,6 +293,25 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
             </div>
           )}
         </section>
+
+        {/* Flutterwave — primary option for Africa */}
+        {showFlutterwave && flwEnabled && (
+          <div style={styles.flwBanner}>
+            <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
+              Pay with Flutterwave
+            </div>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 12px' }}>
+              Recommended for West &amp; Central Africa — card, bank transfer, mobile money.
+            </p>
+            <button
+              onClick={handleFlutterwavePay}
+              disabled={flwLoading}
+              style={{ ...styles.proceedBtn, background: '#f5a623', opacity: flwLoading ? 0.7 : 1 }}
+            >
+              {flwLoading ? 'Redirecting…' : `Pay $${selectedPlan.price_usd} with Flutterwave →`}
+            </button>
+          </div>
+        )}
 
         <div style={styles.summaryBar}>
           <div>
@@ -443,6 +478,10 @@ const styles: Record<string, React.CSSProperties> = {
   networkBtn: {
     padding: '6px 14px', border: '1px solid', borderRadius: 6,
     fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+  },
+  flwBanner: {
+    background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.3)',
+    borderRadius: 10, padding: '16px 20px', marginTop: 8,
   },
   summaryBar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
