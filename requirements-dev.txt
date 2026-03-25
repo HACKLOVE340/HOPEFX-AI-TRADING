@@ -15,7 +15,7 @@ pre-commit>=4.1.0,<5.0.0
 # Type Stubs
 types-redis>=4.6.0,<5.0.0
 types-pyyaml>=6.0.0,<7.0.0
-types-python-jose>=3.3.0,<4.0.0
+# types-python-jose removed: python-jose replaced by PyJWT
 pandas-stubs>=2.2.0,<3.0.0
 
 # Security Scanning
