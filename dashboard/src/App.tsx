@@ -22,6 +22,7 @@ import TwoFactorSetup from './pages/TwoFactorSetup'
 import EconomicCalendar from './pages/EconomicCalendar'
 import WatchlistPage from './pages/Watchlist'
 import PriceAlerts from './pages/PriceAlerts'
+import TradeJournal from './pages/TradeJournal'
 
 function App() {
   const navigate = useNavigate()
@@ -64,6 +65,7 @@ function App() {
       <Route path="/calendar"     element={<AuthGuard><Layout><EconomicCalendar /></Layout></AuthGuard>} />
       <Route path="/watchlist"    element={<AuthGuard><Layout><WatchlistPage /></Layout></AuthGuard>} />
       <Route path="/alerts"       element={<AuthGuard><Layout><PriceAlerts /></Layout></AuthGuard>} />
+      <Route path="/journal"      element={<AuthGuard><Layout><TradeJournal /></Layout></AuthGuard>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
