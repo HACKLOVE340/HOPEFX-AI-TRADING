@@ -20,6 +20,7 @@ import AuthGuard from './components/AuthGuard'
 import AIStrategyGenerator from './pages/AIStrategyGenerator'
 import TwoFactorSetup from './pages/TwoFactorSetup'
 import EconomicCalendar from './pages/EconomicCalendar'
+import WatchlistPage from './pages/Watchlist'
 
 function App() {
   const navigate = useNavigate()
@@ -60,6 +61,7 @@ function App() {
       <Route path="/ai-strategy"  element={<AuthGuard><Layout><AIStrategyGenerator /></Layout></AuthGuard>} />
       <Route path="/2fa-setup"    element={<AuthGuard><Layout><TwoFactorSetup /></Layout></AuthGuard>} />
       <Route path="/calendar"     element={<AuthGuard><Layout><EconomicCalendar /></Layout></AuthGuard>} />
+      <Route path="/watchlist"    element={<AuthGuard><Layout><WatchlistPage /></Layout></AuthGuard>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
