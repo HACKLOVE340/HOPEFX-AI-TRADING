@@ -71,7 +71,7 @@ celery==5.3.4
 
 # === Security ===
 cryptography==41.0.7
-python-jose[cryptography]==3.3.0
+# python-jose removed: replaced by PyJWT (CVE-2024-33663)
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 

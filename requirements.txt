@@ -110,7 +110,7 @@ pyfixmsg>=0.0.14
 psutil>=5.9.0
 
 # ── JWT / auth ────────────────────────────────────────────────────────────────
-python-jose[cryptography]>=3.3.0
+# python-jose removed: replaced by PyJWT (CVE-2024-33663 and algorithm confusion vulns)
 
 # ── Deep learning (optional – install manually for GPU nodes) ─────────────────
 # torch>=2.1.0  # Uncomment and install separately: pip install torch --index-url https://download.pytorch.org/whl/cpu
