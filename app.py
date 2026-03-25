@@ -21,6 +21,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Optional
 
+# Logger must be defined before any module-level try/except blocks that use it.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
@@ -78,12 +85,7 @@ from config.feature_flags import flags as feature_flags
 from database.models import Base
 from kill_switch import KillSwitch, create_kill_switch_router
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# (logging and logger already configured at module top)
 
 # Initialize FastAPI app — lifespan is wired below after it is defined
 app = FastAPI(
