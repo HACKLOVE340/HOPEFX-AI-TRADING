@@ -90,58 +90,108 @@ class FeatureEngineer:
         lookback_window: int = 20
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Create feature matrix and target vector
-        
-        Returns:
-            X: Feature DataFrame
-            y: Target Series (returns direction for classification, returns for regression)
+        Create feature matrix and target vector.
+
+        All features are stationary (returns, z-scores, normalised distances,
+        ratios, binary flags).  Raw price levels are never included as features
+        because they are non-stationary over multi-decade training windows and
+        cause tree models to split on absolute price values that have no
+        predictive value for direction.
+
+        Returns
+        -------
+        X        : Feature DataFrame (stationary, no NaN)
+        y_class  : Binary direction target (1=up, 0=down)
+        y_reg    : Continuous return target
+        data     : Full enriched DataFrame
         """
         data = df.copy()
-        
-        # Price-based features
-        data['returns'] = data[target_col].pct_change()
+
+        # ── Stationary price-based features ──────────────────────────────────
+        data['returns']     = data[target_col].pct_change()
         data['log_returns'] = np.log(data[target_col] / data[target_col].shift(1))
-        
-        # Lag features
+
+        # Lag features: return lags only (stationary).
+        # close_lag_N removed — raw price levels are non-stationary over 50 years
+        # and cause tree models to learn absolute price thresholds with no
+        # predictive value for direction.
         if self.include_lags:
             for lag in range(1, lookback_window + 1):
-                data[f'{target_col}_lag_{lag}'] = data[target_col].shift(lag)
-                data[f'returns_lag_{lag}'] = data['returns'].shift(lag)
-        
-        # Technical indicators
+                data[f'returns_lag_{lag}']     = data['returns'].shift(lag)
+                data[f'log_ret_lag_{lag}']     = data['log_returns'].shift(lag)
+
+        # ── Technical indicators (all normalised / stationary) ────────────────
         if self.include_indicators:
-            # Moving averages
-            for window in [5, 10, 20, 50]:
-                data[f'sma_{window}'] = data[target_col].rolling(window=window).mean()
-                data[f'ema_{window}'] = data[target_col].ewm(span=window, adjust=False).mean()
-                data[f'dist_sma_{window}'] = (data[target_col] - data[f'sma_{window}']) / data[f'sma_{window}']
-            
-            # Volatility
-            data['atr_14'] = self._calculate_atr(data, 14)
+            atr14 = self._calculate_atr(data, 14)
+            data['atr_14']       = atr14
+            data['atr_pct']      = (atr14 / data[target_col].replace(0, np.nan)).fillna(0.0)
             data['volatility_20'] = data['returns'].rolling(window=20).std()
-            
-            # RSI
+
+            # MA distances (normalised by ATR — stationary)
+            for window in [5, 10, 20, 50, 200]:
+                ma = data[target_col].rolling(window=window).mean()
+                data[f'dist_ma_{window}'] = (
+                    (data[target_col] - ma) / atr14.replace(0, np.nan)
+                ).fillna(0.0)
+                # EMA distance
+                ema = data[target_col].ewm(span=window, adjust=False).mean()
+                data[f'dist_ema_{window}'] = (
+                    (data[target_col] - ema) / atr14.replace(0, np.nan)
+                ).fillna(0.0)
+
+            # RSI (already bounded 0–100, stationary)
             data['rsi_14'] = self._calculate_rsi(data[target_col], 14)
-            
-            # MACD
+            data['rsi_7']  = self._calculate_rsi(data[target_col], 7)
+
+            # MACD normalised by price (stationary)
             ema_fast = data[target_col].ewm(span=12, adjust=False).mean()
             ema_slow = data[target_col].ewm(span=26, adjust=False).mean()
-            data['macd'] = ema_fast - ema_slow
-            data['macd_signal'] = data['macd'].ewm(span=9, adjust=False).mean()
-            data['macd_hist'] = data['macd'] - data['macd_signal']
-            
-            # Bollinger Bands
+            macd_raw = ema_fast - ema_slow
+            data['macd_norm']   = (macd_raw / data[target_col].replace(0, np.nan)).fillna(0.0)
+            macd_sig            = macd_raw.ewm(span=9, adjust=False).mean()
+            data['macd_hist_norm'] = (
+                (macd_raw - macd_sig) / data[target_col].replace(0, np.nan)
+            ).fillna(0.0)
+
+            # Bollinger Band position (already 0–1, stationary)
             sma_20 = data[target_col].rolling(window=20).mean()
             std_20 = data[target_col].rolling(window=20).std()
-            data['bb_upper'] = sma_20 + (std_20 * 2)
-            data['bb_lower'] = sma_20 - (std_20 * 2)
-            data['bb_position'] = (data[target_col] - data['bb_lower']) / (data['bb_upper'] - data['bb_lower'])
-            
-            # Volume features
-            if 'volume' in data.columns:
-                data['volume_sma_20'] = data['volume'].rolling(window=20).mean()
-                data['volume_ratio'] = data['volume'] / data['volume_sma_20']
-                data['obv'] = self._calculate_obv(data)
+            bb_upper = sma_20 + std_20 * 2
+            bb_lower = sma_20 - std_20 * 2
+            bb_width = (bb_upper - bb_lower).replace(0, np.nan)
+            data['bb_position'] = (
+                (data[target_col] - bb_lower) / bb_width
+            ).fillna(0.5)
+            data['bb_width_pct'] = (bb_width / data[target_col].replace(0, np.nan)).fillna(0.0)
+
+            # Stochastic %K/%D
+            lo14 = data['low'].rolling(14).min()
+            hi14 = data['high'].rolling(14).max()
+            stoch_k = (100 * (data[target_col] - lo14) / (hi14 - lo14).replace(0, np.nan)).fillna(50.0)
+            data['stoch_k'] = stoch_k
+            data['stoch_d'] = stoch_k.rolling(3).mean().fillna(50.0)
+
+            # Williams %R
+            data['williams_r'] = (
+                -100 * (hi14 - data[target_col]) / (hi14 - lo14).replace(0, np.nan)
+            ).fillna(-50.0)
+
+            # CCI
+            tp = (data['high'] + data['low'] + data[target_col]) / 3
+            data['cci_20'] = (
+                (tp - tp.rolling(20).mean()) /
+                (0.015 * tp.rolling(20).std().replace(0, np.nan))
+            ).fillna(0.0)
+
+            # Volume features (stationary: ratio and z-score, not raw OBV level)
+            if 'volume' in data.columns and data['volume'].sum() > 0:
+                vol_ma20 = data['volume'].rolling(window=20).mean()
+                vol_std20 = data['volume'].rolling(window=20).std().replace(0, np.nan)
+                data['volume_ratio'] = (data['volume'] / vol_ma20.replace(0, np.nan)).fillna(1.0)
+                data['volume_z20']   = ((data['volume'] - vol_ma20) / vol_std20).fillna(0.0)
+                # OBV momentum (rate of change — stationary)
+                obv = (np.sign(data[target_col].diff()) * data['volume']).cumsum()
+                data['obv_mom_10'] = obv.pct_change(10).fillna(0.0)
 
         # ── Macro features (DXY, VIX, yields, SPX cross-asset) ───────────────
         if self.include_macro and ENHANCED_MACRO_AVAILABLE:
@@ -240,19 +290,17 @@ class FeatureEngineer:
     
     @staticmethod
     def _calculate_obv(data: pd.DataFrame) -> pd.Series:
-        """Calculate On Balance Volume"""
-        obv = pd.Series(index=data.index, dtype=float)
-        obv.iloc[0] = data['volume'].iloc[0]
-        
-        for i in range(1, len(data)):
-            if data['close'].iloc[i] > data['close'].iloc[i-1]:
-                obv.iloc[i] = obv.iloc[i-1] + data['volume'].iloc[i]
-            elif data['close'].iloc[i] < data['close'].iloc[i-1]:
-                obv.iloc[i] = obv.iloc[i-1] - data['volume'].iloc[i]
-            else:
-                obv.iloc[i] = obv.iloc[i-1]
-        
-        return obv
+        """
+        Calculate On Balance Volume (vectorised).
+
+        Returns the 10-bar rate-of-change of OBV rather than the cumulative
+        level.  The raw OBV level is non-stationary (grows with price over
+        decades) and has no predictive value as a feature; the momentum of OBV
+        is stationary and captures volume-price divergence.
+        """
+        direction = np.sign(data['close'].diff()).fillna(0)
+        obv_level = (direction * data['volume']).cumsum()
+        return obv_level.pct_change(10).fillna(0.0)
 
 
 class LSTMModel:
@@ -551,14 +599,20 @@ class XGBoostModel:
             fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
 
         self.model.fit(X_train, y_train, **fit_kwargs)
-        
-        # Feature importance
+
+        # Feature importance — store actual feature names, not integer indices.
+        # Integer indices make the importance CSV unreadable without cross-
+        # referencing the feature list separately.
         if hasattr(self.model, 'feature_importances_'):
+            if hasattr(X_train, 'columns'):
+                feat_names = list(X_train.columns)
+            else:
+                feat_names = [f'f{i}' for i in range(len(self.model.feature_importances_))]
             self.feature_importance = pd.DataFrame({
-                'feature': range(len(self.model.feature_importances_)),
+                'feature': feat_names,
                 'importance': self.model.feature_importances_
             }).sort_values('importance', ascending=False)
-        
+
         return {
             'best_iteration': self.model.best_iteration if hasattr(self.model, 'best_iteration') else self.params['n_estimators'],
             'best_score': self.model.best_score if hasattr(self.model, 'best_score') else None
@@ -711,14 +765,18 @@ class RandomForestModel:
             self.build_model()
         
         self.model.fit(X_train, y_train)
-        
-        # Feature importance
+
+        # Feature importance — store actual feature names, not integer indices.
         if hasattr(self.model, 'feature_importances_'):
+            if hasattr(X_train, 'columns'):
+                feat_names = list(X_train.columns)
+            else:
+                feat_names = [f'f{i}' for i in range(len(self.model.feature_importances_))]
             self.feature_importance = pd.DataFrame({
-                'feature': range(len(self.model.feature_importances_)),
+                'feature': feat_names,
                 'importance': self.model.feature_importances_
             }).sort_values('importance', ascending=False)
-        
+
         return {
             'n_estimators': self.n_estimators,
             'feature_importances': self.model.feature_importances_.tolist()
