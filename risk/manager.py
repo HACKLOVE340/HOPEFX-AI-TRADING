@@ -1,13 +1,15 @@
-""" 
+"""
 HOPEFX Risk Manager
 Comprehensive risk management with position sizing, exposure limits, and drawdown control
 """
 
 import json
 import logging
+import os
 import signal
 import sys
 import time
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -121,6 +123,21 @@ class RiskManager:
         self._halt_reason: Optional[str] = None
         self._halt_until: Optional[datetime] = None
 
+        # Two-tier drawdown alert state (Area 2)
+        self._amber_warned: bool = False
+
+        # Rolling returns history for CVaR (Area 2) — 252 trading days
+        self._returns_history: deque = deque(maxlen=252)
+
+        # Per-symbol price history for live correlation (Area 2) — 60 bars
+        self._price_history: Dict[str, deque] = {}
+        self._price_update_counts: Dict[str, int] = {}
+
+        # CVaR daily limit — 0 = disabled (Area 2)
+        self._cvar_daily_limit: float = float(
+            os.getenv("RISK_CVAR_DAILY_LIMIT", "0")
+        )
+
         # Path for persisting halt state across restarts.
         # Callers (e.g. tests) can supply a custom path via halt_state_file to
         # avoid sharing state between test instances.
@@ -135,52 +152,96 @@ class RiskManager:
         # after a drawdown-triggered halt.
         self._restore_halt_state()
     
-    def update_equity(self, equity: float):
-        """Update equity and calculate drawdown"""
+    def update_equity(self, equity: float) -> None:
+        """Update equity, drawdown, and rolling returns history."""
         # Check for new day
         today = datetime.now(timezone.utc).date()
         if today != self.last_reset_date:
             self.daily_starting_equity = equity
             self.daily_pnl = 0.0
             self.last_reset_date = today
-        
+
         # Update daily P&L
         self.daily_pnl = equity - self.daily_starting_equity
-        
+
+        # Append daily return to rolling history for CVaR
+        if self.daily_starting_equity > 0:
+            daily_return = self.daily_pnl / self.daily_starting_equity
+            self._returns_history.append(daily_return)
+
         # Update peak and drawdown
         if equity > self.peak_equity:
             self.peak_equity = equity
-        
+
         if self.peak_equity > 0:
             self.current_drawdown = (self.peak_equity - equity) / self.peak_equity
-        
+
         # Check circuit breakers
         self._check_circuit_breakers(equity)
     
-    def _check_circuit_breakers(self, equity: float):
-        """Check and trigger circuit breakers"""
-        # Max drawdown
-        if self.current_drawdown > self.config.max_drawdown_pct:
+    def _check_circuit_breakers(self, equity: float) -> None:
+        """Check and trigger circuit breakers with two-tier drawdown alerts."""
+        # ── CVaR check (Area 2) ───────────────────────────────────────────────
+        if self._cvar_daily_limit > 0 and len(self._returns_history) >= 10:
+            cvar = self._compute_cvar()
+            if cvar > self._cvar_daily_limit:
+                self._halt_trading(
+                    f"CVaR daily limit breached: CVaR={cvar:.4f} > limit={self._cvar_daily_limit:.4f}",
+                    duration_hours=24,
+                )
+                return
+
+        # ── Two-tier drawdown (Area 2) ────────────────────────────────────────
+        amber_threshold = self.config.max_drawdown_pct * 0.60  # 60% of limit
+        if self.current_drawdown >= self.config.max_drawdown_pct:
+            # RED — halt immediately
+            self._amber_warned = False  # reset for next cycle
             self._halt_trading(
                 f"Max drawdown reached: {self.current_drawdown:.2%} > {self.config.max_drawdown_pct:.2%}",
-                duration_hours=24
+                duration_hours=24,
             )
             return
-        
-        # Daily loss limit
+        elif self.current_drawdown >= amber_threshold and not self._amber_warned:
+            # AMBER — warn but keep trading
+            self._amber_warned = True
+            logger.warning(
+                "AMBER drawdown alert: %.2f%% has reached 60%% of the %.2f%% limit — "
+                "monitor closely",
+                self.current_drawdown * 100,
+                self.config.max_drawdown_pct * 100,
+            )
+        elif self.current_drawdown < amber_threshold:
+            # Reset amber flag when drawdown recovers below threshold
+            self._amber_warned = False
+
+        # ── Daily loss limit ──────────────────────────────────────────────────
         if self.daily_starting_equity > 0:
             daily_loss_pct = abs(self.daily_pnl) / self.daily_starting_equity
             if daily_loss_pct > self.config.daily_loss_limit_pct:
                 self._halt_trading(
                     f"Daily loss limit reached: {daily_loss_pct:.2%}",
-                    duration_hours=1
+                    duration_hours=1,
                 )
                 return
-        
-        # Check if halt should be lifted
+
+        # ── Lift expired halt ─────────────────────────────────────────────────
         if self._trading_halted and self._halt_until:
             if datetime.now(timezone.utc) >= self._halt_until:
                 self._resume_trading()
+
+    def _compute_cvar(self, confidence: float = 0.95) -> float:
+        """
+        Compute CVaR (Expected Shortfall) from the rolling daily returns history.
+        Returns the expected loss (positive number) beyond the VaR threshold.
+        """
+        if len(self._returns_history) < 2:
+            return 0.0
+        returns = np.array(list(self._returns_history))
+        var_threshold = np.percentile(returns, (1 - confidence) * 100)
+        tail = returns[returns <= var_threshold]
+        if len(tail) == 0:
+            return abs(var_threshold)
+        return float(abs(np.mean(tail)))
     
     def _halt_trading(self, reason: str, duration_hours: float = 1.0):
         """
@@ -378,9 +439,19 @@ class RiskManager:
             risk_level = RiskLevel.MEDIUM
             messages.append(f"Approaching daily loss limit: {daily_pnl_pct:.2%}")
         
+        # ── CVaR live check (Area 2) ──────────────────────────────────────────
+        if self._cvar_daily_limit > 0 and len(self._returns_history) >= 10:
+            cvar = self._compute_cvar()
+            if cvar > self._cvar_daily_limit:
+                risk_level = RiskLevel.CRITICAL
+                can_trade = False
+                messages.append(
+                    f"CVaR {cvar:.4f} exceeds daily limit {self._cvar_daily_limit:.4f}"
+                )
+
         if not messages:
             messages.append("Risk within normal parameters")
-        
+
         return RiskAssessment(
             level=risk_level,
             can_trade=can_trade,
@@ -390,7 +461,7 @@ class RiskManager:
             margin_used_pct=margin_used_pct,
             total_exposure_pct=total_exposure_pct,
             largest_position_pct=largest_position_pct,
-            messages=messages
+            messages=messages,
         )
     
     def _calculate_position_size_full(
@@ -476,16 +547,22 @@ class RiskManager:
                 reason=f"Risk/reward too low: {risk_reward:.2f} < {self.config.min_risk_reward}"
             )
         
-        # Calculate win probability based on signal strength and historical performance
-        # Simplified: use signal strength as proxy
-        win_probability = 0.5 + (signal_strength * 0.3)  # 0.5 to 0.8
-        
+        # Win probability: prefer signal['probability'] when available (Area 2).
+        # Bounds-clamp to [0.30, 0.75] to prevent degenerate Kelly fractions.
+        # Fall back to signal_strength proxy when key is absent.
+        _raw_p = signal_strength  # signal_strength is passed as a kwarg; may carry probability
+        # The caller may pass probability via the signal dict; check kwargs
+        _prob_from_signal = getattr(self, '_last_signal_probability', None)
+        if _prob_from_signal is not None:
+            _raw_p = _prob_from_signal
+            self._last_signal_probability = None  # consume
+        win_probability = max(0.30, min(0.75, _raw_p if _raw_p is not None else 0.5))
+
         # Kelly criterion: f* = (p*b - q) / b
-        # where p = win prob, q = loss prob, b = win/loss ratio
         b = risk_reward
         p = win_probability
         q = 1 - p
-        
+
         kelly_pct = (p * b - q) / b if b > 0 else 0
         
         # Apply Kelly fraction and safety caps
@@ -581,6 +658,57 @@ class RiskManager:
                    f"VolFactor: {volatility_factor:.2f}, DD_Factor: {drawdown_factor:.2f}"
         )
     
+    # ------------------------------------------------------------------
+    # Live price tracking and correlation (Area 2)
+    # ------------------------------------------------------------------
+
+    def update_price(self, symbol: str, price: float) -> None:
+        """
+        Record a new price tick for a symbol and recompute correlations every
+        60 updates per symbol.  Warns when any pair exceeds 0.85 correlation.
+        """
+        if symbol not in self._price_history:
+            self._price_history[symbol] = deque(maxlen=60)
+            self._price_update_counts[symbol] = 0
+
+        self._price_history[symbol].append(float(price))
+        self._price_update_counts[symbol] += 1
+
+        if self._price_update_counts[symbol] % 60 == 0:
+            self._recompute_correlations()
+
+    def _recompute_correlations(self) -> None:
+        """
+        Recompute pairwise Pearson correlations from the rolling 60-bar price
+        histories.  Logs a WARNING for any pair whose correlation exceeds 0.85.
+        """
+        symbols = [s for s, h in self._price_history.items() if len(h) >= 10]
+        if len(symbols) < 2:
+            return
+
+        returns: Dict[str, np.ndarray] = {}
+        for sym in symbols:
+            prices = np.array(list(self._price_history[sym]))
+            if len(prices) > 1:
+                returns[sym] = np.diff(prices) / prices[:-1]
+
+        syms = list(returns.keys())
+        for i in range(len(syms)):
+            for j in range(i + 1, len(syms)):
+                s1, s2 = syms[i], syms[j]
+                r1, r2 = returns[s1], returns[s2]
+                min_len = min(len(r1), len(r2))
+                if min_len < 5:
+                    continue
+                corr = float(np.corrcoef(r1[-min_len:], r2[-min_len:])[0, 1])
+                self.correlation_matrix[(s1, s2)] = corr
+                if abs(corr) > 0.85:
+                    logger.warning(
+                        "High correlation detected: %s / %s = %.3f — "
+                        "consider reducing combined exposure",
+                        s1, s2, corr,
+                    )
+
     def _calculate_correlation_penalty(self, symbol: str, positions: List[Dict]) -> float:
         """Calculate position size reduction due to correlation"""
         if not positions:
@@ -643,6 +771,11 @@ class RiskManager:
                 filtered_signals.append(signal)
                 continue
             
+            # Pass ML probability into Kelly calculation when available (Area 2)
+            if 'probability' in signal:
+                raw_p = signal['probability']
+                self._last_signal_probability = max(0.30, min(0.75, float(raw_p)))
+
             # Calculate position size
             sizing = self.calculate_position_size(
                 symbol=signal['symbol'],
@@ -975,16 +1108,14 @@ def _graceful_shutdown(reason: str, exit_code: int = 1) -> None:
     """
     logger.critical("GRACEFUL SHUTDOWN initiated: %s", reason)
     try:
-        # Allow any registered atexit handlers / finalizers to run
         import atexit
         atexit._run_exitfuncs()  # noqa: SLF001
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.critical("atexit handlers failed during graceful shutdown: %s", exc)
     try:
-        import os
         os.kill(os.getpid(), signal.SIGTERM)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.critical("Failed to send SIGTERM during graceful shutdown: %s", exc)
     sys.exit(exit_code)
 
 
