@@ -82,6 +82,7 @@ nav:
     - Asset Diversification: ASSET_DIVERSIFICATION.md
     - Monetization: MONETIZATION.md
     - Community: COMMUNITY.md
+  - Model Performance: model_performance.md
   - API Reference: API_REFERENCE.md
   - CI/CD Pipeline: ci_cd_pipeline.md
   - FAQ: FAQ.md
