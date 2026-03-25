@@ -80,6 +80,11 @@ class PredictionResult:
     model_agreement: float  # Agreement across ensemble
     features_importance: Dict[str, float]
     timestamp: datetime
+    # thresholds_calibrated=False means the confidence boundaries (high/medium/low)
+    # were set by the default heuristic (0.3/0.4/0.6/0.7) rather than derived
+    # from held-out OOS data.  Call RobustPredictor.calibrate_thresholds() with
+    # OOS predictions and outcomes to replace the defaults.
+    thresholds_calibrated: bool = False
 
 class RobustPredictor:
     """
@@ -109,6 +114,23 @@ class RobustPredictor:
         
         # Stability checks
         self.feature_stability_threshold = 0.6  # Pearson correlation of importance across folds
+
+        # ── Confidence thresholds ─────────────────────────────────────────────
+        # Default heuristic thresholds (uncalibrated).
+        # Replace by calling calibrate_thresholds() with OOS predictions.
+        #
+        # Interpretation:
+        #   prob > bullish_high_threshold  → direction=+1, confidence='high'
+        #   prob > bullish_med_threshold   → direction=+1, confidence='medium'
+        #   prob < bearish_high_threshold  → direction=-1, confidence='high'
+        #   prob < bearish_med_threshold   → direction=-1, confidence='medium'
+        #   otherwise                      → direction=0,  confidence='low'
+        self._thresholds_calibrated: bool = False
+        self._bullish_high_threshold: float = 0.70   # was hardcoded 0.7
+        self._bullish_med_threshold:  float = 0.60   # was hardcoded 0.6
+        self._bearish_high_threshold: float = 0.30   # was hardcoded 0.3
+        self._bearish_med_threshold:  float = 0.40   # was hardcoded 0.4
+        self._agreement_threshold:    float = 0.60   # was hardcoded 0.6
         
     def fit(self, X: pd.DataFrame, y: pd.Series, 
             sample_weights: Optional[np.ndarray] = None) -> Dict:
@@ -300,23 +322,25 @@ class RobustPredictor:
         # Uncertainty quantification
         uncertainty = std_prob + (1 - agreement) * 0.5
         
-        # Determine direction and confidence
-        if mean_prob > 0.6 and agreement > 0.6:
+        # ── Determine direction and confidence using (possibly calibrated) thresholds ──
+        # Thresholds are set by calibrate_thresholds() if OOS data is available,
+        # otherwise the defaults (0.3/0.4/0.6/0.7) are used.
+        if mean_prob > self._bullish_med_threshold and agreement > self._agreement_threshold:
             direction = 1
-            confidence = 'high' if mean_prob > 0.7 else 'medium'
-        elif mean_prob < 0.4 and agreement > 0.6:
+            confidence = 'high' if mean_prob > self._bullish_high_threshold else 'medium'
+        elif mean_prob < self._bearish_med_threshold and agreement > self._agreement_threshold:
             direction = -1
-            confidence = 'high' if mean_prob < 0.3 else 'medium'
+            confidence = 'high' if mean_prob < self._bearish_high_threshold else 'medium'
         else:
-            direction = 0  # No trade
+            direction = 0  # No trade — uncertainty too high
             confidence = 'low'
-        
+
         # Expected return estimate (calibrated)
         expected_return = self._estimate_return(direction, mean_prob, regime)
-        
+
         # Feature importance for this prediction
         current_importance = self._get_current_feature_importance(X_selected.iloc[-1])
-        
+
         return PredictionResult(
             direction=direction,
             probability=float(mean_prob),
@@ -326,23 +350,157 @@ class RobustPredictor:
             regime=regime,
             model_agreement=float(agreement),
             features_importance=current_importance,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
+            thresholds_calibrated=self._thresholds_calibrated,
         )
     
+    def calibrate_thresholds(
+        self,
+        oos_probabilities: np.ndarray,
+        oos_outcomes: np.ndarray,
+        n_bins: int = 10,
+        min_precision: float = 0.55,
+    ) -> Dict[str, float]:
+        """
+        Derive confidence thresholds from held-out OOS predictions.
+
+        Replaces the default heuristic thresholds (0.3/0.4/0.6/0.7) with
+        data-driven boundaries calibrated to achieve at least `min_precision`
+        precision on the OOS set.
+
+        Algorithm
+        ---------
+        1. Bin OOS probabilities into `n_bins` equal-width buckets.
+        2. For each bin compute precision (fraction of correct direction calls).
+        3. Find the lowest probability bin where precision >= min_precision
+           for bullish calls, and the highest bin for bearish calls.
+        4. Set thresholds to the bin boundaries.
+
+        If fewer than 30 OOS samples are available the method logs a warning
+        and leaves the default thresholds unchanged.
+
+        Args:
+            oos_probabilities : 1-D array of predicted probabilities (0–1)
+            oos_outcomes      : 1-D array of true labels (1=up, 0=down)
+            n_bins            : Number of probability bins
+            min_precision     : Minimum precision required for a 'medium' signal
+
+        Returns:
+            Dict with the calibrated threshold values and calibration stats.
+        """
+        oos_probabilities = np.asarray(oos_probabilities, dtype=float)
+        oos_outcomes = np.asarray(oos_outcomes, dtype=float)
+
+        if len(oos_probabilities) < 30:
+            logger.warning(
+                "calibrate_thresholds: only %d OOS samples — need ≥30 for reliable "
+                "calibration. Default thresholds unchanged.",
+                len(oos_probabilities),
+            )
+            return {
+                "calibrated": False,
+                "reason": f"insufficient OOS samples ({len(oos_probabilities)} < 30)",
+                "thresholds": self._current_thresholds(),
+            }
+
+        bins = np.linspace(0.0, 1.0, n_bins + 1)
+        bin_stats = []
+        for i in range(n_bins):
+            lo, hi = bins[i], bins[i + 1]
+            mask = (oos_probabilities >= lo) & (oos_probabilities < hi)
+            if mask.sum() == 0:
+                bin_stats.append({"lo": lo, "hi": hi, "n": 0, "precision": np.nan})
+                continue
+            precision = float(oos_outcomes[mask].mean())
+            bin_stats.append({"lo": lo, "hi": hi, "n": int(mask.sum()), "precision": precision})
+
+        # Bullish threshold: lowest bin mid-point where precision >= min_precision
+        bullish_med = self._bullish_med_threshold  # fallback
+        bullish_high = self._bullish_high_threshold
+        for b in bin_stats:
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and b["precision"] >= min_precision:
+                bullish_med = b["lo"]
+                break
+        for b in bin_stats:
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and b["precision"] >= min(min_precision + 0.10, 0.70):
+                bullish_high = b["lo"]
+                break
+
+        # Bearish threshold: highest bin mid-point where (1-precision) >= min_precision
+        bearish_med = self._bearish_med_threshold
+        bearish_high = self._bearish_high_threshold
+        for b in reversed(bin_stats):
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and (1.0 - b["precision"]) >= min_precision:
+                bearish_med = b["hi"]
+                break
+        for b in reversed(bin_stats):
+            if b["n"] >= 5 and not np.isnan(b["precision"]) and (1.0 - b["precision"]) >= min(min_precision + 0.10, 0.70):
+                bearish_high = b["hi"]
+                break
+
+        # Sanity: bullish must be > 0.5, bearish must be < 0.5
+        bullish_med  = max(bullish_med,  0.50)
+        bullish_high = max(bullish_high, bullish_med)
+        bearish_med  = min(bearish_med,  0.50)
+        bearish_high = min(bearish_high, bearish_med)
+
+        self._bullish_med_threshold  = bullish_med
+        self._bullish_high_threshold = bullish_high
+        self._bearish_med_threshold  = bearish_med
+        self._bearish_high_threshold = bearish_high
+        self._thresholds_calibrated  = True
+
+        result = {
+            "calibrated": True,
+            "n_oos_samples": len(oos_probabilities),
+            "min_precision_target": min_precision,
+            "thresholds": self._current_thresholds(),
+            "bin_stats": bin_stats,
+        }
+        logger.info(
+            "calibrate_thresholds: calibrated on %d OOS samples. "
+            "bullish_med=%.3f bullish_high=%.3f bearish_med=%.3f bearish_high=%.3f",
+            len(oos_probabilities),
+            bullish_med, bullish_high, bearish_med, bearish_high,
+        )
+        return result
+
+    def _current_thresholds(self) -> Dict[str, float]:
+        """Return the current threshold values as a dict."""
+        return {
+            "bullish_high": self._bullish_high_threshold,
+            "bullish_med":  self._bullish_med_threshold,
+            "bearish_high": self._bearish_high_threshold,
+            "bearish_med":  self._bearish_med_threshold,
+            "agreement":    self._agreement_threshold,
+            "calibrated":   self._thresholds_calibrated,
+        }
+
     def _estimate_return(self, direction: int, probability: float, regime: Regime) -> float:
-        """Calibrated expected return based on historical performance by regime"""
-        # Simplified - implement actual calibration from historical data
-        base_return = 0.001 * direction  # 10bps base
-        
-        # Adjust by regime
+        """
+        Expected return estimate scaled by regime multiplier.
+
+        Base return is 10 bps per unit of probability edge above 0.5.
+        Regime multipliers reflect empirical XAUUSD regime characteristics:
+          - TRENDING:        1.5× (momentum persists)
+          - MEAN_REVERTING:  0.8× (smaller moves, faster reversals)
+          - HIGH_VOLATILITY: 0.5× (wide spreads, unpredictable fills)
+          - LOW_VOLATILITY:  1.2× (tight spreads, cleaner signals)
+          - UNKNOWN:         0.0× (no trade — regime unclear)
+
+        Note: these multipliers are heuristic defaults. Replace with
+        regime-stratified backtested returns once sufficient OOS data exists.
+        """
+        base_return = 0.001 * direction  # 10 bps base
+
         regime_multipliers = {
             Regime.TRENDING: 1.5,
             Regime.MEAN_REVERTING: 0.8,
-            Regime.HIGH_VOLATILITY: 0.5,  # Reduce size in high vol
+            Regime.HIGH_VOLATILITY: 0.5,
             Regime.LOW_VOLATILITY: 1.2,
-            Regime.UNKNOWN: 0.0  # No trade
+            Regime.UNKNOWN: 0.0,
         }
-        
+
         return base_return * regime_multipliers.get(regime, 1.0) * (probability - 0.5) * 2
     
     def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
