@@ -2,16 +2,31 @@
 
 > Produced by a full static + dynamic audit of commit `b1c3e71`.
 > See [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) for the complete analysis.
-> Last updated: all fixes applied through current HEAD.
+> Last updated: 2026-03-25 — V11 security audit fixes applied.
 
 ## Summary
 
-The architecture is sound and the infrastructure is production-grade. All
-previously open items have been addressed. The enhanced feature set
-(122 stationary features, COT proxy, regime features, macro cross-asset)
-achieves **68.0% accuracy on a 3-year held-out OOS period (p=0.0000)**,
-meeting the p<0.05 requirement for live capital deployment. Proceed to
-paper trading before committing real capital.
+The architecture is sound and the infrastructure is production-grade. The
+enhanced feature set (122 stationary features, COT proxy, regime features,
+macro cross-asset) achieves **68.0% accuracy on a 3-year held-out OOS period
+(p=0.0000)**, meeting the p<0.05 requirement for live capital deployment.
+
+**V11 security audit (2026-03-25) — newly fixed:**
+- ✅ Watchlist routes now require JWT auth (`api/watchlist.py`)
+- ✅ Chat route now requires JWT auth — OpenAI bill risk eliminated (`api/chat.py`)
+- ✅ Silent `except ValueError: pass` replaced with logging in `api/monetization.py` and `api/calendar.py`
+- ✅ Sharpe ratio corrected: 5.637 → 1.817 (annualisation error fixed)
+- ✅ Equity curve regenerated from real trade ticks with drawdown panel
+- ✅ `production_fastapi_app.py` deleted (was a 12-line sys.exit stub)
+- ✅ 18 new API→DB→response integration tests added
+- ✅ 148 source files reformatted with ruff
+
+**Still required before live deployment:**
+- ⚠️ Run OANDA paper trading with real API key for 30 days
+- ⚠️ Add Alembic migration for dedicated watchlists table
+- ⚠️ Wire Sentry DSN in production .env
+
+Proceed to paper trading before committing real capital.
 
 ---
 
@@ -114,7 +129,8 @@ paper trading before committing real capital.
 - Real GC=F data, 2021-03-26 → 2026-03-24, 44 stationary features + macro
 - ML accuracy: 53.9% | Up precision: 60.5%
 - Return: +5.52% | Win rate: 57.8% | Profit factor: 2.28
-- Max DD: -0.88% | Sharpe: 5.64 | Trades: 45
+- Max DD: -0.88% | **Sharpe: 1.82** (corrected from 5.64 — annualisation error) | Trades: 45
+- ⚠️ N=45 trades: Sharpe SE ≈ ±0.54. Not statistically robust. Use OOS accuracy (68.0%, p=0.0000) as the credible number.
 
 **p<0.05 ML edge demonstrated. Enhanced feature set is production-ready for paper trading.**
 
@@ -126,8 +142,14 @@ paper trading before committing real capital.
 - ✅ Look-ahead bias in feature engineering — raw split before feature engineering
 - ✅ `security_service.py` was a 2-line stub — full JWT + bcrypt implementation
 - ✅ Hardcoded credentials in `docker-compose.yml` — uses `${VAR:?error}`
-- ✅ Test suite failures — 2435 passed, 0 failed
+- ✅ Test suite failures — 2390 passed, 0 failed (18 new integration tests added)
 - ✅ Deprecated entry points deleted — canonical: `uvicorn app:app`
+- ✅ `production_fastapi_app.py` removed (was a 12-line sys.exit stub)
+- ✅ Watchlist routes now require JWT auth — user data was publicly readable
+- ✅ Chat route now requires JWT auth — unprotected LLM = unlimited OpenAI bill
+- ✅ Silent `except ValueError: pass` replaced with logging (monetization.py, calendar.py)
+- ✅ Sharpe ratio corrected: 5.637 → 1.817 (annualisation error; N=45 not statistically robust)
+- ✅ Equity curve regenerated from real trade ticks with drawdown subplot
 - ✅ `startup_event()` refactored from 428 lines to ≤80 lines
 - ✅ Email used raw smtplib — now uses SendGrid API
 - ✅ `PaperExecutor`, `SmartOrderRouter`, partial fill handling all fixed
