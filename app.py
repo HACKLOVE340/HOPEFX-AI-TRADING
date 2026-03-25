@@ -339,21 +339,35 @@ async def _oanda_price_poller(state):
         logger.warning("OANDA price poller init failed: %s", exc)
         return
 
+    from core.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+    _cb = CircuitBreaker.get("oanda_poller", failure_threshold=5, reset_timeout=60.0)
+    _backoff = 1.0
+    _MAX_BACKOFF = 300.0
+
     while True:
         try:
-            prices = oanda.get_live_prices(_SYMBOLS)
+            async with _cb:
+                prices = oanda.get_live_prices(_SYMBOLS)
             broker = getattr(state, "broker", None)
             if broker is not None and prices:
                 for sym, tick in prices.items():
                     mid = tick.get("mid", 0.0)
                     if mid > 0 and hasattr(broker, "update_market_price"):
                         broker.update_market_price(sym, mid)
+            _backoff = 1.0  # reset on success
         except _asyncio.CancelledError:
             logger.info("OANDA price poller stopped")
             oanda.disconnect()
             return
+        except CircuitBreakerOpen as cbo:
+            logger.warning("OANDA price poller: circuit OPEN — sleeping %.0fs", cbo.retry_after)
+            await _asyncio.sleep(min(cbo.retry_after, _MAX_BACKOFF))
+            continue
         except Exception as exc:
-            logger.warning("OANDA price poller error: %s", exc)
+            logger.warning("OANDA price poller error (backoff=%.0fs): %s", _backoff, exc)
+            await _asyncio.sleep(_backoff)
+            _backoff = min(_backoff * 2, _MAX_BACKOFF)
+            continue
 
         await _asyncio.sleep(_INTERVAL)
 
