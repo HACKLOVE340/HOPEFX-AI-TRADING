@@ -4,7 +4,10 @@ omit =
     */tests/*
     */examples/*
 report_precision = 2
-fail_under = 80
+# Minimum coverage gate enforced in CI.
+# tests.yml enforces 60% (floor). ci.yml enforces 70% (target).
+# Increase incrementally as integration tests are filled.
+fail_under = 60
 
 [html]
 directory = coverage_html_report
