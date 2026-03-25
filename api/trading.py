@@ -298,6 +298,20 @@ async def place_order(
         except Exception as fcm_exc:
             logger.debug("FCM trade push skipped: %s", fcm_exc)
 
+        # ── Email: trade filled ──────────────────────────────────────────────
+        try:
+            from notifications.email_triggers import send_trade_fill_email
+
+            send_trade_fill_email(
+                symbol=order.symbol,
+                direction=order.side,
+                quantity=order.quantity,
+                fill_price=result.average_fill_price or 0.0,
+                commission=getattr(result, "commission", 0.0),
+            )
+        except Exception as email_exc:
+            logger.debug("Trade fill email skipped: %s", email_exc)
+
         # Prometheus order metric
         try:
             from core.metrics import ORDERS_TOTAL
