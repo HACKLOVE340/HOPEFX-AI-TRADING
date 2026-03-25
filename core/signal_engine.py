@@ -13,18 +13,22 @@ Runs as a background asyncio task. On each tick:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── Macro-aware ML model (loaded lazily) ─────────────────────────────────────
 try:
     from ml import get_active_model, get_model_version
-    _ML_AVAILABLE = True
+    _ML_AVAILABLE: bool = True
 except Exception:
     _ML_AVAILABLE = False
-    def get_active_model(): return None   # type: ignore[misc]
-    def get_model_version(): return "none"  # type: ignore[misc]
+
+    def get_active_model() -> Optional[Any]:  # type: ignore[misc]
+        return None
+
+    def get_model_version() -> str:  # type: ignore[misc]
+        return "none"
 
 # Symbols the engine watches (overridden by ALLOWED_SYMBOLS env var)
 import os
@@ -33,7 +37,7 @@ _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
 _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
-async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[dict]:
+async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[Dict[str, Any]]:
     """
     Fetch latest OHLCV data for a symbol.
 
@@ -89,7 +93,7 @@ async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[dic
     return None
 
 
-async def run_signal_engine(app_state: Any):
+async def run_signal_engine(app_state: Any) -> None:
     """
     Main signal engine loop. Runs indefinitely until cancelled.
     Attach to app startup via asyncio.create_task().
@@ -111,36 +115,41 @@ async def run_signal_engine(app_state: Any):
         await asyncio.sleep(_INTERVAL_SECONDS)
 
 
-async def _tick(app_state: Any):
+async def _tick(app_state: Any) -> None:
     """Process one tick for all watched symbols."""
-    brain = getattr(app_state, "strategy_brain", None)
+    brain: Any = getattr(app_state, "strategy_brain", None)
     if brain is None:
         return
 
-    for symbol in _SYMBOLS:
-        symbol = symbol.strip().upper()
-        data = await _fetch_market_data(symbol, app_state=app_state)
+    sym: str
+    for sym in _SYMBOLS:
+        symbol: str = sym.strip().upper()
+        data: Optional[Dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
 
         # ── Run StrategyBrain ────────────────────────────────────────────────
-        result = brain.analyze_joint(data)
+        result: Dict[str, Any] = brain.analyze_joint(data)
 
         if not result.get("consensus_reached"):
             logger.debug("No consensus for %s: %s", symbol, result.get("reason"))
             continue
 
-        signal = result.get("consensus_signal")
+        signal: Any = result.get("consensus_signal")
         if signal is None:
             continue
 
-        direction = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
-        base_confidence = getattr(signal, "confidence", 0.0)
+        direction: str = (
+            signal.signal_type.value
+            if hasattr(signal.signal_type, "value")
+            else str(signal.signal_type)
+        )
+        base_confidence: float = getattr(signal, "confidence", 0.0)
 
         # ── ML model probability enrichment ──────────────────────────────────
-        ml_probability = base_confidence
-        active_model = get_active_model() if _ML_AVAILABLE else None
-        model_ver = get_model_version() if _ML_AVAILABLE else "none"
+        ml_probability: float = base_confidence
+        active_model: Optional[Any] = get_active_model() if _ML_AVAILABLE else None
+        model_ver: str = get_model_version() if _ML_AVAILABLE else "none"
 
         if active_model is not None:
             try:
@@ -172,7 +181,7 @@ async def _tick(app_state: Any):
             except Exception as ml_exc:
                 logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
 
-        signal_payload = {
+        signal_payload: Dict[str, Any] = {
             "symbol": symbol,
             "direction": direction,
             "confidence": base_confidence,
@@ -219,8 +228,8 @@ async def _tick(app_state: Any):
         if not _AUTO_TRADE:
             continue
 
-        broker = getattr(app_state, "broker", None)
-        risk_manager = getattr(app_state, "risk_manager", None)
+        broker: Any = getattr(app_state, "broker", None)
+        risk_manager: Any = getattr(app_state, "risk_manager", None)
         if broker is None:
             continue
 
@@ -230,16 +239,20 @@ async def _tick(app_state: Any):
             continue
 
         # Risk gate
+        quantity: float
         if risk_manager is not None:
             try:
-                account_info = await broker.get_account_info()
-                positions = await broker.get_positions()
-                positions_dicts = [
-                    {"symbol": p.symbol, "quantity": p.quantity,
-                     "current_price": getattr(p, "current_price", 0)}
+                account_info: Dict[str, Any] = await broker.get_account_info()
+                positions: List[Any] = await broker.get_positions()
+                positions_dicts: List[Dict[str, Any]] = [
+                    {
+                        "symbol": p.symbol,
+                        "quantity": p.quantity,
+                        "current_price": getattr(p, "current_price", 0),
+                    }
                     for p in positions
                 ]
-                assessment = risk_manager.assess_risk(account_info, positions_dicts)
+                assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
                 if not assessment.can_trade:
                     logger.info(
                         "Auto-trade blocked by risk manager: %s", assessment.messages
@@ -247,8 +260,8 @@ async def _tick(app_state: Any):
                     continue
 
                 # Calculate position size
-                equity = account_info.get("equity", 100_000)
-                sizing = risk_manager.calculate_position_size(
+                equity: float = account_info.get("equity", 100_000)
+                sizing: Any = risk_manager.calculate_position_size(
                     symbol=symbol,
                     signal_strength=signal_payload["confidence"],
                     entry_price=signal_payload["entry_price"],
@@ -266,7 +279,7 @@ async def _tick(app_state: Any):
                 logger.error("Risk check failed in signal engine: %s", risk_exc)
                 continue
         else:
-            quantity = 1000  # minimal fallback lot
+            quantity = 1000.0  # minimal fallback lot
 
         # Place order
         try:
