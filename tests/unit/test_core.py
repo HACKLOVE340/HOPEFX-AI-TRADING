@@ -15,7 +15,9 @@ from core.event_bus import EventBus, MemoryMappedEventStore, DomainEvent
 @pytest.mark.asyncio
 async def test_event_bus(tmp_path):
     """Test event bus publish/subscribe."""
-    store = MemoryMappedEventStore(base_path=str(tmp_path / "events") + "/")
+    # Use a small max_file_size (1 MB) to avoid pre-allocating the 1 GB default
+    # which exhausts /tmp in CI environments.
+    store = MemoryMappedEventStore(base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576)
     bus = EventBus(store=store)
 
     received = []
