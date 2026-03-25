@@ -49,6 +49,7 @@ from api.landing import router as landing_router
 from api.payments import router as payments_router
 from api.settings import router as settings_router
 from api.status import router as status_router
+from api.brain import router as brain_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -87,6 +88,7 @@ app.include_router(landing_router)
 app.include_router(payments_router)
 app.include_router(settings_router)
 app.include_router(status_router)
+app.include_router(brain_router)
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
