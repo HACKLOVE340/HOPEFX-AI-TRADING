@@ -512,422 +512,80 @@ def _run_startup_stress_tests(risk_manager: Any) -> None:
 
 
 async def startup_event():
-    """Initialize application on startup via ComponentRegistry."""
+    """Initialize application on startup via ComponentRegistry.
+
+    All factory functions live in core/startup_factories.py.
+    This function is the declarative registry — component names, factories,
+    required flags, and dependency edges only.
+    """
     logger.info("=" * 70)
     logger.info("HOPEFX AI TRADING API - STARTING")
     logger.info("=" * 70)
 
     from core.component_registry import ComponentRegistry
+    import core.startup_factories as F
+    from functools import partial
+
     _registry = ComponentRegistry()
 
-    # ── Factory definitions (one per component) ───────────────────────────────
+    # Factories that need access to the FastAPI `app` object receive it via partial.
+    def _app(fn):
+        return partial(fn, app=app)
 
-    async def _init_env(s):
-        if not os.getenv('OPENAI_API_KEY'):
-            logger.warning("OPENAI_API_KEY not set — /api/chat will return 503 until configured")
-        if not os.getenv('CONFIG_ENCRYPTION_KEY'):
-            logger.warning("CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)")
-            os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
-        if not os.getenv('SECURITY_JWT_SECRET'):
-            logger.warning("SECURITY_JWT_SECRET not set — using dev default (not for production)")
-            os.environ['SECURITY_JWT_SECRET'] = 'dev-jwt-secret-minimum-32-characters-long!!'
-        try:
-            from core.env_validator import validate_and_report
-            validate_and_report(strict=False, exit_on_error=False)
-        except Exception as _ve:
-            logger.warning("Env validator unavailable: %s", _ve)
-        return True
+    def _app_flags(fn):
+        return partial(fn, app=app, flags=feature_flags)
 
-    async def _init_config(s):
-        _raw_config = initialize_config()
-        if isinstance(_raw_config, dict):
-            class _DB:
-                connection_pool_size = 5
-                max_overflow = 10
-                def get_connection_string(self):
-                    return os.getenv('DATABASE_URL', 'sqlite:///hopefx.db')
-            class _ConfigNS:
-                def __init__(self, d):
-                    for k, v in d.items():
-                        setattr(self, k, v)
-                    if not hasattr(self, 'environment'):
-                        self.environment = os.getenv('APP_ENV', 'development')
-                    self.database = _DB()
-                    if not hasattr(self, 'api_configs'):
-                        self.api_configs = {}
-            cfg = _ConfigNS(_raw_config)
-        else:
-            cfg = _raw_config
-        logger.info("Configuration loaded: %s", cfg.environment)
-        return cfg
-
-    async def _init_database(s):
-        conn_str = s.config.database.get_connection_string()
-        engine = create_engine(
-            conn_str,
-            pool_size=s.config.database.connection_pool_size,
-            max_overflow=s.config.database.max_overflow,
-        )
-        try:
-            from alembic.config import Config as AlembicConfig
-            from alembic import command as alembic_command
-            alembic_cfg = AlembicConfig("alembic.ini")
-            alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
-            alembic_command.upgrade(alembic_cfg, "head")
-            logger.info("Database migrations applied (alembic upgrade head)")
-        except Exception as e:
-            logger.warning("Alembic migration failed (%s), falling back to create_all", e)
-            try:
-                Base.metadata.create_all(engine)
-            except Exception as e2:
-                logger.warning("create_all also failed: %s", e2)
-        s.db_engine = engine
-        s.db_session_factory = sessionmaker(bind=engine)
-        return engine
-
-    async def _init_cache(s):
-        cache = MarketDataCache(
-            host=os.getenv('REDIS_HOST', 'localhost'),
-            port=int(os.getenv('REDIS_PORT', 6379)),
-            max_retries=1,
-            socket_connect_timeout=1,
-            enable_fallback=True,
-        )
-        return cache
-
-    async def _init_data_scheduler(s):
-        from data.scheduler import DataScheduler
-        ds = DataScheduler()
-        t = asyncio.create_task(ds.start())
-        s.background_tasks.append(t)
-        s.data_scheduler = ds
-        log_activity("Data scheduler started")
-        return ds
-
-    async def _init_websocket(s):
-        from api.websocket_server import WebSocketManager, create_websocket_router
-        ws = WebSocketManager()
-        app.include_router(create_websocket_router(ws))
-        s.ws_manager = ws
-        log_activity("WebSocket router registered")
-        t = asyncio.create_task(_price_stream_loop(ws))
-        s.background_tasks.append(t)
-        t2 = asyncio.create_task(_oanda_price_poller(s))
-        s.background_tasks.append(t2)
-        return ws
-
-    async def _init_alert_engine(s):
-        from notifications.alert_engine import AlertEngine, create_alert_router
-        _smtp_to = [a.strip() for a in os.getenv("SMTP_TO", "").split(",") if a.strip()]
-        cfg = {
-            "smtp_host": os.getenv("SMTP_HOST", ""), "smtp_port": int(os.getenv("SMTP_PORT", "587")),
-            "smtp_username": os.getenv("SMTP_USERNAME", ""), "smtp_password": os.getenv("SMTP_PASSWORD", ""),
-            "smtp_from": os.getenv("SMTP_FROM", ""), "smtp_to": _smtp_to,
-            "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-            "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
-            "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
-        }
-        ae = AlertEngine(config=cfg)
-        app.include_router(create_alert_router(ae))
-        log_activity("Alert router registered")
-        return ae
-
-    async def _init_order_flow(s):
-        from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
-        ofa = OrderFlowAnalyzer()
-        app.include_router(create_order_flow_router(ofa))
-        return ofa
-
-    async def _init_time_and_sales(s):
-        from data.time_and_sales import TimeAndSalesService, create_time_and_sales_router
-        svc = TimeAndSalesService()
-        app.include_router(create_time_and_sales_router(svc))
-        return svc
-
-    async def _init_market_scanner(s):
-        from analysis.market_scanner import MarketScanner, create_scanner_router
-        ms = MarketScanner()
-        app.include_router(create_scanner_router(ms))
-        return ms
-
-    async def _init_dom(s):
-        from data.depth_of_market import DepthOfMarketService, create_dom_router
-        dom = DepthOfMarketService()
-        app.include_router(create_dom_router(dom))
-        return dom
-
-    async def _init_signals_router(s):
-        from api.signals import create_signals_router
-        r = create_signals_router()
-        if r:
-            app.include_router(r)
-        return r
-
-    async def _init_news_router(s):
-        from news import create_news_router
-        r = create_news_router()
-        if r:
-            app.include_router(r)
-        return r
-
-    async def _init_auth(s):
-        from database.user_models import User, UserSession, LoginAttempt
-        User.__table__.create(s.db_engine, checkfirst=True)
-        UserSession.__table__.create(s.db_engine, checkfirst=True)
-        LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
-        from auth.service import AuthService
-        svc = AuthService(session_factory=s.db_session_factory)
-        set_auth_service(svc)
-        log_activity("Auth Service initialized")
-        return svc
-
-    async def _init_risk_manager(s):
-        from risk.manager import RiskManager, RiskConfig
-        rc = RiskConfig(
-            max_position_size_pct=float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.02")),
-            max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
-            daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
-        )
-        rm = RiskManager(config=rc)
-        log_activity("Risk Manager initialized")
-
-        # Area 2: run stress tests at startup and log any scenario projecting >20% loss
-        _run_startup_stress_tests(rm)
-
-        return rm
-
-    async def _init_broker(s):
-        from brokers.paper_trading import PaperTradingBroker
-        bal = float(os.getenv("PAPER_TRADING_BALANCE", "10000"))
-        b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
-        await b.connect()
-        log_activity("Paper Trading Broker connected")
-        return b
-
-    async def _init_price_engine(s):
-        from data.real_time_price_engine import RealTimePriceEngine
-        from brokers.paper_trading import PaperTradingBroker as _PTB
-        syms = [x.strip().upper() for x in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",") if x.strip()]
-        pe = RealTimePriceEngine({"symbols": syms, "websocket_url": os.getenv("WS_PRICE_FEED_URL", ""), "rest_url": os.getenv("REST_PRICE_FEED_URL", "")})
-        await pe.start()
-        if isinstance(s.broker, _PTB):
-            s.broker.set_price_feed(pe)
-        return pe
-
-    async def _init_compliance(s):
-        from compliance.compliance_manager import ComplianceManager
-        return ComplianceManager(session_factory=s.db_session_factory)
-
-    async def _init_aml(s):
-        from compliance.aml import init_aml_gate
-        init_aml_gate(session_factory=s.db_session_factory)
-        return True
-
-    async def _init_strategy_brain(s):
-        from strategies.strategy_brain import StrategyBrain
-        from strategies.base import StrategyConfig
-        from strategies.ma_crossover import MovingAverageCrossover
-        from strategies.rsi_strategy import RSIStrategy
-        from strategies.macd_strategy import MACDStrategy
-        from strategies.bollinger_bands import BollingerBandsStrategy
-        def _cfg(name): return StrategyConfig(name=name, symbol="XAUUSD", timeframe="1h")
-        brain = StrategyBrain()
-        brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
-        brain.register_strategy(RSIStrategy(_cfg("RSI")))
-        brain.register_strategy(MACDStrategy(_cfg("MACD")))
-        brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
-        return brain
-
-    async def _init_event_store(s):
-        from events.event_store import get_event_store
-        es = get_event_store()
-        await es.start()
-        return es
-
-    async def _init_position_tracker(s):
-        from execution.position_tracker import PositionTracker
-        return PositionTracker()
-
-    async def _init_trade_executor(s):
-        from execution.trade_executor import TradeExecutor
-        return TradeExecutor(broker=s.broker, risk_manager=s.risk_manager, position_tracker=s.position_tracker)
-
-    async def _init_hopefx_brain(s):
-        from brain.brain import HOPEFXBrain
-        b = HOPEFXBrain(config={"max_decision_history": 1000, "regime_check_interval": 60, "circuit_breaker_threshold": 5})
-        b.inject_components(
-            price_engine=s.price_engine, risk_manager=s.risk_manager, broker=s.broker,
-            strategy_manager=s.strategy_brain, notification_manager=s.alert_engine,
-            position_tracker=s.position_tracker, trade_executor=s.trade_executor,
-        )
-        return b
-
-    async def _init_wallet(s):
-        from payments.wallet import WalletManager
-        return WalletManager(session_factory=s.db_session_factory)
-
-    async def _init_social(s):
-        from social import copy_trading_engine, marketplace, leaderboard_manager
-        s.copy_trading_engine = copy_trading_engine
-        s.marketplace = marketplace
-        s.leaderboard_manager = leaderboard_manager
-        return True
-
-    async def _init_regime_router(s):
-        from strategies.regime_router import RegimeRouter
-        from strategies.manager import StrategyManager
-        sm = s.strategy_brain or StrategyManager(preload_defaults=True)
-        return RegimeRouter(sm)
-
-    async def _init_signal_engine(s):
-        from core.signal_engine import run_signal_engine
-        t = asyncio.create_task(run_signal_engine(s))
-        s.background_tasks.append(t)
-        log_activity("Signal engine started")
-        return t
-
-    async def _init_reconciler(s):
-        from core.position_reconciler import PositionReconciler
-        interval = int(os.getenv("RECONCILER_INTERVAL_SECONDS", "30"))
-        r = PositionReconciler(
-            session_factory=s.db_session_factory,
-            broker=getattr(s, "broker", None),
-            ws_manager=getattr(s, "ws_manager", None),
-            interval_seconds=interval,
-        )
-        await r.start()
-        log_activity("Position reconciler started")
-        return r
-
-    async def _init_telegram_bot(s):
-        from notifications.telegram_bot import init_telegram_bot
-        bot = init_telegram_bot(s)
-        if bot:
-            t = asyncio.create_task(bot.start())
-            s.background_tasks.append(t)
-            s.telegram_bot = bot
-        return bot
-
-    async def _init_mobile(s):
-        from mobile.api import MobileAPIServer
-        from mobile.push_notifications import PushNotificationManager
-        mob = MobileAPIServer()
-        if hasattr(mob, 'router'):
-            app.include_router(mob.router, prefix="/api/mobile", tags=["Mobile"])
-        elif hasattr(mob, 'app'):
-            app.mount("/api/mobile", mob.app)
-        s.push_notifications = PushNotificationManager()
-        return mob
-
-    async def _init_hyperopt(s):
-        from backtesting.hyperopt import create_hyperopt_router
-        app.include_router(create_hyperopt_router())
-        return True
-
-    # ── Feature-flagged factories ─────────────────────────────────────────────
-
-    async def _init_research(s):
-        if not feature_flags.RESEARCH_MODULE:
-            return None
-        from research import ResearchNotebookEngine, create_research_router
-        e = ResearchNotebookEngine()
-        app.include_router(create_research_router(e))
-        return e
-
-    async def _init_explainability(s):
-        if not feature_flags.EXPLAINABILITY:
-            return None
-        from explainability import AIExplainer, create_explainability_router
-        e = AIExplainer()
-        app.include_router(create_explainability_router(e))
-        return e
-
-    async def _init_transparency(s):
-        if not feature_flags.TRANSPARENCY_REPORTS:
-            return None
-        from transparency import ExecutionTransparencyEngine, create_transparency_router
-        e = ExecutionTransparencyEngine()
-        app.include_router(create_transparency_router(e))
-        return e
-
-    async def _init_teams(s):
-        if not feature_flags.TEAMS_MODULE:
-            return None
-        from teams import TeamManager, create_teams_router
-        tm = TeamManager()
-        app.include_router(create_teams_router(tm))
-        return tm
-
-    async def _init_nocode(s):
-        if not feature_flags.NOCODE_BUILDER:
-            return None
-        from nocode import NoCodeStrategyBuilder, create_nocode_router
-        nb = NoCodeStrategyBuilder()
-        app.include_router(create_nocode_router(nb))
-        return nb
-
-    async def _init_replay(s):
-        if not feature_flags.REPLAY_ENGINE:
-            return None
-        from replay import ChartReplayEngine, create_replay_router
-        re = ChartReplayEngine()
-        app.include_router(create_replay_router(re))
-        return re
-
-    async def _init_ml_predictions(s):
-        if not feature_flags.ML_PREDICTIONS:
-            return None
-        from ml import TechnicalFeatureEngineer, create_ml_router
-        fe = TechnicalFeatureEngineer()
-        app.include_router(create_ml_router(fe))
-        return fe
-
-    # ── Register all components with dependency graph ─────────────────────────
+    # ── Core infrastructure ───────────────────────────────────────────────────
     (
         _registry
-        .register("env_check",       _init_env,            required=False)
-        .register("config",          _init_config,         required=True,  deps=["env_check"])
-        .register("database",        _init_database,       required=True,  deps=["config"])
-        .register("cache",           _init_cache,          required=False, deps=["config"])
-        .register("data_scheduler",  _init_data_scheduler, required=False, deps=["config"])
-        .register("websocket",       _init_websocket,      required=False, deps=["config"])
-        .register("alert_engine",    _init_alert_engine,   required=False, deps=["config"])
-        .register("order_flow",      _init_order_flow,     required=False, deps=["config"])
-        .register("time_and_sales",  _init_time_and_sales, required=False, deps=["config"])
-        .register("market_scanner",  _init_market_scanner, required=False, deps=["config"])
-        .register("dom",             _init_dom,            required=False, deps=["config"])
-        .register("signals_router",  _init_signals_router, required=False, deps=["config"])
-        .register("news_router",     _init_news_router,    required=False, deps=["config"])
-        .register("auth_service",    _init_auth,           required=False, deps=["database"])
-        .register("risk_manager",    _init_risk_manager,   required=False, deps=["config"])
-        .register("broker",          _init_broker,         required=False, deps=["database"])
-        .register("price_engine",    _init_price_engine,   required=False, deps=["broker"])
-        .register("compliance_manager", _init_compliance,  required=False, deps=["database"])
-        .register("aml",             _init_aml,            required=False, deps=["database"])
-        .register("strategy_brain",  _init_strategy_brain, required=False, deps=["config"])
-        .register("event_store",     _init_event_store,    required=False, deps=["config"])
-        .register("position_tracker",_init_position_tracker, required=False, deps=["config"])
-        .register("trade_executor",  _init_trade_executor, required=False, deps=["broker", "risk_manager", "position_tracker"])
-        .register("brain",           _init_hopefx_brain,   required=False, deps=["price_engine", "risk_manager", "broker", "strategy_brain", "alert_engine", "position_tracker", "trade_executor"])
-        .register("wallet_manager",  _init_wallet,         required=False, deps=["database"])
-        .register("social",          _init_social,         required=False, deps=["config"])
-        .register("regime_router",   _init_regime_router,  required=False, deps=["strategy_brain"])
-        .register("signal_engine",   _init_signal_engine,  required=False, deps=["risk_manager", "broker"])
-        .register("reconciler",      _init_reconciler,     required=False, deps=["database", "broker"])
-        .register("telegram_bot",    _init_telegram_bot,   required=False, deps=["alert_engine"])
-        .register("mobile",          _init_mobile,         required=False, deps=["config"])
-        .register("hyperopt",        _init_hyperopt,       required=False, deps=["config"])
-        .register("research_engine", _init_research,       required=False, deps=["config"])
-        .register("explainer",       _init_explainability, required=False, deps=["config"])
-        .register("transparency_engine", _init_transparency, required=False, deps=["config"])
-        .register("teams_manager",   _init_teams,          required=False, deps=["config"])
-        .register("nocode_builder",  _init_nocode,         required=False, deps=["config"])
-        .register("replay_engine",   _init_replay,         required=False, deps=["config"])
-        .register("ml_feature_engineer", _init_ml_predictions, required=False, deps=["config"])
+        .register("env_check",            F.init_env,                    required=False)
+        .register("config",               F.init_config,                 required=True,  deps=["env_check"])
+        .register("database",             F.init_database,               required=True,  deps=["config"])
+        .register("cache",                F.init_cache,                  required=False, deps=["config"])
+        # ── Background services ───────────────────────────────────────────────
+        .register("data_scheduler",       F.init_data_scheduler,         required=False, deps=["config"])
+        .register("websocket",            _app(F.init_websocket),        required=False, deps=["config"])
+        .register("alert_engine",         _app(F.init_alert_engine),     required=False, deps=["config"])
+        # ── Analysis / data routers ───────────────────────────────────────────
+        .register("order_flow",           _app(F.init_order_flow),       required=False, deps=["config"])
+        .register("time_and_sales",       _app(F.init_time_and_sales),   required=False, deps=["config"])
+        .register("market_scanner",       _app(F.init_market_scanner),   required=False, deps=["config"])
+        .register("dom",                  _app(F.init_dom),              required=False, deps=["config"])
+        .register("signals_router",       _app(F.init_signals_router),   required=False, deps=["config"])
+        .register("news_router",          _app(F.init_news_router),      required=False, deps=["config"])
+        # ── Auth / risk / trading ─────────────────────────────────────────────
+        .register("auth_service",         F.init_auth,                   required=False, deps=["database"])
+        .register("risk_manager",         F.init_risk_manager,           required=False, deps=["config"])
+        .register("broker",               F.init_broker,                 required=False, deps=["database"])
+        .register("price_engine",         F.init_price_engine,           required=False, deps=["broker"])
+        .register("compliance_manager",   F.init_compliance,             required=False, deps=["database"])
+        .register("aml",                  F.init_aml,                    required=False, deps=["database"])
+        .register("strategy_brain",       F.init_strategy_brain,         required=False, deps=["config"])
+        .register("event_store",          F.init_event_store,            required=False, deps=["config"])
+        .register("position_tracker",     F.init_position_tracker,       required=False, deps=["config"])
+        .register("trade_executor",       F.init_trade_executor,         required=False, deps=["broker", "risk_manager", "position_tracker"])
+        .register("brain",                F.init_hopefx_brain,           required=False, deps=["price_engine", "risk_manager", "broker", "strategy_brain", "alert_engine", "position_tracker", "trade_executor"])
+        # ── Payments / social ─────────────────────────────────────────────────
+        .register("wallet_manager",       F.init_wallet,                 required=False, deps=["database"])
+        .register("social",               F.init_social,                 required=False, deps=["config"])
+        .register("regime_router",        F.init_regime_router,          required=False, deps=["strategy_brain"])
+        # ── Engines ───────────────────────────────────────────────────────────
+        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker"])
+        .register("reconciler",           F.init_reconciler,             required=False, deps=["database", "broker"])
+        .register("telegram_bot",         F.init_telegram_bot,           required=False, deps=["alert_engine"])
+        .register("mobile",               _app(F.init_mobile),           required=False, deps=["config"])
+        .register("hyperopt",             _app(F.init_hyperopt),         required=False, deps=["config"])
+        # ── Feature-flagged ───────────────────────────────────────────────────
+        .register("research_engine",      _app_flags(F.init_research),       required=False, deps=["config"])
+        .register("explainer",            _app_flags(F.init_explainability),  required=False, deps=["config"])
+        .register("transparency_engine",  _app_flags(F.init_transparency),    required=False, deps=["config"])
+        .register("teams_manager",        _app_flags(F.init_teams),           required=False, deps=["config"])
+        .register("nocode_builder",       _app_flags(F.init_nocode),          required=False, deps=["config"])
+        .register("replay_engine",        _app_flags(F.init_replay),          required=False, deps=["config"])
+        .register("ml_feature_engineer",  _app_flags(F.init_ml_predictions),  required=False, deps=["config"])
     )
 
     try:
-        # ── Run registry ──────────────────────────────────────────────────────
         await _registry.start_all(app_state)
         _registry.print_table()
         apply_persisted_risk_settings()
@@ -936,12 +594,9 @@ async def startup_event():
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)
-
-    except Exception as e:
-        logger.error("Startup failed: %s", e, exc_info=True)
+    except Exception as exc:
+        logger.error("Startup failed: %s", exc, exc_info=True)
         raise
-
-    # ── DEAD CODE BELOW — kept for reference, never reached ──────────────────
 
 
 async def shutdown_event():
