@@ -7,8 +7,11 @@ and receive AI responses.
 
 Routes
 ------
-POST /api/chat          — send a message, get a response
-DELETE /api/chat/history — clear conversation history for the session
+POST /api/chat          — send a message, get a response (auth required)
+DELETE /api/chat/history — clear conversation history for the session (auth required)
+
+Both routes require a valid JWT bearer token. Without auth, any bot that
+discovers the URL can run up OpenAI charges indefinitely.
 """
 
 from __future__ import annotations
@@ -19,6 +22,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -62,15 +67,18 @@ def _get_agent(session_id: Optional[str] = None):
 # ── routes ────────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=ChatResponse, summary="Send a message to the AI assistant")
-async def ai_chat(body: ChatRequest):
+async def ai_chat(
+    body: ChatRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Send a free-form message to the HOPEFX AI assistant.
 
     The assistant maintains conversation history per session_id so
     follow-up questions have full context. If no session_id is provided
-    all requests share a single default history.
+    all requests share a single default history per authenticated user.
 
-    Requires OPENAI_API_KEY to be set in the environment.
+    Requires a valid JWT bearer token and OPENAI_API_KEY in the environment.
     """
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
@@ -79,7 +87,10 @@ async def ai_chat(body: ChatRequest):
             detail="OPENAI_API_KEY is not configured. Set it in your .env file.",
         )
 
-    agent, key = _get_agent(body.session_id)
+    # Scope session key to the authenticated user so histories never bleed
+    # across accounts even when callers omit session_id.
+    session_key = f"{user.sub}:{body.session_id}" if body.session_id else user.sub
+    agent, key = _get_agent(session_key)
 
     try:
         response_text = await agent.chat(body.message)
@@ -94,13 +105,16 @@ async def ai_chat(body: ChatRequest):
 
 
 @router.delete("/history", summary="Clear conversation history for a session")
-async def clear_chat_history(session_id: Optional[str] = None):
+async def clear_chat_history(
+    session_id: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Clear the conversation history for the given session_id (or the
     default session if none is provided). The next message will start
-    a fresh conversation.
+    a fresh conversation. Only clears history owned by the authenticated user.
     """
-    key = session_id or "__default__"
+    key = f"{user.sub}:{session_id}" if session_id else user.sub
     if key in _agents:
         try:
             _agents[key]._history = []
