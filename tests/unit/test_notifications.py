@@ -156,9 +156,11 @@ class TestNotificationManager:
         """Test email notification with SMTP credentials"""
         config = {
             'email_enabled': True,
+            'smtp_host': 'smtp.example.com',
+            'smtp_port': 587,
             'smtp_username': 'test@example.com',
             'smtp_password': 'password',
-            'smtp_to': 'recipient@example.com'
+            'smtp_to': 'recipient@example.com',
         }
         manager = NotificationManager(config)
         
