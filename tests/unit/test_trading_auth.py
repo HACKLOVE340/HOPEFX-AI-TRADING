@@ -115,6 +115,10 @@ def app(mock_broker, mock_brain):
     state.broker = mock_broker
     state.brain = mock_brain
     state.price_engine = None
+    # Disable risk/compliance/prop-firm gates so they don't interfere with auth tests
+    state.risk_manager = None
+    state.compliance_manager = None
+    state.prop_firm_manager = None
     trading_module.set_state(state)
 
     application = FastAPI()
