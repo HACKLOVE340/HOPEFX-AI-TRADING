@@ -40,51 +40,54 @@ open http://localhost:8000/docs
 
 ## Backtest Results — XAUUSD Strategy
 
-> **Data**: Up to 50 years of GC=F daily bars via yfinance (earliest available ~1974), 5-fold walk-forward split
+> **Data**: 5 years of real GC=F daily bars (Yahoo Finance, 2021-03-26 → 2026-03-24)
 > **Models**: RandomForestClassifier + XGBoost, macro features (DXY, VIX, yields, SPX)
-> **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 2 bps commission
+> **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 35 bps commission + 5 bps slippage
 
 ![Equity Curve](examples/results/equity_curve.png)
 
-### Synthetic Backtest (infrastructure proof)
+### Real-Data Backtest (GC=F, 5 years)
 
 | Metric | Value |
 |---|---|
-| Backtest period | 2024-01-08 – 2024-10-18 |
+| Data source | Yahoo Finance GC=F (real futures prices) |
+| Backtest period | 2024-10-14 – 2026-03-24 |
 | Initial capital | $100,000 |
-| Final equity | $100,676 |
-| Total return | +0.68% |
-| Trades | 17 |
-| Win rate | 47.1% |
-| Profit factor | 1.446 |
-| Max drawdown | −0.6% |
-| Paper trading | Live — results at /api/performance/public |
-| ML accuracy (test) | 48.3% |
+| Final equity | $106,167 |
+| Total return | +6.17% |
+| Trades | 31 |
+| Win rate | 67.7% |
+| Profit factor | 3.553 |
+| Max drawdown | −0.83% |
+| ML accuracy (test) | 52.9% |
+| ML up-precision | 60.2% |
 
-> ⚠️ **17 trades over 9 months cannot produce a statistically significant Sharpe ratio or win rate.**
-> This backtest proves the pipeline runs end-to-end. It is not a trading signal.
+> ⚠️ **31 trades is still too few for statistical significance.** The Sharpe and win rate are
+> not reliable at this sample size. The pipeline now runs on real data end-to-end.
+> Do not trade live capital until p<0.05 is demonstrated on a held-out OOS period.
 
-### Model Metrics
+### Model Metrics (50-year macro walk-forward, real GC=F daily)
 
-| Model | Accuracy | F1 | Training data |
-|---|---|---|---|
-| XGBoost | 49.0% | 0.419 | 11,457 H1 bars, GC=F |
-| RandomForest | 48.6% | — | 11,457 H1 bars, GC=F |
+| Model | WF Accuracy | WF p-value | OOS Accuracy (3yr) | OOS p-value | Training data |
+|---|---|---|---|---|---|
+| XGBoost | 50.3% ± 1.8% | 0.720 | 50.5% | 0.400 | 5,609 bars, GC=F + macro |
+| RandomForest | 50.7% ± 2.6% | 0.612 | 48.4% | 0.818 | 5,609 bars, GC=F + macro |
 
-> **These numbers are near chance level.** Next-bar direction prediction on H1 gold is a hard problem.
-> Research literature consistently shows 52–58% as a realistic ceiling on daily bars with standard
-> technical features. The 50-year macro retrain pipeline is built and ready — it has not been run yet.
-> Run the command below to update these numbers. Do not trade live capital on 49% accuracy.
+> **Neither model shows p<0.05 edge above chance on the held-out OOS period.**
+> Walk-forward CV accuracy is near chance (50%). The 3-year OOS period (2023–2026)
+> is the only valid performance estimate — it was never seen during training.
+> Research literature consistently shows 52–58% as a realistic ceiling on daily bars.
+> Do not trade live capital on these results.
 
-**Reproduce the synthetic backtest:**
+**Reproduce the real-data backtest:**
 ```bash
 python examples/generate_proof_artifacts.py
 ```
 
-**Retrain on 50 years of data (recommended):**
+**Retrain on 50 years of data with strict OOS validation:**
 ```bash
-# Full 50-year daily history with macro features — takes ~10 min
-python ml/train_with_macro.py --years 50
+# Full 50-year daily history with macro features + 3-year held-out OOS
+python ml/train_with_macro.py --years 50 --oos-years 3
 
 # Quick smoke test (10 years, no macro)
 python ml/train_with_macro.py --years 10 --no-macro
