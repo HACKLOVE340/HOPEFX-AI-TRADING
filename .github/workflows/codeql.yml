@@ -99,3 +99,6 @@ jobs:
       uses: github/codeql-action/analyze@v3
       with:
         category: "/language:${{matrix.language}}"
+      # CodeQL requires GitHub Advanced Security on private repos.
+      # continue-on-error allows the workflow to report without blocking.
+      continue-on-error: true

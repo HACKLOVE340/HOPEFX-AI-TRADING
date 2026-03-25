@@ -17,13 +17,9 @@ name: Fortify AST Scan
 
 # Customize trigger events based on your DevSecOps process and/or policy
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "main" ]
-  schedule:
-    - cron: '45 19 * * 2'
+  # Fortify requires a paid enterprise subscription (SSC_TOKEN, SC_CLIENT_AUTH_TOKEN,
+  # DEBRICKED_TOKEN, SSC_URL). Disabled automatic triggers until credentials are
+  # configured in GitHub Actions secrets/variables.
   workflow_dispatch:
 
 jobs:

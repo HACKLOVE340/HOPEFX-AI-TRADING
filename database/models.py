@@ -662,6 +662,23 @@ else:
         __tablename__ = "sessions"
         __table__ = type("T", (), {"columns": []})()
 
+# ── Email suppression table ───────────────────────────────────────────────────
+# Populated by the SendGrid webhook handler (POST /api/email/webhook).
+# EmailChannel.send() checks this table before dispatching any message.
+
+if SQLALCHEMY_AVAILABLE:
+    class EmailSuppression(Base):
+        __tablename__ = "email_suppressions"
+        id = Column(Integer, primary_key=True)
+        email = Column(String(320), unique=True, nullable=False, index=True)
+        reason = Column(String(64), nullable=False)   # bounce | spam_report | unsubscribe
+        created_at = Column(DateTime, default=datetime.utcnow)
+else:
+    class EmailSuppression:  # type: ignore[no-redef]
+        __tablename__ = "email_suppressions"
+        __table__ = type("T", (), {"columns": []})()
+
+
 def _add_enum_value(enum_cls, name, value):
     """Add a new member to an existing Enum if it doesn't already exist."""
     if name in enum_cls._member_map_:

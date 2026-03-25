@@ -1,10 +1,9 @@
 name: Jekyll site CI
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  # This repo uses MkDocs, not Jekyll. Disabled automatic triggers to prevent
+  # spurious failures. Run manually if a Jekyll site is ever added.
+  workflow_dispatch:
 
 jobs:
   build:

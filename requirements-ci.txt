@@ -1,0 +1,45 @@
+# Lightweight requirements for CI — no C extensions, no GPU deps, no broker SDKs.
+# Excludes: ta-lib, tensorflow, torch, MetaTrader5, vectorbt, numba, psycopg2-binary
+# (those require system libraries that are not available in a bare Ubuntu runner).
+#
+# Used by .github/workflows/tests.yml instead of the full requirements.txt.
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+aiosqlite>=0.19.0
+asyncpg>=0.29.0
+redis>=5.0.0
+PyJWT>=2.8.0
+passlib>=1.7.4
+bcrypt>=4.0.0
+cryptography>=41.0.0
+pyotp>=2.9.0
+pydantic[email]>=2.5.0
+email-validator>=2.1.0
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0
+requests>=2.31.0
+aiohttp>=3.9.0
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+lightgbm>=4.3.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+structlog>=24.0.0
+prometheus-client>=0.19.0
+stripe>=7.0.0
+python-telegram-bot>=20.0
+ccxt>=4.2.0
+oandapyV20>=0.6.3
+feedparser>=6.0.0
+strawberry-graphql[fastapi]>=0.200.0
+slowapi>=0.1.9
+tenacity>=8.2.3
+httpx>=0.26.0
+python-multipart>=0.0.9
+jinja2>=3.1.0
+sendgrid>=6.11.0
+hypothesis>=6.100.0
