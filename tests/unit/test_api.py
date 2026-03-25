@@ -213,10 +213,16 @@ from api.admin import (
 
 
 def _make_admin_client() -> TestClient:
-    """Create a TestClient for the admin router."""
-    app = FastAPI()
-    app.include_router(admin_router)
-    return TestClient(app)
+    """Create a TestClient for the admin router with admin auth bypassed."""
+    from api.auth import TokenPayload, get_current_user
+
+    def _mock_admin() -> TokenPayload:
+        return TokenPayload(sub="test-admin", role="admin")
+
+    application = FastAPI()
+    application.include_router(admin_router)
+    application.dependency_overrides[get_current_user] = _mock_admin
+    return TestClient(application)
 
 
 @pytest.mark.unit

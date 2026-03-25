@@ -2,6 +2,10 @@
 Integration tests for API endpoints.
 """
 
+import os
+import time
+
+import jwt
 import pytest
 
 # Guard against missing or incompatible dependencies so that a broken
@@ -23,9 +27,24 @@ if _import_error is not None:
     )
 
 
+def _admin_token() -> str:
+    """Mint a short-lived admin JWT for integration tests."""
+    secret = os.environ.get("SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long")
+    return jwt.encode(
+        {"sub": "test-admin", "role": "admin", "exp": int(time.time()) + 3600},
+        secret,
+        algorithm="HS256",
+    )
+
+
+def _admin_headers() -> dict:
+    return {"Authorization": f"Bearer {_admin_token()}"}
+
+
 @pytest.fixture(scope="module")
 def client():
     """Create a single test client for the module (avoids repeated lifespan start/stop)."""
+    os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long")
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
 
@@ -43,13 +62,14 @@ class TestHealthEndpoints:
         assert data['status'] == 'healthy'
 
     def test_status_endpoint(self, client):
-        """Test status endpoint."""
-        response = client.get("/status")
+        """Test machine-readable status endpoint."""
+        # /status is the public HTML status page; /api/status/json is the JSON API.
+        response = client.get("/api/status/json")
 
         assert response.status_code == 200
         data = response.json()
-        assert 'version' in data
-        assert 'environment' in data
+        assert 'status' in data
+        assert 'uptime_seconds' in data
 
 
 @pytest.mark.integration
@@ -102,29 +122,29 @@ class TestTradingEndpoints:
 
 @pytest.mark.integration
 class TestAdminEndpoints:
-    """Test admin panel endpoints."""
+    """Test admin panel endpoints — all require admin JWT."""
 
     def test_admin_dashboard(self, client):
         """Test admin dashboard."""
-        response = client.get("/admin/")
+        response = client.get("/admin/", headers=_admin_headers())
 
         assert response.status_code == 200
         assert b"HOPEFX" in response.content or b"Dashboard" in response.content
 
     def test_admin_strategies_page(self, client):
         """Test admin strategies page."""
-        response = client.get("/admin/strategies")
+        response = client.get("/admin/strategies", headers=_admin_headers())
 
         assert response.status_code == 200
 
     def test_admin_settings_page(self, client):
         """Test admin settings page."""
-        response = client.get("/admin/settings")
+        response = client.get("/admin/settings", headers=_admin_headers())
 
         assert response.status_code == 200
 
     def test_admin_monitoring_page(self, client):
         """Test admin monitoring page."""
-        response = client.get("/admin/monitoring")
+        response = client.get("/admin/monitoring", headers=_admin_headers())
 
         assert response.status_code == 200

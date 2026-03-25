@@ -182,7 +182,8 @@ class TestAuthApiEndpoints:
             pytest.skip("Auth router not importable in this environment")
 
     def test_register_returns_201(self, client):
-        res = client.post("/register", json={
+        # auth router is mounted with prefix /auth
+        res = client.post("/auth/register", json={
             "email": "new@example.com",
             "username": "newtrader",
             "password": "SecurePass123!",
@@ -190,11 +191,11 @@ class TestAuthApiEndpoints:
         assert res.status_code == 201
 
     def test_register_missing_fields_returns_422(self, client):
-        res = client.post("/register", json={"email": "only@email.com"})
+        res = client.post("/auth/register", json={"email": "only@email.com"})
         assert res.status_code == 422
 
     def test_login_success(self, client):
-        res = client.post("/login", json={
+        res = client.post("/auth/login", json={
             "username": "testuser",
             "password": "SecurePass123!",
         })
@@ -202,5 +203,5 @@ class TestAuthApiEndpoints:
         assert res.status_code != 500
 
     def test_verify_email_endpoint(self, client):
-        res = client.get("/verify-email?token=verify-token-123")
+        res = client.get("/auth/verify-email?token=verify-token-123")
         assert res.status_code in (200, 400)  # 400 if mock returns False
