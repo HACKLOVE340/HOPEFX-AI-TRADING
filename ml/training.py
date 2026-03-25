@@ -777,17 +777,25 @@ class RandomForestModel:
                 'importance': self.model.feature_importances_
             }).sort_values('importance', ascending=False)
 
+        # Return named importances so callers can log/inspect without a
+        # separate feature list lookup.
+        named_imp: Dict[str, float] = {}
+        if self.feature_importance is not None:
+            named_imp = dict(
+                zip(self.feature_importance['feature'],
+                    self.feature_importance['importance'])
+            )
         return {
             'n_estimators': self.n_estimators,
-            'feature_importances': self.model.feature_importances_.tolist()
+            'feature_importances': named_imp,
         }
-    
+
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Make predictions"""
         if self.model is None:
             raise ValueError("Model not trained. Call fit() or load_model() first.")
         return self.model.predict(X)
-    
+
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Make probability predictions (classification only)"""
         if self.model is None:
@@ -1124,22 +1132,25 @@ class MLEvaluationReport:
         plt.show()
     
     def plot_feature_importance(self, importance_df: pd.DataFrame, model_name: str, top_n: int = 20, save: bool = True):
-        """Plot feature importance"""
+        """Plot feature importance using actual feature names."""
         import matplotlib.pyplot as plt
-        
+
         plt.figure(figsize=(10, 8))
         top_features = importance_df.head(top_n)
+        # Use the 'feature' column directly — it now contains real names, not indices.
+        labels = list(top_features['feature'])
         plt.barh(range(len(top_features)), top_features['importance'])
-        plt.yticks(range(len(top_features)), [f'Feature {i}' for i in top_features['feature']])
+        plt.yticks(range(len(top_features)), labels)
         plt.xlabel('Importance')
         plt.title(f'Top {top_n} Feature Importance - {model_name}')
         plt.gca().invert_yaxis()
-        
+        plt.tight_layout()
+
         if save:
             plot_path = self.output_dir / f"{model_name}_feature_importance.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
             print(f"Feature importance plot saved: {plot_path}")
-        
+
         plt.show()
 
 
