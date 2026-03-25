@@ -15,8 +15,10 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +67,15 @@ class DeployResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/generate-strategy", response_model=GenerateResponse)
-async def generate_strategy(req: GenerateRequest) -> GenerateResponse:
+async def generate_strategy(
+    req: GenerateRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> GenerateResponse:
     """
     Generate a trading strategy from a plain-English prompt.
     Uses brain.llm_agent.LLMAgent if OPENAI_API_KEY is set;
     returns a stub response otherwise so the UI works without credentials.
+    Requires: role >= 'admin' (LLM calls cost money per invocation).
     """
     openai_key = os.getenv("OPENAI_API_KEY", "")
 
@@ -154,10 +160,14 @@ class GeneratedStrategy(BaseStrategy):
 
 
 @router.post("/deploy-strategy", response_model=DeployResponse)
-async def deploy_strategy(req: DeployRequest) -> DeployResponse:
+async def deploy_strategy(
+    req: DeployRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> DeployResponse:
     """
-    Deploy a generated strategy to paper trading.
+    Deploy a generated strategy to paper/live trading.
     Stores the strategy code and registers it with the nocode builder.
+    Requires: role >= 'admin' (deploys to live trading infrastructure).
     """
     if not req.strategy_code.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty")

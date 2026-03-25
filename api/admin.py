@@ -279,7 +279,8 @@ async def get_kyc_status(
 # ── New endpoints expected by tests ──────────────────────────────────────────
 
 @router.get("/api/system-info")
-def get_system_info():
+def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
+    """Server version and uptime. Requires: role >= 'admin'."""
     return {
         "version": "1.0.0",
         "status": "running",
@@ -288,26 +289,35 @@ def get_system_info():
 
 
 @router.get("/api/settings")
-def get_settings():
+def get_settings(user: TokenPayload = Depends(require_role("admin"))):
+    """Read current risk settings. Requires: role >= 'admin'."""
     return dict(_risk_settings)
 
 
 @router.post("/api/settings")
-def save_settings(payload: Dict[str, Any]):
+def save_settings(
+    payload: Dict[str, Any],
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """Update risk settings. Requires: role >= 'admin'."""
     try:
         _risk_settings.update(payload)
+        log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
         return {"status": "ok", "saved": list(payload.keys())}
     except Exception as exc:
+        logger.error("save_settings failed: %s", exc, exc_info=True)
         return {"status": "error", "detail": str(exc)}
 
 
 @router.get("/api/activity")
-def get_activity():
+def get_activity(user: TokenPayload = Depends(require_role("admin"))):
+    """All user activity logs. Requires: role >= 'admin'."""
     return {"events": list(activity_log)}
 
 
 @router.get("/api/dashboard-data")
-def get_dashboard_data():
+def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
+    """Full system state. Requires: role >= 'admin'."""
     return {
         "system_health": {"status": "ok"},
         "trading_stats": {"total_trades": 0, "open_positions": 0},
@@ -317,7 +327,8 @@ def get_dashboard_data():
 
 
 @router.get("/api/system-metrics")
-def get_system_metrics():
+def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
+    """Prometheus-style system metrics. Requires: role >= 'admin'."""
     uptime_secs = time.time() - _start_time
     return {
         "uptime": uptime_secs,
@@ -346,20 +357,24 @@ def _html_page(title: str, body: str) -> HTMLResponse:
 
 
 @router.get("/", response_class=HTMLResponse)
-def admin_dashboard():
+def admin_dashboard(user: TokenPayload = Depends(require_role("admin"))):
+    """Admin dashboard. Requires: role >= 'admin'."""
     return _html_page("Dashboard", "<p>Dashboard</p>")
 
 
 @router.get("/strategies", response_class=HTMLResponse)
-def admin_strategies():
+def admin_strategies(user: TokenPayload = Depends(require_role("admin"))):
+    """Strategy management page. Requires: role >= 'admin'."""
     return _html_page("Strategies", "<p>Strategies</p>")
 
 
 @router.get("/settings", response_class=HTMLResponse)
-def admin_settings_page():
+def admin_settings_page(user: TokenPayload = Depends(require_role("admin"))):
+    """Settings page. Requires: role >= 'admin'."""
     return _html_page("Settings", "<p>Settings</p>")
 
 
 @router.get("/monitoring", response_class=HTMLResponse)
-def admin_monitoring():
+def admin_monitoring(user: TokenPayload = Depends(require_role("admin"))):
+    """Monitoring page. Requires: role >= 'admin'."""
     return _html_page("Monitoring", "<p>Monitoring</p>")
