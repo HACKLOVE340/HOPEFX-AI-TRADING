@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ def _get_session():
     """Return a SQLAlchemy session or None if DB unavailable."""
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if not mgr:
             return None
@@ -39,6 +40,7 @@ def db_get(key: str) -> Optional[Any]:
     """
     try:
         from database.models import Configuration
+
         session = _get_session()
         if not session:
             return None
@@ -57,6 +59,7 @@ def db_set(key: str, value: Any, changed_by: str = "system") -> bool:
     """
     try:
         from database.models import Configuration
+
         session = _get_session()
         if not session:
             return False
@@ -86,6 +89,7 @@ def db_delete(key: str) -> bool:
     """Delete a key from the configurations table."""
     try:
         from database.models import Configuration
+
         session = _get_session()
         if not session:
             return False
@@ -101,12 +105,15 @@ def db_keys_prefix(prefix: str) -> List[str]:
     """Return all keys that start with the given prefix."""
     try:
         from database.models import Configuration
+
         session = _get_session()
         if not session:
             return []
-        records = session.query(Configuration.config_key).filter(
-            Configuration.config_key.like(f"{prefix}%")
-        ).all()
+        records = (
+            session.query(Configuration.config_key)
+            .filter(Configuration.config_key.like(f"{prefix}%"))
+            .all()
+        )
         return [r[0] for r in records]
     except Exception as exc:
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)

@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -30,14 +29,14 @@ _pending: Dict[str, dict] = {}
 
 # Approximate rates — replace with live feed in production
 _RATES_USD: Dict[str, float] = {
-    "BTC":  0.000016,   # ~$62,500/BTC
-    "ETH":  0.00033,    # ~$3,000/ETH
+    "BTC": 0.000016,  # ~$62,500/BTC
+    "ETH": 0.00033,  # ~$3,000/ETH
     "USDT": 1.0,
 }
 
 _CONFIRMATIONS_REQUIRED: Dict[str, int] = {
-    "BTC":  3,
-    "ETH":  12,
+    "BTC": 3,
+    "ETH": 12,
     "USDT": 12,
 }
 
@@ -45,6 +44,7 @@ ADDRESS_TTL_MINUTES = 30
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class AddressRequest(BaseModel):
     currency: str = Field(..., description="BTC | ETH | USDT")
@@ -67,7 +67,7 @@ class AddressResponse(BaseModel):
 
 class PaymentStatusResponse(BaseModel):
     payment_id: str
-    status: str          # pending | confirming | complete | expired
+    status: str  # pending | confirming | complete | expired
     confirmations: int
     confirmations_required: int
     currency: str
@@ -75,6 +75,7 @@ class PaymentStatusResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/crypto/address", response_model=AddressResponse)
 async def generate_deposit_address(req: AddressRequest):
@@ -89,13 +90,17 @@ async def generate_deposit_address(req: AddressRequest):
     rate = _RATES_USD[currency]
     amount_crypto = req.amount_usd * rate
     network = (req.network or currency).upper()
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=ADDRESS_TTL_MINUTES)).isoformat()
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(minutes=ADDRESS_TTL_MINUTES)
+    ).isoformat()
 
     try:
         address = _generate_address(currency, req.user_id, network)
     except Exception as exc:
         logger.warning("Address generation failed: %s", exc)
-        raise HTTPException(status_code=503, detail=f"Address generation unavailable: {exc}")
+        raise HTTPException(
+            status_code=503, detail=f"Address generation unavailable: {exc}"
+        )
 
     payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
     _pending[payment_id] = {
@@ -146,31 +151,42 @@ async def get_payment_status(payment_id: str):
 async def get_rates():
     """Return current USD rates for supported cryptocurrencies."""
     return {
-        "rates": {k: {"usd_per_coin": round(1 / v, 2), "coin_per_usd": v} for k, v in _RATES_USD.items()},
+        "rates": {
+            k: {"usd_per_coin": round(1 / v, 2), "coin_per_usd": v}
+            for k, v in _RATES_USD.items()
+        },
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 # ── Address generation helpers ────────────────────────────────────────────────
 
+
 def _generate_address(currency: str, user_id: str, network: str) -> str:
     """Delegate to the appropriate crypto client."""
     if currency == "BTC":
         from payments.crypto.bitcoin import BitcoinClient
+
         client = BitcoinClient()
         result = client.generate_deposit_address(user_id)
         return result["address"]
 
     if currency == "ETH":
         from payments.crypto.ethereum import EthereumClient
+
         client = EthereumClient()
         result = client.generate_deposit_address(user_id)
         return result["address"]
 
     if currency == "USDT":
         from payments.crypto.usdt import USDTClient, USDTNetwork
+
         client = USDTClient()
-        net_enum = USDTNetwork[network] if network in USDTNetwork.__members__ else USDTNetwork.TRC20
+        net_enum = (
+            USDTNetwork[network]
+            if network in USDTNetwork.__members__
+            else USDTNetwork.TRC20
+        )
         result = client.generate_deposit_address(user_id, net_enum)
         return result["address"]
 

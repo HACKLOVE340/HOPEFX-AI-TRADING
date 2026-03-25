@@ -4,19 +4,19 @@ Paper Trading Broker
 Simulated broker for testing strategies without real money.
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
-import uuid
 import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from .base import (
+    AccountInfo,
     BrokerConnector,
     Order,
-    Position,
-    AccountInfo,
-    OrderType,
     OrderSide,
     OrderStatus,
+    OrderType,
+    Position,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,9 +30,15 @@ class PaperTradingBroker(BrokerConnector):
     without connecting to real exchanges.
     """
 
-    def __init__(self, config: Dict[str, Any] = None, session_factory=None,
-                 user_id: str = "paper", initial_balance: float = None,
-                 commission_per_lot: float = None, slippage_model: str = "gaussian"):
+    def __init__(
+        self,
+        config: Dict[str, Any] = None,
+        session_factory=None,
+        user_id: str = "paper",
+        initial_balance: float = None,
+        commission_per_lot: float = None,
+        slippage_model: str = "gaussian",
+    ):
         """
         Initialize paper trading broker.
 
@@ -43,13 +49,13 @@ class PaperTradingBroker(BrokerConnector):
         # Allow keyword args to override config dict
         if initial_balance is not None:
             config = dict(config)
-            config['initial_balance'] = initial_balance
+            config["initial_balance"] = initial_balance
         if commission_per_lot is not None:
             config = dict(config)
-            config['commission_per_lot'] = commission_per_lot
+            config["commission_per_lot"] = commission_per_lot
         super().__init__(config)
 
-        self.initial_balance = config.get('initial_balance', 10000.0)
+        self.initial_balance = config.get("initial_balance", 10000.0)
         self.balance = self.initial_balance
         self.equity = self.initial_balance
         self._session_factory = session_factory
@@ -61,37 +67,37 @@ class PaperTradingBroker(BrokerConnector):
         # Simulated market prices - Multi-asset support
         self.market_prices = {
             # Precious Metals
-            'XAUUSD': 2050.0,     # Gold
-            'XAGUSD': 23.50,      # Silver
-            'XPTUSD': 900.0,      # Platinum
+            "XAUUSD": 2050.0,  # Gold
+            "XAGUSD": 23.50,  # Silver
+            "XPTUSD": 900.0,  # Platinum
             # Major Forex Pairs
-            'EURUSD': 1.0850,
-            'GBPUSD': 1.2650,
-            'USDJPY': 150.50,
-            'USDCHF': 0.8800,
-            'AUDUSD': 0.6550,
-            'USDCAD': 1.3550,
-            'NZDUSD': 0.6100,
+            "EURUSD": 1.0850,
+            "GBPUSD": 1.2650,
+            "USDJPY": 150.50,
+            "USDCHF": 0.8800,
+            "AUDUSD": 0.6550,
+            "USDCAD": 1.3550,
+            "NZDUSD": 0.6100,
             # Cross Pairs
-            'EURGBP': 0.8580,
-            'EURJPY': 163.30,
-            'GBPJPY': 190.40,
+            "EURGBP": 0.8580,
+            "EURJPY": 163.30,
+            "GBPJPY": 190.40,
             # Crypto
-            'BTC/USD': 52000.0,
-            'ETH/USD': 2800.0,
-            'SOL/USD': 110.0,
-            'XRP/USD': 0.55,
+            "BTC/USD": 52000.0,
+            "ETH/USD": 2800.0,
+            "SOL/USD": 110.0,
+            "XRP/USD": 0.55,
             # US Stocks/ETFs (for reference)
-            'SPY': 510.0,
-            'QQQ': 440.0,
-            'AAPL': 185.0,
-            'MSFT': 415.0,
-            'TSLA': 175.0,
-            'NVDA': 720.0,
+            "SPY": 510.0,
+            "QQQ": 440.0,
+            "AAPL": 185.0,
+            "MSFT": 415.0,
+            "TSLA": 175.0,
+            "NVDA": 720.0,
             # Indices
-            'US30': 38500.0,      # Dow Jones
-            'US500': 5100.0,      # S&P 500
-            'NAS100': 18200.0,    # Nasdaq 100
+            "US30": 38500.0,  # Dow Jones
+            "US500": 5100.0,  # S&P 500
+            "NAS100": 18200.0,  # Nasdaq 100
         }
 
     async def __aenter__(self):
@@ -122,7 +128,7 @@ class PaperTradingBroker(BrokerConnector):
         quantity: float,
         price: Optional[float] = None,
         stop_price: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> Order:
         """
         Place a simulated order.
@@ -198,11 +204,17 @@ class PaperTradingBroker(BrokerConnector):
         """Sync helper used internally."""
         positions = []
         for position in self.positions.values():
-            current_price = self.market_prices.get(position.symbol, position.entry_price)
+            current_price = self.market_prices.get(
+                position.symbol, position.entry_price
+            )
             if position.side == "LONG":
-                unrealized_pnl = (current_price - position.entry_price) * position.quantity
+                unrealized_pnl = (
+                    current_price - position.entry_price
+                ) * position.quantity
             else:
-                unrealized_pnl = (position.entry_price - current_price) * position.quantity
+                unrealized_pnl = (
+                    position.entry_price - current_price
+                ) * position.quantity
             position.current_price = current_price
             position.unrealized_pnl = unrealized_pnl
             if not hasattr(position, "id") or not position.id:
@@ -213,8 +225,6 @@ class PaperTradingBroker(BrokerConnector):
     def get_positions(self) -> List[Position]:
         """Get all open positions."""
         return self._get_positions_sync()
-
-
 
     def close_position(self, symbol_or_id: str) -> bool:
         """Close a position by symbol or position id."""
@@ -256,15 +266,28 @@ class PaperTradingBroker(BrokerConnector):
 
         return True
 
-    def _persist_trade(self, position: "Position", exit_price: float, realized_pnl: float) -> None:
+    def _persist_trade(
+        self, position: "Position", exit_price: float, realized_pnl: float
+    ) -> None:
         """Write a closed trade record to the DB trades table."""
         if not self._session_factory:
             return
         try:
-            from database.models import Trade, OrderSide, TradeStatus
+            from database.models import OrderSide, Trade, TradeStatus
+
             # Normalise side to OrderSide enum
-            raw_side = str(position.side).lower().replace("orderside.", "").replace("long", "buy").replace("short", "sell")
-            side_enum = OrderSide.BUY if "buy" in raw_side or "long" in raw_side else OrderSide.SELL
+            raw_side = (
+                str(position.side)
+                .lower()
+                .replace("orderside.", "")
+                .replace("long", "buy")
+                .replace("short", "sell")
+            )
+            side_enum = (
+                OrderSide.BUY
+                if "buy" in raw_side or "long" in raw_side
+                else OrderSide.SELL
+            )
 
             trade = Trade(
                 trade_id=str(uuid.uuid4()),
@@ -286,7 +309,12 @@ class PaperTradingBroker(BrokerConnector):
             with self._session_factory() as session:
                 session.add(trade)
                 session.commit()
-            logger.debug("Trade persisted: %s %s pnl=%.2f", position.symbol, position.side, realized_pnl)
+            logger.debug(
+                "Trade persisted: %s %s pnl=%.2f",
+                position.symbol,
+                position.side,
+                realized_pnl,
+            )
         except Exception as exc:
             logger.warning("Failed to persist trade to DB: %s", exc)
 
@@ -313,10 +341,13 @@ class PaperTradingBroker(BrokerConnector):
 
     async def place_market_order(self, symbol: str, side: str, quantity: float):
         """Async market order — delegates to sync place_order."""
-        from .base import OrderSide as _OS, OrderType as _OT
+        from .base import OrderSide as _OS
+        from .base import OrderType as _OT
+
         side_enum = _OS.BUY if str(side).lower() in ("buy", "long") else _OS.SELL
-        return self.place_order(symbol=symbol, side=side_enum,
-                                order_type=_OT.MARKET, quantity=quantity)
+        return self.place_order(
+            symbol=symbol, side=side_enum, order_type=_OT.MARKET, quantity=quantity
+        )
 
     async def close_all_positions(self) -> int:
         """Close all open positions. Returns number closed."""
@@ -330,10 +361,7 @@ class PaperTradingBroker(BrokerConnector):
         return closed
 
     def get_market_data(
-        self,
-        symbol: str,
-        timeframe: str = "1h",
-        limit: int = 100
+        self, symbol: str, timeframe: str = "1h", limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
         Get simulated market data.
@@ -347,14 +375,16 @@ class PaperTradingBroker(BrokerConnector):
         for i in range(limit):
             # Simple price variation
             price = current_price * (1 + (i % 10 - 5) / 100)
-            data.append({
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'open': price,
-                'high': price * 1.01,
-                'low': price * 0.99,
-                'close': price,
-                'volume': 1000.0,
-            })
+            data.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "open": price,
+                    "high": price * 1.01,
+                    "low": price * 0.99,
+                    "close": price,
+                    "volume": 1000.0,
+                }
+            )
 
         return data
 
@@ -382,11 +412,7 @@ class PaperTradingBroker(BrokerConnector):
         logger.debug(f"Updated {symbol} price to ${price}")
 
     def _update_position(
-        self,
-        symbol: str,
-        side: OrderSide,
-        quantity: float,
-        price: float
+        self, symbol: str, side: OrderSide, quantity: float, price: float
     ):
         """Update or create position"""
         position_side = "LONG" if side == OrderSide.BUY else "SHORT"
@@ -398,9 +424,8 @@ class PaperTradingBroker(BrokerConnector):
             # For simplicity, assume same side
             total_quantity = position.quantity + quantity
             avg_price = (
-                (position.entry_price * position.quantity + price * quantity) /
-                total_quantity
-            )
+                position.entry_price * position.quantity + price * quantity
+            ) / total_quantity
 
             position.quantity = total_quantity
             position.entry_price = avg_price

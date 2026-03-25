@@ -36,6 +36,7 @@ _CONFIG_KEY_PREFIX = "notification_settings"
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class NotificationSettings(BaseModel):
     discord_enabled: bool = False
     discord_webhook_url: str = ""
@@ -59,26 +60,34 @@ class TestNotificationRequest(BaseModel):
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+
 def _get_user_id(request: Request) -> str:
     """Extract user_id from JWT token, fall back to 'anonymous'."""
     try:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-            import os, jwt as pyjwt
-            secret = os.getenv("JWT_SECRET_KEY", "hopefx-secret-key-change-in-production")
+            import os
+
+            import jwt as pyjwt
+
+            secret = os.getenv(
+                "JWT_SECRET_KEY", "hopefx-secret-key-change-in-production"
+            )
             payload = pyjwt.decode(token, secret, algorithms=["HS256"])
             return str(payload.get("sub", "anonymous"))
     except Exception as exc:
-        logger.debug("Settings user extraction failed, defaulting to anonymous: %s", exc)
+        logger.debug(
+            "Settings user extraction failed, defaulting to anonymous: %s", exc
+        )
     return "anonymous"
 
 
 def _db_save(user_id: str, data: dict) -> bool:
     """Persist settings to the configurations table. Returns True on success."""
     try:
-        from database.models import Configuration
         from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -95,6 +104,7 @@ def _db_save(user_id: str, data: dict) -> bool:
             existing.changed_by = user_id
         else:
             from database.models import Configuration as Cfg
+
             record = Cfg(
                 environment="production",
                 config_key=key,
@@ -113,8 +123,8 @@ def _db_save(user_id: str, data: dict) -> bool:
 def _db_load(user_id: str) -> Optional[dict]:
     """Load settings from the configurations table. Returns None on miss/error."""
     try:
-        from database.models import Configuration
         from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -133,6 +143,7 @@ def _db_load(user_id: str) -> Optional[dict]:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/api/settings/notifications", summary="Save notification settings")
 async def save_notification_settings(body: NotificationSettings, request: Request):
@@ -193,13 +204,21 @@ async def test_notification(body: TestNotificationRequest):
 
 # ── Channel helpers ───────────────────────────────────────────────────────────
 
+
 async def _test_discord(webhook_url: str) -> None:
     if not webhook_url:
         raise ValueError("Discord webhook URL is empty")
     import aiohttp
-    payload = {"embeds": [{"title": "HOPEFX — Test Notification",
-                           "description": "Discord notifications are working correctly.",
-                           "color": 0x22C55E}]}
+
+    payload = {
+        "embeds": [
+            {
+                "title": "HOPEFX — Test Notification",
+                "description": "Discord notifications are working correctly.",
+                "color": 0x22C55E,
+            }
+        ]
+    }
     async with aiohttp.ClientSession() as session:
         async with session.post(webhook_url, json=payload) as resp:
             if resp.status not in (200, 204):
@@ -211,6 +230,7 @@ async def _test_slack(webhook_url: str) -> None:
     if not webhook_url:
         raise ValueError("Slack webhook URL is empty")
     import aiohttp
+
     payload = {"text": "*HOPEFX* — Slack notifications are working correctly."}
     async with aiohttp.ClientSession() as session:
         async with session.post(webhook_url, json=payload) as resp:
@@ -223,12 +243,17 @@ async def _test_telegram(bot_token: str, chat_id: str) -> None:
     if not bot_token or not chat_id:
         raise ValueError("Telegram bot token or chat ID is empty")
     import aiohttp
+
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {"chat_id": chat_id,
-               "text": "*HOPEFX* — Telegram notifications are working correctly.",
-               "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": chat_id,
+        "text": "*HOPEFX* — Telegram notifications are working correctly.",
+        "parse_mode": "Markdown",
+    }
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=payload) as resp:
             data = await resp.json()
             if not data.get("ok"):
-                raise ValueError(f"Telegram error: {data.get('description', 'unknown')}")
+                raise ValueError(
+                    f"Telegram error: {data.get('description', 'unknown')}"
+                )

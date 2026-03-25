@@ -4,16 +4,16 @@ Machine Learning Base Model
 Abstract base class for all ML models in the trading framework.
 """
 
-import os
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Tuple
-import pandas as pd
-import numpy as np
-import pickle
 import json
-from pathlib import Path
-from datetime import datetime, timezone
 import logging
+import os
+import pickle
+from abc import ABC, abstractmethod
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import numpy as np
 
 
 class BaseMLModel(ABC):
@@ -38,9 +38,9 @@ class BaseMLModel(ABC):
         self.is_trained = False
         self.training_history = []
         self.metadata = {
-            'created_at': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0.0',
-            'name': name
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "version": "1.0.0",
+            "name": name,
         }
         self.logger = logging.getLogger(f"ml.{name}")
 
@@ -50,9 +50,13 @@ class BaseMLModel(ABC):
         pass
 
     @abstractmethod
-    def train(self, X_train: np.ndarray, y_train: np.ndarray,
-              X_val: Optional[np.ndarray] = None,
-              y_val: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    def train(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]:
         """
         Train the model.
 
@@ -95,26 +99,37 @@ class BaseMLModel(ABC):
 
         # Calculate metrics
         from sklearn.metrics import (
-            mean_squared_error, mean_absolute_error, r2_score,
-            accuracy_score, precision_score, recall_score, f1_score
+            accuracy_score,
+            f1_score,
+            mean_absolute_error,
+            mean_squared_error,
+            precision_score,
+            r2_score,
+            recall_score,
         )
 
         metrics = {}
 
         # For regression tasks
         if len(y_test.shape) == 1 or y_test.shape[1] == 1:
-            metrics['mse'] = mean_squared_error(y_test, predictions)
-            metrics['rmse'] = np.sqrt(metrics['mse'])
-            metrics['mae'] = mean_absolute_error(y_test, predictions)
-            metrics['r2'] = r2_score(y_test, predictions)
+            metrics["mse"] = mean_squared_error(y_test, predictions)
+            metrics["rmse"] = np.sqrt(metrics["mse"])
+            metrics["mae"] = mean_absolute_error(y_test, predictions)
+            metrics["r2"] = r2_score(y_test, predictions)
 
         # For classification tasks (if applicable)
         if len(np.unique(y_test)) <= 10:  # Likely classification
             try:
-                metrics['accuracy'] = accuracy_score(y_test, np.round(predictions))
-                metrics['precision'] = precision_score(y_test, np.round(predictions), average='weighted')
-                metrics['recall'] = recall_score(y_test, np.round(predictions), average='weighted')
-                metrics['f1'] = f1_score(y_test, np.round(predictions), average='weighted')
+                metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
+                metrics["precision"] = precision_score(
+                    y_test, np.round(predictions), average="weighted"
+                )
+                metrics["recall"] = recall_score(
+                    y_test, np.round(predictions), average="weighted"
+                )
+                metrics["f1"] = f1_score(
+                    y_test, np.round(predictions), average="weighted"
+                )
             except Exception:
                 pass  # Skip if not applicable
 
@@ -132,24 +147,25 @@ class BaseMLModel(ABC):
 
         # Save metadata
         metadata_path = filepath.parent / f"{filepath.stem}_metadata.json"
-        with open(metadata_path, 'w') as f:
+        with open(metadata_path, "w") as f:
             json.dump(self.metadata, f, indent=2)
 
         # Save model
-        with open(filepath, 'wb') as f:
-            pickle.dump({
-                'model': self.model,
-                'config': self.config,
-                'is_trained': self.is_trained,
-                'training_history': self.training_history
-            }, f)
+        with open(filepath, "wb") as f:
+            pickle.dump(
+                {
+                    "model": self.model,
+                    "config": self.config,
+                    "is_trained": self.is_trained,
+                    "training_history": self.training_history,
+                },
+                f,
+            )
 
         self.logger.info(f"Model saved to {filepath}")
 
     # Allowed base directory for model files — prevents path traversal
-    _MODEL_BASE_DIR: Path = Path(
-        os.environ.get("MODEL_BASE_DIR", "models")
-    ).resolve()
+    _MODEL_BASE_DIR: Path = Path(os.environ.get("MODEL_BASE_DIR", "models")).resolve()
 
     def load(self, filepath: str) -> None:
         """
@@ -161,7 +177,9 @@ class BaseMLModel(ABC):
         """
         resolved = Path(filepath).resolve()
         # Skip path check when MODEL_BASE_DIR env var is set or in test mode
-        if not os.environ.get("MODEL_BASE_DIR") and not os.environ.get("PYTEST_CURRENT_TEST"):
+        if not os.environ.get("MODEL_BASE_DIR") and not os.environ.get(
+            "PYTEST_CURRENT_TEST"
+        ):
             try:
                 resolved.relative_to(self._MODEL_BASE_DIR)
             except ValueError:
@@ -170,18 +188,18 @@ class BaseMLModel(ABC):
                     f"'{self._MODEL_BASE_DIR}'. Refusing to load."
                 )
 
-        with open(resolved, 'rb') as f:
+        with open(resolved, "rb") as f:
             data = pickle.load(f)  # nosec - path validated above; file written by this app
 
-        self.model = data['model']
-        self.config = data['config']
-        self.is_trained = data['is_trained']
-        self.training_history = data.get('training_history', [])
+        self.model = data["model"]
+        self.config = data["config"]
+        self.is_trained = data["is_trained"]
+        self.training_history = data.get("training_history", [])
 
         # Load metadata if exists
         metadata_path = Path(filepath).parent / f"{Path(filepath).stem}_metadata.json"
         if metadata_path.exists():
-            with open(metadata_path, 'r') as f:
+            with open(metadata_path, "r") as f:
                 self.metadata = json.load(f)
 
         self.logger.info(f"Model loaded from {filepath}")
@@ -193,9 +211,9 @@ class BaseMLModel(ABC):
         Returns:
             Dictionary of feature importances or None
         """
-        if hasattr(self.model, 'feature_importances_'):
+        if hasattr(self.model, "feature_importances_"):
             return dict(enumerate(self.model.feature_importances_))
-        elif hasattr(self.model, 'coef_'):
+        elif hasattr(self.model, "coef_"):
             return dict(enumerate(self.model.coef_))
         return None
 

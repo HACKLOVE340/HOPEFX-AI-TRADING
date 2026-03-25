@@ -12,11 +12,11 @@ prop-firm mode is disabled or the config file is missing.
 This is intentionally synchronous and dependency-free so it can be called
 from any FastAPI endpoint without async overhead.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -45,7 +45,10 @@ def _load_config() -> None:
         if _firm_rules:
             logger.info("Prop-firm guard active: firm=%s", active)
         else:
-            logger.warning("Prop-firm mode enabled but active_firm '%s' not found in config", active)
+            logger.warning(
+                "Prop-firm mode enabled but active_firm '%s' not found in config",
+                active,
+            )
     except FileNotFoundError:
         logger.debug("prop_firm_mode.json not found — prop-firm guard disabled")
         _config = {}
@@ -68,7 +71,8 @@ def check_prop_firm_rules(account_info: Any) -> None:
         return
 
     try:
-        from fastapi import HTTPException, status as _status
+        from fastapi import HTTPException
+        from fastapi import status as _status
     except ImportError:
         return  # FastAPI not available — skip silently
 
@@ -93,30 +97,35 @@ def check_prop_firm_rules(account_info: Any) -> None:
 
     alert_daily_threshold = (
         _enforcement.get("alert_at_pct_of_daily_limit", 80) / 100.0 * max_daily_pct
-        if _enforcement else max_daily_pct * 0.8
+        if _enforcement
+        else max_daily_pct * 0.8
     )
     alert_total_threshold = (
         _enforcement.get("alert_at_pct_of_total_limit", 80) / 100.0 * max_total_pct
-        if _enforcement else max_total_pct * 0.8
+        if _enforcement
+        else max_total_pct * 0.8
     )
 
     # Warn when approaching limits
     if daily_dd_pct >= alert_daily_threshold:
         logger.warning(
             "Prop-firm daily drawdown warning: %.2f%% of %.2f%% limit",
-            daily_dd_pct, max_daily_pct,
+            daily_dd_pct,
+            max_daily_pct,
         )
     if total_dd_pct >= alert_total_threshold:
         logger.warning(
             "Prop-firm total drawdown warning: %.2f%% of %.2f%% limit",
-            total_dd_pct, max_total_pct,
+            total_dd_pct,
+            max_total_pct,
         )
 
     # Hard blocks
     if daily_dd_pct >= max_daily_pct:
         logger.error(
             "Prop-firm daily drawdown BREACHED: %.2f%% >= %.2f%% — order blocked",
-            daily_dd_pct, max_daily_pct,
+            daily_dd_pct,
+            max_daily_pct,
         )
         raise HTTPException(
             status_code=_status.HTTP_403_FORBIDDEN,
@@ -130,7 +139,8 @@ def check_prop_firm_rules(account_info: Any) -> None:
     if total_dd_pct >= max_total_pct:
         logger.error(
             "Prop-firm total drawdown BREACHED: %.2f%% >= %.2f%% — order blocked",
-            total_dd_pct, max_total_pct,
+            total_dd_pct,
+            max_total_pct,
         )
         raise HTTPException(
             status_code=_status.HTTP_403_FORBIDDEN,

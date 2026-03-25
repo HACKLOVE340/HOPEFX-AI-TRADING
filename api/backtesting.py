@@ -31,8 +31,11 @@ _results: Dict[str, dict] = {}
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class BacktestRequest(BaseModel):
-    strategy: str = Field(..., description="Strategy name (e.g. 'MovingAverageCrossover')")
+    strategy: str = Field(
+        ..., description="Strategy name (e.g. 'MovingAverageCrossover')"
+    )
     symbol: str = Field(..., min_length=1, max_length=20)
     start_date: str = Field(..., description="ISO date string, e.g. '2023-01-01'")
     end_date: str = Field(..., description="ISO date string, e.g. '2024-01-01'")
@@ -63,14 +66,14 @@ class BacktestResult(BaseModel):
 
 _STRATEGY_MAP = {
     "MovingAverageCrossover": "strategies.ma_crossover.MovingAverageCrossover",
-    "RSIStrategy":            "strategies.rsi_strategy.RSIStrategy",
-    "MACDStrategy":           "strategies.macd_strategy.MACDStrategy",
-    "BollingerBands":         "strategies.bollinger_bands.BollingerBandsStrategy",
-    "SMCICTStrategy":         "strategies.smc_ict.SMCICTStrategy",
-    "EMAcrossover":           "strategies.ema_crossover.EMAcrossoverStrategy",
-    "MeanReversion":          "strategies.mean_reversion.MeanReversionStrategy",
-    "Breakout":               "strategies.breakout.BreakoutStrategy",
-    "Stochastic":             "strategies.stochastic.StochasticStrategy",
+    "RSIStrategy": "strategies.rsi_strategy.RSIStrategy",
+    "MACDStrategy": "strategies.macd_strategy.MACDStrategy",
+    "BollingerBands": "strategies.bollinger_bands.BollingerBandsStrategy",
+    "SMCICTStrategy": "strategies.smc_ict.SMCICTStrategy",
+    "EMAcrossover": "strategies.ema_crossover.EMAcrossoverStrategy",
+    "MeanReversion": "strategies.mean_reversion.MeanReversionStrategy",
+    "Breakout": "strategies.breakout.BreakoutStrategy",
+    "Stochastic": "strategies.stochastic.StochasticStrategy",
 }
 
 
@@ -81,6 +84,7 @@ def _load_strategy(name: str, params: Optional[dict] = None):
     module_path, class_name = _STRATEGY_MAP[name].rsplit(".", 1)
     try:
         import importlib
+
         mod = importlib.import_module(module_path)
         cls = getattr(mod, class_name)
         return cls(**(params or {}))
@@ -90,9 +94,10 @@ def _load_strategy(name: str, params: Optional[dict] = None):
 
 def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> "pd.DataFrame":
     """Fetch OHLCV data via yfinance."""
-    import pandas as pd
+
     try:
         import yfinance as yf
+
         interval_map = {"1d": "1d", "1h": "1h", "15m": "15m", "5m": "5m"}
         interval = interval_map.get(freq, "1d")
         ticker = yf.Ticker(symbol)
@@ -137,11 +142,14 @@ def _run_backtest_sync(req: BacktestRequest) -> dict:
         "sharpe_ratio": round(results.get("sharpe_ratio", 0.0), 4),
         "total_trades": results.get("total_trades", 0),
         "win_rate_pct": round(results.get("win_rate", 0) * 100, 2),
-        "raw": {k: v for k, v in results.items() if k not in ("equity_curve", "trades")},
+        "raw": {
+            k: v for k, v in results.items() if k not in ("equity_curve", "trades")
+        },
     }
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/strategies")
 async def list_strategies(user: TokenPayload = Depends(get_current_user)):
@@ -206,7 +214,9 @@ async def run_backtest(
 _wf_results: Dict[str, dict] = {}
 
 
-def _generate_mock_walk_forward(strategy: str = "MovingAverageCrossover", symbol: str = "XAU/USD") -> dict:
+def _generate_mock_walk_forward(
+    strategy: str = "MovingAverageCrossover", symbol: str = "XAU/USD"
+) -> dict:
     """Generate demo walk-forward data when no real results exist."""
     import math
     import random
@@ -224,26 +234,30 @@ def _generate_mock_walk_forward(strategy: str = "MovingAverageCrossover", symbol
             dt = date(year, 1, 1) + timedelta(days=d)
             equity.append({"time": dt.isoformat(), "value": round(v, 2)})
         sharpe = 0.8 + random.random() * 1.4
-        folds.append({
-            "fold": i + 1,
-            "train_start": f"{year - 1}-01-01",
-            "train_end":   f"{year}-01-01",
-            "test_start":  f"{year}-01-01",
-            "test_end":    f"{year + 1}-01-01",
-            "accuracy":    round(55 + random.random() * 15, 2),
-            "sharpe":      round(sharpe, 3),
-            "max_drawdown": round(5 + random.random() * 12, 2),
-            "total_return": round((v - 10000) / 100, 2),
-            "total_trades": 80 + int(random.random() * 60),
-            "win_rate":    round(50 + random.random() * 15, 2),
-            "equity_curve": equity,
-        })
+        folds.append(
+            {
+                "fold": i + 1,
+                "train_start": f"{year - 1}-01-01",
+                "train_end": f"{year}-01-01",
+                "test_start": f"{year}-01-01",
+                "test_end": f"{year + 1}-01-01",
+                "accuracy": round(55 + random.random() * 15, 2),
+                "sharpe": round(sharpe, 3),
+                "max_drawdown": round(5 + random.random() * 12, 2),
+                "total_return": round((v - 10000) / 100, 2),
+                "total_trades": 80 + int(random.random() * 60),
+                "win_rate": round(50 + random.random() * 15, 2),
+                "equity_curve": equity,
+            }
+        )
     avg_sharpe = sum(f["sharpe"] for f in folds) / len(folds)
-    avg_acc    = sum(f["accuracy"] for f in folds) / len(folds)
-    avg_dd     = sum(f["max_drawdown"] for f in folds) / len(folds)
-    sharpes    = [f["sharpe"] for f in folds]
-    std        = math.sqrt(sum((x - avg_sharpe) ** 2 for x in sharpes) / len(sharpes))
-    stability  = max(0.0, min(100.0, 100 - (std / avg_sharpe) * 100)) if avg_sharpe else 0.0
+    avg_acc = sum(f["accuracy"] for f in folds) / len(folds)
+    avg_dd = sum(f["max_drawdown"] for f in folds) / len(folds)
+    sharpes = [f["sharpe"] for f in folds]
+    std = math.sqrt(sum((x - avg_sharpe) ** 2 for x in sharpes) / len(sharpes))
+    stability = (
+        max(0.0, min(100.0, 100 - (std / avg_sharpe) * 100)) if avg_sharpe else 0.0
+    )
     return {
         "run_id": "demo-wf-001",
         "strategy": strategy,
@@ -267,7 +281,9 @@ def _generate_mock_walk_forward(strategy: str = "MovingAverageCrossover", symbol
 async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)):
     """Return the most recent walk-forward result, or demo data if none exist."""
     if _wf_results:
-        latest = sorted(_wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True)[0]
+        latest = sorted(
+            _wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True
+        )[0]
         return latest
     return _generate_mock_walk_forward()
 
@@ -334,15 +350,21 @@ async def download_pdf_report(
 
 # ── PDF builder ───────────────────────────────────────────────────────────────
 
+
 def _build_pdf(result: dict) -> bytes:
     """Render a backtest result dict into a PDF and return raw bytes."""
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
         from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+            HRFlowable,
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
         )
     except ImportError as exc:
         raise HTTPException(
@@ -362,71 +384,93 @@ def _build_pdf(result: dict) -> bytes:
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "Title", parent=styles["Heading1"],
-        fontSize=20, spaceAfter=6, textColor=colors.HexColor("#1e3a5f"),
+        "Title",
+        parent=styles["Heading1"],
+        fontSize=20,
+        spaceAfter=6,
+        textColor=colors.HexColor("#1e3a5f"),
     )
     subtitle_style = ParagraphStyle(
-        "Subtitle", parent=styles["Normal"],
-        fontSize=11, textColor=colors.HexColor("#64748b"), spaceAfter=16,
+        "Subtitle",
+        parent=styles["Normal"],
+        fontSize=11,
+        textColor=colors.HexColor("#64748b"),
+        spaceAfter=16,
     )
     section_style = ParagraphStyle(
-        "Section", parent=styles["Heading2"],
-        fontSize=13, spaceBefore=14, spaceAfter=6, textColor=colors.HexColor("#1e293b"),
+        "Section",
+        parent=styles["Heading2"],
+        fontSize=13,
+        spaceBefore=14,
+        spaceAfter=6,
+        textColor=colors.HexColor("#1e293b"),
     )
     body_style = ParagraphStyle(
-        "Body", parent=styles["Normal"],
-        fontSize=10, textColor=colors.HexColor("#334155"), leading=14,
+        "Body",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#334155"),
+        leading=14,
     )
     disclaimer_style = ParagraphStyle(
-        "Disclaimer", parent=styles["Normal"],
-        fontSize=8, textColor=colors.HexColor("#94a3b8"), leading=11,
+        "Disclaimer",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#94a3b8"),
+        leading=11,
     )
 
     # ── Colour palette ────────────────────────────────────────────────────────
-    BLUE   = colors.HexColor("#3b82f6")
-    LIGHT  = colors.HexColor("#eff6ff")
+    BLUE = colors.HexColor("#3b82f6")
+    LIGHT = colors.HexColor("#eff6ff")
     BORDER = colors.HexColor("#cbd5e1")
-    GREEN  = colors.HexColor("#16a34a")
-    RED    = colors.HexColor("#dc2626")
+    GREEN = colors.HexColor("#16a34a")
+    RED = colors.HexColor("#dc2626")
 
     story = []
 
     # ── Title block ───────────────────────────────────────────────────────────
     story.append(Paragraph("HOPEFX — Backtest Report", title_style))
-    story.append(Paragraph(
-        f"Strategy: <b>{result['strategy']}</b> &nbsp;·&nbsp; "
-        f"Symbol: <b>{result['symbol']}</b> &nbsp;·&nbsp; "
-        f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-        subtitle_style,
-    ))
+    story.append(
+        Paragraph(
+            f"Strategy: <b>{result['strategy']}</b> &nbsp;·&nbsp; "
+            f"Symbol: <b>{result['symbol']}</b> &nbsp;·&nbsp; "
+            f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            subtitle_style,
+        )
+    )
     story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=12))
 
     # ── Parameters table ──────────────────────────────────────────────────────
     story.append(Paragraph("Backtest Parameters", section_style))
     params_data = [
         ["Parameter", "Value"],
-        ["Strategy",        result["strategy"]],
-        ["Symbol",          result["symbol"]],
-        ["Start date",      result["start_date"]],
-        ["End date",        result["end_date"]],
+        ["Strategy", result["strategy"]],
+        ["Symbol", result["symbol"]],
+        ["Start date", result["start_date"]],
+        ["End date", result["end_date"]],
         ["Initial capital", f"${result['initial_capital']:,.2f}"],
-        ["Run ID",          result["run_id"]],
-        ["Status",          result["status"].upper()],
+        ["Run ID", result["run_id"]],
+        ["Status", result["status"].upper()],
     ]
     params_table = Table(params_data, colWidths=[5 * cm, 10 * cm])
-    params_table.setStyle(TableStyle([
-        ("BACKGROUND",  (0, 0), (-1, 0), BLUE),
-        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",    (0, 0), (-1, -1), 9),
-        ("BACKGROUND",  (0, 1), (-1, -1), LIGHT),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
-        ("GRID",        (0, 0), (-1, -1), 0.5, BORDER),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING",  (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
+    params_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BACKGROUND", (0, 1), (-1, -1), LIGHT),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+                ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
     story.append(params_table)
     story.append(Spacer(1, 14))
 
@@ -438,30 +482,34 @@ def _build_pdf(result: dict) -> bytes:
 
     perf_data = [
         ["Metric", "Value"],
-        ["Final equity",       f"${result.get('final_equity', 0):,.2f}"],
-        ["Total return",       f"{ret_pct:+.2f}%"],
-        ["Max drawdown",       f"-{result.get('max_drawdown_pct', 0):.2f}%"],
-        ["Sharpe ratio",       f"{result.get('sharpe_ratio', 0):.3f}"],
-        ["Total trades",       str(result.get("total_trades", 0))],
-        ["Win rate",           f"{result.get('win_rate_pct', 0):.1f}%"],
+        ["Final equity", f"${result.get('final_equity', 0):,.2f}"],
+        ["Total return", f"{ret_pct:+.2f}%"],
+        ["Max drawdown", f"-{result.get('max_drawdown_pct', 0):.2f}%"],
+        ["Sharpe ratio", f"{result.get('sharpe_ratio', 0):.3f}"],
+        ["Total trades", str(result.get("total_trades", 0))],
+        ["Win rate", f"{result.get('win_rate_pct', 0):.1f}%"],
     ]
     perf_table = Table(perf_data, colWidths=[7 * cm, 8 * cm])
-    perf_table.setStyle(TableStyle([
-        ("BACKGROUND",  (0, 0), (-1, 0), BLUE),
-        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
-        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTNAME",    (0, 1), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE",    (0, 0), (-1, -1), 10),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
-        ("GRID",        (0, 0), (-1, -1), 0.5, BORDER),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING",  (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        # Colour the return row
-        ("TEXTCOLOR",   (1, 2), (1, 2), ret_color),
-        ("FONTNAME",    (1, 2), (1, 2), "Helvetica-Bold"),
-    ]))
+    perf_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+                ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                # Colour the return row
+                ("TEXTCOLOR", (1, 2), (1, 2), ret_color),
+                ("FONTNAME", (1, 2), (1, 2), "Helvetica-Bold"),
+            ]
+        )
+    )
     story.append(perf_table)
     story.append(Spacer(1, 20))
 
@@ -469,14 +517,18 @@ def _build_pdf(result: dict) -> bytes:
     story.append(Paragraph("Interpretation", section_style))
     sharpe = result.get("sharpe_ratio", 0)
     sharpe_note = (
-        "Excellent risk-adjusted returns (Sharpe > 2)." if sharpe > 2
-        else "Good risk-adjusted returns (Sharpe 1–2)." if sharpe > 1
+        "Excellent risk-adjusted returns (Sharpe > 2)."
+        if sharpe > 2
+        else "Good risk-adjusted returns (Sharpe 1–2)."
+        if sharpe > 1
         else "Marginal risk-adjusted returns (Sharpe < 1). Consider parameter tuning."
     )
     dd = result.get("max_drawdown_pct", 0)
     dd_note = (
-        "Drawdown is well-controlled (< 10%)." if dd < 10
-        else "Moderate drawdown (10–20%). Review position sizing." if dd < 20
+        "Drawdown is well-controlled (< 10%)."
+        if dd < 10
+        else "Moderate drawdown (10–20%). Review position sizing."
+        if dd < 20
         else "High drawdown (> 20%). Risk management review recommended."
     )
     story.append(Paragraph(f"• Sharpe ratio {sharpe:.2f}: {sharpe_note}", body_style))
@@ -485,14 +537,16 @@ def _build_pdf(result: dict) -> bytes:
 
     # ── Disclaimer ────────────────────────────────────────────────────────────
     story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceAfter=8))
-    story.append(Paragraph(
-        "DISCLAIMER: Past performance is not indicative of future results. "
-        "Backtesting results are hypothetical and do not account for slippage, "
-        "commissions, or market impact. This report is for informational purposes "
-        "only and does not constitute financial advice. Trading involves substantial "
-        "risk of loss.",
-        disclaimer_style,
-    ))
+    story.append(
+        Paragraph(
+            "DISCLAIMER: Past performance is not indicative of future results. "
+            "Backtesting results are hypothetical and do not account for slippage, "
+            "commissions, or market impact. This report is for informational purposes "
+            "only and does not constitute financial advice. Trading involves substantial "
+            "risk of loss.",
+            disclaimer_style,
+        )
+    )
 
     doc.build(story)
     return buf.getvalue()

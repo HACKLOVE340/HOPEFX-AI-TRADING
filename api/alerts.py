@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class AlertConditionIn(BaseModel):
     type: str
     threshold: float
@@ -45,6 +46,7 @@ class CreateAlertIn(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _get_engine(request: Request):
     """Retrieve the AlertEngine from app state, or raise 503."""
@@ -71,10 +73,14 @@ def _serialise(alert) -> Dict[str, Any]:
 
     # Normalise conditions to the frontend's [{type, threshold}] shape
     if "condition_type" in d and "conditions" not in d:
-        d["conditions"] = [{
-            "type": d["condition_type"].value if hasattr(d["condition_type"], "value") else d["condition_type"],
-            "threshold": d.get("threshold", 0),
-        }]
+        d["conditions"] = [
+            {
+                "type": d["condition_type"].value
+                if hasattr(d["condition_type"], "value")
+                else d["condition_type"],
+                "threshold": d.get("threshold", 0),
+            }
+        ]
 
     # Normalise notification channels key
     if "notify_channels" in d and "notification_channels" not in d:
@@ -87,6 +93,7 @@ def _serialise(alert) -> Dict[str, Any]:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/")
 async def create_alert(
@@ -104,8 +111,9 @@ async def create_alert(
 
     try:
         from notifications.alert_engine import AlertConditionType, AlertPriority
+
         condition_type = AlertConditionType(first.type)
-        priority       = AlertPriority(body.priority)
+        priority = AlertPriority(body.priority)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -136,6 +144,7 @@ async def list_alerts(
 
     try:
         from notifications.alert_engine import AlertStatus
+
         status_enum = AlertStatus(status) if status else None
     except ValueError:
         status_enum = None

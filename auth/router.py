@@ -26,7 +26,7 @@ from collections import defaultdict
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ _auth_service = None
 # Sliding-window counter: max N requests per window_seconds per IP.
 # Uses Redis when available, falls back to in-memory (single-process only).
 
-_AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))   # max attempts
+_AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))  # max attempts
 _AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # per minute
 
 # In-memory fallback: {ip: [timestamp, ...]}
@@ -59,6 +59,7 @@ def _check_ip_rate_limit(ip: str) -> None:
     # Try Redis first
     try:
         import redis as _redis
+
         r = _redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
@@ -122,6 +123,7 @@ def _client_ip(request: Request) -> str:
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
@@ -140,7 +142,7 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str
-    access_token: Optional[str] = None   # if provided, immediately blacklisted
+    access_token: Optional[str] = None  # if provided, immediately blacklisted
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -162,32 +164,53 @@ class TOTPDisableRequest(BaseModel):
 
 # ── Dependency: current user from access token ────────────────────────────────
 
-def _get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -> str:
+
+def _get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> str:
     if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
         import jwt
+
         from auth.service import _get_secret
+
         secret = _get_secret()  # raises RuntimeError if unset or too short
-        payload = jwt.decode(credentials.credentials, secret, algorithms=["HS256"],
-                             options={"require": ["sub", "exp"]})
+        payload = jwt.decode(
+            credentials.credentials,
+            secret,
+            algorithms=["HS256"],
+            options={"require": ["sub", "exp"]},
+        )
         if payload.get("type") != "access":
             raise ValueError("Not an access token")
         return payload["sub"]
     except RuntimeError as exc:
         # Misconfigured secret — do not mask as 401
         logger.critical("JWT secret misconfiguration in auth router: %s", exc)
-        raise HTTPException(status_code=503, detail="Authentication service misconfigured")
+        raise HTTPException(
+            status_code=503, detail="Authentication service misconfigured"
+        )
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=401,
+            detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except (jwt.InvalidTokenError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid or expired token",
-                            headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/register", status_code=201)
 async def register(body: RegisterRequest, request: Request):
@@ -204,16 +227,20 @@ async def register(body: RegisterRequest, request: Request):
     if verify_token:
         try:
             from core.email_service import send_verification_email
+
             send_verification_email(body.email, body.username, verify_token)
         except Exception as _e:
             logger.warning("Verification email failed: %s", _e)
 
     # Auto-assign FREE tier so paper trading works immediately after signup
     try:
-        from monetization.subscription import subscription_manager, SubscriptionTier
+        from monetization.subscription import SubscriptionTier, subscription_manager
+
         existing = subscription_manager.get_user_subscription(body.username)
         if not existing:
-            subscription_manager.create_subscription(body.username, SubscriptionTier.FREE)
+            subscription_manager.create_subscription(
+                body.username, SubscriptionTier.FREE
+            )
             logger.info("FREE tier assigned to new user %s", body.username)
     except Exception as _tier_err:
         logger.debug("Free tier assignment skipped: %s", _tier_err)
@@ -242,6 +269,7 @@ async def resend_verification(body: ForgotPasswordRequest):
     if verify_token:
         try:
             from core.email_service import send_verification_email
+
             # Fetch username for the email
             user = _svc().get_user_by_email(body.email)
             username = user.username if user else body.email
@@ -270,6 +298,7 @@ async def login(body: LoginRequest, request: Request):
     # Fire-and-forget login alert (non-blocking)
     try:
         from core.email_service import send_login_alert
+
         user = tokens.get("user", {})
         send_login_alert(body.email, user.get("username", body.email), ip, device[:80])
     except Exception:
@@ -288,10 +317,14 @@ async def refresh(body: RefreshRequest, request: Request):
 
 
 @router.post("/logout")
-async def logout(body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+async def logout(
+    body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Depends(_bearer)
+):
     """Revoke the current session and blacklist the access token."""
     # Use the bearer token from the Authorization header if not explicitly provided
-    access_token = body.access_token or (credentials.credentials if credentials else None)
+    access_token = body.access_token or (
+        credentials.credentials if credentials else None
+    )
     _svc().logout(body.refresh_token, access_token=access_token)
     return {"message": "Logged out successfully"}
 
@@ -311,6 +344,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     if reset_token:
         try:
             from core.email_service import send_password_reset_email
+
             user = _svc().get_user_by_email(body.email)
             username = user.username if user else body.email
             send_password_reset_email(body.email, username, reset_token)
@@ -338,12 +372,17 @@ async def setup_2fa(user_id: str = Depends(_get_current_user_id)):
     ok, uri_or_msg, secret = _svc().setup_2fa(user_id)
     if not ok:
         raise HTTPException(status_code=400, detail=uri_or_msg)
-    return {"provisioning_uri": uri_or_msg, "secret": secret,
-            "message": "Scan the QR code then call /auth/2fa/confirm with a valid code"}
+    return {
+        "provisioning_uri": uri_or_msg,
+        "secret": secret,
+        "message": "Scan the QR code then call /auth/2fa/confirm with a valid code",
+    }
 
 
 @router.post("/2fa/confirm")
-async def confirm_2fa(body: TOTPConfirmRequest, user_id: str = Depends(_get_current_user_id)):
+async def confirm_2fa(
+    body: TOTPConfirmRequest, user_id: str = Depends(_get_current_user_id)
+):
     """Confirm 2FA setup with a valid TOTP code to activate it."""
     ok, msg = _svc().confirm_2fa(user_id, body.code)
     if not ok:
@@ -352,7 +391,9 @@ async def confirm_2fa(body: TOTPConfirmRequest, user_id: str = Depends(_get_curr
 
 
 @router.post("/2fa/disable")
-async def disable_2fa(body: TOTPDisableRequest, user_id: str = Depends(_get_current_user_id)):
+async def disable_2fa(
+    body: TOTPDisableRequest, user_id: str = Depends(_get_current_user_id)
+):
     """Disable 2FA. Requires a valid TOTP code to confirm."""
     ok, msg = _svc().disable_2fa(user_id, body.code)
     if not ok:

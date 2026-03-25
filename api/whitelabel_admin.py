@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -38,6 +37,7 @@ router = APIRouter(prefix="/api/whitelabel", tags=["Whitelabel"])
 
 _manager = WhiteLabelManager()
 
+
 # Seed a couple of demo tenants so the UI has data immediately
 def _seed_demo():
     if _manager.list_tenants():
@@ -45,24 +45,35 @@ def _seed_demo():
     t1 = _manager.create_tenant(
         name="PropFirm Alpha",
         owner_email="admin@propfirmalpha.com",
-        features=[FeatureFlag.TRADING, FeatureFlag.RISK_MANAGEMENT, FeatureFlag.ANALYTICS],
+        features=[
+            FeatureFlag.TRADING,
+            FeatureFlag.RISK_MANAGEMENT,
+            FeatureFlag.ANALYTICS,
+        ],
     )
-    _manager.update_theme(t1.tenant_id, {
-        "primary_color": "#f59e0b",
-        "logo_url": "",
-        "company_name": "PropFirm Alpha",
-    })
+    _manager.update_theme(
+        t1.tenant_id,
+        {
+            "primary_color": "#f59e0b",
+            "logo_url": "",
+            "company_name": "PropFirm Alpha",
+        },
+    )
     t2 = _manager.create_tenant(
         name="FX Academy",
         owner_email="admin@fxacademy.io",
         trial_days=14,
         features=[FeatureFlag.TRADING, FeatureFlag.BACKTESTING],
     )
-    _manager.update_theme(t2.tenant_id, {
-        "primary_color": "#8b5cf6",
-        "logo_url": "",
-        "company_name": "FX Academy",
-    })
+    _manager.update_theme(
+        t2.tenant_id,
+        {
+            "primary_color": "#8b5cf6",
+            "logo_url": "",
+            "company_name": "FX Academy",
+        },
+    )
+
 
 _seed_demo()
 
@@ -72,42 +83,48 @@ _api_keys: Dict[str, str] = {}
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class CreateTenantBody(BaseModel):
-    name:        str = Field(..., min_length=2, max_length=100)
+    name: str = Field(..., min_length=2, max_length=100)
     owner_email: str
-    trial_days:  int = Field(0, ge=0, le=365)
-    features:    List[str] = []
+    trial_days: int = Field(0, ge=0, le=365)
+    features: List[str] = []
     primary_color: Optional[str] = None
-    logo_url:    Optional[str] = None
+    logo_url: Optional[str] = None
 
 
 class UpdateTenantBody(BaseModel):
     primary_color: Optional[str] = None
-    logo_url:      Optional[str] = None
-    company_name:  Optional[str] = None
+    logo_url: Optional[str] = None
+    company_name: Optional[str] = None
     custom_domain: Optional[str] = None
 
 
 def _tenant_to_dict(t: Any) -> dict:
     return {
-        "tenant_id":    t.tenant_id,
-        "name":         t.name,
-        "owner_email":  t.owner_email,
-        "status":       t.status.value if hasattr(t.status, "value") else str(t.status),
-        "features":     [f.value if hasattr(f, "value") else str(f) for f in t.features],
+        "tenant_id": t.tenant_id,
+        "name": t.name,
+        "owner_email": t.owner_email,
+        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
+        "features": [f.value if hasattr(f, "value") else str(f) for f in t.features],
         "theme": {
             "primary_color": getattr(t.theme, "primary_color", "#3b82f6"),
-            "logo_url":      getattr(t.theme, "logo_url", ""),
-            "company_name":  getattr(t.theme, "company_name", t.name),
+            "logo_url": getattr(t.theme, "logo_url", ""),
+            "company_name": getattr(t.theme, "company_name", t.name),
         },
         "custom_domain": getattr(t, "custom_domain", None),
-        "created_at":   t.created_at.isoformat() if getattr(t, "created_at", None) else None,
-        "expires_at":   t.expires_at.isoformat() if getattr(t, "expires_at", None) else None,
-        "has_api_key":  t.tenant_id in _api_keys,
+        "created_at": t.created_at.isoformat()
+        if getattr(t, "created_at", None)
+        else None,
+        "expires_at": t.expires_at.isoformat()
+        if getattr(t, "expires_at", None)
+        else None,
+        "has_api_key": t.tenant_id in _api_keys,
     }
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/tenants")
 async def list_tenants(
@@ -119,7 +136,9 @@ async def list_tenants(
         try:
             status_enum = TenantStatus(status_filter)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid status: {status_filter}"
+            )
     tenants = _manager.list_tenants(status=status_enum)
     return {"tenants": [_tenant_to_dict(t) for t in tenants], "total": len(tenants)}
 
@@ -143,13 +162,18 @@ async def create_tenant(
         features=features,
     )
     if body.primary_color or body.logo_url:
-        _manager.update_theme(tenant.tenant_id, {
-            k: v for k, v in {
-                "primary_color": body.primary_color,
-                "logo_url":      body.logo_url,
-                "company_name":  body.name,
-            }.items() if v is not None
-        })
+        _manager.update_theme(
+            tenant.tenant_id,
+            {
+                k: v
+                for k, v in {
+                    "primary_color": body.primary_color,
+                    "logo_url": body.logo_url,
+                    "company_name": body.name,
+                }.items()
+                if v is not None
+            },
+        )
     return _tenant_to_dict(_manager.get_tenant(tenant.tenant_id))
 
 
@@ -174,8 +198,11 @@ async def update_tenant(
     if not t:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    theme_updates = {k: v for k, v in body.model_dump().items()
-                     if k in ("primary_color", "logo_url", "company_name") and v is not None}
+    theme_updates = {
+        k: v
+        for k, v in body.model_dump().items()
+        if k in ("primary_color", "logo_url", "company_name") and v is not None
+    }
     if theme_updates:
         _manager.update_theme(tenant_id, theme_updates)
 
@@ -186,14 +213,18 @@ async def update_tenant(
 
 
 @router.post("/tenants/{tenant_id}/activate")
-async def activate_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def activate_tenant(
+    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+):
     if not _manager.activate_tenant(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {"activated": True, "tenant_id": tenant_id}
 
 
 @router.post("/tenants/{tenant_id}/suspend")
-async def suspend_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def suspend_tenant(
+    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+):
     if not _manager.suspend_tenant(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {"suspended": True, "tenant_id": tenant_id}
@@ -209,7 +240,9 @@ async def delete_tenant(tenant_id: str, user: TokenPayload = Depends(get_current
 
 @router.post("/tenants/{tenant_id}/features/{feature}")
 async def enable_feature(
-    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user),
+    tenant_id: str,
+    feature: str,
+    user: TokenPayload = Depends(get_current_user),
 ):
     try:
         flag = FeatureFlag(feature)
@@ -222,7 +255,9 @@ async def enable_feature(
 
 @router.delete("/tenants/{tenant_id}/features/{feature}")
 async def disable_feature(
-    tenant_id: str, feature: str, user: TokenPayload = Depends(get_current_user),
+    tenant_id: str,
+    feature: str,
+    user: TokenPayload = Depends(get_current_user),
 ):
     try:
         flag = FeatureFlag(feature)
@@ -234,7 +269,9 @@ async def disable_feature(
 
 
 @router.post("/tenants/{tenant_id}/api-key")
-async def generate_api_key(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def generate_api_key(
+    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+):
     """Generate a new API key for a tenant. Shown once — stored as hash."""
     t = _manager.get_tenant(tenant_id)
     if not t:
@@ -242,25 +279,27 @@ async def generate_api_key(tenant_id: str, user: TokenPayload = Depends(get_curr
     raw_key = f"hfx_{secrets.token_urlsafe(32)}"
     _api_keys[tenant_id] = hashlib.sha256(raw_key.encode()).hexdigest()
     return {
-        "api_key":   raw_key,
+        "api_key": raw_key,
         "tenant_id": tenant_id,
-        "note":      "Store this key securely — it will not be shown again.",
+        "note": "Store this key securely — it will not be shown again.",
     }
 
 
 @router.get("/tenants/{tenant_id}/preview")
-async def preview_tenant(tenant_id: str, user: TokenPayload = Depends(get_current_user)):
+async def preview_tenant(
+    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+):
     """Return branded theme data for dashboard preview."""
     t = _manager.get_tenant(tenant_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {
-        "tenant_id":    tenant_id,
+        "tenant_id": tenant_id,
         "company_name": getattr(t.theme, "company_name", t.name),
         "primary_color": getattr(t.theme, "primary_color", "#3b82f6"),
-        "logo_url":     getattr(t.theme, "logo_url", ""),
-        "features":     [f.value if hasattr(f, "value") else str(f) for f in t.features],
-        "status":       t.status.value if hasattr(t.status, "value") else str(t.status),
+        "logo_url": getattr(t.theme, "logo_url", ""),
+        "features": [f.value if hasattr(f, "value") else str(f) for f in t.features],
+        "status": t.status.value if hasattr(t.status, "value") else str(t.status),
     }
 
 

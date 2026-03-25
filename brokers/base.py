@@ -6,13 +6,13 @@ Abstract base class for all broker integrations.
 
 import asyncio
 import functools
+import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Callable, TypeVar
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,10 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exceptio
         backoff: Base backoff in seconds, doubled each attempt (default 1.0).
         exceptions: Exception types to catch and retry on.
     """
+
     def decorator(fn: _F) -> _F:
         if asyncio.iscoroutinefunction(fn):
+
             @functools.wraps(fn)
             async def async_wrapper(*args, **kwargs):
                 delay = backoff
@@ -43,18 +45,26 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exceptio
                         if attempt < max_attempts:
                             logger.warning(
                                 "%s attempt %d/%d failed (%s); retrying in %.1fs",
-                                fn.__qualname__, attempt, max_attempts, exc, delay,
+                                fn.__qualname__,
+                                attempt,
+                                max_attempts,
+                                exc,
+                                delay,
                             )
                             await asyncio.sleep(delay)
                             delay *= 2
                         else:
                             logger.error(
                                 "%s failed after %d attempts: %s",
-                                fn.__qualname__, max_attempts, exc,
+                                fn.__qualname__,
+                                max_attempts,
+                                exc,
                             )
                 raise last_exc
+
             return async_wrapper  # type: ignore[return-value]
         else:
+
             @functools.wraps(fn)
             def sync_wrapper(*args, **kwargs):
                 delay = backoff
@@ -67,17 +77,25 @@ def with_retry(max_attempts: int = 3, backoff: float = 1.0, exceptions=(Exceptio
                         if attempt < max_attempts:
                             logger.warning(
                                 "%s attempt %d/%d failed (%s); retrying in %.1fs",
-                                fn.__qualname__, attempt, max_attempts, exc, delay,
+                                fn.__qualname__,
+                                attempt,
+                                max_attempts,
+                                exc,
+                                delay,
                             )
                             time.sleep(delay)
                             delay *= 2
                         else:
                             logger.error(
                                 "%s failed after %d attempts: %s",
-                                fn.__qualname__, max_attempts, exc,
+                                fn.__qualname__,
+                                max_attempts,
+                                exc,
                             )
                 raise last_exc
+
             return sync_wrapper  # type: ignore[return-value]
+
     return decorator
 
 
@@ -112,6 +130,7 @@ class RateLimiter:
 
 class OrderType(Enum):
     """Order types"""
+
     MARKET = "MARKET"
     LIMIT = "LIMIT"
     STOP = "STOP"
@@ -120,12 +139,14 @@ class OrderType(Enum):
 
 class OrderSide(Enum):
     """Order side"""
+
     BUY = "BUY"
     SELL = "SELL"
 
 
 class OrderStatus(Enum):
     """Order status"""
+
     PENDING = "pending"
     OPEN = "open"
     FILLED = "filled"
@@ -137,6 +158,7 @@ class OrderStatus(Enum):
 @dataclass
 class Order:
     """Order data structure"""
+
     id: str
     symbol: str
     side: OrderSide
@@ -159,6 +181,7 @@ class Order:
 @dataclass
 class Position:
     """Position data structure"""
+
     symbol: str
     side: str  # "LONG" or "SHORT"
     quantity: float
@@ -173,6 +196,7 @@ class Position:
 @dataclass
 class AccountInfo:
     """Account information"""
+
     balance: float
     equity: float
     margin_used: float
@@ -245,7 +269,7 @@ class BrokerConnector(ABC):
         quantity: float,
         price: Optional[float] = None,
         stop_price: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> Order:
         """
         Place an order.
@@ -325,10 +349,7 @@ class BrokerConnector(ABC):
 
     @abstractmethod
     def get_market_data(
-        self,
-        symbol: str,
-        timeframe: str = "1h",
-        limit: int = 100
+        self, symbol: str, timeframe: str = "1h", limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
         Get market data (OHLCV).

@@ -8,5 +8,5 @@ Feature engineering modules for ML models:
 from .technical import TechnicalFeatureEngineer
 
 __all__ = [
-    'TechnicalFeatureEngineer',
+    "TechnicalFeatureEngineer",
 ]

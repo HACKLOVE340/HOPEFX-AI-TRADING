@@ -4,17 +4,23 @@ Binance Broker Connector
 Implements real crypto trading with Binance REST API and WebSocket.
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
-import logging
-import hmac
 import hashlib
+import hmac
+import logging
 import time
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
 import requests
 
 from .base import (
-    BrokerConnector, Order, Position, AccountInfo,
-    OrderType, OrderSide, OrderStatus
+    AccountInfo,
+    BrokerConnector,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Position,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,9 +59,9 @@ class BinanceConnector(BrokerConnector):
         """
         super().__init__(config)
 
-        self.api_key = config.get('api_key')
-        self.api_secret = config.get('api_secret')
-        self.testnet = config.get('testnet', True)
+        self.api_key = config.get("api_key")
+        self.api_secret = config.get("api_secret")
+        self.testnet = config.get("testnet", True)
 
         # Set API URL based on environment
         self.base_url = self.TESTNET_URL if self.testnet else self.LIVE_URL
@@ -75,9 +81,7 @@ class BinanceConnector(BrokerConnector):
         """
         try:
             self.session = requests.Session()
-            self.session.headers.update({
-                'X-MBX-APIKEY': self.api_key
-            })
+            self.session.headers.update({"X-MBX-APIKEY": self.api_key})
 
             # Test connection
             response = self.session.get(f"{self.base_url}/api/v3/ping")
@@ -85,13 +89,12 @@ class BinanceConnector(BrokerConnector):
 
             # Test API key permissions
             timestamp = int(time.time() * 1000)
-            params = {'timestamp': timestamp}
+            params = {"timestamp": timestamp}
             signature = self._generate_signature(params)
-            params['signature'] = signature
+            params["signature"] = signature
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account",
-                params=params
+                f"{self.base_url}/api/v3/account", params=params
             )
             response.raise_for_status()
 
@@ -151,55 +154,54 @@ class BinanceConnector(BrokerConnector):
 
         try:
             # Format symbol (remove /)
-            binance_symbol = symbol.replace('/', '').upper()
+            binance_symbol = symbol.replace("/", "").upper()
 
             # Build order parameters
             timestamp = int(time.time() * 1000)
             params = {
-                'symbol': binance_symbol,
-                'side': side.value,
-                'type': self._convert_order_type(order_type),
-                'quantity': self._format_quantity(binance_symbol, quantity),
-                'timestamp': timestamp
+                "symbol": binance_symbol,
+                "side": side.value,
+                "type": self._convert_order_type(order_type),
+                "quantity": self._format_quantity(binance_symbol, quantity),
+                "timestamp": timestamp,
             }
 
             # Add price for limit orders
             if order_type == OrderType.LIMIT and price:
-                params['timeInForce'] = 'GTC'  # Good Till Cancel
-                params['price'] = str(price)
+                params["timeInForce"] = "GTC"  # Good Till Cancel
+                params["price"] = str(price)
 
             # Add stop price for stop orders
             if order_type in [OrderType.STOP, OrderType.STOP_LIMIT] and stop_price:
-                params['stopPrice'] = str(stop_price)
+                params["stopPrice"] = str(stop_price)
                 if order_type == OrderType.STOP_LIMIT and price:
-                    params['price'] = str(price)
-                    params['timeInForce'] = 'GTC'
+                    params["price"] = str(price)
+                    params["timeInForce"] = "GTC"
 
             # Sign request
-            params['signature'] = self._generate_signature(params)
+            params["signature"] = self._generate_signature(params)
 
             # Send order
-            response = self.session.post(
-                f"{self.base_url}/api/v3/order",
-                params=params
-            )
+            response = self.session.post(f"{self.base_url}/api/v3/order", params=params)
             response.raise_for_status()
 
             result = response.json()
 
             # Parse response
             order = Order(
-                id=str(result['orderId']),
+                id=str(result["orderId"]),
                 symbol=symbol,
                 side=side,
                 type=order_type,
-                quantity=float(result['origQty']),
-                price=float(result.get('price', 0)) if result.get('price') else None,
-                status=self._parse_order_status(result['status']),
-                filled_quantity=float(result.get('executedQty', 0)),
-                average_price=float(result.get('price', 0)) if result.get('price') else None,
-                timestamp=datetime.fromtimestamp(result['transactTime'] / 1000),
-                metadata=result
+                quantity=float(result["origQty"]),
+                price=float(result.get("price", 0)) if result.get("price") else None,
+                status=self._parse_order_status(result["status"]),
+                filled_quantity=float(result.get("executedQty", 0)),
+                average_price=float(result.get("price", 0))
+                if result.get("price")
+                else None,
+                timestamp=datetime.fromtimestamp(result["transactTime"] / 1000),
+                metadata=result,
             )
 
             logger.info(f"Order placed: {order.id} - {side.value} {quantity} {symbol}")
@@ -229,19 +231,18 @@ class BinanceConnector(BrokerConnector):
             return False
 
         try:
-            binance_symbol = symbol.replace('/', '').upper()
+            binance_symbol = symbol.replace("/", "").upper()
             timestamp = int(time.time() * 1000)
 
             params = {
-                'symbol': binance_symbol,
-                'orderId': order_id,
-                'timestamp': timestamp
+                "symbol": binance_symbol,
+                "orderId": order_id,
+                "timestamp": timestamp,
             }
-            params['signature'] = self._generate_signature(params)
+            params["signature"] = self._generate_signature(params)
 
             response = self.session.delete(
-                f"{self.base_url}/api/v3/order",
-                params=params
+                f"{self.base_url}/api/v3/order", params=params
             )
             response.raise_for_status()
 
@@ -272,38 +273,35 @@ class BinanceConnector(BrokerConnector):
             return None
 
         try:
-            binance_symbol = symbol.replace('/', '').upper()
+            binance_symbol = symbol.replace("/", "").upper()
             timestamp = int(time.time() * 1000)
 
             params = {
-                'symbol': binance_symbol,
-                'orderId': order_id,
-                'timestamp': timestamp
+                "symbol": binance_symbol,
+                "orderId": order_id,
+                "timestamp": timestamp,
             }
-            params['signature'] = self._generate_signature(params)
+            params["signature"] = self._generate_signature(params)
 
-            response = self.session.get(
-                f"{self.base_url}/api/v3/order",
-                params=params
-            )
+            response = self.session.get(f"{self.base_url}/api/v3/order", params=params)
             response.raise_for_status()
 
             result = response.json()
 
             # Parse order data
-            side = OrderSide.BUY if result['side'] == 'BUY' else OrderSide.SELL
+            side = OrderSide.BUY if result["side"] == "BUY" else OrderSide.SELL
 
             order = Order(
-                id=str(result['orderId']),
+                id=str(result["orderId"]),
                 symbol=symbol,
                 side=side,
-                type=self._parse_order_type(result['type']),
-                quantity=float(result['origQty']),
-                price=float(result.get('price', 0)) if result.get('price') else None,
-                status=self._parse_order_status(result['status']),
-                filled_quantity=float(result.get('executedQty', 0)),
-                timestamp=datetime.fromtimestamp(result['time'] / 1000),
-                metadata=result
+                type=self._parse_order_type(result["type"]),
+                quantity=float(result["origQty"]),
+                price=float(result.get("price", 0)) if result.get("price") else None,
+                status=self._parse_order_status(result["status"]),
+                filled_quantity=float(result.get("executedQty", 0)),
+                timestamp=datetime.fromtimestamp(result["time"] / 1000),
+                metadata=result,
             )
 
             return order
@@ -328,12 +326,11 @@ class BinanceConnector(BrokerConnector):
 
         try:
             timestamp = int(time.time() * 1000)
-            params = {'timestamp': timestamp}
-            params['signature'] = self._generate_signature(params)
+            params = {"timestamp": timestamp}
+            params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account",
-                params=params
+                f"{self.base_url}/api/v3/account", params=params
             )
             response.raise_for_status()
 
@@ -341,22 +338,22 @@ class BinanceConnector(BrokerConnector):
             positions = []
 
             # Convert non-zero balances to positions
-            for balance in account_data['balances']:
-                free = float(balance['free'])
-                locked = float(balance['locked'])
+            for balance in account_data["balances"]:
+                free = float(balance["free"])
+                locked = float(balance["locked"])
                 total = free + locked
 
                 if total > 0:
                     # Treat as a LONG position
                     position = Position(
-                        symbol=balance['asset'],
-                        side='LONG',
+                        symbol=balance["asset"],
+                        side="LONG",
                         quantity=total,
                         entry_price=0.0,  # Not tracked in spot trading
                         current_price=0.0,  # Would need separate price call
                         unrealized_pnl=0.0,  # Not calculated for spot
                         realized_pnl=0.0,
-                        timestamp=datetime.now(timezone.utc)
+                        timestamp=datetime.now(timezone.utc),
                     )
                     positions.append(position)
 
@@ -384,12 +381,11 @@ class BinanceConnector(BrokerConnector):
         try:
             # Get current balance
             timestamp = int(time.time() * 1000)
-            params = {'timestamp': timestamp}
-            params['signature'] = self._generate_signature(params)
+            params = {"timestamp": timestamp}
+            params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account",
-                params=params
+                f"{self.base_url}/api/v3/account", params=params
             )
             response.raise_for_status()
 
@@ -397,9 +393,9 @@ class BinanceConnector(BrokerConnector):
 
             # Find balance for symbol
             balance = 0.0
-            for bal in account_data['balances']:
-                if bal['asset'] == symbol.replace('/', '').upper():
-                    balance = float(bal['free'])
+            for bal in account_data["balances"]:
+                if bal["asset"] == symbol.replace("/", "").upper():
+                    balance = float(bal["free"])
                     break
 
             if balance <= 0:
@@ -417,7 +413,7 @@ class BinanceConnector(BrokerConnector):
                 symbol=trading_pair,
                 side=OrderSide.SELL,
                 quantity=sell_qty,
-                order_type=OrderType.MARKET
+                order_type=OrderType.MARKET,
             )
 
             if order:
@@ -443,12 +439,11 @@ class BinanceConnector(BrokerConnector):
 
         try:
             timestamp = int(time.time() * 1000)
-            params = {'timestamp': timestamp}
-            params['signature'] = self._generate_signature(params)
+            params = {"timestamp": timestamp}
+            params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account",
-                params=params
+                f"{self.base_url}/api/v3/account", params=params
             )
             response.raise_for_status()
 
@@ -458,15 +453,15 @@ class BinanceConnector(BrokerConnector):
             total_balance = 0.0
             positions_count = 0
 
-            for balance in account_data['balances']:
-                free = float(balance['free'])
-                locked = float(balance['locked'])
+            for balance in account_data["balances"]:
+                free = float(balance["free"])
+                locked = float(balance["locked"])
                 total = free + locked
 
                 if total > 0:
                     positions_count += 1
                     # For simplicity, count USDT directly, others would need price conversion
-                    if balance['asset'] == 'USDT':
+                    if balance["asset"] == "USDT":
                         total_balance += total
 
             info = AccountInfo(
@@ -475,7 +470,7 @@ class BinanceConnector(BrokerConnector):
                 margin_used=0.0,  # Not applicable for spot
                 margin_available=total_balance,
                 positions_count=positions_count,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
             )
 
             return info
@@ -485,10 +480,7 @@ class BinanceConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self,
-        symbol: str,
-        timeframe: str = '1m',
-        limit: int = 100
+        self, symbol: str, timeframe: str = "1m", limit: int = 100
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data (klines/candlesticks).
@@ -506,30 +498,29 @@ class BinanceConnector(BrokerConnector):
             return None
 
         try:
-            binance_symbol = symbol.replace('/', '').upper()
+            binance_symbol = symbol.replace("/", "").upper()
 
             params = {
-                'symbol': binance_symbol,
-                'interval': timeframe,
-                'limit': min(limit, 1000)
+                "symbol": binance_symbol,
+                "interval": timeframe,
+                "limit": min(limit, 1000),
             }
 
-            response = self.session.get(
-                f"{self.base_url}/api/v3/klines",
-                params=params
-            )
+            response = self.session.get(f"{self.base_url}/api/v3/klines", params=params)
             response.raise_for_status()
 
             candles = []
             for kline in response.json():
-                candles.append({
-                    'timestamp': datetime.fromtimestamp(kline[0] / 1000),
-                    'open': float(kline[1]),
-                    'high': float(kline[2]),
-                    'low': float(kline[3]),
-                    'close': float(kline[4]),
-                    'volume': float(kline[5])
-                })
+                candles.append(
+                    {
+                        "timestamp": datetime.fromtimestamp(kline[0] / 1000),
+                        "open": float(kline[1]),
+                        "high": float(kline[2]),
+                        "low": float(kline[3]),
+                        "close": float(kline[4]),
+                        "volume": float(kline[5]),
+                    }
+                )
 
             return candles
 
@@ -539,11 +530,11 @@ class BinanceConnector(BrokerConnector):
 
     def _generate_signature(self, params: Dict) -> str:
         """Generate HMAC SHA256 signature for Binance API"""
-        query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
         signature = hmac.new(
-            self.api_secret.encode('utf-8'),
-            query_string.encode('utf-8'),
-            hashlib.sha256
+            self.api_secret.encode("utf-8"),
+            query_string.encode("utf-8"),
+            hashlib.sha256,
         ).hexdigest()
         return signature
 
@@ -553,7 +544,7 @@ class BinanceConnector(BrokerConnector):
             OrderType.MARKET: "MARKET",
             OrderType.LIMIT: "LIMIT",
             OrderType.STOP: "STOP_LOSS",
-            OrderType.STOP_LIMIT: "STOP_LOSS_LIMIT"
+            OrderType.STOP_LIMIT: "STOP_LOSS_LIMIT",
         }
         return mapping.get(order_type, "MARKET")
 
@@ -565,7 +556,7 @@ class BinanceConnector(BrokerConnector):
             "STOP_LOSS": OrderType.STOP,
             "STOP_LOSS_LIMIT": OrderType.STOP_LIMIT,
             "TAKE_PROFIT": OrderType.LIMIT,
-            "TAKE_PROFIT_LIMIT": OrderType.LIMIT
+            "TAKE_PROFIT_LIMIT": OrderType.LIMIT,
         }
         return mapping.get(binance_type, OrderType.MARKET)
 
@@ -578,11 +569,11 @@ class BinanceConnector(BrokerConnector):
             "CANCELED": OrderStatus.CANCELLED,
             "PENDING_CANCEL": OrderStatus.PENDING,
             "REJECTED": OrderStatus.REJECTED,
-            "EXPIRED": OrderStatus.CANCELLED
+            "EXPIRED": OrderStatus.CANCELLED,
         }
         return mapping.get(binance_status, OrderStatus.PENDING)
 
     def _format_quantity(self, symbol: str, quantity: float) -> str:
         """Format quantity according to symbol's LOT_SIZE filter"""
         # Simplified - in production, should fetch exchange info for precise formatting
-        return f"{quantity:.8f}".rstrip('0').rstrip('.')
+        return f"{quantity:.8f}".rstrip("0").rstrip(".")

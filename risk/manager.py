@@ -8,13 +8,13 @@ import logging
 import os
 import signal
 import sys
-import time
 from collections import deque
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class RiskLevel(Enum):
 @dataclass
 class RiskConfig:
     """Risk management configuration"""
+
     max_position_size_pct: float = 0.02  # 2% per position
     max_portfolio_exposure_pct: float = 0.5  # 50% total exposure
     max_drawdown_pct: float = 0.10  # 10% max drawdown
@@ -52,6 +53,7 @@ class RiskConfig:
 @dataclass
 class PositionSizingResult:
     """Position sizing calculation result"""
+
     recommended_size: float
     max_allowed_size: float
     risk_amount: float
@@ -70,6 +72,7 @@ class PositionSizingResult:
 @dataclass
 class RiskAssessment:
     """Overall risk assessment"""
+
     level: RiskLevel
     can_trade: bool
     daily_pnl: float
@@ -90,7 +93,7 @@ class RiskManager:
     - Drawdown circuit breakers
     - Volatility-adjusted sizing
     """
-    
+
     def __init__(
         self,
         config: RiskConfig = None,
@@ -134,9 +137,7 @@ class RiskManager:
         self._price_update_counts: Dict[str, int] = {}
 
         # CVaR daily limit — 0 = disabled (Area 2)
-        self._cvar_daily_limit: float = float(
-            os.getenv("RISK_CVAR_DAILY_LIMIT", "0")
-        )
+        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0"))
 
         # Path for persisting halt state across restarts.
         # Callers (e.g. tests) can supply a custom path via halt_state_file to
@@ -151,7 +152,7 @@ class RiskManager:
         # This prevents a process restart from silently resuming trading
         # after a drawdown-triggered halt.
         self._restore_halt_state()
-    
+
     def update_equity(self, equity: float) -> None:
         """Update equity, drawdown, and rolling returns history."""
         # Check for new day
@@ -178,7 +179,7 @@ class RiskManager:
 
         # Check circuit breakers
         self._check_circuit_breakers(equity)
-    
+
     def _check_circuit_breakers(self, equity: float) -> None:
         """Check and trigger circuit breakers with two-tier drawdown alerts."""
         # ── CVaR check (Area 2) ───────────────────────────────────────────────
@@ -242,7 +243,7 @@ class RiskManager:
         if len(tail) == 0:
             return abs(var_threshold)
         return float(abs(np.mean(tail)))
-    
+
     def _halt_trading(self, reason: str, duration_hours: float = 1.0):
         """
         Halt trading and persist the halt state to disk.
@@ -334,12 +335,11 @@ class RiskManager:
         self._trading_halted = True
         self._halt_reason = data.get("reason", "restored from persisted halt state")
         logger.critical(
-            "Trading halt RESTORED from persisted state — reason: %s | "
-            "halt_until: %s",
+            "Trading halt RESTORED from persisted state — reason: %s | halt_until: %s",
             self._halt_reason,
             self._halt_until.isoformat() if self._halt_until else "manual resume only",
         )
-    
+
     def assess_risk(self, account_info: Dict, positions: List[Any]) -> RiskAssessment:
         """
         Comprehensive risk assessment.
@@ -356,21 +356,24 @@ class RiskManager:
                 level=RiskLevel.CRITICAL,
                 can_trade=False,
                 daily_pnl=self.daily_pnl,
-                daily_pnl_pct=self.daily_pnl / self.daily_starting_equity if self.daily_starting_equity > 0 else 0,
+                daily_pnl_pct=self.daily_pnl / self.daily_starting_equity
+                if self.daily_starting_equity > 0
+                else 0,
                 current_drawdown=self.current_drawdown,
                 margin_used_pct=0.0,
                 total_exposure_pct=0.0,
                 largest_position_pct=0.0,
-                messages=[f"Trading halted: {self._halt_reason}"]
+                messages=[f"Trading halted: {self._halt_reason}"],
             )
 
-        equity = account_info.get('equity', 0)
+        equity = account_info.get("equity", 0)
 
         # ── Invariant: equity must be positive (strictly negative is invalid; ───
         # ── zero is allowed as a transient state at initialisation)  ────────────
         if equity < 0:
             logger.critical(
-                "INVARIANT VIOLATED: equity=%.2f is not positive — halting trading", equity
+                "INVARIANT VIOLATED: equity=%.2f is not positive — halting trading",
+                equity,
             )
             self._halt_trading(
                 f"equity invariant violated (equity={equity})", duration_hours=24
@@ -388,36 +391,40 @@ class RiskManager:
             )
         # ────────────────────────────────────────────────────────────────────
 
-        margin_used = account_info.get('margin_used', 0)
-        
+        margin_used = account_info.get("margin_used", 0)
+
         # Calculate metrics
         margin_used_pct = (margin_used / equity) if equity > 0 else 0
-        
+
         total_exposure = sum(
-            p.get('quantity', 0) * p.get('current_price', 0)
-            for p in positions
+            p.get("quantity", 0) * p.get("current_price", 0) for p in positions
         )
         total_exposure_pct = (total_exposure / equity) if equity > 0 else 0
-        
+
         largest_position = max(
-            (p.get('quantity', 0) * p.get('current_price', 0) for p in positions),
-            default=0
+            (p.get("quantity", 0) * p.get("current_price", 0) for p in positions),
+            default=0,
         )
         largest_position_pct = (largest_position / equity) if equity > 0 else 0
-        
-        daily_pnl_pct = (self.daily_pnl / self.daily_starting_equity) if self.daily_starting_equity > 0 else 0
-        
+
+        daily_pnl_pct = (
+            (self.daily_pnl / self.daily_starting_equity)
+            if self.daily_starting_equity > 0
+            else 0
+        )
+
         # Determine risk level
         risk_level = RiskLevel.LOW
         can_trade = True
-        
+
         if self.current_drawdown > self.config.max_drawdown_pct * 0.8:
             risk_level = RiskLevel.CRITICAL
             can_trade = False
             messages.append(f"Near max drawdown: {self.current_drawdown:.2%}")
             # FCM push: drawdown warning to all users with registered devices
             try:
-                from mobile.push_notifications import push_manager, _device_tokens
+                from mobile.push_notifications import _device_tokens, push_manager
+
                 for uid in list(_device_tokens.keys()):
                     push_manager.send_drawdown_warning(
                         user_id=uid,
@@ -438,7 +445,7 @@ class RiskManager:
         elif daily_pnl_pct < -self.config.daily_loss_limit_pct * 0.5:
             risk_level = RiskLevel.MEDIUM
             messages.append(f"Approaching daily loss limit: {daily_pnl_pct:.2%}")
-        
+
         # ── CVaR live check (Area 2) ──────────────────────────────────────────
         if self._cvar_daily_limit > 0 and len(self._returns_history) >= 10:
             cvar = self._compute_cvar()
@@ -463,7 +470,7 @@ class RiskManager:
             largest_position_pct=largest_position_pct,
             messages=messages,
         )
-    
+
     def check_cvar_pre_trade(self) -> Tuple[bool, str]:
         """
         Explicit CVaR gate for the order submission path.
@@ -555,11 +562,11 @@ class RiskManager:
         take_profit_price: float,
         account_equity: float,
         volatility: float,
-        existing_positions: List[Dict] = None
+        existing_positions: List[Dict] = None,
     ) -> PositionSizingResult:
         """
         Calculate optimal position size using Kelly criterion with safety factors
-        
+
         Args:
             signal_strength: 0.0 to 1.0
             entry_price: Planned entry price
@@ -569,10 +576,10 @@ class RiskManager:
             volatility: Annualized volatility (0.0 to 1.0)
             existing_positions: Current positions for correlation check
         """
-        
+
         if existing_positions is None:
             existing_positions = []
-        
+
         # Validate inputs
         if entry_price <= 0 or account_equity <= 0:
             return PositionSizingResult(
@@ -583,9 +590,9 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason="Invalid price or equity"
+                reason="Invalid price or equity",
             )
-        
+
         # Check if trading halted
         if self._trading_halted:
             return PositionSizingResult(
@@ -596,13 +603,13 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason=f"Trading halted: {self._halt_reason}"
+                reason=f"Trading halted: {self._halt_reason}",
             )
-        
+
         # Calculate risk/reward
         risk_per_share = abs(entry_price - stop_loss_price)
         reward_per_share = abs(take_profit_price - entry_price)
-        
+
         if risk_per_share <= 0:
             return PositionSizingResult(
                 recommended_size=0,
@@ -612,11 +619,11 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason="Invalid stop loss (must be different from entry)"
+                reason="Invalid stop loss (must be different from entry)",
             )
-        
+
         risk_reward = reward_per_share / risk_per_share
-        
+
         if risk_reward < self.config.min_risk_reward:
             return PositionSizingResult(
                 recommended_size=0,
@@ -626,13 +633,13 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason=f"Risk/reward too low: {risk_reward:.2f} < {self.config.min_risk_reward}"
+                reason=f"Risk/reward too low: {risk_reward:.2f} < {self.config.min_risk_reward}",
             )
-        
+
         # Win probability: prefer signal['probability'] when available (Area 2).
         # Bounds-clamp to [0.30, 0.75] to prevent degenerate Kelly fractions.
         _raw_p = signal_strength
-        _prob_from_signal = getattr(self, '_last_signal_probability', None)
+        _prob_from_signal = getattr(self, "_last_signal_probability", None)
         if _prob_from_signal is not None:
             _raw_p = _prob_from_signal
             self._last_signal_probability = None  # consume
@@ -657,7 +664,7 @@ class RiskManager:
 
         # ── Helper 3: hard risk limits ────────────────────────────────────────
         position_risk_pct = self._apply_risk_limits(position_risk_pct, account_equity)
-        
+
         # Calculate position size
         risk_amount = account_equity * position_risk_pct
         position_size = risk_amount / risk_per_share if risk_per_share > 0 else 0
@@ -684,23 +691,28 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason="Position size too small after rounding"
+                reason="Position size too small after rounding",
             )
 
         # Calculate max allowed based on exposure limits
         current_exposure = sum(
-            p.get('quantity', 0) * p.get('current_price', 0)
-            for p in existing_positions
+            p.get("quantity", 0) * p.get("current_price", 0) for p in existing_positions
         )
-        max_additional_exposure = (account_equity * self.config.max_portfolio_exposure_pct) - current_exposure
-        max_size_from_exposure = max_additional_exposure / entry_price if entry_price > 0 else 0
+        max_additional_exposure = (
+            account_equity * self.config.max_portfolio_exposure_pct
+        ) - current_exposure
+        max_size_from_exposure = (
+            max_additional_exposure / entry_price if entry_price > 0 else 0
+        )
 
         # Final position size is minimum of risk-based and exposure-based
         final_size = min(position_size, max_size_from_exposure)
 
         # Ensure we don't exceed max position size
         max_position_value = account_equity * self.config.max_position_size_pct
-        max_size_from_position_limit = max_position_value / entry_price if entry_price > 0 else 0
+        max_size_from_position_limit = (
+            max_position_value / entry_price if entry_price > 0 else 0
+        )
         final_size = min(final_size, max_size_from_position_limit)
 
         # Round to lot granularity
@@ -715,12 +727,12 @@ class RiskManager:
                 stop_loss_price=stop_loss_price,
                 take_profit_price=take_profit_price,
                 approved=False,
-                reason="Position size too small after applying limits"
+                reason="Position size too small after applying limits",
             )
-        
+
         actual_risk_amount = final_size * risk_per_share
         actual_risk_pct = actual_risk_amount / account_equity
-        
+
         return PositionSizingResult(
             recommended_size=final_size,
             max_allowed_size=max_size_from_exposure,
@@ -730,9 +742,9 @@ class RiskManager:
             take_profit_price=take_profit_price,
             approved=True,
             reason=f"Kelly: {position_risk_pct:.2%}, Risk/Reward: {risk_reward:.2f}, "
-                   f"VolFactor: {volatility_factor:.2f}, DD_Factor: {drawdown_factor:.2f}"
+            f"VolFactor: {volatility_factor:.2f}, DD_Factor: {drawdown_factor:.2f}",
         )
-    
+
     # ------------------------------------------------------------------
     # Live price tracking and correlation (Area 2)
     # ------------------------------------------------------------------
@@ -781,126 +793,142 @@ class RiskManager:
                     logger.warning(
                         "High correlation detected: %s / %s = %.3f — "
                         "consider reducing combined exposure",
-                        s1, s2, corr,
+                        s1,
+                        s2,
+                        corr,
                     )
 
-    def _calculate_correlation_penalty(self, symbol: str, positions: List[Dict]) -> float:
+    def _calculate_correlation_penalty(
+        self, symbol: str, positions: List[Dict]
+    ) -> float:
         """Calculate position size reduction due to correlation"""
         if not positions:
             return 0.0
-        
+
         # Simplified: check if same symbol or related pairs
         correlated_exposure = 0.0
-        
+
         for pos in positions:
-            pos_symbol = pos.get('symbol', '')
-            
+            pos_symbol = pos.get("symbol", "")
+
             # Same symbol = full correlation
             if pos_symbol == symbol:
-                correlated_exposure += pos.get('quantity', 0) * pos.get('current_price', 0)
+                correlated_exposure += pos.get("quantity", 0) * pos.get(
+                    "current_price", 0
+                )
                 continue
-            
+
             # Check for related pairs (e.g., EURUSD and GBPUSD both have USD)
             if self._symbols_related(symbol, pos_symbol):
-                correlated_exposure += pos.get('quantity', 0) * pos.get('current_price', 0) * 0.5
-        
+                correlated_exposure += (
+                    pos.get("quantity", 0) * pos.get("current_price", 0) * 0.5
+                )
+
         # Penalty increases with correlated exposure
         if correlated_exposure > 0:
             return min(0.5, correlated_exposure / 100000)  # Cap at 50% reduction
-        
+
         return 0.0
-    
+
     def _symbols_related(self, sym1: str, sym2: str) -> bool:
         """Check if two symbols are related (share a currency)"""
         # Extract currencies (simplified)
         currencies1 = set([sym1[:3], sym1[3:]]) if len(sym1) == 6 else set([sym1])
         currencies2 = set([sym2[:3], sym2[3:]]) if len(sym2) == 6 else set([sym2])
-        
+
         return len(currencies1 & currencies2) > 0
-    
-    def filter_signals(
-        self,
-        signals: List[Dict],
-        account_state: Any
-    ) -> List[Dict]:
+
+    def filter_signals(self, signals: List[Dict], account_state: Any) -> List[Dict]:
         """
         Filter and size trading signals through risk management
         """
         if not signals:
             return []
-        
+
         # Update equity from account state
-        if hasattr(account_state, 'equity'):
+        if hasattr(account_state, "equity"):
             self.update_equity(account_state.equity)
-        
+
         filtered_signals = []
-        
+
         for signal in signals:
             # Basic validation
-            if not all(k in signal for k in ['symbol', 'action', 'entry_price', 'stop_loss']):
+            if not all(
+                k in signal for k in ["symbol", "action", "entry_price", "stop_loss"]
+            ):
                 logger.warning(f"Invalid signal format: {signal}")
                 continue
-            
+
             # Skip if action is close (handled separately)
-            if signal['action'] == 'close':
+            if signal["action"] == "close":
                 filtered_signals.append(signal)
                 continue
-            
+
             # Pass ML probability into Kelly calculation when available (Area 2)
-            if 'probability' in signal:
-                raw_p = signal['probability']
+            if "probability" in signal:
+                raw_p = signal["probability"]
                 self._last_signal_probability = max(0.30, min(0.75, float(raw_p)))
 
             # Calculate position size
             sizing = self.calculate_position_size(
-                symbol=signal['symbol'],
-                signal_strength=signal.get('strength', 0.5),
-                entry_price=signal['entry_price'],
-                stop_loss_price=signal['stop_loss'],
-                take_profit_price=signal.get('take_profit', signal['entry_price'] * 1.02),
-                account_equity=getattr(account_state, 'equity', 100000),
-                volatility=signal.get('volatility', 0.1),
-                existing_positions=getattr(account_state, 'active_positions', {}).values()
+                symbol=signal["symbol"],
+                signal_strength=signal.get("strength", 0.5),
+                entry_price=signal["entry_price"],
+                stop_loss_price=signal["stop_loss"],
+                take_profit_price=signal.get(
+                    "take_profit", signal["entry_price"] * 1.02
+                ),
+                account_equity=getattr(account_state, "equity", 100000),
+                volatility=signal.get("volatility", 0.1),
+                existing_positions=getattr(
+                    account_state, "active_positions", {}
+                ).values(),
             )
-            
+
             if not sizing.approved:
                 logger.info(f"Signal rejected for {signal['symbol']}: {sizing.reason}")
                 continue
-            
+
             # Add sizing to signal
-            signal['size'] = sizing.recommended_size
-            signal['risk_amount'] = sizing.risk_amount
-            signal['risk_pct'] = sizing.risk_pct
-            signal['stop_loss'] = sizing.stop_loss_price
-            signal['take_profit'] = sizing.take_profit_price
-            
+            signal["size"] = sizing.recommended_size
+            signal["risk_amount"] = sizing.risk_amount
+            signal["risk_pct"] = sizing.risk_pct
+            signal["stop_loss"] = sizing.stop_loss_price
+            signal["take_profit"] = sizing.take_profit_price
+
             filtered_signals.append(signal)
-            
+
             logger.info(
                 f"Signal approved: {signal['symbol']} | "
                 f"Size: {sizing.recommended_size} | "
                 f"Risk: {sizing.risk_pct:.2%} | "
                 f"R/R: {abs(sizing.take_profit_price - signal['entry_price']) / abs(sizing.stop_loss_price - signal['entry_price']):.2f}"
             )
-        
+
         return filtered_signals
-    
+
     # ------------------------------------------------------------------
     # Extended API (test_risk_notification_extended)
     # ------------------------------------------------------------------
 
-    def calculate_position_size(self, symbol: str = "", entry_price: float = 0.0,
-                                 method: str = "risk",
-                                 amount: float = None, percent: float = None,
-                                 stop_loss: float = None, price: float = None,
-                                 # Full-signature kwargs from PositionSizingResult path
-                                 signal_strength: float = None,
-                                 stop_loss_price: float = None,
-                                 take_profit_price: float = None,
-                                 account_equity: float = None,
-                                 volatility: float = None,
-                                 existing_positions=None,
-                                 **kw) -> "PositionSizingResult":
+    def calculate_position_size(
+        self,
+        symbol: str = "",
+        entry_price: float = 0.0,
+        method: str = "risk",
+        amount: float = None,
+        percent: float = None,
+        stop_loss: float = None,
+        price: float = None,
+        # Full-signature kwargs from PositionSizingResult path
+        signal_strength: float = None,
+        stop_loss_price: float = None,
+        take_profit_price: float = None,
+        account_equity: float = None,
+        volatility: float = None,
+        existing_positions=None,
+        **kw,
+    ) -> "PositionSizingResult":
         """Unified position sizing — delegates to full implementation when called with signal_strength."""
         if signal_strength is not None:
             # Full PositionSizingResult path (used by integration tests)
@@ -928,7 +956,11 @@ class RiskManager:
                 risk_amt = self.current_balance * (cfg.max_risk_per_trade / 100.0)
                 size = risk_amt / abs(entry - sl)
             else:
-                size = self.current_balance * (cfg.max_risk_per_trade / 100.0) / max(entry, 1.0)
+                size = (
+                    self.current_balance
+                    * (cfg.max_risk_per_trade / 100.0)
+                    / max(entry, 1.0)
+                )
         else:
             size = self.current_balance * 0.01 / max(entry, 1.0)
         size = max(size, 0.01)
@@ -950,12 +982,21 @@ class RiskManager:
         if len(self.open_positions) >= cfg.max_open_positions:
             return False, f"Max open positions ({cfg.max_open_positions}) reached"
         if size > cfg.max_position_size:
-            return False, f"Position size {size} exceeds maximum {cfg.max_position_size}"
-        daily_loss_pct = abs(self.daily_pnl) / self.current_balance * 100 if self.current_balance else 0
+            return (
+                False,
+                f"Position size {size} exceeds maximum {cfg.max_position_size}",
+            )
+        daily_loss_pct = (
+            abs(self.daily_pnl) / self.current_balance * 100
+            if self.current_balance
+            else 0
+        )
         if self.daily_pnl < 0 and daily_loss_pct >= cfg.max_daily_loss:
             return False, f"Daily loss limit ({cfg.max_daily_loss}%) reached"
         if self.peak_balance > 0:
-            dd_pct = (self.peak_balance - self.current_balance) / self.peak_balance * 100
+            dd_pct = (
+                (self.peak_balance - self.current_balance) / self.peak_balance * 100
+            )
             if dd_pct >= cfg.max_drawdown:
                 return False, f"Max drawdown ({cfg.max_drawdown}%) reached"
         return True, "OK"
@@ -968,7 +1009,9 @@ class RiskManager:
         self.open_positions.append(position)
 
     def close_position(self, position_id: str, pnl: float = 0.0) -> None:
-        self.open_positions = [p for p in self.open_positions if p.get("id") != position_id]
+        self.open_positions = [
+            p for p in self.open_positions if p.get("id") != position_id
+        ]
         self.current_balance += pnl
         self.daily_pnl += pnl
         if self.current_balance > self.peak_balance:
@@ -978,22 +1021,36 @@ class RiskManager:
         """Return (within_limits, list_of_violations)."""
         violations: List[str] = []
         cfg = self.config
-        daily_loss_pct = abs(self.daily_pnl) / self.current_balance * 100 if self.current_balance and self.daily_pnl < 0 else 0
+        daily_loss_pct = (
+            abs(self.daily_pnl) / self.current_balance * 100
+            if self.current_balance and self.daily_pnl < 0
+            else 0
+        )
         if daily_loss_pct >= cfg.max_daily_loss:
-            violations.append(f"Daily loss {daily_loss_pct:.1f}% exceeds limit {cfg.max_daily_loss}%")
+            violations.append(
+                f"Daily loss {daily_loss_pct:.1f}% exceeds limit {cfg.max_daily_loss}%"
+            )
         if self.peak_balance > 0:
-            dd_pct = (self.peak_balance - self.current_balance) / self.peak_balance * 100
+            dd_pct = (
+                (self.peak_balance - self.current_balance) / self.peak_balance * 100
+            )
             if dd_pct >= cfg.max_drawdown:
-                violations.append(f"Drawdown {dd_pct:.1f}% exceeds limit {cfg.max_drawdown}%")
+                violations.append(
+                    f"Drawdown {dd_pct:.1f}% exceeds limit {cfg.max_drawdown}%"
+                )
         return len(violations) == 0, violations
 
-    def calculate_stop_loss(self, entry: float, side: str, percent: float = None) -> float:
+    def calculate_stop_loss(
+        self, entry: float, side: str, percent: float = None
+    ) -> float:
         pct = (percent or self.config.default_stop_loss_pct) / 100.0
         if side.upper() in ("BUY", "LONG"):
             return entry * (1 - pct)
         return entry * (1 + pct)
 
-    def calculate_take_profit(self, entry: float, side: str, percent: float = None) -> float:
+    def calculate_take_profit(
+        self, entry: float, side: str, percent: float = None
+    ) -> float:
         pct = (percent or self.config.default_take_profit_pct) / 100.0
         if side.upper() in ("BUY", "LONG"):
             return entry * (1 + pct)
@@ -1006,9 +1063,12 @@ class RiskManager:
     def reset_daily_stats(self) -> None:
         self.reset_daily_pnl()
 
-    def check_drawdown(self, equity_curve=None, max_dd: float = None) -> "RiskCheckResult":
+    def check_drawdown(
+        self, equity_curve=None, max_dd: float = None
+    ) -> "RiskCheckResult":
         """Check drawdown against limit. Accepts equity_curve array or uses internal state."""
         import numpy as _np
+
         if equity_curve is not None:
             arr = _np.asarray(equity_curve, dtype=float)
             if len(arr) < 2:
@@ -1019,7 +1079,9 @@ class RiskManager:
         else:
             if self.peak_balance <= 0:
                 return RiskCheckResult(passed=True, message="No peak balance")
-            max_drawdown = -(self.peak_balance - self.current_balance) / self.peak_balance
+            max_drawdown = (
+                -(self.peak_balance - self.current_balance) / self.peak_balance
+            )
         limit = -(max_dd if max_dd is not None else self.config.max_drawdown / 100.0)
         passed = max_drawdown >= limit
         return RiskCheckResult(
@@ -1032,10 +1094,18 @@ class RiskManager:
     def kill_switch_active(self) -> bool:
         return self._trading_halted
 
-    def check_kill_switch(self, daily_pnl: float = None, account_value: float = None,
-                          threshold: float = None) -> bool:
+    def check_kill_switch(
+        self,
+        daily_pnl: float = None,
+        account_value: float = None,
+        threshold: float = None,
+    ) -> bool:
         """Return True if kill switch should trigger (trading should stop)."""
-        if daily_pnl is not None and account_value is not None and threshold is not None:
+        if (
+            daily_pnl is not None
+            and account_value is not None
+            and threshold is not None
+        ):
             if account_value > 0:
                 loss_pct = abs(daily_pnl) / account_value if daily_pnl < 0 else 0
                 if loss_pct >= threshold:
@@ -1043,8 +1113,9 @@ class RiskManager:
                     return True
         return self._trading_halted
 
-    def check_price_tolerance(self, order, current_price: float = None,
-                               tolerance: float = None) -> "RiskCheckResult":
+    def check_price_tolerance(
+        self, order, current_price: float = None, tolerance: float = None
+    ) -> "RiskCheckResult":
         """Check if order price is within tolerance of current market price."""
         if isinstance(order, dict):
             order_price = order.get("price", current_price)
@@ -1058,10 +1129,16 @@ class RiskManager:
         return RiskCheckResult(
             passed=passed,
             message=f"Price tolerance {'OK' if passed else 'exceeded'}: diff {diff:.4%} vs limit {tol:.4%}",
-            details={"order_price": order_price, "current_price": current_price, "diff_pct": diff},
+            details={
+                "order_price": order_price,
+                "current_price": current_price,
+                "diff_pct": diff,
+            },
         )
 
-    def check_correlation_risk(self, positions: List, max_correlation: float = 0.80) -> "RiskCheckResult":
+    def check_correlation_risk(
+        self, positions: List, max_correlation: float = 0.80
+    ) -> "RiskCheckResult":
         """Check portfolio correlation risk (simplified heuristic)."""
         # Heuristic: EUR/GBP pairs are highly correlated
         symbols = [getattr(p, "symbol", "") for p in positions]
@@ -1075,7 +1152,9 @@ class RiskManager:
             message=f"Correlation risk: {'high' if high_corr else 'medium'} between {symbols}",
         )
 
-    def check_concentration(self, positions: List, account, max_single: float = 0.40) -> "RiskCheckResult":
+    def check_concentration(
+        self, positions: List, account, max_single: float = 0.40
+    ) -> "RiskCheckResult":
         """Check single-position concentration."""
         balance = getattr(account, "balance", 100000.0) or 100000.0
         violations = []
@@ -1113,7 +1192,11 @@ class RiskManager:
         self.daily_pnl += amount
 
     def get_risk_metrics(self) -> Dict[str, Any]:
-        dd = (self.peak_balance - self.current_balance) / self.peak_balance * 100 if self.peak_balance else 0
+        dd = (
+            (self.peak_balance - self.current_balance) / self.peak_balance * 100
+            if self.peak_balance
+            else 0
+        )
         return {
             "current_balance": self.current_balance,
             "peak_balance": self.peak_balance,
@@ -1125,34 +1208,37 @@ class RiskManager:
     def get_status(self) -> Dict[str, Any]:
         """Get risk manager status"""
         return {
-            'trading_halted': self._trading_halted,
-            'halt_reason': self._halt_reason,
-            'halt_until': self._halt_until.isoformat() if self._halt_until else None,
-            'current_drawdown': self.current_drawdown,
-            'peak_equity': self.peak_equity,
-            'daily_pnl': self.daily_pnl,
-            'daily_pnl_pct': self.daily_pnl / self.daily_starting_equity if self.daily_starting_equity > 0 else 0,
-            'current_balance': self.current_balance,
-            'peak_balance': self.peak_balance,
-            'open_positions': len(self.open_positions),
-            'config': {
-                'max_position_size_pct': self.config.max_position_size_pct,
-                'max_drawdown_pct': self.config.max_drawdown_pct,
-                'daily_loss_limit_pct': self.config.daily_loss_limit_pct,
-                'max_risk_per_trade': self.config.max_risk_per_trade,
-                'max_open_positions': self.config.max_open_positions,
-            }
+            "trading_halted": self._trading_halted,
+            "halt_reason": self._halt_reason,
+            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
+            "current_drawdown": self.current_drawdown,
+            "peak_equity": self.peak_equity,
+            "daily_pnl": self.daily_pnl,
+            "daily_pnl_pct": self.daily_pnl / self.daily_starting_equity
+            if self.daily_starting_equity > 0
+            else 0,
+            "current_balance": self.current_balance,
+            "peak_balance": self.peak_balance,
+            "open_positions": len(self.open_positions),
+            "config": {
+                "max_position_size_pct": self.config.max_position_size_pct,
+                "max_drawdown_pct": self.config.max_drawdown_pct,
+                "daily_loss_limit_pct": self.config.daily_loss_limit_pct,
+                "max_risk_per_trade": self.config.max_risk_per_trade,
+                "max_open_positions": self.config.max_open_positions,
+            },
         }
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
-from dataclasses import dataclass as _dc, field as _field
-from typing import Optional as _Opt, Tuple as _Tuple
+from dataclasses import dataclass as _dc
+from dataclasses import field as _field
 
 
 @_dc
 class PositionSizeResult:
     """Simple result returned by RiskManager.calculate_position_size."""
+
     size: float
     method: str = "risk"
     entry_price: float = 0.0
@@ -1161,6 +1247,7 @@ class PositionSizeResult:
 @_dc
 class RiskCheckResult:
     """Result of a single risk check — used by tests."""
+
     passed: bool
     risk_level: "RiskLevel" = None
     message: str = ""
@@ -1173,6 +1260,7 @@ class RiskCheckResult:
 
 # ── Graceful shutdown on invariant violations / panics ───────────────────────
 
+
 def _graceful_shutdown(reason: str, exit_code: int = 1) -> None:
     """
     Halt all trading and exit the process cleanly.
@@ -1184,6 +1272,7 @@ def _graceful_shutdown(reason: str, exit_code: int = 1) -> None:
     logger.critical("GRACEFUL SHUTDOWN initiated: %s", reason)
     try:
         import atexit
+
         atexit._run_exitfuncs()  # noqa: SLF001
     except Exception as exc:
         logger.critical("atexit handlers failed during graceful shutdown: %s", exc)
@@ -1206,7 +1295,9 @@ def install_invariant_signal_handlers(risk_manager: "RiskManager") -> None:
 
     def _handle(signum, frame):
         sig_name = signal.Signals(signum).name
-        logger.warning("Signal %s received — halting trading and shutting down.", sig_name)
+        logger.warning(
+            "Signal %s received — halting trading and shutting down.", sig_name
+        )
         risk_manager._halt_trading(f"OS signal {sig_name}", duration_hours=0)
         sys.exit(0)
 

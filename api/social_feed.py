@@ -31,12 +31,13 @@ router = APIRouter(prefix="/api/feed", tags=["Social Feed"])
 
 # ── In-memory stores ──────────────────────────────────────────────────────────
 
-_feed_items: Dict[str, dict] = {}          # signal_id → feed item
-_reactions:  Dict[str, Dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
-_comments:   Dict[str, List[dict]] = {}    # signal_id → list of comments
-_opted_in:   set = set()                   # user_ids who opted into public feed
+_feed_items: Dict[str, dict] = {}  # signal_id → feed item
+_reactions: Dict[str, Dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
+_comments: Dict[str, List[dict]] = {}  # signal_id → list of comments
+_opted_in: set = set()  # user_ids who opted into public feed
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
+
 
 def _load_opted_in() -> None:
     """Load opted-in user set from DB on first access."""
@@ -54,43 +55,48 @@ def _save_opted_in() -> None:
 
 # ── Seed demo data ────────────────────────────────────────────────────────────
 
+
 def _seed_demo():
     import random
+
     random.seed(7)
-    symbols    = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD"]
+    symbols = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD"]
     directions = ["BUY", "SELL"]
-    usernames  = ["AlgoTrader_X", "GoldHunter", "FXWizard", "PropKing", "QuietEdge"]
+    usernames = ["AlgoTrader_X", "GoldHunter", "FXWizard", "PropKing", "QuietEdge"]
     for i in range(12):
         sid = f"demo-sig-{i:03d}"
         sym = random.choice(symbols)
         direction = random.choice(directions)
         conf = round(70 + random.random() * 25, 1)
-        pnl  = round((random.random() - 0.4) * 350, 2)
+        pnl = round((random.random() - 0.4) * 350, 2)
         copies = random.randint(0, 18)
         _feed_items[sid] = {
-            "signal_id":  sid,
-            "symbol":     sym,
-            "direction":  direction,
+            "signal_id": sid,
+            "symbol": sym,
+            "direction": direction,
             "confidence": conf,
-            "entry_price": round(2300 + random.random() * 100, 2) if "XAU" in sym else round(1.05 + random.random() * 0.05, 5),
-            "pnl":        pnl,
-            "copies":     copies,
-            "username":   random.choice(usernames),
-            "trader_id":  f"trader-{i:03d}",
-            "thumbs_up":   random.randint(0, 24),
+            "entry_price": round(2300 + random.random() * 100, 2)
+            if "XAU" in sym
+            else round(1.05 + random.random() * 0.05, 5),
+            "pnl": pnl,
+            "copies": copies,
+            "username": random.choice(usernames),
+            "trader_id": f"trader-{i:03d}",
+            "thumbs_up": random.randint(0, 24),
             "thumbs_down": random.randint(0, 6),
             "comment_count": random.randint(0, 5),
-            "is_public":  True,
+            "is_public": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         _reactions[sid] = {}
-        _comments[sid]  = []
+        _comments[sid] = []
 
 
 _seed_demo()
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class ReactionBody(BaseModel):
     reaction: str = Field(..., pattern="^(up|down)$")
@@ -102,37 +108,39 @@ class CommentBody(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
     """Called by the signal engine to publish a high-confidence signal."""
     sid = signal.get("signal_id") or str(uuid.uuid4())
     item = {
-        "signal_id":   sid,
-        "symbol":      signal.get("symbol", "XAU/USD"),
-        "direction":   signal.get("direction", "BUY"),
-        "confidence":  signal.get("confidence", 70.0),
+        "signal_id": sid,
+        "symbol": signal.get("symbol", "XAU/USD"),
+        "direction": signal.get("direction", "BUY"),
+        "confidence": signal.get("confidence", 70.0),
         "entry_price": signal.get("entry_price", 0.0),
-        "pnl":         signal.get("pnl", 0.0),
-        "copies":      0,
-        "username":    username,
-        "trader_id":   trader_id,
-        "thumbs_up":   0,
+        "pnl": signal.get("pnl", 0.0),
+        "copies": 0,
+        "username": username,
+        "trader_id": trader_id,
+        "thumbs_up": 0,
         "thumbs_down": 0,
         "comment_count": 0,
-        "is_public":   True,
-        "created_at":  datetime.now(timezone.utc).isoformat(),
+        "is_public": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _feed_items[sid] = item
-    _reactions[sid]  = {}
-    _comments[sid]   = []
+    _reactions[sid] = {}
+    _comments[sid] = []
     return item
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("")
 async def get_feed(
-    page:   int = 1,
-    limit:  int = 20,
+    page: int = 1,
+    limit: int = 20,
     symbol: Optional[str] = None,
 ):
     """Return paginated community signal feed (public — no auth required)."""
@@ -142,10 +150,10 @@ async def get_feed(
     items.sort(key=lambda x: x["created_at"], reverse=True)
     start = (page - 1) * limit
     return {
-        "items":   items[start: start + limit],
-        "total":   len(items),
-        "page":    page,
-        "pages":   max(1, (len(items) + limit - 1) // limit),
+        "items": items[start : start + limit],
+        "total": len(items),
+        "page": page,
+        "pages": max(1, (len(items) + limit - 1) // limit),
     }
 
 
@@ -181,8 +189,8 @@ async def react_to_signal(
             item["thumbs_down"] += 1
 
     return {
-        "signal_id":   signal_id,
-        "thumbs_up":   item["thumbs_up"],
+        "signal_id": signal_id,
+        "thumbs_up": item["thumbs_up"],
         "thumbs_down": item["thumbs_down"],
         "your_reaction": new_reaction,
     }
@@ -200,10 +208,10 @@ async def add_comment(
 
     comment = {
         "comment_id": str(uuid.uuid4()),
-        "signal_id":  signal_id,
-        "user_id":    user.sub,
-        "username":   getattr(user, "username", user.sub),
-        "text":       body.text,
+        "signal_id": signal_id,
+        "user_id": user.sub,
+        "username": getattr(user, "username", user.sub),
+        "text": body.text,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _comments[signal_id].append(comment)

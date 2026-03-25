@@ -16,37 +16,38 @@ Components:
 - Model versioning and storage
 """
 
-from .models import BaseMLModel, LSTMPricePredictor, RandomForestTradingClassifier
 from .features import TechnicalFeatureEngineer
+from .models import BaseMLModel, LSTMPricePredictor, RandomForestTradingClassifier
 
 __all__ = [
-    'BaseMLModel',
-    'LSTMPricePredictor',
-    'RandomForestTradingClassifier',
-    'TechnicalFeatureEngineer',
-    'create_ml_router',
-    'get_active_model',
-    'get_model_version',
-    'get_advanced_predictor',
+    "BaseMLModel",
+    "LSTMPricePredictor",
+    "RandomForestTradingClassifier",
+    "TechnicalFeatureEngineer",
+    "create_ml_router",
+    "get_active_model",
+    "get_model_version",
+    "get_advanced_predictor",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
+__version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
 import logging as _logging
 import pickle as _pickle
 from pathlib import Path as _Path
-from typing import Optional as _Optional, Any as _Any
+from typing import Any as _Any
+from typing import Optional as _Optional
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
 
 # Loaded model instances (None until first call to get_active_model())
 _macro_xgb: _Any = None
-_macro_rf:  _Any = None
+_macro_rf: _Any = None
 _baseline_xgb: _Any = None
-_baseline_rf:  _Any = None
+_baseline_rf: _Any = None
 _model_version: str = "none"
 
 
@@ -85,11 +86,11 @@ def _load_models() -> None:
 
     # Fallback: macro-aware models
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
-    _macro_rf  = _try_load(_SAVED / "rf_macro.pkl")
+    _macro_rf = _try_load(_SAVED / "rf_macro.pkl")
 
     # Fallback: baseline models
     _baseline_xgb = _try_load(_SAVED / "xgb_xauusd.pkl")
-    _baseline_rf  = _try_load(_SAVED / "rf_xauusd.pkl")
+    _baseline_rf = _try_load(_SAVED / "rf_xauusd.pkl")
 
     if _macro_xgb is not None:
         _model_version = "macro_xgb_v1"
@@ -101,7 +102,8 @@ def _load_models() -> None:
         _model_version = "none"
         _ml_logger.warning(
             "No trained ML model found in %s — signal engine will use "
-            "strategy-only signals", _SAVED
+            "strategy-only signals",
+            _SAVED,
         )
 
 
@@ -123,19 +125,24 @@ def get_model_version() -> str:
     if _model_version == "none":
         _load_models()
     return _model_version
+
+
 # ── Advanced predictor (122-feature live inference) ───────────────────────────
 try:
     from ml.live_inference import get_advanced_predictor
 except Exception:
+
     def get_advanced_predictor():  # type: ignore[misc]
         return None
 
 
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Machine learning models for price prediction and signal classification'
+__author__ = "HOPEFX Development Team"
+__description__ = (
+    "Machine learning models for price prediction and signal classification"
+)
 
 
-def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
+def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     """
     Create a FastAPI router for the Machine Learning module.
 
@@ -148,9 +155,10 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
     Returns:
         FastAPI APIRouter
     """
+    from typing import Any, Dict, List, Optional
+
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import List, Dict, Any, Optional
 
     router = APIRouter(prefix="/api/ml", tags=["Machine Learning"])
 
@@ -195,6 +203,7 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
         Send at least 200 bars to avoid NaN-heavy output.
         """
         import pandas as pd
+
         if len(req.bars) < 10:
             raise HTTPException(
                 status_code=422,
@@ -222,33 +231,35 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
         import json as _json
         from pathlib import Path as _Path
 
-        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        report_path = (
+            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        )
         if report_path.exists():
             try:
                 with open(report_path) as f:
                     report = _json.load(f)
                 final = report.get("final", {})
-                wf    = report.get("walkforward", {})
+                wf = report.get("walkforward", {})
                 return {
                     "models": [
                         {
-                            "model":    "Stacking Ensemble",
+                            "model": "Stacking Ensemble",
                             "accuracy": final.get("accuracy", 0),
-                            "auc":      final.get("auc", 0),
-                            "f1":       final.get("f1", 0),
+                            "auc": final.get("auc", 0),
+                            "f1": final.get("f1", 0),
                         },
                         {
-                            "model":    "Walk-forward (XGBoost+Cal)",
+                            "model": "Walk-forward (XGBoost+Cal)",
                             "accuracy": wf.get("mean_accuracy", 0),
-                            "auc":      wf.get("mean_auc", 0),
-                            "f1":       wf.get("mean_f1", 0),
+                            "auc": wf.get("mean_auc", 0),
+                            "f1": wf.get("mean_f1", 0),
                         },
                     ],
-                    "trained_at":   report.get("trained_at"),
+                    "trained_at": report.get("trained_at"),
                     "sample_count": report.get("sample_count"),
                     "feature_count": report.get("feature_count"),
-                    "significant":  wf.get("significant", False),
-                    "p_value":      wf.get("p_value"),
+                    "significant": wf.get("significant", False),
+                    "p_value": wf.get("p_value"),
                 }
             except Exception:
                 pass
@@ -256,15 +267,20 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
         # Demo metrics (shown before first training run)
         return {
             "models": [
-                {"model": "Stacking Ensemble", "accuracy": 0.87, "auc": 0.91, "f1": 0.86},
-                {"model": "XGBoost",           "accuracy": 0.83, "auc": 0.88, "f1": 0.82},
-                {"model": "Random Forest",     "accuracy": 0.81, "auc": 0.85, "f1": 0.80},
+                {
+                    "model": "Stacking Ensemble",
+                    "accuracy": 0.87,
+                    "auc": 0.91,
+                    "f1": 0.86,
+                },
+                {"model": "XGBoost", "accuracy": 0.83, "auc": 0.88, "f1": 0.82},
+                {"model": "Random Forest", "accuracy": 0.81, "auc": 0.85, "f1": 0.80},
             ],
-            "trained_at":    None,
-            "sample_count":  None,
+            "trained_at": None,
+            "sample_count": None,
             "feature_count": None,
-            "significant":   False,
-            "note":          "Run ml/train_advanced.py to populate real metrics",
+            "significant": False,
+            "note": "Run ml/train_advanced.py to populate real metrics",
         }
 
     @router.get("/predict/{symbol}")
@@ -277,34 +293,37 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
         from pathlib import Path as _Path
 
         # Try to load a cached prediction from the report
-        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        report_path = (
+            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
+        )
         if report_path.exists():
             try:
                 with open(report_path) as f:
                     report = _json.load(f)
                 acc = report.get("final", {}).get("accuracy", 0.5)
                 return {
-                    "symbol":     symbol,
-                    "direction":  "long",
+                    "symbol": symbol,
+                    "direction": "long",
                     "confidence": round(acc, 4),
-                    "model":      "Stacking Ensemble",
-                    "note":       "Based on last training run — retrain for live signals",
+                    "model": "Stacking Ensemble",
+                    "note": "Based on last training run — retrain for live signals",
                 }
             except Exception:
                 pass
 
         return {
-            "symbol":     symbol,
-            "direction":  "neutral",
+            "symbol": symbol,
+            "direction": "neutral",
             "confidence": 0.5,
-            "model":      "none",
-            "note":       "No trained model found — run ml/train_advanced.py",
+            "model": "none",
+            "note": "No trained model found — run ml/train_advanced.py",
         }
 
     @router.get("/models")
     async def list_models():
         """List available trained model files."""
         from pathlib import Path as _Path
+
         model_dir = _Path(__file__).parent / "saved_models"
         if not model_dir.exists():
             return {"models": []}
@@ -316,4 +335,3 @@ def create_ml_router(feature_engineer: 'TechnicalFeatureEngineer'):
         return {"models": files, "directory": str(model_dir)}
 
     return router
-

@@ -11,16 +11,17 @@ Keys used:
     hopefx:positions:<symbol>  – JSON-encoded position dict (TTL = 7 days)
     hopefx:positions:index     – Redis set of open position symbols
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
-_ORDER_TTL = 7 * 24 * 3600     # 7 days
+_ORDER_TTL = 7 * 24 * 3600  # 7 days
 _POSITION_TTL = 7 * 24 * 3600  # 7 days
 _ORDER_KEY_PREFIX = "hopefx:orders:"
 _POSITION_KEY_PREFIX = "hopefx:positions:"
@@ -77,7 +78,9 @@ class RedisStateStore:
         try:
             order_ids = self._r.smembers(_ORDER_INDEX)
             for oid in order_ids:
-                raw = self._r.get(f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}")
+                raw = self._r.get(
+                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}"
+                )
                 if raw:
                     orders.append(json.loads(raw))
         except Exception as exc:
@@ -92,7 +95,9 @@ class RedisStateStore:
         """Persist a position dict keyed by its symbol."""
         symbol = str(position.get("symbol", ""))
         if not symbol:
-            logger.warning("RedisStateStore.save_position: position has no symbol, skipping")
+            logger.warning(
+                "RedisStateStore.save_position: position has no symbol, skipping"
+            )
             return
         key = f"{_POSITION_KEY_PREFIX}{symbol}"
         payload = json.dumps({**position, "_saved_at": _now_iso()})
@@ -197,7 +202,9 @@ class AsyncRedisStateStore:
     async def save_position(self, position: Dict[str, Any]) -> None:
         symbol = str(position.get("symbol", ""))
         if not symbol:
-            logger.warning("AsyncRedisStateStore.save_position: position has no symbol, skipping")
+            logger.warning(
+                "AsyncRedisStateStore.save_position: position has no symbol, skipping"
+            )
             return
         key = f"{_POSITION_KEY_PREFIX}{symbol}"
         payload = json.dumps({**position, "_saved_at": _now_iso()})
@@ -234,7 +241,8 @@ class AsyncRedisStateStore:
         positions = await self.load_positions()
         if orders:
             logger.info(
-                "AsyncRedisStateStore: restored %d open order(s) from Redis", len(orders)
+                "AsyncRedisStateStore: restored %d open order(s) from Redis",
+                len(orders),
             )
         if positions:
             logger.info(

@@ -46,16 +46,16 @@ logger = logging.getLogger(__name__)
 
 # ── Yahoo Finance tickers ─────────────────────────────────────────────────────
 _MACRO_TICKERS: Dict[str, str] = {
-    "dxy":       "DX-Y.NYB",  # US Dollar Index
-    "vix":       "^VIX",      # CBOE Volatility Index (starts ~1990)
-    "yield_10y": "^TNX",      # US 10-year Treasury yield
-    "yield_5y":  "^FVX",      # US 5-year Treasury yield (replaces ^IRX)
-    "gold_etf":  "GLD",       # Gold ETF cross-asset momentum (starts 2004)
-    "spx":       "^GSPC",     # S&P 500
-    "tips":      "TIP",       # TIPS ETF — real rate proxy (starts 2003)
-    "copper":    "HG=F",      # Copper — global growth proxy
-    "oil":       "CL=F",      # Crude oil — inflation / geopolitical proxy
-    "usdcny":    "CNY=X",     # USD/CNY — China gold demand proxy
+    "dxy": "DX-Y.NYB",  # US Dollar Index
+    "vix": "^VIX",  # CBOE Volatility Index (starts ~1990)
+    "yield_10y": "^TNX",  # US 10-year Treasury yield
+    "yield_5y": "^FVX",  # US 5-year Treasury yield (replaces ^IRX)
+    "gold_etf": "GLD",  # Gold ETF cross-asset momentum (starts 2004)
+    "spx": "^GSPC",  # S&P 500
+    "tips": "TIP",  # TIPS ETF — real rate proxy (starts 2003)
+    "copper": "HG=F",  # Copper — global growth proxy
+    "oil": "CL=F",  # Crude oil — inflation / geopolitical proxy
+    "usdcny": "CNY=X",  # USD/CNY — China gold demand proxy
 }
 
 # Columns always present in the output (filled with 0 if unavailable)
@@ -135,7 +135,8 @@ def fetch_macro_history(
     df = df.ffill()
     logger.info(
         "Macro data: %d bars, %d series (%s → %s)",
-        len(df), len(df.columns),
+        len(df),
+        len(df.columns),
         df.index[0].date() if len(df) else "n/a",
         df.index[-1].date() if len(df) else "n/a",
     )
@@ -172,7 +173,7 @@ def add_macro_features(
     macro = macro.reindex(df.index, method="ffill").fillna(0.0)
 
     def _zscore(s: pd.Series, w: int) -> pd.Series:
-        mu  = s.rolling(w).mean()
+        mu = s.rolling(w).mean()
         sig = s.rolling(w).std().replace(0, np.nan)
         return ((s - mu) / sig).fillna(0.0)
 
@@ -192,12 +193,12 @@ def add_macro_features(
     if _has("vix"):
         vix = macro["vix"]
         df["macro_vix_level"] = vix
-        df["macro_vix_ret"]   = vix.pct_change().fillna(0.0)
-        df["macro_vix_z20"]   = _zscore(vix, lookback)
+        df["macro_vix_ret"] = vix.pct_change().fillna(0.0)
+        df["macro_vix_z20"] = _zscore(vix, lookback)
         df["macro_vix_spike"] = (vix > 30).astype(float)
     else:
         df["macro_vix_level"] = df["macro_vix_ret"] = 0.0
-        df["macro_vix_z20"]   = df["macro_vix_spike"] = 0.0
+        df["macro_vix_z20"] = df["macro_vix_spike"] = 0.0
 
     # ── Yields (stationary: daily changes) ───────────────────────────────────
     # Yield levels are non-stationary over 50 years; use daily changes.
@@ -214,12 +215,14 @@ def add_macro_features(
     else:
         df["macro_yield_5y_chg"] = 0.0
 
-    y10_raw = macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
-    y5_raw  = macro["yield_5y"]  if _has("yield_5y")  else pd.Series(0.0, index=df.index)
-    spread  = (y10_raw - y5_raw).reindex(df.index).fillna(0.0)
-    df["macro_yield_spread"]     = spread
+    y10_raw = (
+        macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
+    )
+    y5_raw = macro["yield_5y"] if _has("yield_5y") else pd.Series(0.0, index=df.index)
+    spread = (y10_raw - y5_raw).reindex(df.index).fillna(0.0)
+    df["macro_yield_spread"] = spread
     df["macro_yield_spread_chg"] = spread.diff().fillna(0.0)
-    df["macro_curve_inverted"]   = (spread < 0).astype(float)
+    df["macro_curve_inverted"] = (spread < 0).astype(float)
 
     # ── Real rate proxy ───────────────────────────────────────────────────────
     # Rising 10Y yield + falling TIPS = rising real rates = bearish gold.
@@ -232,9 +235,9 @@ def add_macro_features(
     # ── Cross-asset momentum ─────────────────────────────────────────────────
     for col_out, col_in in [
         ("macro_gold_etf_ret", "gold_etf"),
-        ("macro_copper_ret",   "copper"),
-        ("macro_oil_ret",      "oil"),
-        ("macro_usdcny_ret",   "usdcny"),
+        ("macro_copper_ret", "copper"),
+        ("macro_oil_ret", "oil"),
+        ("macro_usdcny_ret", "usdcny"),
     ]:
         if _has(col_in):
             df[col_out] = macro[col_in].pct_change().fillna(0.0)
@@ -267,10 +270,9 @@ def add_macro_features(
         + (df["macro_real_rate_proxy"] < 0).astype(float)
         + (df["macro_spx_ret"] < -0.005).astype(float)
     )
-    bearish = (
-        (df["macro_yield_10y_chg"] > 0).astype(float)
-        + (df["macro_dxy_z20"] > 0.5).astype(float)
-    )
+    bearish = (df["macro_yield_10y_chg"] > 0).astype(float) + (
+        df["macro_dxy_z20"] > 0.5
+    ).astype(float)
     df["macro_gold_tailwind"] = bullish - bearish
     df["macro_gold_headwind"] = bearish
 
@@ -289,7 +291,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     """
     df = df.copy()
     close = df["close"] if "close" in df.columns else df.iloc[:, 0]
-    ret   = close.pct_change()
+    ret = close.pct_change()
 
     # Trend direction vs 50-day SMA
     sma50 = close.rolling(50).mean()
@@ -297,42 +299,47 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
 
     # ADX-based trend strength (normalised 0–1)
     high = df.get("high", close)
-    low  = df.get("low",  close)
-    tr   = pd.concat([
-        high - low,
-        (high - close.shift(1)).abs(),
-        (low  - close.shift(1)).abs(),
-    ], axis=1).max(axis=1)
-    atr14    = tr.ewm(span=14, adjust=False).mean()
-    plus_dm  = (high - high.shift(1)).clip(lower=0)
+    low = df.get("low", close)
+    tr = pd.concat(
+        [
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    atr14 = tr.ewm(span=14, adjust=False).mean()
+    plus_dm = (high - high.shift(1)).clip(lower=0)
     minus_dm = (low.shift(1) - low).clip(lower=0)
-    plus_dm  = plus_dm.where(plus_dm > minus_dm, 0.0)
+    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
     minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
-    plus_di  = 100 * plus_dm.ewm(span=14).mean()  / atr14.replace(0, np.nan)
+    plus_di = 100 * plus_dm.ewm(span=14).mean() / atr14.replace(0, np.nan)
     minus_di = 100 * minus_dm.ewm(span=14).mean() / atr14.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    df["regime_trend_str"] = (dx.ewm(span=14).mean().fillna(0.0) / 100.0)
+    df["regime_trend_str"] = dx.ewm(span=14).mean().fillna(0.0) / 100.0
 
     # Realised volatility z-score
-    rv      = ret.rolling(20).std()
+    rv = ret.rolling(20).std()
     rv_mean = rv.rolling(lookback).mean()
-    rv_std  = rv.rolling(lookback).std().replace(0, np.nan)
+    rv_std = rv.rolling(lookback).std().replace(0, np.nan)
     df["regime_vol"] = ((rv - rv_mean) / rv_std).fillna(0.0)
 
     # Vol regime: 0=low, 1=normal, 2=high
     pct = rv.rolling(lookback).rank(pct=True).fillna(0.5)
-    df["regime_vol_regime"] = pd.cut(
-        pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True
-    ).astype(float).fillna(1.0)
+    df["regime_vol_regime"] = (
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
+        .astype(float)
+        .fillna(1.0)
+    )
 
     # 20-day momentum z-score
-    mom      = close.pct_change(20)
+    mom = close.pct_change(20)
     mom_mean = mom.rolling(lookback).mean()
-    mom_std  = mom.rolling(lookback).std().replace(0, np.nan)
+    mom_std = mom.rolling(lookback).std().replace(0, np.nan)
     df["regime_momentum"] = ((mom - mom_mean) / mom_std).fillna(0.0)
 
     # Mean reversion: distance from 60-day mean in std units
-    ma60  = close.rolling(lookback).mean()
+    ma60 = close.rolling(lookback).mean()
     std60 = close.rolling(lookback).std().replace(0, np.nan)
     df["regime_mean_rev"] = ((close - ma60) / std60).fillna(0.0)
 
@@ -357,16 +364,18 @@ def build_enhanced_feature_matrix(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     """
     Approximate Hurst exponent via R/S analysis over a rolling window.
     H > 0.5 = trending, H < 0.5 = mean-reverting, H ≈ 0.5 = random walk.
     """
+
     def _hurst_scalar(x: np.ndarray) -> float:
         if len(x) < 8:
             return 0.5
         try:
-            lags    = range(2, min(len(x) // 2, 12))
+            lags = range(2, min(len(x) // 2, 12))
             rs_vals = []
             for lag in lags:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
@@ -375,8 +384,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                     if len(chunk) < 2:
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
-                    r   = dev.max() - dev.min()
-                    s   = np.std(chunk, ddof=1)
+                    r = dev.max() - dev.min()
+                    s = np.std(chunk, ddof=1)
                     if s > 0:
                         rs_chunk.append(r / s)
                 if rs_chunk:
@@ -384,8 +393,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
             if len(rs_vals) < 2:
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
-            log_rs   = np.log(rs_vals)
-            h        = np.polyfit(log_lags, log_rs, 1)[0]
+            log_rs = np.log(rs_vals)
+            h = np.polyfit(log_lags, log_rs, 1)[0]
             return float(np.clip(h, 0.0, 1.0))
         except Exception:
             return 0.5

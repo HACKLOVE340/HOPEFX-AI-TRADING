@@ -17,13 +17,12 @@ import base64
 import hashlib
 import hmac
 import logging
-import os
 import secrets
 import struct
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -37,6 +36,7 @@ _backup_codes: dict[str, list[str]] = {}
 
 
 # ── TOTP helpers ──────────────────────────────────────────────────────────────
+
 
 def _base32_secret() -> str:
     """Generate a random base32-encoded TOTP secret."""
@@ -52,7 +52,7 @@ def _totp(secret_b32: str, t: Optional[int] = None) -> str:
     msg = struct.pack(">Q", t)
     h = hmac.new(key, msg, hashlib.sha1).digest()
     offset = h[-1] & 0x0F
-    code = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+    code = struct.unpack(">I", h[offset : offset + 4])[0] & 0x7FFFFFFF
     return str(code % 1_000_000).zfill(6)
 
 
@@ -70,6 +70,7 @@ def _otpauth_uri(secret: str, user_id: str, issuer: str = "HOPEFX") -> str:
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class SetupRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
@@ -102,6 +103,7 @@ class BackupCodesResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/setup", response_model=SetupResponse)
 async def setup_2fa(req: SetupRequest) -> SetupResponse:
     """Generate a TOTP secret and QR code URI for the user."""
@@ -125,7 +127,9 @@ async def verify_2fa(req: VerifyRequest) -> VerifyResponse:
     """Verify a TOTP code and activate 2FA for the user."""
     secret = _secrets.get(req.user_id)
     if not secret:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="2FA not set up for this user")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="2FA not set up for this user"
+        )
 
     if _verify_totp(secret, req.code):
         _enabled[req.user_id] = True
@@ -140,7 +144,9 @@ async def disable_2fa(req: DisableRequest) -> VerifyResponse:
     """Disable 2FA after verifying the current TOTP code."""
     secret = _secrets.get(req.user_id)
     if not secret or not _enabled.get(req.user_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not enabled")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not enabled"
+        )
 
     if _verify_totp(secret, req.code):
         _enabled[req.user_id] = False
@@ -156,7 +162,9 @@ async def disable_2fa(req: DisableRequest) -> VerifyResponse:
 async def get_backup_codes(user_id: str) -> BackupCodesResponse:
     """Generate 8 one-time backup codes for account recovery."""
     if not _enabled.get(user_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA must be enabled first")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA must be enabled first"
+        )
 
     codes = [secrets.token_hex(4).upper() for _ in range(8)]
     _backup_codes[user_id] = codes

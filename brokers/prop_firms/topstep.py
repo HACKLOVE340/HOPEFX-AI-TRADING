@@ -1,7 +1,8 @@
 """TopstepTrader Connector — futures prop firm via MT5."""
 
-from typing import Dict, Any
 import logging
+from typing import Any, Dict
+
 from ..mt5 import MT5Connector
 
 logger = logging.getLogger(__name__)

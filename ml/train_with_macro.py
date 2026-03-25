@@ -45,7 +45,7 @@ import sys
 import warnings
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -70,11 +70,15 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     the earliest available date. The actual bar count is logged after download.
     """
     import yfinance as yf
+
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=years * 365)
     logger.info(
         "Requesting %d years of %s daily data (%s → %s)",
-        years, symbol, start.date(), end.date(),
+        years,
+        symbol,
+        start.date(),
+        end.date(),
     )
     raw = yf.download(
         symbol,
@@ -86,12 +90,18 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     )
     if raw.empty:
         raise ValueError(f"No data returned for {symbol}")
-    raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
+    raw.columns = [
+        c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns
+    ]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     actual_years = (raw.index[-1] - raw.index[0]).days / 365.25
     logger.info(
         "Downloaded %d bars for %s (%.1f years: %s → %s)",
-        len(raw), symbol, actual_years, raw.index[0].date(), raw.index[-1].date(),
+        len(raw),
+        symbol,
+        actual_years,
+        raw.index[0].date(),
+        raw.index[-1].date(),
     )
     return raw
 
@@ -100,11 +110,14 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
     """Fetch macro data (DXY, VIX, yields, SPX)."""
     try:
         from ml.macro_features import fetch_macro_history
+
         df = fetch_macro_history(start, end, interval="1d")
         if df.empty:
             logger.warning("Macro data fetch returned empty DataFrame")
             return None
-        logger.info("Fetched macro data: %d rows, columns=%s", len(df), list(df.columns))
+        logger.info(
+            "Fetched macro data: %d rows, columns=%s", len(df), list(df.columns)
+        )
         return df
     except Exception as exc:
         logger.warning("Macro fetch failed: %s", exc)
@@ -118,8 +131,11 @@ def build_features(
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix and binary direction target."""
     # ml/training/ directory shadows ml/training.py — import directly from the file
-    import importlib.util as _ilu, sys as _sys
-    _spec = _ilu.spec_from_file_location("ml._training_module", Path(__file__).parent / "training.py")
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location(
+        "ml._training_module", Path(__file__).parent / "training.py"
+    )
     _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
     _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
     FeatureEngineer = _mod.FeatureEngineer
@@ -178,7 +194,7 @@ def _compute_fold_sharpe(
     if len(strategy_returns) < 2:
         return 0.0
 
-    mu  = np.mean(strategy_returns)
+    mu = np.mean(strategy_returns)
     std = np.std(strategy_returns, ddof=1)
     if std == 0.0:
         return 0.0
@@ -200,10 +216,10 @@ def walk_forward_eval(
 
     Returns dict with per-fold metrics and aggregate statistics.
     """
-    from sklearn.model_selection import TimeSeriesSplit
-    from sklearn.metrics import accuracy_score, f1_score
     import xgboost as xgb
     from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, f1_score
+    from sklearn.model_selection import TimeSeriesSplit
 
     tscv = TimeSeriesSplit(n_splits=n_splits)
     fold_results = []
@@ -223,7 +239,8 @@ def walk_forward_eval(
                 gamma=0.1,
                 reg_alpha=0.1,
                 reg_lambda=1.0,
-                scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+                scale_pos_weight=float((y_train == 0).sum())
+                / max((y_train == 1).sum(), 1),
                 use_label_encoder=False,
                 eval_metric="logloss",
                 random_state=42,
@@ -242,10 +259,14 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds
+        proba = (
+            model.predict_proba(X_test)[:, 1]
+            if hasattr(model, "predict_proba")
+            else preds
+        )
 
         acc = accuracy_score(y_test, preds)
-        f1  = f1_score(y_test, preds, zero_division=0)
+        f1 = f1_score(y_test, preds, zero_division=0)
 
         # ── Sharpe ratio from simulated long/short strategy ───────────────────
         # Signal: +1 (long) when pred=1, -1 (short) when pred=0.
@@ -255,36 +276,44 @@ def walk_forward_eval(
         # Annualised Sharpe = mean(daily_ret) / std(daily_ret) × sqrt(252).
         sharpe = _compute_fold_sharpe(X_test, y_test, preds)
 
-        fold_results.append({
-            "fold":       fold + 1,
-            "train_size": len(train_idx),
-            "test_size":  len(test_idx),
-            "accuracy":   round(acc, 4),
-            "f1":         round(f1, 4),
-            "sharpe":     round(sharpe, 4),
-        })
+        fold_results.append(
+            {
+                "fold": fold + 1,
+                "train_size": len(train_idx),
+                "test_size": len(test_idx),
+                "accuracy": round(acc, 4),
+                "f1": round(f1, 4),
+                "sharpe": round(sharpe, 4),
+            }
+        )
         logger.info(
             "Fold %d/%d  acc=%.3f  f1=%.3f  sharpe=%.3f  train=%d  test=%d",
-            fold + 1, n_splits, acc, f1, sharpe, len(train_idx), len(test_idx),
+            fold + 1,
+            n_splits,
+            acc,
+            f1,
+            sharpe,
+            len(train_idx),
+            len(test_idx),
         )
 
-    accs    = [r["accuracy"] for r in fold_results]
-    f1s     = [r["f1"]       for r in fold_results]
-    sharpes = [r["sharpe"]   for r in fold_results]
+    accs = [r["accuracy"] for r in fold_results]
+    f1s = [r["f1"] for r in fold_results]
+    sharpes = [r["sharpe"] for r in fold_results]
 
     # One-sample t-test: H0 = mean accuracy == 0.5 (random)
     t_stat, p_value = stats.ttest_1samp(accs, 0.5)
 
     return {
-        "model":        model_type,
-        "folds":        fold_results,
+        "model": model_type,
+        "folds": fold_results,
         "mean_accuracy": round(float(np.mean(accs)), 4),
-        "std_accuracy":  round(float(np.std(accs)), 4),
-        "mean_f1":       round(float(np.mean(f1s)), 4),
-        "mean_sharpe":   round(float(np.mean(sharpes)), 4),
-        "t_stat":        round(float(t_stat), 4),
-        "p_value":       round(float(p_value), 4),
-        "significant":   bool(p_value < 0.05),
+        "std_accuracy": round(float(np.std(accs)), 4),
+        "mean_f1": round(float(np.mean(f1s)), 4),
+        "mean_sharpe": round(float(np.mean(sharpes)), 4),
+        "t_stat": round(float(t_stat), 4),
+        "p_value": round(float(p_value), 4),
+        "significant": bool(p_value < 0.05),
     }
 
 
@@ -295,10 +324,10 @@ def train_final_model(
     train_pct: float = 0.8,
 ):
     """Train on 80% of data, evaluate on held-out 20%."""
+    import joblib
     import xgboost as xgb
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score, f1_score, classification_report
-    import joblib
+    from sklearn.metrics import accuracy_score, classification_report, f1_score
 
     split = int(len(X) * train_pct)
     X_train, X_test = X.iloc[:split], X.iloc[split:]
@@ -335,11 +364,15 @@ def train_final_model(
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
     acc = accuracy_score(y_test, preds)
-    f1  = f1_score(y_test, preds, zero_division=0)
+    f1 = f1_score(y_test, preds, zero_division=0)
 
     logger.info(
         "Final %s  acc=%.3f  f1=%.3f  train=%d  test=%d",
-        model_type, acc, f1, len(X_train), len(X_test),
+        model_type,
+        acc,
+        f1,
+        len(X_train),
+        len(X_test),
     )
     logger.info("\n%s", classification_report(y_test, preds))
 
@@ -382,11 +415,11 @@ def oos_eval(
     a single OOS period (not multiple folds) and the test statistic is a count
     of correct predictions out of N independent Bernoulli trials.
     """
-    import xgboost as xgb
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score, f1_score, classification_report
-    from scipy.stats import binomtest
     import joblib
+    import xgboost as xgb
+    from scipy.stats import binomtest
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, classification_report, f1_score
 
     if model_type == "xgb":
         model = xgb.XGBClassifier(
@@ -418,10 +451,10 @@ def oos_eval(
 
     model.fit(X_train, y_train)
     preds = model.predict(X_oos)
-    acc   = accuracy_score(y_oos, preds)
-    f1    = f1_score(y_oos, preds, zero_division=0)
-    n     = len(y_oos)
-    k     = int(round(acc * n))  # number of correct predictions
+    acc = accuracy_score(y_oos, preds)
+    f1 = f1_score(y_oos, preds, zero_division=0)
+    n = len(y_oos)
+    k = int(round(acc * n))  # number of correct predictions
 
     # One-sided binomial test: H0 = p(correct) <= 0.5
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
@@ -429,7 +462,13 @@ def oos_eval(
 
     logger.info(
         "OOS %s  acc=%.3f  f1=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        model_type.upper(), acc, f1, n, k, p_value, p_value < 0.05,
+        model_type.upper(),
+        acc,
+        f1,
+        n,
+        k,
+        p_value,
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -463,16 +502,30 @@ def main():
         ),
     )
     parser.add_argument(
-        "--years", type=int, default=50,
+        "--years",
+        type=int,
+        default=50,
         help="Years of daily history to request from Yahoo Finance (default: 50). "
-             "yfinance clips to earliest available date (~1974 for GC=F).",
+        "yfinance clips to earliest available date (~1974 for GC=F).",
     )
-    parser.add_argument("--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)")
-    parser.add_argument("--no-macro", action="store_true", help="Skip macro features (DXY, VIX, yields, SPX)")
-    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)")
-    parser.add_argument("--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)")
     parser.add_argument(
-        "--oos-years", type=float, default=0.0,
+        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)"
+    )
+    parser.add_argument(
+        "--no-macro",
+        action="store_true",
+        help="Skip macro features (DXY, VIX, yields, SPX)",
+    )
+    parser.add_argument(
+        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)"
+    )
+    parser.add_argument(
+        "--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)"
+    )
+    parser.add_argument(
+        "--oos-years",
+        type=float,
+        default=0.0,
         help=(
             "Reserve the last N years as a completely held-out OOS period. "
             "The model is trained on all data before this window and evaluated "
@@ -506,12 +559,13 @@ def main():
 
     if args.oos_years > 0:
         oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
-        oos_n = min(oos_n, len(X) // 4)           # cap at 25% of data
+        oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
         if oos_n < 30:
             logger.warning(
                 "--oos-years %.1f produces only %d bars — too few for reliable OOS eval. "
                 "Increase --oos-years or --years.",
-                args.oos_years, oos_n,
+                args.oos_years,
+                oos_n,
             )
             oos_n = 0
         else:
@@ -519,9 +573,15 @@ def main():
             X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
             logger.info(
                 "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
-                len(X_cv), oos_n, args.oos_years,
-                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
-                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
+                len(X_cv),
+                oos_n,
+                args.oos_years,
+                X_oos.index[0].date()
+                if hasattr(X_oos.index[0], "date")
+                else X_oos.index[0],
+                X_oos.index[-1].date()
+                if hasattr(X_oos.index[-1], "date")
+                else X_oos.index[-1],
             )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
@@ -544,8 +604,10 @@ def main():
         logger.info(
             "%s  mean_acc=%.3f±%.3f  p=%.4f  significant=%s",
             model_type.upper(),
-            wf["mean_accuracy"], wf["std_accuracy"],
-            wf["p_value"], wf["significant"],
+            wf["mean_accuracy"],
+            wf["std_accuracy"],
+            wf["p_value"],
+            wf["significant"],
         )
 
     # ── Train final models (on CV portion) ───────────────────────────────────
@@ -572,20 +634,28 @@ def main():
     print("TRAINING SUMMARY")
     print("=" * 60)
     for model_type in ("xgb", "rf"):
-        wf  = report[f"walkforward_{model_type}"]
+        wf = report[f"walkforward_{model_type}"]
         fin = report[f"final_{model_type}"]
         print(f"\n{model_type.upper()}")
-        print(f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}")
+        print(
+            f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}"
+        )
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
-        print(f"  Walk-forward Sharpe   : {wf.get('mean_sharpe', 0.0):.3f}  (annualised, 1-bar, no costs)")
-        print(f"  p-value (vs random)   : {wf['p_value']:.4f}  {'✓ significant' if wf['significant'] else '✗ not significant'}")
+        print(
+            f"  Walk-forward Sharpe   : {wf.get('mean_sharpe', 0.0):.3f}  (annualised, 1-bar, no costs)"
+        )
+        print(
+            f"  p-value (vs random)   : {wf['p_value']:.4f}  {'✓ significant' if wf['significant'] else '✗ not significant'}"
+        )
         print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
         print(f"  Final holdout F1      : {fin['f1']:.3f}")
         print(f"  Features used         : {fin['feature_count']}")
         if f"oos_{model_type}" in report:
             oos = report[f"oos_{model_type}"]
             sig = "✓ significant" if oos["significant"] else "✗ not significant"
-            print(f"  OOS accuracy          : {oos['accuracy']:.3f}  (n={oos['oos_size']})")
+            print(
+                f"  OOS accuracy          : {oos['accuracy']:.3f}  (n={oos['oos_size']})"
+            )
             print(f"  OOS F1                : {oos['f1']:.3f}")
             print(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
     print("=" * 60)

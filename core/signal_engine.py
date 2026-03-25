@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 # ── Advanced ML predictor (122-feature, 68% OOS accuracy) ────────────────────
 try:
-    from ml import get_active_model, get_model_version, get_advanced_predictor
+    from ml import get_active_model, get_advanced_predictor, get_model_version
+
     _ML_AVAILABLE: bool = True
 except Exception:
     _ML_AVAILABLE = False
@@ -33,14 +34,18 @@ except Exception:
     def get_advanced_predictor() -> Optional[Any]:  # type: ignore[misc]
         return None
 
+
 # Symbols the engine watches (overridden by ALLOWED_SYMBOLS env var)
 import os
+
 _SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
 _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
 _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
-async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[Dict[str, Any]]:
+async def _fetch_market_data(
+    symbol: str, app_state: Any = None
+) -> Optional[Dict[str, Any]]:
     """
     Fetch latest OHLCV data for a symbol.
 
@@ -56,19 +61,19 @@ async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[Dic
             if bars:
                 last = bars[-1]
                 prices = [float(b["close"]) for b in bars]
-                highs  = [float(b["high"])  for b in bars]
-                lows   = [float(b["low"])   for b in bars]
+                highs = [float(b["high"]) for b in bars]
+                lows = [float(b["low"]) for b in bars]
                 volumes = [float(b.get("volume", 0)) for b in bars]
                 return {
                     "symbol": symbol,
-                    "open":   float(last["open"]),
-                    "high":   float(last["high"]),
-                    "low":    float(last["low"]),
-                    "close":  float(last["close"]),
+                    "open": float(last["open"]),
+                    "high": float(last["high"]),
+                    "low": float(last["low"]),
+                    "close": float(last["close"]),
                     "volume": float(last.get("volume", 0)),
                     "prices": prices,
-                    "highs":  highs,
-                    "lows":   lows,
+                    "highs": highs,
+                    "lows": lows,
                     "volumes": volumes,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
@@ -81,11 +86,14 @@ async def _fetch_market_data(symbol: str, app_state: Any = None) -> Optional[Dic
             if price:
                 return {
                     "symbol": symbol,
-                    "open": price, "high": price, "low": price, "close": price,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
                     "volume": 0.0,
                     "prices": [price],
-                    "highs":  [price],
-                    "lows":   [price],
+                    "highs": [price],
+                    "lows": [price],
                     "volumes": [0.0],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
@@ -103,7 +111,9 @@ async def run_signal_engine(app_state: Any) -> None:
     """
     logger.info(
         "Signal engine started — symbols=%s interval=%ss auto_trade=%s",
-        _SYMBOLS, _INTERVAL_SECONDS, _AUTO_TRADE,
+        _SYMBOLS,
+        _INTERVAL_SECONDS,
+        _AUTO_TRADE,
     )
 
     while True:
@@ -127,7 +137,9 @@ async def _tick(app_state: Any) -> None:
     sym: str
     for sym in _SYMBOLS:
         symbol: str = sym.strip().upper()
-        data: Optional[Dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
+        data: Optional[Dict[str, Any]] = await _fetch_market_data(
+            symbol, app_state=app_state
+        )
         if not data:
             continue
 
@@ -161,68 +173,87 @@ async def _tick(app_state: Any) -> None:
         if _ML_AVAILABLE:
             try:
                 import pandas as pd
-                import numpy as np
 
                 # ── Path 1: Advanced predictor (preferred) ────────────────
                 adv_predictor = get_advanced_predictor()
                 if adv_predictor is not None and adv_predictor.is_available:
-                    prices  = data.get("prices",  [data["close"]])
-                    highs   = data.get("highs",   [data["high"]])
-                    lows    = data.get("lows",    [data["low"]])
+                    prices = data.get("prices", [data["close"]])
+                    highs = data.get("highs", [data["high"]])
+                    lows = data.get("lows", [data["low"]])
                     volumes = data.get("volumes", [data.get("volume", 0)])
 
                     # Reconstruct a rolling OHLCV DataFrame from the bar list.
                     # The broker feed provides up to 100 bars; we need >= 100
                     # for reliable feature computation.
                     n = len(prices)
-                    ohlcv_df = pd.DataFrame({
-                        "open":   prices,   # open not tracked per-bar; use close as proxy
-                        "high":   highs   if len(highs)   == n else prices,
-                        "low":    lows    if len(lows)    == n else prices,
-                        "close":  prices,
-                        "volume": volumes if len(volumes) == n else [0.0] * n,
-                    })
+                    ohlcv_df = pd.DataFrame(
+                        {
+                            "open": prices,  # open not tracked per-bar; use close as proxy
+                            "high": highs if len(highs) == n else prices,
+                            "low": lows if len(lows) == n else prices,
+                            "close": prices,
+                            "volume": volumes if len(volumes) == n else [0.0] * n,
+                        }
+                    )
                     # Overwrite last bar with actual OHLCV
                     ohlcv_df.iloc[-1] = [
-                        data["open"], data["high"], data["low"],
-                        data["close"], data.get("volume", 0),
+                        data["open"],
+                        data["high"],
+                        data["low"],
+                        data["close"],
+                        data.get("volume", 0),
                     ]
 
                     ml_probability = adv_predictor.predict_proba(ohlcv_df)
                     model_ver = adv_predictor.version
                     logger.debug(
                         "Advanced ML (%s) prob for %s: %.4f",
-                        model_ver, symbol, ml_probability,
+                        model_ver,
+                        symbol,
+                        ml_probability,
                     )
 
                 else:
                     # ── Path 2: Basic active model (fallback) ─────────────
                     active_model = get_active_model()
-                    model_ver    = get_model_version()
+                    model_ver = get_model_version()
                     if active_model is not None:
-                        prices  = data.get("prices", [data["close"]])
-                        closes  = pd.Series(prices)
+                        prices = data.get("prices", [data["close"]])
+                        closes = pd.Series(prices)
                         feat = {
-                            "close":  data["close"],
-                            "open":   data["open"],
-                            "high":   data["high"],
-                            "low":    data["low"],
+                            "close": data["close"],
+                            "open": data["open"],
+                            "high": data["high"],
+                            "low": data["low"],
                             "volume": data.get("volume", 0),
-                            "ret_1":  closes.pct_change(1).iloc[-1]  if len(closes) > 1  else 0,
-                            "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,
-                            "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+                            "ret_1": closes.pct_change(1).iloc[-1]
+                            if len(closes) > 1
+                            else 0,
+                            "ret_5": closes.pct_change(5).iloc[-1]
+                            if len(closes) > 5
+                            else 0,
+                            "ret_20": closes.pct_change(20).iloc[-1]
+                            if len(closes) > 20
+                            else 0,
                             "vol_20": closes.pct_change().rolling(20).std().iloc[-1]
-                                      if len(closes) > 20 else 0,
+                            if len(closes) > 20
+                            else 0,
                         }
                         X = pd.DataFrame([feat])
                         if hasattr(active_model, "predict_proba"):
                             proba = active_model.predict_proba(X)
-                            ml_probability = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+                            ml_probability = (
+                                float(proba[0][1])
+                                if proba.shape[1] > 1
+                                else float(proba[0][0])
+                            )
                         elif hasattr(active_model, "predict"):
                             ml_probability = float(active_model.predict(X)[0])
                         logger.debug(
                             "Basic ML (%s) prob for %s: %.4f",
-                            model_ver, symbol, ml_probability,
+                            model_ver,
+                            symbol,
+                            ml_probability,
                         )
 
             except Exception as ml_exc:
@@ -244,6 +275,7 @@ async def _tick(app_state: Any) -> None:
         # ── Publish typed SignalEvent ─────────────────────────────────────────
         try:
             from events.typed_events import EventEnvelope, SignalEvent, publish_sync
+
             typed_signal = SignalEvent(
                 symbol=symbol,
                 action=direction.upper(),
@@ -254,13 +286,23 @@ async def _tick(app_state: Any) -> None:
                 take_profit=signal_payload["take_profit"],
                 model_version=model_ver,
             )
-            publish_sync(EventEnvelope.wrap(source="signal_engine", payload=typed_signal, model_version=model_ver))
+            publish_sync(
+                EventEnvelope.wrap(
+                    source="signal_engine",
+                    payload=typed_signal,
+                    model_version=model_ver,
+                )
+            )
         except Exception as ev_exc:
             logger.debug("Typed event publish failed: %s", ev_exc)
 
         logger.info(
             "Brain consensus: %s %s confidence=%.2f ml_prob=%.4f model=%s",
-            symbol, direction, base_confidence, ml_probability, model_ver,
+            symbol,
+            direction,
+            base_confidence,
+            ml_probability,
+            model_ver,
         )
 
         # ── Broadcast signal over WebSocket ──────────────────────────────────
@@ -299,7 +341,9 @@ async def _tick(app_state: Any) -> None:
                     }
                     for p in positions
                 ]
-                assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
+                assessment: Any = risk_manager.assess_risk(
+                    account_info, positions_dicts
+                )
                 if not assessment.can_trade:
                     logger.info(
                         "Auto-trade blocked by risk manager: %s", assessment.messages
@@ -312,8 +356,10 @@ async def _tick(app_state: Any) -> None:
                     symbol=symbol,
                     signal_strength=signal_payload["confidence"],
                     entry_price=signal_payload["entry_price"],
-                    stop_loss_price=signal_payload["stop_loss"] or signal_payload["entry_price"] * 0.99,
-                    take_profit_price=signal_payload["take_profit"] or signal_payload["entry_price"] * 1.02,
+                    stop_loss_price=signal_payload["stop_loss"]
+                    or signal_payload["entry_price"] * 0.99,
+                    take_profit_price=signal_payload["take_profit"]
+                    or signal_payload["entry_price"] * 1.02,
                     account_equity=equity,
                     volatility=0.1,
                     existing_positions=positions_dicts,
@@ -337,7 +383,11 @@ async def _tick(app_state: Any) -> None:
             )
             logger.info(
                 "Auto-trade executed: %s %s %s qty=%s order_id=%s",
-                direction, symbol, signal_payload["confidence"], quantity, order.id,
+                direction,
+                symbol,
+                signal_payload["confidence"],
+                quantity,
+                order.id,
             )
 
             # Compliance log

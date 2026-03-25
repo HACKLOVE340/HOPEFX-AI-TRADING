@@ -38,9 +38,21 @@ logger = logging.getLogger(__name__)
 
 # ccxt timeframe aliases → ccxt format
 _TF_MAP = {
-    "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m",
-    "1h": "1h", "2h": "2h", "4h": "4h", "6h": "6h", "8h": "8h", "12h": "12h",
-    "1d": "1d", "3d": "3d", "1w": "1w", "1M": "1M",
+    "1m": "1m",
+    "3m": "3m",
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1h",
+    "2h": "2h",
+    "4h": "4h",
+    "6h": "6h",
+    "8h": "8h",
+    "12h": "12h",
+    "1d": "1d",
+    "3d": "3d",
+    "1w": "1w",
+    "1M": "1M",
 }
 
 
@@ -88,8 +100,11 @@ class CCXTConnector(BrokerConnector):
             # Verify connectivity by loading markets
             self._exchange.load_markets()
             self.connected = True
-            logger.info("Connected to %s (%d markets)", self._exchange_id,
-                        len(self._exchange.markets))
+            logger.info(
+                "Connected to %s (%d markets)",
+                self._exchange_id,
+                len(self._exchange.markets),
+            )
             return True
         except Exception as exc:
             logger.error("CCXT connect failed for %s: %s", self._exchange_id, exc)
@@ -100,6 +115,7 @@ class CCXTConnector(BrokerConnector):
         if self._exchange and hasattr(self._exchange, "close"):
             try:
                 import asyncio
+
                 asyncio.get_event_loop().run_until_complete(self._exchange.close())
             except Exception as exc:
                 logger.warning("CCXT exchange close failed: %s", exc)
@@ -162,23 +178,28 @@ class CCXTConnector(BrokerConnector):
         try:
             if self._exchange.has.get("fetchPositions"):
                 raws = self._exchange.fetch_positions()
-                return [self._parse_position(p) for p in raws
-                        if float(p.get("contracts") or p.get("size") or 0) != 0]
+                return [
+                    self._parse_position(p)
+                    for p in raws
+                    if float(p.get("contracts") or p.get("size") or 0) != 0
+                ]
             # Spot fallback: derive from balance
             balance = self._exchange.fetch_balance()
             positions = []
             for asset, info in balance.get("total", {}).items():
                 if asset in ("USDT", "USD", "BUSD", "USDC") or float(info or 0) == 0:
                     continue
-                positions.append(Position(
-                    symbol=f"{asset}/USDT",
-                    side="LONG",
-                    quantity=float(info),
-                    entry_price=0.0,
-                    current_price=0.0,
-                    unrealized_pnl=0.0,
-                    timestamp=datetime.now(timezone.utc),
-                ))
+                positions.append(
+                    Position(
+                        symbol=f"{asset}/USDT",
+                        side="LONG",
+                        quantity=float(info),
+                        entry_price=0.0,
+                        current_price=0.0,
+                        unrealized_pnl=0.0,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+                )
             return positions
         except Exception as exc:
             logger.error("Fetch positions failed: %s", exc)
@@ -309,7 +330,11 @@ class CCXTConnector(BrokerConnector):
         )
 
     def _parse_position(self, raw: Dict) -> Position:
-        side = "LONG" if float(raw.get("contracts") or raw.get("size") or 0) > 0 else "SHORT"
+        side = (
+            "LONG"
+            if float(raw.get("contracts") or raw.get("size") or 0) > 0
+            else "SHORT"
+        )
         return Position(
             symbol=raw.get("symbol", ""),
             side=side,
@@ -326,6 +351,7 @@ def list_supported_exchanges() -> List[str]:
     """Return all exchange IDs supported by ccxt."""
     try:
         import ccxt
+
         return ccxt.exchanges
     except ImportError:
         return []

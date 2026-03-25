@@ -5,10 +5,11 @@ Long Short-Term Memory neural network for time series price prediction.
 Uses TensorFlow/Keras for deep learning.
 """
 
-from typing import Dict, Any, Optional, Tuple
+import logging
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-import logging
 
 from .base import BaseMLModel
 
@@ -43,12 +44,12 @@ class LSTMPricePredictor(BaseMLModel):
         super().__init__(name, config)
 
         # Model parameters
-        self.sequence_length = self.config.get('sequence_length', 60)
-        self.lstm_units = self.config.get('lstm_units', [50, 50])
-        self.dropout = self.config.get('dropout', 0.2)
-        self.epochs = self.config.get('epochs', 100)
-        self.batch_size = self.config.get('batch_size', 32)
-        self.learning_rate = self.config.get('learning_rate', 0.001)
+        self.sequence_length = self.config.get("sequence_length", 60)
+        self.lstm_units = self.config.get("lstm_units", [50, 50])
+        self.dropout = self.config.get("dropout", 0.2)
+        self.epochs = self.config.get("epochs", 100)
+        self.batch_size = self.config.get("batch_size", 32)
+        self.learning_rate = self.config.get("learning_rate", 0.001)
 
         # Data scaling
         self.scaler_X = None
@@ -57,18 +58,20 @@ class LSTMPricePredictor(BaseMLModel):
     def build(self) -> None:
         """Build LSTM model architecture."""
         try:
-            from tensorflow.keras.models import Sequential
             from tensorflow.keras.layers import LSTM, Dense, Dropout
+            from tensorflow.keras.models import Sequential
             from tensorflow.keras.optimizers import Adam
 
             model = Sequential()
 
             # First LSTM layer
-            model.add(LSTM(
-                units=self.lstm_units[0],
-                return_sequences=len(self.lstm_units) > 1,
-                input_shape=(self.sequence_length, 1)
-            ))
+            model.add(
+                LSTM(
+                    units=self.lstm_units[0],
+                    return_sequences=len(self.lstm_units) > 1,
+                    input_shape=(self.sequence_length, 1),
+                )
+            )
             model.add(Dropout(self.dropout))
 
             # Additional LSTM layers
@@ -83,15 +86,17 @@ class LSTMPricePredictor(BaseMLModel):
             # Compile model
             model.compile(
                 optimizer=Adam(learning_rate=self.learning_rate),
-                loss='mean_squared_error',
-                metrics=['mae']
+                loss="mean_squared_error",
+                metrics=["mae"],
             )
 
             self.model = model
             self.logger.info(f"LSTM model built with architecture: {self.lstm_units}")
 
         except ImportError:
-            self.logger.error("TensorFlow not installed. Please install: pip install tensorflow")
+            self.logger.error(
+                "TensorFlow not installed. Please install: pip install tensorflow"
+            )
             raise
         except Exception as e:
             self.logger.error(f"Error building LSTM model: {e}")
@@ -110,13 +115,14 @@ class LSTMPricePredictor(BaseMLModel):
         X, y = [], []
 
         for i in range(self.sequence_length, len(data)):
-            X.append(data[i-self.sequence_length:i, 0])
+            X.append(data[i - self.sequence_length : i, 0])
             y.append(data[i, 0])
 
         return np.array(X), np.array(y)
 
-    def _scale_data(self, X: np.ndarray, y: np.ndarray,
-                    fit: bool = True) -> Tuple[np.ndarray, np.ndarray]:
+    def _scale_data(
+        self, X: np.ndarray, y: np.ndarray, fit: bool = True
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Scale data using MinMaxScaler.
 
@@ -145,9 +151,13 @@ class LSTMPricePredictor(BaseMLModel):
 
         return X_scaled, y_scaled
 
-    def train(self, X_train: np.ndarray, y_train: np.ndarray,
-              X_val: Optional[np.ndarray] = None,
-              y_val: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    def train(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]:
         """
         Train LSTM model.
 
@@ -166,7 +176,9 @@ class LSTMPricePredictor(BaseMLModel):
                 self.build()
 
             # Scale data
-            X_train_scaled, y_train_scaled = self._scale_data(X_train, y_train, fit=True)
+            X_train_scaled, y_train_scaled = self._scale_data(
+                X_train, y_train, fit=True
+            )
 
             # Prepare sequences
             X_seq, y_seq = self._prepare_sequences(
@@ -190,35 +202,42 @@ class LSTMPricePredictor(BaseMLModel):
             from tensorflow.keras.callbacks import EarlyStopping
 
             early_stop = EarlyStopping(
-                monitor='val_loss' if validation_data else 'loss',
+                monitor="val_loss" if validation_data else "loss",
                 patience=10,
-                restore_best_weights=True
+                restore_best_weights=True,
             )
 
             history = self.model.fit(
-                X_seq, y_seq,
+                X_seq,
+                y_seq,
                 epochs=self.epochs,
                 batch_size=self.batch_size,
                 validation_data=validation_data,
                 callbacks=[early_stop],
-                verbose=0
+                verbose=0,
             )
 
             self.is_trained = True
-            self.training_history.append({
-                'timestamp': pd.Timestamp.now().isoformat(),
-                'epochs': len(history.history['loss']),
-                'final_loss': float(history.history['loss'][-1]),
-                'final_val_loss': float(history.history['val_loss'][-1]) if validation_data else None,
-            })
+            self.training_history.append(
+                {
+                    "timestamp": pd.Timestamp.now().isoformat(),
+                    "epochs": len(history.history["loss"]),
+                    "final_loss": float(history.history["loss"][-1]),
+                    "final_val_loss": float(history.history["val_loss"][-1])
+                    if validation_data
+                    else None,
+                }
+            )
 
-            self.logger.info(f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}")
+            self.logger.info(
+                f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}"
+            )
 
             return {
-                'loss': history.history['loss'],
-                'val_loss': history.history.get('val_loss'),
-                'mae': history.history.get('mae'),
-                'val_mae': history.history.get('val_mae'),
+                "loss": history.history["loss"],
+                "val_loss": history.history.get("val_loss"),
+                "mae": history.history.get("mae"),
+                "val_mae": history.history.get("val_mae"),
             }
 
         except Exception as e:
@@ -245,7 +264,7 @@ class LSTMPricePredictor(BaseMLModel):
             # Prepare sequences
             X_seq = []
             for i in range(self.sequence_length, len(X_scaled)):
-                X_seq.append(X_scaled[i-self.sequence_length:i, 0])
+                X_seq.append(X_scaled[i - self.sequence_length : i, 0])
 
             X_seq = np.array(X_seq)
             X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)
@@ -277,7 +296,7 @@ class LSTMPricePredictor(BaseMLModel):
             raise ValueError(f"Need at least {self.sequence_length} data points")
 
         predictions = []
-        current_sequence = recent_data[-self.sequence_length:].copy()
+        current_sequence = recent_data[-self.sequence_length :].copy()
 
         for _ in range(steps):
             # Predict next value
@@ -295,8 +314,7 @@ class LSTMPricePredictor(BaseMLModel):
             return "Model not built"
 
         from io import StringIO
-        import sys
 
         stream = StringIO()
-        self.model.summary(print_fn=lambda x: stream.write(x + '\n'))
+        self.model.summary(print_fn=lambda x: stream.write(x + "\n"))
         return stream.getvalue()

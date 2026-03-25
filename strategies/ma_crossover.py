@@ -4,9 +4,9 @@ Moving Average Crossover Strategy
 A simple trend-following strategy based on moving average crossovers.
 """
 
-from typing import Dict, Optional, Any
 import logging
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
 
@@ -33,9 +33,9 @@ class MovingAverageCrossover(BaseStrategy):
 
         # Get parameters from config
         params = config.parameters or {}
-        self.fast_period = params.get('fast_period', 10)
-        self.slow_period = params.get('slow_period', 30)
-        self.min_confidence = params.get('min_confidence', 0.6)
+        self.fast_period = params.get("fast_period", 10)
+        self.slow_period = params.get("slow_period", 30)
+        self.min_confidence = params.get("min_confidence", 0.6)
 
         # Internal state
         self.price_history = []
@@ -59,7 +59,7 @@ class MovingAverageCrossover(BaseStrategy):
         Returns:
             Analysis with MA values and crossover signals
         """
-        close_price = data.get('close', 0.0)
+        close_price = data.get("close", 0.0)
 
         # Add to price history
         self.price_history.append(close_price)
@@ -67,15 +67,15 @@ class MovingAverageCrossover(BaseStrategy):
         # Keep only necessary history
         max_period = max(self.fast_period, self.slow_period)
         if len(self.price_history) > max_period * 2:
-            self.price_history = self.price_history[-max_period * 2:]
+            self.price_history = self.price_history[-max_period * 2 :]
 
         # Calculate moving averages
         analysis = {
-            'close': close_price,
-            'fast_ma': None,
-            'slow_ma': None,
-            'crossover': None,
-            'trend': 'NEUTRAL',
+            "close": close_price,
+            "fast_ma": None,
+            "slow_ma": None,
+            "crossover": None,
+            "trend": "NEUTRAL",
         }
 
         if len(self.price_history) >= self.slow_period:
@@ -83,24 +83,24 @@ class MovingAverageCrossover(BaseStrategy):
             fast_ma = self._calculate_ma(self.fast_period)
             slow_ma = self._calculate_ma(self.slow_period)
 
-            analysis['fast_ma'] = fast_ma
-            analysis['slow_ma'] = slow_ma
+            analysis["fast_ma"] = fast_ma
+            analysis["slow_ma"] = slow_ma
 
             # Check for crossover
             if self.prev_fast_ma is not None and self.prev_slow_ma is not None:
                 # Bullish crossover
                 if fast_ma > slow_ma and self.prev_fast_ma <= self.prev_slow_ma:
-                    analysis['crossover'] = 'BULLISH'
-                    analysis['trend'] = 'BULLISH'
+                    analysis["crossover"] = "BULLISH"
+                    analysis["trend"] = "BULLISH"
                 # Bearish crossover
                 elif fast_ma < slow_ma and self.prev_fast_ma >= self.prev_slow_ma:
-                    analysis['crossover'] = 'BEARISH'
-                    analysis['trend'] = 'BEARISH'
+                    analysis["crossover"] = "BEARISH"
+                    analysis["trend"] = "BEARISH"
                 # Existing trend
                 elif fast_ma > slow_ma:
-                    analysis['trend'] = 'BULLISH'
+                    analysis["trend"] = "BULLISH"
                 elif fast_ma < slow_ma:
-                    analysis['trend'] = 'BEARISH'
+                    analysis["trend"] = "BEARISH"
 
             # Store previous values
             self.prev_fast_ma = fast_ma
@@ -118,15 +118,15 @@ class MovingAverageCrossover(BaseStrategy):
         Returns:
             Signal if crossover detected, None otherwise
         """
-        crossover = analysis.get('crossover')
-        close_price = analysis.get('close', 0.0)
+        crossover = analysis.get("crossover")
+        close_price = analysis.get("close", 0.0)
 
         if not crossover:
             return None
 
         # Calculate confidence based on MA distance
-        fast_ma = analysis.get('fast_ma', 0.0)
-        slow_ma = analysis.get('slow_ma', 0.0)
+        fast_ma = analysis.get("fast_ma", 0.0)
+        slow_ma = analysis.get("slow_ma", 0.0)
 
         if slow_ma > 0:
             ma_distance = abs(fast_ma - slow_ma) / slow_ma
@@ -140,9 +140,9 @@ class MovingAverageCrossover(BaseStrategy):
             return None
 
         # Generate signal
-        if crossover == 'BULLISH':
+        if crossover == "BULLISH":
             signal_type = SignalType.BUY
-        elif crossover == 'BEARISH':
+        elif crossover == "BEARISH":
             signal_type = SignalType.SELL
         else:
             return None
@@ -154,11 +154,11 @@ class MovingAverageCrossover(BaseStrategy):
             timestamp=datetime.now(timezone.utc),
             confidence=confidence,
             metadata={
-                'fast_ma': fast_ma,
-                'slow_ma': slow_ma,
-                'crossover': crossover,
-                'strategy': self.config.name,
-            }
+                "fast_ma": fast_ma,
+                "slow_ma": slow_ma,
+                "crossover": crossover,
+                "strategy": self.config.name,
+            },
         )
 
         return signal

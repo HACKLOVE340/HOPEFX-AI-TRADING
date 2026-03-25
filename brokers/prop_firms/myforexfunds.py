@@ -4,8 +4,8 @@ MyForexFunds Connector
 MyForexFunds is a prop trading firm offering forex funded accounts.
 """
 
-from typing import Dict, Any
 import logging
+from typing import Any, Dict
 
 from ..mt5 import MT5Connector
 
@@ -36,33 +36,35 @@ class MyForexFundsConnector(MT5Connector):
     """
 
     MFF_SERVERS = [
-        'MyForexFunds-Demo',
-        'MyForexFunds-Live',
-        'MyForexFunds-Server',
+        "MyForexFunds-Demo",
+        "MyForexFunds-Live",
+        "MyForexFunds-Server",
     ]
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize MyForexFunds connector."""
-        if 'server' not in config:
-            config['server'] = self.MFF_SERVERS[0]
+        if "server" not in config:
+            config["server"] = self.MFF_SERVERS[0]
             logger.info(f"Auto-selected MyForexFunds server: {config['server']}")
 
         super().__init__(config)
 
-        self.account_size = config.get('account_size', 100000)
+        self.account_size = config.get("account_size", 100000)
 
-        logger.info(f"MyForexFunds Connector initialized for ${self.account_size} account")
+        logger.info(
+            f"MyForexFunds Connector initialized for ${self.account_size} account"
+        )
 
     def get_myforexfunds_rules(self) -> Dict[str, Any]:
         """Get MyForexFunds rules and limits."""
         rules = {
-            'max_daily_loss': '5%',
-            'max_total_loss': '10%',
-            'profit_target': '8% for evaluation',
-            'profit_split': 'up to 85%',
-            'scaling': 'up to $2.56M',
-            'evaluation_days': 'unlimited',
-            'payouts': 'on-demand',
+            "max_daily_loss": "5%",
+            "max_total_loss": "10%",
+            "profit_target": "8% for evaluation",
+            "profit_split": "up to 85%",
+            "scaling": "up to $2.56M",
+            "evaluation_days": "unlimited",
+            "payouts": "on-demand",
         }
 
         return rules

@@ -44,15 +44,17 @@ logger = logging.getLogger(__name__)
 # Data structures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Component:
     """Registered component descriptor."""
+
     name: str
-    factory: Callable          # async def factory(app_state) -> Any
-    required: bool = False     # if True, failure raises RuntimeError
+    factory: Callable  # async def factory(app_state) -> Any
+    required: bool = False  # if True, failure raises RuntimeError
     deps: List[str] = field(default_factory=list)
     # Populated after startup
-    status: str = "pending"    # pending | ok | failed | skipped
+    status: str = "pending"  # pending | ok | failed | skipped
     instance: Any = None
     error: Optional[str] = None
     elapsed_ms: float = 0.0
@@ -112,9 +114,14 @@ class ComponentRegistry:
 
             # Check if any dependency failed or was skipped
             failed_dep = next(
-                (d for d in comp.deps
-                 if self._components.get(d, Component(name=d, factory=lambda s: None)).status
-                 in ("failed", "skipped")),
+                (
+                    d
+                    for d in comp.deps
+                    if self._components.get(
+                        d, Component(name=d, factory=lambda s: None)
+                    ).status
+                    in ("failed", "skipped")
+                ),
                 None,
             )
             if failed_dep:
@@ -142,8 +149,12 @@ class ComponentRegistry:
                 setattr(app_state, name, None)
 
                 if comp.required:
-                    logger.critical("✗ %-30s REQUIRED — aborting startup: %s", name, exc)
-                    raise RuntimeError(f"Required component '{name}' failed: {exc}") from exc
+                    logger.critical(
+                        "✗ %-30s REQUIRED — aborting startup: %s", name, exc
+                    )
+                    raise RuntimeError(
+                        f"Required component '{name}' failed: {exc}"
+                    ) from exc
                 else:
                     logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
 
@@ -155,7 +166,9 @@ class ComponentRegistry:
         """Log a single aligned startup summary table."""
         lines = ["", "┌─ Startup Summary " + "─" * 52 + "┐"]
         for comp in self._components.values():
-            icon = {"ok": "✓", "failed": "✗", "skipped": "⊘", "pending": "?"}.get(comp.status, "?")
+            icon = {"ok": "✓", "failed": "✗", "skipped": "⊘", "pending": "?"}.get(
+                comp.status, "?"
+            )
             req = "REQ" if comp.required else "opt"
             detail = comp.error or f"{comp.elapsed_ms:.0f} ms"
             lines.append(f"│ {icon} {req} {comp.name:<30} {detail:<25}│")
@@ -200,11 +213,7 @@ class ComponentRegistry:
 
     def all_required_ok(self) -> bool:
         """True if every required component started successfully."""
-        return all(
-            c.status == "ok"
-            for c in self._components.values()
-            if c.required
-        )
+        return all(c.status == "ok" for c in self._components.values() if c.required)
 
     def summary(self) -> Dict[str, str]:
         """Return {name: status} dict for health endpoints."""

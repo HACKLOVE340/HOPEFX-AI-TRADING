@@ -6,22 +6,22 @@ FastAPI application with logging, health checks, and metrics
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any, Optional
-from datetime import datetime
+from typing import Any, Optional
 
 try:
-    from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+    from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, PlainTextResponse
     from pydantic import BaseModel
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
     logging.warning("FastAPI not available, API server disabled")
 
-from infrastructure.health import HealthChecker, HealthStatus, get_health_checker
-from infrastructure.metrics import get_metrics_registry
+from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
+from infrastructure.metrics import get_metrics_registry
 
 logger = get_logger(__name__)
 
@@ -45,7 +45,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         return None
 
     import os
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request as StarletteRequest
 
@@ -53,7 +54,9 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
     _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
     _ALLOWED_SYMBOLS = frozenset(
-        os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF").split(",")
+        os.getenv(
+            "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF"
+        ).split(",")
     )
     _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
@@ -99,8 +102,12 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-            response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+            response.headers["Permissions-Policy"] = (
+                "geolocation=(), microphone=(), camera=()"
+            )
             return response
 
     app.add_middleware(SecurityHeadersMiddleware)
@@ -111,11 +118,15 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     def _get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
         try:
             from api.auth import _decode_token
+
             return _decode_token(credentials.credentials)
         except Exception as exc:
             logger.warning("Token decode failed: %s", exc)
-            raise HTTPException(status_code=401, detail="Invalid or expired token",
-                                headers={"WWW-Authenticate": "Bearer"})
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     def _require_trader(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
         user = _get_current_user(credentials)
@@ -133,54 +144,44 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     # Store reference to trading app
     app.state.trading_app = trading_app
-    
+
     # Health endpoints
     @app.get("/health")
     async def health():
         """Comprehensive health check"""
         health_data = await health_checker.run_all_checks()
-        
+
         status_code = 200
         if health_data.status == HealthStatus.UNHEALTHY:
             status_code = 503
         elif health_data.status == HealthStatus.DEGRADED:
             status_code = 503  # or 200 depending on your LB config
-        
-        return JSONResponse(
-            content=health_data.to_dict(),
-            status_code=status_code
-        )
-    
+
+        return JSONResponse(content=health_data.to_dict(), status_code=status_code)
+
     @app.get("/ready")
     async def ready():
         """Readiness probe"""
         if not trading_app:
             return {"ready": False}
-        
-        ready = (
-            trading_app._components_initialized and
-            trading_app.running
-        )
-        return JSONResponse(
-            content={"ready": ready},
-            status_code=200 if ready else 503
-        )
-    
+
+        ready = trading_app._components_initialized and trading_app.running
+        return JSONResponse(content={"ready": ready}, status_code=200 if ready else 503)
+
     @app.get("/live")
     async def live():
         """Liveness probe"""
         return {"alive": True}
-    
+
     # Metrics endpoint (Prometheus format)
     @app.get("/metrics")
     async def metrics():
         """Prometheus metrics"""
         registry = get_metrics_registry()
         return PlainTextResponse(
-            content=registry.export_prometheus(),
-            media_type="text/plain"
+            content=registry.export_prometheus(), media_type="text/plain"
         )
-    
+
     # Trading endpoints
     @app.get("/api/v1/status")
     async def get_status(user=Depends(_get_current_user)):
@@ -207,7 +208,10 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             raise HTTPException(status_code=503, detail="Broker not available")
         try:
             positions = await trading_app.broker.get_positions()
-            return {"positions": [p.to_dict() for p in positions], "count": len(positions)}
+            return {
+                "positions": [p.to_dict() for p in positions],
+                "count": len(positions),
+            }
         except Exception as e:
             logger.error("Error getting positions: %s", e)
             raise HTTPException(status_code=500, detail=str(e))
@@ -225,13 +229,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         # Server-side symbol validation
         symbol = request.symbol.upper().strip()
         if symbol not in _ALLOWED_SYMBOLS:
-            raise HTTPException(status_code=400,
-                                detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(_ALLOWED_SYMBOLS)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(_ALLOWED_SYMBOLS)}",
+            )
 
         # Server-side quantity validation
         if request.quantity <= 0 or request.quantity > _MAX_QTY:
-            raise HTTPException(status_code=400,
-                                detail=f"Quantity must be > 0 and <= {_MAX_QTY}")
+            raise HTTPException(
+                status_code=400, detail=f"Quantity must be > 0 and <= {_MAX_QTY}"
+            )
 
         # Side validation
         if request.side.lower() not in ("buy", "sell"):
@@ -243,8 +250,14 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 side=request.side.lower(),
                 quantity=request.quantity,
             )
-            logger.info("Order placed: user=%s symbol=%s side=%s qty=%s id=%s",
-                        user.sub, symbol, request.side, request.quantity, order.id)
+            logger.info(
+                "Order placed: user=%s symbol=%s side=%s qty=%s id=%s",
+                user.sub,
+                symbol,
+                request.side,
+                request.quantity,
+                order.id,
+            )
             background_tasks.add_task(get_metrics_registry().record_order_latency, 0)
             return {
                 "order_id": order.id,
@@ -317,14 +330,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     # System control
     @app.post("/api/v1/system/shutdown")
-    async def shutdown_system(background_tasks: BackgroundTasks, user=Depends(_require_admin)):
+    async def shutdown_system(
+        background_tasks: BackgroundTasks, user=Depends(_require_admin)
+    ):
         """Shutdown the trading system. Requires: role >= 'admin'."""
         if not trading_app:
             raise HTTPException(status_code=503, detail="Trading app not available")
         logger.critical("System shutdown initiated by user=%s", user.sub)
         background_tasks.add_task(trading_app.shutdown)
         return {"status": "shutdown_initiated"}
-    
+
     return app
 
 
@@ -332,28 +347,26 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):
     """Start API server"""
     if not FASTAPI_AVAILABLE:
-        logger.error("FastAPI required for API server. Install: pip install fastapi uvicorn")
+        logger.error(
+            "FastAPI required for API server. Install: pip install fastapi uvicorn"
+        )
         return
-    
+
     import uvicorn
-    
+
     app = create_api_app(trading_app)
     if not app:
         return
-    
+
     config = uvicorn.Config(
-        app,
-        host=host,
-        port=port,
-        log_level="info",
-        access_log=True
+        app, host=host, port=port, log_level="info", access_log=True
     )
-    
+
     server = uvicorn.Server(config)
-    
+
     logger.info(f"API server starting on http://{host}:{port}")
     logger.info(f"  - API docs: http://{host}:{port}/docs")
     logger.info(f"  - Health:   http://{host}:{port}/health")
     logger.info(f"  - Metrics:  http://{host}:{port}/metrics")
-    
+
     await server.serve()

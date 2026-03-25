@@ -9,30 +9,32 @@ Provides real-time trading signals with:
 - Alert management
 """
 
-from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta, timezone
-from enum import Enum
 import json
 import logging
+import threading
 import uuid
 from collections import deque
-import threading
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class SignalStrength(Enum):
     """Signal strength levels."""
+
     VERY_STRONG = "very_strong"  # 0.8+
-    STRONG = "strong"            # 0.6-0.8
-    MODERATE = "moderate"        # 0.4-0.6
-    WEAK = "weak"               # 0.2-0.4
-    VERY_WEAK = "very_weak"     # 0-0.2
+    STRONG = "strong"  # 0.6-0.8
+    MODERATE = "moderate"  # 0.4-0.6
+    WEAK = "weak"  # 0.2-0.4
+    VERY_WEAK = "very_weak"  # 0-0.2
 
 
 class SignalDirection(Enum):
     """Signal direction."""
+
     BUY = "buy"
     SELL = "sell"
     HOLD = "hold"
@@ -43,6 +45,7 @@ class TradingSignal:
     """
     Real-time trading signal with full context.
     """
+
     id: str
     symbol: str
     direction: SignalDirection
@@ -64,25 +67,25 @@ class TradingSignal:
 
     def to_dict(self) -> Dict:
         return {
-            'id': self.id,
-            'symbol': self.symbol,
-            'direction': self.direction.value,
-            'strength': self.strength.value,
-            'confidence': self.confidence,
-            'price': self.price,
-            'entry_price': self.entry_price,
-            'stop_loss': self.stop_loss,
-            'take_profit': self.take_profit,
-            'risk_reward_ratio': self.risk_reward_ratio,
-            'timeframe': self.timeframe,
-            'strategies_agreeing': self.strategies_agreeing,
-            'total_strategies': self.total_strategies,
-            'regime': self.regime,
-            'session': self.session,
-            'expiry': self.expiry.isoformat(),
-            'timestamp': self.timestamp.isoformat(),
-            'metadata': self.metadata,
-            'is_valid': self.is_valid
+            "id": self.id,
+            "symbol": self.symbol,
+            "direction": self.direction.value,
+            "strength": self.strength.value,
+            "confidence": self.confidence,
+            "price": self.price,
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "risk_reward_ratio": self.risk_reward_ratio,
+            "timeframe": self.timeframe,
+            "strategies_agreeing": self.strategies_agreeing,
+            "total_strategies": self.total_strategies,
+            "regime": self.regime,
+            "session": self.session,
+            "expiry": self.expiry.isoformat(),
+            "timestamp": self.timestamp.isoformat(),
+            "metadata": self.metadata,
+            "is_valid": self.is_valid,
         }
 
     @property
@@ -98,12 +101,13 @@ class TradingSignal:
 @dataclass
 class SignalAlert:
     """Alert configuration for signals."""
+
     id: str
     symbol: str
     direction: Optional[SignalDirection] = None
     min_confidence: float = 0.5
     min_strength: SignalStrength = SignalStrength.MODERATE
-    notify_channels: List[str] = field(default_factory=lambda: ['web'])
+    notify_channels: List[str] = field(default_factory=lambda: ["web"])
     active: bool = True
     triggered_count: int = 0
     last_triggered: Optional[datetime] = None
@@ -113,6 +117,7 @@ class SignalAlert:
 @dataclass
 class SignalPerformance:
     """Track signal performance."""
+
     signal_id: str
     symbol: str
     direction: SignalDirection
@@ -133,10 +138,10 @@ class SignalAnalytics:
 
     def __init__(self):
         self.signals_generated = 0
-        self.signals_by_direction = {'buy': 0, 'sell': 0, 'hold': 0}
+        self.signals_by_direction = {"buy": 0, "sell": 0, "hold": 0}
         self.signals_by_strength = {s.value: 0 for s in SignalStrength}
         self.signals_by_symbol = {}
-        self.hit_rate = {'tp': 0, 'sl': 0, 'expired': 0}
+        self.hit_rate = {"tp": 0, "sl": 0, "expired": 0}
         self.avg_confidence = 0.0
         self.avg_rr_ratio = 0.0
         self.hourly_distribution = {str(h): 0 for h in range(24)}
@@ -157,7 +162,9 @@ class SignalAnalytics:
         # Update averages
         n = self.signals_generated
         self.avg_confidence = ((self.avg_confidence * (n - 1)) + signal.confidence) / n
-        self.avg_rr_ratio = ((self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio) / n
+        self.avg_rr_ratio = (
+            (self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio
+        ) / n
 
     def record_outcome(self, outcome: str):
         """Record signal outcome (tp, sl, expired)."""
@@ -167,16 +174,20 @@ class SignalAnalytics:
     def to_dict(self) -> Dict:
         total_outcomes = sum(self.hit_rate.values())
         return {
-            'signals_generated': self.signals_generated,
-            'signals_by_direction': self.signals_by_direction,
-            'signals_by_strength': self.signals_by_strength,
-            'signals_by_symbol': self.signals_by_symbol,
-            'hit_rate': self.hit_rate,
-            'tp_rate': self.hit_rate['tp'] / total_outcomes if total_outcomes > 0 else 0,
-            'sl_rate': self.hit_rate['sl'] / total_outcomes if total_outcomes > 0 else 0,
-            'avg_confidence': self.avg_confidence,
-            'avg_rr_ratio': self.avg_rr_ratio,
-            'hourly_distribution': self.hourly_distribution,
+            "signals_generated": self.signals_generated,
+            "signals_by_direction": self.signals_by_direction,
+            "signals_by_strength": self.signals_by_strength,
+            "signals_by_symbol": self.signals_by_symbol,
+            "hit_rate": self.hit_rate,
+            "tp_rate": self.hit_rate["tp"] / total_outcomes
+            if total_outcomes > 0
+            else 0,
+            "sl_rate": self.hit_rate["sl"] / total_outcomes
+            if total_outcomes > 0
+            else 0,
+            "avg_confidence": self.avg_confidence,
+            "avg_rr_ratio": self.avg_rr_ratio,
+            "hourly_distribution": self.hourly_distribution,
         }
 
 
@@ -216,9 +227,9 @@ class RealTimeSignalService:
         self.analytics = SignalAnalytics()
 
         # Configuration
-        self.signal_expiry_minutes = self.config.get('signal_expiry_minutes', 30)
-        self.min_confidence = self.config.get('min_confidence', 0.3)
-        self.min_strategies = self.config.get('min_strategies', 2)
+        self.signal_expiry_minutes = self.config.get("signal_expiry_minutes", 30)
+        self.min_confidence = self.config.get("min_confidence", 0.3)
+        self.min_strategies = self.config.get("min_strategies", 2)
 
         # Thread safety
         self._lock = threading.Lock()
@@ -239,7 +250,7 @@ class RealTimeSignalService:
         total_strategies: int,
         regime: str = "unknown",
         session: str = "unknown",
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> Optional[TradingSignal]:
         """
         Generate a new trading signal.
@@ -264,11 +275,15 @@ class RealTimeSignalService:
         """
         # Validate
         if confidence < self.min_confidence:
-            logger.debug(f"Signal rejected: confidence {confidence} < {self.min_confidence}")
+            logger.debug(
+                f"Signal rejected: confidence {confidence} < {self.min_confidence}"
+            )
             return None
 
         if len(strategies_agreeing) < self.min_strategies:
-            logger.debug(f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}")
+            logger.debug(
+                f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}"
+            )
             return None
 
         # Calculate risk/reward
@@ -282,7 +297,9 @@ class RealTimeSignalService:
         rr_ratio = reward / risk if risk > 0 else 0
 
         # Determine strength
-        strength = self._calculate_strength(confidence, len(strategies_agreeing), total_strategies, rr_ratio)
+        strength = self._calculate_strength(
+            confidence, len(strategies_agreeing), total_strategies, rr_ratio
+        )
 
         # Create signal
         signal = TradingSignal(
@@ -301,8 +318,9 @@ class RealTimeSignalService:
             total_strategies=total_strategies,
             regime=regime,
             session=session,
-            expiry=datetime.now(timezone.utc) + timedelta(minutes=self.signal_expiry_minutes),
-            metadata=metadata or {}
+            expiry=datetime.now(timezone.utc)
+            + timedelta(minutes=self.signal_expiry_minutes),
+            metadata=metadata or {},
         )
 
         with self._lock:
@@ -311,7 +329,7 @@ class RealTimeSignalService:
             self.analytics.record_signal(signal)
 
         # Publish event
-        self._publish_event('signal_generated', signal)
+        self._publish_event("signal_generated", signal)
 
         # Check alerts
         self._check_alerts(signal)
@@ -322,25 +340,28 @@ class RealTimeSignalService:
             self._publish_to_social_feed(signal)
             self._push_fcm_to_all_users(signal)
 
-        logger.info(f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}")
+        logger.info(
+            f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}"
+        )
         return signal
 
     def _publish_to_social_feed(self, signal: "TradingSignal") -> None:
         """Publish a high-confidence signal to the community social feed."""
         try:
             from api.social_feed import _publish_signal
+
             _publish_signal(
                 signal={
-                    "signal_id":   signal.id,
-                    "symbol":      signal.symbol,
-                    "direction":   signal.direction.value.upper(),
-                    "confidence":  round(signal.confidence * 100, 1),
+                    "signal_id": signal.id,
+                    "symbol": signal.symbol,
+                    "direction": signal.direction.value.upper(),
+                    "confidence": round(signal.confidence * 100, 1),
                     "entry_price": signal.entry_price,
-                    "stop_loss":   signal.stop_loss,
+                    "stop_loss": signal.stop_loss,
                     "take_profit": signal.take_profit,
-                    "pnl":         None,
-                    "copies":      0,
-                    "is_public":   True,
+                    "pnl": None,
+                    "copies": 0,
+                    "is_public": True,
                 },
                 username="HOPEFX AI",
                 trader_id="ai_engine",
@@ -352,8 +373,8 @@ class RealTimeSignalService:
     def _push_fcm_to_all_users(self, signal: "TradingSignal") -> None:
         """Send FCM push notification to all opted-in users for a high-confidence signal."""
         try:
-            from mobile.push_notifications import push_manager, _device_tokens
             from api.social_feed import _opted_in
+            from mobile.push_notifications import _device_tokens, push_manager
 
             # Send to users who have opted into the feed and have FCM tokens
             target_users = list(_opted_in) if _opted_in else list(_device_tokens.keys())
@@ -370,11 +391,7 @@ class RealTimeSignalService:
             logger.debug("FCM signal push skipped: %s", exc)
 
     def _calculate_strength(
-        self,
-        confidence: float,
-        agreeing: int,
-        total: int,
-        rr_ratio: float
+        self, confidence: float, agreeing: int, total: int, rr_ratio: float
     ) -> SignalStrength:
         """Calculate signal strength based on multiple factors."""
 
@@ -400,7 +417,7 @@ class RealTimeSignalService:
         self,
         symbol: str = None,
         direction: SignalDirection = None,
-        min_strength: SignalStrength = None
+        min_strength: SignalStrength = None,
     ) -> List[TradingSignal]:
         """
         Get active (non-expired) signals.
@@ -429,7 +446,9 @@ class RealTimeSignalService:
             if min_strength:
                 strength_order = list(SignalStrength)
                 min_idx = strength_order.index(min_strength)
-                signals = [s for s in signals if strength_order.index(s.strength) <= min_idx]
+                signals = [
+                    s for s in signals if strength_order.index(s.strength) <= min_idx
+                ]
 
             return sorted(signals, key=lambda s: -s.confidence)
 
@@ -444,8 +463,8 @@ class RealTimeSignalService:
                 signal = self.active_signals[signal_id]
                 signal.expiry = datetime.now(timezone.utc)
                 del self.active_signals[signal_id]
-                self.analytics.record_outcome('expired')
-                self._publish_event('signal_expired', signal)
+                self.analytics.record_outcome("expired")
+                self._publish_event("signal_expired", signal)
 
     def record_signal_outcome(self, signal_id: str, outcome: str, exit_price: float):
         """
@@ -462,11 +481,14 @@ class RealTimeSignalService:
                 self.analytics.record_outcome(outcome)
                 del self.active_signals[signal_id]
 
-                self._publish_event('signal_closed', {
-                    'signal': signal.to_dict(),
-                    'outcome': outcome,
-                    'exit_price': exit_price
-                })
+                self._publish_event(
+                    "signal_closed",
+                    {
+                        "signal": signal.to_dict(),
+                        "outcome": outcome,
+                        "exit_price": exit_price,
+                    },
+                )
 
     # ============================================================
     # ALERTS
@@ -478,7 +500,7 @@ class RealTimeSignalService:
         direction: Optional[SignalDirection] = None,
         min_confidence: float = 0.5,
         min_strength: SignalStrength = SignalStrength.MODERATE,
-        notify_channels: List[str] = None
+        notify_channels: List[str] = None,
     ) -> SignalAlert:
         """Create a signal alert."""
         alert = SignalAlert(
@@ -487,7 +509,7 @@ class RealTimeSignalService:
             direction=direction,
             min_confidence=min_confidence,
             min_strength=min_strength,
-            notify_channels=notify_channels or ['web']
+            notify_channels=notify_channels or ["web"],
         )
 
         with self._lock:
@@ -522,10 +544,9 @@ class RealTimeSignalService:
             alert.triggered_count += 1
             alert.last_triggered = datetime.now(timezone.utc)
 
-            self._publish_event('alert_triggered', {
-                'alert': asdict(alert),
-                'signal': signal.to_dict()
-            })
+            self._publish_event(
+                "alert_triggered", {"alert": asdict(alert), "signal": signal.to_dict()}
+            )
 
             logger.info(f"Alert triggered: {alert.id} by signal {signal.id}")
 
@@ -563,9 +584,9 @@ class RealTimeSignalService:
     def _publish_event(self, event_type: str, data: Any):
         """Publish event to all subscribers."""
         event = {
-            'type': event_type,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'data': data.to_dict() if hasattr(data, 'to_dict') else data
+            "type": event_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": data.to_dict() if hasattr(data, "to_dict") else data,
         }
 
         for callback in self.subscribers:
@@ -579,9 +600,7 @@ class RealTimeSignalService:
     # ============================================================
 
     def get_signal_history(
-        self,
-        symbol: str = None,
-        hours: int = 24
+        self, symbol: str = None, hours: int = 24
     ) -> List[TradingSignal]:
         """Get signal history."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -600,24 +619,47 @@ class RealTimeSignalService:
         """Get summary of current signal state."""
         with self._lock:
             return {
-                'active_signals': len(self.active_signals),
-                'signals_last_hour': len([
-                    s for s in self.signal_history
-                    if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
-                ]),
-                'signals_last_24h': len([
-                    s for s in self.signal_history
-                    if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=24)
-                ]),
-                'active_alerts': len([a for a in self.alerts.values() if a.active]),
-                'symbols_with_signals': list(set(s.symbol for s in self.active_signals.values())),
-                'direction_distribution': {
-                    'buy': len([s for s in self.active_signals.values() if s.direction == SignalDirection.BUY]),
-                    'sell': len([s for s in self.active_signals.values() if s.direction == SignalDirection.SELL]),
+                "active_signals": len(self.active_signals),
+                "signals_last_hour": len(
+                    [
+                        s
+                        for s in self.signal_history
+                        if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
+                    ]
+                ),
+                "signals_last_24h": len(
+                    [
+                        s
+                        for s in self.signal_history
+                        if s.timestamp
+                        > datetime.now(timezone.utc) - timedelta(hours=24)
+                    ]
+                ),
+                "active_alerts": len([a for a in self.alerts.values() if a.active]),
+                "symbols_with_signals": list(
+                    set(s.symbol for s in self.active_signals.values())
+                ),
+                "direction_distribution": {
+                    "buy": len(
+                        [
+                            s
+                            for s in self.active_signals.values()
+                            if s.direction == SignalDirection.BUY
+                        ]
+                    ),
+                    "sell": len(
+                        [
+                            s
+                            for s in self.active_signals.values()
+                            if s.direction == SignalDirection.SELL
+                        ]
+                    ),
                 },
-                'avg_active_confidence': (
-                    sum(s.confidence for s in self.active_signals.values()) /
-                    len(self.active_signals) if self.active_signals else 0
+                "avg_active_confidence": (
+                    sum(s.confidence for s in self.active_signals.values())
+                    / len(self.active_signals)
+                    if self.active_signals
+                    else 0
                 ),
             }
 
@@ -627,18 +669,20 @@ class RealTimeSignalService:
 
     def format_for_websocket(self, signal: TradingSignal) -> str:
         """Format signal for WebSocket transmission."""
-        return json.dumps({
-            'event': 'signal',
-            'channel': f'signals:{signal.symbol}',
-            'data': signal.to_dict()
-        })
+        return json.dumps(
+            {
+                "event": "signal",
+                "channel": f"signals:{signal.symbol}",
+                "data": signal.to_dict(),
+            }
+        )
 
     def get_websocket_channels(self) -> List[str]:
         """Get available WebSocket channels."""
         symbols = set(s.symbol for s in self.active_signals.values())
-        channels = [f'signals:{sym}' for sym in symbols]
-        channels.append('signals:all')
-        channels.append('alerts')
+        channels = [f"signals:{sym}" for sym in symbols]
+        channels.append("signals:all")
+        channels.append("alerts")
         return channels
 
 
@@ -674,8 +718,8 @@ def create_signals_router():
     class GenerateSignalRequest(_BaseModel):
         symbol: str
         price: float
-        direction: str = "buy"           # "buy" | "sell"
-        confidence: float = 0.7          # 0-1
+        direction: str = "buy"  # "buy" | "sell"
+        confidence: float = 0.7  # 0-1
         entry_price: Optional[float] = None
         stop_loss: Optional[float] = None
         take_profit: Optional[float] = None
@@ -724,16 +768,35 @@ def create_signals_router():
             try:
                 direction = SignalDirection(req.direction.lower())
             except ValueError:
-                raise HTTPException(status_code=422, detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.",
+                )
 
             entry = req.entry_price if req.entry_price is not None else req.price
             # Default SL/TP: 0.5% away (conservative if not provided)
             if direction == SignalDirection.BUY:
-                sl = req.stop_loss if req.stop_loss is not None else round(entry * 0.995, 5)
-                tp = req.take_profit if req.take_profit is not None else round(entry * 1.015, 5)
+                sl = (
+                    req.stop_loss
+                    if req.stop_loss is not None
+                    else round(entry * 0.995, 5)
+                )
+                tp = (
+                    req.take_profit
+                    if req.take_profit is not None
+                    else round(entry * 1.015, 5)
+                )
             else:
-                sl = req.stop_loss if req.stop_loss is not None else round(entry * 1.005, 5)
-                tp = req.take_profit if req.take_profit is not None else round(entry * 0.985, 5)
+                sl = (
+                    req.stop_loss
+                    if req.stop_loss is not None
+                    else round(entry * 1.005, 5)
+                )
+                tp = (
+                    req.take_profit
+                    if req.take_profit is not None
+                    else round(entry * 0.985, 5)
+                )
 
             signal = svc.generate_signal(
                 symbol=req.symbol,
@@ -751,12 +814,17 @@ def create_signals_router():
                 metadata=req.parameters or {},
             )
             if signal is None:
-                return {"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"}
+                return {
+                    "signal": None,
+                    "message": "No signal generated (confidence or strategy threshold not met)",
+                }
             return {"signal": signal.to_dict()}
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Signal generation failed: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Signal generation failed: {e}"
+            )
 
     @signals_router.get("/analytics")
     async def get_signal_analytics():

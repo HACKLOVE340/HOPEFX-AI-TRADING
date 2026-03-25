@@ -28,7 +28,7 @@ _reconciler_task: Optional[asyncio.Task] = None
 _MISMATCH_ALERT_THRESHOLD = 3
 
 # Drift thresholds — breach either to trigger RiskHaltEvent
-_DRIFT_QTY_THRESHOLD   = float(os.getenv("RECONCILER_DRIFT_QTY",   "1.0"))   # units
+_DRIFT_QTY_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_QTY", "1.0"))  # units
 _DRIFT_VALUE_THRESHOLD = float(os.getenv("RECONCILER_DRIFT_VALUE", "100.0"))  # USD
 
 
@@ -57,7 +57,7 @@ class PositionReconciler:
         self._ws = ws_manager
         self._alert_engine = alert_engine
         self._interval = interval_seconds
-        self._drift_qty   = drift_qty_threshold
+        self._drift_qty = drift_qty_threshold
         self._drift_value = drift_value_threshold
         self._running = False
         self._cycles = 0
@@ -135,12 +135,15 @@ class PositionReconciler:
                         logger.error(
                             "RECONCILE_GAP: position %s (%s) missing from broker "
                             "for %d consecutive cycles — manual review required",
-                            pos.id, pos.symbol, count,
+                            pos.id,
+                            pos.symbol,
+                            count,
                         )
                     else:
                         logger.warning(
                             "RECONCILE: position %s (%s) in DB but not in broker state",
-                            pos.id, pos.symbol,
+                            pos.id,
+                            pos.symbol,
                         )
                 else:
                     # Symbol present — check quantity and value drift
@@ -155,9 +158,9 @@ class PositionReconciler:
                     qty_diff = abs(db_qty - broker_qty)
 
                     current_price_for_drift = price or 0.0
-                    db_value     = db_qty     * current_price_for_drift
+                    db_value = db_qty * current_price_for_drift
                     broker_value = broker_qty * current_price_for_drift
-                    value_diff   = abs(db_value - broker_value)
+                    value_diff = abs(db_value - broker_value)
 
                     if qty_diff > self._drift_qty or value_diff > self._drift_value:
                         await self._trigger_drift_halt(
@@ -171,16 +174,22 @@ class PositionReconciler:
                         )
 
         if updated:
-            logger.debug("Reconciler cycle %d: updated P&L for %d positions", self._cycles, updated)
+            logger.debug(
+                "Reconciler cycle %d: updated P&L for %d positions",
+                self._cycles,
+                updated,
+            )
 
         # Broadcast updated positions over WebSocket
         if self._ws and updated:
             try:
-                await self._ws.broadcast_to_all({
-                    "type": "positions_updated",
-                    "count": updated,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+                await self._ws.broadcast_to_all(
+                    {
+                        "type": "positions_updated",
+                        "count": updated,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
             except Exception:
                 pass
 
@@ -211,7 +220,13 @@ class PositionReconciler:
 
         # Publish typed RiskHaltEvent
         try:
-            from events.typed_events import EventEnvelope, RiskHaltEvent, PositionDriftEvent, publish_sync
+            from events.typed_events import (
+                EventEnvelope,
+                PositionDriftEvent,
+                RiskHaltEvent,
+                publish_sync,
+            )
+
             drift_event = PositionDriftEvent(
                 symbol=symbol,
                 db_quantity=db_qty,
@@ -221,18 +236,22 @@ class PositionReconciler:
                 broker_value=broker_value,
                 value_diff=value_diff,
             )
-            publish_sync(EventEnvelope.wrap(
-                source="position_reconciler",
-                payload=drift_event,
-            ))
+            publish_sync(
+                EventEnvelope.wrap(
+                    source="position_reconciler",
+                    payload=drift_event,
+                )
+            )
             halt_event = RiskHaltEvent(
                 reason=reason,
                 triggered_by="position_reconciler",
             )
-            publish_sync(EventEnvelope.wrap(
-                source="position_reconciler",
-                payload=halt_event,
-            ))
+            publish_sync(
+                EventEnvelope.wrap(
+                    source="position_reconciler",
+                    payload=halt_event,
+                )
+            )
         except Exception as ev_exc:
             logger.warning("Could not publish drift events: %s", ev_exc)
 
@@ -250,6 +269,7 @@ class PositionReconciler:
         # Instruct risk manager to halt if available
         try:
             from app import app_state
+
             rm = getattr(app_state, "risk_manager", None)
             if rm is not None and hasattr(rm, "_halt_trading"):
                 rm._halt_trading(reason, duration_hours=1.0)
@@ -261,6 +281,7 @@ class PositionReconciler:
         """Fetch latest price. Uses yfinance with a short timeout."""
         try:
             import yfinance as yf
+
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period="1d", interval="1m")
             if not hist.empty:
@@ -280,10 +301,16 @@ class PositionReconciler:
 
     @property
     def stats(self) -> dict:
-        return {"cycles": self._cycles, "mismatches": self._mismatches, "running": self._running}
+        return {
+            "cycles": self._cycles,
+            "mismatches": self._mismatches,
+            "running": self._running,
+        }
 
 
-def start_reconciler(session_factory, broker=None, ws_manager=None, interval_seconds: int = 10) -> PositionReconciler:
+def start_reconciler(
+    session_factory, broker=None, ws_manager=None, interval_seconds: int = 10
+) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
     global _reconciler_task
     rec = PositionReconciler(

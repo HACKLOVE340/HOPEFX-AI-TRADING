@@ -9,19 +9,20 @@ Professional-grade risk management tools:
 - Risk-adjusted performance metrics
 """
 
-from typing import Dict, List, Optional, Any, Tuple
-import numpy as np
-import pandas as pd
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import logging
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 class RiskMetricType(Enum):
     """Types of risk metrics."""
+
     VAR_HISTORICAL = "var_historical"
     VAR_PARAMETRIC = "var_parametric"
     VAR_MONTE_CARLO = "var_monte_carlo"
@@ -35,6 +36,7 @@ class RiskMetricType(Enum):
 @dataclass
 class VaRResult:
     """Value at Risk calculation result."""
+
     var_value: float  # Dollar or percent loss
     confidence_level: float  # e.g., 0.95 for 95%
     time_horizon: int  # Days
@@ -49,21 +51,22 @@ class VaRResult:
 
     def to_dict(self) -> Dict:
         d = {
-            'var_value': self.var_value,
-            'confidence_level': self.confidence_level,
-            'time_horizon': self.time_horizon,
-            'method': self.method,
-            'timestamp': self.timestamp.isoformat(),
+            "var_value": self.var_value,
+            "confidence_level": self.confidence_level,
+            "time_horizon": self.time_horizon,
+            "method": self.method,
+            "timestamp": self.timestamp.isoformat(),
         }
         if self.scaling_approximate:
-            d['scaling_approximate'] = True
-            d['scaling_note'] = self.scaling_note
+            d["scaling_approximate"] = True
+            d["scaling_note"] = self.scaling_note
         return d
 
 
 @dataclass
 class MonteCarloResult:
     """Monte Carlo simulation result."""
+
     expected_return: float
     expected_volatility: float
     var_95: float
@@ -77,21 +80,22 @@ class MonteCarloResult:
 
     def to_dict(self) -> Dict:
         return {
-            'expected_return': self.expected_return,
-            'expected_volatility': self.expected_volatility,
-            'var_95': self.var_95,
-            'var_99': self.var_99,
-            'cvar_95': self.cvar_95,
-            'max_gain': self.max_gain,
-            'max_loss': self.max_loss,
-            'num_simulations': self.num_simulations,
-            'timestamp': self.timestamp.isoformat()
+            "expected_return": self.expected_return,
+            "expected_volatility": self.expected_volatility,
+            "var_95": self.var_95,
+            "var_99": self.var_99,
+            "cvar_95": self.cvar_95,
+            "max_gain": self.max_gain,
+            "max_loss": self.max_loss,
+            "num_simulations": self.num_simulations,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class StressTestResult:
     """Stress test scenario result."""
+
     scenario_name: str
     portfolio_impact: float  # Percentage impact
     dollar_impact: float  # Dollar impact
@@ -104,6 +108,7 @@ class StressTestResult:
 @dataclass
 class DrawdownAnalysis:
     """Drawdown analysis result."""
+
     current_drawdown: float
     max_drawdown: float
     max_drawdown_duration: int  # Days
@@ -136,9 +141,9 @@ class AdvancedRiskAnalytics:
                 - risk_free_rate: Annual risk-free rate (default: 0.05)
         """
         self.config = config or {}
-        self.var_confidence = self.config.get('var_confidence', 0.95)
-        self.mc_simulations = self.config.get('mc_simulations', 10000)
-        self.risk_free_rate = self.config.get('risk_free_rate', 0.05)
+        self.var_confidence = self.config.get("var_confidence", 0.95)
+        self.mc_simulations = self.config.get("mc_simulations", 10000)
+        self.risk_free_rate = self.config.get("risk_free_rate", 0.05)
 
         # Stress test scenarios
         self.stress_scenarios = self._initialize_stress_scenarios()
@@ -148,68 +153,68 @@ class AdvancedRiskAnalytics:
     def _initialize_stress_scenarios(self) -> Dict[str, Dict]:
         """Initialize predefined stress test scenarios."""
         return {
-            'market_crash_2008': {
-                'name': 'Market Crash (2008 Style)',
-                'equities': -0.50,
-                'forex': -0.15,
-                'gold': 0.10,
-                'crypto': -0.60,
-                'bonds': 0.05,
-                'description': 'Severe market downturn similar to 2008 financial crisis'
+            "market_crash_2008": {
+                "name": "Market Crash (2008 Style)",
+                "equities": -0.50,
+                "forex": -0.15,
+                "gold": 0.10,
+                "crypto": -0.60,
+                "bonds": 0.05,
+                "description": "Severe market downturn similar to 2008 financial crisis",
             },
-            'flash_crash': {
-                'name': 'Flash Crash',
-                'equities': -0.10,
-                'forex': -0.05,
-                'gold': 0.02,
-                'crypto': -0.25,
-                'bonds': 0.01,
-                'description': 'Sudden sharp decline with quick recovery'
+            "flash_crash": {
+                "name": "Flash Crash",
+                "equities": -0.10,
+                "forex": -0.05,
+                "gold": 0.02,
+                "crypto": -0.25,
+                "bonds": 0.01,
+                "description": "Sudden sharp decline with quick recovery",
             },
-            'rate_hike_shock': {
-                'name': 'Interest Rate Shock (+200bps)',
-                'equities': -0.15,
-                'forex': 0.05,
-                'gold': -0.10,
-                'crypto': -0.20,
-                'bonds': -0.12,
-                'description': 'Unexpected aggressive rate hike by central banks'
+            "rate_hike_shock": {
+                "name": "Interest Rate Shock (+200bps)",
+                "equities": -0.15,
+                "forex": 0.05,
+                "gold": -0.10,
+                "crypto": -0.20,
+                "bonds": -0.12,
+                "description": "Unexpected aggressive rate hike by central banks",
             },
-            'geopolitical_crisis': {
-                'name': 'Geopolitical Crisis',
-                'equities': -0.20,
-                'forex': -0.08,
-                'gold': 0.15,
-                'crypto': -0.15,
-                'bonds': 0.03,
-                'description': 'Major geopolitical event causing market uncertainty'
+            "geopolitical_crisis": {
+                "name": "Geopolitical Crisis",
+                "equities": -0.20,
+                "forex": -0.08,
+                "gold": 0.15,
+                "crypto": -0.15,
+                "bonds": 0.03,
+                "description": "Major geopolitical event causing market uncertainty",
             },
-            'crypto_winter': {
-                'name': 'Crypto Winter',
-                'equities': -0.05,
-                'forex': 0.00,
-                'gold': 0.02,
-                'crypto': -0.80,
-                'bonds': 0.00,
-                'description': 'Severe cryptocurrency market downturn'
+            "crypto_winter": {
+                "name": "Crypto Winter",
+                "equities": -0.05,
+                "forex": 0.00,
+                "gold": 0.02,
+                "crypto": -0.80,
+                "bonds": 0.00,
+                "description": "Severe cryptocurrency market downturn",
             },
-            'dollar_collapse': {
-                'name': 'USD Collapse',
-                'equities': -0.10,
-                'forex': 0.20,  # Non-USD pairs benefit
-                'gold': 0.30,
-                'crypto': 0.15,
-                'bonds': -0.05,
-                'description': 'Sharp devaluation of US Dollar'
+            "dollar_collapse": {
+                "name": "USD Collapse",
+                "equities": -0.10,
+                "forex": 0.20,  # Non-USD pairs benefit
+                "gold": 0.30,
+                "crypto": 0.15,
+                "bonds": -0.05,
+                "description": "Sharp devaluation of US Dollar",
             },
-            'best_case': {
-                'name': 'Bull Market Rally',
-                'equities': 0.30,
-                'forex': 0.05,
-                'gold': -0.05,
-                'crypto': 0.50,
-                'bonds': -0.02,
-                'description': 'Strong bull market across assets'
+            "best_case": {
+                "name": "Bull Market Rally",
+                "equities": 0.30,
+                "forex": 0.05,
+                "gold": -0.05,
+                "crypto": 0.50,
+                "bonds": -0.02,
+                "description": "Strong bull market across assets",
             },
         }
 
@@ -222,7 +227,7 @@ class AdvancedRiskAnalytics:
         returns: np.ndarray,
         confidence_level: float = None,
         time_horizon: int = 1,
-        portfolio_value: float = None
+        portfolio_value: float = None,
     ) -> VaRResult:
         """
         Calculate Historical VaR.
@@ -263,15 +268,16 @@ class AdvancedRiskAnalytics:
             # Compute t-day overlapping returns and take the percentile directly.
             t = int(time_horizon)
             if len(returns) >= t * 2:
-                multi_day = np.array([
-                    np.sum(returns[i:i + t]) for i in range(len(returns) - t + 1)
-                ])
+                multi_day = np.array(
+                    [np.sum(returns[i : i + t]) for i in range(len(returns) - t + 1)]
+                )
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
                 # Insufficient history — fall back to sqrt(t) with a warning.
                 # sqrt(t) is only valid for i.i.d. normal returns; real gold/FX
                 # returns have fat tails and autocorrelation so this is approximate.
                 import warnings as _w
+
                 _w.warn(
                     f"calculate_var_historical: insufficient data for {t}-day window "
                     f"({len(returns)} bars). Falling back to sqrt(t) scaling "
@@ -295,7 +301,7 @@ class AdvancedRiskAnalytics:
             var_value=var_value,
             confidence_level=confidence_level,
             time_horizon=time_horizon,
-            method='historical',
+            method="historical",
             scaling_approximate=scaling_approximate,
             scaling_note=scaling_note,
         )
@@ -305,7 +311,7 @@ class AdvancedRiskAnalytics:
         returns: np.ndarray,
         confidence_level: float = None,
         time_horizon: int = 1,
-        portfolio_value: float = None
+        portfolio_value: float = None,
     ) -> VaRResult:
         """
         Calculate Parametric (Variance-Covariance) VaR.
@@ -339,6 +345,7 @@ class AdvancedRiskAnalytics:
                 _, jb_pvalue = stats.jarque_bera(returns)
                 if jb_pvalue < 0.05:
                     import warnings as _w
+
                     _w.warn(
                         f"calculate_var_parametric: Jarque-Bera normality test rejected "
                         f"(p={jb_pvalue:.4f}). Returns are non-normal; parametric VaR "
@@ -366,8 +373,8 @@ class AdvancedRiskAnalytics:
             # Under normality: mu_t = mu*t, sigma_t = sigma*sqrt(t).
             # This is more accurate than scaling the 1-day VaR by sqrt(t)
             # because it correctly scales the mean component linearly.
-            mean_t  = mean_return * time_horizon
-            std_t   = std_return  * np.sqrt(time_horizon)
+            mean_t = mean_return * time_horizon
+            std_t = std_return * np.sqrt(time_horizon)
             var_scaled = -(mean_t + z_score * std_t)
 
         # Convert to dollar value if portfolio value provided
@@ -380,7 +387,7 @@ class AdvancedRiskAnalytics:
             var_value=var_final,
             confidence_level=confidence_level,
             time_horizon=time_horizon,
-            method='parametric',
+            method="parametric",
             # Parametric VaR always assumes normality; flag as approximate for
             # any asset with fat tails (gold, FX, crypto).
             scaling_approximate=True,
@@ -452,6 +459,7 @@ class AdvancedRiskAnalytics:
             # returns.  For gold/FX with fat tails this underestimates tail risk.
             if use_historical_bootstrap and len(returns) < time_horizon:
                 import warnings as _w
+
                 _w.warn(
                     f"calculate_var_monte_carlo: insufficient history for bootstrap "
                     f"({len(returns)} bars < {time_horizon}-day horizon). "
@@ -530,7 +538,9 @@ class AdvancedRiskAnalytics:
         if time_horizon <= 1:
             # Delegate to historical 1-day VaR
             return self.calculate_var_historical(
-                returns, confidence_level, time_horizon=1,
+                returns,
+                confidence_level,
+                time_horizon=1,
                 portfolio_value=portfolio_value,
             )
 
@@ -542,7 +552,7 @@ class AdvancedRiskAnalytics:
                 method = "overlapping"
             else:
                 blocks = [
-                    np.sum(returns[i * time_horizon:(i + 1) * time_horizon])
+                    np.sum(returns[i * time_horizon : (i + 1) * time_horizon])
                     for i in range(n_blocks)
                 ]
                 multiday_returns = np.array(blocks)
@@ -552,6 +562,7 @@ class AdvancedRiskAnalytics:
             if len(returns) < time_horizon + 1:
                 # Not enough data — fall back to sqrt(t) with explicit warning.
                 import warnings as _w
+
                 _w.warn(
                     f"calculate_var_multiday: only {len(returns)} bars available for "
                     f"{time_horizon}-day horizon. Falling back to sqrt(t) scaling "
@@ -561,7 +572,11 @@ class AdvancedRiskAnalytics:
                 )
                 var_1d = np.percentile(returns, (1 - confidence_level) * 100)
                 var_scaled = var_1d * np.sqrt(time_horizon)
-                val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
+                val = (
+                    abs(var_scaled * portfolio_value)
+                    if portfolio_value
+                    else abs(var_scaled)
+                )
                 return VaRResult(
                     var_value=val,
                     confidence_level=confidence_level,
@@ -574,13 +589,19 @@ class AdvancedRiskAnalytics:
                         f"multi-day VaR."
                     ),
                 )
-            multiday_returns = np.array([
-                np.sum(returns[i:i + time_horizon])
-                for i in range(len(returns) - time_horizon + 1)
-            ])
+            multiday_returns = np.array(
+                [
+                    np.sum(returns[i : i + time_horizon])
+                    for i in range(len(returns) - time_horizon + 1)
+                ]
+            )
 
         var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
-        val = abs(var_percentile * portfolio_value) if portfolio_value else abs(var_percentile)
+        val = (
+            abs(var_percentile * portfolio_value)
+            if portfolio_value
+            else abs(var_percentile)
+        )
 
         return VaRResult(
             var_value=val,
@@ -618,7 +639,6 @@ class AdvancedRiskAnalytics:
         Returns:
             VaRResult with method='ewma'
         """
-        from scipy import stats as _stats
 
         confidence_level = confidence_level or self.var_confidence
 
@@ -664,7 +684,7 @@ class AdvancedRiskAnalytics:
         self,
         returns: np.ndarray,
         confidence_level: float = None,
-        portfolio_value: float = None
+        portfolio_value: float = None,
     ) -> float:
         """
         Calculate Conditional VaR (Expected Shortfall).
@@ -708,7 +728,7 @@ class AdvancedRiskAnalytics:
         volatility: float,
         time_horizon: int = 252,  # Trading days
         num_simulations: int = None,
-        return_paths: bool = False
+        return_paths: bool = False,
     ) -> MonteCarloResult:
         """
         Run Monte Carlo simulation for portfolio projection.
@@ -733,9 +753,7 @@ class AdvancedRiskAnalytics:
         # Generate random walks
         np.random.seed(42)  # Reproducibility
         random_returns = np.random.normal(
-            daily_return,
-            daily_vol,
-            (num_simulations, time_horizon)
+            daily_return, daily_vol, (num_simulations, time_horizon)
         )
 
         # Calculate cumulative returns (geometric)
@@ -756,7 +774,7 @@ class AdvancedRiskAnalytics:
             max_gain=np.max(final_returns),
             max_loss=np.min(final_returns),
             simulated_paths=cumulative_returns if return_paths else None,
-            num_simulations=num_simulations
+            num_simulations=num_simulations,
         )
 
         return result
@@ -766,7 +784,7 @@ class AdvancedRiskAnalytics:
         positions: Dict[str, Dict],
         correlations: Optional[np.ndarray] = None,
         time_horizon: int = 30,
-        num_simulations: int = None
+        num_simulations: int = None,
     ) -> Dict[str, Any]:
         """
         Simulate portfolio scenarios with correlated assets.
@@ -785,9 +803,11 @@ class AdvancedRiskAnalytics:
         asset_names = list(positions.keys())
 
         # Extract parameters
-        values = np.array([positions[a]['value'] for a in asset_names])
-        returns = np.array([positions[a].get('expected_return', 0.0) for a in asset_names])
-        vols = np.array([positions[a].get('volatility', 0.20) for a in asset_names])
+        values = np.array([positions[a]["value"] for a in asset_names])
+        returns = np.array(
+            [positions[a].get("expected_return", 0.0) for a in asset_names]
+        )
+        vols = np.array([positions[a].get("volatility", 0.20) for a in asset_names])
 
         # Default to identity correlation if not provided
         if correlations is None:
@@ -803,7 +823,7 @@ class AdvancedRiskAnalytics:
         # Generate correlated random returns
         np.random.seed(42)
         uncorrelated = np.random.normal(0, 1, (num_simulations, time_horizon, n_assets))
-        correlated = np.einsum('ijk,lk->ijl', uncorrelated, L)
+        correlated = np.einsum("ijk,lk->ijl", uncorrelated, L)
 
         # Apply mean and volatility
         simulated_returns = daily_returns + daily_vols * correlated
@@ -817,19 +837,21 @@ class AdvancedRiskAnalytics:
         initial_portfolio_value = np.sum(values)
 
         # Calculate metrics
-        portfolio_returns = (final_portfolio_values - initial_portfolio_value) / initial_portfolio_value
+        portfolio_returns = (
+            final_portfolio_values - initial_portfolio_value
+        ) / initial_portfolio_value
 
         return {
-            'initial_value': initial_portfolio_value,
-            'expected_final_value': np.mean(final_portfolio_values),
-            'expected_return': np.mean(portfolio_returns),
-            'volatility': np.std(portfolio_returns),
-            'var_95': -np.percentile(portfolio_returns, 5) * initial_portfolio_value,
-            'var_99': -np.percentile(portfolio_returns, 1) * initial_portfolio_value,
-            'best_case': np.percentile(final_portfolio_values, 95),
-            'worst_case': np.percentile(final_portfolio_values, 5),
-            'probability_loss': np.mean(portfolio_returns < 0),
-            'probability_gain_10pct': np.mean(portfolio_returns > 0.10),
+            "initial_value": initial_portfolio_value,
+            "expected_final_value": np.mean(final_portfolio_values),
+            "expected_return": np.mean(portfolio_returns),
+            "volatility": np.std(portfolio_returns),
+            "var_95": -np.percentile(portfolio_returns, 5) * initial_portfolio_value,
+            "var_99": -np.percentile(portfolio_returns, 1) * initial_portfolio_value,
+            "best_case": np.percentile(final_portfolio_values, 95),
+            "worst_case": np.percentile(final_portfolio_values, 5),
+            "probability_loss": np.mean(portfolio_returns < 0),
+            "probability_gain_10pct": np.mean(portfolio_returns > 0.10),
         }
 
     # ============================================================
@@ -837,9 +859,7 @@ class AdvancedRiskAnalytics:
     # ============================================================
 
     def run_stress_test(
-        self,
-        portfolio: Dict[str, Dict],
-        scenario_name: str
+        self, portfolio: Dict[str, Dict], scenario_name: str
     ) -> StressTestResult:
         """
         Run a stress test scenario on portfolio.
@@ -855,15 +875,15 @@ class AdvancedRiskAnalytics:
             raise ValueError(f"Unknown scenario: {scenario_name}")
 
         scenario = self.stress_scenarios[scenario_name]
-        total_value = sum(p['value'] for p in portfolio.values())
+        total_value = sum(p["value"] for p in portfolio.values())
 
         # Calculate impact on each position
         total_impact = 0.0
         affected = []
 
         for position_name, position in portfolio.items():
-            asset_class = position.get('asset_class', 'equities')
-            value = position['value']
+            asset_class = position.get("asset_class", "equities")
+            value = position["value"]
 
             # Get shock for asset class
             shock = scenario.get(asset_class, 0.0)
@@ -878,28 +898,30 @@ class AdvancedRiskAnalytics:
 
         # Determine risk level
         if abs(pct_impact) < 0.05:
-            risk_level = 'low'
-            recommendation = 'Portfolio is resilient to this scenario'
+            risk_level = "low"
+            recommendation = "Portfolio is resilient to this scenario"
         elif abs(pct_impact) < 0.15:
-            risk_level = 'medium'
-            recommendation = 'Consider hedging or reducing exposure'
+            risk_level = "medium"
+            recommendation = "Consider hedging or reducing exposure"
         elif abs(pct_impact) < 0.30:
-            risk_level = 'high'
-            recommendation = 'Significant risk - implement protective measures'
+            risk_level = "high"
+            recommendation = "Significant risk - implement protective measures"
         else:
-            risk_level = 'severe'
-            recommendation = 'Critical exposure - immediate risk reduction required'
+            risk_level = "severe"
+            recommendation = "Critical exposure - immediate risk reduction required"
 
         return StressTestResult(
-            scenario_name=scenario['name'],
+            scenario_name=scenario["name"],
             portfolio_impact=pct_impact,
             dollar_impact=total_impact,
             affected_positions=affected,
             risk_level=risk_level,
-            recommendation=recommendation
+            recommendation=recommendation,
         )
 
-    def run_all_stress_tests(self, portfolio: Dict[str, Dict]) -> List[StressTestResult]:
+    def run_all_stress_tests(
+        self, portfolio: Dict[str, Dict]
+    ) -> List[StressTestResult]:
         """Run all stress test scenarios."""
         results = []
         for scenario_name in self.stress_scenarios.keys():
@@ -935,7 +957,9 @@ class AdvancedRiskAnalytics:
         max_drawdown_idx = np.argmin(drawdown)
 
         # Find drawdown start (last peak before max drawdown)
-        max_drawdown_start = np.argmax(equity_curve[:max_drawdown_idx+1] == running_max[max_drawdown_idx])
+        max_drawdown_start = np.argmax(
+            equity_curve[: max_drawdown_idx + 1] == running_max[max_drawdown_idx]
+        )
         max_drawdown_duration = max_drawdown_idx - max_drawdown_start
 
         # Current drawdown duration
@@ -958,13 +982,11 @@ class AdvancedRiskAnalytics:
             current_drawdown_duration=current_drawdown_duration,
             recovery_rate=recovery_rate,
             drawdown_events=drawdown_events,
-            underwater_periods=underwater_periods
+            underwater_periods=underwater_periods,
         )
 
     def _identify_drawdown_events(
-        self,
-        drawdown: np.ndarray,
-        threshold: float = -0.05
+        self, drawdown: np.ndarray, threshold: float = -0.05
     ) -> List[Dict]:
         """Identify significant drawdown events."""
         events = []
@@ -977,23 +999,27 @@ class AdvancedRiskAnalytics:
                 start_idx = i
             elif dd >= 0 and in_drawdown:
                 in_drawdown = False
-                events.append({
-                    'start_idx': start_idx,
-                    'end_idx': i,
-                    'duration': i - start_idx,
-                    'max_drawdown': float(np.min(drawdown[start_idx:i+1])),
-                    'recovered': True
-                })
+                events.append(
+                    {
+                        "start_idx": start_idx,
+                        "end_idx": i,
+                        "duration": i - start_idx,
+                        "max_drawdown": float(np.min(drawdown[start_idx : i + 1])),
+                        "recovered": True,
+                    }
+                )
 
         # Handle ongoing drawdown
         if in_drawdown:
-            events.append({
-                'start_idx': start_idx,
-                'end_idx': len(drawdown) - 1,
-                'duration': len(drawdown) - start_idx,
-                'max_drawdown': float(np.min(drawdown[start_idx:])),
-                'recovered': False
-            })
+            events.append(
+                {
+                    "start_idx": start_idx,
+                    "end_idx": len(drawdown) - 1,
+                    "duration": len(drawdown) - start_idx,
+                    "max_drawdown": float(np.min(drawdown[start_idx:])),
+                    "recovered": False,
+                }
+            )
 
         return events
 
@@ -1002,7 +1028,7 @@ class AdvancedRiskAnalytics:
         if not drawdown_events:
             return 1.0
 
-        recovered = sum(1 for e in drawdown_events if e['recovered'])
+        recovered = sum(1 for e in drawdown_events if e["recovered"])
         return recovered / len(drawdown_events)
 
     def _calculate_underwater_periods(self, drawdown: np.ndarray) -> List[Dict]:
@@ -1019,18 +1045,18 @@ class AdvancedRiskAnalytics:
                 start_idx = i
             elif not uw and in_period:
                 in_period = False
-                periods.append({
-                    'start_idx': start_idx,
-                    'end_idx': i,
-                    'duration': i - start_idx
-                })
+                periods.append(
+                    {"start_idx": start_idx, "end_idx": i, "duration": i - start_idx}
+                )
 
         if in_period:
-            periods.append({
-                'start_idx': start_idx,
-                'end_idx': len(drawdown) - 1,
-                'duration': len(drawdown) - start_idx
-            })
+            periods.append(
+                {
+                    "start_idx": start_idx,
+                    "end_idx": len(drawdown) - 1,
+                    "duration": len(drawdown) - start_idx,
+                }
+            )
 
         return periods
 
@@ -1038,11 +1064,7 @@ class AdvancedRiskAnalytics:
     # RISK-ADJUSTED METRICS
     # ============================================================
 
-    def calculate_sharpe_ratio(
-        self,
-        returns,
-        periods_per_year: int = 252
-    ) -> float:
+    def calculate_sharpe_ratio(self, returns, periods_per_year: int = 252) -> float:
         """Calculate annualized Sharpe ratio."""
         returns = np.asarray(returns, dtype=float)
         excess_returns = returns - self.risk_free_rate / periods_per_year
@@ -1051,24 +1073,20 @@ class AdvancedRiskAnalytics:
         return np.sqrt(periods_per_year) * np.mean(excess_returns) / np.std(returns)
 
     def calculate_sortino_ratio(
-        self,
-        returns: np.ndarray,
-        periods_per_year: int = 252
+        self, returns: np.ndarray, periods_per_year: int = 252
     ) -> float:
         """Calculate annualized Sortino ratio (using downside deviation)."""
         excess_returns = returns - self.risk_free_rate / periods_per_year
         downside_returns = returns[returns < 0]
 
         if len(downside_returns) == 0 or np.std(downside_returns) == 0:
-            return float('inf') if np.mean(excess_returns) > 0 else 0.0
+            return float("inf") if np.mean(excess_returns) > 0 else 0.0
 
         downside_std = np.std(downside_returns)
         return np.sqrt(periods_per_year) * np.mean(excess_returns) / downside_std
 
     def calculate_calmar_ratio(
-        self,
-        returns: np.ndarray,
-        equity_curve: np.ndarray = None
+        self, returns: np.ndarray, equity_curve: np.ndarray = None
     ) -> float:
         """Calculate Calmar ratio (annual return / max drawdown)."""
         annual_return = np.mean(returns) * 252
@@ -1081,7 +1099,7 @@ class AdvancedRiskAnalytics:
         max_dd = abs(analysis.max_drawdown)
 
         if max_dd == 0:
-            return float('inf') if annual_return > 0 else 0.0
+            return float("inf") if annual_return > 0 else 0.0
 
         return annual_return / max_dd
 
@@ -1089,7 +1107,7 @@ class AdvancedRiskAnalytics:
         self,
         returns: np.ndarray,
         equity_curve: np.ndarray = None,
-        portfolio_value: float = None
+        portfolio_value: float = None,
     ) -> Dict[str, Any]:
         """Calculate comprehensive risk metrics."""
 
@@ -1097,9 +1115,15 @@ class AdvancedRiskAnalytics:
             equity_curve = np.cumprod(1 + returns) * (portfolio_value or 10000)
 
         # VaR calculations
-        var_hist = self.calculate_var_historical(returns, portfolio_value=portfolio_value)
-        var_param = self.calculate_var_parametric(returns, portfolio_value=portfolio_value)
-        var_mc = self.calculate_var_monte_carlo(returns, portfolio_value=portfolio_value)
+        var_hist = self.calculate_var_historical(
+            returns, portfolio_value=portfolio_value
+        )
+        var_param = self.calculate_var_parametric(
+            returns, portfolio_value=portfolio_value
+        )
+        var_mc = self.calculate_var_monte_carlo(
+            returns, portfolio_value=portfolio_value
+        )
         cvar = self.calculate_cvar(returns, portfolio_value=portfolio_value)
 
         # Drawdown analysis
@@ -1111,39 +1135,42 @@ class AdvancedRiskAnalytics:
         calmar = self.calculate_calmar_ratio(returns, equity_curve)
 
         return {
-            'var_historical_95': var_hist.var_value,
-            'var_parametric_95': var_param.var_value,
-            'var_monte_carlo_95': var_mc.var_value,
-            'cvar_95': cvar,
-            'max_drawdown': drawdown.max_drawdown,
-            'max_drawdown_duration': drawdown.max_drawdown_duration,
-            'current_drawdown': drawdown.current_drawdown,
-            'sharpe_ratio': sharpe,
-            'sortino_ratio': sortino,
-            'calmar_ratio': calmar,
-            'total_return': float((equity_curve[-1] / equity_curve[0]) - 1),
-            'annual_return': float(np.mean(returns) * 252),
-            'annual_volatility': float(np.std(returns) * np.sqrt(252)),
-            'positive_days': float(np.mean(returns > 0)),
-            'recovery_rate': drawdown.recovery_rate,
+            "var_historical_95": var_hist.var_value,
+            "var_parametric_95": var_param.var_value,
+            "var_monte_carlo_95": var_mc.var_value,
+            "cvar_95": cvar,
+            "max_drawdown": drawdown.max_drawdown,
+            "max_drawdown_duration": drawdown.max_drawdown_duration,
+            "current_drawdown": drawdown.current_drawdown,
+            "sharpe_ratio": sharpe,
+            "sortino_ratio": sortino,
+            "calmar_ratio": calmar,
+            "total_return": float((equity_curve[-1] / equity_curve[0]) - 1),
+            "annual_return": float(np.mean(returns) * 252),
+            "annual_volatility": float(np.std(returns) * np.sqrt(252)),
+            "positive_days": float(np.mean(returns > 0)),
+            "recovery_rate": drawdown.recovery_rate,
         }
 
     # ------------------------------------------------------------------
     # Convenience aliases expected by tests
     # ------------------------------------------------------------------
 
-    def calculate_var(self, returns, confidence: float = None,
-                      confidence_level: float = None, **kw) -> float:
+    def calculate_var(
+        self, returns, confidence: float = None, confidence_level: float = None, **kw
+    ) -> float:
         """Return VaR as a negative number (loss). Uses historical simulation."""
         import numpy as _np
+
         cl = confidence or confidence_level or self.var_confidence
         arr = _np.asarray(returns, dtype=float)
         # VaR at confidence level = percentile of losses (negative)
         var = float(_np.percentile(arr, (1 - cl) * 100))
         return var  # already negative for loss distributions
 
-    def calculate_sharpe(self, returns, risk_free_rate: float = None,
-                         annualize: bool = True) -> float:
+    def calculate_sharpe(
+        self, returns, risk_free_rate: float = None, annualize: bool = True
+    ) -> float:
         """Alias for calculate_sharpe_ratio with optional risk_free_rate override."""
         old_rfr = self.risk_free_rate
         if risk_free_rate is not None:
@@ -1156,12 +1183,15 @@ class AdvancedRiskAnalytics:
 # Patch calculate_cvar to also accept 'confidence' kwarg
 _orig_cvar = AdvancedRiskAnalytics.calculate_cvar
 
-def _patched_cvar(self, returns, confidence_level=None, confidence=None,
-                  portfolio_value=None):
+
+def _patched_cvar(
+    self, returns, confidence_level=None, confidence=None, portfolio_value=None
+):
     cl = confidence or confidence_level
     arr = np.asarray(returns, dtype=float)
     result = _orig_cvar(self, arr, confidence_level=cl, portfolio_value=portfolio_value)
     return abs(result)
+
 
 AdvancedRiskAnalytics.calculate_cvar = _patched_cvar
 

@@ -31,7 +31,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -68,10 +68,13 @@ _DEFAULT_REGIME_STRATEGY: Dict[str, str] = {
     REGIME_UNKNOWN: "TrendFollowing",
 }
 
-_MANIFEST_PATH = Path(os.getenv("REGIME_MANIFEST", "ml/saved_models/regime_manifest.json"))
+_MANIFEST_PATH = Path(
+    os.getenv("REGIME_MANIFEST", "ml/saved_models/regime_manifest.json")
+)
 
 
 # ── Lightweight regime detector (no HMM dependency) ──────────────────────────
+
 
 def detect_regime(df: pd.DataFrame, lookback: int = 50) -> Tuple[str, float]:
     """
@@ -131,6 +134,7 @@ def detect_regime(df: pd.DataFrame, lookback: int = 50) -> Tuple[str, float]:
 
 # ── Numeric helpers ───────────────────────────────────────────────────────────
 
+
 def _ema(values: np.ndarray, period: int) -> np.ndarray:
     alpha = 2.0 / (period + 1)
     result = np.empty_like(values)
@@ -176,9 +180,11 @@ def _adx_approx(
 
 # ── Manifest: per-regime strategy performance ─────────────────────────────────
 
+
 @dataclass
 class RegimePerformance:
     """Backtest performance of one strategy in one regime."""
+
     strategy_name: str
     regime: str
     sharpe: float = 0.0
@@ -215,10 +221,7 @@ def load_regime_manifest() -> Dict[str, List[RegimePerformance]]:
 def save_regime_manifest(manifest: Dict[str, List[RegimePerformance]]) -> None:
     """Persist regime performance manifest to disk."""
     _MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    raw = {
-        regime: [vars(p) for p in perfs]
-        for regime, perfs in manifest.items()
-    }
+    raw = {regime: [vars(p) for p in perfs] for regime, perfs in manifest.items()}
     with open(_MANIFEST_PATH, "w") as f:
         json.dump(raw, f, indent=2)
     logger.info("Regime manifest saved: %s", _MANIFEST_PATH)
@@ -271,6 +274,7 @@ def update_regime_performance(
 
 # ── RegimeRouter ──────────────────────────────────────────────────────────────
 
+
 class RegimeRouter:
     """
     Routes incoming market data to the best strategy for the detected regime.
@@ -306,9 +310,7 @@ class RegimeRouter:
         # Log regime changes
         ts = datetime.now(timezone.utc).isoformat()
         if not self._regime_history or self._regime_history[-1][0] != regime:
-            logger.info(
-                "Regime change → %s (confidence=%.2f)", regime, confidence
-            )
+            logger.info("Regime change → %s (confidence=%.2f)", regime, confidence)
             self._regime_history.append((regime, confidence, ts))
             if len(self._regime_history) > 500:
                 self._regime_history = self._regime_history[-500:]
@@ -327,7 +329,10 @@ class RegimeRouter:
             if entry.strategy_name in available and entry.total_trades >= 10:
                 logger.debug(
                     "Regime %s → %s (manifest Sharpe=%.2f, trades=%d)",
-                    regime, entry.strategy_name, entry.sharpe, entry.total_trades,
+                    regime,
+                    entry.strategy_name,
+                    entry.sharpe,
+                    entry.total_trades,
                 )
                 return entry.strategy_name
 

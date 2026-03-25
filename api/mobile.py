@@ -23,9 +23,12 @@ router = APIRouter(prefix="/api/mobile", tags=["Mobile"])
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class RegisterPushBody(BaseModel):
-    fcm_token: str = Field(..., min_length=10, description="Firebase Cloud Messaging device token")
-    platform:  str = Field("android", description="'android' or 'ios'")
+    fcm_token: str = Field(
+        ..., min_length=10, description="Firebase Cloud Messaging device token"
+    )
+    platform: str = Field("android", description="'android' or 'ios'")
 
 
 class UnregisterPushBody(BaseModel):
@@ -33,6 +36,7 @@ class UnregisterPushBody(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/register-push")
 async def register_push(
@@ -43,8 +47,8 @@ async def register_push(
     push_manager.register_device(user.sub, body.fcm_token)
     return {
         "registered": True,
-        "user_id":    user.sub,
-        "platform":   body.platform,
+        "user_id": user.sub,
+        "platform": body.platform,
         "fcm_enabled": push_manager.fcm_enabled,
     }
 
@@ -70,10 +74,12 @@ async def test_push(user: TokenPayload = Depends(get_current_user)):
     )
     tokens = push_manager.get_tokens(user.sub)
     return {
-        "sent":        sent,
+        "sent": sent,
         "fcm_enabled": push_manager.fcm_enabled,
-        "devices":     len(tokens),
-        "note":        "Notification logged (no FCM key)" if not push_manager.fcm_enabled else "Sent via FCM",
+        "devices": len(tokens),
+        "note": "Notification logged (no FCM key)"
+        if not push_manager.fcm_enabled
+        else "Sent via FCM",
     }
 
 
@@ -82,5 +88,5 @@ async def push_status(user: TokenPayload = Depends(get_current_user)):
     """Return FCM status and registered device count for the current user."""
     return {
         "fcm_enabled": push_manager.fcm_enabled,
-        "devices":     len(push_manager.get_tokens(user.sub)),
+        "devices": len(push_manager.get_tokens(user.sub)),
     }

@@ -11,7 +11,6 @@ GET /api/risk/prop-firm-status   — current challenge metrics for the UI tracke
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -23,15 +22,16 @@ router = APIRouter(prefix="/api/risk", tags=["Risk / Prop Firm"])
 
 class PropFirmStatus(BaseModel):
     """Current prop firm challenge state returned to the dashboard."""
+
     # Drawdown metrics (fractions 0–1)
     daily_loss_pct: float
     daily_loss_limit: float
     max_drawdown_pct: float
     max_drawdown_limit: float
     # Profit progress
-    profit_target_pct: float          # fraction of target achieved
-    profit_target_amount: float       # $ amount earned so far
-    profit_target_goal: float         # $ target (e.g. 10 000 for $100K account)
+    profit_target_pct: float  # fraction of target achieved
+    profit_target_amount: float  # $ amount earned so far
+    profit_target_goal: float  # $ target (e.g. 10 000 for $100K account)
     # Trading days
     trading_days_completed: int
     trading_days_required: int
@@ -44,7 +44,11 @@ class PropFirmStatus(BaseModel):
     starting_equity: float
 
 
-@router.get("/prop-firm-status", response_model=PropFirmStatus, summary="Prop firm challenge status")
+@router.get(
+    "/prop-firm-status",
+    response_model=PropFirmStatus,
+    summary="Prop firm challenge status",
+)
 async def prop_firm_status():
     """
     Return the current prop firm challenge metrics.
@@ -54,8 +58,8 @@ async def prop_firm_status():
     yet initialised (e.g. before first trade).
     """
     try:
-        from risk.compliance import PropComplianceEngine, PropFirmConfig
         from app import app_state  # noqa: PLC0415
+        from risk.compliance import PropComplianceEngine, PropFirmConfig
 
         # Try to get the engine from app state first
         engine = getattr(app_state, "prop_compliance_engine", None)
@@ -86,13 +90,15 @@ async def prop_firm_status():
 
         # AI message
         if ks_active:
-            ai_msg = "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
+            ai_msg = (
+                "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
+            )
         elif paused:
             ai_msg = "🛑 TRADING PAUSED — approaching drawdown limit"
         elif total_dd >= max_limit * 0.95:
-            ai_msg = f"⚠️ At {total_dd/max_limit*100:.0f}% of max drawdown — reduce size immediately"
+            ai_msg = f"⚠️ At {total_dd / max_limit * 100:.0f}% of max drawdown — reduce size immediately"
         elif daily_dd >= daily_limit * 0.80:
-            ai_msg = f"⚠️ At {daily_dd/daily_limit*100:.0f}% of daily loss limit — halving position size"
+            ai_msg = f"⚠️ At {daily_dd / daily_limit * 100:.0f}% of daily loss limit — halving position size"
         else:
             ai_msg = "✅ Within all prop firm limits — trading active"
 
@@ -104,7 +110,7 @@ async def prop_firm_status():
             profit_target_pct=profit_pct,
             profit_target_amount=profit_earned,
             profit_target_goal=profit_goal,
-            trading_days_completed=0,   # populated when trade log is wired
+            trading_days_completed=0,  # populated when trade log is wired
             trading_days_required=30,
             paused=paused,
             kill_switch_active=ks_active,

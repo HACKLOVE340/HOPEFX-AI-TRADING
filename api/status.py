@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
@@ -31,6 +31,7 @@ _start_time = time.time()
 
 
 # ── JSON endpoint ─────────────────────────────────────────────────────────────
+
 
 @router.get("/api/status/json", summary="Machine-readable system status")
 async def status_json():
@@ -58,14 +59,17 @@ async def status_history():
     history = []
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
-        history.append({
-            "date": day,
-            "uptime_pct": _uptime_history.get(day, 100.0),
-        })
+        history.append(
+            {
+                "date": day,
+                "uptime_pct": _uptime_history.get(day, 100.0),
+            }
+        )
     return {"history": history}
 
 
 # ── HTML status page ──────────────────────────────────────────────────────────
+
 
 @router.get("/status", response_class=HTMLResponse, include_in_schema=False)
 async def status_page():
@@ -79,12 +83,20 @@ async def status_page():
     rows_html = ""
     for name, info in checks.items():
         status = info["status"]
-        dot_color = {"healthy": "#22c55e", "degraded": "#f59e0b", "unhealthy": "#ef4444"}.get(status, "#94a3b8")
-        label_color = {"healthy": "#4ade80", "degraded": "#fbbf24", "unhealthy": "#f87171"}.get(status, "#94a3b8")
+        dot_color = {
+            "healthy": "#22c55e",
+            "degraded": "#f59e0b",
+            "unhealthy": "#ef4444",
+        }.get(status, "#94a3b8")
+        label_color = {
+            "healthy": "#4ade80",
+            "degraded": "#fbbf24",
+            "unhealthy": "#f87171",
+        }.get(status, "#94a3b8")
         message = info.get("message", "")
         rows_html += f"""
         <div class="component-row">
-          <div class="component-name">{name.replace('_', ' ').title()}</div>
+          <div class="component-name">{name.replace("_", " ").title()}</div>
           <div class="component-status">
             <span class="dot" style="background:{dot_color}"></span>
             <span style="color:{label_color};font-weight:600;text-transform:capitalize">{status}</span>
@@ -92,8 +104,16 @@ async def status_page():
           <div class="component-msg">{message}</div>
         </div>"""
 
-    banner_color = {"healthy": "#14532d", "degraded": "#451a03", "unhealthy": "#450a0a"}.get(overall, "#1e293b")
-    banner_border = {"healthy": "#16a34a", "degraded": "#d97706", "unhealthy": "#dc2626"}.get(overall, "#334155")
+    banner_color = {
+        "healthy": "#14532d",
+        "degraded": "#451a03",
+        "unhealthy": "#450a0a",
+    }.get(overall, "#1e293b")
+    banner_border = {
+        "healthy": "#16a34a",
+        "degraded": "#d97706",
+        "unhealthy": "#dc2626",
+    }.get(overall, "#334155")
     banner_text = {
         "healthy": "All systems operational",
         "degraded": "Partial degradation — some services affected",
@@ -248,10 +268,12 @@ async def status_page():
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 async def _run_checks() -> Dict[str, Any]:
     """Run all health checks, falling back gracefully if checker unavailable."""
     try:
         from infrastructure.health import get_health_checker
+
         checker = get_health_checker()
         system_health = await checker.run_all_checks()
         result = {}
@@ -259,7 +281,9 @@ async def _run_checks() -> Dict[str, Any]:
             result[check.name] = {
                 "status": check.status.value,
                 "message": check.message or "",
-                "response_time_ms": round(check.response_time * 1000, 1) if check.response_time else None,
+                "response_time_ms": round(check.response_time * 1000, 1)
+                if check.response_time
+                else None,
             }
         return result
     except Exception as exc:

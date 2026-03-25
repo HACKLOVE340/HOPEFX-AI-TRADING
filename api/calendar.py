@@ -35,45 +35,121 @@ _auto_pause_config: Dict[str, Any] = {
 
 # ── Seed data helper ──────────────────────────────────────────────────────────
 
+
 def _seed_calendar():
     """Return a seeded EconomicCalendar with realistic upcoming events."""
-    from news.economic_calendar import EconomicCalendar, EconomicEvent, EventImportance, EventType
+    from news.economic_calendar import (
+        EconomicCalendar,
+        EconomicEvent,
+        EventImportance,
+        EventType,
+    )
 
     cal = EconomicCalendar()
     now = datetime.now(timezone.utc)
 
     seed_events = [
         # Today / tomorrow
-        dict(title="US Non-Farm Payrolls", event_type=EventType.EMPLOYMENT,
-             importance=EventImportance.CRITICAL, hours=2, country="US",
-             currency="USD", forecast=185.0, previous=175.0),
-        dict(title="US CPI (YoY)", event_type=EventType.INFLATION,
-             importance=EventImportance.HIGH, hours=6, country="US",
-             currency="USD", forecast=3.1, previous=3.2),
-        dict(title="FOMC Meeting Minutes", event_type=EventType.CENTRAL_BANK,
-             importance=EventImportance.CRITICAL, hours=26, country="US",
-             currency="USD", forecast=None, previous=None),
-        dict(title="ECB Interest Rate Decision", event_type=EventType.CENTRAL_BANK,
-             importance=EventImportance.CRITICAL, hours=30, country="EU",
-             currency="EUR", forecast=4.5, previous=4.5),
-        dict(title="UK GDP (QoQ)", event_type=EventType.GDP,
-             importance=EventImportance.HIGH, hours=48, country="UK",
-             currency="GBP", forecast=0.2, previous=0.1),
-        dict(title="US Retail Sales (MoM)", event_type=EventType.RETAIL_SALES,
-             importance=EventImportance.MEDIUM, hours=52, country="US",
-             currency="USD", forecast=0.3, previous=-0.1),
-        dict(title="US Initial Jobless Claims", event_type=EventType.EMPLOYMENT,
-             importance=EventImportance.MEDIUM, hours=72, country="US",
-             currency="USD", forecast=215.0, previous=220.0),
-        dict(title="BOJ Rate Decision", event_type=EventType.CENTRAL_BANK,
-             importance=EventImportance.HIGH, hours=96, country="JP",
-             currency="JPY", forecast=-0.1, previous=-0.1),
-        dict(title="US PPI (MoM)", event_type=EventType.INFLATION,
-             importance=EventImportance.MEDIUM, hours=120, country="US",
-             currency="USD", forecast=0.2, previous=0.3),
-        dict(title="Michigan Consumer Sentiment", event_type=EventType.CONSUMER_CONFIDENCE,
-             importance=EventImportance.LOW, hours=144, country="US",
-             currency="USD", forecast=68.0, previous=67.4),
+        dict(
+            title="US Non-Farm Payrolls",
+            event_type=EventType.EMPLOYMENT,
+            importance=EventImportance.CRITICAL,
+            hours=2,
+            country="US",
+            currency="USD",
+            forecast=185.0,
+            previous=175.0,
+        ),
+        dict(
+            title="US CPI (YoY)",
+            event_type=EventType.INFLATION,
+            importance=EventImportance.HIGH,
+            hours=6,
+            country="US",
+            currency="USD",
+            forecast=3.1,
+            previous=3.2,
+        ),
+        dict(
+            title="FOMC Meeting Minutes",
+            event_type=EventType.CENTRAL_BANK,
+            importance=EventImportance.CRITICAL,
+            hours=26,
+            country="US",
+            currency="USD",
+            forecast=None,
+            previous=None,
+        ),
+        dict(
+            title="ECB Interest Rate Decision",
+            event_type=EventType.CENTRAL_BANK,
+            importance=EventImportance.CRITICAL,
+            hours=30,
+            country="EU",
+            currency="EUR",
+            forecast=4.5,
+            previous=4.5,
+        ),
+        dict(
+            title="UK GDP (QoQ)",
+            event_type=EventType.GDP,
+            importance=EventImportance.HIGH,
+            hours=48,
+            country="UK",
+            currency="GBP",
+            forecast=0.2,
+            previous=0.1,
+        ),
+        dict(
+            title="US Retail Sales (MoM)",
+            event_type=EventType.RETAIL_SALES,
+            importance=EventImportance.MEDIUM,
+            hours=52,
+            country="US",
+            currency="USD",
+            forecast=0.3,
+            previous=-0.1,
+        ),
+        dict(
+            title="US Initial Jobless Claims",
+            event_type=EventType.EMPLOYMENT,
+            importance=EventImportance.MEDIUM,
+            hours=72,
+            country="US",
+            currency="USD",
+            forecast=215.0,
+            previous=220.0,
+        ),
+        dict(
+            title="BOJ Rate Decision",
+            event_type=EventType.CENTRAL_BANK,
+            importance=EventImportance.HIGH,
+            hours=96,
+            country="JP",
+            currency="JPY",
+            forecast=-0.1,
+            previous=-0.1,
+        ),
+        dict(
+            title="US PPI (MoM)",
+            event_type=EventType.INFLATION,
+            importance=EventImportance.MEDIUM,
+            hours=120,
+            country="US",
+            currency="USD",
+            forecast=0.2,
+            previous=0.3,
+        ),
+        dict(
+            title="Michigan Consumer Sentiment",
+            event_type=EventType.CONSUMER_CONFIDENCE,
+            importance=EventImportance.LOW,
+            hours=144,
+            country="US",
+            currency="USD",
+            forecast=68.0,
+            previous=67.4,
+        ),
     ]
 
     for ev in seed_events:
@@ -88,6 +164,7 @@ def _seed_calendar():
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class EventOut(BaseModel):
     title: str
@@ -111,6 +188,7 @@ class AutoPauseConfig(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _event_to_out(event: Any) -> EventOut:
     now = datetime.now(timezone.utc)
     delta = event.scheduled_time - now
@@ -133,14 +211,18 @@ def _event_to_out(event: Any) -> EventOut:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/upcoming", response_model=List[EventOut])
 async def get_upcoming(
     hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
-    importance: Optional[str] = Query(None, description="Filter: low|medium|high|critical"),
+    importance: Optional[str] = Query(
+        None, description="Filter: low|medium|high|critical"
+    ),
 ) -> List[EventOut]:
     """Return upcoming economic events within the specified window."""
     try:
         from news.economic_calendar import EventImportance
+
         cal = _seed_calendar()
         min_imp = None
         if importance:
@@ -187,20 +269,38 @@ async def get_auto_pause() -> AutoPauseConfig:
 
 # Known 2024-2026 FOMC meeting dates (UTC, 18:00 = statement release)
 _FOMC_DATES = [
-    "2024-01-31", "2024-03-20", "2024-05-01", "2024-06-12",
-    "2024-07-31", "2024-09-18", "2024-11-07", "2024-12-18",
-    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
-    "2025-07-30", "2025-09-17", "2025-11-05", "2025-12-17",
-    "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
-    "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
+    "2024-01-31",
+    "2024-03-20",
+    "2024-05-01",
+    "2024-06-12",
+    "2024-07-31",
+    "2024-09-18",
+    "2024-11-07",
+    "2024-12-18",
+    "2025-01-29",
+    "2025-03-19",
+    "2025-05-07",
+    "2025-06-18",
+    "2025-07-30",
+    "2025-09-17",
+    "2025-11-05",
+    "2025-12-17",
+    "2026-01-28",
+    "2026-03-18",
+    "2026-05-06",
+    "2026-06-17",
+    "2026-07-29",
+    "2026-09-16",
+    "2026-11-04",
+    "2026-12-16",
 ]
 
 # In-memory store for post-event regime overrides
 _fomc_regime_override: dict = {
     "active": False,
-    "outcome": None,        # "hawkish" | "dovish" | "neutral"
+    "outcome": None,  # "hawkish" | "dovish" | "neutral"
     "set_at": None,
-    "expires_at": None,     # 48h after event
+    "expires_at": None,  # 48h after event
     "position_size_multiplier": 1.0,
     "notes": "",
 }
@@ -244,13 +344,15 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> List[FomcEvent]:
         delta_min = int((dt - now).total_seconds() / 60)
         if upcoming_only and delta_min < -60:
             continue
-        events.append(FomcEvent(
-            date=date_str,
-            time_utc="18:00",
-            minutes_until=max(0, delta_min),
-            is_next=False,
-            is_within_2h=abs(delta_min) <= 120,
-        ))
+        events.append(
+            FomcEvent(
+                date=date_str,
+                time_utc="18:00",
+                minutes_until=max(0, delta_min),
+                is_next=False,
+                is_within_2h=abs(delta_min) <= 120,
+            )
+        )
 
     # Mark the soonest upcoming as is_next
     upcoming = [e for e in events if e.minutes_until > 0]
@@ -276,30 +378,38 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     outcome = body.outcome.lower()
     if outcome not in ("hawkish", "dovish", "neutral"):
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="outcome must be hawkish | dovish | neutral")
+
+        raise HTTPException(
+            status_code=400, detail="outcome must be hawkish | dovish | neutral"
+        )
 
     now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=48)
 
     multiplier = {"hawkish": 0.8, "dovish": 1.2, "neutral": 1.0}[outcome]
 
-    _fomc_regime_override.update({
-        "active": True,
-        "outcome": outcome,
-        "set_at": now.isoformat(),
-        "expires_at": expires.isoformat(),
-        "position_size_multiplier": multiplier,
-        "notes": body.notes,
-    })
+    _fomc_regime_override.update(
+        {
+            "active": True,
+            "outcome": outcome,
+            "set_at": now.isoformat(),
+            "expires_at": expires.isoformat(),
+            "position_size_multiplier": multiplier,
+            "notes": body.notes,
+        }
+    )
 
     logger.info(
         "FOMC regime override set: outcome=%s multiplier=%.1f expires=%s",
-        outcome, multiplier, expires.isoformat(),
+        outcome,
+        multiplier,
+        expires.isoformat(),
     )
 
     # Persist to DB so it survives restarts
     try:
         from api.db_store import db_set
+
         db_set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
     except Exception as exc:
         logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
@@ -319,6 +429,7 @@ async def get_fomc_regime() -> FomcRegimeStatus:
     if not _fomc_regime_override.get("active"):
         try:
             from api.db_store import db_get
+
             stored = db_get("fomc_regime_override")
             if stored:
                 _fomc_regime_override.update(stored)
@@ -329,11 +440,13 @@ async def get_fomc_regime() -> FomcRegimeStatus:
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):
         expires = datetime.fromisoformat(_fomc_regime_override["expires_at"])
         if datetime.now(timezone.utc) > expires:
-            _fomc_regime_override.update({
-                "active": False,
-                "outcome": None,
-                "position_size_multiplier": 1.0,
-            })
+            _fomc_regime_override.update(
+                {
+                    "active": False,
+                    "outcome": None,
+                    "position_size_multiplier": 1.0,
+                }
+            )
 
     return FomcRegimeStatus(**_fomc_regime_override)
 
@@ -341,16 +454,19 @@ async def get_fomc_regime() -> FomcRegimeStatus:
 @router.delete("/fomc/regime")
 async def clear_fomc_regime() -> dict:
     """Manually clear the FOMC regime override."""
-    _fomc_regime_override.update({
-        "active": False,
-        "outcome": None,
-        "set_at": None,
-        "expires_at": None,
-        "position_size_multiplier": 1.0,
-        "notes": "",
-    })
+    _fomc_regime_override.update(
+        {
+            "active": False,
+            "outcome": None,
+            "set_at": None,
+            "expires_at": None,
+            "position_size_multiplier": 1.0,
+            "notes": "",
+        }
+    )
     try:
         from api.db_store import db_delete
+
         db_delete("fomc_regime_override")
     except Exception as exc:
         logger.warning("FOMC regime DB delete failed (non-fatal): %s", exc)
