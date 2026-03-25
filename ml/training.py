@@ -1203,18 +1203,75 @@ def train_ml_pipeline(
         df_test_raw, prediction_horizon=prediction_horizon
     )
 
-    # ── Macro features (DXY, 10Y yield, 2Y yield, yield spread, CPI) ─────────
-    # These are point-in-time macro values fetched once and broadcast across all
-    # rows.  They add cross-asset context that pure OHLCV features cannot capture
-    # and are the primary lever for pushing accuracy above 50%.
-    if MACRO_AVAILABLE:
+    # ── Macro features (DXY, VIX, yields, SPX cross-asset) ───────────────────
+    # Use historical macro data aligned to each bar's date — never broadcast
+    # today's point-in-time values across all training rows (look-ahead bias).
+    #
+    # Priority:
+    #   1. ENHANCED_MACRO_AVAILABLE (ml.macro_features via yfinance) — historical
+    #   2. MACRO_AVAILABLE (data.feeds.macro / FRED) — point-in-time fallback
+    #      with explicit warning that it introduces look-ahead bias.
+    #
+    # The FeatureEngineer already calls add_macro_features() when macro_df is
+    # provided.  Here we fetch historical macro data and pass it in so that
+    # every training bar gets the macro values that were available on that date.
+    if ENHANCED_MACRO_AVAILABLE:
+        try:
+            from ml.macro_features import fetch_macro_history
+            import logging as _log
+            _macro_logger = _log.getLogger(__name__)
+            # Determine date range from the full df (train + test)
+            _idx = df.index if hasattr(df.index, 'min') else pd.RangeIndex(len(df))
+            if hasattr(_idx, 'min') and hasattr(_idx[0], 'year'):
+                from datetime import timezone as _tz
+                _start = pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=_tz.utc)
+                _end   = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=_tz.utc)
+            else:
+                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+                _end   = _dt.now(_tz.utc)
+                _start = _end - _td(days=len(df) + 30)
+
+            macro_hist = fetch_macro_history(_start, _end, interval="1d")
+            if not macro_hist.empty:
+                # Re-run feature engineering with historical macro data
+                fe_macro = FeatureEngineer(
+                    include_indicators=True,
+                    include_lags=True,
+                    include_macro=True,
+                    include_regime=True,
+                    macro_df=macro_hist,
+                )
+                X_train, y_train_class, y_train_reg, _ = fe_macro.create_features(
+                    df_train_raw, prediction_horizon=prediction_horizon
+                )
+                X_test, y_test_class, y_test_reg, _ = fe_macro.create_features(
+                    df_test_raw, prediction_horizon=prediction_horizon
+                )
+                print(f"Historical macro features merged: {macro_hist.shape[1]} series, "
+                      f"{len(macro_hist)} bars")
+            else:
+                _macro_logger.warning("Historical macro fetch returned empty — skipping macro features")
+        except Exception as _macro_exc:
+            print(f"Historical macro features unavailable: {_macro_exc} — skipping")
+    elif MACRO_AVAILABLE:
+        # Fallback: point-in-time broadcast (introduces look-ahead bias for
+        # historical training data — acceptable only for live inference).
+        import warnings as _w
+        _w.warn(
+            "MacroFeed().as_ml_features() broadcasts today's macro values to all "
+            "training rows. This introduces look-ahead bias for historical data. "
+            "Install yfinance for bias-free historical macro features.",
+            UserWarning,
+            stacklevel=2,
+        )
         try:
             macro_features = MacroFeed().as_ml_features()
             if macro_features:
                 for col, val in macro_features.items():
                     X_train[col] = float(val) if val is not None else 0.0
                     X_test[col]  = float(val) if val is not None else 0.0
-                print(f"Macro features merged: {list(macro_features.keys())}")
+                print(f"Point-in-time macro features merged (look-ahead bias warning): "
+                      f"{list(macro_features.keys())}")
         except Exception as _macro_exc:
             print(f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping")
 
