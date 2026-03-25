@@ -1,7 +1,7 @@
 """
 api/watchlist.py
 ================
-User watchlist endpoints.
+User watchlist endpoints with DB persistence.
 
 Routes
 ------
@@ -9,6 +9,9 @@ GET    /api/watchlist              — get user's watchlist with live prices
 POST   /api/watchlist/{symbol}     — add symbol to watchlist
 DELETE /api/watchlist/{symbol}     — remove symbol from watchlist
 GET    /api/watchlist/prices       — live prices for all watchlist symbols
+
+Persistence: configurations table via api.db_store.
+Falls back to in-memory dict when DB is unavailable.
 """
 
 from __future__ import annotations
@@ -16,57 +19,71 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Path, status
+from fastapi import APIRouter, HTTPException, Path, Request, status
 from pydantic import BaseModel
+
+from api.db_store import db_get, db_set
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 
-# In-memory store keyed by user_id (replace with DB in production)
+# In-memory fallback (used when DB unavailable)
 _watchlists: Dict[str, List[str]] = {}
 
-# Default symbols for new users
 DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
 
-# Simulated base prices
 _BASE_PRICES: Dict[str, float] = {
-    "XAUUSD": 2050.0,
-    "EURUSD": 1.0850,
-    "GBPUSD": 1.2650,
-    "USDJPY": 149.50,
-    "BTCUSD": 67000.0,
-    "ETHUSD": 3500.0,
-    "USDCAD": 1.3600,
-    "AUDUSD": 0.6550,
-    "USDCHF": 0.8950,
-    "NZDUSD": 0.6050,
+    "XAUUSD": 2050.0, "EURUSD": 1.0850, "GBPUSD": 1.2650,
+    "USDJPY": 149.50, "BTCUSD": 67000.0, "ETHUSD": 3500.0,
+    "USDCAD": 1.3600, "AUDUSD": 0.6550, "USDCHF": 0.8950, "NZDUSD": 0.6050,
 }
 
 
+def _get_user_id(request: Request) -> str:
+    try:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            import os, jwt as pyjwt
+            secret = os.getenv("JWT_SECRET_KEY", "hopefx-secret-key-change-in-production")
+            payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
+            return str(payload.get("sub", "demo"))
+    except Exception:
+        pass
+    return request.query_params.get("user_id", "demo")
+
+
 def _get_price(symbol: str) -> dict:
-    """Return a simulated live price tick for a symbol."""
     base = _BASE_PRICES.get(symbol, 1.0)
     noise = random.uniform(-0.002, 0.002)
     mid = base * (1 + noise)
     spread = base * 0.0002
-    change_pct = random.uniform(-1.5, 1.5)
     return {
         "symbol": symbol,
         "bid": round(mid - spread / 2, 5),
         "ask": round(mid + spread / 2, 5),
         "mid": round(mid, 5),
-        "change_pct": round(change_pct, 2),
+        "change_pct": round(random.uniform(-1.5, 1.5), 2),
         "timestamp": int(time.time() * 1000),
     }
 
 
-def _get_watchlist(user_id: str) -> List[str]:
+def _load_watchlist(user_id: str) -> List[str]:
+    """Load from DB, fall back to in-memory, then default."""
+    db_val = db_get(f"watchlist:{user_id}")
+    if isinstance(db_val, list):
+        _watchlists[user_id] = db_val
+        return db_val
     if user_id not in _watchlists:
         _watchlists[user_id] = list(DEFAULT_SYMBOLS)
     return _watchlists[user_id]
+
+
+def _save_watchlist(user_id: str, symbols: List[str]) -> None:
+    _watchlists[user_id] = symbols
+    db_set(f"watchlist:{user_id}", symbols, changed_by=user_id)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -89,43 +106,47 @@ class WatchlistResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=WatchlistResponse)
-async def get_watchlist(user_id: str = "demo") -> WatchlistResponse:
-    symbols = _get_watchlist(user_id)
+async def get_watchlist(request: Request) -> WatchlistResponse:
+    user_id = _get_user_id(request)
+    symbols = _load_watchlist(user_id)
     items = [WatchlistItem(**_get_price(s)) for s in symbols]
     return WatchlistResponse(user_id=user_id, symbols=symbols, items=items)
 
 
 @router.post("/{symbol}", status_code=status.HTTP_201_CREATED)
 async def add_symbol(
+    request: Request,
     symbol: str = Path(..., min_length=3, max_length=12),
-    user_id: str = "demo",
 ) -> dict:
+    user_id = _get_user_id(request)
     sym = symbol.upper()
-    wl = _get_watchlist(user_id)
+    wl = _load_watchlist(user_id)
     if sym in wl:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"{sym} already in watchlist")
+        raise HTTPException(status_code=409, detail=f"{sym} already in watchlist")
     if len(wl) >= 20:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Watchlist limit is 20 symbols")
+        raise HTTPException(status_code=400, detail="Watchlist limit is 20 symbols")
     wl.append(sym)
-    logger.info("Added %s to watchlist for %s", sym, user_id)
-    return {"symbol": sym, "added": True}
+    _save_watchlist(user_id, wl)
+    return {"symbol": sym, "added": True, "persisted": True}
 
 
 @router.delete("/{symbol}")
 async def remove_symbol(
+    request: Request,
     symbol: str = Path(..., min_length=3, max_length=12),
-    user_id: str = "demo",
 ) -> dict:
+    user_id = _get_user_id(request)
     sym = symbol.upper()
-    wl = _get_watchlist(user_id)
+    wl = _load_watchlist(user_id)
     if sym not in wl:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{sym} not in watchlist")
+        raise HTTPException(status_code=404, detail=f"{sym} not in watchlist")
     wl.remove(sym)
-    logger.info("Removed %s from watchlist for %s", sym, user_id)
+    _save_watchlist(user_id, wl)
     return {"symbol": sym, "removed": True}
 
 
 @router.get("/prices", response_model=List[WatchlistItem])
-async def get_prices(user_id: str = "demo") -> List[WatchlistItem]:
-    symbols = _get_watchlist(user_id)
+async def get_prices(request: Request) -> List[WatchlistItem]:
+    user_id = _get_user_id(request)
+    symbols = _load_watchlist(user_id)
     return [WatchlistItem(**_get_price(s)) for s in symbols]

@@ -1,7 +1,7 @@
 """
 api/journal.py
 ==============
-Trade Journal endpoints.
+Trade Journal endpoints with DB persistence.
 
 Routes
 ------
@@ -11,6 +11,9 @@ GET    /api/journal/trades/{trade_id}   — get single entry
 PATCH  /api/journal/trades/{trade_id}   — update notes/tags/emotion
 GET    /api/journal/stats               — win rate by tag, emotion breakdown
 GET    /api/journal/mistakes            — trades where rules were deviated from
+
+Persistence: configurations table via api.db_store.
+Falls back to in-memory dict when DB is unavailable.
 """
 
 from __future__ import annotations
@@ -20,27 +23,30 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+
+from api.db_store import db_get, db_set, db_keys_prefix
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/journal", tags=["Trade Journal"])
 
-# In-memory store (replace with DB in production)
+# In-memory fallback
 _entries: Dict[str, dict] = {}
 
-
-# ── Models ────────────────────────────────────────────────────────────────────
+_JOURNAL_PREFIX = "journal_entry"
 
 EMOTION_TAGS = ["patient", "fomo", "revenge", "disciplined", "hesitant", "overconfident", "fearful"]
 TRADE_TAGS   = ["trend", "breakout", "reversal", "news", "scalp", "swing", "mistake", "best-trade"]
 
 
+# ── Models ────────────────────────────────────────────────────────────────────
+
 class JournalEntry(BaseModel):
     trade_id: str
     symbol: str
-    side: str                          # long | short
+    side: str
     entry_price: float
     exit_price: Optional[float] = None
     size: float
@@ -49,7 +55,7 @@ class JournalEntry(BaseModel):
     closed_at: Optional[str] = None
     notes: str = ""
     tags: List[str] = Field(default_factory=list)
-    emotion: Optional[str] = None      # one of EMOTION_TAGS
+    emotion: Optional[str] = None
     followed_rules: bool = True
     rule_deviation: Optional[str] = None
     screenshot_url: Optional[str] = None
@@ -87,10 +93,36 @@ class JournalStats(BaseModel):
     rule_deviation_count: int
 
 
+# ── Persistence helpers ───────────────────────────────────────────────────────
+
+def _entry_key(trade_id: str) -> str:
+    return f"{_JOURNAL_PREFIX}:{trade_id}"
+
+
+def _save_entry(entry: dict) -> None:
+    tid = entry["trade_id"]
+    _entries[tid] = entry
+    db_set(_entry_key(tid), entry, changed_by="journal")
+
+
+def _load_all_entries() -> Dict[str, dict]:
+    """Load all journal entries from DB into the in-memory cache."""
+    if _entries:
+        return _entries
+    keys = db_keys_prefix(f"{_JOURNAL_PREFIX}:")
+    for key in keys:
+        val = db_get(key)
+        if isinstance(val, dict) and "trade_id" in val:
+            _entries[val["trade_id"]] = val
+    if not _entries:
+        _seed()
+    return _entries
+
+
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
-def _seed():
-    """Seed with realistic demo entries."""
+def _seed() -> None:
+    """Seed with realistic demo entries (only if store is empty)."""
     if _entries:
         return
     samples = [
@@ -113,15 +145,9 @@ def _seed():
     for i, s in enumerate(samples):
         tid = f"demo-{i+1}"
         now = datetime.now(timezone.utc).isoformat()
-        entry = JournalEntry(
-            trade_id=tid,
-            opened_at=now,
-            closed_at=now,
-            created_at=now,
-            updated_at=now,
-            **s,
-        )
-        _entries[tid] = entry.model_dump()
+        entry = JournalEntry(trade_id=tid, opened_at=now, closed_at=now,
+                             created_at=now, updated_at=now, **s)
+        _save_entry(entry.model_dump())
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -134,8 +160,7 @@ async def list_trades(
     emotion: Optional[str] = None,
     symbol: Optional[str] = None,
 ) -> List[JournalEntry]:
-    _seed()
-    entries = list(_entries.values())
+    entries = list(_load_all_entries().values())
     if tag:
         entries = [e for e in entries if tag in e.get("tags", [])]
     if emotion:
@@ -148,40 +173,40 @@ async def list_trades(
 
 @router.post("/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED)
 async def create_entry(entry: JournalEntry) -> JournalEntry:
-    _seed()
+    _load_all_entries()
     if not entry.trade_id:
         entry.trade_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     entry.created_at = now
     entry.updated_at = now
-    _entries[entry.trade_id] = entry.model_dump()
+    _save_entry(entry.model_dump())
     return entry
 
 
 @router.get("/trades/{trade_id}", response_model=JournalEntry)
 async def get_entry(trade_id: str) -> JournalEntry:
-    _seed()
-    if trade_id not in _entries:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found")
-    return JournalEntry(**_entries[trade_id])
+    entries = _load_all_entries()
+    if trade_id not in entries:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return JournalEntry(**entries[trade_id])
 
 
 @router.patch("/trades/{trade_id}", response_model=JournalEntry)
 async def update_entry(trade_id: str, update: JournalUpdate) -> JournalEntry:
-    _seed()
-    if trade_id not in _entries:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trade not found")
-    entry = _entries[trade_id]
+    entries = _load_all_entries()
+    if trade_id not in entries:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    entry = entries[trade_id]
     for field, value in update.model_dump(exclude_none=True).items():
         entry[field] = value
     entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_entry(entry)
     return JournalEntry(**entry)
 
 
 @router.get("/stats", response_model=JournalStats)
 async def get_stats() -> JournalStats:
-    _seed()
-    entries = list(_entries.values())
+    entries = list(_load_all_entries().values())
     closed = [e for e in entries if e.get("pnl") is not None]
     if not closed:
         return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0,
@@ -190,9 +215,8 @@ async def get_stats() -> JournalStats:
     pnls = [e["pnl"] for e in closed]
     wins = [p for p in pnls if p > 0]
 
-    # By tag
-    tag_stats = []
     all_tags = set(t for e in closed for t in e.get("tags", []))
+    tag_stats = []
     for tag in all_tags:
         tagged = [e for e in closed if tag in e.get("tags", [])]
         tag_pnls = [e["pnl"] for e in tagged]
@@ -203,9 +227,8 @@ async def get_stats() -> JournalStats:
             avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
         ))
 
-    # By emotion
-    emotion_stats = []
     all_emotions = set(e.get("emotion") for e in closed if e.get("emotion"))
+    emotion_stats = []
     for em in all_emotions:
         em_entries = [e for e in closed if e.get("emotion") == em]
         em_pnls = [e["pnl"] for e in em_entries]
@@ -231,6 +254,6 @@ async def get_stats() -> JournalStats:
 @router.get("/mistakes", response_model=List[JournalEntry])
 async def get_mistakes() -> List[JournalEntry]:
     """Trades where the user deviated from their rules."""
-    _seed()
-    mistakes = [e for e in _entries.values() if not e.get("followed_rules", True)]
+    entries = _load_all_entries()
+    mistakes = [e for e in entries.values() if not e.get("followed_rules", True)]
     return [JournalEntry(**e) for e in mistakes]
