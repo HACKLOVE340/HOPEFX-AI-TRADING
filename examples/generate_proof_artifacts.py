@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """
-Generate all proof-of-concept artifacts:
-  - data/XAUUSD_2Y.csv          : 2 years of synthetic OHLCV (daily bars)
+Generate backtest artifacts from REAL XAUUSD daily data (GC=F via yfinance).
+
+Outputs:
+  - data/XAUUSD_5Y.csv           : 5 years of real OHLCV (daily bars, GC=F)
   - ml/saved_models/rf_xauusd.pkl: trained RandomForest signal classifier
   - examples/results/trades.csv  : per-trade log
   - examples/results/equity_curve.png
   - examples/results/performance.json
+
+Data source: Yahoo Finance GC=F (Gold Futures front-month, continuous).
+Falls back to synthetic GBM data only if yfinance is unavailable, with
+a clear warning in the output and performance.json.
 """
 
 import json
@@ -35,40 +41,63 @@ for d in [DATA_DIR, MODEL_DIR, RESULTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 
-# ── 1. Synthetic XAUUSD dataset ───────────────────────────────────────────────
+# ── 1. Real XAUUSD dataset (yfinance) ────────────────────────────────────────
 
-def generate_xauusd(start="2022-01-03", n_days=730, seed=42) -> pd.DataFrame:
+_USING_REAL_DATA = False  # set to True after successful yfinance fetch
+
+
+def fetch_real_xauusd(years: int = 5) -> pd.DataFrame:
     """
-    Simulate 2 years of daily XAUUSD OHLCV.
-    Uses geometric Brownian motion with realistic gold parameters:
-      - annualised vol ~15%
-      - slight upward drift ~5% p.a.
-      - mean-reversion component (Ornstein-Uhlenbeck overlay)
+    Download real GC=F (Gold Futures) daily OHLCV from Yahoo Finance.
+    Returns a DataFrame with columns: open, high, low, close, volume.
+    Raises RuntimeError if yfinance is unavailable or returns empty data.
+    """
+    import yfinance as yf
+    from datetime import timezone
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=years * 365)
+    raw = yf.download(
+        "GC=F",
+        start=start.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d"),
+        interval="1d",
+        progress=False,
+        auto_adjust=True,
+    )
+    if raw.empty:
+        raise RuntimeError("yfinance returned empty data for GC=F")
+    raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
+    raw.index = pd.to_datetime(raw.index).tz_localize(None)
+    raw = raw.dropna(subset=["close"])
+    return raw
+
+
+def generate_xauusd_synthetic(start="2019-01-02", n_days=1260, seed=42) -> pd.DataFrame:
+    """
+    Fallback: simulate 5 years of daily XAUUSD OHLCV via GBM + OU.
+    Only used when yfinance is unavailable.
     """
     rng = np.random.default_rng(seed)
-    dt = 1 / 252          # daily step
-    mu = 0.05             # annual drift
-    sigma = 0.15          # annual vol
-    theta = 0.03          # mean-reversion speed
-    long_run = 2050.0     # long-run mean price
+    dt = 1 / 252
+    mu = 0.05
+    sigma = 0.15
+    theta = 0.03
+    long_run = 2050.0
 
     dates = []
     d = datetime.strptime(start, "%Y-%m-%d")
     while len(dates) < n_days:
-        if d.weekday() < 5:   # Mon–Fri only
+        if d.weekday() < 5:
             dates.append(d)
         d += timedelta(days=1)
 
-    price = 1830.0
+    price = 1280.0
     rows = []
     for date in dates:
-        # GBM + OU mean-reversion
         gbm = (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rng.standard_normal()
         ou  = theta * (long_run - price) * dt
         price *= np.exp(gbm)
         price += ou
-
-        # Intraday range: ~0.6% of price on average
         daily_range = price * rng.uniform(0.003, 0.012)
         direction   = rng.choice([-1, 1])
         open_  = price + direction * daily_range * rng.uniform(0, 0.3)
@@ -76,7 +105,6 @@ def generate_xauusd(start="2022-01-03", n_days=730, seed=42) -> pd.DataFrame:
         high   = max(open_, close) + daily_range * rng.uniform(0.1, 0.5)
         low    = min(open_, close) - daily_range * rng.uniform(0.1, 0.5)
         volume = int(rng.integers(8_000, 35_000))
-
         rows.append({
             "date":   date.strftime("%Y-%m-%d"),
             "open":   round(open_, 2),
@@ -92,11 +120,30 @@ def generate_xauusd(start="2022-01-03", n_days=730, seed=42) -> pd.DataFrame:
     return df
 
 
-print("Generating XAUUSD dataset …")
-df = generate_xauusd()
-csv_path = DATA_DIR / "XAUUSD_2Y.csv"
-df.to_csv(csv_path)
-print(f"  Saved {len(df)} bars → {csv_path}")
+# ── Load data: real first, synthetic fallback ─────────────────────────────────
+print("Fetching real XAUUSD data (GC=F via yfinance) …")
+try:
+    df = fetch_real_xauusd(years=5)
+    _USING_REAL_DATA = True
+    csv_path = DATA_DIR / "XAUUSD_5Y.csv"
+    df.to_csv(csv_path)
+    actual_years = (df.index[-1] - df.index[0]).days / 365.25
+    print(f"  Real data: {len(df)} bars, {actual_years:.1f} years "
+          f"({df.index[0].date()} → {df.index[-1].date()}) → {csv_path}")
+except Exception as exc:
+    import warnings
+    warnings.warn(
+        f"yfinance unavailable ({exc}). Falling back to SYNTHETIC GBM data. "
+        "Results are NOT based on real market data.",
+        UserWarning,
+        stacklevel=1,
+    )
+    print(f"  ⚠ yfinance failed ({exc}) — using SYNTHETIC fallback")
+    df = generate_xauusd_synthetic()
+    _USING_REAL_DATA = False
+    csv_path = DATA_DIR / "XAUUSD_5Y_synthetic.csv"
+    df.to_csv(csv_path)
+    print(f"  Synthetic data: {len(df)} bars → {csv_path}")
 
 
 # ── 2. Feature engineering ────────────────────────────────────────────────────
@@ -322,8 +369,18 @@ else:
     win_rate = profit_factor = total_return = max_dd = sharpe = calmar = 0.0
     avg_win = avg_loss = 0.0
 
+_data_start = str(df.index[0].date())
+_data_end   = str(df.index[-1].date())
+_data_label = (
+    f"XAUUSD 5Y real GC=F ({_data_start} – {_data_end})"
+    if _USING_REAL_DATA
+    else f"XAUUSD 5Y SYNTHETIC GBM ({_data_start} – {_data_end}) — NOT real data"
+)
+
 perf = {
-    "dataset":          "XAUUSD_2Y synthetic (2022-01-03 – 2023-12-29)",
+    "dataset":          _data_label,
+    "data_source":      "Yahoo Finance GC=F (real)" if _USING_REAL_DATA else "Synthetic GBM (fallback)",
+    "real_data":        _USING_REAL_DATA,
     "model":            "RandomForestClassifier (200 trees, depth 6)",
     "backtest_period":  f"{test_df.index[0].date()} – {test_df.index[-1].date()}",
     "initial_capital":  INITIAL_CAPITAL,
@@ -356,8 +413,12 @@ if n_trades > 0:
 
 fig, axes = plt.subplots(3, 1, figsize=(12, 10),
                           gridspec_kw={"height_ratios": [3, 1, 1]})
-fig.suptitle("HOPEFX · XAUUSD RandomForest Strategy · Backtest Results",
-             fontsize=14, fontweight="bold", y=0.98)
+_data_tag = "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
+fig.suptitle(
+    f"HOPEFX · XAUUSD RandomForest Strategy · Backtest Results\n"
+    f"({_data_tag}, {_data_start} – {_data_end})",
+    fontsize=13, fontweight="bold", y=0.99,
+)
 
 # Panel 1: equity curve
 ax1 = axes[0]
