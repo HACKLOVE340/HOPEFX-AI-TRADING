@@ -212,17 +212,53 @@ from api.admin import (
 )
 
 
-def _make_admin_client() -> TestClient:
-    """Create a TestClient for the admin router with admin auth bypassed."""
-    from api.auth import TokenPayload, get_current_user
+import os as _os
+import time as _time
+import jwt as _jwt
 
-    def _mock_admin() -> TokenPayload:
-        return TokenPayload(sub="test-admin", role="admin")
 
+def _admin_token() -> str:
+    # Read the secret at call time — other test modules may have set it.
+    # Do NOT overwrite the env var here; just use whatever is current.
+    secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
+    return _jwt.encode(
+        {"sub": "test-admin", "role": "admin", "exp": int(_time.time()) + 3600},
+        secret,
+        algorithm="HS256",
+    )
+
+
+class _AdminClient:
+    """Thin wrapper that injects an admin Bearer token on every request."""
+
+    def __init__(self, inner: "TestClient"):
+        self._inner = inner
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {_admin_token()}"}
+
+    def get(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.get(url, **kw)
+
+    def post(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.post(url, **kw)
+
+    def put(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.put(url, **kw)
+
+    def delete(self, url, **kw):
+        kw.setdefault("headers", {}).update(self._headers())
+        return self._inner.delete(url, **kw)
+
+
+def _make_admin_client() -> "_AdminClient":
+    """Create a TestClient for the admin router with a real admin JWT."""
     application = FastAPI()
     application.include_router(admin_router)
-    application.dependency_overrides[get_current_user] = _mock_admin
-    return TestClient(application)
+    return _AdminClient(TestClient(application))
 
 
 @pytest.mark.unit
