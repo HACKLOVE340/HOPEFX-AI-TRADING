@@ -10,14 +10,25 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
-import LandingPage    from './pages/LandingPage';
-import Dashboard      from './pages/Dashboard';
-import Marketplace    from './pages/Marketplace';
-import Affiliate      from './pages/Affiliate';
-import CryptoCheckout from './pages/CryptoCheckout';
-import Settings       from './pages/Settings';
-import StatusPage     from './pages/StatusPage';
-import Login          from './pages/Login';
+import LandingPage          from './pages/LandingPage';
+import Dashboard            from './pages/Dashboard';
+import Marketplace          from './pages/Marketplace';
+import Affiliate            from './pages/Affiliate';
+import CryptoCheckout       from './pages/CryptoCheckout';
+import Settings             from './pages/Settings';
+import StatusPage           from './pages/StatusPage';
+import Login                from './pages/Login';
+
+// ── New pages (Tasks 16–47) ───────────────────────────────────────────────────
+import RiskCalculator       from './pages/RiskCalculator';
+import WalkForward          from './pages/WalkForward';
+import Profile              from './pages/Profile';
+import SocialFeed           from './pages/SocialFeed';
+import WhitelabelAdmin      from './pages/WhitelabelAdmin';
+import AdminPanel           from './pages/AdminPanel';
+import ABTesting            from './pages/ABTesting';
+import CorrelationDashboard from './pages/CorrelationDashboard';
+import CustomIndicators     from './pages/CustomIndicators';
 
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
@@ -30,12 +41,21 @@ const queryClient = new QueryClient({
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { path: '/dashboard',   label: 'Dashboard',   icon: '📊', auth: true  },
-  { path: '/marketplace', label: 'Marketplace', icon: '🛒', auth: false },
-  { path: '/affiliate',   label: 'Affiliate',   icon: '🤝', auth: false },
-  { path: '/checkout',    label: 'Upgrade',     icon: '💳', auth: false },
-  { path: '/status',      label: 'Status',      icon: '🟢', auth: false },
-  { path: '/settings',    label: 'Settings',    icon: '⚙️', auth: true  },
+  { path: '/dashboard',     label: 'Dashboard',     icon: '📊', auth: true  },
+  { path: '/feed',          label: 'Signal Feed',   icon: '📡', auth: true  },
+  { path: '/risk-calc',     label: 'Risk Calc',     icon: '🧮', auth: true  },
+  { path: '/walk-forward',  label: 'Walk-Forward',  icon: '📈', auth: true  },
+  { path: '/ab-testing',    label: 'A/B Testing',   icon: '⚗️', auth: true  },
+  { path: '/correlation',   label: 'Correlation',   icon: '🔗', auth: true  },
+  { path: '/indicators',    label: 'Indicators',    icon: '📐', auth: true  },
+  { path: '/profile',       label: 'Profile',       icon: '👤', auth: true  },
+  { path: '/marketplace',   label: 'Marketplace',   icon: '🛒', auth: false },
+  { path: '/affiliate',     label: 'Affiliate',     icon: '🤝', auth: false },
+  { path: '/checkout',      label: 'Upgrade',       icon: '💳', auth: false },
+  { path: '/whitelabel',    label: 'Whitelabel',    icon: '🏷️', auth: true  },
+  { path: '/admin',         label: 'Admin',         icon: '🛡️', auth: true  },
+  { path: '/status',        label: 'Status',        icon: '🟢', auth: false },
+  { path: '/settings',      label: 'Settings',      icon: '⚙️', auth: true  },
 ];
 
 // ── WS dot ────────────────────────────────────────────────────────────────────
@@ -131,13 +151,31 @@ const AppShell: React.FC = () => {
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <main style={s.main}>
         <Routes>
-          <Route path="/dashboard"   element={<AuthGuard><Dashboard /></AuthGuard>} />
-          <Route path="/settings"    element={<AuthGuard><Settings /></AuthGuard>} />
-          <Route path="/marketplace" element={<Marketplace />} />
-          <Route path="/affiliate"   element={<Affiliate />} />
-          <Route path="/checkout"    element={<CryptoCheckout />} />
-          <Route path="/status"      element={<StatusPage />} />
-          <Route path="*"            element={<Navigate to="/dashboard" replace />} />
+          {/* Core */}
+          <Route path="/dashboard"    element={<AuthGuard><Dashboard /></AuthGuard>} />
+          <Route path="/settings"     element={<AuthGuard><Settings /></AuthGuard>} />
+          <Route path="/marketplace"  element={<Marketplace />} />
+          <Route path="/affiliate"    element={<Affiliate />} />
+          <Route path="/checkout"     element={<CryptoCheckout />} />
+          <Route path="/status"       element={<StatusPage />} />
+
+          {/* Tasks 16–19: Calculator, Walk-Forward, Profile, Feed */}
+          <Route path="/risk-calc"    element={<AuthGuard><RiskCalculator /></AuthGuard>} />
+          <Route path="/walk-forward" element={<AuthGuard><WalkForward /></AuthGuard>} />
+          <Route path="/profile"      element={<AuthGuard><Profile /></AuthGuard>} />
+          <Route path="/profile/:id"  element={<Profile />} />
+          <Route path="/feed"         element={<AuthGuard><SocialFeed /></AuthGuard>} />
+
+          {/* Tasks 22, 36–41: Whitelabel + Admin */}
+          <Route path="/whitelabel"   element={<AuthGuard><WhitelabelAdmin /></AuthGuard>} />
+          <Route path="/admin"        element={<AuthGuard><AdminPanel /></AuthGuard>} />
+
+          {/* Tasks 42–46: Advanced trading */}
+          <Route path="/ab-testing"   element={<AuthGuard><ABTesting /></AuthGuard>} />
+          <Route path="/correlation"  element={<AuthGuard><CorrelationDashboard /></AuthGuard>} />
+          <Route path="/indicators"   element={<AuthGuard><CustomIndicators /></AuthGuard>} />
+
+          <Route path="*"             element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
     </div>
