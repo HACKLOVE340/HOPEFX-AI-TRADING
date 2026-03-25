@@ -65,9 +65,24 @@ class ForexTradingEnv:
 
     Reward
     ------
-    Incremental Sharpe contribution:
-        r_t = Δpnl / (rolling_std(Δpnl) + ε)
-    Penalty for excessive trading (commission).
+    Incremental Sharpe contribution with full transaction cost accounting:
+
+        transaction_cost = commission + slippage   (on open and close)
+        holding_cost     = overnight_cost_daily * notional  (per bar held)
+        delta_pnl_net    = delta_pnl_gross - holding_cost
+
+        r_t = clip(delta_pnl_net / (rolling_std_20 + ε), -10, +10) * reward_scaling
+
+    Reward is clipped to [-10, +10] before scaling to prevent gradient
+    explosions from outlier bars (e.g. news spikes).
+
+    Cost defaults are calibrated to XAUUSD H1 live trading:
+      - commission 35 bps round-trip (spread ~20 bps + broker commission ~15 bps)
+      - slippage   5 bps per trade (market-order fill slippage on H1 bars)
+      - overnight  2 bps/day swap ≈ 7.3% annualised (typical leveraged XAUUSD)
+
+    The previous implementation used 1 bp holding cost which was far below
+    real swap rates and caused the agent to overhold losing positions.
     """
 
     metadata = {"render_modes": []}
@@ -77,9 +92,11 @@ class ForexTradingEnv:
         candles:              List[Dict],
         initial_balance:      float = 10_000.0,
         position_pct:         float = 0.10,
-        commission:           float = 0.0035,   # 35 bps — realistic XAUUSD spread + commission
-        overnight_cost_daily: float = 0.0002,   # 2 bps/day ≈ 7.3% annualised (realistic XAUUSD swap)
+        commission:           float = 0.0035,   # 35 bps round-trip (spread + broker fee)
+        slippage_bps:         float = 0.0005,   # 5 bps per trade (market-order slippage)
+        overnight_cost_daily: float = 0.0002,   # 2 bps/day ≈ 7.3% annualised (XAUUSD swap)
         reward_scaling:       float = 100.0,
+        reward_clip:          float = 10.0,     # clip reward to [-clip, +clip] before scaling
     ):
         try:
             import gymnasium as gym
@@ -101,8 +118,10 @@ class ForexTradingEnv:
         self.initial_balance      = initial_balance
         self.position_pct         = position_pct
         self.commission           = commission
+        self.slippage_bps         = slippage_bps
         self.overnight_cost_daily = overnight_cost_daily  # per-bar holding cost
         self.reward_scaling       = reward_scaling
+        self.reward_clip          = reward_clip
         self._window              = W
 
         # pre-compute feature vectors for every valid window
@@ -182,17 +201,25 @@ class ForexTradingEnv:
 
         self._pnl_history.append(delta_pnl)
 
-        # Sharpe-like incremental reward
+        # ── Sharpe-like incremental reward with clipping ──────────────────────
+        # Normalise by rolling 20-bar PnL std so the reward is scale-invariant.
+        # Clip to [-reward_clip, +reward_clip] before scaling to prevent gradient
+        # explosions from outlier bars (news spikes, data errors).
         if len(self._pnl_history) > 20:
             std = float(np.std(self._pnl_history[-20:])) + 1e-9
-            reward = float(delta_pnl / std) * self.reward_scaling
+            raw_reward = float(delta_pnl / std)
         else:
-            reward = float(delta_pnl / self.initial_balance) * self.reward_scaling
+            # Insufficient history — normalise by initial balance
+            raw_reward = float(delta_pnl / self.initial_balance)
+
+        reward = float(np.clip(raw_reward, -self.reward_clip, self.reward_clip)) * self.reward_scaling
 
         info = {
-            "equity":   new_equity,
-            "position": self._position,
-            "price":    new_price,
+            "equity":        new_equity,
+            "position":      self._position,
+            "price":         new_price,
+            "delta_pnl":     delta_pnl,
+            "raw_reward":    raw_reward,
         }
         return self._obs(), reward, done, False, info
 
@@ -220,18 +247,27 @@ class ForexTradingEnv:
         return self._balance + self._position * size * (price - self._entry_price)
 
     def _open_position(self, direction: int, price: float) -> None:
-        cost = (self._balance * self.position_pct) * self.commission
-        self._balance   -= cost
-        self._position   = direction
-        self._entry_price= price
-        self._steps_held = 0
+        # Total entry cost = commission (spread + broker fee) + slippage.
+        # Slippage is modelled as an adverse fill: the effective entry price
+        # is worse by slippage_bps in the direction of the trade.
+        notional = self._balance * self.position_pct
+        total_cost_rate = self.commission + self.slippage_bps
+        cost = notional * total_cost_rate
+        self._balance    -= cost
+        self._position    = direction
+        # Effective entry price includes slippage adverse fill
+        slip = price * self.slippage_bps * direction  # positive for BUY, negative for SELL
+        self._entry_price = price + slip
+        self._steps_held  = 0
 
     def _close_position(self, price: float) -> None:
         if self._position == 0:
             return
         size = (self._balance * self.position_pct) / (self._entry_price + 1e-9)
         pnl  = self._position * size * (price - self._entry_price)
-        cost = size * price * self.commission
+        # Exit cost = commission + slippage (adverse fill on close)
+        total_cost_rate = self.commission + self.slippage_bps
+        cost = size * price * total_cost_rate
         self._balance  += pnl - cost
         self._position  = 0
         self._entry_price = 0.0
