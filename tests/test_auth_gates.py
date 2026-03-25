@@ -20,8 +20,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # ── Minimal secret for test tokens ───────────────────────────────────────────
+# Force-set (not setdefault) so this module's tokens always verify correctly
+# regardless of which other test module ran first and set a different secret.
 _SECRET = "test-secret-key-that-is-long-enough-for-hs256-validation"
-os.environ.setdefault("SECURITY_JWT_SECRET", _SECRET)
+os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
 
 def _make_token(role: str = "user", sub: str = "test-user") -> str:
@@ -39,6 +41,11 @@ def _make_token(role: str = "user", sub: str = "test-user") -> str:
 
 @pytest.fixture(scope="module")
 def client() -> Generator[TestClient, None, None]:
+    # Pin the JWT secret for the entire module so tokens signed with _SECRET
+    # verify correctly even when other test modules set a different secret.
+    original_secret = os.environ.get("SECURITY_JWT_SECRET")
+    os.environ["SECURITY_JWT_SECRET"] = _SECRET
+
     app = FastAPI()
 
     from api.admin import router as admin_router
@@ -51,6 +58,12 @@ def client() -> Generator[TestClient, None, None]:
 
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
+
+    # Restore original value so we don't pollute other modules
+    if original_secret is not None:
+        os.environ["SECURITY_JWT_SECRET"] = original_secret
+    else:
+        os.environ.pop("SECURITY_JWT_SECRET", None)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

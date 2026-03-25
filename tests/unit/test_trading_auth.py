@@ -111,6 +111,11 @@ def mock_brain():
 
 @pytest.fixture()
 def app(mock_broker, mock_brain):
+    # Re-pin the secret at fixture time (not just module level) so it stays
+    # correct even when other test modules change SECURITY_JWT_SECRET between
+    # collection and execution.
+    os.environ["SECURITY_JWT_SECRET"] = _SECRET
+
     state = MagicMock()
     state.broker = mock_broker
     state.brain = mock_brain
