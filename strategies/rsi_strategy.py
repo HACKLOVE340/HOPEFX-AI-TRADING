@@ -5,12 +5,12 @@ This strategy uses RSI to identify overbought and oversold conditions.
 """
 
 import logging
-import pandas as pd
-import numpy as np
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
-from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+import pandas as pd
+
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,14 @@ class RSIStrategy(BaseStrategy):
     Sells when RSI is overbought (above upper threshold).
     """
 
-    def __init__(self, config: StrategyConfig, *_args,
-                 period: int = 14, oversold: float = 30, overbought: float = 70):
+    def __init__(
+        self,
+        config: StrategyConfig,
+        *_args,
+        period: int = 14,
+        oversold: float = 30,
+        overbought: float = 70,
+    ):
         """
         Initialize RSI strategy.
 
@@ -51,7 +57,11 @@ class RSIStrategy(BaseStrategy):
         series = pd.Series(prices) if not isinstance(prices, pd.Series) else prices
         rsi = self.calculate_rsi(series)
         current = float(rsi.iloc[-1]) if not rsi.empty else None
-        return {"rsi": current, "oversold": self.oversold, "overbought": self.overbought}
+        return {
+            "rsi": current,
+            "oversold": self.oversold,
+            "overbought": self.overbought,
+        }
 
     def generate_signal(self, data) -> Any:
         """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
@@ -63,11 +73,23 @@ class RSIStrategy(BaseStrategy):
             return None
         price = analysis.get("price", 0.0)
         if rsi < self.oversold:
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc),
-                          confidence=min(0.95, 0.5 + (self.oversold - rsi) / self.oversold * 0.4))
+            return Signal(
+                SignalType.BUY,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=min(0.95, 0.5 + (self.oversold - rsi) / self.oversold * 0.4),
+            )
         if rsi > self.overbought:
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc),
-                          confidence=min(0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4))
+            return Signal(
+                SignalType.SELL,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=min(
+                    0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4
+                ),
+            )
         return None
 
     def generate_signal_from_data(self, market_data: pd.DataFrame) -> Dict[str, Any]:
@@ -97,14 +119,14 @@ class RSIStrategy(BaseStrategy):
         try:
             if len(market_data) < self.period + 1:
                 return {
-                    'type': 'HOLD',
-                    'confidence': 0.0,
-                    'reason': 'Insufficient data for RSI calculation',
-                    'timestamp': datetime.now(timezone.utc)
+                    "type": "HOLD",
+                    "confidence": 0.0,
+                    "reason": "Insufficient data for RSI calculation",
+                    "timestamp": datetime.now(timezone.utc),
                 }
 
             # Calculate RSI
-            close = market_data['close']
+            close = market_data["close"]
             rsi = self.calculate_rsi(close)
 
             current_rsi = rsi.iloc[-1]
@@ -114,78 +136,89 @@ class RSIStrategy(BaseStrategy):
             # Check for NaN
             if pd.isna(current_rsi):
                 return {
-                    'type': 'HOLD',
-                    'confidence': 0.0,
-                    'reason': 'RSI calculation resulted in NaN',
-                    'timestamp': datetime.now(timezone.utc)
+                    "type": "HOLD",
+                    "confidence": 0.0,
+                    "reason": "RSI calculation resulted in NaN",
+                    "timestamp": datetime.now(timezone.utc),
                 }
 
-            signal_type = 'HOLD'
+            signal_type = "HOLD"
             confidence = 0.0
-            reason = ''
+            reason = ""
 
             # BUY signal: RSI is oversold and starting to rise
             if current_rsi < self.oversold:
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 # Confidence increases as RSI gets more oversold
                 confidence = 0.5 + (self.oversold - current_rsi) / self.oversold * 0.4
                 confidence = min(0.95, confidence)
-                reason = f'RSI oversold: {current_rsi:.2f} < {self.oversold}'
+                reason = f"RSI oversold: {current_rsi:.2f} < {self.oversold}"
 
                 # Higher confidence if RSI is turning up
                 if current_rsi > previous_rsi:
                     confidence = min(0.95, confidence + 0.1)
-                    reason += ' and rising'
+                    reason += " and rising"
 
             # SELL signal: RSI is overbought and starting to fall
             elif current_rsi > self.overbought:
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 # Confidence increases as RSI gets more overbought
-                confidence = 0.5 + (current_rsi - self.overbought) / (100 - self.overbought) * 0.4
+                confidence = (
+                    0.5
+                    + (current_rsi - self.overbought) / (100 - self.overbought) * 0.4
+                )
                 confidence = min(0.95, confidence)
-                reason = f'RSI overbought: {current_rsi:.2f} > {self.overbought}'
+                reason = f"RSI overbought: {current_rsi:.2f} > {self.overbought}"
 
                 # Higher confidence if RSI is turning down
                 if current_rsi < previous_rsi:
                     confidence = min(0.95, confidence + 0.1)
-                    reason += ' and falling'
+                    reason += " and falling"
 
             # Exit long position if RSI reaches neutral/overbought
-            elif hasattr(self, 'position') and self.position == 'LONG' and current_rsi > 50:
+            elif (
+                hasattr(self, "position")
+                and self.position == "LONG"
+                and current_rsi > 50
+            ):
                 if current_rsi > self.overbought or current_rsi < previous_rsi:
-                    signal_type = 'SELL'
+                    signal_type = "SELL"
                     confidence = 0.6
-                    reason = f'Exit long: RSI = {current_rsi:.2f}'
+                    reason = f"Exit long: RSI = {current_rsi:.2f}"
 
             # Exit short position if RSI reaches neutral/oversold
-            elif hasattr(self, 'position') and self.position == 'SHORT' and current_rsi < 50:
+            elif (
+                hasattr(self, "position")
+                and self.position == "SHORT"
+                and current_rsi < 50
+            ):
                 if current_rsi < self.oversold or current_rsi > previous_rsi:
-                    signal_type = 'BUY'
+                    signal_type = "BUY"
                     confidence = 0.6
-                    reason = f'Exit short: RSI = {current_rsi:.2f}'
+                    reason = f"Exit short: RSI = {current_rsi:.2f}"
 
             else:
-                reason = f'RSI neutral: {current_rsi:.2f} (range: {self.oversold}-{self.overbought})'
+                reason = f"RSI neutral: {current_rsi:.2f} (range: {self.oversold}-{self.overbought})"
 
             return {
-                'type': signal_type,
-                'confidence': confidence,
-                'reason': reason,
-                'timestamp': datetime.now(timezone.utc),
-                'metadata': {
-                    'rsi': current_rsi,
-                    'previous_rsi': previous_rsi,
-                    'price': current_price,
-                    'oversold_level': self.oversold,
-                    'overbought_level': self.overbought
-                }
+                "type": signal_type,
+                "confidence": confidence,
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc),
+                "metadata": {
+                    "rsi": current_rsi,
+                    "previous_rsi": previous_rsi,
+                    "price": current_price,
+                    "oversold_level": self.oversold,
+                    "overbought_level": self.overbought,
+                },
             }
 
         except Exception as e:
             self.logger.error(f"Error generating RSI signal: {e}")
             return {
-                'type': 'HOLD',
-                'confidence': 0.0,
-                'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now(timezone.utc)
+                "type": "HOLD",
+                "confidence": 0.0,
+                "reason": f"Error: {str(e)}",
+                "timestamp": datetime.now(timezone.utc),
             }

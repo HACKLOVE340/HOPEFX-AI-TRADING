@@ -46,7 +46,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -59,12 +59,13 @@ router = APIRouter(tags=["Platform"])
 
 # ── In-memory stores (replace with DB in production) ─────────────────────────
 
-_sessions: Dict[str, dict] = {}          # session_id → session info
-_audit_log: List[dict] = []              # append-only audit events
-_api_keys: Dict[str, dict] = {}          # key_id → key metadata
-_api_key_hashes: Dict[str, str] = {}     # sha256(raw_key) → key_id
-_users_admin: Dict[str, dict] = {}       # user_id → admin view
+_sessions: Dict[str, dict] = {}  # session_id → session info
+_audit_log: List[dict] = []  # append-only audit events
+_api_keys: Dict[str, dict] = {}  # key_id → key metadata
+_api_key_hashes: Dict[str, str] = {}  # sha256(raw_key) → key_id
+_users_admin: Dict[str, dict] = {}  # user_id → admin view
 _flag_overrides: Dict[str, Dict[str, bool]] = {}  # flag_name → {user_id: bool}
+
 
 # Seed demo audit log
 def _seed_audit():
@@ -79,42 +80,54 @@ def _seed_audit():
         ("user-001", "signal.copied", "Copied signal sig-003 from AlgoTrader_X"),
     ]
     for user_id, event_type, detail in events:
-        _audit_log.append({
-            "event_id":   str(uuid.uuid4()),
-            "user_id":    user_id,
-            "event_type": event_type,
-            "detail":     detail,
-            "ip_address": "127.0.0.1",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _audit_log.append(
+            {
+                "event_id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "event_type": event_type,
+                "detail": detail,
+                "ip_address": "127.0.0.1",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
 
 _seed_audit()
 
 
 def _log_audit(user_id: str, event_type: str, detail: str, ip: str = ""):
-    _audit_log.append({
-        "event_id":   str(uuid.uuid4()),
-        "user_id":    user_id,
-        "event_type": event_type,
-        "detail":     detail,
-        "ip_address": ip,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    _audit_log.append(
+        {
+            "event_id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "event_type": event_type,
+            "detail": detail,
+            "ip_address": ip,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 35 — Session Management
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/auth/sessions")
 async def list_sessions(user: TokenPayload = Depends(get_current_user)):
     """List all active sessions for the current user."""
-    user_sessions = [s for s in _sessions.values() if s["user_id"] == user.sub and not s.get("revoked")]
+    user_sessions = [
+        s
+        for s in _sessions.values()
+        if s["user_id"] == user.sub and not s.get("revoked")
+    ]
     return {"sessions": user_sessions, "total": len(user_sessions)}
 
 
 @router.delete("/api/auth/sessions/{session_id}")
-async def revoke_session(session_id: str, user: TokenPayload = Depends(get_current_user)):
+async def revoke_session(
+    session_id: str, user: TokenPayload = Depends(get_current_user)
+):
     """Revoke a specific session (log out that device)."""
     session = _sessions.get(session_id)
     if not session or session["user_id"] != user.sub:
@@ -143,11 +156,11 @@ def register_session(user_id: str, device_info: str = "", ip_address: str = "") 
     session_id = str(uuid.uuid4())
     _sessions[session_id] = {
         "session_id": session_id,
-        "user_id":    user_id,
+        "user_id": user_id,
         "device_info": device_info or "Unknown device",
         "ip_address": ip_address,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "revoked":    False,
+        "revoked": False,
         "revoked_at": None,
     }
     return session_id
@@ -157,16 +170,17 @@ def register_session(user_id: str, device_info: str = "", ip_address: str = "") 
 # Task 36 — User Admin Panel
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _get_demo_users():
     if not _users_admin:
         for i in range(1, 8):
             uid = f"user-{i:03d}"
             _users_admin[uid] = {
-                "user_id":    uid,
-                "username":   f"trader_{i:03d}",
-                "email":      f"trader{i}@example.com",
-                "status":     "active" if i != 4 else "banned",
-                "tier":       ["free", "professional", "enterprise"][i % 3],
+                "user_id": uid,
+                "username": f"trader_{i:03d}",
+                "email": f"trader{i}@example.com",
+                "status": "active" if i != 4 else "banned",
+                "tier": ["free", "professional", "enterprise"][i % 3],
                 "total_trades": i * 47,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "last_login": datetime.now(timezone.utc).isoformat(),
@@ -176,8 +190,8 @@ def _get_demo_users():
 
 @router.get("/api/admin/users")
 async def list_users(
-    page:   int = 1,
-    limit:  int = 20,
+    page: int = 1,
+    limit: int = 20,
     status_filter: Optional[str] = Query(None, alias="status"),
     user: TokenPayload = Depends(get_current_user),
 ):
@@ -187,9 +201,9 @@ async def list_users(
         users = [u for u in users if u["status"] == status_filter]
     start = (page - 1) * limit
     return {
-        "users": users[start: start + limit],
+        "users": users[start : start + limit],
         "total": len(users),
-        "page":  page,
+        "page": page,
     }
 
 
@@ -216,22 +230,27 @@ async def unban_user(user_id: str, admin: TokenPayload = Depends(get_current_use
 @router.post("/api/admin/users/{user_id}/reset-password")
 async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current_user)):
     """Trigger a password reset email for a user."""
-    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}")
+    _log_audit(
+        admin.sub, "user.password_reset", f"Password reset triggered for {user_id}"
+    )
     return {"reset_triggered": True, "user_id": user_id, "note": "Reset email queued"}
 
 
 @router.get("/api/admin/users/{user_id}/trades")
-async def get_user_trades(user_id: str, admin: TokenPayload = Depends(get_current_user)):
+async def get_user_trades(
+    user_id: str, admin: TokenPayload = Depends(get_current_user)
+):
     """View a user's trade history (demo data)."""
     import random
+
     random.seed(hash(user_id) % 1000)
     trades = [
         {
-            "trade_id":  f"t-{user_id}-{i:03d}",
-            "symbol":    random.choice(["XAU/USD", "EUR/USD"]),
+            "trade_id": f"t-{user_id}-{i:03d}",
+            "symbol": random.choice(["XAU/USD", "EUR/USD"]),
             "direction": random.choice(["BUY", "SELL"]),
-            "lots":      round(random.random() * 0.5, 2),
-            "pnl":       round((random.random() - 0.4) * 200, 2),
+            "lots": round(random.random() * 0.5, 2),
+            "pnl": round((random.random() - 0.4) * 200, 2),
             "opened_at": datetime.now(timezone.utc).isoformat(),
         }
         for i in range(10)
@@ -240,14 +259,16 @@ async def get_user_trades(user_id: str, admin: TokenPayload = Depends(get_curren
 
 
 @router.post("/api/admin/users/{user_id}/impersonate")
-async def impersonate_user(user_id: str, admin: TokenPayload = Depends(get_current_user)):
+async def impersonate_user(
+    user_id: str, admin: TokenPayload = Depends(get_current_user)
+):
     """Generate a short-lived impersonation token for support purposes."""
     _log_audit(admin.sub, "user.impersonated", f"Admin impersonating {user_id}")
     # In production: generate a short-lived JWT with impersonation claim
     token = f"impersonate_{secrets.token_urlsafe(16)}"
     return {
         "impersonation_token": token,
-        "user_id":  user_id,
+        "user_id": user_id,
         "expires_in": 300,
         "note": "Token valid for 5 minutes. All actions are audit-logged.",
     }
@@ -257,11 +278,12 @@ async def impersonate_user(user_id: str, admin: TokenPayload = Depends(get_curre
 # Task 37 — Audit Log UI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/admin/audit-log")
 async def get_audit_log(
-    page:       int = 1,
-    limit:      int = 50,
-    user_id:    Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+    user_id: Optional[str] = None,
     event_type: Optional[str] = None,
     admin: TokenPayload = Depends(get_current_user),
 ):
@@ -273,10 +295,10 @@ async def get_audit_log(
         events = [e for e in events if event_type in e["event_type"]]
     start = (page - 1) * limit
     return {
-        "events": events[start: start + limit],
-        "total":  len(events),
-        "page":   page,
-        "pages":  max(1, (len(events) + limit - 1) // limit),
+        "events": events[start : start + limit],
+        "total": len(events),
+        "page": page,
+        "pages": max(1, (len(events) + limit - 1) // limit),
     }
 
 
@@ -284,7 +306,17 @@ async def get_audit_log(
 async def export_audit_log(admin: TokenPayload = Depends(get_current_user)):
     """Export full audit log as CSV."""
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"])
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            "event_id",
+            "user_id",
+            "event_type",
+            "detail",
+            "ip_address",
+            "created_at",
+        ],
+    )
     writer.writeheader()
     for event in _audit_log:
         writer.writerow(event)
@@ -300,15 +332,20 @@ async def export_audit_log(admin: TokenPayload = Depends(get_current_user)):
 # Task 39 — API Key Management
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class CreateApiKeyBody(BaseModel):
-    name:   str = Field(..., min_length=1, max_length=60)
+    name: str = Field(..., min_length=1, max_length=60)
     scopes: List[str] = Field(default_factory=lambda: ["read"])
 
 
 @router.get("/api/settings/api-keys")
 async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
     """List all API keys for the current user (never returns raw key)."""
-    keys = [k for k in _api_keys.values() if k["user_id"] == user.sub and not k.get("revoked")]
+    keys = [
+        k
+        for k in _api_keys.values()
+        if k["user_id"] == user.sub and not k.get("revoked")
+    ]
     return {"api_keys": keys}
 
 
@@ -323,24 +360,24 @@ async def create_api_key(
     key_id = str(uuid.uuid4())[:12]
 
     _api_keys[key_id] = {
-        "key_id":     key_id,
-        "user_id":    user.sub,
-        "name":       body.name,
-        "scopes":     body.scopes,
+        "key_id": key_id,
+        "user_id": user.sub,
+        "name": body.name,
+        "scopes": body.scopes,
         "key_prefix": raw_key[:10] + "…",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "last_used":  None,
-        "revoked":    False,
+        "last_used": None,
+        "revoked": False,
     }
     _api_key_hashes[key_hash] = key_id
     _log_audit(user.sub, "api_key.created", f"API key '{body.name}' created")
 
     return {
-        "key_id":  key_id,
+        "key_id": key_id,
         "api_key": raw_key,
-        "name":    body.name,
-        "scopes":  body.scopes,
-        "note":    "Store this key securely — it will not be shown again.",
+        "name": body.name,
+        "scopes": body.scopes,
+        "note": "Store this key securely — it will not be shown again.",
     }
 
 
@@ -360,21 +397,25 @@ async def revoke_api_key(key_id: str, user: TokenPayload = Depends(get_current_u
 # Task 41 — Feature Flag UI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/admin/feature-flags")
 async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
     """Return all feature flags with their current state and metadata."""
-    from config.feature_flags import flags as _flags, FeatureStatus
+    from config.feature_flags import flags as _flags
+
     registry = _flags.registry()
     result = []
     for name, info in registry.items():
-        result.append({
-            "name":        name,
-            "enabled":     info.get("enabled", False),
-            "status":      info.get("status", "unknown"),
-            "description": info.get("description", ""),
-            "env_var":     info.get("env_var", ""),
-            "overrides":   _flag_overrides.get(name, {}),
-        })
+        result.append(
+            {
+                "name": name,
+                "enabled": info.get("enabled", False),
+                "status": info.get("status", "unknown"),
+                "description": info.get("description", ""),
+                "env_var": info.get("env_var", ""),
+                "overrides": _flag_overrides.get(name, {}),
+            }
+        )
     return {"flags": result, "total": len(result)}
 
 
@@ -382,6 +423,7 @@ async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
 async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
     """Enable a feature flag at runtime (sets env var for this process)."""
     from config.feature_flags import flags as _flags
+
     registry = _flags.registry()
     if flag_name not in registry:
         raise HTTPException(status_code=404, detail=f"Flag '{flag_name}' not found")
@@ -395,6 +437,7 @@ async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_
 async def disable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
     """Disable a feature flag at runtime."""
     from config.feature_flags import flags as _flags
+
     registry = _flags.registry()
     if flag_name not in registry:
         raise HTTPException(status_code=404, detail=f"Flag '{flag_name}' not found")
@@ -417,11 +460,15 @@ async def override_flag_for_user(
 ):
     """Set a per-user feature flag override (e.g. give beta users early access)."""
     from config.feature_flags import flags as _flags
+
     if flag_name not in _flags.registry():
         raise HTTPException(status_code=404, detail=f"Flag '{flag_name}' not found")
     _flag_overrides.setdefault(flag_name, {})[body.user_id] = body.enabled
-    _log_audit(admin.sub, "feature_flag.override",
-               f"Flag {flag_name} overridden to {body.enabled} for user {body.user_id}")
+    _log_audit(
+        admin.sub,
+        "feature_flag.override",
+        f"Flag {flag_name} overridden to {body.enabled} for user {body.user_id}",
+    )
     return {"flag": flag_name, "user_id": body.user_id, "enabled": body.enabled}
 
 
@@ -430,6 +477,7 @@ async def override_flag_for_user(
 # Task 40 — Sentry init helper (called from app.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def setup_rate_limiting(app):
     """
     Attach Redis-backed slowapi rate limiter to the FastAPI app.
@@ -437,8 +485,8 @@ def setup_rate_limiting(app):
     """
     try:
         from slowapi import Limiter, _rate_limit_exceeded_handler
-        from slowapi.util import get_remote_address
         from slowapi.errors import RateLimitExceeded
+        from slowapi.util import get_remote_address
 
         redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
         try:
@@ -453,7 +501,9 @@ def setup_rate_limiting(app):
         logger.info("slowapi rate limiting configured")
         return limiter
     except ImportError:
-        logger.warning("slowapi not installed — rate limiting disabled. Run: pip install slowapi")
+        logger.warning(
+            "slowapi not installed — rate limiting disabled. Run: pip install slowapi"
+        )
         return None
 
 
@@ -469,6 +519,7 @@ def init_sentry():
 
     try:
         import sentry_sdk
+
         sentry_sdk.init(
             dsn=dsn,
             environment=os.getenv("APP_ENV", "development"),

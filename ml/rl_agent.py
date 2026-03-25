@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -43,11 +43,12 @@ logger = logging.getLogger(__name__)
 _MODEL_DIR = os.path.join(os.path.dirname(__file__), "saved_models", "rl")
 os.makedirs(_MODEL_DIR, exist_ok=True)
 
-_WINDOW    = 50    # observation window (must match vector_store._WINDOW)
+_WINDOW = 50  # observation window (must match vector_store._WINDOW)
 _FEATURE_DIM = 32
 
 
 # ── Gymnasium environment ─────────────────────────────────────────────────────
+
 
 class ForexTradingEnv:
     """
@@ -89,14 +90,14 @@ class ForexTradingEnv:
 
     def __init__(
         self,
-        candles:              List[Dict],
-        initial_balance:      float = 10_000.0,
-        position_pct:         float = 0.10,
-        commission:           float = 0.0035,   # 35 bps round-trip (spread + broker fee)
-        slippage_bps:         float = 0.0005,   # 5 bps per trade (market-order slippage)
-        overnight_cost_daily: float = 0.0002,   # 2 bps/day ≈ 7.3% annualised (XAUUSD swap)
-        reward_scaling:       float = 100.0,
-        reward_clip:          float = 10.0,     # clip reward to [-clip, +clip] before scaling
+        candles: List[Dict],
+        initial_balance: float = 10_000.0,
+        position_pct: float = 0.10,
+        commission: float = 0.0035,  # 35 bps round-trip (spread + broker fee)
+        slippage_bps: float = 0.0005,  # 5 bps per trade (market-order slippage)
+        overnight_cost_daily: float = 0.0002,  # 2 bps/day ≈ 7.3% annualised (XAUUSD swap)
+        reward_scaling: float = 100.0,
+        reward_clip: float = 10.0,  # clip reward to [-clip, +clip] before scaling
     ):
         try:
             import gymnasium as gym
@@ -105,9 +106,11 @@ class ForexTradingEnv:
             raise ImportError("gymnasium required: pip install gymnasium")
 
         import pandas as pd
-        from research.vector_store import _compute_features, _WINDOW as W
 
-        self._gym    = gym
+        from research.vector_store import _WINDOW as W
+        from research.vector_store import _compute_features
+
+        self._gym = gym
         self._spaces = spaces
 
         df = pd.DataFrame(candles)
@@ -115,21 +118,21 @@ class ForexTradingEnv:
         df = df.sort_values("timestamp").reset_index(drop=True)
         self._df = df
 
-        self.initial_balance      = initial_balance
-        self.position_pct         = position_pct
-        self.commission           = commission
-        self.slippage_bps         = slippage_bps
+        self.initial_balance = initial_balance
+        self.position_pct = position_pct
+        self.commission = commission
+        self.slippage_bps = slippage_bps
         self.overnight_cost_daily = overnight_cost_daily  # per-bar holding cost
-        self.reward_scaling       = reward_scaling
-        self.reward_clip          = reward_clip
-        self._window              = W
+        self.reward_scaling = reward_scaling
+        self.reward_clip = reward_clip
+        self._window = W
 
         # pre-compute feature vectors for every valid window
         self._features: List[np.ndarray] = []
-        self._prices:   List[float]      = []
+        self._prices: List[float] = []
         for i in range(W, len(df)):
             window = df.iloc[i - W : i]
-            vec    = _compute_features(window)
+            vec = _compute_features(window)
             if vec is not None:
                 self._features.append(vec)
                 self._prices.append(float(df.at[i, "close"]))
@@ -146,21 +149,21 @@ class ForexTradingEnv:
         )
         self.action_space = spaces.Discrete(3)
 
-        self._step_idx    = 0
-        self._position    = 0      # -1 short, 0 flat, 1 long
+        self._step_idx = 0
+        self._position = 0  # -1 short, 0 flat, 1 long
         self._entry_price = 0.0
-        self._balance     = initial_balance
-        self._steps_held  = 0
+        self._balance = initial_balance
+        self._steps_held = 0
         self._pnl_history: List[float] = []
 
     # ── Gymnasium API ─────────────────────────────────────────────────────────
 
     def reset(self, *, seed=None, options=None):
-        self._step_idx    = 0
-        self._position    = 0
+        self._step_idx = 0
+        self._position = 0
         self._entry_price = 0.0
-        self._balance     = self.initial_balance
-        self._steps_held  = 0
+        self._balance = self.initial_balance
+        self._steps_held = 0
         self._pnl_history = []
         return self._obs(), {}
 
@@ -169,10 +172,10 @@ class ForexTradingEnv:
         prev_equity = self._equity(price)
 
         # ── execute action ────────────────────────────────────────────────────
-        if action == 1 and self._position != 1:    # BUY
+        if action == 1 and self._position != 1:  # BUY
             self._close_position(price)
             self._open_position(1, price)
-        elif action == 2 and self._position != -1: # SELL
+        elif action == 2 and self._position != -1:  # SELL
             self._close_position(price)
             self._open_position(-1, price)
         # action == 0 → HOLD
@@ -180,9 +183,9 @@ class ForexTradingEnv:
         self._step_idx += 1
         done = self._step_idx >= len(self._features) - 1
 
-        new_price  = self._prices[self._step_idx] if not done else price
+        new_price = self._prices[self._step_idx] if not done else price
         new_equity = self._equity(new_price)
-        delta_pnl  = new_equity - prev_equity
+        delta_pnl = new_equity - prev_equity
 
         # ── Overnight financing cost ──────────────────────────────────────────
         # Deduct holding cost for every bar an open position is carried.
@@ -191,10 +194,10 @@ class ForexTradingEnv:
         # The previous implementation used 0 bps, causing the agent to overhold
         # positions that would be unprofitable in live trading.
         if self._position != 0:
-            notional = (self._balance * self.position_pct)
+            notional = self._balance * self.position_pct
             holding_cost = notional * self.overnight_cost_daily
             self._balance -= holding_cost
-            delta_pnl    -= holding_cost
+            delta_pnl -= holding_cost
             self._steps_held += 1
         else:
             self._steps_held = 0
@@ -212,14 +215,17 @@ class ForexTradingEnv:
             # Insufficient history — normalise by initial balance
             raw_reward = float(delta_pnl / self.initial_balance)
 
-        reward = float(np.clip(raw_reward, -self.reward_clip, self.reward_clip)) * self.reward_scaling
+        reward = (
+            float(np.clip(raw_reward, -self.reward_clip, self.reward_clip))
+            * self.reward_scaling
+        )
 
         info = {
-            "equity":        new_equity,
-            "position":      self._position,
-            "price":         new_price,
-            "delta_pnl":     delta_pnl,
-            "raw_reward":    raw_reward,
+            "equity": new_equity,
+            "position": self._position,
+            "price": new_price,
+            "delta_pnl": delta_pnl,
+            "raw_reward": raw_reward,
         }
         return self._obs(), reward, done, False, info
 
@@ -231,13 +237,19 @@ class ForexTradingEnv:
     def _obs(self) -> np.ndarray:
         feat = self._features[self._step_idx].copy()
         price = self._prices[self._step_idx]
-        upnl  = self._position * (price - self._entry_price) / (self._entry_price + 1e-9) \
-                if self._entry_price > 0 else 0.0
-        extra = np.array([
-            float(self._position),
-            np.clip(upnl, -1.0, 1.0),
-            min(self._steps_held / 100.0, 1.0),
-        ], dtype=np.float32)
+        upnl = (
+            self._position * (price - self._entry_price) / (self._entry_price + 1e-9)
+            if self._entry_price > 0
+            else 0.0
+        )
+        extra = np.array(
+            [
+                float(self._position),
+                np.clip(upnl, -1.0, 1.0),
+                min(self._steps_held / 100.0, 1.0),
+            ],
+            dtype=np.float32,
+        )
         return np.concatenate([feat, extra])
 
     def _equity(self, price: float) -> float:
@@ -253,47 +265,51 @@ class ForexTradingEnv:
         notional = self._balance * self.position_pct
         total_cost_rate = self.commission + self.slippage_bps
         cost = notional * total_cost_rate
-        self._balance    -= cost
-        self._position    = direction
+        self._balance -= cost
+        self._position = direction
         # Effective entry price includes slippage adverse fill
-        slip = price * self.slippage_bps * direction  # positive for BUY, negative for SELL
+        slip = (
+            price * self.slippage_bps * direction
+        )  # positive for BUY, negative for SELL
         self._entry_price = price + slip
-        self._steps_held  = 0
+        self._steps_held = 0
 
     def _close_position(self, price: float) -> None:
         if self._position == 0:
             return
         size = (self._balance * self.position_pct) / (self._entry_price + 1e-9)
-        pnl  = self._position * size * (price - self._entry_price)
+        pnl = self._position * size * (price - self._entry_price)
         # Exit cost = commission + slippage (adverse fill on close)
         total_cost_rate = self.commission + self.slippage_bps
         cost = size * price * total_cost_rate
-        self._balance  += pnl - cost
-        self._position  = 0
+        self._balance += pnl - cost
+        self._position = 0
         self._entry_price = 0.0
 
 
 # ── metrics ───────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class RLMetrics:
-    sharpe:       float
+    sharpe: float
     total_return: float
     max_drawdown: float
-    win_rate:     float
-    episodes:     int
-    timesteps:    int
-    model_path:   str
+    win_rate: float
+    episodes: int
+    timesteps: int
+    model_path: str
 
     def __str__(self) -> str:
         return (
-            f"Sharpe={self.sharpe:.3f}  Return={self.total_return*100:.2f}%  "
-            f"MaxDD={self.max_drawdown*100:.2f}%  WinRate={self.win_rate*100:.1f}%  "
+            f"Sharpe={self.sharpe:.3f}  Return={self.total_return * 100:.2f}%  "
+            f"MaxDD={self.max_drawdown * 100:.2f}%  WinRate={self.win_rate * 100:.1f}%  "
             f"Timesteps={self.timesteps:,}"
         )
 
 
 # ── agent wrapper ─────────────────────────────────────────────────────────────
+
 
 class RLAgent:
     """
@@ -305,40 +321,42 @@ class RLAgent:
     """
 
     def __init__(self, model_name: str = "hopefx_ppo"):
-        self.model_name  = model_name
-        self.model_path  = os.path.join(_MODEL_DIR, f"{model_name}.zip")
+        self.model_name = model_name
+        self.model_path = os.path.join(_MODEL_DIR, f"{model_name}.zip")
         self._model: Any = None
 
     # ── training ──────────────────────────────────────────────────────────────
 
     def train(
         self,
-        env:        ForexTradingEnv,
-        timesteps:  int  = 100_000,
-        n_envs:     int  = 1,
-        verbose:    int  = 1,
+        env: ForexTradingEnv,
+        timesteps: int = 100_000,
+        n_envs: int = 1,
+        verbose: int = 1,
     ) -> None:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
             from stable_baselines3.common.env_checker import check_env
         except ImportError:
-            raise ImportError("stable-baselines3 required: pip install stable-baselines3")
+            raise ImportError(
+                "stable-baselines3 required: pip install stable-baselines3"
+            )
 
         logger.info("Training PPO for %d timesteps …", timesteps)
         self._model = PPO(
-            policy          = "MlpPolicy",
-            env             = env,
-            learning_rate   = 3e-4,
-            n_steps         = 2048,
-            batch_size      = 64,
-            n_epochs        = 10,
-            gamma           = 0.99,
-            gae_lambda      = 0.95,
-            clip_range      = 0.2,
-            ent_coef        = 0.01,
-            verbose         = verbose,
-            tensorboard_log = os.path.join(_MODEL_DIR, "tb_logs"),
+            policy="MlpPolicy",
+            env=env,
+            learning_rate=3e-4,
+            n_steps=2048,
+            batch_size=64,
+            n_epochs=10,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.01,
+            verbose=verbose,
+            tensorboard_log=os.path.join(_MODEL_DIR, "tb_logs"),
         )
         self._model.learn(total_timesteps=timesteps)
         self._model.save(self.model_path)
@@ -351,6 +369,7 @@ class RLAgent:
             return False
         try:
             from stable_baselines3 import PPO
+
             self._model = PPO.load(self.model_path)
             logger.info("Loaded RL model from %s", self.model_path)
             return True
@@ -374,12 +393,16 @@ class RLAgent:
             confidence : probability of the chosen action (0–1)
         """
         if self._model is None:
-            raise RuntimeError("Model not trained or loaded — call train() or load() first")
+            raise RuntimeError(
+                "Model not trained or loaded — call train() or load() first"
+            )
 
-        from research.vector_store import _compute_features, _WINDOW as W
         import pandas as pd
 
-        df  = pd.DataFrame(candles).sort_values("timestamp").reset_index(drop=True)
+        from research.vector_store import _WINDOW as W
+        from research.vector_store import _compute_features
+
+        df = pd.DataFrame(candles).sort_values("timestamp").reset_index(drop=True)
         vec = _compute_features(df.iloc[-W:])
         if vec is None:
             return 0, 0.0
@@ -391,6 +414,7 @@ class RLAgent:
         # get action probabilities from policy
         try:
             import torch
+
             obs_tensor = self._model.policy.obs_to_tensor(obs[None])[0]
             with torch.no_grad():
                 dist = self._model.policy.get_distribution(obs_tensor)
@@ -426,26 +450,27 @@ class RLAgent:
             if done:
                 break
 
-        eq  = np.array(equity_curve, dtype=float)
+        eq = np.array(equity_curve, dtype=float)
         ret = np.diff(eq) / (eq[:-1] + 1e-9)
 
-        sharpe       = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))
+        sharpe = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))
         total_return = float((eq[-1] - eq[0]) / eq[0])
-        peak         = np.maximum.accumulate(eq)
-        max_dd       = float(np.min((eq - peak) / (peak + 1e-9)))
+        peak = np.maximum.accumulate(eq)
+        max_dd = float(np.min((eq - peak) / (peak + 1e-9)))
         total_trades = wins + losses
-        win_rate     = wins / total_trades if total_trades > 0 else 0.0
+        win_rate = wins / total_trades if total_trades > 0 else 0.0
 
         return {
-            "sharpe":       sharpe,
+            "sharpe": sharpe,
             "total_return": total_return,
             "max_drawdown": max_dd,
-            "win_rate":     win_rate,
-            "trades":       total_trades,
+            "win_rate": win_rate,
+            "trades": total_trades,
         }
 
 
 # ── async trainer ─────────────────────────────────────────────────────────────
+
 
 class RLAgentTrainer:
     """
@@ -460,18 +485,18 @@ class RLAgentTrainer:
     def __init__(
         self,
         oanda_stream: Any,
-        model_name:   str = "hopefx_ppo",
+        model_name: str = "hopefx_ppo",
     ):
-        self.stream    = oanda_stream
-        self.agent     = RLAgent(model_name=model_name)
+        self.stream = oanda_stream
+        self.agent = RLAgent(model_name=model_name)
 
     async def train(
         self,
-        symbol:     str   = "XAU_USD",
-        timeframe:  str   = "H1",
-        candles:    int   = 2000,
-        timesteps:  int   = 100_000,
-        train_split:float = 0.8,
+        symbol: str = "XAU_USD",
+        timeframe: str = "H1",
+        candles: int = 2000,
+        timesteps: int = 100_000,
+        train_split: float = 0.8,
     ) -> RLMetrics:
         """
         Fetch candles, build env, train PPO, evaluate on hold-out set.
@@ -480,25 +505,26 @@ class RLAgentTrainer:
         """
         logger.info(
             "Fetching %d %s %s candles for RL training …",
-            candles, symbol, timeframe,
+            candles,
+            symbol,
+            timeframe,
         )
         raw = await self.stream.get_candles(symbol, timeframe, candles)
         if len(raw) < 200:
-            raise ValueError(
-                f"Only {len(raw)} candles returned — need at least 200"
-            )
+            raise ValueError(f"Only {len(raw)} candles returned — need at least 200")
 
         split = int(len(raw) * train_split)
         train_candles = raw[:split]
-        test_candles  = raw[split:]
+        test_candles = raw[split:]
 
         logger.info(
             "Train: %d candles  Test: %d candles",
-            len(train_candles), len(test_candles),
+            len(train_candles),
+            len(test_candles),
         )
 
         train_env = ForexTradingEnv(train_candles)
-        test_env  = ForexTradingEnv(test_candles)
+        test_env = ForexTradingEnv(test_candles)
 
         self.agent.train(train_env, timesteps=timesteps)
 
@@ -506,13 +532,13 @@ class RLAgentTrainer:
         logger.info("RL evaluation: %s", metrics_dict)
 
         return RLMetrics(
-            sharpe       = metrics_dict["sharpe"],
-            total_return = metrics_dict["total_return"],
-            max_drawdown = metrics_dict["max_drawdown"],
-            win_rate     = metrics_dict["win_rate"],
-            episodes     = 1,
-            timesteps    = timesteps,
-            model_path   = self.agent.model_path,
+            sharpe=metrics_dict["sharpe"],
+            total_return=metrics_dict["total_return"],
+            max_drawdown=metrics_dict["max_drawdown"],
+            win_rate=metrics_dict["win_rate"],
+            episodes=1,
+            timesteps=timesteps,
+            model_path=self.agent.model_path,
         )
 
     def predict(self, candles: List[Dict]) -> Tuple[int, float]:

@@ -27,9 +27,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, time, timezone
 from enum import Enum, auto
 from pathlib import Path
@@ -43,13 +42,14 @@ logger = logging.getLogger(__name__)
 # Config dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PropFirmConfig:
-    daily_dd: float = 0.05          # Max daily drawdown fraction
-    max_dd: float = 0.10            # Max total drawdown fraction
-    news_blackout: int = 5          # Minutes before/after high-impact news
-    weekend_close: bool = True      # Auto-close before weekend
-    breach_action: str = "pause"    # "pause" | "liquidate"
+    daily_dd: float = 0.05  # Max daily drawdown fraction
+    max_dd: float = 0.10  # Max total drawdown fraction
+    news_blackout: int = 5  # Minutes before/after high-impact news
+    weekend_close: bool = True  # Auto-close before weekend
+    breach_action: str = "pause"  # "pause" | "liquidate"
     telegram_token: str = ""
     telegram_chat_id: str = ""
 
@@ -77,6 +77,7 @@ class PropFirmConfig:
 # Breach types
 # ---------------------------------------------------------------------------
 
+
 class BreachType(Enum):
     DAILY_DD = auto()
     MAX_DD = auto()
@@ -87,6 +88,7 @@ class BreachType(Enum):
 # ---------------------------------------------------------------------------
 # Kill-switch
 # ---------------------------------------------------------------------------
+
 
 class KillSwitch:
     """Thread-safe kill-switch that halts all order flow."""
@@ -110,6 +112,7 @@ class KillSwitch:
 # ---------------------------------------------------------------------------
 # Main engine
 # ---------------------------------------------------------------------------
+
 
 class PropComplianceEngine:
     """
@@ -140,7 +143,7 @@ class PropComplianceEngine:
         # Equity tracking
         self._lock = threading.RLock()
         self._initial_equity = initial_equity
-        self._high_water_mark = initial_equity   # trailing HWM for max DD
+        self._high_water_mark = initial_equity  # trailing HWM for max DD
         self._day_start_equity = initial_equity  # reset daily
         self._current_equity = initial_equity
 
@@ -233,7 +236,9 @@ class PropComplianceEngine:
 
             # 3. News blackout
             if self._in_news_blackout(now):
-                self._breach(BreachType.NEWS_BLACKOUT, "High-impact news blackout window")
+                self._breach(
+                    BreachType.NEWS_BLACKOUT, "High-impact news blackout window"
+                )
                 return False, "News blackout window active"
 
             # 4. Weekend close
@@ -264,6 +269,7 @@ class PropComplianceEngine:
     def _in_news_blackout(self, now: datetime) -> bool:
         """True if `now` is within ±news_blackout minutes of any scheduled event."""
         from datetime import timedelta
+
         window = timedelta(minutes=self.cfg.news_blackout)
         for event in self._news_events:
             if abs((now - event).total_seconds()) <= window.total_seconds():
@@ -278,11 +284,11 @@ class PropComplianceEngine:
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
 
-        if weekday == 4 and t >= time(21, 0):   # Friday after 21:00
+        if weekday == 4 and t >= time(21, 0):  # Friday after 21:00
             return True
-        if weekday == 5:                          # Saturday
+        if weekday == 5:  # Saturday
             return True
-        if weekday == 6 and t < time(23, 0):     # Sunday before 23:00
+        if weekday == 6 and t < time(23, 0):  # Sunday before 23:00
             return True
         return False
 
@@ -329,10 +335,9 @@ class PropComplianceEngine:
         while True:
             now = datetime.now(timezone.utc)
             # Seconds until next midnight UTC
-            next_midnight = now.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
             from datetime import timedelta
+
             next_midnight += timedelta(days=1)
             sleep_secs = (next_midnight - now).total_seconds()
             _time.sleep(max(sleep_secs, 1))
@@ -341,7 +346,10 @@ class PropComplianceEngine:
                 self._day_start_equity = self._current_equity
                 if self.cfg.breach_action == "pause":
                     self._paused = False
-                    logger.info("Daily reset: pause cleared, day_start_equity=%.2f", self._day_start_equity)
+                    logger.info(
+                        "Daily reset: pause cleared, day_start_equity=%.2f",
+                        self._day_start_equity,
+                    )
 
     # ------------------------------------------------------------------
     # Status

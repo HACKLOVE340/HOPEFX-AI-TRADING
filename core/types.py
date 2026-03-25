@@ -9,7 +9,6 @@ from typing import Literal, NewType
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # Domain types
 Symbol = NewType("Symbol", str)
 OrderId = NewType("OrderId", str)
@@ -134,6 +133,7 @@ class Order(BaseModel):
         if isinstance(v, str):
             return v.upper()
         return v
+
     quantity: Decimal
     price: Decimal | None = None
     stop_price: Decimal | None = None

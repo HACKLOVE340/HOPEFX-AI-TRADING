@@ -10,14 +10,15 @@ import logging
 import os
 import secrets
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
@@ -206,6 +207,7 @@ class AppConfig:
 
     def copy(self):
         import copy
+
         return copy.deepcopy(self)
 
     def to_dict(self) -> dict:
@@ -230,30 +232,32 @@ class AppConfig:
         )
         db_d = d.get("database", {})
         if db_d:
-            cfg.database = DatabaseConfig(**{
-                k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d
-            })
+            cfg.database = DatabaseConfig(
+                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d}
+            )
         tr_d = d.get("trading", {})
         if tr_d:
-            cfg.trading = TradingConfig(**{
-                k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d
-            })
+            cfg.trading = TradingConfig(
+                **{k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d}
+            )
         lg_d = d.get("logging", {})
         if lg_d:
-            cfg.logging = LoggingConfig(**{
-                k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d
-            })
+            cfg.logging = LoggingConfig(
+                **{k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d}
+            )
         for name, api_d in d.get("api_configs", {}).items():
-            cfg.api_configs[name] = APIConfig(**{
-                k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d
-            })
+            cfg.api_configs[name] = APIConfig(
+                **{k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d}
+            )
         return cfg
 
 
 class _Settings:
     """Dynamic settings namespace."""
+
     def __setattr__(self, name, value):
         object.__setattr__(self, name, value)
+
     def __getattr__(self, name):
         return None
 
@@ -261,11 +265,15 @@ class _Settings:
 class ConfigManager:
     """Secure configuration manager with encryption and hash-based change detection."""
 
-    def __init__(self, config_dir: str = "config", encryption_key: Optional[str] = None):
+    def __init__(
+        self, config_dir: str = "config", encryption_key: Optional[str] = None
+    ):
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        self._encryption_key = encryption_key or os.environ.get("CONFIG_ENCRYPTION_KEY", "")
+        self._encryption_key = encryption_key or os.environ.get(
+            "CONFIG_ENCRYPTION_KEY", ""
+        )
         self._enc: Optional[EncryptionManager] = None
         if self._encryption_key:
             try:
@@ -358,7 +366,9 @@ class ConfigManager:
             raise RuntimeError("Config not loaded; call load_config() first")
         return self.config.api_configs.get(provider)
 
-    def update_api_credential(self, provider: str, api_key: str, api_secret: str) -> None:
+    def update_api_credential(
+        self, provider: str, api_key: str, api_secret: str
+    ) -> None:
         if self.config is None:
             raise RuntimeError("Config not loaded; call load_config() first")
         if provider in self.config.api_configs:

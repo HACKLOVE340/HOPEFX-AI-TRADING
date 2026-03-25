@@ -31,7 +31,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _SAVED = Path(__file__).parent / "saved_models"
-_MIN_BARS = 100   # minimum bars for reliable feature computation
+_MIN_BARS = 100  # minimum bars for reliable feature computation
 
 
 class AdvancedModelPredictor:
@@ -56,7 +56,7 @@ class AdvancedModelPredictor:
         min_bars: int = _MIN_BARS,
     ) -> None:
         self.model_path = model_path or (_SAVED / "advanced_oos.pkl")
-        self.min_bars   = min_bars
+        self.min_bars = min_bars
         self._model: Optional[Any] = None
         self._feature_names: Optional[list] = None
         self._version = "advanced_oos_v1"
@@ -69,6 +69,7 @@ class AdvancedModelPredictor:
             return True
         try:
             import joblib
+
             payload = joblib.load(self.model_path)
             # advanced_oos.pkl is a sklearn Pipeline (scaler + calibrated XGB)
             self._model = payload
@@ -101,6 +102,7 @@ class AdvancedModelPredictor:
         """
         try:
             from ml.advanced_features import build_advanced_features
+
             # build_advanced_features applies filtered target — we don't need
             # the target for inference, so use use_filtered_target=False and
             # take the last row of X.
@@ -113,7 +115,7 @@ class AdvancedModelPredictor:
             )
             if X.empty:
                 return None
-            return X.iloc[[-1]]   # last bar only
+            return X.iloc[[-1]]  # last bar only
         except Exception as exc:
             logger.warning("Feature build failed: %s", exc)
             return None
@@ -140,7 +142,8 @@ class AdvancedModelPredictor:
         if len(ohlcv) < self.min_bars:
             logger.debug(
                 "Only %d bars available (need %d) — returning neutral 0.5",
-                len(ohlcv), self.min_bars,
+                len(ohlcv),
+                self.min_bars,
             )
             return 0.5
 
@@ -162,7 +165,7 @@ class AdvancedModelPredictor:
         self,
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
-        threshold_long:  float = 0.58,
+        threshold_long: float = 0.58,
         threshold_short: float = 0.42,
     ) -> Dict[str, Any]:
         """
@@ -181,7 +184,7 @@ class AdvancedModelPredictor:
 
         if prob >= threshold_long:
             direction = "long"
-            confidence = (prob - 0.5) * 2.0   # scale 0.5-1.0 → 0.0-1.0
+            confidence = (prob - 0.5) * 2.0  # scale 0.5-1.0 → 0.0-1.0
         elif prob <= threshold_short:
             direction = "short"
             confidence = (0.5 - prob) * 2.0
@@ -190,12 +193,12 @@ class AdvancedModelPredictor:
             confidence = 0.0
 
         return {
-            "direction":     direction,
-            "probability":   round(prob, 4),
-            "confidence":    round(float(confidence), 4),
+            "direction": direction,
+            "probability": round(prob, 4),
+            "confidence": round(float(confidence), 4),
             "model_version": self._version,
-            "bars_used":     len(ohlcv),
-            "last_close":    float(last.get("close", last.iloc[-1])),
+            "bars_used": len(ohlcv),
+            "last_close": float(last.get("close", last.iloc[-1])),
         }
 
 

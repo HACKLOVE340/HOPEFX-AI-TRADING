@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 from typing import List
 
 from fastapi import APIRouter
@@ -26,22 +25,24 @@ router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
 # ── models ────────────────────────────────────────────────────────────────────
 
+
 class EquityPoint(BaseModel):
-    time: float   # Unix timestamp (seconds)
+    time: float  # Unix timestamp (seconds)
     value: float  # Equity in account currency
 
 
 class PublicPerformance(BaseModel):
     total_trades: int
-    win_rate: float | None        # None until 50+ trades
+    win_rate: float | None  # None until 50+ trades
     avg_return_pct: float | None
-    sharpe: float | None          # None until 50+ trades
+    sharpe: float | None  # None until 50+ trades
     max_drawdown_pct: float
     start_date: str
     note: str
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _load_equity_curve() -> List[EquityPoint]:
     """
@@ -50,6 +51,7 @@ def _load_equity_curve() -> List[EquityPoint]:
     """
     try:
         from app import app_state  # noqa: PLC0415
+
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_equity_history"):
             history = broker.get_equity_history()
@@ -104,6 +106,7 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
             sharpe = round((mean_r / std_r) * math.sqrt(252), 3)
 
     import datetime
+
     start_date = datetime.datetime.fromtimestamp(curve[0].time).strftime("%Y-%m-%d")
 
     note = (
@@ -114,7 +117,9 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
 
     return PublicPerformance(
         total_trades=len(returns),
-        win_rate=round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1) if returns else None,
+        win_rate=round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1)
+        if returns
+        else None,
         avg_return_pct=round(avg_ret, 4) if avg_ret is not None else None,
         sharpe=sharpe,
         max_drawdown_pct=round(max_dd * 100, 3),
@@ -125,7 +130,12 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
 
 # ── routes ────────────────────────────────────────────────────────────────────
 
-@router.get("/equity-curve", response_model=List[EquityPoint], summary="Equity curve time series")
+
+@router.get(
+    "/equity-curve",
+    response_model=List[EquityPoint],
+    summary="Equity curve time series",
+)
 async def equity_curve():
     """
     Return the equity curve as a list of {time, value} points.
@@ -135,7 +145,9 @@ async def equity_curve():
     return _load_equity_curve()
 
 
-@router.get("/public", response_model=PublicPerformance, summary="Public performance summary")
+@router.get(
+    "/public", response_model=PublicPerformance, summary="Public performance summary"
+)
 async def public_performance():
     """
     Public (no auth required) performance summary.

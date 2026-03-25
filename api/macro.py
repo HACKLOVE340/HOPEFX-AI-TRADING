@@ -31,6 +31,7 @@ async def macro_snapshot():
     """
     try:
         from data.feeds.macro import get_macro_feed
+
         feed = get_macro_feed()
         return await feed.refresh_async()
     except Exception as exc:
@@ -46,6 +47,7 @@ async def macro_refresh():
     """Force a fresh pull from FRED, bypassing the cache."""
     try:
         from data.feeds.macro import get_macro_feed
+
         feed = get_macro_feed()
         snapshot = await feed.refresh_async()
         return {"status": "refreshed", **snapshot}
@@ -65,6 +67,7 @@ async def macro_features():
     """
     try:
         from data.feeds.macro import get_macro_feed
+
         feed = get_macro_feed()
         return feed.as_ml_features()
     except Exception as exc:

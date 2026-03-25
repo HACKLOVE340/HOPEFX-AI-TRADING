@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -28,30 +28,31 @@ _manager = TraderProfileManager()
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class ProfileUpdate(BaseModel):
-    bio:        Optional[str] = Field(None, max_length=500)
+    bio: Optional[str] = Field(None, max_length=500)
     avatar_url: Optional[str] = None
-    website:    Optional[str] = None
-    is_public:  Optional[bool] = None
+    website: Optional[str] = None
+    is_public: Optional[bool] = None
 
 
 class ProfileResponse(BaseModel):
-    trader_id:       str
-    username:        str
-    bio:             str
-    avatar_url:      Optional[str]
-    website:         Optional[str]
-    verified:        bool
-    is_public:       bool
+    trader_id: str
+    username: str
+    bio: str
+    avatar_url: Optional[str]
+    website: Optional[str]
+    verified: bool
+    is_public: bool
     total_followers: int
     total_following: int
-    total_trades:    int
-    win_rate:        float
-    total_pnl:       float
-    avg_win:         float
-    avg_loss:        float
-    sharpe_ratio:    float
-    created_at:      Optional[str]
+    total_trades: int
+    win_rate: float
+    total_pnl: float
+    avg_win: float
+    avg_loss: float
+    sharpe_ratio: float
+    created_at: Optional[str]
 
 
 def _profile_to_response(p: TraderProfile, include_email: bool = False) -> dict:
@@ -74,6 +75,7 @@ def _get_or_create(user: TokenPayload) -> TraderProfile:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/me")
 async def get_my_profile(user: TokenPayload = Depends(get_current_user)):
@@ -126,6 +128,7 @@ async def get_public_profile(trader_id: str):
 async def get_trader_signals(trader_id: str, limit: int = 10):
     """Return recent public signals for a trader (demo data)."""
     import random
+
     random.seed(hash(trader_id) % 1000)
     signals = []
     symbols = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY"]
@@ -133,15 +136,17 @@ async def get_trader_signals(trader_id: str, limit: int = 10):
         sym = random.choice(symbols)
         direction = random.choice(["BUY", "SELL"])
         pnl = round((random.random() - 0.4) * 200, 2)
-        signals.append({
-            "signal_id": f"sig-{trader_id[:4]}-{i:03d}",
-            "symbol": sym,
-            "direction": direction,
-            "confidence": round(70 + random.random() * 25, 1),
-            "pnl": pnl,
-            "copies": random.randint(0, 12),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        signals.append(
+            {
+                "signal_id": f"sig-{trader_id[:4]}-{i:03d}",
+                "symbol": sym,
+                "direction": direction,
+                "confidence": round(70 + random.random() * 25, 1),
+                "pnl": pnl,
+                "copies": random.randint(0, 12),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     return {"signals": signals}
 
 

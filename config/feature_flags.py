@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import os
 from enum import Enum
-from typing import Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +141,8 @@ class FeatureFlags:
         default=False,
         status=FeatureStatus.STABLE,
         description="Live order execution via connected broker APIs. "
-                    "Intentionally off by default — set FEATURE_LIVE_TRADING=true "
-                    "only after verifying broker credentials and risk limits.",
+        "Intentionally off by default — set FEATURE_LIVE_TRADING=true "
+        "only after verifying broker credentials and risk limits.",
     )
     RISK_MANAGER = _FeatureDef(
         "FEATURE_RISK_MANAGER",
@@ -314,7 +314,7 @@ class FeatureFlags:
         default=False,
         status=FeatureStatus.BETA,
         description="ML ensemble price-direction predictions (XGBoost/LightGBM/RF). "
-                    "Off by default until models reach production accuracy threshold.",
+        "Off by default until models reach production accuracy threshold.",
     )
     ML_FEATURE_ENGINEERING = _FeatureDef(
         "FEATURE_ML_FEATURE_ENGINEERING",

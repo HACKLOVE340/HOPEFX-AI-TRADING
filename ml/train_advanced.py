@@ -59,11 +59,12 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 # Data fetching
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     """Download XAUUSD/GC=F daily OHLCV from Yahoo Finance."""
     import yfinance as yf
 
-    end   = datetime.now(timezone.utc)
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=years * 365)
     logger.info("Downloading %s  %s → %s", symbol, start.date(), end.date())
 
@@ -93,6 +94,7 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
     """Fetch macro data (DXY, VIX, yields, SPX)."""
     try:
         from ml.macro_features import fetch_macro_history
+
         df = fetch_macro_history(start, end, interval="1d")
         if df.empty:
             logger.warning("Macro data returned empty — skipping")
@@ -108,10 +110,15 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
 # Model building
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_base_models():
     """Return list of (name, estimator) base learners."""
     import xgboost as xgb
-    from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
+    from sklearn.ensemble import (
+        ExtraTreesClassifier,
+        GradientBoostingClassifier,
+        RandomForestClassifier,
+    )
 
     models = [
         (
@@ -172,23 +179,26 @@ def _build_base_models():
     # LightGBM if available
     try:
         import lightgbm as lgb
-        models.append((
-            "lgbm",
-            lgb.LGBMClassifier(
-                n_estimators=600,
-                max_depth=5,
-                learning_rate=0.03,
-                subsample=0.75,
-                colsample_bytree=0.75,
-                min_child_samples=10,
-                reg_alpha=0.1,
-                reg_lambda=1.5,
-                class_weight="balanced",
-                random_state=42,
-                n_jobs=-1,
-                verbose=-1,
-            ),
-        ))
+
+        models.append(
+            (
+                "lgbm",
+                lgb.LGBMClassifier(
+                    n_estimators=600,
+                    max_depth=5,
+                    learning_rate=0.03,
+                    subsample=0.75,
+                    colsample_bytree=0.75,
+                    min_child_samples=10,
+                    reg_alpha=0.1,
+                    reg_lambda=1.5,
+                    class_weight="balanced",
+                    random_state=42,
+                    n_jobs=-1,
+                    verbose=-1,
+                ),
+            )
+        )
         logger.info("LightGBM available — added to ensemble")
     except ImportError:
         logger.info("LightGBM not installed — using 4-model ensemble")
@@ -202,11 +212,11 @@ def build_stacking_ensemble():
       Base: XGBoost + RF + ExtraTrees + GBM [+ LightGBM]
       Meta: Calibrated LogisticRegression
     """
+    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.ensemble import StackingClassifier
     from sklearn.linear_model import LogisticRegression
-    from sklearn.calibration import CalibratedClassifierCV
-    from sklearn.preprocessing import StandardScaler
     from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
 
     base_models = _build_base_models()
 
@@ -222,7 +232,7 @@ def build_stacking_ensemble():
         final_estimator=meta,
         cv=5,
         stack_method="predict_proba",
-        passthrough=True,   # also pass original features to meta-learner
+        passthrough=True,  # also pass original features to meta-learner
         n_jobs=-1,
     )
 
@@ -230,10 +240,12 @@ def build_stacking_ensemble():
     calibrated = CalibratedClassifierCV(stacker, method="isotonic", cv=3)
 
     # Full pipeline with scaling
-    pipeline = Pipeline([
-        ("scaler", StandardScaler()),
-        ("model",  calibrated),
-    ])
+    pipeline = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("model", calibrated),
+        ]
+    )
 
     return pipeline
 
@@ -241,6 +253,7 @@ def build_stacking_ensemble():
 # ─────────────────────────────────────────────────────────────────────────────
 # Walk-forward evaluation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def walk_forward_eval(
     X: pd.DataFrame,
@@ -251,13 +264,11 @@ def walk_forward_eval(
     Walk-forward cross-validation with the stacking ensemble.
     Uses a simpler (faster) model for CV to avoid O(n²) fitting time.
     """
-    from sklearn.model_selection import TimeSeriesSplit
+    import xgboost as xgb
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.model_selection import TimeSeriesSplit
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
-    from sklearn.calibration import CalibratedClassifierCV
-    import xgboost as xgb
 
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=1)
     fold_results = []
@@ -295,50 +306,59 @@ def walk_forward_eval(
         preds = model.predict(X_test)
         proba = model.predict_proba(X_test)[:, 1]
 
-        acc  = accuracy_score(y_test, preds)
-        f1   = f1_score(y_test, preds, zero_division=0)
+        acc = accuracy_score(y_test, preds)
+        f1 = f1_score(y_test, preds, zero_division=0)
         try:
             auc = roc_auc_score(y_test, proba)
         except Exception:
             auc = 0.5
 
-        fold_results.append({
-            "fold":       fold + 1,
-            "train_size": len(train_idx),
-            "test_size":  len(test_idx),
-            "accuracy":   round(acc, 4),
-            "f1":         round(f1, 4),
-            "auc":        round(auc, 4),
-        })
+        fold_results.append(
+            {
+                "fold": fold + 1,
+                "train_size": len(train_idx),
+                "test_size": len(test_idx),
+                "accuracy": round(acc, 4),
+                "f1": round(f1, 4),
+                "auc": round(auc, 4),
+            }
+        )
         logger.info(
             "Fold %d/%d  acc=%.3f  f1=%.3f  auc=%.3f  train=%d  test=%d",
-            fold + 1, n_splits, acc, f1, auc, len(train_idx), len(test_idx),
+            fold + 1,
+            n_splits,
+            acc,
+            f1,
+            auc,
+            len(train_idx),
+            len(test_idx),
         )
 
     if not fold_results:
         return {"error": "no valid folds"}
 
     accs = [r["accuracy"] for r in fold_results]
-    f1s  = [r["f1"]       for r in fold_results]
-    aucs = [r["auc"]      for r in fold_results]
+    f1s = [r["f1"] for r in fold_results]
+    aucs = [r["auc"] for r in fold_results]
 
     t_stat, p_value = stats.ttest_1samp(accs, 0.5)
 
     return {
-        "folds":         fold_results,
+        "folds": fold_results,
         "mean_accuracy": round(float(np.mean(accs)), 4),
-        "std_accuracy":  round(float(np.std(accs)),  4),
-        "mean_f1":       round(float(np.mean(f1s)),  4),
-        "mean_auc":      round(float(np.mean(aucs)), 4),
-        "t_stat":        round(float(t_stat),        4),
-        "p_value":       round(float(p_value),       4),
-        "significant":   bool(p_value < 0.05 and np.mean(accs) > 0.55),
+        "std_accuracy": round(float(np.std(accs)), 4),
+        "mean_f1": round(float(np.mean(f1s)), 4),
+        "mean_auc": round(float(np.mean(aucs)), 4),
+        "t_stat": round(float(t_stat), 4),
+        "p_value": round(float(p_value), 4),
+        "significant": bool(p_value < 0.05 and np.mean(accs) > 0.55),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Final model training
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def train_final_model(
     X: pd.DataFrame,
@@ -354,14 +374,17 @@ def train_final_model(
     XGBoost pipeline which trains in ~30 seconds and achieves comparable
     accuracy on large datasets.
     """
-    from sklearn.metrics import (
-        accuracy_score, f1_score, roc_auc_score,
-        classification_report, confusion_matrix,
-    )
+    import xgboost as xgb
     from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.metrics import (
+        accuracy_score,
+        classification_report,
+        confusion_matrix,
+        f1_score,
+        roc_auc_score,
+    )
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
-    import xgboost as xgb
 
     split = int(len(X) * train_pct)
     X_train, X_test = X.iloc[:split], X.iloc[split:]
@@ -388,7 +411,7 @@ def train_final_model(
             random_state=42,
             n_jobs=-1,
         )
-        cal   = CalibratedClassifierCV(base, method="isotonic", cv=3)
+        cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
         model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
 
     model.fit(X_train, y_train)
@@ -396,8 +419,8 @@ def train_final_model(
     preds = model.predict(X_test)
     proba = model.predict_proba(X_test)[:, 1]
 
-    acc  = accuracy_score(y_test, preds)
-    f1   = f1_score(y_test, preds, zero_division=0)
+    acc = accuracy_score(y_test, preds)
+    f1 = f1_score(y_test, preds, zero_division=0)
     try:
         auc = roc_auc_score(y_test, proba)
     except Exception:
@@ -413,13 +436,13 @@ def train_final_model(
     logger.info("Saved stacking ensemble → %s", model_path)
 
     return model, {
-        "train_size":    len(X_train),
-        "test_size":     len(X_test),
-        "accuracy":      round(acc, 4),
-        "f1":            round(f1, 4),
-        "auc":           round(auc, 4),
+        "train_size": len(X_train),
+        "test_size": len(X_test),
+        "accuracy": round(acc, 4),
+        "f1": round(f1, 4),
+        "auc": round(auc, 4),
         "feature_count": X.shape[1],
-        "features":      list(X.columns),
+        "features": list(X.columns),
     }
 
 
@@ -427,13 +450,14 @@ def train_final_model(
 # Feature importance
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def extract_feature_importance(model, feature_names: List[str]) -> Dict:
     """Extract feature importance from the stacking ensemble."""
     try:
         # Try to get importance from the XGBoost base model inside the pipeline
         pipeline = model
         cal_model = pipeline.named_steps["model"]
-        stacker   = cal_model.calibrated_classifiers_[0].estimator
+        stacker = cal_model.calibrated_classifiers_[0].estimator
         xgb_model = dict(stacker.estimators_).get("xgb")
         if xgb_model and hasattr(xgb_model, "feature_importances_"):
             imp = pd.Series(xgb_model.feature_importances_, index=feature_names)
@@ -447,6 +471,7 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def oos_eval_advanced(
     X_train: pd.DataFrame,
@@ -464,12 +489,17 @@ def oos_eval_advanced(
     Returns accuracy, F1, AUC, and a one-sided binomial p-value testing
     H0: accuracy <= 0.5.
     """
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
+    import xgboost as xgb
+    from scipy.stats import binomtest
     from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.metrics import (
+        accuracy_score,
+        classification_report,
+        f1_score,
+        roc_auc_score,
+    )
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
-    from scipy.stats import binomtest
-    import xgboost as xgb
 
     base = xgb.XGBClassifier(
         n_estimators=500,
@@ -487,14 +517,14 @@ def oos_eval_advanced(
         random_state=42,
         n_jobs=-1,
     )
-    cal   = CalibratedClassifierCV(base, method="isotonic", cv=3)
+    cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
     model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
     model.fit(X_train, y_train)
 
     preds = model.predict(X_oos)
     proba = model.predict_proba(X_oos)[:, 1]
-    acc   = accuracy_score(y_oos, preds)
-    f1    = f1_score(y_oos, preds, zero_division=0)
+    acc = accuracy_score(y_oos, preds)
+    f1 = f1_score(y_oos, preds, zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
     except Exception:
@@ -507,7 +537,13 @@ def oos_eval_advanced(
 
     logger.info(
         "OOS advanced  acc=%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        acc, f1, auc, n, k, p_value, p_value < 0.05,
+        acc,
+        f1,
+        auc,
+        n,
+        k,
+        p_value,
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -517,15 +553,15 @@ def oos_eval_advanced(
     logger.info("Saved OOS model → %s", out_path)
 
     return {
-        "train_size":          len(X_train),
-        "oos_size":            n,
+        "train_size": len(X_train),
+        "oos_size": n,
         "correct_predictions": k,
-        "accuracy":            round(acc, 4),
-        "f1":                  round(f1, 4),
-        "auc":                 round(auc, 4),
-        "p_value_binomial":    round(p_value, 4),
-        "significant":         bool(p_value < 0.05),
-        "test":                "one-sided binomial (H0: accuracy <= 0.5)",
+        "accuracy": round(acc, 4),
+        "f1": round(f1, 4),
+        "auc": round(auc, 4),
+        "p_value_binomial": round(p_value, 4),
+        "significant": bool(p_value < 0.05),
+        "test": "one-sided binomial (H0: accuracy <= 0.5)",
     }
 
 
@@ -540,16 +576,46 @@ def main():
             "  python ml/train_advanced.py --years 8 --no-macro    # quick test\n"
         ),
     )
-    parser.add_argument("--years",     type=int,   default=8,     help="Years of history (default: 8; use 50 for full dataset)")
-    parser.add_argument("--symbol",    default="GC=F",            help="Yahoo Finance symbol (default: GC=F)")
-    parser.add_argument("--no-macro",  action="store_true",       help="Skip macro features (DXY, VIX, yields, SPX)")
-    parser.add_argument("--horizon",   type=int,   default=1,     help="Prediction horizon in bars (default: 1)")
-    parser.add_argument("--splits",    type=int,   default=8,     help="Walk-forward CV splits (default: 8)")
-    parser.add_argument("--min-move",  type=float, default=0.25,  help="Min ATR move for filtered target (default: 0.25)")
-    parser.add_argument("--no-filter", action="store_true",       help="Disable filtered target (train on all bars)")
-    parser.add_argument("--stacking",  action="store_true",       help="Use full stacking ensemble for final model (slow; default: calibrated XGBoost)")
     parser.add_argument(
-        "--oos-years", type=float, default=0.0,
+        "--years",
+        type=int,
+        default=8,
+        help="Years of history (default: 8; use 50 for full dataset)",
+    )
+    parser.add_argument(
+        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)"
+    )
+    parser.add_argument(
+        "--no-macro",
+        action="store_true",
+        help="Skip macro features (DXY, VIX, yields, SPX)",
+    )
+    parser.add_argument(
+        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)"
+    )
+    parser.add_argument(
+        "--splits", type=int, default=8, help="Walk-forward CV splits (default: 8)"
+    )
+    parser.add_argument(
+        "--min-move",
+        type=float,
+        default=0.25,
+        help="Min ATR move for filtered target (default: 0.25)",
+    )
+    parser.add_argument(
+        "--no-filter",
+        action="store_true",
+        help="Disable filtered target (train on all bars)",
+    )
+    parser.add_argument(
+        "--stacking",
+        action="store_true",
+        help="Use full stacking ensemble for final model (slow; default: calibrated XGBoost)",
+    )
+    parser.add_argument(
+        "--oos-years",
+        type=float,
+        default=0.0,
         help=(
             "Reserve the last N years as a completely held-out OOS period. "
             "The model is trained on all data before this window and evaluated "
@@ -564,7 +630,7 @@ def main():
 
     # ── Fetch data ────────────────────────────────────────────────────────────
     ohlcv = fetch_gold_ohlcv(args.symbol, args.years)
-    end_dt   = datetime.now(timezone.utc)
+    end_dt = datetime.now(timezone.utc)
     start_dt = end_dt - timedelta(days=args.years * 365)
 
     macro_df = None
@@ -572,8 +638,11 @@ def main():
         macro_df = fetch_macro(start_dt, end_dt)
 
     # ── Build features ────────────────────────────────────────────────────────
-    logger.info("Building advanced feature matrix (macro=%s, filtered=%s)...",
-                macro_df is not None, not args.no_filter)
+    logger.info(
+        "Building advanced feature matrix (macro=%s, filtered=%s)...",
+        macro_df is not None,
+        not args.no_filter,
+    )
 
     X, y = build_advanced_features(
         ohlcv,
@@ -598,13 +667,14 @@ def main():
     X_oos, y_oos = None, None
 
     if args.oos_years > 0:
-        oos_n = int(round(args.oos_years * 252))   # ~252 trading days/year
-        oos_n = min(oos_n, len(X) // 4)            # cap at 25% of data
+        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
         if oos_n < 30:
             logger.warning(
                 "--oos-years %.1f produces only %d bars — too few for reliable OOS eval. "
                 "Increase --oos-years or --years.",
-                args.oos_years, oos_n,
+                args.oos_years,
+                oos_n,
             )
             oos_n = 0
         else:
@@ -612,29 +682,39 @@ def main():
             X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
             logger.info(
                 "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
-                len(X_cv), oos_n, args.oos_years,
-                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
-                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
+                len(X_cv),
+                oos_n,
+                args.oos_years,
+                X_oos.index[0].date()
+                if hasattr(X_oos.index[0], "date")
+                else X_oos.index[0],
+                X_oos.index[-1].date()
+                if hasattr(X_oos.index[-1], "date")
+                else X_oos.index[-1],
             )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
-    logger.info("\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits)
+    logger.info(
+        "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits
+    )
     wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits)
 
     logger.info(
         "Walk-forward  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  p=%.4f  significant=%s",
         wf.get("mean_accuracy", 0),
-        wf.get("std_accuracy",  0),
-        wf.get("mean_f1",       0),
-        wf.get("mean_auc",      0),
-        wf.get("p_value",       1),
-        wf.get("significant",   False),
+        wf.get("std_accuracy", 0),
+        wf.get("mean_f1", 0),
+        wf.get("mean_auc", 0),
+        wf.get("p_value", 1),
+        wf.get("significant", False),
     )
 
     # ── Train final model (on CV portion) ────────────────────────────────────
     mode = "stacking ensemble" if args.stacking else "calibrated XGBoost"
     logger.info("\n=== Training final model (%s) ===", mode)
-    final_model, final_metrics = train_final_model(X_cv, y_cv, use_stacking=args.stacking)
+    final_model, final_metrics = train_final_model(
+        X_cv, y_cv, use_stacking=args.stacking
+    )
 
     # Feature importance
     importance = extract_feature_importance(final_model, list(X_cv.columns))
@@ -649,22 +729,22 @@ def main():
 
     # ── Save report ───────────────────────────────────────────────────────────
     report = {
-        "symbol":           args.symbol,
-        "years":            args.years,
-        "oos_years":        args.oos_years,
-        "macro_features":   macro_df is not None,
-        "filtered_target":  not args.no_filter,
-        "min_move_atr":     args.min_move,
-        "horizon":          args.horizon,
-        "sample_count":     len(X),
-        "cv_sample_count":  len(X_cv),
+        "symbol": args.symbol,
+        "years": args.years,
+        "oos_years": args.oos_years,
+        "macro_features": macro_df is not None,
+        "filtered_target": not args.no_filter,
+        "min_move_atr": args.min_move,
+        "horizon": args.horizon,
+        "sample_count": len(X),
+        "cv_sample_count": len(X_cv),
         "oos_sample_count": oos_n,
-        "feature_count":    X.shape[1],
-        "trained_at":       datetime.now(timezone.utc).isoformat(),
-        "walkforward":      wf,
-        "final":            final_metrics,
-        "oos":              oos_metrics,
-        "top_features":     importance,
+        "feature_count": X.shape[1],
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "walkforward": wf,
+        "final": final_metrics,
+        "oos": oos_metrics,
+        "top_features": importance,
     }
 
     report_path = MODEL_DIR / "advanced_training_report.json"
@@ -684,11 +764,15 @@ def main():
     print(f"  Features        : {X.shape[1]}")
     print(f"  Macro features  : {macro_df is not None}")
     print()
-    print(f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}")
+    print(
+        f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}"
+    )
     print(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
     print(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
-    print(f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
-          f"{'✓ significant' if wf.get('significant') else '✗ not significant'}")
+    print(
+        f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
+        f"{'✓ significant' if wf.get('significant') else '✗ not significant'}"
+    )
     print()
     print(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
     print(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
@@ -697,7 +781,9 @@ def main():
     if oos_metrics:
         print()
         sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
-        print(f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}  (n={oos_metrics['oos_size']})")
+        print(
+            f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}  (n={oos_metrics['oos_size']})"
+        )
         print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
         print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
         print(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")

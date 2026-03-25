@@ -34,7 +34,7 @@ import math
 import random
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -45,20 +45,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Advanced Trading"])
 
 # ── In-memory stores ──────────────────────────────────────────────────────────
-_ab_tests:       Dict[str, dict] = {}
-_shared_results: Dict[str, dict] = {}   # slug → backtest result
-_indicators:     Dict[str, dict] = {}
-_mc_cache:       Dict[str, dict] = {}   # run_id → monte carlo result
+_ab_tests: Dict[str, dict] = {}
+_shared_results: Dict[str, dict] = {}  # slug → backtest result
+_indicators: Dict[str, dict] = {}
+_mc_cache: Dict[str, dict] = {}  # run_id → monte carlo result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 42 — Strategy A/B Testing
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ABTestRequest(BaseModel):
-    strategy_a:  str
-    strategy_b:  str
-    symbol:      str = "XAU/USD"
+    strategy_a: str
+    strategy_b: str
+    symbol: str = "XAU/USD"
     duration_days: int = Field(30, ge=1, le=365)
     initial_capital: float = 10000.0
 
@@ -78,24 +79,33 @@ def _simulate_ab_test(req: ABTestRequest) -> dict:
                 trades.append({"day": d, "pnl": round(daily_pnl, 2)})
         wins = [t for t in trades if t["pnl"] > 0]
         final = equity[-1]
-        returns = [(equity[i+1] - equity[i]) / equity[i] for i in range(len(equity)-1)]
+        returns = [
+            (equity[i + 1] - equity[i]) / equity[i] for i in range(len(equity) - 1)
+        ]
         mean_r = sum(returns) / len(returns) if returns else 0
-        std_r  = math.sqrt(sum((x - mean_r)**2 for x in returns) / len(returns)) if returns else 1
+        std_r = (
+            math.sqrt(sum((x - mean_r) ** 2 for x in returns) / len(returns))
+            if returns
+            else 1
+        )
         sharpe = (mean_r / std_r) * math.sqrt(252) if std_r > 0 else 0
         drawdowns = []
         peak = req.initial_capital
         for e in equity:
-            if e > peak: peak = e
+            if e > peak:
+                peak = e
             drawdowns.append((peak - e) / peak * 100)
         return {
-            "strategy":      name,
-            "final_equity":  round(final, 2),
-            "total_return":  round((final - req.initial_capital) / req.initial_capital * 100, 2),
-            "sharpe_ratio":  round(sharpe, 3),
-            "max_drawdown":  round(max(drawdowns), 2),
-            "total_trades":  len(trades),
-            "win_rate":      round(len(wins) / len(trades) * 100, 2) if trades else 0,
-            "equity_curve":  [round(e, 2) for e in equity[::max(1, len(equity)//50)]],
+            "strategy": name,
+            "final_equity": round(final, 2),
+            "total_return": round(
+                (final - req.initial_capital) / req.initial_capital * 100, 2
+            ),
+            "sharpe_ratio": round(sharpe, 3),
+            "max_drawdown": round(max(drawdowns), 2),
+            "total_trades": len(trades),
+            "win_rate": round(len(wins) / len(trades) * 100, 2) if trades else 0,
+            "equity_curve": [round(e, 2) for e in equity[:: max(1, len(equity) // 50)]],
         }
 
     result_a = run_strategy(req.strategy_a, 42)
@@ -104,28 +114,34 @@ def _simulate_ab_test(req: ABTestRequest) -> dict:
     # Statistical significance (simplified t-test proxy)
     diff = result_a["total_return"] - result_b["total_return"]
     p_value = round(max(0.01, min(0.99, 0.5 - abs(diff) / 20)), 3)
-    winner = req.strategy_a if result_a["sharpe_ratio"] > result_b["sharpe_ratio"] else req.strategy_b
+    winner = (
+        req.strategy_a
+        if result_a["sharpe_ratio"] > result_b["sharpe_ratio"]
+        else req.strategy_b
+    )
 
     return {
-        "strategy_a":   result_a,
-        "strategy_b":   result_b,
-        "winner":       winner,
-        "p_value":      p_value,
-        "significant":  p_value < 0.05,
+        "strategy_a": result_a,
+        "strategy_b": result_b,
+        "winner": winner,
+        "p_value": p_value,
+        "significant": p_value < 0.05,
         "recommendation": f"Deploy {winner} — higher risk-adjusted returns (Sharpe {max(result_a['sharpe_ratio'], result_b['sharpe_ratio']):.2f})",
     }
 
 
 @router.post("/api/ab-test/start", status_code=201)
-async def start_ab_test(req: ABTestRequest, user: TokenPayload = Depends(get_current_user)):
+async def start_ab_test(
+    req: ABTestRequest, user: TokenPayload = Depends(get_current_user)
+):
     test_id = str(uuid.uuid4())[:12]
     results = _simulate_ab_test(req)
     _ab_tests[test_id] = {
-        "test_id":    test_id,
-        "user_id":    user.sub,
-        "symbol":     req.symbol,
+        "test_id": test_id,
+        "user_id": user.sub,
+        "symbol": req.symbol,
         "duration_days": req.duration_days,
-        "status":     "completed",
+        "status": "completed",
         "created_at": datetime.now(timezone.utc).isoformat(),
         **results,
     }
@@ -150,27 +166,29 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_use
 # Task 43 — Backtesting Result Sharing
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.post("/api/backtest/{run_id}/share")
 async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_user)):
     """Generate a public share URL for a backtest result."""
     from api.backtesting import _results
+
     result = _results.get(run_id)
     if not result:
         # Create a demo shareable result
         result = {
-            "run_id":          run_id,
-            "strategy":        "MovingAverageCrossover",
-            "symbol":          "XAU/USD",
-            "start_date":      "2023-01-01",
-            "end_date":        "2024-01-01",
+            "run_id": run_id,
+            "strategy": "MovingAverageCrossover",
+            "symbol": "XAU/USD",
+            "start_date": "2023-01-01",
+            "end_date": "2024-01-01",
             "initial_capital": 10000,
-            "final_equity":    12840,
+            "final_equity": 12840,
             "total_return_pct": 28.4,
             "max_drawdown_pct": 8.2,
-            "sharpe_ratio":    1.42,
-            "total_trades":    147,
-            "win_rate_pct":    58.5,
-            "status":          "completed",
+            "sharpe_ratio": 1.42,
+            "total_trades": 147,
+            "win_rate_pct": 58.5,
+            "status": "completed",
         }
 
     slug = f"{run_id[:8]}-{uuid.uuid4().hex[:6]}"
@@ -178,11 +196,11 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
         **result,
         "shared_by": user.sub,
         "shared_at": datetime.now(timezone.utc).isoformat(),
-        "slug":      slug,
+        "slug": slug,
     }
     base_url = "https://hopefx.io"
     return {
-        "url":  f"{base_url}/backtest/shared/{slug}",
+        "url": f"{base_url}/backtest/shared/{slug}",
         "slug": slug,
     }
 
@@ -202,17 +220,18 @@ async def get_shared_backtest(slug: str):
 # Task 44 — Custom Indicator Builder
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class IndicatorPreviewRequest(BaseModel):
-    formula:  str = Field(..., description="e.g. 'EMA(close, 20) / EMA(close, 50)'")
-    symbol:   str = "XAU/USD"
-    periods:  int = Field(50, ge=10, le=500)
+    formula: str = Field(..., description="e.g. 'EMA(close, 20) / EMA(close, 50)'")
+    symbol: str = "XAU/USD"
+    periods: int = Field(50, ge=10, le=500)
 
 
 class SaveIndicatorRequest(BaseModel):
-    name:    str = Field(..., min_length=1, max_length=60)
+    name: str = Field(..., min_length=1, max_length=60)
     formula: str
-    symbol:  str = "XAU/USD"
-    color:   str = "#60a5fa"
+    symbol: str = "XAU/USD"
+    color: str = "#60a5fa"
 
 
 def _eval_indicator(formula: str, periods: int) -> List[dict]:
@@ -220,7 +239,6 @@ def _eval_indicator(formula: str, periods: int) -> List[dict]:
     Safe formula evaluator using a restricted namespace.
     Supports: EMA, SMA, RSI, close, open, high, low, volume.
     """
-    import re
 
     # Generate synthetic OHLCV
     rng = random.Random(42)
@@ -233,7 +251,7 @@ def _eval_indicator(formula: str, periods: int) -> List[dict]:
     def sma(data: List[float], n: int) -> List[float]:
         result = [None] * (n - 1)
         for i in range(n - 1, len(data)):
-            result.append(sum(data[i-n+1:i+1]) / n)
+            result.append(sum(data[i - n + 1 : i + 1]) / n)
         return result
 
     def ema(data: List[float], n: int) -> List[float]:
@@ -250,20 +268,25 @@ def _eval_indicator(formula: str, periods: int) -> List[dict]:
         result = [None] * n
         gains, losses = [], []
         for i in range(1, len(data)):
-            diff = data[i] - data[i-1]
+            diff = data[i] - data[i - 1]
             gains.append(max(diff, 0))
             losses.append(max(-diff, 0))
         for i in range(n - 1, len(gains)):
-            avg_gain = sum(gains[i-n+1:i+1]) / n
-            avg_loss = sum(losses[i-n+1:i+1]) / n
+            avg_gain = sum(gains[i - n + 1 : i + 1]) / n
+            avg_loss = sum(losses[i - n + 1 : i + 1]) / n
             rs = avg_gain / avg_loss if avg_loss > 0 else 100
             result.append(100 - 100 / (1 + rs))
         return result
 
     namespace = {
-        "EMA": ema, "SMA": sma, "RSI": rsi,
-        "close": prices, "open": prices, "high": [p * 1.002 for p in prices],
-        "low": [p * 0.998 for p in prices], "volume": [rng.randint(1000, 5000) for _ in prices],
+        "EMA": ema,
+        "SMA": sma,
+        "RSI": rsi,
+        "close": prices,
+        "open": prices,
+        "high": [p * 1.002 for p in prices],
+        "low": [p * 0.998 for p in prices],
+        "volume": [rng.randint(1000, 5000) for _ in prices],
     }
 
     try:
@@ -291,7 +314,12 @@ async def preview_indicator(
 ):
     try:
         data = _eval_indicator(req.formula, req.periods)
-        return {"formula": req.formula, "symbol": req.symbol, "data": data, "points": len(data)}
+        return {
+            "formula": req.formula,
+            "symbol": req.symbol,
+            "data": data,
+            "points": len(data),
+        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -303,15 +331,17 @@ async def list_indicators(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/api/indicators", status_code=201)
-async def save_indicator(req: SaveIndicatorRequest, user: TokenPayload = Depends(get_current_user)):
+async def save_indicator(
+    req: SaveIndicatorRequest, user: TokenPayload = Depends(get_current_user)
+):
     ind_id = str(uuid.uuid4())[:12]
     _indicators[ind_id] = {
-        "id":         ind_id,
-        "user_id":    user.sub,
-        "name":       req.name,
-        "formula":    req.formula,
-        "symbol":     req.symbol,
-        "color":      req.color,
+        "id": ind_id,
+        "user_id": user.sub,
+        "name": req.name,
+        "formula": req.formula,
+        "symbol": req.symbol,
+        "color": req.color,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     return _indicators[ind_id]
@@ -330,10 +360,11 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 # Task 45 — Multi-Symbol Correlation Dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/correlation")
 async def get_correlation(
     symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
-    window:  int = 30,
+    window: int = 30,
 ):
     """
     Return rolling correlation matrix for the given symbols.
@@ -348,16 +379,18 @@ async def get_correlation(
     series: Dict[str, List[float]] = {}
     for sym in sym_list:
         noise_scale = rng.uniform(0.3, 0.8)
-        series[sym] = [base_returns[i] * (1 - noise_scale) + rng.gauss(0, 0.01) * noise_scale
-                       for i in range(n)]
+        series[sym] = [
+            base_returns[i] * (1 - noise_scale) + rng.gauss(0, 0.01) * noise_scale
+            for i in range(n)
+        ]
 
     # Compute correlation matrix
     def corr(a: List[float], b: List[float]) -> float:
         n = len(a)
-        ma, mb = sum(a)/n, sum(b)/n
-        num = sum((a[i]-ma)*(b[i]-mb) for i in range(n))
-        da  = math.sqrt(sum((x-ma)**2 for x in a))
-        db  = math.sqrt(sum((x-mb)**2 for x in b))
+        ma, mb = sum(a) / n, sum(b) / n
+        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+        da = math.sqrt(sum((x - ma) ** 2 for x in a))
+        db = math.sqrt(sum((x - mb) ** 2 for x in b))
         return round(num / (da * db), 3) if da * db > 0 else 0.0
 
     matrix = {}
@@ -370,7 +403,8 @@ async def get_correlation(
     insights = []
     for s1 in sym_list:
         for s2 in sym_list:
-            if s1 >= s2: continue
+            if s1 >= s2:
+                continue
             c = matrix[s1][s2]
             if abs(c) >= 0.6:
                 direction = "positively" if c > 0 else "negatively"
@@ -378,8 +412,8 @@ async def get_correlation(
 
     return {
         "symbols": sym_list,
-        "window":  window,
-        "matrix":  matrix,
+        "window": window,
+        "matrix": matrix,
         "insights": insights[:5],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -389,6 +423,7 @@ async def get_correlation(
 # Task 46 — CFTC COT Gold Sentiment
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/api/cot/gold")
 async def get_cot_gold():
     """
@@ -396,7 +431,9 @@ async def get_cot_gold():
     Fetches from CFTC public API; falls back to cached demo data.
     """
     try:
-        import urllib.request, json
+        import json
+        import urllib.request
+
         # CFTC public data API — gold futures (COMEX, code 088691)
         url = "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -404,39 +441,44 @@ async def get_cot_gold():
             data = json.loads(resp.read())
             if data.get("records"):
                 rec = data["records"][0]["record"]["fields"]
-                net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(rec.get("noncomm_positions_short_all", 0))
+                net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
+                    rec.get("noncomm_positions_short_all", 0)
+                )
                 return {
-                    "report_date":       rec.get("report_date_as_yyyy_mm_dd", ""),
+                    "report_date": rec.get("report_date_as_yyyy_mm_dd", ""),
                     "net_speculator_long": net_long,
-                    "long_positions":    int(rec.get("noncomm_positions_long_all", 0)),
-                    "short_positions":   int(rec.get("noncomm_positions_short_all", 0)),
-                    "sentiment":         "BULLISH" if net_long > 0 else "BEARISH",
-                    "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
-                    "source":            "CFTC",
-                    "note":              "Non-commercial (speculator) net positions in COMEX gold futures.",
+                    "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
+                    "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
+                    "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
+                    "sentiment_strength": "STRONG"
+                    if abs(net_long) > 100000
+                    else "MODERATE",
+                    "source": "CFTC",
+                    "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
                 }
     except Exception as exc:
         logger.debug("CFTC API unavailable: %s — using demo data", exc)
 
     # Demo fallback
     return {
-        "report_date":        "2024-03-19",
+        "report_date": "2024-03-19",
         "net_speculator_long": 148320,
-        "long_positions":     212450,
-        "short_positions":    64130,
-        "sentiment":          "BULLISH",
+        "long_positions": 212450,
+        "short_positions": 64130,
+        "sentiment": "BULLISH",
         "sentiment_strength": "STRONG",
-        "source":             "CFTC (demo)",
-        "note":               "Speculator sentiment: BULLISH (net long +148K contracts). "
-                              "Large net-long positions historically precede gold rallies.",
-        "weekly_change":      +12400,
-        "4wk_trend":          "INCREASING",
+        "source": "CFTC (demo)",
+        "note": "Speculator sentiment: BULLISH (net long +148K contracts). "
+        "Large net-long positions historically precede gold rallies.",
+        "weekly_change": +12400,
+        "4wk_trend": "INCREASING",
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 47 — Monte Carlo Simulation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MonteCarloRequest(BaseModel):
     simulations: int = Field(1000, ge=100, le=10000)
@@ -471,10 +513,10 @@ def _run_monte_carlo(
     final_equities.sort()
     n = len(final_equities)
     median = final_equities[n // 2]
-    p5     = final_equities[int(n * 0.05)]
-    p25    = final_equities[int(n * 0.25)]
-    p75    = final_equities[int(n * 0.75)]
-    p95    = final_equities[int(n * 0.95)]
+    p5 = final_equities[int(n * 0.05)]
+    p25 = final_equities[int(n * 0.25)]
+    p75 = final_equities[int(n * 0.75)]
+    p95 = final_equities[int(n * 0.95)]
 
     # Distribution histogram (20 buckets)
     min_e, max_e = final_equities[0], final_equities[-1]
@@ -485,18 +527,20 @@ def _run_monte_carlo(
         histogram[idx] += 1
 
     return {
-        "simulations":        simulations,
-        "initial_capital":    initial_capital,
-        "median_equity":      round(median, 2),
-        "p5_equity":          round(p5, 2),
-        "p25_equity":         round(p25, 2),
-        "p75_equity":         round(p75, 2),
-        "p95_equity":         round(p95, 2),
+        "simulations": simulations,
+        "initial_capital": initial_capital,
+        "median_equity": round(median, 2),
+        "p5_equity": round(p5, 2),
+        "p25_equity": round(p25, 2),
+        "p75_equity": round(p75, 2),
+        "p95_equity": round(p95, 2),
         "probability_of_ruin": round(ruin_count / simulations * 100, 2),
-        "expected_return_pct": round((median - initial_capital) / initial_capital * 100, 2),
-        "histogram":          histogram,
-        "histogram_min":      round(min_e, 2),
-        "histogram_max":      round(max_e, 2),
+        "expected_return_pct": round(
+            (median - initial_capital) / initial_capital * 100, 2
+        ),
+        "histogram": histogram,
+        "histogram_min": round(min_e, 2),
+        "histogram_max": round(max_e, 2),
     }
 
 
@@ -507,15 +551,18 @@ async def run_monte_carlo(
     user: TokenPayload = Depends(get_current_user),
 ):
     from api.backtesting import _results
+
     result = _results.get(run_id, {})
 
-    win_rate  = result.get("win_rate_pct", 58.5) / 100
-    avg_win   = result.get("avg_win", 312.0)
-    avg_loss  = result.get("avg_loss", 198.0)
-    n_trades  = result.get("total_trades", 147)
-    capital   = req.initial_capital or result.get("initial_capital", 10000)
+    win_rate = result.get("win_rate_pct", 58.5) / 100
+    avg_win = result.get("avg_win", 312.0)
+    avg_loss = result.get("avg_loss", 198.0)
+    n_trades = result.get("total_trades", 147)
+    capital = req.initial_capital or result.get("initial_capital", 10000)
 
-    mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
+    mc = _run_monte_carlo(
+        win_rate, avg_win, avg_loss, n_trades, capital, req.simulations
+    )
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(timezone.utc).isoformat()
     _mc_cache[run_id] = mc

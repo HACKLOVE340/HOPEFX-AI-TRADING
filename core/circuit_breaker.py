@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # ── Prometheus gauge (optional — degrades gracefully if prometheus_client absent)
 try:
     from prometheus_client import Gauge as _Gauge
+
     _CB_STATE_GAUGE = _Gauge(
         "hopefx_broker_circuit_state",
         "Circuit breaker state per broker (0=closed, 1=half_open, 2=open)",
@@ -58,13 +59,14 @@ except Exception:
 
 
 class CBState(IntEnum):
-    CLOSED    = 0
+    CLOSED = 0
     HALF_OPEN = 1
-    OPEN      = 2
+    OPEN = 2
 
 
 class CircuitBreakerOpen(Exception):
     """Raised when a call is attempted while the circuit is OPEN."""
+
     def __init__(self, broker: str, retry_after: float):
         self.broker = broker
         self.retry_after = retry_after
@@ -158,11 +160,16 @@ class CircuitBreaker:
                 logger.warning(
                     "Circuit breaker '%s' → OPEN (probe failed: %s)", self.name, error
                 )
-            elif self._state == CBState.CLOSED and self._failure_count >= self.failure_threshold:
+            elif (
+                self._state == CBState.CLOSED
+                and self._failure_count >= self.failure_threshold
+            ):
                 self._transition(CBState.OPEN)
                 logger.error(
                     "Circuit breaker '%s' → OPEN after %d failures. Last: %s",
-                    self.name, self._failure_count, error,
+                    self.name,
+                    self._failure_count,
+                    error,
                 )
 
     def _transition(self, new_state: CBState) -> None:
@@ -178,16 +185,23 @@ class CircuitBreaker:
 
         # Publish typed event
         try:
-            from events.typed_events import EventEnvelope, CircuitBreakerEvent, publish_sync
-            publish_sync(EventEnvelope.wrap(
-                source="circuit_breaker",
-                payload=CircuitBreakerEvent(
-                    broker=self.name,
-                    state=new_state.name,
-                    failure_count=self._failure_count,
-                    last_error=self._last_error,
-                ),
-            ))
+            from events.typed_events import (
+                CircuitBreakerEvent,
+                EventEnvelope,
+                publish_sync,
+            )
+
+            publish_sync(
+                EventEnvelope.wrap(
+                    source="circuit_breaker",
+                    payload=CircuitBreakerEvent(
+                        broker=self.name,
+                        state=new_state.name,
+                        failure_count=self._failure_count,
+                        last_error=self._last_error,
+                    ),
+                )
+            )
         except Exception:
             pass
 
@@ -248,6 +262,7 @@ class CircuitBreaker:
 
 # ── Decorator ─────────────────────────────────────────────────────────────────
 
+
 def circuit_breaker(
     name: str,
     failure_threshold: int = 5,
@@ -262,13 +277,16 @@ def circuit_breaker(
         async def fetch_prices(symbols):
             return await session.get(...)
     """
-    cb = CircuitBreaker.get(name, failure_threshold=failure_threshold, reset_timeout=reset_timeout)
+    cb = CircuitBreaker.get(
+        name, failure_threshold=failure_threshold, reset_timeout=reset_timeout
+    )
 
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             async with cb:
                 return await fn(*args, **kwargs)
+
         return wrapper
 
     return decorator

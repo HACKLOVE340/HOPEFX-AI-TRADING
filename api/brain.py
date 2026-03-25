@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/brain", tags=["AI Brain"])
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=5, max_length=2000)
@@ -66,6 +67,7 @@ class DeployResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/generate-strategy", response_model=GenerateResponse)
 async def generate_strategy(
     req: GenerateRequest,
@@ -82,6 +84,7 @@ async def generate_strategy(
     if openai_key:
         try:
             from brain.llm_agent import LLMAgent
+
             agent = LLMAgent(openai_api_key=openai_key)
             result = await agent.generate_strategy(
                 prompt=req.prompt,
@@ -92,9 +95,13 @@ async def generate_strategy(
             bt = None
             if result.backtest:
                 bt = BacktestSummary(
-                    total_return_pct=float(getattr(result.backtest, "total_return_pct", 0)),
+                    total_return_pct=float(
+                        getattr(result.backtest, "total_return_pct", 0)
+                    ),
                     sharpe_ratio=float(getattr(result.backtest, "sharpe_ratio", 0)),
-                    max_drawdown_pct=float(getattr(result.backtest, "max_drawdown_pct", 0)),
+                    max_drawdown_pct=float(
+                        getattr(result.backtest, "max_drawdown_pct", 0)
+                    ),
                     win_rate=float(getattr(result.backtest, "win_rate", 0)),
                     total_trades=int(getattr(result.backtest, "total_trades", 0)),
                 )
@@ -170,10 +177,13 @@ async def deploy_strategy(
     Requires: role >= 'admin' (deploys to live trading infrastructure).
     """
     if not req.strategy_code.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty"
+        )
 
     try:
         from nocode.builder import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         strategy_id = f"ai_{req.strategy_name.lower().replace(' ', '_')}"
         logger.info("Deploying AI strategy %s to %s mode", strategy_id, req.mode)

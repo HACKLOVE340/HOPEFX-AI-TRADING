@@ -5,10 +5,11 @@ Random Forest ensemble model for classification of trading signals
 (BUY, SELL, HOLD) based on technical indicators and market features.
 """
 
-from typing import Dict, Any, Optional, List
+import logging
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-import logging
 
 from .base import BaseMLModel
 
@@ -44,13 +45,13 @@ class RandomForestTradingClassifier(BaseMLModel):
         super().__init__(name, config)
 
         # Model parameters
-        self.n_estimators = self.config.get('n_estimators', 100)
-        self.max_depth = self.config.get('max_depth', 10)
-        self.min_samples_split = self.config.get('min_samples_split', 5)
-        self.min_samples_leaf = self.config.get('min_samples_leaf', 2)
-        self.max_features = self.config.get('max_features', 'sqrt')
-        self.random_state = self.config.get('random_state', 42)
-        self.class_weight = self.config.get('class_weight', 'balanced')
+        self.n_estimators = self.config.get("n_estimators", 100)
+        self.max_depth = self.config.get("max_depth", 10)
+        self.min_samples_split = self.config.get("min_samples_split", 5)
+        self.min_samples_leaf = self.config.get("min_samples_leaf", 2)
+        self.max_features = self.config.get("max_features", "sqrt")
+        self.random_state = self.config.get("random_state", 42)
+        self.class_weight = self.config.get("class_weight", "balanced")
 
         # Feature names (for interpretation)
         self.feature_names: List[str] = []
@@ -69,7 +70,7 @@ class RandomForestTradingClassifier(BaseMLModel):
                 max_features=self.max_features,
                 random_state=self.random_state,
                 class_weight=self.class_weight,
-                n_jobs=-1  # Use all CPU cores
+                n_jobs=-1,  # Use all CPU cores
             )
 
             self.logger.info(
@@ -81,10 +82,14 @@ class RandomForestTradingClassifier(BaseMLModel):
             self.logger.error(f"Error building Random Forest: {e}")
             raise
 
-    def train(self, X_train: np.ndarray, y_train: np.ndarray,
-              X_val: Optional[np.ndarray] = None,
-              y_val: Optional[np.ndarray] = None,
-              feature_names: Optional[List[str]] = None) -> Dict[str, Any]:
+    def train(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+        feature_names: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """
         Train Random Forest classifier.
 
@@ -106,7 +111,7 @@ class RandomForestTradingClassifier(BaseMLModel):
             # Store feature names
             if feature_names:
                 self.feature_names = feature_names
-            elif hasattr(X_train, 'columns'):
+            elif hasattr(X_train, "columns"):
                 self.feature_names = list(X_train.columns)
             else:
                 self.feature_names = [f"feature_{i}" for i in range(X_train.shape[1])]
@@ -114,6 +119,7 @@ class RandomForestTradingClassifier(BaseMLModel):
             # Encode labels if they're strings
             if y_train.dtype == object:
                 from sklearn.preprocessing import LabelEncoder
+
                 self.label_encoder = LabelEncoder()
                 y_train = self.label_encoder.fit_transform(y_train)
                 if y_val is not None:
@@ -128,34 +134,37 @@ class RandomForestTradingClassifier(BaseMLModel):
             train_accuracy = np.mean(train_pred == y_train)
 
             metrics = {
-                'train_accuracy': float(train_accuracy),
-                'train_samples': len(X_train),
-                'n_features': X_train.shape[1],
-                'n_classes': len(np.unique(y_train)),
+                "train_accuracy": float(train_accuracy),
+                "train_samples": len(X_train),
+                "n_features": X_train.shape[1],
+                "n_classes": len(np.unique(y_train)),
             }
 
             # Validation metrics
             if X_val is not None and y_val is not None:
                 val_pred = self.model.predict(X_val)
                 val_accuracy = np.mean(val_pred == y_val)
-                metrics['val_accuracy'] = float(val_accuracy)
-                metrics['val_samples'] = len(X_val)
+                metrics["val_accuracy"] = float(val_accuracy)
+                metrics["val_samples"] = len(X_val)
 
             # Feature importance
             feature_importance = self.get_feature_importance_dict()
-            metrics['top_features'] = dict(
-                sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10]
+            metrics["top_features"] = dict(
+                sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[
+                    :10
+                ]
             )
 
             # Store training history
-            self.training_history.append({
-                'timestamp': pd.Timestamp.now().isoformat(),
-                'metrics': metrics,
-            })
+            self.training_history.append(
+                {
+                    "timestamp": pd.Timestamp.now().isoformat(),
+                    "metrics": metrics,
+                }
+            )
 
             self.logger.info(
-                f"Random Forest training complete. "
-                f"Train accuracy: {train_accuracy:.3f}"
+                f"Random Forest training complete. Train accuracy: {train_accuracy:.3f}"
             )
 
             return metrics
@@ -258,13 +267,13 @@ class RandomForestTradingClassifier(BaseMLModel):
         """
         importance_dict = self.get_feature_importance_dict()
         sorted_features = sorted(
-            importance_dict.items(),
-            key=lambda x: x[1],
-            reverse=True
+            importance_dict.items(), key=lambda x: x[1], reverse=True
         )
         return sorted_features[:n]
 
-    def evaluate_detailed(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+    def evaluate_detailed(
+        self, X_test: np.ndarray, y_test: np.ndarray
+    ) -> Dict[str, Any]:
         """
         Detailed evaluation with classification report.
 
@@ -276,8 +285,10 @@ class RandomForestTradingClassifier(BaseMLModel):
             Detailed metrics including confusion matrix
         """
         from sklearn.metrics import (
-            classification_report, confusion_matrix,
-            accuracy_score, precision_recall_fscore_support
+            accuracy_score,
+            classification_report,
+            confusion_matrix,
+            precision_recall_fscore_support,
         )
 
         # Encode test labels if needed
@@ -292,7 +303,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         # Calculate metrics
         accuracy = accuracy_score(y_test_encoded, predictions)
         precision, recall, f1, support = precision_recall_fscore_support(
-            y_test_encoded, predictions, average='weighted'
+            y_test_encoded, predictions, average="weighted"
         )
 
         # Confusion matrix
@@ -305,19 +316,17 @@ class RandomForestTradingClassifier(BaseMLModel):
             target_names = [str(i) for i in np.unique(y_test)]
 
         class_report = classification_report(
-            y_test_encoded, predictions,
-            target_names=target_names,
-            output_dict=True
+            y_test_encoded, predictions, target_names=target_names, output_dict=True
         )
 
         return {
-            'accuracy': float(accuracy),
-            'precision': float(precision),
-            'recall': float(recall),
-            'f1_score': float(f1),
-            'confusion_matrix': cm.tolist(),
-            'classification_report': class_report,
-            'n_samples': len(X_test),
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1),
+            "confusion_matrix": cm.tolist(),
+            "classification_report": class_report,
+            "n_samples": len(X_test),
         }
 
     def optimize_hyperparameters(
@@ -325,7 +334,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         X_train: np.ndarray,
         y_train: np.ndarray,
         param_grid: Optional[Dict] = None,
-        cv: int = 5
+        cv: int = 5,
     ) -> Dict[str, Any]:
         """
         Optimize hyperparameters using GridSearchCV.
@@ -343,10 +352,10 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         if param_grid is None:
             param_grid = {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [5, 10, 15],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
+                "n_estimators": [50, 100, 200],
+                "max_depth": [5, 10, 15],
+                "min_samples_split": [2, 5, 10],
+                "min_samples_leaf": [1, 2, 4],
             }
 
         # Build base model
@@ -354,12 +363,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         # Grid search
         grid_search = GridSearchCV(
-            self.model,
-            param_grid,
-            cv=cv,
-            scoring='accuracy',
-            n_jobs=-1,
-            verbose=1
+            self.model, param_grid, cv=cv, scoring="accuracy", n_jobs=-1, verbose=1
         )
 
         grid_search.fit(X_train, y_train)
@@ -372,14 +376,16 @@ class RandomForestTradingClassifier(BaseMLModel):
         self.config.update(grid_search.best_params_)
 
         results = {
-            'best_params': grid_search.best_params_,
-            'best_score': float(grid_search.best_score_),
-            'cv_results': {
-                'mean_test_score': grid_search.cv_results_['mean_test_score'].tolist(),
-                'std_test_score': grid_search.cv_results_['std_test_score'].tolist(),
-            }
+            "best_params": grid_search.best_params_,
+            "best_score": float(grid_search.best_score_),
+            "cv_results": {
+                "mean_test_score": grid_search.cv_results_["mean_test_score"].tolist(),
+                "std_test_score": grid_search.cv_results_["std_test_score"].tolist(),
+            },
         }
 
-        self.logger.info(f"Hyperparameter optimization complete. Best score: {results['best_score']:.3f}")
+        self.logger.info(
+            f"Hyperparameter optimization complete. Best score: {results['best_score']:.3f}"
+        )
 
         return results

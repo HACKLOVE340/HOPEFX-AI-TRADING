@@ -37,29 +37,44 @@ logger = logging.getLogger(__name__)
 # 1. Price-action & candlestick features
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     """Candlestick body/wick ratios, engulfing, doji, pin-bar, 3-bar patterns."""
     d = df.copy()
     o, h, l, c = d["open"], d["high"], d["low"], d["close"]
 
-    body         = (c - o).abs()
+    body = (c - o).abs()
     candle_range = (h - l).replace(0, np.nan)
 
-    d["pa_body_ratio"]   = (body / candle_range).fillna(0.0)
-    d["pa_upper_wick"]   = ((h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range).fillna(0.0)
-    d["pa_lower_wick"]   = ((pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range).fillna(0.0)
-    d["pa_bull_candle"]  = (c > o).astype(int)
-    d["pa_doji"]         = (d["pa_body_ratio"] < 0.1).astype(int)
-    d["pa_pin_bar_bull"] = ((d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)).astype(int)
-    d["pa_pin_bar_bear"] = ((d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)).astype(int)
+    d["pa_body_ratio"] = (body / candle_range).fillna(0.0)
+    d["pa_upper_wick"] = (
+        (h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range
+    ).fillna(0.0)
+    d["pa_lower_wick"] = (
+        (pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range
+    ).fillna(0.0)
+    d["pa_bull_candle"] = (c > o).astype(int)
+    d["pa_doji"] = (d["pa_body_ratio"] < 0.1).astype(int)
+    d["pa_pin_bar_bull"] = (
+        (d["pa_lower_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
+    ).astype(int)
+    d["pa_pin_bar_bear"] = (
+        (d["pa_upper_wick"] > 0.6) & (d["pa_body_ratio"] < 0.3)
+    ).astype(int)
 
     # Engulfing patterns
     prev_body = (d["close"].shift(1) - d["open"].shift(1)).abs()
     d["pa_bull_engulf"] = (
-        (c > o) & (o < d["close"].shift(1)) & (c > d["open"].shift(1)) & (body > prev_body)
+        (c > o)
+        & (o < d["close"].shift(1))
+        & (c > d["open"].shift(1))
+        & (body > prev_body)
     ).astype(int)
     d["pa_bear_engulf"] = (
-        (c < o) & (o > d["close"].shift(1)) & (c < d["open"].shift(1)) & (body > prev_body)
+        (c < o)
+        & (o > d["close"].shift(1))
+        & (c < d["open"].shift(1))
+        & (body > prev_body)
     ).astype(int)
 
     # 3-bar momentum
@@ -67,9 +82,9 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     d["pa_3bar_bear"] = ((c < c.shift(1)) & (c.shift(1) < c.shift(2))).astype(int)
 
     # Gap features (overnight gap as % of prior close)
-    d["pa_gap_up"]   = ((o > d["high"].shift(1)) & (o > c.shift(1))).astype(int)
-    d["pa_gap_down"] = ((o < d["low"].shift(1))  & (o < c.shift(1))).astype(int)
-    d["pa_gap_pct"]  = ((o - c.shift(1)) / c.shift(1).replace(0, np.nan)).fillna(0.0)
+    d["pa_gap_up"] = ((o > d["high"].shift(1)) & (o > c.shift(1))).astype(int)
+    d["pa_gap_down"] = ((o < d["low"].shift(1)) & (o < c.shift(1))).astype(int)
+    d["pa_gap_pct"] = ((o - c.shift(1)) / c.shift(1).replace(0, np.nan)).fillna(0.0)
 
     return d
 
@@ -78,6 +93,7 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
 # 2. Swing highs/lows and fractal levels
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     """Fractal swing levels; distance from price to nearest S/R in ATR units."""
     d = df.copy()
@@ -85,19 +101,19 @@ def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     atr = _atr(d, 14)
 
     swing_high = h[(h == h.rolling(window * 2 + 1, center=True).max())].reindex(d.index)
-    swing_low  = l[(l == l.rolling(window * 2 + 1, center=True).min())].reindex(d.index)
+    swing_low = l[(l == l.rolling(window * 2 + 1, center=True).min())].reindex(d.index)
 
     last_sh = swing_high.ffill()
     last_sl = swing_low.ffill()
 
     d["dist_to_swing_high"] = ((last_sh - c) / atr.replace(0, np.nan)).fillna(0.0)
-    d["dist_to_swing_low"]  = ((c - last_sl) / atr.replace(0, np.nan)).fillna(0.0)
-    d["near_swing_high"]    = (d["dist_to_swing_high"].abs() < 0.5).astype(int)
-    d["near_swing_low"]     = (d["dist_to_swing_low"].abs() < 0.5).astype(int)
+    d["dist_to_swing_low"] = ((c - last_sl) / atr.replace(0, np.nan)).fillna(0.0)
+    d["near_swing_high"] = (d["dist_to_swing_high"].abs() < 0.5).astype(int)
+    d["near_swing_low"] = (d["dist_to_swing_low"].abs() < 0.5).astype(int)
 
     # Breakout flags
     d["breakout_high"] = (c > last_sh.shift(1)).astype(int)
-    d["breakout_low"]  = (c < last_sl.shift(1)).astype(int)
+    d["breakout_low"] = (c < last_sl.shift(1)).astype(int)
 
     return d
 
@@ -106,6 +122,7 @@ def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
 # 3. Multi-timeframe momentum
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_mtf_momentum(df: pd.DataFrame) -> pd.DataFrame:
     """Momentum at 5/10/20/60-bar horizons; alignment score; acceleration."""
     d = df.copy()
@@ -113,7 +130,7 @@ def add_mtf_momentum(df: pd.DataFrame) -> pd.DataFrame:
 
     for n in [5, 10, 20, 60]:
         ret = c.pct_change(n)
-        d[f"mom_{n}"]      = ret
+        d[f"mom_{n}"] = ret
         d[f"mom_{n}_sign"] = np.sign(ret)
 
     # Alignment: fraction of timeframes agreeing on direction (-1 to +1)
@@ -121,7 +138,7 @@ def add_mtf_momentum(df: pd.DataFrame) -> pd.DataFrame:
     d["mtf_alignment"] = sum(signs) / 4.0
 
     # Momentum acceleration (short vs long)
-    d["mom_accel_5_20"]  = d["mom_5"]  - d["mom_20"]
+    d["mom_accel_5_20"] = d["mom_5"] - d["mom_20"]
     d["mom_accel_10_60"] = d["mom_10"] - d["mom_60"]
 
     # Rate of change of momentum (second derivative)
@@ -134,6 +151,7 @@ def add_mtf_momentum(df: pd.DataFrame) -> pd.DataFrame:
 # 4. Volatility regime
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     """Realised vol, vol-of-vol, GARCH-proxy, vol regime label, vol skew."""
     d = df.copy()
@@ -142,9 +160,9 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     for w in [5, 10, 20, 60]:
         d[f"rvol_{w}"] = ret.rolling(w).std() * np.sqrt(252)
 
-    d["vol_ratio_5_20"]  = (d["rvol_5"]  / d["rvol_20"].replace(0, np.nan)).fillna(1.0)
+    d["vol_ratio_5_20"] = (d["rvol_5"] / d["rvol_20"].replace(0, np.nan)).fillna(1.0)
     d["vol_ratio_10_60"] = (d["rvol_10"] / d["rvol_60"].replace(0, np.nan)).fillna(1.0)
-    d["vol_of_vol"]      = d["rvol_20"].rolling(20).std().fillna(0.0)
+    d["vol_of_vol"] = d["rvol_20"].rolling(20).std().fillna(0.0)
 
     # GARCH-proxy: exponentially weighted variance
     ewm_var = ret.ewm(span=20).var()
@@ -152,15 +170,17 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
 
     # Vol regime: 0=low, 1=normal, 2=high (60-bar percentile)
     pct = d["rvol_20"].rolling(60).rank(pct=True).fillna(0.5)
-    d["vol_regime"] = pd.cut(
-        pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True
-    ).astype(float).fillna(1.0)
+    d["vol_regime"] = (
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
+        .astype(float)
+        .fillna(1.0)
+    )
 
     # Parkinson volatility estimator (uses high-low range, more efficient)
     hl_ratio = (d["high"] / d["low"].replace(0, np.nan)).apply(np.log)
-    d["parkinson_vol"] = (
-        (1.0 / (4.0 * np.log(2))) * (hl_ratio ** 2)
-    ).rolling(20).mean().apply(np.sqrt).fillna(0.0) * np.sqrt(252)
+    d["parkinson_vol"] = ((1.0 / (4.0 * np.log(2))) * (hl_ratio**2)).rolling(
+        20
+    ).mean().apply(np.sqrt).fillna(0.0) * np.sqrt(252)
 
     return d
 
@@ -168,6 +188,7 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Market microstructure
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
     """Kaufman efficiency ratio, Amihud illiquidity, spread proxy, OI momentum."""
@@ -177,38 +198,40 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
     # Kaufman Efficiency Ratio: directional move / path length
     for w in [10, 20]:
         direction = (c - c.shift(w)).abs()
-        path      = c.diff().abs().rolling(w).sum()
+        path = c.diff().abs().rolling(w).sum()
         d[f"efficiency_{w}"] = (direction / path.replace(0, np.nan)).fillna(0.5)
 
     # High-low spread proxy (normalised by close)
-    d["hl_spread"] = ((d["high"] - d["low"]) / d["close"].replace(0, np.nan)).fillna(0.0)
+    d["hl_spread"] = ((d["high"] - d["low"]) / d["close"].replace(0, np.nan)).fillna(
+        0.0
+    )
 
     # Amihud illiquidity proxy
     if "volume" in d.columns and d["volume"].sum() > 0:
-        ret_abs   = c.pct_change().abs()
+        ret_abs = c.pct_change().abs()
         d["amihud"] = (
             (ret_abs / d["volume"].replace(0, np.nan)).rolling(20).mean()
         ).fillna(0.0)
         # Volume z-score
         vol_mean = d["volume"].rolling(20).mean()
-        vol_std  = d["volume"].rolling(20).std().replace(0, np.nan)
+        vol_std = d["volume"].rolling(20).std().replace(0, np.nan)
         d["volume_z20"] = ((d["volume"] - vol_mean) / vol_std).fillna(0.0)
         # OBV momentum (stationary: rate of change)
         obv = (np.sign(c.diff()) * d["volume"]).cumsum()
         d["obv_mom_10"] = obv.pct_change(10).fillna(0.0)
     else:
-        d["amihud"]     = 0.0
+        d["amihud"] = 0.0
         d["volume_z20"] = 0.0
         d["obv_mom_10"] = 0.0
 
     # Open interest momentum proxy (if available)
     if "open_interest" in d.columns and d["open_interest"].sum() > 0:
         oi = d["open_interest"]
-        d["oi_chg"]    = oi.pct_change().fillna(0.0)
-        d["oi_z20"]    = _zscore(oi, 20)
+        d["oi_chg"] = oi.pct_change().fillna(0.0)
+        d["oi_z20"] = _zscore(oi, 20)
         # Price up + OI up = strong trend; price up + OI down = weak trend
         price_up = (c.pct_change() > 0).astype(float)
-        oi_up    = (d["oi_chg"] > 0).astype(float)
+        oi_up = (d["oi_chg"] > 0).astype(float)
         d["oi_price_confirm"] = (price_up == oi_up).astype(float)
     else:
         d["oi_chg"] = d["oi_z20"] = d["oi_price_confirm"] = 0.0
@@ -220,27 +243,28 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
 # 6. Calendar / seasonality
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     """Cyclically encoded DOW, month, quarter, EOM/EOW, Monday effects."""
-    d   = df.copy()
+    d = df.copy()
     idx = pd.DatetimeIndex(d.index)
 
-    d["cal_dow"]     = idx.dayofweek
-    d["cal_month"]   = idx.month
+    d["cal_dow"] = idx.dayofweek
+    d["cal_month"] = idx.month
     d["cal_quarter"] = idx.quarter
-    d["cal_eom"]     = idx.is_month_end.astype(int)
-    d["cal_eow"]     = (idx.dayofweek == 4).astype(int)
-    d["cal_monday"]  = (idx.dayofweek == 0).astype(int)
+    d["cal_eom"] = idx.is_month_end.astype(int)
+    d["cal_eow"] = (idx.dayofweek == 4).astype(int)
+    d["cal_monday"] = (idx.dayofweek == 0).astype(int)
 
     # Cyclical encoding avoids ordinal assumption
-    d["cal_dow_sin"]   = np.sin(2 * np.pi * d["cal_dow"]   / 5)
-    d["cal_dow_cos"]   = np.cos(2 * np.pi * d["cal_dow"]   / 5)
+    d["cal_dow_sin"] = np.sin(2 * np.pi * d["cal_dow"] / 5)
+    d["cal_dow_cos"] = np.cos(2 * np.pi * d["cal_dow"] / 5)
     d["cal_month_sin"] = np.sin(2 * np.pi * d["cal_month"] / 12)
     d["cal_month_cos"] = np.cos(2 * np.pi * d["cal_month"] / 12)
 
     # Gold seasonality: historically strong in Jan, Sep-Nov; weak in Mar-Apr
     strong_months = idx.month.isin([1, 9, 10, 11]).astype(int)
-    weak_months   = idx.month.isin([3, 4]).astype(int)
+    weak_months = idx.month.isin([3, 4]).astype(int)
     d["cal_gold_season_bull"] = strong_months
     d["cal_gold_season_bear"] = weak_months
 
@@ -251,6 +275,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 # 7. Trend strength
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
     """ADX, DI+/DI-, z-score mean reversion, multiple MA distances."""
     d = df.copy()
@@ -258,17 +283,17 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
     atr14 = _atr(d, 14)
 
     # ADX
-    plus_dm  = (h - h.shift(1)).clip(lower=0)
+    plus_dm = (h - h.shift(1)).clip(lower=0)
     minus_dm = (l.shift(1) - l).clip(lower=0)
-    plus_dm  = plus_dm.where(plus_dm > minus_dm, 0.0)
+    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
     minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
-    plus_di  = 100 * plus_dm.ewm(span=14).mean()  / atr14.replace(0, np.nan)
+    plus_di = 100 * plus_dm.ewm(span=14).mean() / atr14.replace(0, np.nan)
     minus_di = 100 * minus_dm.ewm(span=14).mean() / atr14.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    d["adx_14"]      = dx.ewm(span=14).mean().fillna(0.0)
-    d["plus_di_14"]  = plus_di.fillna(0.0)
+    d["adx_14"] = dx.ewm(span=14).mean().fillna(0.0)
+    d["plus_di_14"] = plus_di.fillna(0.0)
     d["minus_di_14"] = minus_di.fillna(0.0)
-    d["di_diff"]     = (plus_di - minus_di).fillna(0.0)
+    d["di_diff"] = (plus_di - minus_di).fillna(0.0)
 
     # Distance from multiple MAs (stationary: normalised by ATR)
     for w in [10, 20, 50, 200]:
@@ -277,7 +302,7 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Z-score mean reversion at multiple windows
     for w in [10, 20, 50]:
-        mu  = c.rolling(w).mean()
+        mu = c.rolling(w).mean()
         sig = c.rolling(w).std().replace(0, np.nan)
         d[f"zscore_{w}"] = ((c - mu) / sig).fillna(0.0)
 
@@ -288,15 +313,23 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
     for w in [14]:
         lo_w = l.rolling(w).min()
         hi_w = h.rolling(w).max()
-        d[f"stoch_k_{w}"] = (100 * (c - lo_w) / (hi_w - lo_w).replace(0, np.nan)).fillna(50.0)
+        d[f"stoch_k_{w}"] = (
+            100 * (c - lo_w) / (hi_w - lo_w).replace(0, np.nan)
+        ).fillna(50.0)
         d[f"stoch_d_{w}"] = d[f"stoch_k_{w}"].rolling(3).mean().fillna(50.0)
 
     # Williams %R
-    d["williams_r"] = (-100 * (h.rolling(14).max() - c) / (h.rolling(14).max() - l.rolling(14).min()).replace(0, np.nan)).fillna(-50.0)
+    d["williams_r"] = (
+        -100
+        * (h.rolling(14).max() - c)
+        / (h.rolling(14).max() - l.rolling(14).min()).replace(0, np.nan)
+    ).fillna(-50.0)
 
     # CCI (Commodity Channel Index)
     tp = (h + l + c) / 3
-    d["cci_20"] = ((tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std().replace(0, np.nan))).fillna(0.0)
+    d["cci_20"] = (
+        (tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std().replace(0, np.nan))
+    ).fillna(0.0)
 
     return d
 
@@ -305,7 +338,10 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
 # 8. Intermarket divergence features
 # ─────────────────────────────────────────────────────────────────────────────
 
-def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+
+def add_intermarket_features(
+    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
     """
     Gold vs DXY, SPX, oil divergence signals.
 
@@ -316,8 +352,13 @@ def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] 
     d = df.copy()
 
     if macro_df is None or macro_df.empty:
-        for col in ["im_gold_dxy_div", "im_gold_spx_div", "im_gold_oil_div",
-                    "im_gold_strong_demand", "im_forced_liquidation"]:
+        for col in [
+            "im_gold_dxy_div",
+            "im_gold_spx_div",
+            "im_gold_oil_div",
+            "im_gold_strong_demand",
+            "im_forced_liquidation",
+        ]:
             d[col] = 0.0
         return d
 
@@ -332,7 +373,7 @@ def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] 
     # Gold-DXY divergence: both rising = exceptional demand (bullish)
     if "dxy" in macro.columns:
         dxy_ret = macro["dxy"].pct_change().fillna(0.0)
-        d["im_gold_dxy_div"]       = (gold_ret * dxy_ret).rolling(5).mean()
+        d["im_gold_dxy_div"] = (gold_ret * dxy_ret).rolling(5).mean()
         d["im_gold_strong_demand"] = ((gold_ret > 0) & (dxy_ret > 0)).astype(float)
     else:
         d["im_gold_dxy_div"] = d["im_gold_strong_demand"] = 0.0
@@ -354,7 +395,9 @@ def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] 
     # Forced liquidation: gold down + VIX up (risk-off but gold sold for margin)
     if "vix" in macro.columns:
         vix_ret = macro["vix"].pct_change().fillna(0.0)
-        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(float)
+        d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(
+            float
+        )
     else:
         d["im_forced_liquidation"] = 0.0
 
@@ -365,7 +408,10 @@ def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] 
 # 9. COT / central bank buying proxy features
 # ─────────────────────────────────────────────────────────────────────────────
 
-def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+
+def add_cot_proxy_features(
+    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
     """
     Proxy features for speculative positioning and central bank demand.
 
@@ -395,24 +441,28 @@ def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = 
     # Gold futures volume is a reasonable OI proxy for daily data.
     if "volume" in d.columns and d["volume"].sum() > 0:
         vol = d["volume"].replace(0, np.nan)
-        d["cot_oi_momentum_5"]  = vol.pct_change(5).fillna(0.0)
+        d["cot_oi_momentum_5"] = vol.pct_change(5).fillna(0.0)
         d["cot_oi_momentum_20"] = vol.pct_change(20).fillna(0.0)
 
         # Net long proxy: OI direction × price direction
-        oi_dir    = np.sign(d["cot_oi_momentum_5"])
+        oi_dir = np.sign(d["cot_oi_momentum_5"])
         price_dir = np.sign(d["close"].pct_change())
         d["cot_net_long_proxy"] = (oi_dir * price_dir).fillna(0.0)
 
         # Demand surge: OI momentum > 1 std above its 60-bar mean AND price up
         oi_mom_mean = d["cot_oi_momentum_5"].rolling(60).mean()
-        oi_mom_std  = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
-        oi_z        = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
-        d["cot_demand_surge"] = (
-            (oi_z > 1.0) & (d["close"].pct_change() > 0)
-        ).astype(float)
+        oi_mom_std = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
+        oi_z = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
+        d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change() > 0)).astype(
+            float
+        )
     else:
-        for col in ["cot_oi_momentum_5", "cot_oi_momentum_20",
-                    "cot_net_long_proxy", "cot_demand_surge"]:
+        for col in [
+            "cot_oi_momentum_5",
+            "cot_oi_momentum_20",
+            "cot_net_long_proxy",
+            "cot_demand_surge",
+        ]:
             d[col] = 0.0
 
     # ── Cross-asset proxies (require macro_df) ────────────────────────────────
@@ -430,26 +480,30 @@ def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = 
         # physical/institutional buying rather than speculative positioning.
         if "gold_etf" in macro.columns and macro["gold_etf"].abs().sum() > 0:
             gld_ret = macro["gold_etf"].pct_change().fillna(0.0)
-            d["cot_large_spec_proxy"] = (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
+            d["cot_large_spec_proxy"] = (
+                (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
+            )
         else:
             d["cot_large_spec_proxy"] = 0.0
 
         # Central bank buying proxy: gold up + DXY up + yields up
         # This is the signature of demand that defies macro headwinds —
         # the dominant driver of the 2022-2026 bull market.
-        has_dxy    = "dxy"       in macro.columns and macro["dxy"].abs().sum() > 0
-        has_yield  = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
+        has_dxy = "dxy" in macro.columns and macro["dxy"].abs().sum() > 0
+        has_yield = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
         if has_dxy and has_yield:
-            dxy_ret   = macro["dxy"].pct_change().fillna(0.0)
+            dxy_ret = macro["dxy"].pct_change().fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             # All three rising simultaneously = central bank / geopolitical demand
             d["cot_cb_buying_proxy"] = (
                 (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
             ).astype(float)
             # Rolling 20-bar frequency of this pattern (persistence measure)
-            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+            d["cot_cb_buying_freq20"] = (
+                d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+            )
         else:
-            d["cot_cb_buying_proxy"]  = 0.0
+            d["cot_cb_buying_proxy"] = 0.0
             d["cot_cb_buying_freq20"] = 0.0
 
         # Geopolitical premium: VIX spike + gold outperforming SPX
@@ -457,7 +511,7 @@ def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = 
         has_spx = "spx" in macro.columns and macro["spx"].abs().sum() > 0
         if has_vix and has_spx:
             vix_spike = (macro["vix"] > 25).astype(float)
-            spx_ret   = macro["spx"].pct_change().fillna(0.0)
+            spx_ret = macro["spx"].pct_change().fillna(0.0)
             gold_vs_spx = gold_ret - spx_ret
             d["cot_geopolitical"] = (
                 vix_spike * (gold_vs_spx > 0).astype(float)
@@ -466,11 +520,16 @@ def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = 
             d["cot_geo_score20"] = d["cot_geopolitical"].rolling(20).mean().fillna(0.0)
         else:
             d["cot_geopolitical"] = 0.0
-            d["cot_geo_score20"]  = 0.0
+            d["cot_geo_score20"] = 0.0
 
     else:
-        for col in ["cot_large_spec_proxy", "cot_cb_buying_proxy",
-                    "cot_cb_buying_freq20", "cot_geopolitical", "cot_geo_score20"]:
+        for col in [
+            "cot_large_spec_proxy",
+            "cot_cb_buying_proxy",
+            "cot_cb_buying_freq20",
+            "cot_geopolitical",
+            "cot_geo_score20",
+        ]:
             d[col] = 0.0
 
     return d
@@ -479,6 +538,7 @@ def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. Target engineering
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_filtered_target(
     df: pd.DataFrame,
@@ -492,12 +552,12 @@ def build_filtered_target(
     Bars below the threshold are labelled NaN and dropped from training.
     This forces the model to learn high-conviction setups rather than noise.
     """
-    c   = df["close"]
+    c = df["close"]
     atr = _atr(df, 14)
 
-    future_ret  = c.pct_change(horizon).shift(-horizon)
+    future_ret = c.pct_change(horizon).shift(-horizon)
     future_move = (c.shift(-horizon) - c).abs()
-    threshold   = min_move_atr * atr
+    threshold = min_move_atr * atr
 
     y = pd.Series(np.nan, index=df.index)
     mask = future_move >= threshold
@@ -508,6 +568,7 @@ def build_filtered_target(
 # ─────────────────────────────────────────────────────────────────────────────
 # Master builder
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_advanced_features(
     ohlcv: pd.DataFrame,
@@ -556,6 +617,7 @@ def build_advanced_features(
     if macro_df is not None and not macro_df.empty:
         try:
             from ml.macro_features import add_macro_features, add_regime_features
+
             d = add_macro_features(d, macro_df=macro_df, lookback=20)
             d = add_regime_features(d, lookback=60)
         except Exception as exc:
@@ -564,6 +626,7 @@ def build_advanced_features(
         # Ensure regime columns exist even without macro data
         try:
             from ml.macro_features import add_regime_features
+
             d = add_regime_features(d, lookback=60)
         except Exception:
             pass
@@ -582,7 +645,7 @@ def build_advanced_features(
     # Inf values arise from division by zero in early bars (e.g. pct_change on
     # the first bar, Amihud illiquidity when volume=0, Hurst on short windows).
     # sklearn's StandardScaler raises ValueError on inf — replace before drop.
-    exclude      = {"open", "high", "low", "close", "volume", "_target"}
+    exclude = {"open", "high", "low", "close", "volume", "_target"}
     feature_cols = [c for c in d.columns if c not in exclude]
 
     d = d[feature_cols + ["_target"]]
@@ -593,7 +656,10 @@ def build_advanced_features(
 
     logger.info(
         "Advanced features: %d bars × %d features (filtered from %d, horizon=%d)",
-        len(X), len(feature_cols), len(ohlcv), horizon,
+        len(X),
+        len(feature_cols),
+        len(ohlcv),
+        horizon,
     )
     return X, y
 
@@ -602,18 +668,22 @@ def build_advanced_features(
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     h, l, c = df["high"], df["low"], df["close"]
-    tr = pd.concat([
-        h - l,
-        (h - c.shift(1)).abs(),
-        (l - c.shift(1)).abs(),
-    ], axis=1).max(axis=1)
+    tr = pd.concat(
+        [
+            h - l,
+            (h - c.shift(1)).abs(),
+            (l - c.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
     return tr.ewm(span=period, adjust=False).mean()
 
 
 def _zscore(s: pd.Series, w: int) -> pd.Series:
-    mu  = s.rolling(w).mean()
+    mu = s.rolling(w).mean()
     sig = s.rolling(w).std().replace(0, np.nan)
     return ((s - mu) / sig).fillna(0.0)
 
@@ -623,11 +693,12 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     Approximate Hurst exponent via R/S analysis over a rolling window.
     H > 0.5 = trending, H < 0.5 = mean-reverting, H ≈ 0.5 = random walk.
     """
+
     def _hurst_scalar(x: np.ndarray) -> float:
         if len(x) < 8:
             return 0.5
         try:
-            lags    = range(2, min(len(x) // 2, 12))
+            lags = range(2, min(len(x) // 2, 12))
             rs_vals = []
             for lag in lags:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
@@ -636,8 +707,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                     if len(chunk) < 2:
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
-                    r   = dev.max() - dev.min()
-                    s   = np.std(chunk, ddof=1)
+                    r = dev.max() - dev.min()
+                    s = np.std(chunk, ddof=1)
                     if s > 0:
                         rs_chunk.append(r / s)
                 if rs_chunk:
@@ -645,8 +716,8 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
             if len(rs_vals) < 2:
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
-            log_rs   = np.log(rs_vals)
-            h        = np.polyfit(log_lags, log_rs, 1)[0]
+            log_rs = np.log(rs_vals)
+            h = np.polyfit(log_lags, log_rs, 1)[0]
             return float(np.clip(h, 0.0, 1.0))
         except Exception:
             return 0.5

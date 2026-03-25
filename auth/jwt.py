@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
-from fastapi import HTTPException
 from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)

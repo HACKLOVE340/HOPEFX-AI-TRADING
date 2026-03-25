@@ -6,12 +6,12 @@ and potential reversals.
 """
 
 import logging
-import pandas as pd
-import numpy as np
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
-from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+import pandas as pd
+
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,9 @@ class BollingerBandsStrategy(BaseStrategy):
     Combines band touches with band squeeze for signal generation.
     """
 
-    def __init__(self, config: StrategyConfig, *_args,
-                 period: int = 20, std_dev: float = 2.0):
+    def __init__(
+        self, config: StrategyConfig, *_args, period: int = 20, std_dev: float = 2.0
+    ):
         """
         Initialize Bollinger Bands strategy.
 
@@ -37,8 +38,7 @@ class BollingerBandsStrategy(BaseStrategy):
         self.period = period
         self.std_dev = std_dev
         logger.info(
-            f"Bollinger Bands Strategy initialized: "
-            f"period={period}, std_dev={std_dev}"
+            f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}"
         )
 
     def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -81,10 +81,22 @@ class BollingerBandsStrategy(BaseStrategy):
             return None
         if price < lower:
             conf = 0.85 if price > prev_price else 0.70
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc), confidence=conf)
+            return Signal(
+                SignalType.BUY,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=conf,
+            )
         if price > upper:
             conf = 0.85 if price < prev_price else 0.70
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc), confidence=conf)
+            return Signal(
+                SignalType.SELL,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=conf,
+            )
         return None
 
     def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
@@ -92,13 +104,13 @@ class BollingerBandsStrategy(BaseStrategy):
         try:
             if len(market_data) < self.period:
                 return {
-                    'type': 'HOLD',
-                    'confidence': 0.0,
-                    'reason': 'Insufficient data',
-                    'timestamp': datetime.now(timezone.utc)
+                    "type": "HOLD",
+                    "confidence": 0.0,
+                    "reason": "Insufficient data",
+                    "timestamp": datetime.now(timezone.utc),
                 }
 
-            close = market_data['close']
+            close = market_data["close"]
 
             # Calculate Bollinger Bands
             sma = close.rolling(window=self.period).mean()
@@ -121,103 +133,107 @@ class BollingerBandsStrategy(BaseStrategy):
             # Calculate %B (position within bands)
             band_width = current_upper - current_lower
             if band_width == 0:
-                return {'type': 'HOLD', 'confidence': 0.0, 'reason': 'Zero band width'}
+                return {"type": "HOLD", "confidence": 0.0, "reason": "Zero band width"}
 
             percent_b = (current_price - current_lower) / band_width
 
             # Calculate band squeeze (volatility)
-            avg_std = std.rolling(window=50).mean().iloc[-1] if len(std) >= 50 else current_std
+            avg_std = (
+                std.rolling(window=50).mean().iloc[-1]
+                if len(std) >= 50
+                else current_std
+            )
             is_squeeze = current_std < avg_std * 0.75 if not pd.isna(avg_std) else False
 
-            signal_type = 'HOLD'
+            signal_type = "HOLD"
             confidence = 0.0
-            reason = ''
+            reason = ""
 
             # BUY signals
             if current_price < current_lower:
                 # Price below lower band - oversold
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 confidence = 0.7
-                reason = 'Price below lower Bollinger Band (oversold)'
+                reason = "Price below lower Bollinger Band (oversold)"
 
                 # Higher confidence if bouncing back
                 if current_price > prev_price:
                     confidence = 0.85
-                    reason += ' with bounce'
+                    reason += " with bounce"
 
             elif prev_price < prev_lower and current_price > current_lower:
                 # Price crossing back above lower band
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 confidence = 0.75
-                reason = 'Price crossing above lower band'
+                reason = "Price crossing above lower band"
 
             elif is_squeeze and current_price > current_sma:
                 # Band squeeze breakout to upside
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 confidence = 0.65
-                reason = 'Bollinger Band squeeze breakout (bullish)'
+                reason = "Bollinger Band squeeze breakout (bullish)"
 
             # SELL signals
             elif current_price > current_upper:
                 # Price above upper band - overbought
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 confidence = 0.7
-                reason = 'Price above upper Bollinger Band (overbought)'
+                reason = "Price above upper Bollinger Band (overbought)"
 
                 # Higher confidence if turning down
                 if current_price < prev_price:
                     confidence = 0.85
-                    reason += ' with reversal'
+                    reason += " with reversal"
 
             elif prev_price > prev_upper and current_price < current_upper:
                 # Price crossing back below upper band
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 confidence = 0.75
-                reason = 'Price crossing below upper band'
+                reason = "Price crossing below upper band"
 
             elif is_squeeze and current_price < current_sma:
                 # Band squeeze breakout to downside
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 confidence = 0.65
-                reason = 'Bollinger Band squeeze breakout (bearish)'
+                reason = "Bollinger Band squeeze breakout (bearish)"
 
             # Walking the bands
             elif percent_b > 0.9 and current_price > current_sma:
                 # Walking the upper band (strong uptrend)
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 confidence = 0.55
-                reason = 'Walking upper band (strong uptrend)'
+                reason = "Walking upper band (strong uptrend)"
 
             elif percent_b < 0.1 and current_price < current_sma:
                 # Walking the lower band (strong downtrend)
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 confidence = 0.55
-                reason = 'Walking lower band (strong downtrend)'
+                reason = "Walking lower band (strong downtrend)"
 
             else:
-                reason = f'Price within bands: %B = {percent_b:.2f}'
+                reason = f"Price within bands: %B = {percent_b:.2f}"
 
             return {
-                'type': signal_type,
-                'confidence': confidence,
-                'reason': reason,
-                'timestamp': datetime.now(timezone.utc),
-                'metadata': {
-                    'price': current_price,
-                    'upper_band': current_upper,
-                    'lower_band': current_lower,
-                    'sma': current_sma,
-                    'percent_b': percent_b,
-                    'band_width': band_width,
-                    'is_squeeze': is_squeeze
-                }
+                "type": signal_type,
+                "confidence": confidence,
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc),
+                "metadata": {
+                    "price": current_price,
+                    "upper_band": current_upper,
+                    "lower_band": current_lower,
+                    "sma": current_sma,
+                    "percent_b": percent_b,
+                    "band_width": band_width,
+                    "is_squeeze": is_squeeze,
+                },
             }
 
         except Exception as e:
             self.logger.error(f"Error generating Bollinger Bands signal: {e}")
             return {
-                'type': 'HOLD',
-                'confidence': 0.0,
-                'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now(timezone.utc)
+                "type": "HOLD",
+                "confidence": 0.0,
+                "reason": f"Error: {str(e)}",
+                "timestamp": datetime.now(timezone.utc),
             }

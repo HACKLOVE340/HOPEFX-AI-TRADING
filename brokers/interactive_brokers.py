@@ -5,25 +5,35 @@ Universal connector for Interactive Brokers (IB).
 Supports stocks, options, futures, forex, and more.
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 try:
-    from ib_insync import IB, Stock, Forex, Future, Option, MarketOrder, LimitOrder, StopOrder
+    from ib_insync import (
+        IB,
+        Forex,
+        Future,
+        LimitOrder,
+        MarketOrder,
+        Option,
+        Stock,
+        StopOrder,
+    )
+
     IB_AVAILABLE = True
 except ImportError:
     IB_AVAILABLE = False
     logging.warning("ib_insync package not installed. IB connector will not work.")
 
 from .base import (
+    AccountInfo,
     BrokerConnector,
     Order,
-    Position,
-    AccountInfo,
-    OrderType,
     OrderSide,
     OrderStatus,
+    OrderType,
+    Position,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,15 +75,14 @@ class InteractiveBrokersConnector(BrokerConnector):
 
         if not IB_AVAILABLE:
             raise ImportError(
-                "ib_insync package not installed. "
-                "Install with: pip install ib_insync"
+                "ib_insync package not installed. Install with: pip install ib_insync"
             )
 
-        self.host = config.get('host', '127.0.0.1')
-        self.port = config.get('port', 7497)  # Paper trading default
-        self.client_id = config.get('client_id', 1)
-        self.account = config.get('account', None)
-        self.paper = config.get('paper', True)
+        self.host = config.get("host", "127.0.0.1")
+        self.port = config.get("port", 7497)  # Paper trading default
+        self.client_id = config.get("client_id", 1)
+        self.account = config.get("account", None)
+        self.paper = config.get("paper", True)
 
         self.ib = IB()
         self.connected = False
@@ -82,10 +91,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         """Connect to IB Gateway or TWS."""
         try:
             self.ib.connect(
-                host=self.host,
-                port=self.port,
-                clientId=self.client_id,
-                readonly=False
+                host=self.host, port=self.port, clientId=self.client_id, readonly=False
             )
 
             self.connected = True
@@ -124,7 +130,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> Optional[Order]:
         """
         Place order on IB.
@@ -145,23 +151,23 @@ class InteractiveBrokersConnector(BrokerConnector):
 
         try:
             # Create contract (stocks by default, can be extended)
-            asset_type = kwargs.get('asset_type', 'stock')
+            asset_type = kwargs.get("asset_type", "stock")
 
-            if asset_type == 'stock':
-                exchange = kwargs.get('exchange', 'SMART')
-                contract = Stock(symbol, exchange, 'USD')
-            elif asset_type == 'forex':
+            if asset_type == "stock":
+                exchange = kwargs.get("exchange", "SMART")
+                contract = Stock(symbol, exchange, "USD")
+            elif asset_type == "forex":
                 contract = Forex(symbol)
-            elif asset_type == 'future':
-                contract = Future(symbol, exchange=kwargs.get('exchange', 'GLOBEX'))
+            elif asset_type == "future":
+                contract = Future(symbol, exchange=kwargs.get("exchange", "GLOBEX"))
             else:
-                contract = Stock(symbol, 'SMART', 'USD')
+                contract = Stock(symbol, "SMART", "USD")
 
             # Qualify contract
             self.ib.qualifyContracts(contract)
 
             # Create order
-            action = 'BUY' if side == OrderSide.BUY else 'SELL'
+            action = "BUY" if side == OrderSide.BUY else "SELL"
 
             if order_type == OrderType.MARKET:
                 ib_order = MarketOrder(action, quantity)
@@ -189,7 +195,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 price=price,
                 status=OrderStatus.PENDING,
                 timestamp=datetime.now(timezone.utc),
-                metadata={'ib_order_id': trade.order.orderId}
+                metadata={"ib_order_id": trade.order.orderId},
             )
 
             logger.info(f"IB order placed: {symbol} {side.value} {quantity}")
@@ -251,17 +257,21 @@ class InteractiveBrokersConnector(BrokerConnector):
                 current_price = ticker.marketPrice() if ticker else 0.0
 
                 # Calculate P&L
-                unrealized_pnl = pos.unrealizedPNL if hasattr(pos, 'unrealizedPNL') else 0.0
+                unrealized_pnl = (
+                    pos.unrealizedPNL if hasattr(pos, "unrealizedPNL") else 0.0
+                )
 
                 position = Position(
                     symbol=pos.contract.symbol,
                     side="LONG" if pos.position > 0 else "SHORT",
                     quantity=abs(pos.position),
-                    entry_price=pos.avgCost / abs(pos.position) if pos.position != 0 else 0.0,
+                    entry_price=pos.avgCost / abs(pos.position)
+                    if pos.position != 0
+                    else 0.0,
                     current_price=current_price,
                     unrealized_pnl=unrealized_pnl,
                     realized_pnl=0.0,
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=datetime.now(timezone.utc),
                 )
                 result.append(position)
 
@@ -271,11 +281,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB get positions error: {e}")
             return []
 
-    def close_position(
-        self,
-        symbol: str,
-        quantity: Optional[float] = None
-    ) -> bool:
+    def close_position(self, symbol: str, quantity: Optional[float] = None) -> bool:
         """Close position."""
         if not self.connected:
             return False
@@ -288,7 +294,9 @@ class InteractiveBrokersConnector(BrokerConnector):
 
             for position in positions:
                 # Create closing order
-                close_side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
+                close_side = (
+                    OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
+                )
                 close_qty = quantity if quantity else position.quantity
 
                 # Place closing order
@@ -296,7 +304,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                     symbol=symbol,
                     side=close_side,
                     quantity=close_qty,
-                    order_type=OrderType.MARKET
+                    order_type=OrderType.MARKET,
                 )
 
             logger.info(f"Closed position: {symbol}")
@@ -320,13 +328,13 @@ class InteractiveBrokersConnector(BrokerConnector):
             margin_available = 0.0
 
             for value in account_values:
-                if value.tag == 'TotalCashValue':
+                if value.tag == "TotalCashValue":
                     balance = float(value.value)
-                elif value.tag == 'NetLiquidation':
+                elif value.tag == "NetLiquidation":
                     equity = float(value.value)
-                elif value.tag == 'MaintMarginReq':
+                elif value.tag == "MaintMarginReq":
                     margin_used = float(value.value)
-                elif value.tag == 'AvailableFunds':
+                elif value.tag == "AvailableFunds":
                     margin_available = float(value.value)
 
             positions = len(self.get_positions())
@@ -337,7 +345,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 margin_used=margin_used,
                 margin_available=margin_available,
                 positions_count=positions,
-                timestamp=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc),
             )
 
         except Exception as e:
@@ -345,10 +353,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self,
-        symbol: str,
-        timeframe: str = "1 hour",
-        count: int = 100
+        self, symbol: str, timeframe: str = "1 hour", count: int = 100
     ) -> Optional[List[Dict[str, Any]]]:
         """Get historical market data."""
         if not self.connected:
@@ -356,30 +361,32 @@ class InteractiveBrokersConnector(BrokerConnector):
 
         try:
             # Create contract
-            contract = Stock(symbol, 'SMART', 'USD')
+            contract = Stock(symbol, "SMART", "USD")
             self.ib.qualifyContracts(contract)
 
             # Request historical data
             duration = f"{count} D"  # Simplified
             bars = self.ib.reqHistoricalData(
                 contract,
-                endDateTime='',
+                endDateTime="",
                 durationStr=duration,
                 barSizeSetting=timeframe,
-                whatToShow='TRADES',
-                useRTH=True
+                whatToShow="TRADES",
+                useRTH=True,
             )
 
             candles = []
             for bar in bars:
-                candles.append({
-                    'time': bar.date,
-                    'open': bar.open,
-                    'high': bar.high,
-                    'low': bar.low,
-                    'close': bar.close,
-                    'volume': bar.volume,
-                })
+                candles.append(
+                    {
+                        "time": bar.date,
+                        "open": bar.open,
+                        "high": bar.high,
+                        "low": bar.low,
+                        "close": bar.close,
+                        "volume": bar.volume,
+                    }
+                )
 
             return candles
 
@@ -392,10 +399,14 @@ class InteractiveBrokersConnector(BrokerConnector):
         return Order(
             id=str(trade.order.orderId),
             symbol=trade.contract.symbol,
-            side=OrderSide.BUY if trade.order.action == 'BUY' else OrderSide.SELL,
-            type=OrderType.MARKET if trade.order.orderType == 'MKT' else OrderType.LIMIT,
+            side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
+            type=OrderType.MARKET
+            if trade.order.orderType == "MKT"
+            else OrderType.LIMIT,
             quantity=trade.order.totalQuantity,
-            price=trade.order.lmtPrice if hasattr(trade.order, 'lmtPrice') else None,
-            status=OrderStatus.OPEN if trade.orderStatus.status == 'Submitted' else OrderStatus.FILLED,
-            timestamp=datetime.now(timezone.utc)
+            price=trade.order.lmtPrice if hasattr(trade.order, "lmtPrice") else None,
+            status=OrderStatus.OPEN
+            if trade.orderStatus.status == "Submitted"
+            else OrderStatus.FILLED,
+            timestamp=datetime.now(timezone.utc),
         )

@@ -10,7 +10,6 @@ REST API endpoints for monetization features including:
 """
 
 import logging
-from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -20,35 +19,30 @@ from pydantic import BaseModel, EmailStr, Field
 logger = logging.getLogger(__name__)
 
 from monetization import (
+    BillingCycle,
+    PartnerType,
+    StrategyCategory,
+    StrategyLicenseType,
+    SubscriptionStatus,
     # Pricing
     SubscriptionTier,
-    BillingCycle,
-    pricing_manager,
-    # Subscription
-    subscription_manager,
-    SubscriptionStatus,
-    # Payment
-    payment_processor,
-    stripe_integration,
-    # License
-    license_validator,
+    TimePeriod,
+    WhiteLabelConfig,
     # Access codes
     access_code_generator,
     # Affiliate
     affiliate_manager,
-    AffiliateLevel,
-    # Marketplace
-    strategy_marketplace,
-    StrategyCategory,
-    StrategyLicenseType,
+    enterprise_manager,
+    # License
+    license_validator,
+    pricing_manager,
     # Analytics
     revenue_analytics,
-    TimePeriod,
-    RevenueSource,
-    # Enterprise
-    enterprise_manager,
-    PartnerType,
-    WhiteLabelConfig,
+    strategy_marketplace,
+    # Payment
+    stripe_integration,
+    # Subscription
+    subscription_manager,
 )
 
 # Create router
@@ -59,8 +53,10 @@ router = APIRouter(prefix="/api/monetization", tags=["Monetization"])
 # Request/Response Models
 # ==========================
 
+
 class PricingTierResponse(BaseModel):
     """Pricing tier response"""
+
     tier: str
     name: str
     monthly_price: float
@@ -71,6 +67,7 @@ class PricingTierResponse(BaseModel):
 
 class SubscribeRequest(BaseModel):
     """Subscribe request"""
+
     user_id: str = Field(..., description="User ID")
     tier: str = Field(..., description="Subscription tier")
     billing_cycle: str = Field(default="monthly", description="Billing cycle")
@@ -78,6 +75,7 @@ class SubscribeRequest(BaseModel):
 
 class SubscribeResponse(BaseModel):
     """Subscribe response"""
+
     subscription_id: str
     checkout_url: Optional[str] = None
     status: str
@@ -87,12 +85,14 @@ class SubscribeResponse(BaseModel):
 
 class ActivateCodeRequest(BaseModel):
     """Activate access code request"""
+
     user_id: str = Field(..., description="User ID")
     code: str = Field(..., description="Access code")
 
 
 class ActivateCodeResponse(BaseModel):
     """Activate code response"""
+
     success: bool
     tier: Optional[str] = None
     expires_at: Optional[str] = None
@@ -101,6 +101,7 @@ class ActivateCodeResponse(BaseModel):
 
 class AffiliateSignupRequest(BaseModel):
     """Affiliate signup request"""
+
     user_id: str = Field(..., description="User ID")
     payment_email: Optional[EmailStr] = None
     custom_code: Optional[str] = None
@@ -108,6 +109,7 @@ class AffiliateSignupRequest(BaseModel):
 
 class AffiliateResponse(BaseModel):
     """Affiliate response"""
+
     affiliate_id: str
     code: str
     level: str
@@ -117,12 +119,14 @@ class AffiliateResponse(BaseModel):
 
 class ReferralRequest(BaseModel):
     """Create referral tracking request"""
+
     affiliate_code: str = Field(..., description="Affiliate referral code")
     referred_user_id: str = Field(..., description="ID of referred user")
 
 
 class StrategyListRequest(BaseModel):
     """List strategy in marketplace request"""
+
     creator_id: str
     name: str
     description: str
@@ -135,12 +139,14 @@ class StrategyListRequest(BaseModel):
 
 class StrategyPurchaseRequest(BaseModel):
     """Purchase strategy request"""
+
     buyer_id: str
     strategy_id: str
 
 
 class ReviewRequest(BaseModel):
     """Add review request"""
+
     user_id: str
     strategy_id: str
     rating: int = Field(..., ge=1, le=5)
@@ -150,6 +156,7 @@ class ReviewRequest(BaseModel):
 
 class PartnerSignupRequest(BaseModel):
     """Partner signup request"""
+
     company_name: str
     contact_email: EmailStr
     partner_type: str
@@ -159,6 +166,7 @@ class PartnerSignupRequest(BaseModel):
 
 class WhiteLabelRequest(BaseModel):
     """Create white-label instance request"""
+
     partner_id: str
     name: str
     company_name: str
@@ -173,11 +181,12 @@ class WhiteLabelRequest(BaseModel):
 # Pricing Endpoints
 # ==========================
 
+
 @router.get("/pricing", response_model=List[PricingTierResponse])
 async def get_pricing():
     """
     Get all pricing tiers.
-    
+
     Returns pricing information for all subscription tiers including
     monthly/annual prices, commission rates, and features.
     """
@@ -189,7 +198,7 @@ async def get_pricing():
             monthly_price=float(t.monthly_price),
             annual_price=float(t.get_annual_price()),
             commission_rate=float(t.commission_rate),
-            features=t.to_dict()['features']
+            features=t.to_dict()["features"],
         )
         for t in tiers
     ]
@@ -205,14 +214,12 @@ async def get_tier_pricing(tier: str):
         pricing_tier = pricing_manager.get_tier(tier_enum)
         if not pricing_tier:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tier '{tier}' not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Tier '{tier}' not found"
             )
         return pricing_tier.to_dict()
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid tier: {tier}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid tier: {tier}"
         )
 
 
@@ -220,11 +227,12 @@ async def get_tier_pricing(tier: str):
 # Subscription Endpoints
 # ==========================
 
+
 @router.post("/subscribe", response_model=SubscribeResponse)
 async def subscribe(request: SubscribeRequest):
     """
     Subscribe to a plan.
-    
+
     Creates a subscription and returns checkout URL for payment.
     """
     try:
@@ -233,7 +241,7 @@ async def subscribe(request: SubscribeRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid tier or billing cycle: {str(e)}"
+            detail=f"Invalid tier or billing cycle: {str(e)}",
         )
 
     # Free tier - no payment needed
@@ -242,46 +250,41 @@ async def subscribe(request: SubscribeRequest):
             user_id=request.user_id,
             tier=tier,
             duration_days=365,  # 1 year free trial
-            auto_renew=False
+            auto_renew=False,
         )
         subscription.status = SubscriptionStatus.ACTIVE
-        
+
         return SubscribeResponse(
             subscription_id=subscription.subscription_id,
             checkout_url=None,
             status="active",
             tier=tier.value,
-            billing_cycle=billing_cycle.value
+            billing_cycle=billing_cycle.value,
         )
 
     # Create Stripe customer
     customer = stripe_integration.create_customer(
         user_id=request.user_id,
-        email=f"{request.user_id}@hopefx.ai"  # Would use real email
+        email=f"{request.user_id}@hopefx.ai",  # Would use real email
     )
 
     # Create checkout session
     checkout = stripe_integration.create_checkout_session(
-        customer_id=customer.customer_id,
-        tier=tier,
-        billing_cycle=billing_cycle
+        customer_id=customer.customer_id, tier=tier, billing_cycle=billing_cycle
     )
 
     # Create pending subscription
     duration_days = 365 if billing_cycle == BillingCycle.ANNUAL else 30
     subscription = subscription_manager.create_subscription(
-        user_id=request.user_id,
-        tier=tier,
-        duration_days=duration_days,
-        auto_renew=True
+        user_id=request.user_id, tier=tier, duration_days=duration_days, auto_renew=True
     )
 
     return SubscribeResponse(
         subscription_id=subscription.subscription_id,
-        checkout_url=checkout.get('url'),
+        checkout_url=checkout.get("url"),
         status="pending",
         tier=tier.value,
-        billing_cycle=billing_cycle.value
+        billing_cycle=billing_cycle.value,
     )
 
 
@@ -295,13 +298,10 @@ async def get_subscription(user_id: str):
         return {
             "has_subscription": False,
             "tier": "free",
-            "message": "No active subscription"
+            "message": "No active subscription",
         }
 
-    return {
-        "has_subscription": True,
-        **subscription.to_dict()
-    }
+    return {"has_subscription": True, **subscription.to_dict()}
 
 
 @router.post("/subscription/{subscription_id}/cancel")
@@ -312,10 +312,9 @@ async def cancel_subscription(subscription_id: str):
     success = subscription_manager.cancel_subscription(subscription_id)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subscription not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
         )
-    
+
     return {"success": True, "message": "Subscription cancelled"}
 
 
@@ -332,47 +331,40 @@ async def get_user_limits(user_id: str):
 # Access Code Endpoints
 # ==========================
 
+
 @router.post("/activate-code", response_model=ActivateCodeResponse)
 async def activate_code(request: ActivateCodeRequest):
     """
     Activate an access code for a user.
     """
     result, message = license_validator.validate_access_code(request.code)
-    
+
     if result.value != "valid":
-        return ActivateCodeResponse(
-            success=False,
-            message=message
-        )
+        return ActivateCodeResponse(success=False, message=message)
 
     access_code = access_code_generator.get_code(request.code)
     if not access_code:
-        return ActivateCodeResponse(
-            success=False,
-            message="Code not found"
-        )
+        return ActivateCodeResponse(success=False, message="Code not found")
 
     # Create subscription from code
     subscription = subscription_manager.create_subscription(
         user_id=request.user_id,
         tier=access_code.tier,
         duration_days=access_code.duration_days,
-        access_code=request.code
+        access_code=request.code,
     )
     subscription.status = SubscriptionStatus.ACTIVE
 
     # Mark code as used
     access_code_generator.activate_code(
-        request.code,
-        request.user_id,
-        subscription.subscription_id
+        request.code, request.user_id, subscription.subscription_id
     )
 
     return ActivateCodeResponse(
         success=True,
         tier=access_code.tier.value,
         expires_at=subscription.end_date.isoformat(),
-        message="Code activated successfully"
+        message="Code activated successfully",
     )
 
 
@@ -382,20 +374,17 @@ async def validate_code(code: str):
     Validate an access code without activating it.
     """
     result, message = license_validator.validate_access_code(code)
-    
+
     access_code = access_code_generator.get_code(code)
     tier = access_code.tier.value if access_code else None
-    
-    return {
-        "valid": result.value == "valid",
-        "tier": tier,
-        "message": message
-    }
+
+    return {"valid": result.value == "valid", "tier": tier, "message": message}
 
 
 # ==========================
 # Affiliate Endpoints
 # ==========================
+
 
 @router.post("/affiliate/signup", response_model=AffiliateResponse)
 async def affiliate_signup(request: AffiliateSignupRequest):
@@ -404,12 +393,12 @@ async def affiliate_signup(request: AffiliateSignupRequest):
     """
     payment_details = {}
     if request.payment_email:
-        payment_details['email'] = request.payment_email
+        payment_details["email"] = request.payment_email
 
     affiliate = affiliate_manager.create_affiliate(
         user_id=request.user_id,
         payment_details=payment_details,
-        custom_code=request.custom_code
+        custom_code=request.custom_code,
     )
 
     return AffiliateResponse(
@@ -417,7 +406,7 @@ async def affiliate_signup(request: AffiliateSignupRequest):
         code=affiliate.code,
         level=affiliate.level.value,
         commission_rate=float(affiliate.get_commission_rate()),
-        status=affiliate.status.value
+        status=affiliate.status.value,
     )
 
 
@@ -431,7 +420,7 @@ async def get_affiliate(user_id: str):
         return {"has_affiliate_account": False}
 
     metrics = affiliate_manager.get_affiliate_metrics(affiliate.affiliate_id)
-    
+
     return {
         "has_affiliate_account": True,
         "affiliate": affiliate.to_dict(),
@@ -441,8 +430,8 @@ async def get_affiliate(user_id: str):
             "total_revenue": float(metrics.total_revenue) if metrics else 0,
             "total_commissions": float(metrics.total_commissions) if metrics else 0,
             "pending_commissions": float(metrics.pending_commissions) if metrics else 0,
-            "conversion_rate": metrics.conversion_rate if metrics else 0
-        }
+            "conversion_rate": metrics.conversion_rate if metrics else 0,
+        },
     }
 
 
@@ -452,33 +441,29 @@ async def create_referral(request: ReferralRequest):
     Create referral tracking for a referred user.
     """
     referral = affiliate_manager.create_referral(
-        affiliate_code=request.affiliate_code,
-        referred_user_id=request.referred_user_id
+        affiliate_code=request.affiliate_code, referred_user_id=request.referred_user_id
     )
-    
+
     if not referral:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid affiliate code or user already referred"
+            detail="Invalid affiliate code or user already referred",
         )
 
     return {
         "success": True,
         "referral_id": referral.referral_id,
-        "expires_at": referral.expires_at.isoformat()
+        "expires_at": referral.expires_at.isoformat(),
     }
 
 
 @router.get("/affiliate/{affiliate_id}/referrals")
-async def get_affiliate_referrals(
-    affiliate_id: str,
-    status: Optional[str] = None
-):
+async def get_affiliate_referrals(affiliate_id: str, status: Optional[str] = None):
     """
     Get all referrals for an affiliate.
     """
     from monetization import ReferralStatus
-    
+
     status_enum = None
     if status:
         try:
@@ -490,14 +475,10 @@ async def get_affiliate_referrals(
             )
 
     referrals = affiliate_manager.get_affiliate_referrals(
-        affiliate_id,
-        status=status_enum
+        affiliate_id, status=status_enum
     )
 
-    return {
-        "total": len(referrals),
-        "referrals": [r.to_dict() for r in referrals]
-    }
+    return {"total": len(referrals), "referrals": [r.to_dict() for r in referrals]}
 
 
 @router.get("/affiliate/leaderboard")
@@ -512,6 +493,7 @@ async def get_affiliate_leaderboard(limit: int = Query(10, ge=1, le=100)):
 # Marketplace Endpoints
 # ==========================
 
+
 @router.post("/marketplace/list")
 async def list_strategy(request: StrategyListRequest):
     """
@@ -524,7 +506,7 @@ async def list_strategy(request: StrategyListRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid category, license type, or tier: {str(e)}"
+            detail=f"Invalid category, license type, or tier: {str(e)}",
         )
 
     strategy = strategy_marketplace.list_strategy(
@@ -535,14 +517,14 @@ async def list_strategy(request: StrategyListRequest):
         price=Decimal(str(request.price)),
         license_type=license_type,
         min_tier=min_tier,
-        tags=request.tags
+        tags=request.tags,
     )
 
     return {
         "success": True,
         "strategy_id": strategy.strategy_id,
         "status": strategy.status.value,
-        "message": "Strategy listed. Submit for review to publish."
+        "message": "Strategy listed. Submit for review to publish.",
     }
 
 
@@ -553,9 +535,11 @@ async def search_strategies(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     min_rating: Optional[float] = None,
-    sort_by: str = Query("popular", pattern="^(popular|rating|newest|price_low|price_high)$"),
+    sort_by: str = Query(
+        "popular", pattern="^(popular|rating|newest|price_low|price_high)$"
+    ),
     limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
 ):
     """
     Search strategies in the marketplace.
@@ -578,13 +562,10 @@ async def search_strategies(
         min_rating=min_rating,
         sort_by=sort_by,
         limit=limit,
-        offset=offset
+        offset=offset,
     )
 
-    return {
-        "total": len(strategies),
-        "strategies": [s.to_dict() for s in strategies]
-    }
+    return {"total": len(strategies), "strategies": [s.to_dict() for s in strategies]}
 
 
 @router.get("/marketplace/strategies/{strategy_id}")
@@ -595,16 +576,12 @@ async def get_strategy(strategy_id: str):
     strategy = strategy_marketplace.get_strategy(strategy_id)
     if not strategy:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Strategy not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found"
         )
 
     reviews = strategy_marketplace.get_strategy_reviews(strategy_id, limit=5)
 
-    return {
-        "strategy": strategy.to_dict(),
-        "reviews": [r.to_dict() for r in reviews]
-    }
+    return {"strategy": strategy.to_dict(), "reviews": [r.to_dict() for r in reviews]}
 
 
 @router.post("/marketplace/purchase")
@@ -613,24 +590,20 @@ async def purchase_strategy(request: StrategyPurchaseRequest):
     Purchase a strategy.
     """
     purchase = strategy_marketplace.purchase_strategy(
-        buyer_id=request.buyer_id,
-        strategy_id=request.strategy_id
+        buyer_id=request.buyer_id, strategy_id=request.strategy_id
     )
 
     if not purchase:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to purchase. Strategy may be unavailable or already owned."
+            detail="Unable to purchase. Strategy may be unavailable or already owned.",
         )
 
     # In production, would initiate payment here
     # For now, auto-complete
     strategy_marketplace.complete_purchase(purchase.purchase_id)
 
-    return {
-        "success": True,
-        "purchase": purchase.to_dict()
-    }
+    return {"success": True, "purchase": purchase.to_dict()}
 
 
 @router.post("/marketplace/review")
@@ -643,19 +616,16 @@ async def add_review(request: ReviewRequest):
         strategy_id=request.strategy_id,
         rating=request.rating,
         title=request.title,
-        content=request.content
+        content=request.content,
     )
 
     if not review:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to add review. Strategy may not exist."
+            detail="Unable to add review. Strategy may not exist.",
         )
 
-    return {
-        "success": True,
-        "review": review.to_dict()
-    }
+    return {"success": True, "review": review.to_dict()}
 
 
 @router.get("/marketplace/featured")
@@ -664,9 +634,7 @@ async def get_featured_strategies(limit: int = Query(10, ge=1, le=50)):
     Get featured strategies.
     """
     strategies = strategy_marketplace.get_featured_strategies(limit)
-    return {
-        "strategies": [s.to_dict() for s in strategies]
-    }
+    return {"strategies": [s.to_dict() for s in strategies]}
 
 
 @router.get("/marketplace/stats")
@@ -681,6 +649,7 @@ async def get_marketplace_stats():
 # Analytics Endpoints
 # ==========================
 
+
 @router.get("/analytics/dashboard")
 async def get_analytics_dashboard():
     """
@@ -692,7 +661,7 @@ async def get_analytics_dashboard():
 @router.get("/analytics/report")
 async def get_analytics_report(
     period: str = Query("monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$"),
-    include_projections: bool = True
+    include_projections: bool = True,
 ):
     """
     Generate comprehensive revenue report.
@@ -703,8 +672,7 @@ async def get_analytics_report(
         time_period = TimePeriod.MONTHLY
 
     return revenue_analytics.generate_report(
-        period=time_period,
-        include_projections=include_projections
+        period=time_period, include_projections=include_projections
     )
 
 
@@ -715,13 +683,11 @@ async def get_revenue_breakdown():
     """
     return {
         "by_source": {
-            k: float(v) 
-            for k, v in revenue_analytics.get_revenue_by_source().items()
+            k: float(v) for k, v in revenue_analytics.get_revenue_by_source().items()
         },
         "by_tier": {
-            k: float(v) 
-            for k, v in revenue_analytics.get_revenue_by_tier().items()
-        }
+            k: float(v) for k, v in revenue_analytics.get_revenue_by_tier().items()
+        },
     }
 
 
@@ -739,13 +705,14 @@ async def get_growth_metrics():
         "ltv": float(metrics.ltv),
         "cac": float(metrics.cac),
         "ltv_cac_ratio": metrics.ltv_cac_ratio,
-        "net_revenue_retention": metrics.net_revenue_retention
+        "net_revenue_retention": metrics.net_revenue_retention,
     }
 
 
 # ==========================
 # Enterprise/Partner Endpoints
 # ==========================
+
 
 @router.post("/partner/signup")
 async def partner_signup(request: PartnerSignupRequest):
@@ -757,7 +724,7 @@ async def partner_signup(request: PartnerSignupRequest):
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid partner type: {request.partner_type}"
+            detail=f"Invalid partner type: {request.partner_type}",
         )
 
     partner = enterprise_manager.register_partner(
@@ -765,14 +732,14 @@ async def partner_signup(request: PartnerSignupRequest):
         contact_email=request.contact_email,
         partner_type=partner_type,
         contact_name=request.contact_name,
-        contact_phone=request.contact_phone
+        contact_phone=request.contact_phone,
     )
 
     return {
         "success": True,
         "partner_id": partner.partner_id,
         "status": partner.status.value,
-        "message": "Application submitted. We'll contact you shortly."
+        "message": "Application submitted. We'll contact you shortly.",
     }
 
 
@@ -784,8 +751,7 @@ async def get_partner(partner_id: str):
     partner = enterprise_manager.get_partner(partner_id)
     if not partner:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Partner not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Partner not found"
         )
 
     return partner.to_dict()
@@ -802,19 +768,17 @@ async def create_white_label(request: WhiteLabelRequest):
         primary_color=request.primary_color,
         secondary_color=request.secondary_color,
         custom_domain=request.custom_domain,
-        support_email=request.support_email
+        support_email=request.support_email,
     )
 
     instance = enterprise_manager.create_white_label_instance(
-        partner_id=request.partner_id,
-        name=request.name,
-        config=config
+        partner_id=request.partner_id, name=request.name, config=config
     )
 
     if not instance:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid partner or not authorized for white-label"
+            detail="Invalid partner or not authorized for white-label",
         )
 
     return {
@@ -822,7 +786,7 @@ async def create_white_label(request: WhiteLabelRequest):
         "instance_id": instance.instance_id,
         "subdomain": instance.subdomain,
         "api_endpoint": instance.api_endpoint,
-        "status": instance.status.value
+        "status": instance.status.value,
     }
 
 
@@ -838,20 +802,15 @@ async def get_enterprise_stats():
 # Webhook Endpoints
 # ==========================
 
+
 @router.post("/webhook/stripe")
-async def stripe_webhook(
-    payload: Dict[str, Any] = Body(...)
-):
+async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
     """
     Handle Stripe webhooks.
     """
-    event_type = payload.get('type', '')
-    event_data = payload.get('data', {}).get('object', {})
+    event_type = payload.get("type", "")
+    event_data = payload.get("data", {}).get("object", {})
 
     result = stripe_integration.handle_webhook(event_type, event_data)
 
-    return {
-        "received": True,
-        "event_type": event_type,
-        "result": result
-    }
+    return {"received": True, "event_type": event_type, "result": result}

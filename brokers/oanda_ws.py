@@ -8,6 +8,7 @@ Wraps OANDA's v20 pricing stream endpoint with:
 - Automatic resubscription after reconnect
 - Configurable timeouts (default 30 s connection, 10 s reconciliation)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,7 @@ _MAX_DELAY: float = 60.0
 _MULTIPLIER: float = 2.0
 
 # Timeouts
-_CONNECT_TIMEOUT: float = 30.0   # seconds – kill connection attempt if stuck
+_CONNECT_TIMEOUT: float = 30.0  # seconds – kill connection attempt if stuck
 _RECONCILE_TIMEOUT: float = 10.0  # seconds – used by callers for reconciliation
 
 
@@ -209,7 +210,10 @@ class OANDAStreamAdapter:
                     return True
 
         except asyncio.TimeoutError:
-            logger.warning("OANDAStreamAdapter connection timed out (%.1fs).", self._connect_timeout)
+            logger.warning(
+                "OANDAStreamAdapter connection timed out (%.1fs).",
+                self._connect_timeout,
+            )
         except Exception as exc:
             logger.error("OANDAStreamAdapter stream error: %s", exc)
 
@@ -252,6 +256,8 @@ class OANDAStreamAdapter:
                     try:
                         self._on_tick(price)
                     except Exception as exc:
-                        logger.error("OANDAStreamAdapter REST fallback callback error: %s", exc)
+                        logger.error(
+                            "OANDAStreamAdapter REST fallback callback error: %s", exc
+                        )
             await asyncio.sleep(interval)
             elapsed += interval

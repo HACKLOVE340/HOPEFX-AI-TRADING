@@ -60,7 +60,11 @@ def _load_persisted_risk_settings() -> Dict[str, Any]:
             return {}
         return json.loads(_RISK_SETTINGS_FILE.read_text())
     except Exception as exc:
-        logger.warning("Failed to load persisted risk settings from %s: %s", _RISK_SETTINGS_FILE, exc)
+        logger.warning(
+            "Failed to load persisted risk settings from %s: %s",
+            _RISK_SETTINGS_FILE,
+            exc,
+        )
         return {}
 
 
@@ -129,13 +133,12 @@ async def update_risk_settings(
 
 # ── KYC management ────────────────────────────────────────────────────────────
 
-from typing import Optional
 from pydantic import BaseModel
 
 
 class KYCDecision(BaseModel):
     user_id: str
-    action: str          # "approve" | "reject" | "request_more_info"
+    action: str  # "approve" | "reject" | "request_more_info"
     notes: Optional[str] = None
 
 
@@ -143,14 +146,17 @@ class KYCDecision(BaseModel):
 async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
     """List users with pending KYC submissions. Requires: role >= 'admin'."""
     try:
-        from database.user_models import User
         from app import app_state as _state
+        from database.user_models import User
+
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
         with _state.db_session_factory() as session:
-            pending = session.query(User).filter(
-                User.kyc_status.in_(["pending", "submitted", "under_review"])
-            ).all()
+            pending = (
+                session.query(User)
+                .filter(User.kyc_status.in_(["pending", "submitted", "under_review"]))
+                .all()
+            )
             return {
                 "count": len(pending),
                 "users": [
@@ -182,12 +188,15 @@ async def decide_kyc(
     Requires: role >= 'admin'.
     """
     if body.action not in ("approve", "reject", "request_more_info"):
-        raise HTTPException(status_code=400, detail="action must be approve | reject | request_more_info")
+        raise HTTPException(
+            status_code=400,
+            detail="action must be approve | reject | request_more_info",
+        )
 
     try:
-        from database.user_models import User
         from app import app_state as _state
-        from datetime import datetime, timezone
+        from database.user_models import User
+
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
 
@@ -214,6 +223,7 @@ async def decide_kyc(
         try:
             from core.email_service import _send
             from database.user_models import User as _User
+
             with _state.db_session_factory() as session:
                 target = session.query(_User).filter_by(id=body.user_id).first()
                 if target:
@@ -254,8 +264,9 @@ async def get_kyc_status(
 ):
     """Get KYC status for a specific user. Requires: role >= 'admin'."""
     try:
-        from database.user_models import User
         from app import app_state as _state
+        from database.user_models import User
+
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
         with _state.db_session_factory() as session:
@@ -277,6 +288,7 @@ async def get_kyc_status(
 
 
 # ── New endpoints expected by tests ──────────────────────────────────────────
+
 
 @router.get("/api/system-info")
 def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
@@ -345,10 +357,12 @@ _activity_log = activity_log
 def _check_module(name: str) -> bool:
     """Return True if a module can be imported."""
     import importlib.util
+
     return importlib.util.find_spec(name) is not None
 
 
 # ── Admin HTML pages ──────────────────────────────────────────────────────────
+
 
 def _html_page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(f"""<!DOCTYPE html>

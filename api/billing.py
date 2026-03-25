@@ -26,22 +26,29 @@ router = APIRouter(tags=["Billing"])
 
 # ── Lazy imports (graceful if packages missing) ───────────────────────────────
 
+
 def _get_subscription_manager():
     from monetization.subscription import subscription_manager
+
     return subscription_manager
+
 
 def _get_affiliate_manager():
     from monetization.affiliate import affiliate_manager
+
     return affiliate_manager
+
 
 def _get_flutterwave():
     from payments.fintech.flutterwave import FlutterwaveClient
+
     return FlutterwaveClient(secret_key=os.getenv("FLUTTERWAVE_SECRET_KEY", ""))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 25 — Stripe Webhook
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @router.post("/api/webhook/stripe", include_in_schema=True)
 async def stripe_webhook(request: Request):
@@ -66,7 +73,9 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         # stripe package not installed — log and ack to avoid Stripe retries
-        logger.warning("Stripe webhook received but stripe package unavailable: %s", exc)
+        logger.warning(
+            "Stripe webhook received but stripe package unavailable: %s", exc
+        )
         return {"received": True, "note": "stripe package not installed"}
     except Exception as exc:
         logger.error("Stripe webhook error: %s", exc)
@@ -76,6 +85,7 @@ async def stripe_webhook(request: Request):
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 26 — Referral Link Generation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @router.post("/api/affiliate/generate-link")
 async def generate_referral_link(user: TokenPayload = Depends(get_current_user)):
@@ -96,16 +106,19 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
     ref_url = f"{base_url}/signup?ref={affiliate.code}"
 
     return {
-        "url":          ref_url,
-        "code":         affiliate.code,
+        "url": ref_url,
+        "code": affiliate.code,
         "affiliate_id": affiliate.affiliate_id,
-        "status":       affiliate.status.value if hasattr(affiliate.status, "value") else str(affiliate.status),
+        "status": affiliate.status.value
+        if hasattr(affiliate.status, "value")
+        else str(affiliate.status),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 27 — Free Tier Activation on Signup
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class FreeTierBody(BaseModel):
     user_id: str
@@ -129,7 +142,9 @@ async def activate_free_tier(body: FreeTierBody):
     existing = mgr.get_user_subscription(body.user_id)
     if existing:
         return {
-            "tier":    existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier),
+            "tier": existing.tier.value
+            if hasattr(existing.tier, "value")
+            else str(existing.tier),
             "message": "Subscription already active.",
             "features": ["paper_trading"],
         }
@@ -149,7 +164,7 @@ async def activate_free_tier(body: FreeTierBody):
             logger.debug("Referral tracking skipped: %s", exc)
 
     return {
-        "tier":    sub.tier.value if hasattr(sub.tier, "value") else "free",
+        "tier": sub.tier.value if hasattr(sub.tier, "value") else "free",
         "message": "You're on the Free tier — upgrade for live trading + AI signals.",
         "features": ["paper_trading"],
         "upgrade_url": "/subscription",
@@ -160,10 +175,11 @@ async def activate_free_tier(body: FreeTierBody):
 # Task 28 — Flutterwave Checkout
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class FlutterwaveInitBody(BaseModel):
-    amount:   float = Field(..., gt=0)
-    currency: str   = Field("USD", max_length=3)
-    plan:     str   = Field("professional", description="Subscription plan name")
+    amount: float = Field(..., gt=0)
+    currency: str = Field("USD", max_length=3)
+    plan: str = Field("professional", description="Subscription plan name")
 
 
 class FlutterwaveVerifyBody(BaseModel):
@@ -189,12 +205,12 @@ async def flutterwave_init(
             currency=body.currency,
         )
         return {
-            "tx_ref":       result["tx_ref"],
+            "tx_ref": result["tx_ref"],
             "payment_link": result["payment_link"],
-            "amount":       result["amount"],
-            "currency":     result["currency"],
-            "fee":          result["fee"],
-            "plan":         body.plan,
+            "amount": result["amount"],
+            "currency": result["currency"],
+            "fee": result["fee"],
+            "plan": body.plan,
         }
     except Exception as exc:
         logger.error("Flutterwave init error: %s", exc)
@@ -214,7 +230,11 @@ async def flutterwave_verify(
             # Activate subscription based on amount paid
             # (full activation logic would map amount → tier)
             return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
-        return {"verified": False, "tx_ref": body.tx_ref, "status": result.get("status", "unknown")}
+        return {
+            "verified": False,
+            "tx_ref": body.tx_ref,
+            "status": result.get("status", "unknown"),
+        }
     except Exception as exc:
         logger.error("Flutterwave verify error: %s", exc)
         raise HTTPException(status_code=500, detail=f"Verification failed: {exc}")
@@ -226,5 +246,5 @@ async def flutterwave_status():
     key = os.getenv("FLUTTERWAVE_SECRET_KEY", "")
     return {
         "enabled": bool(key and not key.startswith("FLWSECK_TEST-placeholder")),
-        "note":    "Set FLUTTERWAVE_SECRET_KEY in .env to enable live payments.",
+        "note": "Set FLUTTERWAVE_SECRET_KEY in .env to enable live payments.",
     }

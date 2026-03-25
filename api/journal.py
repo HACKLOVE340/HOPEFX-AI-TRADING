@@ -23,10 +23,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from api.db_store import db_get, db_set, db_keys_prefix
+from api.db_store import db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,29 @@ _entries: Dict[str, dict] = {}
 
 _JOURNAL_PREFIX = "journal_entry"
 
-EMOTION_TAGS = ["patient", "fomo", "revenge", "disciplined", "hesitant", "overconfident", "fearful"]
-TRADE_TAGS   = ["trend", "breakout", "reversal", "news", "scalp", "swing", "mistake", "best-trade"]
+EMOTION_TAGS = [
+    "patient",
+    "fomo",
+    "revenge",
+    "disciplined",
+    "hesitant",
+    "overconfident",
+    "fearful",
+]
+TRADE_TAGS = [
+    "trend",
+    "breakout",
+    "reversal",
+    "news",
+    "scalp",
+    "swing",
+    "mistake",
+    "best-trade",
+]
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
+
 
 class JournalEntry(BaseModel):
     trade_id: str
@@ -59,8 +77,12 @@ class JournalEntry(BaseModel):
     followed_rules: bool = True
     rule_deviation: Optional[str] = None
     screenshot_url: Optional[str] = None
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class JournalUpdate(BaseModel):
@@ -95,6 +117,7 @@ class JournalStats(BaseModel):
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
 
+
 def _entry_key(trade_id: str) -> str:
     return f"{_JOURNAL_PREFIX}:{trade_id}"
 
@@ -121,36 +144,90 @@ def _load_all_entries() -> Dict[str, dict]:
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
+
 def _seed() -> None:
     """Seed with realistic demo entries (only if store is empty)."""
     if _entries:
         return
     samples = [
-        dict(symbol="XAUUSD", side="long",  entry_price=2045.0, exit_price=2062.0, size=0.5, pnl=85.0,
-             notes="Clean breakout above 2050 resistance. Waited for retest.", tags=["breakout", "trend"],
-             emotion="patient", followed_rules=True),
-        dict(symbol="XAUUSD", side="short", entry_price=2078.0, exit_price=2091.0, size=0.3, pnl=-39.0,
-             notes="Entered too early before NFP. Should have waited.", tags=["news", "mistake"],
-             emotion="fomo", followed_rules=False, rule_deviation="Entered before high-impact news event"),
-        dict(symbol="EURUSD", side="long",  entry_price=1.0842, exit_price=1.0871, size=1.0, pnl=29.0,
-             notes="ECB dovish surprise. Caught the move perfectly.", tags=["news", "swing"],
-             emotion="disciplined", followed_rules=True),
-        dict(symbol="XAUUSD", side="long",  entry_price=2031.0, exit_price=2055.0, size=0.8, pnl=192.0,
-             notes="Best trade this month. RSI oversold + DXY falling.", tags=["reversal", "best-trade"],
-             emotion="patient", followed_rules=True),
-        dict(symbol="XAUUSD", side="short", entry_price=2068.0, exit_price=2061.0, size=0.5, pnl=35.0,
-             notes="Scalp at resistance. Quick in and out.", tags=["scalp"],
-             emotion="disciplined", followed_rules=True),
+        dict(
+            symbol="XAUUSD",
+            side="long",
+            entry_price=2045.0,
+            exit_price=2062.0,
+            size=0.5,
+            pnl=85.0,
+            notes="Clean breakout above 2050 resistance. Waited for retest.",
+            tags=["breakout", "trend"],
+            emotion="patient",
+            followed_rules=True,
+        ),
+        dict(
+            symbol="XAUUSD",
+            side="short",
+            entry_price=2078.0,
+            exit_price=2091.0,
+            size=0.3,
+            pnl=-39.0,
+            notes="Entered too early before NFP. Should have waited.",
+            tags=["news", "mistake"],
+            emotion="fomo",
+            followed_rules=False,
+            rule_deviation="Entered before high-impact news event",
+        ),
+        dict(
+            symbol="EURUSD",
+            side="long",
+            entry_price=1.0842,
+            exit_price=1.0871,
+            size=1.0,
+            pnl=29.0,
+            notes="ECB dovish surprise. Caught the move perfectly.",
+            tags=["news", "swing"],
+            emotion="disciplined",
+            followed_rules=True,
+        ),
+        dict(
+            symbol="XAUUSD",
+            side="long",
+            entry_price=2031.0,
+            exit_price=2055.0,
+            size=0.8,
+            pnl=192.0,
+            notes="Best trade this month. RSI oversold + DXY falling.",
+            tags=["reversal", "best-trade"],
+            emotion="patient",
+            followed_rules=True,
+        ),
+        dict(
+            symbol="XAUUSD",
+            side="short",
+            entry_price=2068.0,
+            exit_price=2061.0,
+            size=0.5,
+            pnl=35.0,
+            notes="Scalp at resistance. Quick in and out.",
+            tags=["scalp"],
+            emotion="disciplined",
+            followed_rules=True,
+        ),
     ]
     for i, s in enumerate(samples):
-        tid = f"demo-{i+1}"
+        tid = f"demo-{i + 1}"
         now = datetime.now(timezone.utc).isoformat()
-        entry = JournalEntry(trade_id=tid, opened_at=now, closed_at=now,
-                             created_at=now, updated_at=now, **s)
+        entry = JournalEntry(
+            trade_id=tid,
+            opened_at=now,
+            closed_at=now,
+            created_at=now,
+            updated_at=now,
+            **s,
+        )
         _save_entry(entry.model_dump())
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/trades", response_model=List[JournalEntry])
 async def list_trades(
@@ -168,10 +245,12 @@ async def list_trades(
     if symbol:
         entries = [e for e in entries if e.get("symbol") == symbol.upper()]
     entries.sort(key=lambda e: e.get("created_at", ""), reverse=True)
-    return [JournalEntry(**e) for e in entries[offset:offset + limit]]
+    return [JournalEntry(**e) for e in entries[offset : offset + limit]]
 
 
-@router.post("/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED
+)
 async def create_entry(entry: JournalEntry) -> JournalEntry:
     _load_all_entries()
     if not entry.trade_id:
@@ -209,8 +288,16 @@ async def get_stats() -> JournalStats:
     entries = list(_load_all_entries().values())
     closed = [e for e in entries if e.get("pnl") is not None]
     if not closed:
-        return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0,
-                            worst_trade_pnl=0, by_tag=[], by_emotion=[], rule_deviation_count=0)
+        return JournalStats(
+            total_trades=0,
+            win_rate=0,
+            avg_pnl=0,
+            best_trade_pnl=0,
+            worst_trade_pnl=0,
+            by_tag=[],
+            by_emotion=[],
+            rule_deviation_count=0,
+        )
 
     pnls = [e["pnl"] for e in closed]
     wins = [p for p in pnls if p > 0]
@@ -221,11 +308,14 @@ async def get_stats() -> JournalStats:
         tagged = [e for e in closed if tag in e.get("tags", [])]
         tag_pnls = [e["pnl"] for e in tagged]
         tag_wins = [p for p in tag_pnls if p > 0]
-        tag_stats.append(TagStats(
-            tag=tag, count=len(tagged),
-            win_rate=round(len(tag_wins) / len(tagged) * 100, 1) if tagged else 0,
-            avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
-        ))
+        tag_stats.append(
+            TagStats(
+                tag=tag,
+                count=len(tagged),
+                win_rate=round(len(tag_wins) / len(tagged) * 100, 1) if tagged else 0,
+                avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
+            )
+        )
 
     all_emotions = set(e.get("emotion") for e in closed if e.get("emotion"))
     emotion_stats = []
@@ -233,11 +323,16 @@ async def get_stats() -> JournalStats:
         em_entries = [e for e in closed if e.get("emotion") == em]
         em_pnls = [e["pnl"] for e in em_entries]
         em_wins = [p for p in em_pnls if p > 0]
-        emotion_stats.append(TagStats(
-            tag=em, count=len(em_entries),
-            win_rate=round(len(em_wins) / len(em_entries) * 100, 1) if em_entries else 0,
-            avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
-        ))
+        emotion_stats.append(
+            TagStats(
+                tag=em,
+                count=len(em_entries),
+                win_rate=round(len(em_wins) / len(em_entries) * 100, 1)
+                if em_entries
+                else 0,
+                avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
+            )
+        )
 
     return JournalStats(
         total_trades=len(closed),
@@ -247,7 +342,9 @@ async def get_stats() -> JournalStats:
         worst_trade_pnl=min(pnls),
         by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
         by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
-        rule_deviation_count=sum(1 for e in entries if not e.get("followed_rules", True)),
+        rule_deviation_count=sum(
+            1 for e in entries if not e.get("followed_rules", True)
+        ),
     )
 
 

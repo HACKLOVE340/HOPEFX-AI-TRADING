@@ -25,8 +25,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -39,6 +38,7 @@ _FIX_BACKEND: str = "none"
 try:
     import quickfix as fix  # type: ignore
     import quickfix44 as fix44  # type: ignore
+
     _FIX_BACKEND = "quickfix"
     logger.info("fix_adapter: using quickfix backend")
 except ImportError:
@@ -49,6 +49,7 @@ if _FIX_BACKEND == "none":
     try:
         import pyfixmsg  # type: ignore
         from pyfixmsg.lib.message import FixMessage  # type: ignore
+
         _FIX_BACKEND = "pyfixmsg"
         logger.info("fix_adapter: using pyfixmsg backend")
     except ImportError:
@@ -63,6 +64,7 @@ if _FIX_BACKEND == "none":
 # ---------------------------------------------------------------------------
 # Domain types
 # ---------------------------------------------------------------------------
+
 
 class FIXSide(Enum):
     BUY = "1"
@@ -89,12 +91,12 @@ class FIXOrder:
     side: FIXSide
     quantity: float
     ord_type: FIXOrdType = FIXOrdType.MARKET
-    price: Optional[float] = None        # Required for LIMIT
-    stop_px: Optional[float] = None      # Required for STOP
+    price: Optional[float] = None  # Required for LIMIT
+    stop_px: Optional[float] = None  # Required for STOP
     cl_ord_id: str = field(default_factory=lambda: str(uuid.uuid4())[:16])
     account: str = ""
     currency: str = "USD"
-    time_in_force: str = "0"             # 0=Day, 1=GTC, 3=IOC, 4=FOK
+    time_in_force: str = "0"  # 0=Day, 1=GTC, 3=IOC, 4=FOK
 
 
 @dataclass
@@ -117,13 +119,16 @@ class FIXFillReport:
 # Circuit breaker
 # ---------------------------------------------------------------------------
 
+
 class CircuitBreaker:
     """
     Opens when measured latency exceeds `threshold_ms`.
     Resets after `reset_after_sec` seconds of no new orders.
     """
 
-    def __init__(self, threshold_ms: float = 100.0, reset_after_sec: float = 30.0) -> None:
+    def __init__(
+        self, threshold_ms: float = 100.0, reset_after_sec: float = 30.0
+    ) -> None:
         self.threshold_ms = threshold_ms
         self.reset_after_sec = reset_after_sec
         self._open = False
@@ -138,14 +143,17 @@ class CircuitBreaker:
                     self._opened_at = time.monotonic()
                     logger.error(
                         "circuit_breaker.OPEN latency=%.1f ms threshold=%.1f ms",
-                        latency_ms, self.threshold_ms,
+                        latency_ms,
+                        self.threshold_ms,
                     )
             else:
                 if self._open:
                     elapsed = time.monotonic() - (self._opened_at or 0)
                     if elapsed >= self.reset_after_sec:
                         self._open = False
-                        logger.info("circuit_breaker.CLOSED latency=%.1f ms", latency_ms)
+                        logger.info(
+                            "circuit_breaker.CLOSED latency=%.1f ms", latency_ms
+                        )
 
     @property
     def is_open(self) -> bool:
@@ -249,7 +257,8 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     logger.debug("fix.fromAdmin: Logout Text field absent: %s", _e)
                 logger.warning(
                     "fix.fromAdmin: Logout received session=%s text=%r",
-                    session_id, text,
+                    session_id,
+                    text,
                 )
 
             elif mt == fix.MsgType_Reject:
@@ -258,20 +267,27 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                 text_f = fix.Text()
                 ref_seq, reason, text = "", "", ""
                 try:
-                    message.getField(ref_seq_f); ref_seq = ref_seq_f.getString()
+                    message.getField(ref_seq_f)
+                    ref_seq = ref_seq_f.getString()
                 except Exception as _e:
                     logger.debug("fix.fromAdmin: Reject RefSeqNum field absent: %s", _e)
                 try:
-                    message.getField(reason_f); reason = reason_f.getString()
+                    message.getField(reason_f)
+                    reason = reason_f.getString()
                 except Exception as _e:
-                    logger.debug("fix.fromAdmin: Reject SessionRejectReason field absent: %s", _e)
+                    logger.debug(
+                        "fix.fromAdmin: Reject SessionRejectReason field absent: %s", _e
+                    )
                 try:
-                    message.getField(text_f); text = text_f.getString()
+                    message.getField(text_f)
+                    text = text_f.getString()
                 except Exception as _e:
                     logger.debug("fix.fromAdmin: Reject Text field absent: %s", _e)
                 logger.error(
                     "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
-                    ref_seq, reason, text,
+                    ref_seq,
+                    reason,
+                    text,
                 )
         except Exception as exc:
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
@@ -374,11 +390,15 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                 reason_code = cxl_rej_reason_f.getString()
             except Exception as _e:
                 # CxlRejReason is optional
-                logger.debug("fix_adapter.OrderCancelReject: CxlRejReason field absent: %s", _e)
+                logger.debug(
+                    "fix_adapter.OrderCancelReject: CxlRejReason field absent: %s", _e
+                )
 
             logger.error(
                 "fix_adapter.OrderCancelReject cl_ord_id=%s reason=%s text=%r",
-                cl_ord_id, reason_code, text,
+                cl_ord_id,
+                reason_code,
+                text,
             )
             exc = RuntimeError(
                 f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
@@ -389,7 +409,8 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except Exception as exc:
             logger.exception(
                 "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
-                cl_ord_id, exc,
+                cl_ord_id,
+                exc,
             )
 
     def _reject_pending(self, cl_ord_id: str, exc: Exception) -> None:
@@ -425,13 +446,15 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except Exception as inner:
             logger.warning(
                 "fix_adapter._reject_pending: could not dispatch rejection for cl_ord_id=%s: %s",
-                cl_ord_id, inner,
+                cl_ord_id,
+                inner,
             )
 
 
 # ---------------------------------------------------------------------------
 # Main adapter
 # ---------------------------------------------------------------------------
+
 
 class FIXAdapter:
     """
@@ -530,6 +553,7 @@ class FIXAdapter:
         )
 
         import os
+
         if os.path.exists(self.config_file):
             settings = fix.SessionSettings(self.config_file)
         else:
@@ -551,7 +575,9 @@ class FIXAdapter:
                 f"SocketConnectHost={self.host}\n"
                 f"SocketConnectPort={self.port}\n"
             )
-            import tempfile, os
+            import os
+            import tempfile
+
             tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False)
             tmp.write(settings_str)
             tmp.close()
@@ -560,7 +586,9 @@ class FIXAdapter:
 
         store_factory = fix.FileStoreFactory(settings)
         log_factory = fix.FileLogFactory(settings)
-        self._initiator = fix.SocketInitiator(self._app, store_factory, settings, log_factory)
+        self._initiator = fix.SocketInitiator(
+            self._app, store_factory, settings, log_factory
+        )
         self._initiator.start()
 
         # Capture session ID
@@ -586,9 +614,7 @@ class FIXAdapter:
         import socket as _socket
 
         if pyfixmsg is None or FixMessage is None:
-            raise RuntimeError(
-                "pyfixmsg is not installed. Run: pip install pyfixmsg"
-            )
+            raise RuntimeError("pyfixmsg is not installed. Run: pip install pyfixmsg")
 
         sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         sock.settimeout(10.0)
@@ -609,7 +635,8 @@ class FIXAdapter:
         sock.sendall(logon)
         logger.info(
             "fix_adapter._start_pyfixmsg: connected to %s:%s, Logon sent",
-            self.host, self.port,
+            self.host,
+            self.port,
         )
 
         # Start background reader
@@ -631,13 +658,13 @@ class FIXAdapter:
 
         fields = [
             ("8", "FIX.4.4"),
-            ("35", "A"),           # MsgType = Logon
+            ("35", "A"),  # MsgType = Logon
             ("49", self.sender_comp_id),
             ("56", self.target_comp_id),
             ("34", str(seq)),
             ("52", sending_time),
-            ("98", "0"),           # EncryptMethod = None
-            ("108", "30"),         # HeartBtInt
+            ("98", "0"),  # EncryptMethod = None
+            ("108", "30"),  # HeartBtInt
         ]
         if self._username:
             fields.append(("553", self._username))
@@ -664,7 +691,9 @@ class FIXAdapter:
             try:
                 chunk = sock.recv(4096)
                 if not chunk:
-                    logger.warning("fix_adapter._pyfixmsg_reader_loop: connection closed by peer")
+                    logger.warning(
+                        "fix_adapter._pyfixmsg_reader_loop: connection closed by peer"
+                    )
                     break
                 buf += chunk
                 # Split on SOH-terminated messages (FIX delimiter is \x01 after checksum tag 10=)
@@ -677,7 +706,9 @@ class FIXAdapter:
                     self._handle_pyfixmsg_message(raw_msg)
             except OSError as exc:
                 if self._running:
-                    logger.error("fix_adapter._pyfixmsg_reader_loop: socket error: %s", exc)
+                    logger.error(
+                        "fix_adapter._pyfixmsg_reader_loop: socket error: %s", exc
+                    )
                 break
 
     def _handle_pyfixmsg_message(self, raw: bytes) -> None:
@@ -705,10 +736,10 @@ class FIXAdapter:
                     exec_type=exec_type,
                     symbol=fields.get("55", ""),
                     side=FIXSide(fields.get("54", "1")),
-                    filled_qty=float(fields.get("32", 0)),   # LastQty
-                    avg_px=float(fields.get("6", 0)),        # AvgPx
+                    filled_qty=float(fields.get("32", 0)),  # LastQty
+                    avg_px=float(fields.get("6", 0)),  # AvgPx
                     leaves_qty=float(fields.get("151", 0)),  # LeavesQty
-                    cum_qty=float(fields.get("14", 0)),      # CumQty
+                    cum_qty=float(fields.get("14", 0)),  # CumQty
                     text=fields.get("58", ""),
                     raw=fields,
                 )
@@ -722,10 +753,13 @@ class FIXAdapter:
             elif msg_type == "3":  # Reject
                 logger.error(
                     "fix_adapter._handle_pyfixmsg_message: session Reject ref_seq=%s text=%r",
-                    fields.get("45", ""), fields.get("58", ""),
+                    fields.get("45", ""),
+                    fields.get("58", ""),
                 )
         except Exception as exc:
-            logger.exception("fix_adapter._handle_pyfixmsg_message: parse error: %s", exc)
+            logger.exception(
+                "fix_adapter._handle_pyfixmsg_message: parse error: %s", exc
+            )
 
     # ------------------------------------------------------------------
     # Heartbeat
@@ -738,7 +772,8 @@ class FIXAdapter:
             status = "OPEN" if self.circuit_breaker.is_open else "CLOSED"
             logger.debug(
                 "fix_adapter.heartbeat backend=%s circuit=%s",
-                _FIX_BACKEND, status,
+                _FIX_BACKEND,
+                status,
             )
 
     # ------------------------------------------------------------------
@@ -806,7 +841,10 @@ class FIXAdapter:
         fix.Session.sendToTarget(msg, self._session_id)
         logger.info(
             "fix_adapter.sent cl_ord_id=%s symbol=%s side=%s qty=%.2f",
-            order.cl_ord_id, order.symbol, order.side.value, order.quantity,
+            order.cl_ord_id,
+            order.symbol,
+            order.side.value,
+            order.quantity,
         )
 
     def _send_pyfixmsg(self, order: FIXOrder) -> None:
@@ -829,27 +867,27 @@ class FIXAdapter:
 
         fields = [
             ("8", "FIX.4.4"),
-            ("35", "D"),                          # MsgType = NewOrderSingle
+            ("35", "D"),  # MsgType = NewOrderSingle
             ("49", self.sender_comp_id),
             ("56", self.target_comp_id),
             ("34", str(seq)),
             ("52", sending_time),
-            ("11", order.cl_ord_id),              # ClOrdID
-            ("55", order.symbol),                 # Symbol
-            ("54", order.side.value),             # Side
-            ("60", sending_time),                 # TransactTime
-            ("40", order.ord_type.value),         # OrdType
-            ("38", str(order.quantity)),          # OrderQty
-            ("59", order.time_in_force),          # TimeInForce
+            ("11", order.cl_ord_id),  # ClOrdID
+            ("55", order.symbol),  # Symbol
+            ("54", order.side.value),  # Side
+            ("60", sending_time),  # TransactTime
+            ("40", order.ord_type.value),  # OrdType
+            ("38", str(order.quantity)),  # OrderQty
+            ("59", order.time_in_force),  # TimeInForce
         ]
         if order.ord_type == FIXOrdType.LIMIT and order.price is not None:
-            fields.append(("44", str(order.price)))   # Price
+            fields.append(("44", str(order.price)))  # Price
         if order.ord_type == FIXOrdType.STOP and order.stop_px is not None:
-            fields.append(("99", str(order.stop_px))) # StopPx
+            fields.append(("99", str(order.stop_px)))  # StopPx
         if order.account:
-            fields.append(("1", order.account))       # Account
+            fields.append(("1", order.account))  # Account
         if order.currency:
-            fields.append(("15", order.currency))     # Currency
+            fields.append(("15", order.currency))  # Currency
 
         body = "\x01".join(f"{tag}={val}" for tag, val in fields[1:]) + "\x01"
         body_len = len(body.encode())
@@ -870,7 +908,10 @@ class FIXAdapter:
 
         logger.info(
             "fix_adapter.pyfixmsg.sent cl_ord_id=%s symbol=%s side=%s qty=%.2f",
-            order.cl_ord_id, order.symbol, order.side.value, order.quantity,
+            order.cl_ord_id,
+            order.symbol,
+            order.side.value,
+            order.quantity,
         )
 
     def _simulate_fill(self, order: FIXOrder) -> FIXFillReport:
@@ -904,12 +945,18 @@ class FIXAdapter:
             future = self._pending.pop(report.cl_ord_id, None)
 
         if future is None:
-            logger.debug("fix_adapter: unsolicited exec report cl_ord_id=%s", report.cl_ord_id)
+            logger.debug(
+                "fix_adapter: unsolicited exec report cl_ord_id=%s", report.cl_ord_id
+            )
             return
 
         if not future.done():
             try:
-                loop = future.get_loop() if hasattr(future, "get_loop") else future.get_event_loop()
+                loop = (
+                    future.get_loop()
+                    if hasattr(future, "get_loop")
+                    else future.get_event_loop()
+                )
                 if report.exec_type == FIXExecType.REJECTED:
                     exc = RuntimeError(
                         f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} "
@@ -933,10 +980,13 @@ class FIXAdapter:
             fix_adapter = FIXAdapter(...)
             router.add_broker("fix", fix_adapter.route_hook())
         """
+
         async def _route(order_dict: dict) -> dict:
             fix_order = FIXOrder(
                 symbol=order_dict["symbol"],
-                side=FIXSide.BUY if order_dict.get("side", "BUY") == "BUY" else FIXSide.SELL,
+                side=FIXSide.BUY
+                if order_dict.get("side", "BUY") == "BUY"
+                else FIXSide.SELL,
                 quantity=float(order_dict.get("quantity", 1.0)),
                 ord_type=FIXOrdType.MARKET,
                 price=order_dict.get("price"),

@@ -9,15 +9,15 @@ Implemented models:
 """
 
 from .base import BaseMLModel
+from .ensemble import EnsemblePrediction, EnsemblePredictor, ModelPrediction
 from .lstm import LSTMPricePredictor
 from .random_forest import RandomForestTradingClassifier
-from .ensemble import EnsemblePredictor, EnsemblePrediction, ModelPrediction
 
 __all__ = [
-    'BaseMLModel',
-    'LSTMPricePredictor',
-    'RandomForestTradingClassifier',
-    'EnsemblePredictor',
-    'EnsemblePrediction',
-    'ModelPrediction',
+    "BaseMLModel",
+    "LSTMPricePredictor",
+    "RandomForestTradingClassifier",
+    "EnsemblePredictor",
+    "EnsemblePrediction",
+    "ModelPrediction",
 ]

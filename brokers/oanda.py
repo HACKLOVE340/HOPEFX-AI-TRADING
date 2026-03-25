@@ -14,6 +14,7 @@ AsyncOANDAConnector (async)
     OANDAConnector methods from an async application blocks the event loop
     on every API call, causing missed fills and stale prices.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,13 +23,16 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+
 # Circuit breaker — imported lazily to avoid circular imports at module load
 def _get_oanda_cb():
     try:
         from core.circuit_breaker import CircuitBreaker
+
         return CircuitBreaker.get("oanda", failure_threshold=5, reset_timeout=60.0)
     except Exception:
         return None
+
 
 from brokers.base import (
     AccountInfo,
@@ -46,8 +50,14 @@ _PRACTICE_URL = "https://api-fxpractice.oanda.com"
 _LIVE_URL = "https://api-fxtrade.oanda.com"
 
 _TF_MAP: Dict[str, str] = {
-    "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
-    "1h": "H1", "4h": "H4", "1d": "D", "1w": "W",
+    "1m": "M1",
+    "5m": "M5",
+    "15m": "M15",
+    "30m": "M30",
+    "1h": "H1",
+    "4h": "H4",
+    "1d": "D",
+    "1w": "W",
 }
 
 _STATUS_MAP: Dict[str, OrderStatus] = {
@@ -63,6 +73,7 @@ _STATUS_MAP: Dict[str, OrderStatus] = {
 # ---------------------------------------------------------------------------
 # Shared parsing helpers (used by both sync and async connectors)
 # ---------------------------------------------------------------------------
+
 
 def _parse_order_response(
     data: Dict, symbol: str, side: OrderSide, qty: float
@@ -163,6 +174,7 @@ def _parse_positions(raw_positions: List[Dict]) -> List[Position]:
 # Synchronous connector (backward compat — do not use in async contexts)
 # ---------------------------------------------------------------------------
 
+
 class OANDAConnector(BrokerConnector):
     """
     Synchronous OANDA REST v20 connector.
@@ -186,18 +198,23 @@ class OANDAConnector(BrokerConnector):
         if config is None:
             config = {}
         if api_key:
-            config = dict(config); config["api_key"] = api_key
+            config = dict(config)
+            config["api_key"] = api_key
         if account_id:
-            config = dict(config); config["account_id"] = account_id
+            config = dict(config)
+            config["account_id"] = account_id
         if not practice:
-            config = dict(config); config["environment"] = "live"
+            config = dict(config)
+            config["environment"] = "live"
         super().__init__(config)
         self.api_key = config.get("api_key", "")
         self.account_id = config.get("account_id", "")
         if not self.api_key or not self.account_id:
             raise ValueError("OANDAConnector requires 'api_key' and 'account_id'")
         self.environment = config.get("environment", "practice")
-        self.base_url = self.LIVE_URL if self.environment == "live" else self.PRACTICE_URL
+        self.base_url = (
+            self.LIVE_URL if self.environment == "live" else self.PRACTICE_URL
+        )
         self.session: Optional[requests.Session] = None
         self.name = "OANDA"
 
@@ -205,7 +222,10 @@ class OANDAConnector(BrokerConnector):
         try:
             self.session = requests.Session()
             self.session.headers.update(
-                {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+                {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
             )
             r = self.session.get(
                 f"{self.base_url}/v3/accounts/{self.account_id}", timeout=10
@@ -410,6 +430,7 @@ class OANDAConnector(BrokerConnector):
 # Async connector — use this in all async / FastAPI contexts
 # ---------------------------------------------------------------------------
 
+
 class AsyncOANDAConnector:
     """
     Async OANDA REST v20 connector using aiohttp.ClientSession.
@@ -459,6 +480,7 @@ class AsyncOANDAConnector:
     async def connect(self) -> bool:
         try:
             import aiohttp
+
             self._session = aiohttp.ClientSession(
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
@@ -520,7 +542,8 @@ class AsyncOANDAConnector:
             if cb:
                 async with cb:
                     async with session.post(
-                        f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body
+                        f"{self.base_url}/v3/accounts/{self.account_id}/orders",
+                        json=body,
                     ) as resp:
                         resp.raise_for_status()
                         data = await resp.json()
@@ -649,9 +672,7 @@ class AsyncOANDAConnector:
             logger.error("AsyncOANDAConnector get_market_data: %s", exc)
             return []
 
-    async def get_live_prices(
-        self, symbols: List[str]
-    ) -> Dict[str, Dict[str, float]]:
+    async def get_live_prices(self, symbols: List[str]) -> Dict[str, Dict[str, float]]:
         """Fetch live bid/ask for one or more instruments."""
         session = self._require_session()
         instruments = ",".join(s.replace("/", "_") for s in symbols)
@@ -678,6 +699,7 @@ class AsyncOANDAConnector:
 # ---------------------------------------------------------------------------
 # Backward-compat aliases
 # ---------------------------------------------------------------------------
+
 
 class OandaBroker:
     """Async-friendly OANDA broker wrapper used by integration tests."""

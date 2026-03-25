@@ -5,10 +5,11 @@ Comprehensive feature engineering pipeline for creating
 technical indicators and derived features from OHLCV data.
 """
 
-from typing import Dict, List, Optional, Any
+import logging
+from typing import Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class TechnicalFeatureEngineer:
         df = df.copy()
 
         # Ensure required columns exist
-        required = ['open', 'high', 'low', 'close', 'volume']
+        required = ["open", "high", "low", "close", "volume"]
         if not all(col in df.columns for col in required):
             raise ValueError(f"DataFrame must contain columns: {required}")
 
@@ -74,41 +75,43 @@ class TechnicalFeatureEngineer:
 
     def _add_trend_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add trend-following indicators."""
-        close = df['close']
+        close = df["close"]
 
         # Simple Moving Averages - min_periods=1 allows computation with fewer rows
         # than the window size, which prevents all rows from being NaN-dropped on
         # small datasets (e.g. sma_200 with n<200).
         for period in [5, 10, 20, 50, 100, 200]:
-            df[f'sma_{period}'] = close.rolling(window=period, min_periods=1).mean()
+            df[f"sma_{period}"] = close.rolling(window=period, min_periods=1).mean()
 
         # Exponential Moving Averages (including 12 and 26 for MACD crossover)
         for period in [5, 10, 12, 20, 26, 50, 100]:
-            df[f'ema_{period}'] = close.ewm(span=period, adjust=False).mean()
+            df[f"ema_{period}"] = close.ewm(span=period, adjust=False).mean()
 
         # MACD
         exp1 = close.ewm(span=12, adjust=False).mean()
         exp2 = close.ewm(span=26, adjust=False).mean()
-        df['macd'] = exp1 - exp2
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-        df['macd_hist'] = df['macd'] - df['macd_signal']
+        df["macd"] = exp1 - exp2
+        df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+        df["macd_hist"] = df["macd"] - df["macd_signal"]
 
         # Price relative to MAs
         for period in [20, 50, 200]:
-            df[f'close_to_sma_{period}'] = (close - df[f'sma_{period}']) / df[f'sma_{period}']
+            df[f"close_to_sma_{period}"] = (close - df[f"sma_{period}"]) / df[
+                f"sma_{period}"
+            ]
 
         # MA crossovers (1 if short > long, -1 if short < long)
-        df['sma_10_20_cross'] = np.where(df['sma_10'] > df['sma_20'], 1, -1)
-        df['sma_20_50_cross'] = np.where(df['sma_20'] > df['sma_50'], 1, -1)
-        df['ema_12_26_cross'] = np.where(df['ema_12'] > df['ema_26'], 1, -1)
+        df["sma_10_20_cross"] = np.where(df["sma_10"] > df["sma_20"], 1, -1)
+        df["sma_20_50_cross"] = np.where(df["sma_20"] > df["sma_50"], 1, -1)
+        df["ema_12_26_cross"] = np.where(df["ema_12"] > df["ema_26"], 1, -1)
 
         return df
 
     def _add_momentum_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add momentum indicators."""
-        close = df['close']
-        high = df['high']
-        low = df['low']
+        close = df["close"]
+        high = df["high"]
+        low = df["low"]
 
         # RSI
         for period in [7, 14, 21]:
@@ -118,7 +121,7 @@ class TechnicalFeatureEngineer:
             rs = gain / loss.replace(0, np.nan)
             rsi = 100 - (100 / (1 + rs))
             # gain=0 & loss=0 (e.g. constant price) → neutral; loss=0 & gain>0 → overbought
-            df[f'rsi_{period}'] = np.where(
+            df[f"rsi_{period}"] = np.where(
                 loss == 0,
                 np.where(gain == 0, 50.0, 100.0),
                 rsi,
@@ -128,42 +131,49 @@ class TechnicalFeatureEngineer:
         for period in [14, 21]:
             low_min = low.rolling(window=period).min()
             high_max = high.rolling(window=period).max()
-            df[f'stoch_k_{period}'] = 100 * (close - low_min) / (high_max - low_min)
-            df[f'stoch_d_{period}'] = df[f'stoch_k_{period}'].rolling(window=3).mean()
+            df[f"stoch_k_{period}"] = 100 * (close - low_min) / (high_max - low_min)
+            df[f"stoch_d_{period}"] = df[f"stoch_k_{period}"].rolling(window=3).mean()
 
         # Rate of Change (ROC)
         for period in [5, 10, 20]:
-            df[f'roc_{period}'] = ((close - close.shift(period)) / close.shift(period)) * 100
+            df[f"roc_{period}"] = (
+                (close - close.shift(period)) / close.shift(period)
+            ) * 100
 
         # Momentum
         for period in [5, 10, 20]:
-            df[f'momentum_{period}'] = close - close.shift(period)
+            df[f"momentum_{period}"] = close - close.shift(period)
 
         # Williams %R
         for period in [14, 21]:
             high_max = high.rolling(window=period).max()
             low_min = low.rolling(window=period).min()
-            df[f'williams_r_{period}'] = -100 * (high_max - close) / (high_max - low_min)
+            df[f"williams_r_{period}"] = (
+                -100 * (high_max - close) / (high_max - low_min)
+            )
 
         return df
 
     def _add_volatility_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volatility indicators."""
-        close = df['close']
-        high = df['high']
-        low = df['low']
+        close = df["close"]
+        high = df["high"]
+        low = df["low"]
 
         # Bollinger Bands
         for period in [20, 50]:
             sma = close.rolling(window=period).mean()
             std = close.rolling(window=period).std()
-            df[f'bb_upper_{period}'] = sma + (std * 2)
-            df[f'bb_lower_{period}'] = sma - (std * 2)
-            df[f'bb_width_{period}'] = (df[f'bb_upper_{period}'] - df[f'bb_lower_{period}']) / sma
-            bb_range = df[f'bb_upper_{period}'] - df[f'bb_lower_{period}']
-            df[f'bb_position_{period}'] = np.where(
-                bb_range == 0, 0.5,
-                (close - df[f'bb_lower_{period}']) / bb_range.replace(0, np.nan),
+            df[f"bb_upper_{period}"] = sma + (std * 2)
+            df[f"bb_lower_{period}"] = sma - (std * 2)
+            df[f"bb_width_{period}"] = (
+                df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]
+            ) / sma
+            bb_range = df[f"bb_upper_{period}"] - df[f"bb_lower_{period}"]
+            df[f"bb_position_{period}"] = np.where(
+                bb_range == 0,
+                0.5,
+                (close - df[f"bb_lower_{period}"]) / bb_range.replace(0, np.nan),
             )
 
         # Average True Range (ATR)
@@ -171,43 +181,57 @@ class TechnicalFeatureEngineer:
             high_low = high - low
             high_close = np.abs(high - close.shift())
             low_close = np.abs(low - close.shift())
-            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-            df[f'atr_{period}'] = true_range.rolling(window=period).mean()
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(
+                axis=1
+            )
+            df[f"atr_{period}"] = true_range.rolling(window=period).mean()
 
         # Historical Volatility
         for period in [10, 20, 30]:
             returns = np.log(close / close.shift())
-            df[f'volatility_{period}'] = returns.rolling(window=period).std() * np.sqrt(252)
+            df[f"volatility_{period}"] = returns.rolling(window=period).std() * np.sqrt(
+                252
+            )
 
         return df
 
     def _add_volume_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add volume-based indicators."""
-        volume = df['volume']
-        close = df['close']
+        volume = df["volume"]
+        close = df["close"]
 
         # Volume Moving Averages
         for period in [5, 10, 20]:
-            df[f'volume_sma_{period}'] = volume.rolling(window=period).mean()
-            df[f'volume_ratio_{period}'] = volume / df[f'volume_sma_{period}']
+            df[f"volume_sma_{period}"] = volume.rolling(window=period).mean()
+            df[f"volume_ratio_{period}"] = volume / df[f"volume_sma_{period}"]
 
         # On-Balance Volume (OBV)
-        df['obv'] = (np.sign(close.diff()) * volume).fillna(0).cumsum()
+        df["obv"] = (np.sign(close.diff()) * volume).fillna(0).cumsum()
 
         # Volume Price Trend (VPT)
-        df['vpt'] = (volume * ((close - close.shift()) / close.shift())).fillna(0).cumsum()
+        df["vpt"] = (
+            (volume * ((close - close.shift()) / close.shift())).fillna(0).cumsum()
+        )
 
         # Money Flow Index (MFI)
-        typical_price = (df['high'] + df['low'] + close) / 3
+        typical_price = (df["high"] + df["low"] + close) / 3
         money_flow = typical_price * volume
 
         for period in [14, 21]:
-            positive_flow = money_flow.where(typical_price > typical_price.shift(), 0).rolling(window=period).sum()
-            negative_flow = money_flow.where(typical_price < typical_price.shift(), 0).rolling(window=period).sum()
+            positive_flow = (
+                money_flow.where(typical_price > typical_price.shift(), 0)
+                .rolling(window=period)
+                .sum()
+            )
+            negative_flow = (
+                money_flow.where(typical_price < typical_price.shift(), 0)
+                .rolling(window=period)
+                .sum()
+            )
             mfi_ratio = positive_flow / negative_flow.replace(0, np.nan)
             mfi = 100 - (100 / (1 + mfi_ratio))
             # negative=0 & positive=0 → neutral; negative=0 & positive>0 → max buying pressure
-            df[f'mfi_{period}'] = np.where(
+            df[f"mfi_{period}"] = np.where(
                 negative_flow == 0,
                 np.where(positive_flow == 0, 50.0, 100.0),
                 mfi,
@@ -217,75 +241,74 @@ class TechnicalFeatureEngineer:
 
     def _add_price_patterns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add price pattern features."""
-        open_price = df['open']
-        high = df['high']
-        low = df['low']
-        close = df['close']
+        open_price = df["open"]
+        high = df["high"]
+        low = df["low"]
+        close = df["close"]
 
         # Candle body and shadow
-        df['body'] = close - open_price
-        df['body_pct'] = (close - open_price) / open_price
-        df['upper_shadow'] = high - np.maximum(open_price, close)
-        df['lower_shadow'] = np.minimum(open_price, close) - low
-        df['total_range'] = high - low
+        df["body"] = close - open_price
+        df["body_pct"] = (close - open_price) / open_price
+        df["upper_shadow"] = high - np.maximum(open_price, close)
+        df["lower_shadow"] = np.minimum(open_price, close) - low
+        df["total_range"] = high - low
 
         # Candle patterns (simplified)
-        df['is_bullish'] = (close > open_price).astype(int)
-        df['is_bearish'] = (close < open_price).astype(int)
-        df['is_doji'] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)
+        df["is_bullish"] = (close > open_price).astype(int)
+        df["is_bearish"] = (close < open_price).astype(int)
+        df["is_doji"] = (np.abs(close - open_price) / (high - low) < 0.1).astype(int)
 
         # Price gaps
-        df['gap'] = open_price - close.shift()
-        df['gap_pct'] = df['gap'] / close.shift()
+        df["gap"] = open_price - close.shift()
+        df["gap_pct"] = df["gap"] / close.shift()
 
         # Higher highs, lower lows
-        df['higher_high'] = (high > high.shift()).astype(int)
-        df['lower_low'] = (low < low.shift()).astype(int)
-        df['higher_low'] = (low > low.shift()).astype(int)
-        df['lower_high'] = (high < high.shift()).astype(int)
+        df["higher_high"] = (high > high.shift()).astype(int)
+        df["lower_low"] = (low < low.shift()).astype(int)
+        df["higher_low"] = (low > low.shift()).astype(int)
+        df["lower_high"] = (high < high.shift()).astype(int)
 
         return df
 
     def _add_statistical_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add statistical features."""
-        close = df['close']
+        close = df["close"]
 
         # Returns
-        df['returns_1'] = close.pct_change()
-        df['returns_5'] = close.pct_change(5)
-        df['returns_10'] = close.pct_change(10)
-        df['returns_20'] = close.pct_change(20)
+        df["returns_1"] = close.pct_change()
+        df["returns_5"] = close.pct_change(5)
+        df["returns_10"] = close.pct_change(10)
+        df["returns_20"] = close.pct_change(20)
 
         # Log returns
-        df['log_returns_1'] = np.log(close / close.shift())
-        df['log_returns_5'] = np.log(close / close.shift(5))
+        df["log_returns_1"] = np.log(close / close.shift())
+        df["log_returns_5"] = np.log(close / close.shift(5))
 
         # Rolling statistics
         for period in [10, 20]:
-            df[f'mean_{period}'] = close.rolling(window=period).mean()
-            df[f'std_{period}'] = close.rolling(window=period).std()
-            df[f'skew_{period}'] = close.rolling(window=period).skew()
-            df[f'kurt_{period}'] = close.rolling(window=period).kurt()
+            df[f"mean_{period}"] = close.rolling(window=period).mean()
+            df[f"std_{period}"] = close.rolling(window=period).std()
+            df[f"skew_{period}"] = close.rolling(window=period).skew()
+            df[f"kurt_{period}"] = close.rolling(window=period).kurt()
 
         # Z-score
         for period in [20, 50]:
             mean = close.rolling(window=period).mean()
             std = close.rolling(window=period).std()
-            df[f'zscore_{period}'] = np.where(std == 0, 0.0, (close - mean) / std.replace(0, np.nan))
+            df[f"zscore_{period}"] = np.where(
+                std == 0, 0.0, (close - mean) / std.replace(0, np.nan)
+            )
 
         # Percentile rank
         for period in [20, 50]:
-            df[f'percentile_{period}'] = close.rolling(window=period).apply(
+            df[f"percentile_{period}"] = close.rolling(window=period).apply(
                 lambda x: pd.Series(x).rank(pct=True).iloc[-1]
             )
 
         return df
 
     def create_labels(
-        self,
-        df: pd.DataFrame,
-        method: str = 'forward_return',
-        **kwargs
+        self, df: pd.DataFrame, method: str = "forward_return", **kwargs
     ) -> pd.Series:
         """
         Create labels for supervised learning.
@@ -298,12 +321,12 @@ class TechnicalFeatureEngineer:
         Returns:
             Series of labels
         """
-        close = df['close']
+        close = df["close"]
 
-        if method == 'forward_return':
+        if method == "forward_return":
             # Label based on forward return
-            periods = kwargs.get('periods', 5)
-            threshold = kwargs.get('threshold', 0.01)  # 1%
+            periods = kwargs.get("periods", 5)
+            threshold = kwargs.get("threshold", 0.01)  # 1%
 
             forward_return = close.shift(-periods) / close - 1
 
@@ -311,9 +334,9 @@ class TechnicalFeatureEngineer:
             labels[forward_return > threshold] = 2  # BUY
             labels[forward_return < -threshold] = 0  # SELL
 
-        elif method == 'trend':
+        elif method == "trend":
             # Label based on trend direction
-            periods = kwargs.get('periods', 10)
+            periods = kwargs.get("periods", 10)
 
             future_ma = close.shift(-periods).rolling(window=periods).mean()
             current_price = close
@@ -322,16 +345,16 @@ class TechnicalFeatureEngineer:
             labels[future_ma > current_price] = 2  # BUY
             labels[future_ma < current_price] = 0  # SELL
 
-        elif method == 'breakout':
+        elif method == "breakout":
             # Label based on breakout from range
-            lookback = kwargs.get('lookback', 20)
-            threshold = kwargs.get('threshold', 0.02)  # 2%
+            lookback = kwargs.get("lookback", 20)
+            threshold = kwargs.get("threshold", 0.02)  # 2%
 
-            high_max = df['high'].rolling(window=lookback).max()
-            low_min = df['low'].rolling(window=lookback).min()
+            high_max = df["high"].rolling(window=lookback).max()
+            low_min = df["low"].rolling(window=lookback).min()
 
-            future_high = df['high'].shift(-1)
-            future_low = df['low'].shift(-1)
+            future_high = df["high"].shift(-1)
+            future_low = df["low"].shift(-1)
 
             labels = pd.Series(1, index=df.index)  # HOLD
             labels[future_high > high_max * (1 + threshold)] = 2  # BUY (breakout up)
@@ -350,11 +373,58 @@ class TechnicalFeatureEngineer:
             Dict mapping group names to feature lists
         """
         groups = {
-            'trend': [f for f in self.feature_names if any(x in f for x in ['sma', 'ema', 'macd'])],
-            'momentum': [f for f in self.feature_names if any(x in f for x in ['rsi', 'stoch', 'roc', 'momentum', 'williams'])],
-            'volatility': [f for f in self.feature_names if any(x in f for x in ['bb', 'atr', 'volatility'])],
-            'volume': [f for f in self.feature_names if any(x in f for x in ['volume', 'obv', 'vpt', 'mfi'])],
-            'pattern': [f for f in self.feature_names if any(x in f for x in ['body', 'shadow', 'bullish', 'bearish', 'doji', 'gap', 'higher', 'lower'])],
-            'statistical': [f for f in self.feature_names if any(x in f for x in ['returns', 'mean', 'std', 'skew', 'kurt', 'zscore', 'percentile'])],
+            "trend": [
+                f
+                for f in self.feature_names
+                if any(x in f for x in ["sma", "ema", "macd"])
+            ],
+            "momentum": [
+                f
+                for f in self.feature_names
+                if any(x in f for x in ["rsi", "stoch", "roc", "momentum", "williams"])
+            ],
+            "volatility": [
+                f
+                for f in self.feature_names
+                if any(x in f for x in ["bb", "atr", "volatility"])
+            ],
+            "volume": [
+                f
+                for f in self.feature_names
+                if any(x in f for x in ["volume", "obv", "vpt", "mfi"])
+            ],
+            "pattern": [
+                f
+                for f in self.feature_names
+                if any(
+                    x in f
+                    for x in [
+                        "body",
+                        "shadow",
+                        "bullish",
+                        "bearish",
+                        "doji",
+                        "gap",
+                        "higher",
+                        "lower",
+                    ]
+                )
+            ],
+            "statistical": [
+                f
+                for f in self.feature_names
+                if any(
+                    x in f
+                    for x in [
+                        "returns",
+                        "mean",
+                        "std",
+                        "skew",
+                        "kurt",
+                        "zscore",
+                        "percentile",
+                    ]
+                )
+            ],
         }
         return groups

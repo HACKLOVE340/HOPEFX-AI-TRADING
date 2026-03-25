@@ -53,7 +53,9 @@ def load_h1_csv(symbol: str, csv_dir: str = H1_CSV_DIR) -> pd.DataFrame | None:
     df.columns = [c.lower() for c in df.columns]
     required = {"open", "high", "low", "close"}
     if not required.issubset(df.columns):
-        logger.warning("CSV missing required columns %s — skipping", required - set(df.columns))
+        logger.warning(
+            "CSV missing required columns %s — skipping", required - set(df.columns)
+        )
         return None
     if "volume" not in df.columns:
         df["volume"] = 0
@@ -62,7 +64,9 @@ def load_h1_csv(symbol: str, csv_dir: str = H1_CSV_DIR) -> pd.DataFrame | None:
     return df
 
 
-def fetch_ohlcv_yfinance(symbol: str, period: str = "2y", interval: str = "1d") -> pd.DataFrame:
+def fetch_ohlcv_yfinance(
+    symbol: str, period: str = "2y", interval: str = "1d"
+) -> pd.DataFrame:
     """Fallback: download OHLCV data from Yahoo Finance (daily bars)."""
     try:
         import yfinance as yf
@@ -103,7 +107,8 @@ def load_data(symbol: str, csv_path: str | None, period: str) -> pd.DataFrame:
     logger.warning(
         "No H1 CSV found for %s — falling back to yfinance daily data. "
         "For better accuracy place data/%s_H1.csv in the data/ directory.",
-        symbol, symbol,
+        symbol,
+        symbol,
     )
     return fetch_ohlcv_yfinance(symbol, period=period)
 
@@ -118,6 +123,7 @@ def run_pipeline(
     """Load data and run the full training pipeline for one symbol."""
     # ml/training.py is shadowed by ml/training/ package — load directly
     import importlib.util as _ilu
+
     _spec = _ilu.spec_from_file_location(
         "ml_training_module",
         os.path.join(os.path.dirname(__file__), "training.py"),
@@ -153,8 +159,11 @@ def run_pipeline(
     for name, info in results.items():
         manifest["models"][name] = {
             "path": info.get("model_path", ""),
-            "metrics": {k: v for k, v in (info.get("metrics") or {}).items()
-                        if isinstance(v, (int, float))},
+            "metrics": {
+                k: v
+                for k, v in (info.get("metrics") or {}).items()
+                if isinstance(v, (int, float))
+            },
         }
 
     manifest_path = os.path.join(out_dir, "manifest.json")
@@ -167,15 +176,21 @@ def run_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(description="HOPEFX ML training pipeline")
-    parser.add_argument("--symbol", default=None, help="Single symbol to train (overrides ML_SYMBOLS)")
+    parser.add_argument(
+        "--symbol", default=None, help="Single symbol to train (overrides ML_SYMBOLS)"
+    )
     parser.add_argument("--csv", default=None, help="Explicit path to OHLCV CSV file")
-    parser.add_argument("--period", default="2y", help="yfinance fallback period (default: 2y)")
+    parser.add_argument(
+        "--period", default="2y", help="yfinance fallback period (default: 2y)"
+    )
     parser.add_argument(
         "--models",
         default="random_forest,xgboost",
         help="Comma-separated model types: random_forest,xgboost,lstm",
     )
-    parser.add_argument("--model-dir", default=MODEL_DIR, help="Output directory for saved weights")
+    parser.add_argument(
+        "--model-dir", default=MODEL_DIR, help="Output directory for saved weights"
+    )
     args = parser.parse_args()
 
     symbols = [args.symbol] if args.symbol else DEFAULT_SYMBOLS
@@ -193,8 +208,11 @@ def main():
     for sym in symbols:
         try:
             results = run_pipeline(
-                sym, model_types, args.model_dir,
-                csv_path=args.csv, period=args.period,
+                sym,
+                model_types,
+                args.model_dir,
+                csv_path=args.csv,
+                period=args.period,
             )
             for name, info in results.items():
                 m = info.get("metrics") or {}

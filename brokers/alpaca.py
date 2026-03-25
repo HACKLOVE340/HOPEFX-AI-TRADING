@@ -4,14 +4,20 @@ Alpaca Broker Connector
 Implements real stock trading with Alpaca REST API (commission-free US stocks).
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
 import requests
 
 from .base import (
-    BrokerConnector, Order, Position, AccountInfo,
-    OrderType, OrderSide, OrderStatus
+    AccountInfo,
+    BrokerConnector,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    Position,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,9 +57,9 @@ class AlpacaConnector(BrokerConnector):
         """
         super().__init__(config)
 
-        self.api_key = config.get('api_key')
-        self.api_secret = config.get('api_secret')
-        self.paper = config.get('paper', True)
+        self.api_key = config.get("api_key")
+        self.api_secret = config.get("api_secret")
+        self.paper = config.get("paper", True)
 
         # Set API URL based on environment
         self.base_url = self.PAPER_URL if self.paper else self.LIVE_URL
@@ -73,10 +79,12 @@ class AlpacaConnector(BrokerConnector):
         """
         try:
             self.session = requests.Session()
-            self.session.headers.update({
-                'APCA-API-KEY-ID': self.api_key,
-                'APCA-API-SECRET-KEY': self.api_secret,
-            })
+            self.session.headers.update(
+                {
+                    "APCA-API-KEY-ID": self.api_key,
+                    "APCA-API-SECRET-KEY": self.api_secret,
+                }
+            )
 
             # Test connection by fetching account
             response = self.session.get(f"{self.base_url}/v2/account")
@@ -117,7 +125,7 @@ class AlpacaConnector(BrokerConnector):
         order_type: OrderType = OrderType.MARKET,
         price: Optional[float] = None,
         stop_price: Optional[float] = None,
-        time_in_force: str = 'day',
+        time_in_force: str = "day",
         extended_hours: bool = False,
     ) -> Optional[Order]:
         """
@@ -143,50 +151,55 @@ class AlpacaConnector(BrokerConnector):
         try:
             # Build order request
             order_data = {
-                'symbol': symbol.upper(),
-                'qty': quantity,
-                'side': side.value.lower(),
-                'type': self._convert_order_type(order_type),
-                'time_in_force': time_in_force,
+                "symbol": symbol.upper(),
+                "qty": quantity,
+                "side": side.value.lower(),
+                "type": self._convert_order_type(order_type),
+                "time_in_force": time_in_force,
             }
 
             # Add price for limit orders
             if order_type == OrderType.LIMIT and price:
-                order_data['limit_price'] = str(price)
+                order_data["limit_price"] = str(price)
 
             # Add stop price for stop orders
             if order_type in [OrderType.STOP, OrderType.STOP_LIMIT] and stop_price:
-                order_data['stop_price'] = str(stop_price)
+                order_data["stop_price"] = str(stop_price)
                 if order_type == OrderType.STOP_LIMIT and price:
-                    order_data['limit_price'] = str(price)
+                    order_data["limit_price"] = str(price)
 
             # Extended hours
             if extended_hours:
-                order_data['extended_hours'] = True
+                order_data["extended_hours"] = True
 
             # Send order
-            response = self.session.post(
-                f"{self.base_url}/v2/orders",
-                json=order_data
-            )
+            response = self.session.post(f"{self.base_url}/v2/orders", json=order_data)
             response.raise_for_status()
 
             result = response.json()
 
             # Parse response
             order = Order(
-                id=result['id'],
-                symbol=result['symbol'],
-                side=OrderSide.BUY if result['side'] == 'buy' else OrderSide.SELL,
-                type=self._parse_order_type(result['type']),
-                quantity=float(result['qty']),
-                price=float(result.get('limit_price', 0)) if result.get('limit_price') else None,
-                stop_price=float(result.get('stop_price', 0)) if result.get('stop_price') else None,
-                status=self._parse_order_status(result['status']),
-                filled_quantity=float(result.get('filled_qty', 0)),
-                average_price=float(result.get('filled_avg_price', 0)) if result.get('filled_avg_price') else None,
-                timestamp=datetime.fromisoformat(result['created_at'].replace('Z', '+00:00')),
-                metadata=result
+                id=result["id"],
+                symbol=result["symbol"],
+                side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
+                type=self._parse_order_type(result["type"]),
+                quantity=float(result["qty"]),
+                price=float(result.get("limit_price", 0))
+                if result.get("limit_price")
+                else None,
+                stop_price=float(result.get("stop_price", 0))
+                if result.get("stop_price")
+                else None,
+                status=self._parse_order_status(result["status"]),
+                filled_quantity=float(result.get("filled_qty", 0)),
+                average_price=float(result.get("filled_avg_price", 0))
+                if result.get("filled_avg_price")
+                else None,
+                timestamp=datetime.fromisoformat(
+                    result["created_at"].replace("Z", "+00:00")
+                ),
+                metadata=result,
             )
 
             logger.info(f"Order placed: {order.id} - {side.value} {quantity} {symbol}")
@@ -211,9 +224,7 @@ class AlpacaConnector(BrokerConnector):
             return False
 
         try:
-            response = self.session.delete(
-                f"{self.base_url}/v2/orders/{order_id}"
-            )
+            response = self.session.delete(f"{self.base_url}/v2/orders/{order_id}")
             response.raise_for_status()
 
             logger.info(f"Order cancelled: {order_id}")
@@ -238,27 +249,33 @@ class AlpacaConnector(BrokerConnector):
             return None
 
         try:
-            response = self.session.get(
-                f"{self.base_url}/v2/orders/{order_id}"
-            )
+            response = self.session.get(f"{self.base_url}/v2/orders/{order_id}")
             response.raise_for_status()
 
             result = response.json()
 
             # Parse order data
             order = Order(
-                id=result['id'],
-                symbol=result['symbol'],
-                side=OrderSide.BUY if result['side'] == 'buy' else OrderSide.SELL,
-                type=self._parse_order_type(result['type']),
-                quantity=float(result['qty']),
-                price=float(result.get('limit_price', 0)) if result.get('limit_price') else None,
-                stop_price=float(result.get('stop_price', 0)) if result.get('stop_price') else None,
-                status=self._parse_order_status(result['status']),
-                filled_quantity=float(result.get('filled_qty', 0)),
-                average_price=float(result.get('filled_avg_price', 0)) if result.get('filled_avg_price') else None,
-                timestamp=datetime.fromisoformat(result['created_at'].replace('Z', '+00:00')),
-                metadata=result
+                id=result["id"],
+                symbol=result["symbol"],
+                side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
+                type=self._parse_order_type(result["type"]),
+                quantity=float(result["qty"]),
+                price=float(result.get("limit_price", 0))
+                if result.get("limit_price")
+                else None,
+                stop_price=float(result.get("stop_price", 0))
+                if result.get("stop_price")
+                else None,
+                status=self._parse_order_status(result["status"]),
+                filled_quantity=float(result.get("filled_qty", 0)),
+                average_price=float(result.get("filled_avg_price", 0))
+                if result.get("filled_avg_price")
+                else None,
+                timestamp=datetime.fromisoformat(
+                    result["created_at"].replace("Z", "+00:00")
+                ),
+                metadata=result,
             )
 
             return order
@@ -284,17 +301,17 @@ class AlpacaConnector(BrokerConnector):
 
             positions = []
             for pos_data in response.json():
-                qty = float(pos_data['qty'])
+                qty = float(pos_data["qty"])
 
                 position = Position(
-                    symbol=pos_data['symbol'],
-                    side='LONG' if qty > 0 else 'SHORT',
+                    symbol=pos_data["symbol"],
+                    side="LONG" if qty > 0 else "SHORT",
                     quantity=abs(qty),
-                    entry_price=float(pos_data['avg_entry_price']),
-                    current_price=float(pos_data['current_price']),
-                    unrealized_pnl=float(pos_data['unrealized_pl']),
+                    entry_price=float(pos_data["avg_entry_price"]),
+                    current_price=float(pos_data["current_price"]),
+                    unrealized_pnl=float(pos_data["unrealized_pl"]),
                     realized_pnl=0.0,  # Not provided by Alpaca in position data
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=datetime.now(timezone.utc),
                 )
                 positions.append(position)
 
@@ -325,12 +342,14 @@ class AlpacaConnector(BrokerConnector):
                 positions = self.get_positions()
                 for pos in positions:
                     if pos.symbol == symbol.upper():
-                        opposite_side = OrderSide.SELL if pos.side == 'LONG' else OrderSide.BUY
+                        opposite_side = (
+                            OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
+                        )
                         order = self.place_order(
                             symbol=symbol,
                             side=opposite_side,
                             quantity=quantity,
-                            order_type=OrderType.MARKET
+                            order_type=OrderType.MARKET,
                         )
                         return order is not None
 
@@ -368,12 +387,12 @@ class AlpacaConnector(BrokerConnector):
             account_data = response.json()
 
             info = AccountInfo(
-                balance=float(account_data['cash']),
-                equity=float(account_data['equity']),
-                margin_used=float(account_data.get('initial_margin', 0)),
-                margin_available=float(account_data['buying_power']),
-                positions_count=int(account_data.get('position_count', 0)),
-                timestamp=datetime.now(timezone.utc)
+                balance=float(account_data["cash"]),
+                equity=float(account_data["equity"]),
+                margin_used=float(account_data.get("initial_margin", 0)),
+                margin_available=float(account_data["buying_power"]),
+                positions_count=int(account_data.get("position_count", 0)),
+                timestamp=datetime.now(timezone.utc),
             )
 
             return info
@@ -383,10 +402,7 @@ class AlpacaConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self,
-        symbol: str,
-        timeframe: str = '1Min',
-        limit: int = 100
+        self, symbol: str, timeframe: str = "1Min", limit: int = 100
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data (bars).
@@ -407,26 +423,27 @@ class AlpacaConnector(BrokerConnector):
             # Use data API v2
             response = self.session.get(
                 f"{self.DATA_URL}/v2/stocks/{symbol.upper()}/bars",
-                params={
-                    'timeframe': timeframe,
-                    'limit': limit
-                }
+                params={"timeframe": timeframe, "limit": limit},
             )
             response.raise_for_status()
 
             bars_data = response.json()
 
             candles = []
-            if 'bars' in bars_data:
-                for bar in bars_data['bars']:
-                    candles.append({
-                        'timestamp': datetime.fromisoformat(bar['t'].replace('Z', '+00:00')),
-                        'open': float(bar['o']),
-                        'high': float(bar['h']),
-                        'low': float(bar['l']),
-                        'close': float(bar['c']),
-                        'volume': int(bar['v'])
-                    })
+            if "bars" in bars_data:
+                for bar in bars_data["bars"]:
+                    candles.append(
+                        {
+                            "timestamp": datetime.fromisoformat(
+                                bar["t"].replace("Z", "+00:00")
+                            ),
+                            "open": float(bar["o"]),
+                            "high": float(bar["h"]),
+                            "low": float(bar["l"]),
+                            "close": float(bar["c"]),
+                            "volume": int(bar["v"]),
+                        }
+                    )
 
             return candles
 
@@ -456,14 +473,16 @@ class AlpacaConnector(BrokerConnector):
 
             quote_data = response.json()
 
-            if 'quote' in quote_data:
-                quote = quote_data['quote']
+            if "quote" in quote_data:
+                quote = quote_data["quote"]
                 return {
-                    'bid': float(quote.get('bp', 0)),
-                    'ask': float(quote.get('ap', 0)),
-                    'bid_size': int(quote.get('bs', 0)),
-                    'ask_size': int(quote.get('as', 0)),
-                    'timestamp': datetime.fromisoformat(quote['t'].replace('Z', '+00:00'))
+                    "bid": float(quote.get("bp", 0)),
+                    "ask": float(quote.get("ap", 0)),
+                    "bid_size": int(quote.get("bs", 0)),
+                    "ask_size": int(quote.get("as", 0)),
+                    "timestamp": datetime.fromisoformat(
+                        quote["t"].replace("Z", "+00:00")
+                    ),
                 }
 
             return None
@@ -478,7 +497,7 @@ class AlpacaConnector(BrokerConnector):
             OrderType.MARKET: "market",
             OrderType.LIMIT: "limit",
             OrderType.STOP: "stop",
-            OrderType.STOP_LIMIT: "stop_limit"
+            OrderType.STOP_LIMIT: "stop_limit",
         }
         return mapping.get(order_type, "market")
 
@@ -489,7 +508,7 @@ class AlpacaConnector(BrokerConnector):
             "limit": OrderType.LIMIT,
             "stop": OrderType.STOP,
             "stop_limit": OrderType.STOP_LIMIT,
-            "trailing_stop": OrderType.STOP
+            "trailing_stop": OrderType.STOP,
         }
         return mapping.get(alpaca_type, OrderType.MARKET)
 
@@ -509,6 +528,6 @@ class AlpacaConnector(BrokerConnector):
             "pending_replace": OrderStatus.PENDING,
             "rejected": OrderStatus.REJECTED,
             "suspended": OrderStatus.PENDING,
-            "calculated": OrderStatus.OPEN
+            "calculated": OrderStatus.OPEN,
         }
         return mapping.get(alpaca_status, OrderStatus.PENDING)

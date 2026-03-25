@@ -5,12 +5,12 @@ This strategy uses MACD indicator for trend-following signals.
 """
 
 import logging
-import pandas as pd
-import numpy as np
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
-from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType
+import pandas as pd
+
+from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,14 @@ class MACDStrategy(BaseStrategy):
     Generates signals based on MACD line crossing signal line.
     """
 
-    def __init__(self, config: StrategyConfig, *_args,
-                 fast_period: int = 12, slow_period: int = 26, signal_period: int = 9):
+    def __init__(
+        self,
+        config: StrategyConfig,
+        *_args,
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ):
         """
         Initialize MACD strategy.
 
@@ -51,10 +57,14 @@ class MACDStrategy(BaseStrategy):
         macd_line, signal_line, histogram = self.calculate_macd(series)
         return {
             "macd": float(macd_line.iloc[-1]) if not macd_line.empty else None,
-            "signal_line": float(signal_line.iloc[-1]) if not signal_line.empty else None,
+            "signal_line": float(signal_line.iloc[-1])
+            if not signal_line.empty
+            else None,
             "histogram": float(histogram.iloc[-1]) if not histogram.empty else None,
             "prev_macd": float(macd_line.iloc[-2]) if len(macd_line) > 1 else None,
-            "prev_signal": float(signal_line.iloc[-2]) if len(signal_line) > 1 else None,
+            "prev_signal": float(signal_line.iloc[-2])
+            if len(signal_line) > 1
+            else None,
             "price": float(series.iloc[-1]),
         }
 
@@ -71,11 +81,21 @@ class MACDStrategy(BaseStrategy):
         if any(v is None for v in (macd, sig, prev_macd, prev_sig)):
             return None
         if prev_macd <= prev_sig and macd > sig:
-            return Signal(SignalType.BUY, self.config.symbol, price, datetime.now(timezone.utc),
-                          confidence=0.85 if macd < 0 else 0.75)
+            return Signal(
+                SignalType.BUY,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=0.85 if macd < 0 else 0.75,
+            )
         if prev_macd >= prev_sig and macd < sig:
-            return Signal(SignalType.SELL, self.config.symbol, price, datetime.now(timezone.utc),
-                          confidence=0.85 if macd > 0 else 0.75)
+            return Signal(
+                SignalType.SELL,
+                self.config.symbol,
+                price,
+                datetime.now(timezone.utc),
+                confidence=0.85 if macd > 0 else 0.75,
+            )
         return None
 
     def calculate_macd(self, prices: pd.Series) -> tuple:
@@ -109,13 +129,13 @@ class MACDStrategy(BaseStrategy):
             min_length = self.slow_period + self.signal_period
             if len(market_data) < min_length:
                 return {
-                    'type': 'HOLD',
-                    'confidence': 0.0,
-                    'reason': f'Insufficient data (need {min_length} periods)',
-                    'timestamp': datetime.now(timezone.utc)
+                    "type": "HOLD",
+                    "confidence": 0.0,
+                    "reason": f"Insufficient data (need {min_length} periods)",
+                    "timestamp": datetime.now(timezone.utc),
                 }
 
-            close = market_data['close']
+            close = market_data["close"]
 
             # Calculate MACD
             macd_line, signal_line, histogram = self.calculate_macd(close)
@@ -134,97 +154,97 @@ class MACDStrategy(BaseStrategy):
             # Check for NaN
             if pd.isna(current_macd) or pd.isna(current_signal):
                 return {
-                    'type': 'HOLD',
-                    'confidence': 0.0,
-                    'reason': 'MACD calculation resulted in NaN',
-                    'timestamp': datetime.now(timezone.utc)
+                    "type": "HOLD",
+                    "confidence": 0.0,
+                    "reason": "MACD calculation resulted in NaN",
+                    "timestamp": datetime.now(timezone.utc),
                 }
 
-            signal_type = 'HOLD'
+            signal_type = "HOLD"
             confidence = 0.0
-            reason = ''
+            reason = ""
 
             # Bullish crossover: MACD crosses above signal line
             if prev_macd <= prev_signal and current_macd > current_signal:
-                signal_type = 'BUY'
+                signal_type = "BUY"
                 confidence = 0.75
-                reason = 'Bullish MACD crossover'
+                reason = "Bullish MACD crossover"
 
                 # Higher confidence if MACD is below zero (oversold)
                 if current_macd < 0:
                     confidence = 0.85
-                    reason += ' from oversold'
+                    reason += " from oversold"
 
                 # Higher confidence if histogram is growing
                 if current_hist > prev_hist:
                     confidence = min(0.95, confidence + 0.1)
-                    reason += ' with momentum'
+                    reason += " with momentum"
 
             # Bearish crossover: MACD crosses below signal line
             elif prev_macd >= prev_signal and current_macd < current_signal:
-                signal_type = 'SELL'
+                signal_type = "SELL"
                 confidence = 0.75
-                reason = 'Bearish MACD crossover'
+                reason = "Bearish MACD crossover"
 
                 # Higher confidence if MACD is above zero (overbought)
                 if current_macd > 0:
                     confidence = 0.85
-                    reason += ' from overbought'
+                    reason += " from overbought"
 
                 # Higher confidence if histogram is shrinking
                 if current_hist < prev_hist:
                     confidence = min(0.95, confidence + 0.1)
-                    reason += ' with momentum'
+                    reason += " with momentum"
 
             # Histogram divergence signals
             elif current_macd > current_signal:
                 # MACD above signal (bullish territory)
                 if current_hist < prev_hist and current_hist > 0:
                     # Weakening momentum
-                    signal_type = 'SELL'
+                    signal_type = "SELL"
                     confidence = 0.55
-                    reason = 'MACD momentum weakening (bearish divergence)'
+                    reason = "MACD momentum weakening (bearish divergence)"
                 elif current_hist > prev_hist:
                     # Strengthening momentum
-                    signal_type = 'BUY'
+                    signal_type = "BUY"
                     confidence = 0.50
-                    reason = 'MACD momentum strengthening'
+                    reason = "MACD momentum strengthening"
 
             elif current_macd < current_signal:
                 # MACD below signal (bearish territory)
                 if current_hist > prev_hist and current_hist < 0:
                     # Weakening downward momentum
-                    signal_type = 'BUY'
+                    signal_type = "BUY"
                     confidence = 0.55
-                    reason = 'MACD momentum weakening (bullish divergence)'
+                    reason = "MACD momentum weakening (bullish divergence)"
                 elif current_hist < prev_hist:
                     # Strengthening downward momentum
-                    signal_type = 'SELL'
+                    signal_type = "SELL"
                     confidence = 0.50
-                    reason = 'MACD downward momentum strengthening'
+                    reason = "MACD downward momentum strengthening"
 
-            if signal_type == 'HOLD':
-                reason = f'No MACD signal: MACD={current_macd:.5f}, Signal={current_signal:.5f}'
+            if signal_type == "HOLD":
+                reason = f"No MACD signal: MACD={current_macd:.5f}, Signal={current_signal:.5f}"
 
             return {
-                'type': signal_type,
-                'confidence': confidence,
-                'reason': reason,
-                'timestamp': datetime.now(timezone.utc),
-                'metadata': {
-                    'macd': current_macd,
-                    'signal': current_signal,
-                    'histogram': current_hist,
-                    'previous_histogram': prev_hist,
-                    'price': current_price
-                }
+                "type": signal_type,
+                "confidence": confidence,
+                "reason": reason,
+                "timestamp": datetime.now(timezone.utc),
+                "metadata": {
+                    "macd": current_macd,
+                    "signal": current_signal,
+                    "histogram": current_hist,
+                    "previous_histogram": prev_hist,
+                    "price": current_price,
+                },
             }
 
         except Exception as e:
             self.logger.error(f"Error generating MACD signal: {e}")
             return {
-                'type': 'HOLD',
-                'confidence': 0.0,
-                'reason': f'Error: {str(e)}',
-                'timestamp': datetime.now(timezone.utc)
+                "type": "HOLD",
+                "confidence": 0.0,
+                "reason": f"Error: {str(e)}",
+                "timestamp": datetime.now(timezone.utc),
             }

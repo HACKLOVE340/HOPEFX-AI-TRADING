@@ -38,9 +38,16 @@ _watchlists: Dict[str, List[str]] = {}
 DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
 
 _BASE_PRICES: Dict[str, float] = {
-    "XAUUSD": 2050.0, "EURUSD": 1.0850, "GBPUSD": 1.2650,
-    "USDJPY": 149.50, "BTCUSD": 67000.0, "ETHUSD": 3500.0,
-    "USDCAD": 1.3600, "AUDUSD": 0.6550, "USDCHF": 0.8950, "NZDUSD": 0.6050,
+    "XAUUSD": 2050.0,
+    "EURUSD": 1.0850,
+    "GBPUSD": 1.2650,
+    "USDJPY": 149.50,
+    "BTCUSD": 67000.0,
+    "ETHUSD": 3500.0,
+    "USDCAD": 1.3600,
+    "AUDUSD": 0.6550,
+    "USDCHF": 0.8950,
+    "NZDUSD": 0.6050,
 }
 
 
@@ -77,6 +84,7 @@ def _save_watchlist(user_id: str, symbols: List[str]) -> None:
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class WatchlistItem(BaseModel):
     symbol: str
     bid: float
@@ -93,6 +101,7 @@ class WatchlistResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=WatchlistResponse)
 async def get_watchlist(

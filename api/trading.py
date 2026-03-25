@@ -17,17 +17,17 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from api.auth import (
     TokenPayload,
     get_current_user,
-    require_role,
     require_kyc,
-    validate_order_symbol,
+    require_role,
     validate_order_quantity,
+    validate_order_symbol,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ def _check_order_rate_limit(user_id: str) -> None:
     """Raise HTTP 429 if the user has exceeded the order rate limit."""
     try:
         import redis as _redis
+
         r = _redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
@@ -90,6 +91,7 @@ def _check_order_rate_limit(user_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
+
 
 class OrderRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20)
@@ -135,6 +137,7 @@ def set_state(state) -> None:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.post("/order", status_code=status.HTTP_201_CREATED)
 async def place_order(
     order: OrderRequest,
@@ -153,15 +156,20 @@ async def place_order(
     _check_order_rate_limit(user.sub)
 
     if not app_state or not app_state.broker:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
 
     # ── Prop-firm rule enforcement ───────────────────────────────────────────
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
+
         account_info = await app_state.broker.get_account_info()
         check_prop_firm_rules(account_info)
     except Exception as pf_exc:
         from fastapi import HTTPException as _HTTPException
+
         if isinstance(pf_exc, _HTTPException):
             raise
         logger.warning("Prop-firm guard error (allowing trade): %s", pf_exc)
@@ -179,11 +187,14 @@ async def place_order(
                 }
                 for p in positions
             ]
-            assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
+            assessment = app_state.risk_manager.assess_risk(
+                account_info, positions_dicts
+            )
             if not assessment.can_trade:
                 logger.warning(
                     "Order blocked by risk manager: user=%s reason=%s",
-                    user.sub, assessment.messages,
+                    user.sub,
+                    assessment.messages,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -202,19 +213,24 @@ async def place_order(
             if not cvar_allowed:
                 logger.warning(
                     "Order blocked by CVaR gate: user=%s reason=%s",
-                    user.sub, cvar_reason,
+                    user.sub,
+                    cvar_reason,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"CVaR limit breached: {cvar_reason}",
                 )
-            logger.debug("CVaR pre-trade gate passed: user=%s %s", user.sub, cvar_reason)
+            logger.debug(
+                "CVaR pre-trade gate passed: user=%s %s", user.sub, cvar_reason
+            )
         except HTTPException:
             raise
         except Exception as cvar_exc:
             logger.error(
                 "CVaR pre-trade check error (blocking order for safety): user=%s %s",
-                user.sub, cvar_exc, exc_info=True,
+                user.sub,
+                cvar_exc,
+                exc_info=True,
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -222,7 +238,10 @@ async def place_order(
             )
 
     # ── Compliance / audit log ───────────────────────────────────────────────
-    if hasattr(app_state, "compliance_manager") and app_state.compliance_manager is not None:
+    if (
+        hasattr(app_state, "compliance_manager")
+        and app_state.compliance_manager is not None
+    ):
         try:
             app_state.compliance_manager.log_trade(
                 user_id=user.sub,
@@ -245,7 +264,11 @@ async def place_order(
         )
         logger.info(
             "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
-            user.sub, order.symbol, order.side, order.quantity, result.id,
+            user.sub,
+            order.symbol,
+            order.side,
+            order.quantity,
+            result.id,
         )
 
         # ── Broadcast to WebSocket subscribers ──────────────────────────────
@@ -264,6 +287,7 @@ async def place_order(
         # ── FCM push: trade filled ───────────────────────────────────────────
         try:
             from mobile.push_notifications import push_manager
+
             push_manager.send_trade_filled(
                 user_id=user.sub,
                 symbol=order.symbol,
@@ -277,7 +301,10 @@ async def place_order(
         # Prometheus order metric
         try:
             from core.metrics import ORDERS_TOTAL
-            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
+
+            ORDERS_TOTAL.labels(
+                symbol=order.symbol, side=order.side, status="filled"
+            ).inc()
         except Exception as metric_exc:
             logger.debug("Prometheus metric update skipped: %s", metric_exc)
 
@@ -293,7 +320,10 @@ async def place_order(
         logger.error("Order error for user=%s: %s", user.sub, exc, exc_info=True)
         try:
             from core.metrics import ORDERS_TOTAL
-            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
+
+            ORDERS_TOTAL.labels(
+                symbol=order.symbol, side=order.side, status="error"
+            ).inc()
         except Exception as metric_exc:
             logger.debug("Prometheus metric update skipped: %s", metric_exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -305,7 +335,10 @@ async def get_positions(
 ):
     """Get all open positions. Requires: any authenticated user."""
     if not app_state or not app_state.broker:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
 
     positions = await app_state.broker.get_positions()
     return [
@@ -329,21 +362,29 @@ async def close_position(
 ):
     """Close a specific position. Requires: role >= 'trader'."""
     if not app_state or not app_state.broker:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
 
     success = await app_state.broker.close_position(position_id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Position not found"
+        )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
 
     if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
         try:
-            await app_state.ws_manager.broadcast_to_all({
-                "type": "position_closed",
-                "position_id": position_id,
-                "user_id": user.sub,
-            }, event="position_closed")
+            await app_state.ws_manager.broadcast_to_all(
+                {
+                    "type": "position_closed",
+                    "position_id": position_id,
+                    "user_id": user.sub,
+                },
+                event="position_closed",
+            )
         except Exception as ws_exc:
             logger.warning("WebSocket broadcast failed: %s", ws_exc)
 
@@ -356,7 +397,10 @@ async def close_all_positions(
 ):
     """Close all open positions. Requires: role >= 'trader'."""
     if not app_state or not app_state.broker:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
 
     closed = await app_state.broker.close_all_positions()
     logger.info("All positions closed: user=%s count=%s", user.sub, closed)
@@ -369,7 +413,10 @@ async def get_account(
 ):
     """Get account information. Requires: any authenticated user."""
     if not app_state or not app_state.broker:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Broker not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
 
     return await app_state.broker.get_account_info()
 
@@ -380,7 +427,10 @@ async def get_prices(
 ):
     """Get current bid/ask prices. Requires: any authenticated user."""
     if not app_state or not app_state.price_engine:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Price engine not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Price engine not available",
+        )
 
     prices: Dict = {}
     for symbol in app_state.price_engine.symbols:
@@ -406,7 +456,10 @@ async def get_ohlcv(
     symbol = validate_order_symbol(symbol)
 
     if not app_state or not app_state.price_engine:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Price engine not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Price engine not available",
+        )
 
     data = app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
     return [
@@ -428,7 +481,10 @@ async def get_brain_state(
 ):
     """Get AI brain state. Requires: any authenticated user."""
     if not app_state or not app_state.brain:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Brain not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Brain not available",
+        )
 
     return app_state.brain.state.to_dict()
 
@@ -443,7 +499,10 @@ async def emergency_stop(
     Requires: role >= 'admin'. Logs the triggering user for audit trail.
     """
     if not app_state or not app_state.brain:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Brain not available")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Brain not available",
+        )
 
     app_state.brain.emergency_stop()
     logger.critical("Emergency stop triggered by user=%s", user.sub)
@@ -453,16 +512,27 @@ async def emergency_stop(
 # ── Trade history ─────────────────────────────────────────────────────────────
 
 _TRADE_CSV_FIELDS = [
-    "trade_id", "symbol", "side", "quantity", "entry_price", "exit_price",
-    "realized_pnl", "commission", "status", "strategy", "entry_time", "exit_time",
+    "trade_id",
+    "symbol",
+    "side",
+    "quantity",
+    "entry_price",
+    "exit_price",
+    "realized_pnl",
+    "commission",
+    "status",
+    "strategy",
+    "entry_time",
+    "exit_time",
 ]
 
 
 def _query_trades(user_id: str, symbol: Optional[str], limit: int, offset: int) -> list:
     """Fetch trades from DB for the given user."""
     try:
-        from database.models import Trade
         from app import app_state as _state
+        from database.models import Trade
+
         if not _state or not _state.db_session_factory:
             return []
         with _state.db_session_factory() as session:
@@ -554,6 +624,7 @@ async def export_trade_history_csv(
 
 # ── Models expected by tests ──────────────────────────────────────────────────
 
+
 class StrategyCreateRequest(BaseModel):
     name: str
     symbol: str = "XAUUSD"
@@ -570,7 +641,7 @@ class StrategyResponse(BaseModel):
     symbol: str
     timeframe: str
     strategy_type: str
-    type: str = ""          # alias for strategy_type used by some tests
+    type: str = ""  # alias for strategy_type used by some tests
     enabled: bool
     parameters: Optional[dict] = None
 
@@ -618,6 +689,7 @@ _strategy_store: Dict[str, dict] = {}
 def _make_strategy_router():
     """Return a sub-router with the strategy CRUD + position-size endpoints."""
     from fastapi import APIRouter
+
     _r = APIRouter()  # no prefix — parent router already has /api/trading
 
     @_r.get("/strategies")
@@ -626,17 +698,34 @@ def _make_strategy_router():
 
     @_r.post("/strategies", status_code=201)
     def create_strategy(req: StrategyCreateRequest):
-        _KNOWN = {"ma_crossover", "rsi", "macd", "bollinger_bands",
-                  "ema_crossover", "breakout", "stochastic", "mean_reversion",
-                  "smc_ict", "strategy_brain"}
+        _KNOWN = {
+            "ma_crossover",
+            "rsi",
+            "macd",
+            "bollinger_bands",
+            "ema_crossover",
+            "breakout",
+            "stochastic",
+            "mean_reversion",
+            "smc_ict",
+            "strategy_brain",
+        }
         if req.strategy_type not in _KNOWN:
             from fastapi import HTTPException
+
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
-        record = {"id": sid, "name": req.name, "symbol": req.symbol,
-                  "timeframe": req.timeframe, "strategy_type": req.strategy_type,
-                  "type": req.strategy_type, "enabled": req.enabled,
-                  "parameters": req.parameters, "risk_per_trade": req.risk_per_trade}
+        record = {
+            "id": sid,
+            "name": req.name,
+            "symbol": req.symbol,
+            "timeframe": req.timeframe,
+            "strategy_type": req.strategy_type,
+            "type": req.strategy_type,
+            "enabled": req.enabled,
+            "parameters": req.parameters,
+            "risk_per_trade": req.risk_per_trade,
+        }
         _strategy_store[sid] = record
         return record
 
@@ -652,6 +741,7 @@ def _make_strategy_router():
     @_r.get("/strategies/{strategy_id}")
     def get_strategy(strategy_id: str):
         from fastapi import HTTPException
+
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -660,6 +750,7 @@ def _make_strategy_router():
     @_r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str):
         from fastapi import HTTPException
+
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -678,12 +769,17 @@ def _make_strategy_router():
         fomc_multiplier = 1.0
         try:
             from api.calendar import _fomc_regime_override
+
             if _fomc_regime_override.get("active"):
-                fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
+                fomc_multiplier = _fomc_regime_override.get(
+                    "position_size_multiplier", 1.0
+                )
         except Exception as exc:
             logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
 
-        size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
+        size = (
+            risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0
+        ) * fomc_multiplier
         tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
         return PositionSizeResponse(
             size=round(size, 4),
@@ -694,27 +790,46 @@ def _make_strategy_router():
 
     @_r.get("/risk-metrics")
     def get_risk_metrics():
-        return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0,
-                "margin_used": 0.0, "risk_score": 0.0}
+        return {
+            "daily_pnl": 0.0,
+            "max_drawdown": 0.0,
+            "open_positions": 0,
+            "margin_used": 0.0,
+            "risk_score": 0.0,
+        }
 
     @_r.get("/performance/summary")
     def get_performance_summary():
-        return {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0,
-                "win_rate": 0.0, "total_trades": 0, "period_days": 30,
-                "total_strategies": len(_strategy_store)}
+        return {
+            "total_return": 0.0,
+            "sharpe_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+            "period_days": 30,
+            "total_strategies": len(_strategy_store),
+        }
 
     @_r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
         from fastapi import HTTPException
+
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
-        return {"strategy_id": strategy_id, "total_return": 0.0, "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0, "win_rate": 0.0, "total_trades": 0}
+        return {
+            "strategy_id": strategy_id,
+            "total_return": 0.0,
+            "sharpe_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+        }
 
     @_r.post("/strategies/{strategy_id}/start")
     def start_strategy(strategy_id: str):
         from fastapi import HTTPException
+
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -724,6 +839,7 @@ def _make_strategy_router():
     @_r.post("/strategies/{strategy_id}/stop")
     def stop_strategy(strategy_id: str):
         from fastapi import HTTPException
+
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -742,6 +858,7 @@ except Exception as exc:
 
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
+
 @router.get("/regime", summary="Current market regime and active strategy")
 async def get_regime_status():
     """
@@ -753,6 +870,7 @@ async def get_regime_status():
     """
     try:
         from app import app_state  # noqa: PLC0415
+
         broker = getattr(app_state, "broker", None)
         regime_router = getattr(app_state, "regime_router", None)
 
@@ -760,12 +878,14 @@ async def get_regime_status():
         if regime_router is None:
             from strategies.manager import StrategyManager
             from strategies.regime_router import RegimeRouter
+
             sm = getattr(app_state, "strategy_manager", None) or StrategyManager()
             regime_router = RegimeRouter(sm)
 
         # Try to detect regime from live price data
         if broker is not None and hasattr(broker, "get_ohlcv"):
             import pandas as pd
+
             ohlcv = broker.get_ohlcv("XAUUSD", limit=100)
             if ohlcv:
                 df = pd.DataFrame(ohlcv)
@@ -775,6 +895,7 @@ async def get_regime_status():
 
     except Exception as exc:
         import logging as _log
+
         _log.getLogger(__name__).warning("regime status error: %s", exc)
         return {
             "current_regime": "unknown",
@@ -790,6 +911,7 @@ async def get_regime_history(limit: int = 20):
     """Return the last N regime transitions with timestamps."""
     try:
         from app import app_state  # noqa: PLC0415
+
         regime_router = getattr(app_state, "regime_router", None)
         if regime_router is None:
             return {"history": []}

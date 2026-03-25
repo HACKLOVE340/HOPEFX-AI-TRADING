@@ -20,19 +20,26 @@ Metrics defined here:
 from __future__ import annotations
 
 import time
-from typing import Callable
 
 try:
     from prometheus_client import (
-        Counter, Gauge, Histogram, CollectorRegistry,
-        generate_latest, CONTENT_TYPE_LATEST,
+        CONTENT_TYPE_LATEST,
+        CollectorRegistry,
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
+    from prometheus_client import (
         REGISTRY as _DEFAULT_REGISTRY,
     )
+
     _PROM_AVAILABLE = True
 except ImportError:
     _PROM_AVAILABLE = False
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 # ── Metric definitions ────────────────────────────────────────────────────────
@@ -87,15 +94,27 @@ if _PROM_AVAILABLE:
 else:
     # Stub objects so callers don't need to guard every call
     class _Stub:
-        def labels(self, **_): return self
-        def inc(self, *a, **k): pass
-        def set(self, *a, **k): pass
-        def observe(self, *a, **k): pass
-        def time(self): return _NullCtx()
+        def labels(self, **_):
+            return self
+
+        def inc(self, *a, **k):
+            pass
+
+        def set(self, *a, **k):
+            pass
+
+        def observe(self, *a, **k):
+            pass
+
+        def time(self):
+            return _NullCtx()
 
     class _NullCtx:
-        def __enter__(self): return self
-        def __exit__(self, *a): pass
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
 
     HTTP_REQUESTS = HTTP_LATENCY = ORDERS_TOTAL = ACTIVE_POSITIONS = _Stub()
     PNL_TOTAL = WS_CONNECTIONS = AUTH_ATTEMPTS = AML_BLOCKS = _Stub()
@@ -104,11 +123,13 @@ else:
 
 # ── Middleware helper ─────────────────────────────────────────────────────────
 
+
 def make_metrics_middleware():
     """
     Returns a Starlette middleware callable that records HTTP metrics.
     Attach with: app.middleware("http")(make_metrics_middleware())
     """
+
     async def metrics_middleware(request, call_next):
         start = time.perf_counter()
         response = await call_next(request)
@@ -118,7 +139,9 @@ def make_metrics_middleware():
         path = _normalise_path(request.url.path)
         method = request.method
 
-        HTTP_REQUESTS.labels(method=method, path=path, status=str(response.status_code)).inc()
+        HTTP_REQUESTS.labels(
+            method=method, path=path, status=str(response.status_code)
+        ).inc()
         HTTP_LATENCY.labels(method=method, path=path).observe(duration)
         return response
 
@@ -138,6 +161,7 @@ def _normalise_path(path: str) -> str:
 
 
 # ── Endpoint helper ───────────────────────────────────────────────────────────
+
 
 def metrics_response():
     """

@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/broker", tags=["Broker"])
 
 
 class BrokerTestRequest(BaseModel):
-    type: str = "paper"          # paper | oanda | alpaca
+    type: str = "paper"  # paper | oanda | alpaca
     apiKey: str = ""
     accountId: str = ""
     practice: bool = True
@@ -76,7 +76,9 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
     if not req.apiKey:
         return BrokerTestResponse(ok=False, broker="oanda", error="API key is required")
     if not req.accountId:
-        return BrokerTestResponse(ok=False, broker="oanda", error="Account ID is required")
+        return BrokerTestResponse(
+            ok=False, broker="oanda", error="Account ID is required"
+        )
 
     base = (
         "https://api-fxpractice.oanda.com"
@@ -84,16 +86,22 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
         else "https://api-fxtrade.oanda.com"
     )
     url = f"{base}/v3/accounts/{req.accountId}/summary"
-    headers = {"Authorization": f"Bearer {req.apiKey}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {req.apiKey}",
+        "Content-Type": "application/json",
+    }
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
     except ImportError:
         # Fallback to requests in executor
         import asyncio
+
         import requests as _req
+
         loop = asyncio.get_event_loop()
         try:
             resp_sync = await loop.run_in_executor(
@@ -103,19 +111,22 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
             latency = int((time.monotonic() - start) * 1000)
             if resp_sync.status_code == 401:
                 return BrokerTestResponse(
-                    ok=False, broker="oanda",
+                    ok=False,
+                    broker="oanda",
                     error="401 Unauthorized — check your API token",
                     latency_ms=latency,
                 )
             if resp_sync.status_code == 404:
                 return BrokerTestResponse(
-                    ok=False, broker="oanda",
+                    ok=False,
+                    broker="oanda",
                     error=f"Account {req.accountId!r} not found",
                     latency_ms=latency,
                 )
             if resp_sync.status_code != 200:
                 return BrokerTestResponse(
-                    ok=False, broker="oanda",
+                    ok=False,
+                    broker="oanda",
                     error=f"HTTP {resp_sync.status_code}",
                     latency_ms=latency,
                 )
@@ -130,13 +141,15 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
             )
         except Exception as exc:
             return BrokerTestResponse(
-                ok=False, broker="oanda",
+                ok=False,
+                broker="oanda",
                 error=f"Connection error: {exc}",
                 latency_ms=int((time.monotonic() - start) * 1000),
             )
     except Exception as exc:
         return BrokerTestResponse(
-            ok=False, broker="oanda",
+            ok=False,
+            broker="oanda",
             error=f"Connection error: {exc}",
             latency_ms=int((time.monotonic() - start) * 1000),
         )
@@ -145,19 +158,22 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
 
     if resp.status_code == 401:
         return BrokerTestResponse(
-            ok=False, broker="oanda",
+            ok=False,
+            broker="oanda",
             error="401 Unauthorized — check your API token",
             latency_ms=latency,
         )
     if resp.status_code == 404:
         return BrokerTestResponse(
-            ok=False, broker="oanda",
+            ok=False,
+            broker="oanda",
             error=f"Account {req.accountId!r} not found",
             latency_ms=latency,
         )
     if resp.status_code != 200:
         return BrokerTestResponse(
-            ok=False, broker="oanda",
+            ok=False,
+            broker="oanda",
             error=f"HTTP {resp.status_code}",
             latency_ms=latency,
         )
@@ -177,7 +193,8 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
     """Test Alpaca API connectivity."""
     if not req.apiKey or not req.accountId:
         return BrokerTestResponse(
-            ok=False, broker="alpaca",
+            ok=False,
+            broker="alpaca",
             error="API Key ID and Secret Key are both required",
         )
 
@@ -194,18 +211,21 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         latency = int((time.monotonic() - start) * 1000)
         if resp.status_code == 403:
             return BrokerTestResponse(
-                ok=False, broker="alpaca",
+                ok=False,
+                broker="alpaca",
                 error="403 Forbidden — check API key and secret",
                 latency_ms=latency,
             )
         if resp.status_code != 200:
             return BrokerTestResponse(
-                ok=False, broker="alpaca",
+                ok=False,
+                broker="alpaca",
                 error=f"HTTP {resp.status_code}",
                 latency_ms=latency,
             )
@@ -219,7 +239,8 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         )
     except Exception as exc:
         return BrokerTestResponse(
-            ok=False, broker="alpaca",
+            ok=False,
+            broker="alpaca",
             error=f"Connection error: {exc}",
             latency_ms=int((time.monotonic() - start) * 1000),
         )
@@ -230,6 +251,7 @@ async def broker_status():
     """Return the current broker type and connection state."""
     try:
         from app import app_state  # noqa: PLC0415
+
         broker = getattr(app_state, "broker", None)
         if broker is None:
             return {"connected": False, "broker_type": "none", "balance": None}

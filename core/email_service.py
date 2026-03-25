@@ -34,6 +34,7 @@ APP_ENV = os.getenv("APP_ENV", "development")
 
 # ── Transport helpers ─────────────────────────────────────────────────────────
 
+
 def _send_via_sendgrid(to: str, subject: str, html: str, text: str) -> bool:
     """Send via SendGrid API. Returns True on success."""
     api_key = os.getenv("SENDGRID_API_KEY", "")
@@ -41,6 +42,7 @@ def _send_via_sendgrid(to: str, subject: str, html: str, text: str) -> bool:
     try:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import Mail
+
         sg = SendGridAPIClient(api_key=api_key)
         message = Mail(
             from_email=from_email,
@@ -69,7 +71,9 @@ def _smtp_config() -> Optional[dict]:
         "port": int(os.getenv("SMTP_PORT", "587")),
         "user": os.getenv("SMTP_USER", ""),
         "password": os.getenv("SMTP_PASSWORD", ""),
-        "from_email": os.getenv("FROM_EMAIL", os.getenv("SMTP_USER", "noreply@hopefx.io")),
+        "from_email": os.getenv(
+            "FROM_EMAIL", os.getenv("SMTP_USER", "noreply@hopefx.io")
+        ),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
     }
 
@@ -125,12 +129,15 @@ def _send(to: str, subject: str, html: str, text: str) -> bool:
     # 3. Dev mode — log instead of sending
     logger.info(
         "EMAIL (dev — no transport configured): to=%s subject=%s\n%s",
-        to, subject, text,
+        to,
+        subject,
+        text,
     )
     return True
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def send_verification_email(to_email: str, username: str, token: str) -> bool:
     """Send email address verification link."""

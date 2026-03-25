@@ -12,7 +12,7 @@ GET /api/explain/latest               — explanation for the most recent signal
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -24,24 +24,26 @@ router = APIRouter(prefix="/api/explain", tags=["Explainability"])
 
 # ── response models ───────────────────────────────────────────────────────────
 
+
 class FeatureImportance(BaseModel):
     feature: str
-    importance: float        # SHAP value (positive = bullish contribution)
+    importance: float  # SHAP value (positive = bullish contribution)
     description: str
 
 
 class SignalExplanation(BaseModel):
     signal_id: str
     symbol: str
-    direction: str           # BUY / SELL / HOLD
-    confidence: float        # 0–1
-    regime: str              # trending / ranging / volatile / risk-off
+    direction: str  # BUY / SELL / HOLD
+    confidence: float  # 0–1
+    regime: str  # trending / ranging / volatile / risk-off
     top_features: List[FeatureImportance]
-    plain_english: str       # LLM or template-generated summary
+    plain_english: str  # LLM or template-generated summary
     timestamp: str
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _build_explanation(signal_id: str) -> SignalExplanation:
     """
@@ -50,8 +52,8 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
     so the UI always has something to show.
     """
     try:
-        from explainability.explainer import AIExplainer
         from core.signal_engine import SignalEngine  # noqa: PLC0415
+        from explainability.explainer import AIExplainer
 
         explainer = AIExplainer()
         # Attempt to fetch the signal from the signal engine
@@ -69,7 +71,9 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                 FeatureImportance(
                     feature=fc.feature_name,
                     importance=fc.contribution,
-                    description=explainer.feature_descriptions.get(fc.feature_name, fc.feature_name),
+                    description=explainer.feature_descriptions.get(
+                        fc.feature_name, fc.feature_name
+                    ),
                 )
                 for fc in sorted(
                     explanation.feature_contributions,
@@ -84,7 +88,8 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                 confidence=explanation.confidence_score,
                 regime=getattr(signal, "regime", "unknown"),
                 top_features=features,
-                plain_english=explanation.natural_language_explanation or _template_summary(features, explanation.prediction_class),
+                plain_english=explanation.natural_language_explanation
+                or _template_summary(features, explanation.prediction_class),
                 timestamp=explanation.timestamp.isoformat(),
             )
     except Exception as exc:
@@ -92,12 +97,25 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
 
     # Template fallback — always returns something useful
     import datetime
+
     template_features = [
-        FeatureImportance(feature="rsi", importance=0.32, description="RSI showing oversold conditions"),
-        FeatureImportance(feature="macd", importance=0.28, description="MACD bullish crossover"),
-        FeatureImportance(feature="atr", importance=0.18, description="Volatility within normal range"),
-        FeatureImportance(feature="sma_20", importance=0.14, description="Price above 20-period SMA"),
-        FeatureImportance(feature="volume_ratio", importance=0.08, description="Volume above average"),
+        FeatureImportance(
+            feature="rsi",
+            importance=0.32,
+            description="RSI showing oversold conditions",
+        ),
+        FeatureImportance(
+            feature="macd", importance=0.28, description="MACD bullish crossover"
+        ),
+        FeatureImportance(
+            feature="atr", importance=0.18, description="Volatility within normal range"
+        ),
+        FeatureImportance(
+            feature="sma_20", importance=0.14, description="Price above 20-period SMA"
+        ),
+        FeatureImportance(
+            feature="volume_ratio", importance=0.08, description="Volume above average"
+        ),
     ]
     return SignalExplanation(
         signal_id=signal_id,
@@ -121,14 +139,18 @@ def _template_summary(features: List[FeatureImportance], direction: str) -> str:
     top = features[:3] if features else []
     parts = [f"{f.feature} ({f.description})" for f in top]
     return (
-        f"Signal direction: {direction}. "
-        f"Top contributing factors: {', '.join(parts)}."
+        f"Signal direction: {direction}. Top contributing factors: {', '.join(parts)}."
     )
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
 
-@router.get("/signal/{signal_id}", response_model=SignalExplanation, summary="Explain a specific signal")
+
+@router.get(
+    "/signal/{signal_id}",
+    response_model=SignalExplanation,
+    summary="Explain a specific signal",
+)
 async def explain_signal(signal_id: str):
     """
     Return a SHAP-based explanation for the given signal_id.
@@ -145,7 +167,9 @@ async def explain_signal(signal_id: str):
         )
 
 
-@router.get("/latest", response_model=SignalExplanation, summary="Explain the latest signal")
+@router.get(
+    "/latest", response_model=SignalExplanation, summary="Explain the latest signal"
+)
 async def explain_latest():
     """Return an explanation for the most recently generated signal."""
     return _build_explanation("latest")

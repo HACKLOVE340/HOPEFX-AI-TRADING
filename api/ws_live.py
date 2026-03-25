@@ -22,10 +22,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import random
 import math
+import random
 from datetime import datetime, timezone
-from typing import Dict, Set, Optional, Any
+from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["WebSocket Live"])
 
 # ─── Connection registry ──────────────────────────────────────────────────────
+
 
 class LiveConnectionManager:
     """Manages all active /ws/live connections."""
@@ -76,7 +77,9 @@ class LiveConnectionManager:
             try:
                 await ws.send_text(json.dumps(msg))
             except Exception as exc:
-                logger.debug("WebSocket send failed for %s, disconnecting: %s", cid, exc)
+                logger.debug(
+                    "WebSocket send failed for %s, disconnecting: %s", cid, exc
+                )
                 self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
@@ -89,7 +92,11 @@ class LiveConnectionManager:
                     try:
                         await ws.send_text(json.dumps(msg))
                     except Exception as exc:
-                        logger.debug("WebSocket broadcast failed for %s, marking dead: %s", cid, exc)
+                        logger.debug(
+                            "WebSocket broadcast failed for %s, marking dead: %s",
+                            cid,
+                            exc,
+                        )
                         dead.append(cid)
         for cid in dead:
             self.disconnect(cid)
@@ -129,20 +136,20 @@ def _gbm_step(price: float, vol: float, dt: float) -> float:
 
 def _make_tick(symbol: str) -> dict:
     cfg = _SYMBOLS[symbol]
-    dt  = 1.0 / (24 * 60 * 60)  # 1-second step as fraction of day
+    dt = 1.0 / (24 * 60 * 60)  # 1-second step as fraction of day
     cfg["price"] = _gbm_step(cfg["price"], cfg["vol"], dt)
-    mid    = cfg["price"]
-    half   = cfg["spread"] / 2
+    mid = cfg["price"]
+    half = cfg["spread"] / 2
     change = (mid - _open_prices[symbol]) / _open_prices[symbol] * 100
     return {
         "type": "price_tick",
         "data": {
-            "symbol":     symbol,
-            "bid":        round(mid - half, 5),
-            "ask":        round(mid + half, 5),
-            "mid":        round(mid, 5),
-            "spread":     cfg["spread"],
-            "timestamp":  int(datetime.now(timezone.utc).timestamp() * 1000),
+            "symbol": symbol,
+            "bid": round(mid - half, 5),
+            "ask": round(mid + half, 5),
+            "mid": round(mid, 5),
+            "spread": cfg["spread"],
+            "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
             "change_pct": round(change, 3),
         },
     }
@@ -183,6 +190,7 @@ def start_broadcasters() -> None:
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
 
+
 @router.websocket("/ws/live")
 async def ws_live(websocket: WebSocket) -> None:
     """
@@ -192,11 +200,14 @@ async def ws_live(websocket: WebSocket) -> None:
     cid = await _manager.connect(websocket)
 
     # Send connection ack
-    await _manager.send(cid, {
-        "type": "connected",
-        "connection_id": cid,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    await _manager.send(
+        cid,
+        {
+            "type": "connected",
+            "connection_id": cid,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     try:
         while True:
@@ -211,10 +222,13 @@ async def ws_live(websocket: WebSocket) -> None:
             if msg_type == "subscribe":
                 channels = msg.get("channels", [])
                 _manager.subscribe(cid, channels)
-                await _manager.send(cid, {
-                    "type": "subscribed",
-                    "channels": channels,
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "subscribed",
+                        "channels": channels,
+                    },
+                )
 
             elif msg_type == "unsubscribe":
                 channels = msg.get("channels", [])
@@ -232,24 +246,28 @@ async def ws_live(websocket: WebSocket) -> None:
 
 # ─── REST helpers ─────────────────────────────────────────────────────────────
 
+
 @router.get("/ws/live/stats")
 async def ws_live_stats() -> dict:
     """Current WebSocket connection stats."""
     return {
         "connections": _manager.connection_count,
-        "symbols":     list(_SYMBOLS.keys()),
-        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "symbols": list(_SYMBOLS.keys()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
 # ─── Push helpers (called from trading/signal routers) ───────────────────────
+
 
 async def push_position_update(position: dict) -> None:
     await _manager.broadcast("positions", {"type": "position_update", "data": position})
 
 
 async def push_position_close(position_id: str) -> None:
-    await _manager.broadcast("positions", {"type": "position_close", "data": {"id": position_id}})
+    await _manager.broadcast(
+        "positions", {"type": "position_close", "data": {"id": position_id}}
+    )
 
 
 async def push_signal(signal: dict) -> None:

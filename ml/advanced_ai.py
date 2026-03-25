@@ -23,11 +23,10 @@ import logging
 import os
 import pickle
 import threading
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -41,6 +40,7 @@ logger = logging.getLogger(__name__)
 try:
     import gymnasium as gym
     from gymnasium import spaces
+
     _GYM_AVAILABLE = True
 except ImportError:
     gym = None  # type: ignore
@@ -51,6 +51,7 @@ except ImportError:
 try:
     from stable_baselines3 import PPO
     from stable_baselines3.common.vec_env import DummyVecEnv
+
     _SB3_AVAILABLE = True
 except ImportError:
     PPO = None  # type: ignore
@@ -60,6 +61,7 @@ except ImportError:
 
 try:
     import faiss  # type: ignore
+
     _FAISS_AVAILABLE = True
 except ImportError:
     faiss = None  # type: ignore
@@ -68,6 +70,7 @@ except ImportError:
 
 try:
     from sentence_transformers import SentenceTransformer  # type: ignore
+
     _ST_AVAILABLE = True
 except ImportError:
     SentenceTransformer = None  # type: ignore
@@ -78,6 +81,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Trading environment for RL
 # ---------------------------------------------------------------------------
+
 
 class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
     """
@@ -100,9 +104,9 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
     metadata = {"render_modes": []}
 
     # Realistic XAUUSD CFD cost defaults (in decimal, not bps)
-    DEFAULT_SPREAD      = 3e-4   # 3 bps half-spread each way
-    DEFAULT_COMMISSION  = 2e-4   # 2 bps per trade (round-turn = 4 bps)
-    DEFAULT_FINANCING   = 5e-5   # 0.5 bps per bar held (≈ 3% p.a. on H1 bars)
+    DEFAULT_SPREAD = 3e-4  # 3 bps half-spread each way
+    DEFAULT_COMMISSION = 2e-4  # 2 bps per trade (round-turn = 4 bps)
+    DEFAULT_FINANCING = 5e-5  # 0.5 bps per bar held (≈ 3% p.a. on H1 bars)
 
     def __init__(
         self,
@@ -121,9 +125,9 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         self._n = len(df)
 
         # Convert bps to decimal fractions
-        self._spread      = spread_bps      / 10_000
-        self._commission  = commission_bps  / 10_000
-        self._financing   = financing_bps_per_bar / 10_000
+        self._spread = spread_bps / 10_000
+        self._commission = commission_bps / 10_000
+        self._financing = financing_bps_per_bar / 10_000
 
         # Observation: window returns + atr_norm + position + pnl_norm
         obs_dim = window + 3
@@ -136,7 +140,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
 
     def _reset_state(self) -> None:
         self._step = self.window
-        self._position = 0       # -1, 0, 1
+        self._position = 0  # -1, 0, 1
         self._entry_price = 0.0
         self._equity = 1.0
         self._initial_equity = 1.0
@@ -170,7 +174,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
 
         total_cost = trade_cost + financing_cost
         reward = float(pnl - total_cost)
-        self._equity *= (1 + pnl - total_cost)
+        self._equity *= 1 + pnl - total_cost
 
         # Update position after costs are assessed on the OLD position
         self._position = new_position
@@ -181,7 +185,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         return self._obs(), reward, done, False, {}
 
     def _obs(self) -> np.ndarray:
-        closes = self.df["close"].iloc[self._step - self.window: self._step].values
+        closes = self.df["close"].iloc[self._step - self.window : self._step].values
         returns = np.diff(closes) / (closes[:-1] + 1e-9)
         if len(returns) < self.window:
             returns = np.pad(returns, (self.window - len(returns), 0))
@@ -198,6 +202,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
 # ---------------------------------------------------------------------------
 # PPO RL Agent
 # ---------------------------------------------------------------------------
+
 
 class PPORLAgent:
     """
@@ -237,7 +242,9 @@ class PPORLAgent:
 
     def train(self, df: pd.DataFrame, window: int = 10) -> None:
         """Train PPO on the supplied OHLCV DataFrame."""
-        logger.info("ppo_agent.train bars=%d timesteps=%d", len(df), self.total_timesteps)
+        logger.info(
+            "ppo_agent.train bars=%d timesteps=%d", len(df), self.total_timesteps
+        )
 
         def _make_env():
             return TradingEnv(df, window=window)
@@ -291,9 +298,11 @@ class PPORLAgent:
 
         action, _states = self._model.predict(obs, deterministic=True)
         # Value function as a rough confidence proxy (normalised sigmoid)
-        value = float(self._model.policy.predict_values(
-            self._model.policy.obs_to_tensor(obs.reshape(1, -1))[0]
-        ).item())
+        value = float(
+            self._model.policy.predict_values(
+                self._model.policy.obs_to_tensor(obs.reshape(1, -1))[0]
+            ).item()
+        )
         confidence = float(1 / (1 + np.exp(-value)))
         return int(action) - 1, confidence  # map {0,1,2} → {-1,0,1}
 
@@ -319,19 +328,20 @@ class PPORLAgent:
 # Vector RAG — News Sentiment
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class NewsItem:
     headline: str
     body: str = ""
     event_time: Optional[datetime] = None
-    impact: str = "medium"   # low / medium / high
+    impact: str = "medium"  # low / medium / high
     currency: str = "XAU"
 
 
 @dataclass
 class SentimentResult:
     headline: str
-    sentiment_score: float   # -1.0 (bearish) … +1.0 (bullish)
+    sentiment_score: float  # -1.0 (bearish) … +1.0 (bullish)
     similar_headlines: list[str] = field(default_factory=list)
     confidence: float = 0.0
 
@@ -351,7 +361,7 @@ class VectorRAGNewsSentiment:
         result = rag.score(NewsItem("Fed raises rates by 75bps"))
     """
 
-    EMBED_MODEL = "all-MiniLM-L6-v2"   # 384-dim, fast, good quality
+    EMBED_MODEL = "all-MiniLM-L6-v2"  # 384-dim, fast, good quality
     EMBED_DIM = 384
 
     def __init__(self, model_name: str = EMBED_MODEL, top_k: int = 5) -> None:
@@ -362,9 +372,11 @@ class VectorRAGNewsSentiment:
             )
         self.top_k = top_k
         self._encoder = SentenceTransformer(model_name)
-        self._index = faiss.IndexFlatIP(self.EMBED_DIM)  # Inner-product (cosine after norm)
+        self._index = faiss.IndexFlatIP(
+            self.EMBED_DIM
+        )  # Inner-product (cosine after norm)
         self._stored_headlines: list[str] = []
-        self._stored_scores: list[float] = []   # Ground-truth sentiment labels
+        self._stored_scores: list[float] = []  # Ground-truth sentiment labels
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -388,11 +400,15 @@ class VectorRAGNewsSentiment:
             self._stored_headlines.extend(headlines)
             self._stored_scores.extend(scores)
 
-        logger.info("rag.add_items count=%d total=%d", len(items), len(self._stored_headlines))
+        logger.info(
+            "rag.add_items count=%d total=%d", len(items), len(self._stored_headlines)
+        )
 
     def _encode(self, texts: list[str]) -> np.ndarray:
         """Encode texts and L2-normalise for cosine similarity via inner product."""
-        emb = self._encoder.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        emb = self._encoder.encode(
+            texts, convert_to_numpy=True, normalize_embeddings=True
+        )
         return emb.astype(np.float32)
 
     # ------------------------------------------------------------------
@@ -406,7 +422,9 @@ class VectorRAGNewsSentiment:
         Returns SentimentResult with weighted average sentiment.
         """
         if self._index.ntotal == 0:
-            return SentimentResult(headline=item.headline, sentiment_score=0.0, confidence=0.0)
+            return SentimentResult(
+                headline=item.headline, sentiment_score=0.0, confidence=0.0
+            )
 
         query_emb = self._encode([item.headline])
         k = min(self.top_k, self._index.ntotal)
@@ -463,12 +481,15 @@ class VectorRAGNewsSentiment:
                 meta = pickle.load(fh)
             self._stored_headlines = meta["headlines"]
             self._stored_scores = meta["scores"]
-        logger.info("rag.loaded directory=%s items=%d", directory, len(self._stored_headlines))
+        logger.info(
+            "rag.loaded directory=%s items=%d", directory, len(self._stored_headlines)
+        )
 
 
 # ---------------------------------------------------------------------------
 # Online retraining scheduler
 # ---------------------------------------------------------------------------
+
 
 class OnlineRetrainer:
     """
@@ -525,6 +546,7 @@ class OnlineRetrainer:
 # Ensemble: combines RL signal + RAG sentiment
 # ---------------------------------------------------------------------------
 
+
 class AdvancedAIEnsemble:
     """
     Top-level ensemble that merges:
@@ -568,14 +590,18 @@ class AdvancedAIEnsemble:
 
     def train_rl(self, df: pd.DataFrame, timesteps: int = 100_000) -> None:
         if self._rl is None:
-            raise RuntimeError("RL agent not available — install stable-baselines3 + gymnasium")
+            raise RuntimeError(
+                "RL agent not available — install stable-baselines3 + gymnasium"
+            )
         self._rl.total_timesteps = timesteps
         self._rl.train(df)
         self._retrainer = OnlineRetrainer(self._rl)
 
     def add_news_history(self, items: list[tuple[str, float]]) -> None:
         if self._rag is None:
-            raise RuntimeError("RAG not available — install faiss-cpu + sentence-transformers")
+            raise RuntimeError(
+                "RAG not available — install faiss-cpu + sentence-transformers"
+            )
         self._rag.add_items(items)
 
     # ------------------------------------------------------------------
@@ -584,8 +610,8 @@ class AdvancedAIEnsemble:
 
     @dataclass
     class Signal:
-        direction: int          # -1 / 0 / 1
-        size: float             # 0–1 fraction of max position
+        direction: int  # -1 / 0 / 1
+        size: float  # 0–1 fraction of max position
         rl_confidence: float
         sentiment_score: float
         combined_score: float
@@ -612,11 +638,8 @@ class AdvancedAIEnsemble:
             sentiment = result.sentiment_score
 
         # Blend
-        rl_score = rl_action * rl_conf          # ∈ [-1, 1]
-        combined = (
-            self.rl_weight * rl_score
-            + self.sentiment_weight * sentiment
-        )
+        rl_score = rl_action * rl_conf  # ∈ [-1, 1]
+        combined = self.rl_weight * rl_score + self.sentiment_weight * sentiment
 
         direction = int(np.sign(combined)) if abs(combined) > 0.1 else 0
         size = float(np.clip(abs(combined), 0.0, 1.0))

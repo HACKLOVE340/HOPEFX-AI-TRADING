@@ -18,43 +18,43 @@ Endpoint categories:
 Uses FastAPI for modern async API development.
 """
 
-from . import trading, admin
+from . import admin, trading
 from .signals import (
     RealTimeSignalService,
-    TradingSignal,
     SignalAlert,
     SignalAnalytics,
-    SignalStrength,
     SignalDirection,
+    SignalStrength,
+    TradingSignal,
 )
 from .websocket_server import (
+    ChannelType,
+    ConnectionInfo,
     WebSocketManager,
     WebSocketMessage,
-    ConnectionInfo,
-    ChannelType,
     create_websocket_router,
     get_websocket_manager,
 )
 
 __all__ = [
-    'trading',
-    'admin',
-    'RealTimeSignalService',
-    'TradingSignal',
-    'SignalAlert',
-    'SignalAnalytics',
-    'SignalStrength',
-    'SignalDirection',
+    "trading",
+    "admin",
+    "RealTimeSignalService",
+    "TradingSignal",
+    "SignalAlert",
+    "SignalAnalytics",
+    "SignalStrength",
+    "SignalDirection",
     # WebSocket
-    'WebSocketManager',
-    'WebSocketMessage',
-    'ConnectionInfo',
-    'ChannelType',
-    'create_websocket_router',
-    'get_websocket_manager',
+    "WebSocketManager",
+    "WebSocketMessage",
+    "ConnectionInfo",
+    "ChannelType",
+    "create_websocket_router",
+    "get_websocket_manager",
 ]
 
 # Module metadata
-__version__ = '2.1.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'REST API endpoints for trading operations, real-time signals, and WebSocket streaming'
+__version__ = "2.1.0"
+__author__ = "HOPEFX Development Team"
+__description__ = "REST API endpoints for trading operations, real-time signals, and WebSocket streaming"

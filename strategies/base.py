@@ -5,18 +5,19 @@ This module provides the base class for all trading strategies.
 All strategies should inherit from this base class.
 """
 
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-import logging
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class SignalType(Enum):
     """Trading signal types"""
+
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -26,6 +27,7 @@ class SignalType(Enum):
 
 class StrategyStatus(Enum):
     """Strategy execution status"""
+
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
@@ -36,6 +38,7 @@ class StrategyStatus(Enum):
 @dataclass
 class Signal:
     """Trading signal data structure"""
+
     signal_type: SignalType
     symbol: str
     price: float
@@ -52,6 +55,7 @@ class Signal:
 @dataclass
 class StrategyConfig:
     """Strategy configuration"""
+
     name: str
     symbol: str
     timeframe: str
@@ -83,13 +87,13 @@ class BaseStrategy(ABC):
         self.positions = []
         self.signals_history = []
         self.performance_metrics = {
-            'total_signals': 0,
-            'winning_signals': 0,
-            'losing_signals': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'total_pnl': 0.0,
-            'win_rate': 0.0,
+            "total_signals": 0,
+            "winning_signals": 0,
+            "losing_signals": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "total_pnl": 0.0,
+            "win_rate": 0.0,
         }
 
         logger.info(f"Initialized strategy: {config.name} for {config.symbol}")
@@ -191,7 +195,7 @@ class BaseStrategy(ABC):
     def _record_signal(self, signal: Signal):
         """Record signal in history"""
         self.signals_history.append(signal)
-        self.performance_metrics['total_signals'] += 1
+        self.performance_metrics["total_signals"] += 1
 
     def get_performance_metrics(self) -> Dict[str, Any]:
         """
@@ -202,17 +206,24 @@ class BaseStrategy(ABC):
         """
         metrics = self.performance_metrics.copy()
 
-        if metrics['total_signals'] > 0:
-            metrics['win_rate'] = (
-                metrics['winning_signals'] / metrics['total_signals'] * 100
+        if metrics["total_signals"] > 0:
+            metrics["win_rate"] = (
+                metrics["winning_signals"] / metrics["total_signals"] * 100
             )
         else:
-            metrics['win_rate'] = 0.0
+            metrics["win_rate"] = 0.0
 
         return metrics
 
-    def update_performance(self, signal_id_or_pnl=None, pnl_or_side=None,
-                           is_winner=None, profit_loss=None, pnl=None, signal_type=None):
+    def update_performance(
+        self,
+        signal_id_or_pnl=None,
+        pnl_or_side=None,
+        is_winner=None,
+        profit_loss=None,
+        pnl=None,
+        signal_type=None,
+    ):
         """
         Update performance metrics after trade completion.
 
@@ -239,19 +250,21 @@ class BaseStrategy(ABC):
         else:
             pnl = float(pnl_or_side) if pnl_or_side is not None else 0.0
 
-        self.performance_metrics['total_signals'] += 1
-        self.performance_metrics['total_pnl'] += pnl
+        self.performance_metrics["total_signals"] += 1
+        self.performance_metrics["total_pnl"] += pnl
 
         if is_winner:
-            self.performance_metrics['winning_signals'] += 1
-            self.performance_metrics['winning_trades'] += 1
+            self.performance_metrics["winning_signals"] += 1
+            self.performance_metrics["winning_trades"] += 1
         else:
-            self.performance_metrics['losing_signals'] += 1
-            self.performance_metrics['losing_trades'] += 1
+            self.performance_metrics["losing_signals"] += 1
+            self.performance_metrics["losing_trades"] += 1
 
-        total = self.performance_metrics['total_signals']
-        wins = self.performance_metrics['winning_trades']
-        self.performance_metrics['win_rate'] = (wins / total * 100.0) if total > 0 else 0.0
+        total = self.performance_metrics["total_signals"]
+        wins = self.performance_metrics["winning_trades"]
+        self.performance_metrics["win_rate"] = (
+            (wins / total * 100.0) if total > 0 else 0.0
+        )
 
     def __repr__(self) -> str:
         return (

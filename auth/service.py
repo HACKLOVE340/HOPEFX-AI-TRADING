@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # ── Access-token blacklist (Redis-backed, in-memory fallback) ─────────────────
 # Stores jti (JWT ID) of revoked access tokens until their natural expiry.
 
+
 class _TokenBlacklist:
     """
     Thin wrapper around Redis for access-token revocation.
@@ -48,13 +49,23 @@ class _TokenBlacklist:
         self._connected = True  # only attempt once
         try:
             import redis as _redis_lib
+
             host = os.getenv("REDIS_HOST", "localhost")
             port = int(os.getenv("REDIS_PORT", "6379"))
-            self._redis = _redis_lib.Redis(host=host, port=port, socket_connect_timeout=0.5, decode_responses=True, retry_on_error=[], retry=None)
+            self._redis = _redis_lib.Redis(
+                host=host,
+                port=port,
+                socket_connect_timeout=0.5,
+                decode_responses=True,
+                retry_on_error=[],
+                retry=None,
+            )
             self._redis.ping()
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
         except Exception:
-            logger.warning("Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)")
+            logger.warning(
+                "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)"
+            )
             self._redis = None
 
     def revoke(self, jti: str, ttl_seconds: int) -> None:
@@ -119,10 +130,13 @@ def _now() -> datetime:
 # Uses Fernet (AES-128-CBC + HMAC-SHA256) keyed from CONFIG_ENCRYPTION_KEY.
 # Falls back to base64 identity encoding when cryptography is not installed.
 
+
 def _get_fernet():
     try:
-        from cryptography.fernet import Fernet
         import base64
+
+        from cryptography.fernet import Fernet
+
         raw_key = os.getenv("CONFIG_ENCRYPTION_KEY", "")
         if not raw_key:
             return None
@@ -159,6 +173,7 @@ def decrypt_totp_secret(stored: str) -> str:
 # still being a secure, well-tested KDF.
 try:
     from passlib.context import CryptContext
+
     _pwd_ctx = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
     def hash_password(plain: str) -> str:
@@ -198,6 +213,7 @@ try:
         return _pyotp.TOTP(secret).verify(code, valid_window=1)
 
 except ImportError:
+
     def generate_totp_secret() -> str:  # type: ignore[misc]
         return secrets.token_hex(20)
 
@@ -262,7 +278,11 @@ class AuthService:
             session.add(user)
             session.commit()
             logger.info("User registered: %s", email)
-            return True, "Registration successful. Check your email to verify.", verify_token
+            return (
+                True,
+                "Registration successful. Check your email to verify.",
+                verify_token,
+            )
 
     # ── Email verification ────────────────────────────────────────────────────
 
@@ -274,7 +294,9 @@ class AuthService:
             user = session.query(User).filter_by(email_verify_token=token_hash).first()
             if not user:
                 return False, "Invalid or expired verification token"
-            if user.email_verify_expires and _now() > user.email_verify_expires.replace(tzinfo=timezone.utc):
+            if user.email_verify_expires and _now() > user.email_verify_expires.replace(
+                tzinfo=timezone.utc
+            ):
                 return False, "Verification token expired. Request a new one."
             user.is_email_verified = True
             user.status = UserStatus.ACTIVE.value
@@ -320,7 +342,7 @@ class AuthService:
             "user": {id, email, username, role}
         }
         """
-        from database.user_models import User, UserSession, LoginAttempt, UserStatus
+        from database.user_models import LoginAttempt, User, UserStatus
 
         email = email.lower().strip()
 
@@ -329,17 +351,20 @@ class AuthService:
 
             # Record attempt regardless of outcome
             def _record(success: bool, reason: str = ""):
-                session.add(LoginAttempt(
-                    user_id=user.id if user else None,
-                    email=email,
-                    ip_address=ip_address,
-                    success=success,
-                    failure_reason=reason if not success else None,
-                ))
+                session.add(
+                    LoginAttempt(
+                        user_id=user.id if user else None,
+                        email=email,
+                        ip_address=ip_address,
+                        success=success,
+                        failure_reason=reason if not success else None,
+                    )
+                )
                 session.commit()
                 # Prometheus metric
                 try:
                     from core.metrics import AUTH_ATTEMPTS
+
                     if success:
                         AUTH_ATTEMPTS.labels(outcome="success").inc()
                     elif reason == "account_locked":
@@ -366,7 +391,11 @@ class AuthService:
             )
             if recent_failures >= MAX_LOGIN_ATTEMPTS:
                 _record(False, "account_locked")
-                return False, f"Account locked. Too many failed attempts. Try again in {LOCKOUT_MINUTES} minutes.", None
+                return (
+                    False,
+                    f"Account locked. Too many failed attempts. Try again in {LOCKOUT_MINUTES} minutes.",
+                    None,
+                )
 
             if not verify_password(password, user.hashed_password):
                 _record(False, "wrong_password")
@@ -400,24 +429,30 @@ class AuthService:
             user.last_login_ip = ip_address
             _record(True)
 
-            return True, "Login successful", {
-                "access_token": access_token,
-                "refresh_token": raw_refresh,
-                "token_type": "bearer",
-                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                    "username": user.username,
-                    "role": user.role,
-                    "kyc_status": user.kyc_status,
-                    "totp_enabled": user.totp_enabled,
+            return (
+                True,
+                "Login successful",
+                {
+                    "access_token": access_token,
+                    "refresh_token": raw_refresh,
+                    "token_type": "bearer",
+                    "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "username": user.username,
+                        "role": user.role,
+                        "kyc_status": user.kyc_status,
+                        "totp_enabled": user.totp_enabled,
+                    },
                 },
-            }
+            )
 
     # ── Token refresh ─────────────────────────────────────────────────────────
 
-    def refresh(self, raw_refresh_token: str, ip_address: str = "unknown") -> Tuple[bool, str, Optional[dict]]:
+    def refresh(
+        self, raw_refresh_token: str, ip_address: str = "unknown"
+    ) -> Tuple[bool, str, Optional[dict]]:
         """
         Rotate refresh token. Old token is revoked, new pair issued.
         """
@@ -447,25 +482,37 @@ class AuthService:
 
             # Issue new pair
             access_token = self._create_access_token(user)
-            raw_new, _ = self._create_refresh_session(user, ip_address, sess_row.device_info or "", session)
+            raw_new, _ = self._create_refresh_session(
+                user, ip_address, sess_row.device_info or "", session
+            )
             session.commit()
 
-            return True, "Token refreshed", {
-                "access_token": access_token,
-                "refresh_token": raw_new,
-                "token_type": "bearer",
-                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            }
+            return (
+                True,
+                "Token refreshed",
+                {
+                    "access_token": access_token,
+                    "refresh_token": raw_new,
+                    "token_type": "bearer",
+                    "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                },
+            )
 
     # ── Logout ────────────────────────────────────────────────────────────────
 
-    def logout(self, raw_refresh_token: str, access_token: Optional[str] = None) -> Tuple[bool, str]:
+    def logout(
+        self, raw_refresh_token: str, access_token: Optional[str] = None
+    ) -> Tuple[bool, str]:
         from database.user_models import UserSession
 
         # Revoke refresh session in DB
         token_hash = _hash_token(raw_refresh_token)
         with self._sf() as session:
-            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash).first()
+            sess_row = (
+                session.query(UserSession)
+                .filter_by(refresh_token_hash=token_hash)
+                .first()
+            )
             if sess_row:
                 sess_row.is_revoked = True
                 sess_row.revoked_at = _now()
@@ -474,7 +521,9 @@ class AuthService:
         # Blacklist the access token immediately so it can't be reused
         if access_token:
             try:
-                payload = jwt.decode(access_token, _get_secret(), algorithms=[ALGORITHM])
+                payload = jwt.decode(
+                    access_token, _get_secret(), algorithms=[ALGORITHM]
+                )
                 jti = payload.get("jti")
                 exp = payload.get("exp", 0)
                 if jti:
@@ -490,9 +539,9 @@ class AuthService:
         from database.user_models import UserSession
 
         with self._sf() as session:
-            session.query(UserSession).filter_by(user_id=user_id, is_revoked=False).update(
-                {"is_revoked": True, "revoked_at": _now()}
-            )
+            session.query(UserSession).filter_by(
+                user_id=user_id, is_revoked=False
+            ).update({"is_revoked": True, "revoked_at": _now()})
             session.commit()
         return True, "All sessions revoked"
 
@@ -505,7 +554,11 @@ class AuthService:
             user = session.query(User).filter_by(email=email.lower().strip()).first()
             if not user:
                 # Don't reveal whether email exists
-                return True, "If that email is registered, a reset link has been sent.", None
+                return (
+                    True,
+                    "If that email is registered, a reset link has been sent.",
+                    None,
+                )
             token = secrets.token_urlsafe(32)
             user.password_reset_token = _hash_token(token)
             user.password_reset_expires = _now() + timedelta(hours=1)
@@ -520,10 +573,15 @@ class AuthService:
 
         token_hash = _hash_token(token)
         with self._sf() as session:
-            user = session.query(User).filter_by(password_reset_token=token_hash).first()
+            user = (
+                session.query(User).filter_by(password_reset_token=token_hash).first()
+            )
             if not user:
                 return False, "Invalid or expired reset token"
-            if user.password_reset_expires and _now() > user.password_reset_expires.replace(tzinfo=timezone.utc):
+            if (
+                user.password_reset_expires
+                and _now() > user.password_reset_expires.replace(tzinfo=timezone.utc)
+            ):
                 return False, "Reset token expired. Request a new one."
             user.hashed_password = hash_password(new_password)
             user.password_reset_token = None
@@ -588,14 +646,18 @@ class AuthService:
             "sub": user.id,
             "email": user.email,
             "role": user.role,
-            "jti": secrets.token_hex(16),   # unique token ID for blacklisting
+            "jti": secrets.token_hex(16),  # unique token ID for blacklisting
             "iat": int(now.timestamp()),
-            "exp": int((now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp()),
+            "exp": int(
+                (now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp()
+            ),
             "type": "access",
         }
         return jwt.encode(payload, _get_secret(), algorithm=ALGORITHM)
 
-    def _create_refresh_session(self, user, ip_address: str, device_info: str, session) -> Tuple[str, object]:
+    def _create_refresh_session(
+        self, user, ip_address: str, device_info: str, session
+    ) -> Tuple[str, object]:
         from database.user_models import UserSession
 
         raw_token = secrets.token_urlsafe(48)

@@ -8,14 +8,13 @@ Read-only endpoints use get_current_user.
 Token generation is handled externally (login endpoint / mobile auth).
 """
 
-import os
 import logging
-from datetime import datetime, timezone
+import os
 from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -26,13 +25,15 @@ _bearer = HTTPBearer(auto_error=True)
 _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
 
 ALLOWED_SYMBOLS = frozenset(
-    os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF").split(",")
+    os.getenv(
+        "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF"
+    ).split(",")
 )
 MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
 
 class TokenPayload(BaseModel):
-    sub: str          # user_id
+    sub: str  # user_id
     role: str = "user"
     exp: Optional[int] = None
     iat: Optional[int] = None
@@ -43,7 +44,7 @@ def _get_jwt_secret() -> str:
     if not secret:
         raise RuntimeError(
             "SECURITY_JWT_SECRET environment variable is not set. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
         )
     if len(secret) < 32:
         raise RuntimeError("SECURITY_JWT_SECRET must be at least 32 characters")
@@ -66,6 +67,7 @@ def _decode_token(token: str) -> TokenPayload:
         if jti:
             try:
                 from auth.service import is_access_token_revoked
+
                 if is_access_token_revoked(jti):
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,7 +77,9 @@ def _decode_token(token: str) -> TokenPayload:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.warning("Token blacklist check failed, allowing token (fail-open): %s", exc)
+                logger.warning(
+                    "Token blacklist check failed, allowing token (fail-open): %s", exc
+                )
 
         return TokenPayload(**payload)
     except HTTPException:
@@ -117,6 +121,7 @@ def require_role(minimum_role: str):
         async def place_order(user: TokenPayload = Depends(require_role("trader"))):
             ...
     """
+
     def _check(user: TokenPayload = Depends(get_current_user)) -> TokenPayload:
         caller_rank = _ROLE_RANK.get(user.role, -1)
         required_rank = _ROLE_RANK.get(minimum_role, 999)
@@ -174,7 +179,9 @@ def require_kyc(
     try:
         # Resolve compliance_manager from the request's app state so that
         # test apps (which have no compliance_manager) bypass the check.
-        from app import app as _main_app, app_state
+        from app import app as _main_app
+        from app import app_state
+
         if request.app is not _main_app:
             return user  # not the main app — skip KYC (test / embedded app)
         if app_state.compliance_manager is not None:
@@ -182,7 +189,7 @@ def require_kyc(
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="KYC verification required before trading. "
-                           "Please complete identity verification.",
+                    "Please complete identity verification.",
                 )
     except ImportError:
         pass  # app not fully initialised (e.g. during tests)

@@ -30,17 +30,18 @@ router = APIRouter(prefix="/ml", tags=["ML Models"])
 
 # ── Lazy model loader ─────────────────────────────────────────────────────────
 
+
 def _load_model_registry() -> Dict[str, Any]:
     """Return a dict of available saved models with metadata."""
-    import pathlib, joblib
+    import pathlib
 
     saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
     registry: Dict[str, Any] = {}
 
     model_files = {
-        "xgb_macro":  "xgb_macro.pkl",
-        "rf_xauusd":  "rf_xauusd.pkl",
-        "rf_macro":   "rf_macro.pkl",
+        "xgb_macro": "xgb_macro.pkl",
+        "rf_xauusd": "rf_xauusd.pkl",
+        "rf_macro": "rf_macro.pkl",
     }
 
     for name, fname in model_files.items():
@@ -49,14 +50,14 @@ def _load_model_registry() -> Dict[str, Any]:
             try:
                 stat = path.stat()
                 registry[name] = {
-                    "model_id":   name,
-                    "name":       name.replace("_", " ").title(),
-                    "file":       fname,
-                    "size_kb":    round(stat.st_size / 1024, 1),
+                    "model_id": name,
+                    "name": name.replace("_", " ").title(),
+                    "file": fname,
+                    "size_kb": round(stat.st_size / 1024, 1),
                     "trained_at": datetime.fromtimestamp(
                         stat.st_mtime, tz=timezone.utc
                     ).isoformat(),
-                    "available":  True,
+                    "available": True,
                 }
             except Exception as exc:
                 logger.debug("Could not stat model %s: %s", fname, exc)
@@ -71,12 +72,21 @@ def _get_predictor():
     """Return the active ML predictor (XGBoost macro model preferred)."""
     try:
         from ml.models.ensemble import EnsemblePredictor
+
         return EnsemblePredictor()
     except Exception as exc:
         logger.debug("EnsemblePredictor unavailable, trying saved model: %s", exc)
     try:
-        import joblib, pathlib
-        path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
+        import pathlib
+
+        import joblib
+
+        path = (
+            pathlib.Path(__file__).parent.parent
+            / "ml"
+            / "saved_models"
+            / "xgb_macro.pkl"
+        )
         if path.exists():
             return joblib.load(str(path))
     except Exception as exc:
@@ -86,45 +96,47 @@ def _get_predictor():
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+
 class PredictRequest(BaseModel):
     timeframe: str = Field("H1", description="Candle timeframe: M15, H1, H4, D1")
-    lookback:  int = Field(100, ge=20, le=500, description="Number of candles to use")
+    lookback: int = Field(100, ge=20, le=500, description="Number of candles to use")
 
 
 class PredictResponse(BaseModel):
-    symbol:     str
-    direction:  str          # BUY | SELL | HOLD
-    confidence: float        # 0–100
+    symbol: str
+    direction: str  # BUY | SELL | HOLD
+    confidence: float  # 0–100
     entry_price: Optional[float] = None
-    stop_loss:   Optional[float] = None
+    stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     features_used: int = 0
-    model_id:   str = "xgb_macro"
+    model_id: str = "xgb_macro"
     generated_at: str
 
 
 class AccuracyResponse(BaseModel):
-    model_id:       str
-    accuracy:       float
-    precision:      float
-    recall:         float
-    f1:             float
-    sharpe:         float
-    win_rate:       float
-    total_signals:  int
-    evaluated_at:   str
-    note:           str = ""
+    model_id: str
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+    sharpe: float
+    win_rate: float
+    total_signals: int
+    evaluated_at: str
+    note: str = ""
 
 
 class ModelInfo(BaseModel):
-    model_id:   str
-    name:       str
-    available:  bool
-    size_kb:    Optional[float] = None
-    trained_at: Optional[str]  = None
+    model_id: str
+    name: str
+    available: bool
+    size_kb: Optional[float] = None
+    trained_at: Optional[str] = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/accuracy", response_model=AccuracyResponse)
 async def get_accuracy():
@@ -134,7 +146,8 @@ async def get_accuracy():
     Reads from the most recent evaluation CSV if available; otherwise
     returns the last known metrics from the saved model metadata.
     """
-    import pathlib, json
+    import json
+    import pathlib
 
     # Try to load evaluation results from disk
     eval_paths = [
@@ -146,32 +159,34 @@ async def get_accuracy():
             try:
                 data = json.loads(p.read_text())
                 return AccuracyResponse(
-                    model_id      = data.get("model_id", "xgb_macro"),
-                    accuracy      = float(data.get("accuracy", 0.49)),
-                    precision     = float(data.get("precision", 0.50)),
-                    recall        = float(data.get("recall", 0.50)),
-                    f1            = float(data.get("f1", 0.50)),
-                    sharpe        = float(data.get("sharpe", 0.0)),
-                    win_rate      = float(data.get("win_rate", 0.49)),
-                    total_signals = int(data.get("total_signals", 0)),
-                    evaluated_at  = data.get("evaluated_at", datetime.now(timezone.utc).isoformat()),
-                    note          = data.get("note", ""),
+                    model_id=data.get("model_id", "xgb_macro"),
+                    accuracy=float(data.get("accuracy", 0.49)),
+                    precision=float(data.get("precision", 0.50)),
+                    recall=float(data.get("recall", 0.50)),
+                    f1=float(data.get("f1", 0.50)),
+                    sharpe=float(data.get("sharpe", 0.0)),
+                    win_rate=float(data.get("win_rate", 0.49)),
+                    total_signals=int(data.get("total_signals", 0)),
+                    evaluated_at=data.get(
+                        "evaluated_at", datetime.now(timezone.utc).isoformat()
+                    ),
+                    note=data.get("note", ""),
                 )
             except Exception as exc:
                 logger.debug("Could not parse eval file %s: %s", p, exc)
 
     # Fallback: return baseline metrics with a note
     return AccuracyResponse(
-        model_id      = "xgb_macro",
-        accuracy      = 0.49,
-        precision     = 0.50,
-        recall        = 0.50,
-        f1            = 0.50,
-        sharpe        = 0.0,
-        win_rate      = 0.49,
-        total_signals = 0,
-        evaluated_at  = datetime.now(timezone.utc).isoformat(),
-        note          = "Model not yet evaluated on real data. Run: python ml/train_with_macro.py --years 8",
+        model_id="xgb_macro",
+        accuracy=0.49,
+        precision=0.50,
+        recall=0.50,
+        f1=0.50,
+        sharpe=0.0,
+        win_rate=0.49,
+        total_signals=0,
+        evaluated_at=datetime.now(timezone.utc).isoformat(),
+        note="Model not yet evaluated on real data. Run: python ml/train_with_macro.py --years 8",
     )
 
 
@@ -201,17 +216,19 @@ async def predict(symbol: str, body: PredictRequest):
         try:
             # Try ensemble predict
             if hasattr(predictor, "predict_symbol"):
-                result = predictor.predict_symbol(symbol_upper, timeframe=body.timeframe)
+                result = predictor.predict_symbol(
+                    symbol_upper, timeframe=body.timeframe
+                )
                 return PredictResponse(
-                    symbol       = symbol_upper,
-                    direction    = result.get("direction", "HOLD"),
-                    confidence   = float(result.get("confidence", 50.0)),
-                    entry_price  = result.get("entry_price"),
-                    stop_loss    = result.get("stop_loss"),
-                    take_profit  = result.get("take_profit"),
-                    features_used= result.get("features_used", 0),
-                    model_id     = result.get("model_id", "xgb_macro"),
-                    generated_at = now_iso,
+                    symbol=symbol_upper,
+                    direction=result.get("direction", "HOLD"),
+                    confidence=float(result.get("confidence", 50.0)),
+                    entry_price=result.get("entry_price"),
+                    stop_loss=result.get("stop_loss"),
+                    take_profit=result.get("take_profit"),
+                    features_used=result.get("features_used", 0),
+                    model_id=result.get("model_id", "xgb_macro"),
+                    generated_at=now_iso,
                 )
         except Exception as exc:
             logger.warning("Predictor failed for %s: %s", symbol, exc)
@@ -219,19 +236,19 @@ async def predict(symbol: str, body: PredictRequest):
     # Fallback: deterministic mock based on symbol hash
     rng = random.Random(hash(symbol_upper + body.timeframe) % 10000)
     directions = ["BUY", "SELL", "HOLD"]
-    direction  = rng.choice(directions)
+    direction = rng.choice(directions)
     confidence = round(50 + rng.random() * 30, 1)
 
     return PredictResponse(
-        symbol       = symbol_upper,
-        direction    = direction,
-        confidence   = confidence,
-        entry_price  = None,
-        stop_loss    = None,
-        take_profit  = None,
-        features_used= 0,
-        model_id     = "fallback",
-        generated_at = now_iso,
+        symbol=symbol_upper,
+        direction=direction,
+        confidence=confidence,
+        entry_price=None,
+        stop_loss=None,
+        take_profit=None,
+        features_used=0,
+        model_id="fallback",
+        generated_at=now_iso,
     )
 
 
@@ -241,9 +258,13 @@ async def get_feature_importances():
     Return feature importances for the active XGBoost model.
     Used by the explainability panel.
     """
-    import pathlib, joblib
+    import pathlib
 
-    model_path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
+    import joblib
+
+    model_path = (
+        pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
+    )
     if not model_path.exists():
         return {"features": [], "note": "Model not trained yet"}
 
@@ -288,7 +309,9 @@ async def trigger_retrain(
 
     def _retrain():
         try:
-            import subprocess, sys
+            import subprocess
+            import sys
+
             script = os.path.join(
                 os.path.dirname(__file__), "..", "ml", "train_with_macro.py"
             )
@@ -306,6 +329,6 @@ async def trigger_retrain(
 
     background_tasks.add_task(_retrain)
     return {
-        "status":  "queued",
+        "status": "queued",
         "message": "Model retraining started in background. Check /ml/accuracy in ~10 minutes.",
     }
