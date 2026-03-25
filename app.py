@@ -19,7 +19,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
