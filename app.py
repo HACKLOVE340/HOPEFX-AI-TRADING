@@ -435,619 +435,421 @@ app.router.lifespan_context = lifespan
 
 
 async def startup_event():
-    """Initialize application on startup"""
+    """Initialize application on startup via ComponentRegistry."""
     logger.info("=" * 70)
     logger.info("HOPEFX AI TRADING API - STARTING")
     logger.info("=" * 70)
 
-    try:
-        # ── Environment validation ────────────────────────────────────────────
-        # Warn about optional but important keys so operators notice early.
-        if not os.getenv('OPENAI_API_KEY'):
-            logger.warning(
-                "OPENAI_API_KEY not set — /api/chat will return 503 until configured"
-            )
+    from core.component_registry import ComponentRegistry
+    _registry = ComponentRegistry()
 
-        # Set dev defaults before validation so the app can start in dev mode.
+    # ── Factory definitions (one per component) ───────────────────────────────
+
+    async def _init_env(s):
+        if not os.getenv('OPENAI_API_KEY'):
+            logger.warning("OPENAI_API_KEY not set — /api/chat will return 503 until configured")
         if not os.getenv('CONFIG_ENCRYPTION_KEY'):
             logger.warning("CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)")
             os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
         if not os.getenv('SECURITY_JWT_SECRET'):
             logger.warning("SECURITY_JWT_SECRET not set — using dev default (not for production)")
             os.environ['SECURITY_JWT_SECRET'] = 'dev-jwt-secret-minimum-32-characters-long!!'
-
         try:
             from core.env_validator import validate_and_report
             validate_and_report(strict=False, exit_on_error=False)
         except Exception as _ve:
             logger.warning("Env validator unavailable: %s", _ve)
+        return True
 
-        # Initialize configuration
-        logger.info("Loading configuration...")
-        encryption_key = os.getenv('CONFIG_ENCRYPTION_KEY')
-
+    async def _init_config(s):
         _raw_config = initialize_config()
-        # initialize_config() may return a dict — wrap it in a namespace so
-        # attribute access works throughout the app.
         if isinstance(_raw_config, dict):
             class _DB:
-                """Minimal database config object."""
                 connection_pool_size = 5
                 max_overflow = 10
                 def get_connection_string(self):
                     return os.getenv('DATABASE_URL', 'sqlite:///hopefx.db')
-
             class _ConfigNS:
                 def __init__(self, d):
                     for k, v in d.items():
                         setattr(self, k, v)
                     if not hasattr(self, 'environment'):
                         self.environment = os.getenv('APP_ENV', 'development')
-                    # Always replace database with a proper object
                     self.database = _DB()
                     if not hasattr(self, 'api_configs'):
                         self.api_configs = {}
-            app_state.config = _ConfigNS(_raw_config)
+            cfg = _ConfigNS(_raw_config)
         else:
-            app_state.config = _raw_config
-        logger.info(f"✓ Configuration loaded: {app_state.config.environment}")
+            cfg = _raw_config
+        logger.info("Configuration loaded: %s", cfg.environment)
+        return cfg
 
-        # Initialize database
-        logger.info("Initializing database...")
-        connection_string = app_state.config.database.get_connection_string()
-        app_state.db_engine = create_engine(
-            connection_string,
-            pool_size=app_state.config.database.connection_pool_size,
-            max_overflow=app_state.config.database.max_overflow,
+    async def _init_database(s):
+        conn_str = s.config.database.get_connection_string()
+        engine = create_engine(
+            conn_str,
+            pool_size=s.config.database.connection_pool_size,
+            max_overflow=s.config.database.max_overflow,
         )
         try:
-            # Run Alembic migrations instead of create_all so schema changes
-            # are tracked and applied incrementally.
             from alembic.config import Config as AlembicConfig
             from alembic import command as alembic_command
             alembic_cfg = AlembicConfig("alembic.ini")
-            alembic_cfg.set_main_option("sqlalchemy.url", connection_string)
+            alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
             alembic_command.upgrade(alembic_cfg, "head")
-            logger.info("✓ Database migrations applied (alembic upgrade head)")
+            logger.info("Database migrations applied (alembic upgrade head)")
         except Exception as e:
-            logger.warning(f"⚠ Alembic migration failed ({e}), falling back to create_all")
+            logger.warning("Alembic migration failed (%s), falling back to create_all", e)
             try:
-                Base.metadata.create_all(app_state.db_engine)
-                logger.info("✓ Database initialized via create_all fallback")
+                Base.metadata.create_all(engine)
             except Exception as e2:
-                logger.warning(f"⚠ create_all also failed: {e2}")
-        
-        app_state.db_session_factory = sessionmaker(bind=app_state.db_engine)
+                logger.warning("create_all also failed: %s", e2)
+        s.db_engine = engine
+        s.db_session_factory = sessionmaker(bind=engine)
+        return engine
 
-        # Initialize cache
-        logger.info("Initializing cache...")
-        try:
-            redis_host = os.getenv('REDIS_HOST', 'localhost')
-            redis_port = int(os.getenv('REDIS_PORT', 6379))
-            app_state.cache = MarketDataCache(
-                host=redis_host,
-                port=redis_port,
-                max_retries=1,
-                socket_connect_timeout=1,
-                enable_fallback=True,
-            )
-            logger.info("✓ Cache initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Cache initialization failed: {e}")
-            app_state.cache = None
+    async def _init_cache(s):
+        cache = MarketDataCache(
+            host=os.getenv('REDIS_HOST', 'localhost'),
+            port=int(os.getenv('REDIS_PORT', 6379)),
+            max_retries=1,
+            socket_connect_timeout=1,
+            enable_fallback=True,
+        )
+        return cache
 
-        # ── Data Scheduler ───────────────────────────────────────────────────
-        try:
-            from data.scheduler import DataScheduler
-            _data_scheduler = DataScheduler()
-            _ds_task = asyncio.create_task(_data_scheduler.start())
-            app_state.background_tasks.append(_ds_task)
-            app_state.data_scheduler = _data_scheduler
-            logger.info("✓ Data scheduler started")
-            log_activity("Data scheduler started")
-        except Exception as e:
-            logger.warning("⚠ Data scheduler not available: %s", e)
-            app_state.data_scheduler = None
+    async def _init_data_scheduler(s):
+        from data.scheduler import DataScheduler
+        ds = DataScheduler()
+        t = asyncio.create_task(ds.start())
+        s.background_tasks.append(t)
+        s.data_scheduler = ds
+        log_activity("Data scheduler started")
+        return ds
 
-        # Register optional routers with graceful degradation
-        try:
-            from api.websocket_server import WebSocketManager, create_websocket_router
-            ws_manager = WebSocketManager()
-            app.include_router(create_websocket_router(ws_manager))
-            app_state.ws_manager = ws_manager
-            logger.info("✓ WebSocket router registered")
-            log_activity("WebSocket router registered")
-            # Start background price-streaming task (broadcasts to WS clients)
-            _t = asyncio.create_task(_price_stream_loop(ws_manager))
-            app_state.background_tasks.append(_t)
-            logger.info("✓ Price streaming background task started")
-            # Start OANDA price poller (writes real ticks into broker price table)
-            _t2 = asyncio.create_task(_oanda_price_poller(app_state))
-            app_state.background_tasks.append(_t2)
-            logger.info("✓ OANDA price poller task started")
-        except Exception as e:
-            logger.warning(f"⚠ WebSocket router not available: {e}")
-            log_activity(f"WebSocket router unavailable: {e}")
+    async def _init_websocket(s):
+        from api.websocket_server import WebSocketManager, create_websocket_router
+        ws = WebSocketManager()
+        app.include_router(create_websocket_router(ws))
+        s.ws_manager = ws
+        log_activity("WebSocket router registered")
+        t = asyncio.create_task(_price_stream_loop(ws))
+        s.background_tasks.append(t)
+        t2 = asyncio.create_task(_oanda_price_poller(s))
+        s.background_tasks.append(t2)
+        return ws
 
-        try:
-            from notifications.alert_engine import AlertEngine, create_alert_router
-            _smtp_to_raw = os.getenv("SMTP_TO", "")
-            _smtp_to = [a.strip() for a in _smtp_to_raw.split(",") if a.strip()]
-            _alert_config = {
-                # SMTP email
-                "smtp_host":     os.getenv("SMTP_HOST", ""),
-                "smtp_port":     int(os.getenv("SMTP_PORT", "587")),
-                "smtp_username": os.getenv("SMTP_USERNAME", ""),
-                "smtp_password": os.getenv("SMTP_PASSWORD", ""),
-                "smtp_from":     os.getenv("SMTP_FROM", ""),
-                "smtp_to":       _smtp_to,
-                # Telegram
-                "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-                "telegram_chat_id":   os.getenv("TELEGRAM_CHAT_ID", ""),
-                # Discord
-                "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
-            }
-            alert_engine = AlertEngine(config=_alert_config)
-            app.include_router(create_alert_router(alert_engine))
-            app_state.alert_engine = alert_engine
-            logger.info("✓ Alert router registered")
-            log_activity("Alert router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Alert router not available: {e}")
-            log_activity(f"Alert router unavailable: {e}")
+    async def _init_alert_engine(s):
+        from notifications.alert_engine import AlertEngine, create_alert_router
+        _smtp_to = [a.strip() for a in os.getenv("SMTP_TO", "").split(",") if a.strip()]
+        cfg = {
+            "smtp_host": os.getenv("SMTP_HOST", ""), "smtp_port": int(os.getenv("SMTP_PORT", "587")),
+            "smtp_username": os.getenv("SMTP_USERNAME", ""), "smtp_password": os.getenv("SMTP_PASSWORD", ""),
+            "smtp_from": os.getenv("SMTP_FROM", ""), "smtp_to": _smtp_to,
+            "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+            "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
+        }
+        ae = AlertEngine(config=cfg)
+        app.include_router(create_alert_router(ae))
+        log_activity("Alert router registered")
+        return ae
 
-        try:
-            from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
-            order_flow_analyzer = OrderFlowAnalyzer()
-            app.include_router(create_order_flow_router(order_flow_analyzer))
-            app_state.order_flow_analyzer = order_flow_analyzer
-            logger.info("✓ Order Flow router registered")
-            log_activity("Order Flow router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Order Flow router not available: {e}")
-            log_activity(f"Order Flow router unavailable: {e}")
+    async def _init_order_flow(s):
+        from analysis.order_flow import OrderFlowAnalyzer, create_order_flow_router
+        ofa = OrderFlowAnalyzer()
+        app.include_router(create_order_flow_router(ofa))
+        return ofa
 
-        try:
-            from data.time_and_sales import TimeAndSalesService, create_time_and_sales_router
-            time_and_sales_service = TimeAndSalesService()
-            app.include_router(create_time_and_sales_router(time_and_sales_service))
-            app_state.time_and_sales_service = time_and_sales_service
-            logger.info("✓ Time & Sales router registered (/api/timesales)")
-            log_activity("Time & Sales router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Time & Sales router not available: {e}")
-            log_activity(f"Time & Sales router unavailable: {e}")
+    async def _init_time_and_sales(s):
+        from data.time_and_sales import TimeAndSalesService, create_time_and_sales_router
+        svc = TimeAndSalesService()
+        app.include_router(create_time_and_sales_router(svc))
+        return svc
 
-        try:
-            from analysis.order_flow_dashboard import OrderFlowDashboard, create_dashboard_router
-            order_flow_dashboard = OrderFlowDashboard()
-            app.include_router(create_dashboard_router(order_flow_dashboard))
-            app_state.order_flow_dashboard = order_flow_dashboard
-            logger.info("✓ Order Flow Dashboard router registered (/api/dashboard)")
-            log_activity("Order Flow Dashboard router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Order Flow Dashboard router not available: {e}")
-            log_activity(f"Order Flow Dashboard router unavailable: {e}")
+    async def _init_market_scanner(s):
+        from analysis.market_scanner import MarketScanner, create_scanner_router
+        ms = MarketScanner()
+        app.include_router(create_scanner_router(ms))
+        return ms
 
-        try:
-            from analysis.market_scanner import MarketScanner, create_scanner_router
-            market_scanner = MarketScanner()
-            app.include_router(create_scanner_router(market_scanner))
-            app_state.market_scanner = market_scanner
-            logger.info("✓ Market Scanner router registered")
-            log_activity("Market Scanner router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Market Scanner router not available: {e}")
-            log_activity(f"Market Scanner router unavailable: {e}")
+    async def _init_dom(s):
+        from data.depth_of_market import DepthOfMarketService, create_dom_router
+        dom = DepthOfMarketService()
+        app.include_router(create_dom_router(dom))
+        return dom
 
-        try:
-            from data.depth_of_market import DepthOfMarketService, create_dom_router
-            dom_service = DepthOfMarketService()
-            app.include_router(create_dom_router(dom_service))
-            app_state.dom_service = dom_service
-            logger.info("✓ DOM router registered")
-            log_activity("DOM router registered")
-        except Exception as e:
-            logger.warning(f"⚠ DOM router not available: {e}")
-            log_activity(f"DOM router unavailable: {e}")
+    async def _init_signals_router(s):
+        from api.signals import create_signals_router
+        r = create_signals_router()
+        if r:
+            app.include_router(r)
+        return r
 
-        try:
-            from api.signals import create_signals_router
-            signals_router = create_signals_router()
-            if signals_router is not None:
-                app.include_router(signals_router)
-                logger.info("✓ Real-Time Signals router registered")
-                log_activity("Signals router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Signals router not available: {e}")
-            log_activity(f"Signals router unavailable: {e}")
+    async def _init_news_router(s):
+        from news import create_news_router
+        r = create_news_router()
+        if r:
+            app.include_router(r)
+        return r
 
-        try:
-            from news import create_news_router
-            news_router = create_news_router()
-            if news_router is not None:
-                app.include_router(news_router)
-                logger.info("✓ News & Geopolitical Intelligence router registered")
-                log_activity("News router registered")
-        except Exception as e:
-            logger.warning(f"⚠ News router not available: {e}")
-            log_activity(f"News router unavailable: {e}")
+    async def _init_auth(s):
+        from database.user_models import User, UserSession, LoginAttempt
+        User.__table__.create(s.db_engine, checkfirst=True)
+        UserSession.__table__.create(s.db_engine, checkfirst=True)
+        LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
+        from auth.service import AuthService
+        svc = AuthService(session_factory=s.db_session_factory)
+        set_auth_service(svc)
+        log_activity("Auth Service initialized")
+        return svc
 
-        # ── Auth Service ─────────────────────────────────────────────────────
-        try:
-            from database.user_models import User, UserSession, LoginAttempt
-            # Ensure user tables exist
-            from database.models import Base as _Base
-            User.__table__.create(app_state.db_engine, checkfirst=True)
-            UserSession.__table__.create(app_state.db_engine, checkfirst=True)
-            LoginAttempt.__table__.create(app_state.db_engine, checkfirst=True)
+    async def _init_risk_manager(s):
+        from risk.manager import RiskManager, RiskConfig
+        rc = RiskConfig(
+            max_position_size_pct=float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.02")),
+            max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
+            daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
+        )
+        rm = RiskManager(config=rc)
+        log_activity("Risk Manager initialized")
+        return rm
 
-            from auth.service import AuthService
-            auth_svc = AuthService(session_factory=app_state.db_session_factory)
-            set_auth_service(auth_svc)
-            app_state.auth_service = auth_svc
-            logger.info("✓ Auth Service initialized")
-            log_activity("Auth Service initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Auth Service not available: {e}")
-            app_state.auth_service = None
+    async def _init_broker(s):
+        from brokers.paper_trading import PaperTradingBroker
+        bal = float(os.getenv("PAPER_TRADING_BALANCE", "10000"))
+        b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
+        await b.connect()
+        log_activity("Paper Trading Broker connected")
+        return b
 
-        # ── Risk Manager ─────────────────────────────────────────────────────
-        try:
-            from risk.manager import RiskManager, RiskConfig
-            risk_config = RiskConfig(
-                max_position_size_pct=float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.02")),
-                max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
-                daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
-            )
-            app_state.risk_manager = RiskManager(config=risk_config)
-            logger.info("✓ Risk Manager initialized")
-            log_activity("Risk Manager initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Risk Manager not available: {e}")
-            app_state.risk_manager = None
+    async def _init_price_engine(s):
+        from data.real_time_price_engine import RealTimePriceEngine
+        from brokers.paper_trading import PaperTradingBroker as _PTB
+        syms = [x.strip().upper() for x in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",") if x.strip()]
+        pe = RealTimePriceEngine({"symbols": syms, "websocket_url": os.getenv("WS_PRICE_FEED_URL", ""), "rest_url": os.getenv("REST_PRICE_FEED_URL", "")})
+        await pe.start()
+        if isinstance(s.broker, _PTB):
+            s.broker.set_price_feed(pe)
+        return pe
 
-        # ── Broker ───────────────────────────────────────────────────────────
-        try:
-            from brokers.paper_trading import PaperTradingBroker
-            initial_balance = float(os.getenv("PAPER_TRADING_BALANCE", "10000"))
-            paper_broker = PaperTradingBroker(
-                initial_balance=initial_balance,
-                session_factory=app_state.db_session_factory,
-            )
-            await paper_broker.connect()
-            app_state.broker = paper_broker
-            logger.info("✓ Paper Trading Broker connected (balance=$%.2f)", initial_balance)
-            log_activity("Paper Trading Broker connected")
-        except Exception as e:
-            logger.warning(f"⚠ Broker not available: {e}")
-            app_state.broker = None
+    async def _init_compliance(s):
+        from compliance.compliance_manager import ComplianceManager
+        return ComplianceManager(session_factory=s.db_session_factory)
 
-        # ── Real-Time Price Engine ────────────────────────────────────────────
-        try:
-            from data.real_time_price_engine import RealTimePriceEngine
-            from brokers.paper_trading import PaperTradingBroker as _PTB
-            _symbols = [
-                s.strip().upper()
-                for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
-                if s.strip()
-            ]
-            _price_cfg = {
-                "symbols": _symbols,
-                "websocket_url": os.getenv("WS_PRICE_FEED_URL", ""),
-                "rest_url": os.getenv("REST_PRICE_FEED_URL", ""),
-            }
-            price_engine = RealTimePriceEngine(_price_cfg)
-            await price_engine.start()
-            app_state.price_engine = price_engine
-            # Connect paper broker to the price feed so get_market_price()
-            # returns live ticks instead of static startup values.
-            if isinstance(app_state.broker, _PTB):
-                app_state.broker.set_price_feed(price_engine)
-            logger.info(
-                "✓ RealTimePriceEngine started — symbols=%s", _symbols
-            )
-            log_activity("RealTimePriceEngine started")
-        except Exception as e:
-            logger.warning("⚠ RealTimePriceEngine not available: %s", e)
-            app_state.price_engine = None
+    async def _init_aml(s):
+        from compliance.aml import init_aml_gate
+        init_aml_gate(session_factory=s.db_session_factory)
+        return True
 
-        # ── Compliance Manager ───────────────────────────────────────────────
-        try:
-            from compliance.compliance_manager import ComplianceManager
-            app_state.compliance_manager = ComplianceManager(
-                session_factory=app_state.db_session_factory
-            )
-            logger.info("✓ Compliance Manager initialized (DB-backed)")
-            log_activity("Compliance Manager initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Compliance Manager not available: {e}")
-            app_state.compliance_manager = None
+    async def _init_strategy_brain(s):
+        from strategies.strategy_brain import StrategyBrain
+        from strategies.base import StrategyConfig
+        from strategies.ma_crossover import MovingAverageCrossover
+        from strategies.rsi_strategy import RSIStrategy
+        from strategies.macd_strategy import MACDStrategy
+        from strategies.bollinger_bands import BollingerBandsStrategy
+        def _cfg(name): return StrategyConfig(name=name, symbol="XAUUSD", timeframe="1h")
+        brain = StrategyBrain()
+        brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
+        brain.register_strategy(RSIStrategy(_cfg("RSI")))
+        brain.register_strategy(MACDStrategy(_cfg("MACD")))
+        brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
+        return brain
 
-        # ── AML Gate ─────────────────────────────────────────────────────────
-        try:
-            from compliance.aml import init_aml_gate
-            init_aml_gate(session_factory=app_state.db_session_factory)
-            logger.info("✓ AML Gate initialized (DB-backed)")
-            log_activity("AML Gate initialized")
-        except Exception as e:
-            logger.warning(f"⚠ AML Gate not available: {e}")
+    async def _init_event_store(s):
+        from events.event_store import get_event_store
+        es = get_event_store()
+        await es.start()
+        return es
 
-        # ── Strategy Brain ───────────────────────────────────────────────────
-        try:
-            from strategies.strategy_brain import StrategyBrain
-            from strategies.base import StrategyConfig
-            from strategies.ma_crossover import MovingAverageCrossover
-            from strategies.rsi_strategy import RSIStrategy
-            from strategies.macd_strategy import MACDStrategy
-            from strategies.bollinger_bands import BollingerBandsStrategy
+    async def _init_position_tracker(s):
+        from execution.position_tracker import PositionTracker
+        return PositionTracker()
 
-            def _cfg(name, symbol="XAUUSD", tf="1h"):
-                return StrategyConfig(name=name, symbol=symbol, timeframe=tf)
+    async def _init_trade_executor(s):
+        from execution.trade_executor import TradeExecutor
+        return TradeExecutor(broker=s.broker, risk_manager=s.risk_manager, position_tracker=s.position_tracker)
 
-            brain = StrategyBrain()
-            brain.register_strategy(MovingAverageCrossover(_cfg("MA_Crossover")))
-            brain.register_strategy(RSIStrategy(_cfg("RSI")))
-            brain.register_strategy(MACDStrategy(_cfg("MACD")))
-            brain.register_strategy(BollingerBandsStrategy(_cfg("BB")))
-            app_state.strategy_brain = brain
-            logger.info("✓ Strategy Brain initialized with 4 strategies")
-            log_activity("Strategy Brain initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Strategy Brain not available: {e}")
-            app_state.strategy_brain = None
+    async def _init_hopefx_brain(s):
+        from brain.brain import HOPEFXBrain
+        b = HOPEFXBrain(config={"max_decision_history": 1000, "regime_check_interval": 60, "circuit_breaker_threshold": 5})
+        b.inject_components(
+            price_engine=s.price_engine, risk_manager=s.risk_manager, broker=s.broker,
+            strategy_manager=s.strategy_brain, notification_manager=s.alert_engine,
+            position_tracker=s.position_tracker, trade_executor=s.trade_executor,
+        )
+        return b
 
-        # ── Event Store ───────────────────────────────────────────────────────
-        try:
-            from events.event_store import get_event_store, EventType, publish_event
-            event_store = get_event_store()
-            await event_store.start()
-            app_state.event_store = event_store
-            logger.info("✓ Event store started")
-            log_activity("Event store started")
-        except Exception as e:
-            logger.warning("⚠ Event store not available: %s", e)
-            app_state.event_store = None
+    async def _init_wallet(s):
+        from payments.wallet import WalletManager
+        return WalletManager(session_factory=s.db_session_factory)
 
-        # ── Position Tracker & Trade Executor ─────────────────────────────────
-        try:
-            from execution.position_tracker import PositionTracker
-            from execution.trade_executor import TradeExecutor
-            position_tracker = PositionTracker()
-            app_state.position_tracker = position_tracker
-            if app_state.broker and app_state.risk_manager:
-                trade_executor = TradeExecutor(
-                    broker=app_state.broker,
-                    risk_manager=app_state.risk_manager,
-                    position_tracker=position_tracker,
-                )
-                app_state.trade_executor = trade_executor
-                logger.info("✓ PositionTracker + TradeExecutor initialized")
-            else:
-                logger.warning("⚠ TradeExecutor skipped — broker or risk_manager unavailable")
-            log_activity("PositionTracker initialized")
-        except Exception as e:
-            logger.warning("⚠ PositionTracker/TradeExecutor not available: %s", e)
-            app_state.position_tracker = None
-            app_state.trade_executor = None
+    async def _init_social(s):
+        from social import copy_trading_engine, marketplace, leaderboard_manager
+        s.copy_trading_engine = copy_trading_engine
+        s.marketplace = marketplace
+        s.leaderboard_manager = leaderboard_manager
+        return True
 
-        # ── HOPEFXBrain (central intelligence) ────────────────────────────────
-        try:
-            from brain.brain import HOPEFXBrain
-            hopefx_brain = HOPEFXBrain(config={
-                "max_decision_history": 1000,
-                "regime_check_interval": 60,
-                "circuit_breaker_threshold": 5,
-            })
-            hopefx_brain.inject_components(
-                price_engine=app_state.price_engine,
-                risk_manager=app_state.risk_manager,
-                broker=app_state.broker,
-                strategy_manager=app_state.strategy_brain,
-                notification_manager=app_state.alert_engine,
-                position_tracker=app_state.position_tracker,
-                trade_executor=app_state.trade_executor,
-            )
-            app_state.brain = hopefx_brain
-            logger.info("✓ HOPEFXBrain initialized and wired")
-            log_activity("HOPEFXBrain initialized")
-        except Exception as e:
-            logger.warning("⚠ HOPEFXBrain not available: %s", e)
-            app_state.brain = None
+    async def _init_regime_router(s):
+        from strategies.regime_router import RegimeRouter
+        from strategies.manager import StrategyManager
+        sm = s.strategy_brain or StrategyManager(preload_defaults=True)
+        return RegimeRouter(sm)
 
-        # ── Wallet Manager ───────────────────────────────────────────────────
-        try:
-            from payments.wallet import WalletManager
-            app_state.wallet_manager = WalletManager(
-                session_factory=app_state.db_session_factory
-            )
-            logger.info("✓ Wallet Manager initialized (DB-backed)")
-            log_activity("Wallet Manager initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Wallet Manager not available: {e}")
-            app_state.wallet_manager = None
+    async def _init_signal_engine(s):
+        from core.signal_engine import run_signal_engine
+        t = asyncio.create_task(run_signal_engine(s))
+        s.background_tasks.append(t)
+        log_activity("Signal engine started")
+        return t
 
-        # ── Social / Copy Trading ────────────────────────────────────────────
-        try:
-            from social import copy_trading_engine, marketplace, leaderboard_manager
-            app_state.copy_trading_engine = copy_trading_engine
-            app_state.marketplace = marketplace
-            app_state.leaderboard_manager = leaderboard_manager
-            logger.info("✓ Social trading initialized")
-            log_activity("Social trading initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Social trading not available: {e}")
+    async def _init_reconciler(s):
+        from core.position_reconciler import PositionReconciler
+        interval = int(os.getenv("RECONCILER_INTERVAL_SECONDS", "30"))
+        r = PositionReconciler(
+            session_factory=s.db_session_factory,
+            broker=getattr(s, "broker", None),
+            ws_manager=getattr(s, "ws_manager", None),
+            interval_seconds=interval,
+        )
+        await r.start()
+        log_activity("Position reconciler started")
+        return r
 
-        # ── Regime Router ────────────────────────────────────────────────────
-        try:
-            from strategies.regime_router import RegimeRouter
-            from strategies.manager import StrategyManager
-            _sm = app_state.strategy_brain or StrategyManager(preload_defaults=True)
-            app_state.regime_router = RegimeRouter(_sm)
-            logger.info("✓ RegimeRouter initialized")
-        except Exception as _re:
-            logger.warning("⚠ RegimeRouter not available: %s", _re)
-            app_state.regime_router = None
+    async def _init_telegram_bot(s):
+        from notifications.telegram_bot import init_telegram_bot
+        bot = init_telegram_bot(s)
+        if bot:
+            t = asyncio.create_task(bot.start())
+            s.background_tasks.append(t)
+            s.telegram_bot = bot
+        return bot
 
-        # ── Signal Engine (StrategyBrain → broker loop) ──────────────────────
-        try:
-            from core.signal_engine import run_signal_engine
-            _t = asyncio.create_task(run_signal_engine(app_state))
-            app_state.background_tasks.append(_t)
-            logger.info("✓ Signal engine started")
-            log_activity("Signal engine started")
-        except Exception as e:
-            logger.warning(f"⚠ Signal engine not started: {e}")
+    async def _init_mobile(s):
+        from mobile.api import MobileAPIServer
+        from mobile.push_notifications import PushNotificationManager
+        mob = MobileAPIServer()
+        if hasattr(mob, 'router'):
+            app.include_router(mob.router, prefix="/api/mobile", tags=["Mobile"])
+        elif hasattr(mob, 'app'):
+            app.mount("/api/mobile", mob.app)
+        s.push_notifications = PushNotificationManager()
+        return mob
 
-        # ── Position Reconciliation Loop ──────────────────────────────────────
-        try:
-            from core.position_reconciler import PositionReconciler
-            interval = int(os.getenv("RECONCILER_INTERVAL_SECONDS", "30"))
-            reconciler = PositionReconciler(
-                session_factory=app_state.db_session_factory,
-                broker=getattr(app_state, "broker", None),
-                ws_manager=getattr(app_state, "ws_manager", None),
-                interval_seconds=interval,
-            )
-            await reconciler.start()
-            app_state.reconciler = reconciler
-            logger.info("✓ Position reconciler started (interval=%ds)", interval)
-            log_activity("Position reconciler started")
-        except Exception as e:
-            logger.warning(f"⚠ Position reconciler not started: {e}")
+    async def _init_hyperopt(s):
+        from backtesting.hyperopt import create_hyperopt_router
+        app.include_router(create_hyperopt_router())
+        return True
 
-        # Apply any risk settings persisted from a previous run
+    # ── Feature-flagged factories ─────────────────────────────────────────────
+
+    async def _init_research(s):
+        if not feature_flags.RESEARCH_MODULE:
+            return None
+        from research import ResearchNotebookEngine, create_research_router
+        e = ResearchNotebookEngine()
+        app.include_router(create_research_router(e))
+        return e
+
+    async def _init_explainability(s):
+        if not feature_flags.EXPLAINABILITY:
+            return None
+        from explainability import AIExplainer, create_explainability_router
+        e = AIExplainer()
+        app.include_router(create_explainability_router(e))
+        return e
+
+    async def _init_transparency(s):
+        if not feature_flags.TRANSPARENCY_REPORTS:
+            return None
+        from transparency import ExecutionTransparencyEngine, create_transparency_router
+        e = ExecutionTransparencyEngine()
+        app.include_router(create_transparency_router(e))
+        return e
+
+    async def _init_teams(s):
+        if not feature_flags.TEAMS_MODULE:
+            return None
+        from teams import TeamManager, create_teams_router
+        tm = TeamManager()
+        app.include_router(create_teams_router(tm))
+        return tm
+
+    async def _init_nocode(s):
+        if not feature_flags.NOCODE_BUILDER:
+            return None
+        from nocode import NoCodeStrategyBuilder, create_nocode_router
+        nb = NoCodeStrategyBuilder()
+        app.include_router(create_nocode_router(nb))
+        return nb
+
+    async def _init_replay(s):
+        if not feature_flags.REPLAY_ENGINE:
+            return None
+        from replay import ChartReplayEngine, create_replay_router
+        re = ChartReplayEngine()
+        app.include_router(create_replay_router(re))
+        return re
+
+    async def _init_ml_predictions(s):
+        if not feature_flags.ML_PREDICTIONS:
+            return None
+        from ml import TechnicalFeatureEngineer, create_ml_router
+        fe = TechnicalFeatureEngineer()
+        app.include_router(create_ml_router(fe))
+        return fe
+
+    # ── Register all components with dependency graph ─────────────────────────
+    (
+        _registry
+        .register("env_check",       _init_env,            required=False)
+        .register("config",          _init_config,         required=True,  deps=["env_check"])
+        .register("database",        _init_database,       required=True,  deps=["config"])
+        .register("cache",           _init_cache,          required=False, deps=["config"])
+        .register("data_scheduler",  _init_data_scheduler, required=False, deps=["config"])
+        .register("websocket",       _init_websocket,      required=False, deps=["config"])
+        .register("alert_engine",    _init_alert_engine,   required=False, deps=["config"])
+        .register("order_flow",      _init_order_flow,     required=False, deps=["config"])
+        .register("time_and_sales",  _init_time_and_sales, required=False, deps=["config"])
+        .register("market_scanner",  _init_market_scanner, required=False, deps=["config"])
+        .register("dom",             _init_dom,            required=False, deps=["config"])
+        .register("signals_router",  _init_signals_router, required=False, deps=["config"])
+        .register("news_router",     _init_news_router,    required=False, deps=["config"])
+        .register("auth_service",    _init_auth,           required=False, deps=["database"])
+        .register("risk_manager",    _init_risk_manager,   required=False, deps=["config"])
+        .register("broker",          _init_broker,         required=False, deps=["database"])
+        .register("price_engine",    _init_price_engine,   required=False, deps=["broker"])
+        .register("compliance_manager", _init_compliance,  required=False, deps=["database"])
+        .register("aml",             _init_aml,            required=False, deps=["database"])
+        .register("strategy_brain",  _init_strategy_brain, required=False, deps=["config"])
+        .register("event_store",     _init_event_store,    required=False, deps=["config"])
+        .register("position_tracker",_init_position_tracker, required=False, deps=["config"])
+        .register("trade_executor",  _init_trade_executor, required=False, deps=["broker", "risk_manager", "position_tracker"])
+        .register("brain",           _init_hopefx_brain,   required=False, deps=["price_engine", "risk_manager", "broker", "strategy_brain", "alert_engine", "position_tracker", "trade_executor"])
+        .register("wallet_manager",  _init_wallet,         required=False, deps=["database"])
+        .register("social",          _init_social,         required=False, deps=["config"])
+        .register("regime_router",   _init_regime_router,  required=False, deps=["strategy_brain"])
+        .register("signal_engine",   _init_signal_engine,  required=False, deps=["risk_manager", "broker"])
+        .register("reconciler",      _init_reconciler,     required=False, deps=["database", "broker"])
+        .register("telegram_bot",    _init_telegram_bot,   required=False, deps=["alert_engine"])
+        .register("mobile",          _init_mobile,         required=False, deps=["config"])
+        .register("hyperopt",        _init_hyperopt,       required=False, deps=["config"])
+        .register("research_engine", _init_research,       required=False, deps=["config"])
+        .register("explainer",       _init_explainability, required=False, deps=["config"])
+        .register("transparency_engine", _init_transparency, required=False, deps=["config"])
+        .register("teams_manager",   _init_teams,          required=False, deps=["config"])
+        .register("nocode_builder",  _init_nocode,         required=False, deps=["config"])
+        .register("replay_engine",   _init_replay,         required=False, deps=["config"])
+        .register("ml_feature_engineer", _init_ml_predictions, required=False, deps=["config"])
+    )
+
+    try:
+        # ── Run registry ──────────────────────────────────────────────────────
+        await _registry.start_all(app_state)
+        _registry.print_table()
         apply_persisted_risk_settings()
-
-        # ── Experimental modules (gated by feature flags) ────────────────────
-        if feature_flags.RESEARCH_MODULE:
-            try:
-                from research import ResearchNotebookEngine, create_research_router
-                research_engine = ResearchNotebookEngine()
-                app.include_router(create_research_router(research_engine))
-                app_state.research_engine = research_engine
-                logger.info("✓ Research Notebooks router registered")
-                log_activity("Research Notebooks router registered")
-            except Exception as e:
-                logger.warning(f"⚠ Research Notebooks router not available: {e}")
-                log_activity(f"Research Notebooks router unavailable: {e}")
-
-        if feature_flags.EXPLAINABILITY:
-            try:
-                from explainability import AIExplainer, create_explainability_router
-                explainer = AIExplainer()
-                app.include_router(create_explainability_router(explainer))
-                app_state.explainer = explainer
-                logger.info("✓ Explainability router registered")
-                log_activity("Explainability router registered")
-            except Exception as e:
-                logger.warning(f"⚠ Explainability router not available: {e}")
-                log_activity(f"Explainability router unavailable: {e}")
-
-        if feature_flags.TRANSPARENCY_REPORTS:
-            try:
-                from transparency import ExecutionTransparencyEngine, create_transparency_router
-                transparency_engine = ExecutionTransparencyEngine()
-                app.include_router(create_transparency_router(transparency_engine))
-                app_state.transparency_engine = transparency_engine
-                logger.info("✓ Transparency router registered")
-                log_activity("Transparency router registered")
-            except Exception as e:
-                logger.warning(f"⚠ Transparency router not available: {e}")
-                log_activity(f"Transparency router unavailable: {e}")
-
-        if feature_flags.TEAMS_MODULE:
-            try:
-                from teams import TeamManager, create_teams_router
-                teams_manager = TeamManager()
-                app.include_router(create_teams_router(teams_manager))
-                app_state.teams_manager = teams_manager
-                logger.info("✓ Teams router registered")
-                log_activity("Teams router registered")
-            except Exception as e:
-                logger.warning(f"⚠ Teams router not available: {e}")
-                log_activity(f"Teams router unavailable: {e}")
-
-        if feature_flags.NOCODE_BUILDER:
-            try:
-                from nocode import NoCodeStrategyBuilder, create_nocode_router
-                nocode_builder = NoCodeStrategyBuilder()
-                app.include_router(create_nocode_router(nocode_builder))
-                app_state.nocode_builder = nocode_builder
-                logger.info("✓ No-Code Builder router registered")
-                log_activity("No-Code Builder router registered")
-            except Exception as e:
-                logger.warning(f"⚠ No-Code Builder router not available: {e}")
-                log_activity(f"No-Code Builder router unavailable: {e}")
-
-        if feature_flags.REPLAY_ENGINE:
-            try:
-                from replay import ChartReplayEngine, create_replay_router
-                replay_engine = ChartReplayEngine()
-                app.include_router(create_replay_router(replay_engine))
-                app_state.replay_engine = replay_engine
-                logger.info("✓ Replay Engine router registered")
-                log_activity("Replay Engine router registered")
-            except Exception as e:
-                logger.warning(f"⚠ Replay Engine router not available: {e}")
-                log_activity(f"Replay Engine router unavailable: {e}")
-
-        if feature_flags.ML_PREDICTIONS:
-            try:
-                from ml import TechnicalFeatureEngineer, create_ml_router
-                ml_feature_engineer = TechnicalFeatureEngineer()
-                app.include_router(create_ml_router(ml_feature_engineer))
-                app_state.ml_feature_engineer = ml_feature_engineer
-                logger.info("✓ ML Predictions router registered")
-                log_activity("ML Predictions router registered")
-            except Exception as e:
-                logger.warning(f"⚠ ML Predictions router not available: {e}")
-                log_activity(f"ML Predictions router unavailable: {e}")
-
-        # ── Mobile API ────────────────────────────────────────────────────────
-        try:
-            from mobile.api import MobileAPIServer
-            from mobile.push_notifications import PushNotificationManager
-            mobile_api_server = MobileAPIServer()
-            # Register mobile routes under /api/mobile prefix
-            if hasattr(mobile_api_server, 'router'):
-                app.include_router(mobile_api_server.router, prefix="/api/mobile", tags=["Mobile"])
-            elif hasattr(mobile_api_server, 'app'):
-                # MobileAPIServer wraps its own FastAPI app — mount it
-                app.mount("/api/mobile", mobile_api_server.app)
-            app_state.mobile_api = mobile_api_server
-
-            push_manager = PushNotificationManager()
-            app_state.push_notifications = push_manager
-            logger.info("✓ Mobile API + Push Notifications initialized")
-            log_activity("Mobile API initialized")
-        except Exception as e:
-            logger.warning(f"⚠ Mobile API not available: {e}")
-
-        # ── Hyperopt router ───────────────────────────────────────────────────
-        try:
-            from backtesting.hyperopt import create_hyperopt_router
-            app.include_router(create_hyperopt_router())
-            logger.info("✓ Hyperopt router registered")
-            log_activity("Hyperopt router registered")
-        except Exception as e:
-            logger.warning(f"⚠ Hyperopt router not available: {e}")
-
-        # ── Telegram Bot ──────────────────────────────────────────────────────
-        try:
-            from notifications.telegram_bot import init_telegram_bot
-            tg_bot = init_telegram_bot(app_state)
-            if tg_bot:
-                _t = asyncio.create_task(tg_bot.start())
-                app_state.background_tasks.append(_t)
-                app_state.telegram_bot = tg_bot
-                logger.info("✓ Telegram bot started")
-                log_activity("Telegram bot started")
-            else:
-                logger.info("Telegram bot skipped (TELEGRAM_BOT_TOKEN not set)")
-        except Exception as e:
-            logger.warning(f"⚠ Telegram bot not available: {e}")
-
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)
@@ -1055,8 +857,10 @@ async def startup_event():
         logger.info("=" * 70)
 
     except Exception as e:
-        logger.error(f"Startup failed: {e}", exc_info=True)
+        logger.error("Startup failed: %s", e, exc_info=True)
         raise
+
+    # ── DEAD CODE BELOW — kept for reference, never reached ──────────────────
 
 
 async def shutdown_event():
