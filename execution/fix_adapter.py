@@ -165,7 +165,13 @@ class CircuitBreaker:
 # quickfix Application callbacks
 # ---------------------------------------------------------------------------
 
-class _QuickfixApp(fix.Application):  # type: ignore[misc]
+# _QuickfixApp inherits from fix.Application only when quickfix is available.
+# When the library is absent we use a plain object base so the class can still
+# be defined and imported without raising AttributeError.
+_QuickfixBase = fix.Application if fix is not None else object
+
+
+class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
     """
     quickfix Application implementation.
     Dispatches ExecutionReports to pending futures registered by FIXAdapter.
@@ -387,16 +393,40 @@ class _QuickfixApp(fix.Application):  # type: ignore[misc]
             )
 
     def _reject_pending(self, cl_ord_id: str, exc: Exception) -> None:
-        """Resolve a pending future with an exception so the caller is not left hanging."""
-        with self._pending_lock:
-            future = self._pending.pop(cl_ord_id, None)
-        if future is not None and not future.done():
-            try:
-                future.get_event_loop().call_soon_threadsafe(future.set_exception, exc)
-            except Exception as inner:
-                logger.warning(
-                    "fix_adapter._reject_pending: could not set exception on future: %s", inner
-                )
+        """
+        Resolve a pending future with an exception so the caller is not left hanging.
+
+        NOTE: _pending and _pending_lock live on FIXAdapter, not on this class.
+        They are injected via the on_exec_report callback path — this method is
+        called by _handle_exec_report / _handle_order_cancel_reject which are
+        invoked from the quickfix thread.  The FIXAdapter passes
+        self._dispatch_exec_report as on_exec_report; _dispatch_exec_report owns
+        the lock.  This method therefore delegates to the adapter's dispatcher
+        rather than touching _pending directly.
+        """
+        # Wrap the exception in a synthetic FIXFillReport-like rejection and
+        # route it through the normal on_exec_report callback so FIXAdapter's
+        # _dispatch_exec_report can resolve the future under its own lock.
+        # We signal rejection by calling on_exec_report with a REJECTED report.
+        try:
+            report = FIXFillReport(
+                cl_ord_id=cl_ord_id,
+                order_id="",
+                exec_type=FIXExecType.REJECTED,
+                symbol="",
+                side=FIXSide.BUY,
+                filled_qty=0.0,
+                avg_px=0.0,
+                leaves_qty=0.0,
+                cum_qty=0.0,
+                text=str(exc),
+            )
+            self._on_exec_report(report)
+        except Exception as inner:
+            logger.warning(
+                "fix_adapter._reject_pending: could not dispatch rejection for cl_ord_id=%s: %s",
+                cl_ord_id, inner,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -539,8 +569,163 @@ class FIXAdapter:
             break
 
     def _start_pyfixmsg(self) -> None:
-        """pyfixmsg uses a simpler socket-based approach — stub for extensibility."""
-        logger.info("fix_adapter: pyfixmsg session initialised (stub)")
+        """
+        Open a TCP socket to the FIX counterparty and send a FIX 4.4 Logon.
+
+        pyfixmsg does not manage the session lifecycle the way quickfix does —
+        the application is responsible for the socket and for sending/receiving
+        raw FIX messages.  This implementation:
+
+          1. Opens a blocking TCP socket to self.host:self.port.
+          2. Sends a minimal FIX 4.4 Logon (MsgType=A) with HeartBtInt=30.
+          3. Starts a background reader thread that feeds inbound bytes to
+             pyfixmsg's codec and dispatches ExecutionReports.
+
+        The socket is stored on self._pyfixmsg_sock so _send_pyfixmsg can use it.
+        """
+        import socket as _socket
+
+        if pyfixmsg is None or FixMessage is None:
+            raise RuntimeError(
+                "pyfixmsg is not installed. Run: pip install pyfixmsg"
+            )
+
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        sock.settimeout(10.0)
+        try:
+            sock.connect((self.host, self.port))
+        except OSError as exc:
+            raise RuntimeError(
+                f"fix_adapter._start_pyfixmsg: cannot connect to "
+                f"{self.host}:{self.port} — {exc}"
+            ) from exc
+
+        sock.settimeout(None)  # switch to blocking for the reader thread
+        self._pyfixmsg_sock = sock
+        self._pyfixmsg_seq = 1  # outbound MsgSeqNum
+
+        # Send Logon (MsgType=A)
+        logon = self._build_pyfixmsg_logon()
+        sock.sendall(logon)
+        logger.info(
+            "fix_adapter._start_pyfixmsg: connected to %s:%s, Logon sent",
+            self.host, self.port,
+        )
+
+        # Start background reader
+        reader = threading.Thread(
+            target=self._pyfixmsg_reader_loop,
+            args=(sock,),
+            daemon=True,
+            name="FIXpyfixmsgReader",
+        )
+        reader.start()
+
+    def _build_pyfixmsg_logon(self) -> bytes:
+        """Build a minimal FIX 4.4 Logon message as raw bytes."""
+        import time as _time
+
+        seq = self._pyfixmsg_seq
+        self._pyfixmsg_seq += 1
+        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+
+        fields = [
+            ("8", "FIX.4.4"),
+            ("35", "A"),           # MsgType = Logon
+            ("49", self.sender_comp_id),
+            ("56", self.target_comp_id),
+            ("34", str(seq)),
+            ("52", sending_time),
+            ("98", "0"),           # EncryptMethod = None
+            ("108", "30"),         # HeartBtInt
+        ]
+        if self._username:
+            fields.append(("553", self._username))
+        if self._password:
+            fields.append(("554", self._password))
+
+        body = "\x01".join(f"{tag}={val}" for tag, val in fields[1:]) + "\x01"
+        body_len = len(body.encode())
+        header = f"8=FIX.4.4\x019={body_len}\x01"
+        raw = header + body
+        checksum = sum(raw.encode()) % 256
+        raw += f"10={checksum:03d}\x01"
+        return raw.encode()
+
+    def _pyfixmsg_reader_loop(self, sock) -> None:
+        """
+        Read raw FIX bytes from the socket and dispatch ExecutionReports.
+
+        Runs in a daemon thread.  Exits when the socket is closed or the
+        adapter is stopped.
+        """
+        buf = b""
+        while self._running:
+            try:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    logger.warning("fix_adapter._pyfixmsg_reader_loop: connection closed by peer")
+                    break
+                buf += chunk
+                # Split on SOH-terminated messages (FIX delimiter is \x01 after checksum tag 10=)
+                while b"10=" in buf:
+                    end = buf.find(b"\x01", buf.index(b"10="))
+                    if end == -1:
+                        break
+                    raw_msg = buf[: end + 1]
+                    buf = buf[end + 1 :]
+                    self._handle_pyfixmsg_message(raw_msg)
+            except OSError as exc:
+                if self._running:
+                    logger.error("fix_adapter._pyfixmsg_reader_loop: socket error: %s", exc)
+                break
+
+    def _handle_pyfixmsg_message(self, raw: bytes) -> None:
+        """Parse a raw FIX message and dispatch ExecutionReports."""
+        try:
+            # Parse tag=value pairs from raw bytes
+            fields: dict[str, str] = {}
+            for part in raw.decode(errors="replace").split("\x01"):
+                if "=" in part:
+                    tag, _, val = part.partition("=")
+                    fields[tag] = val
+
+            msg_type = fields.get("35", "")
+            if msg_type == "8":  # ExecutionReport
+                cl_ord_id = fields.get("11", "<unknown>")
+                exec_type_raw = fields.get("150", "0")
+                try:
+                    exec_type = FIXExecType(exec_type_raw)
+                except ValueError:
+                    exec_type = FIXExecType.NEW
+
+                report = FIXFillReport(
+                    cl_ord_id=cl_ord_id,
+                    order_id=fields.get("37", ""),
+                    exec_type=exec_type,
+                    symbol=fields.get("55", ""),
+                    side=FIXSide(fields.get("54", "1")),
+                    filled_qty=float(fields.get("32", 0)),   # LastQty
+                    avg_px=float(fields.get("6", 0)),        # AvgPx
+                    leaves_qty=float(fields.get("151", 0)),  # LeavesQty
+                    cum_qty=float(fields.get("14", 0)),      # CumQty
+                    text=fields.get("58", ""),
+                    raw=fields,
+                )
+                self._dispatch_exec_report(report)
+
+            elif msg_type == "5":  # Logout
+                logger.warning(
+                    "fix_adapter._handle_pyfixmsg_message: Logout received text=%r",
+                    fields.get("58", ""),
+                )
+            elif msg_type == "3":  # Reject
+                logger.error(
+                    "fix_adapter._handle_pyfixmsg_message: session Reject ref_seq=%s text=%r",
+                    fields.get("45", ""), fields.get("58", ""),
+                )
+        except Exception as exc:
+            logger.exception("fix_adapter._handle_pyfixmsg_message: parse error: %s", exc)
 
     # ------------------------------------------------------------------
     # Heartbeat
@@ -625,10 +810,67 @@ class FIXAdapter:
         )
 
     def _send_pyfixmsg(self, order: FIXOrder) -> None:
-        """pyfixmsg send stub — extend with actual socket send."""
+        """
+        Build a FIX 4.4 NewOrderSingle and send it over the pyfixmsg socket.
+
+        Raises RuntimeError if the socket is not connected (start() not called).
+        """
+        sock = getattr(self, "_pyfixmsg_sock", None)
+        if sock is None:
+            raise RuntimeError(
+                "fix_adapter._send_pyfixmsg: socket not connected — call start() first"
+            )
+
+        import time as _time
+
+        seq = self._pyfixmsg_seq
+        self._pyfixmsg_seq += 1
+        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+
+        fields = [
+            ("8", "FIX.4.4"),
+            ("35", "D"),                          # MsgType = NewOrderSingle
+            ("49", self.sender_comp_id),
+            ("56", self.target_comp_id),
+            ("34", str(seq)),
+            ("52", sending_time),
+            ("11", order.cl_ord_id),              # ClOrdID
+            ("55", order.symbol),                 # Symbol
+            ("54", order.side.value),             # Side
+            ("60", sending_time),                 # TransactTime
+            ("40", order.ord_type.value),         # OrdType
+            ("38", str(order.quantity)),          # OrderQty
+            ("59", order.time_in_force),          # TimeInForce
+        ]
+        if order.ord_type == FIXOrdType.LIMIT and order.price is not None:
+            fields.append(("44", str(order.price)))   # Price
+        if order.ord_type == FIXOrdType.STOP and order.stop_px is not None:
+            fields.append(("99", str(order.stop_px))) # StopPx
+        if order.account:
+            fields.append(("1", order.account))       # Account
+        if order.currency:
+            fields.append(("15", order.currency))     # Currency
+
+        body = "\x01".join(f"{tag}={val}" for tag, val in fields[1:]) + "\x01"
+        body_len = len(body.encode())
+        header = f"8=FIX.4.4\x019={body_len}\x01"
+        raw = header + body
+        checksum = sum(raw.encode()) % 256
+        raw += f"10={checksum:03d}\x01"
+
+        # Record send time for latency measurement (mirrors quickfix path)
+        self._app._send_times[order.cl_ord_id] = time.monotonic() if self._app else 0.0
+
+        try:
+            sock.sendall(raw.encode())
+        except OSError as exc:
+            raise RuntimeError(
+                f"fix_adapter._send_pyfixmsg: send failed for {order.cl_ord_id}: {exc}"
+            ) from exc
+
         logger.info(
-            "fix_adapter.pyfixmsg.send cl_ord_id=%s symbol=%s",
-            order.cl_ord_id, order.symbol,
+            "fix_adapter.pyfixmsg.sent cl_ord_id=%s symbol=%s side=%s qty=%.2f",
+            order.cl_ord_id, order.symbol, order.side.value, order.quantity,
         )
 
     def _simulate_fill(self, order: FIXOrder) -> FIXFillReport:
@@ -651,7 +893,13 @@ class FIXAdapter:
     # ------------------------------------------------------------------
 
     def _dispatch_exec_report(self, report: FIXFillReport) -> None:
-        """Called from quickfix thread; resolves the matching asyncio Future."""
+        """
+        Called from the quickfix or pyfixmsg reader thread; resolves the
+        matching asyncio Future.
+
+        REJECTED reports set an exception on the future so the caller receives
+        a RuntimeError immediately rather than waiting for the 30 s timeout.
+        """
         with self._pending_lock:
             future = self._pending.pop(report.cl_ord_id, None)
 
@@ -660,9 +908,16 @@ class FIXAdapter:
             return
 
         if not future.done():
-            # Schedule resolution on the event loop thread
             try:
-                future.get_event_loop().call_soon_threadsafe(future.set_result, report)
+                loop = future.get_loop() if hasattr(future, "get_loop") else future.get_event_loop()
+                if report.exec_type == FIXExecType.REJECTED:
+                    exc = RuntimeError(
+                        f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} "
+                        f"text={report.text!r}"
+                    )
+                    loop.call_soon_threadsafe(future.set_exception, exc)
+                else:
+                    loop.call_soon_threadsafe(future.set_result, report)
             except Exception as exc:
                 logger.warning("fix_adapter._dispatch_exec_report: %s", exc)
 
