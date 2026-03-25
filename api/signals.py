@@ -316,8 +316,58 @@ class RealTimeSignalService:
         # Check alerts
         self._check_alerts(signal)
 
+        # ── High-confidence pipeline: social feed + FCM push ─────────────────
+        # Threshold: confidence >= 0.70 (70%)
+        if confidence >= 0.70:
+            self._publish_to_social_feed(signal)
+            self._push_fcm_to_all_users(signal)
+
         logger.info(f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}")
         return signal
+
+    def _publish_to_social_feed(self, signal: "TradingSignal") -> None:
+        """Publish a high-confidence signal to the community social feed."""
+        try:
+            from api.social_feed import _publish_signal
+            _publish_signal(
+                signal={
+                    "signal_id":   signal.id,
+                    "symbol":      signal.symbol,
+                    "direction":   signal.direction.value.upper(),
+                    "confidence":  round(signal.confidence * 100, 1),
+                    "entry_price": signal.entry_price,
+                    "stop_loss":   signal.stop_loss,
+                    "take_profit": signal.take_profit,
+                    "pnl":         None,
+                    "copies":      0,
+                    "is_public":   True,
+                },
+                username="HOPEFX AI",
+                trader_id="ai_engine",
+            )
+            logger.debug("Signal %s published to social feed", signal.id)
+        except Exception as exc:
+            logger.debug("Social feed publish skipped: %s", exc)
+
+    def _push_fcm_to_all_users(self, signal: "TradingSignal") -> None:
+        """Send FCM push notification to all opted-in users for a high-confidence signal."""
+        try:
+            from mobile.push_notifications import push_manager, _device_tokens
+            from api.social_feed import _opted_in
+
+            # Send to users who have opted into the feed and have FCM tokens
+            target_users = list(_opted_in) if _opted_in else list(_device_tokens.keys())
+            for user_id in target_users:
+                push_manager.send_new_signal(
+                    user_id=user_id,
+                    symbol=signal.symbol,
+                    direction=signal.direction.value.upper(),
+                    confidence=signal.confidence * 100,
+                )
+            if target_users:
+                logger.debug("FCM signal push sent to %d users", len(target_users))
+        except Exception as exc:
+            logger.debug("FCM signal push skipped: %s", exc)
 
     def _calculate_strength(
         self,

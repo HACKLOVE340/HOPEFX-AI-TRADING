@@ -354,6 +354,17 @@ class RiskManager:
             risk_level = RiskLevel.CRITICAL
             can_trade = False
             messages.append(f"Near max drawdown: {self.current_drawdown:.2%}")
+            # FCM push: drawdown warning to all users with registered devices
+            try:
+                from mobile.push_notifications import push_manager, _device_tokens
+                for uid in list(_device_tokens.keys()):
+                    push_manager.send_drawdown_warning(
+                        user_id=uid,
+                        drawdown_pct=self.current_drawdown * 100,
+                        limit_pct=self.config.max_drawdown_pct * 100,
+                    )
+            except Exception:
+                pass
         elif margin_used_pct > 0.8:
             risk_level = RiskLevel.HIGH
             messages.append(f"High margin usage: {margin_used_pct:.2%}")
