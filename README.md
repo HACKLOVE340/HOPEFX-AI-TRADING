@@ -25,7 +25,8 @@ open http://localhost:8000/docs
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-FFD700.svg?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00c853.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-2239%20passed-brightgreen.svg?style=for-the-badge)](tests/)
+[![Tests](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/actions/workflows/tests.yml/badge.svg)](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/actions/workflows/tests.yml)
+[![Coverage](https://codecov.io/gh/HACKLOVE340/HOPEFX-AI-TRADING/branch/main/graph/badge.svg)](https://codecov.io/gh/HACKLOVE340/HOPEFX-AI-TRADING)
 [![Paper Trading](https://img.shields.io/badge/Paper_Trading-Active-orange.svg?style=for-the-badge)](docs/)
 [![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-00e5ff.svg?style=for-the-badge)](docs/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
