@@ -407,7 +407,7 @@ async def close_all_positions(
     return {"status": "success", "closed_positions": closed}
 
 
-@router.get("/account")
+@router.get("/account", response_model=None, summary="Get broker account snapshot")
 async def get_account(
     user: TokenPayload = Depends(get_current_user),
 ):
@@ -859,7 +859,7 @@ except Exception as exc:
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
-@router.get("/regime", summary="Current market regime and active strategy")
+@router.get("/regime", response_model=None, summary="Current market regime and active strategy")
 async def get_regime_status():
     """
     Return the current detected market regime, confidence score, and the
@@ -906,7 +906,7 @@ async def get_regime_status():
         }
 
 
-@router.get("/regime/history", summary="Recent regime transition history")
+@router.get("/regime/history", response_model=None, summary="Recent regime transition history")
 async def get_regime_history(limit: int = 20):
     """Return the last N regime transitions with timestamps."""
     try:
