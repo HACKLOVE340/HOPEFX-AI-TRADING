@@ -41,9 +41,13 @@ export interface LoginPayload  { username: string; password: string }
 export interface LoginResponse { access_token: string; token_type: string; user: import('../store').User }
 
 export const authApi = {
-  login:  (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
-  logout: ()                       => api.post('/auth/logout'),
-  me:     ()                       => api.get<import('../store').User>('/auth/me'),
+  login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
+  logout:   ()                       => api.post('/auth/logout'),
+  me:       ()                       => api.get<import('../store').User>('/auth/me'),
+  register: (payload: { email: string; username: string; password: string }) =>
+    api.post('/auth/register', payload),
+  activateFreeTier: (userId: string, refCode?: string) =>
+    api.post('/api/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
 };
 
 export const tradingApi = {

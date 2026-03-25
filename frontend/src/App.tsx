@@ -18,6 +18,7 @@ import CryptoCheckout       from './pages/CryptoCheckout';
 import Settings             from './pages/Settings';
 import StatusPage           from './pages/StatusPage';
 import Login                from './pages/Login';
+import Register             from './pages/Register';
 
 // ── New pages (Tasks 16–47) ───────────────────────────────────────────────────
 import RiskCalculator       from './pages/RiskCalculator';
@@ -189,7 +190,8 @@ const App: React.FC = () => (
       <Routes>
         <Route path="/"        element={<LandingPage />} />
         <Route path="/landing" element={<LandingPage />} />
-        <Route path="/login"   element={<Login />} />
+        <Route path="/login"    element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/*"       element={<AppShell />} />
       </Routes>
     </BrowserRouter>
