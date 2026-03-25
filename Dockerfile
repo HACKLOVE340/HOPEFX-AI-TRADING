@@ -21,8 +21,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create required directories
-RUN mkdir -p logs data credentials
+# Create required directories and a non-root user
+RUN mkdir -p logs data credentials \
+    && useradd -m -u 1001 hopefx \
+    && chown -R hopefx:hopefx /app
+
+# Drop root before the process starts
+USER hopefx
 
 # Expose port (matches docker-compose.yml and API_PORT default)
 EXPOSE 8000
