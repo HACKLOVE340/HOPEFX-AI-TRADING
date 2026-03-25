@@ -12,6 +12,13 @@ Outputs:
 Data source: Yahoo Finance GC=F (Gold Futures front-month, continuous).
 Falls back to synthetic GBM data only if yfinance is unavailable, with
 a clear warning in the output and performance.json.
+
+Enhanced features (v2):
+  - Stationary features only (returns, z-scores, MA distances — no raw price lags)
+  - COT/central bank buying proxy (gold up + DXY up + yields up)
+  - Regime features (Hurst exponent, ADX trend strength, vol regime)
+  - Macro cross-asset (DXY, VIX, SPX, yields via yfinance)
+  - Intermarket divergence (gold vs DXY, gold vs SPX)
 """
 
 import json
@@ -146,49 +153,12 @@ except Exception as exc:
     print(f"  Synthetic data: {len(df)} bars → {csv_path}")
 
 
-# ── 2. Feature engineering ────────────────────────────────────────────────────
-
-def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    d = df.copy()
-
-    # Trend
-    for n in [5, 10, 20, 50]:
-        d[f"sma_{n}"] = d["close"].rolling(n).mean()
-        d[f"ema_{n}"] = d["close"].ewm(span=n, adjust=False).mean()
-
-    # Momentum
-    d["rsi_14"] = _rsi(d["close"], 14)
-    d["roc_5"]  = d["close"].pct_change(5)
-    d["roc_20"] = d["close"].pct_change(20)
-
-    # Volatility
-    d["atr_14"]  = _atr(d, 14)
-    d["bb_width"] = _bb_width(d["close"], 20, 2.0)
-
-    # MACD
-    ema12 = d["close"].ewm(span=12, adjust=False).mean()
-    ema26 = d["close"].ewm(span=26, adjust=False).mean()
-    d["macd"]        = ema12 - ema26
-    d["macd_signal"] = d["macd"].ewm(span=9, adjust=False).mean()
-    d["macd_hist"]   = d["macd"] - d["macd_signal"]
-
-    # Price position
-    d["close_vs_sma20"] = (d["close"] - d["sma_20"]) / d["sma_20"]
-    d["close_vs_sma50"] = (d["close"] - d["sma_50"]) / d["sma_50"]
-
-    # Volume
-    d["vol_ratio"] = d["volume"] / d["volume"].rolling(20).mean()
-
-    # Target: 1 if next-day close > today's close, else 0
-    d["target"] = (d["close"].shift(-1) > d["close"]).astype(int)
-
-    return d.dropna()
-
+# ── 2. Feature engineering (stationary — no raw price lags) ──────────────────
 
 def _rsi(series, period):
     delta = series.diff()
-    gain  = delta.clip(lower=0).rolling(period).mean()
-    loss  = (-delta.clip(upper=0)).rolling(period).mean()
+    gain  = delta.clip(lower=0).ewm(alpha=1/period, adjust=False).mean()
+    loss  = (-delta.clip(upper=0)).ewm(alpha=1/period, adjust=False).mean()
     rs    = gain / loss.replace(0, np.nan)
     return 100 - 100 / (1 + rs)
 
@@ -198,27 +168,212 @@ def _atr(df, period):
     hpc = (df["high"] - df["close"].shift()).abs()
     lpc = (df["low"]  - df["close"].shift()).abs()
     tr  = pd.concat([hl, hpc, lpc], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+    return tr.ewm(alpha=1/period, adjust=False).mean()
 
 
-def _bb_width(series, period, std_mult):
-    sma  = series.rolling(period).mean()
-    std  = series.rolling(period).std()
-    return (std_mult * std * 2) / sma
+def _zscore(s, w):
+    mu  = s.rolling(w).mean()
+    sig = s.rolling(w).std().replace(0, np.nan)
+    return ((s - mu) / sig).fillna(0.0)
+
+
+def _rolling_hurst(series, window=40):
+    """Approximate Hurst exponent via R/S analysis."""
+    def _h(x):
+        if len(x) < 8:
+            return 0.5
+        try:
+            lags = range(2, min(len(x) // 2, 12))
+            rs_vals = []
+            for lag in lags:
+                chunks = [x[i:i+lag] for i in range(0, len(x)-lag, lag)]
+                rs_c = []
+                for c in chunks:
+                    if len(c) < 2:
+                        continue
+                    dev = np.cumsum(c - np.mean(c))
+                    r = dev.max() - dev.min()
+                    s = np.std(c, ddof=1)
+                    if s > 0:
+                        rs_c.append(r / s)
+                if rs_c:
+                    rs_vals.append(np.mean(rs_c))
+            if len(rs_vals) < 2:
+                return 0.5
+            h = np.polyfit(np.log(list(lags)[:len(rs_vals)]), np.log(rs_vals), 1)[0]
+            return float(np.clip(h, 0.0, 1.0))
+        except Exception:
+            return 0.5
+    return series.rolling(window).apply(_h, raw=True).fillna(0.5)
+
+
+def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
+    d = df.copy()
+    c = d["close"]
+    atr14 = _atr(d, 14)
+
+    # ── Returns (stationary) ──────────────────────────────────────────────────
+    d["ret_1"]  = c.pct_change(1)
+    d["ret_5"]  = c.pct_change(5)
+    d["ret_20"] = c.pct_change(20)
+    for lag in range(1, 6):
+        d[f"ret_lag_{lag}"] = d["ret_1"].shift(lag)
+
+    # ── MA distances normalised by ATR (stationary) ───────────────────────────
+    for n in [5, 10, 20, 50, 200]:
+        ma  = c.rolling(n).mean()
+        ema = c.ewm(span=n, adjust=False).mean()
+        d[f"dist_ma_{n}"]  = ((c - ma)  / atr14.replace(0, np.nan)).fillna(0.0)
+        d[f"dist_ema_{n}"] = ((c - ema) / atr14.replace(0, np.nan)).fillna(0.0)
+
+    # ── Oscillators ───────────────────────────────────────────────────────────
+    d["rsi_14"] = _rsi(c, 14)
+    d["rsi_7"]  = _rsi(c, 7)
+
+    ema12 = c.ewm(span=12, adjust=False).mean()
+    ema26 = c.ewm(span=26, adjust=False).mean()
+    macd  = ema12 - ema26
+    d["macd_norm"]     = (macd / c.replace(0, np.nan)).fillna(0.0)
+    d["macd_hist_norm"] = ((macd - macd.ewm(span=9, adjust=False).mean()) / c.replace(0, np.nan)).fillna(0.0)
+
+    sma20 = c.rolling(20).mean()
+    std20 = c.rolling(20).std()
+    bb_w  = (4 * std20).replace(0, np.nan)
+    d["bb_position"] = ((c - (sma20 - 2*std20)) / bb_w).fillna(0.5)
+    d["bb_width_pct"] = (bb_w / c.replace(0, np.nan)).fillna(0.0)
+
+    lo14 = d["low"].rolling(14).min()
+    hi14 = d["high"].rolling(14).max()
+    stoch_k = (100 * (c - lo14) / (hi14 - lo14).replace(0, np.nan)).fillna(50.0)
+    d["stoch_k"] = stoch_k
+    d["stoch_d"] = stoch_k.rolling(3).mean().fillna(50.0)
+
+    # ── Volatility ────────────────────────────────────────────────────────────
+    d["rvol_20"]       = d["ret_1"].rolling(20).std() * np.sqrt(252)
+    d["vol_ratio_5_20"] = (d["ret_1"].rolling(5).std() / d["ret_1"].rolling(20).std().replace(0, np.nan)).fillna(1.0)
+    d["atr_pct"]       = (atr14 / c.replace(0, np.nan)).fillna(0.0)
+
+    # ── Regime features ───────────────────────────────────────────────────────
+    d["hurst_40"] = _rolling_hurst(c, 40)
+
+    # ADX (normalised 0-1)
+    tr = pd.concat([d["high"]-d["low"],
+                    (d["high"]-c.shift(1)).abs(),
+                    (d["low"]-c.shift(1)).abs()], axis=1).max(axis=1)
+    atr14_raw = tr.ewm(span=14, adjust=False).mean()
+    plus_dm   = (d["high"] - d["high"].shift(1)).clip(lower=0)
+    minus_dm  = (d["low"].shift(1) - d["low"]).clip(lower=0)
+    plus_dm   = plus_dm.where(plus_dm > minus_dm, 0.0)
+    minus_dm  = minus_dm.where(minus_dm > plus_dm, 0.0)
+    plus_di   = 100 * plus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
+    minus_di  = 100 * minus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    d["adx_norm"] = (dx.ewm(span=14).mean().fillna(0.0) / 100.0)
+    d["regime_trend"] = np.where(c > c.rolling(50).mean(), 1, -1)
+
+    # ── Volume ────────────────────────────────────────────────────────────────
+    if "volume" in d.columns and d["volume"].sum() > 0:
+        vol_ma = d["volume"].rolling(20).mean()
+        d["vol_ratio"]  = (d["volume"] / vol_ma.replace(0, np.nan)).fillna(1.0)
+        d["vol_z20"]    = _zscore(d["volume"], 20)
+        obv = (np.sign(c.diff()) * d["volume"]).cumsum()
+        d["obv_mom_10"] = obv.pct_change(10).fillna(0.0)
+    else:
+        d["vol_ratio"] = d["vol_z20"] = d["obv_mom_10"] = 0.0
+
+    # ── Macro cross-asset (yfinance) ──────────────────────────────────────────
+    if macro_df is not None and not macro_df.empty:
+        macro = macro_df.copy()
+        if macro.index.tz is not None:
+            macro.index = macro.index.tz_localize(None)
+        macro.index = pd.to_datetime(macro.index).normalize()
+        macro = macro.reindex(d.index, method="ffill").fillna(0.0)
+
+        gold_ret = d["ret_1"].fillna(0.0)
+
+        if "dxy" in macro.columns:
+            dxy = macro["dxy"]
+            d["macro_dxy_ret"]  = dxy.pct_change().fillna(0.0)
+            d["macro_dxy_z20"]  = _zscore(dxy, 20)
+        else:
+            d["macro_dxy_ret"] = d["macro_dxy_z20"] = 0.0
+
+        if "vix" in macro.columns:
+            vix = macro["vix"]
+            d["macro_vix_level"] = vix
+            d["macro_vix_spike"] = (vix > 30).astype(float)
+        else:
+            d["macro_vix_level"] = d["macro_vix_spike"] = 0.0
+
+        if "yield_10y" in macro.columns:
+            y10 = macro["yield_10y"]
+            d["macro_yield_10y_chg"] = y10.diff().fillna(0.0)
+        else:
+            d["macro_yield_10y_chg"] = 0.0
+
+        if "spx" in macro.columns:
+            spx_ret = macro["spx"].pct_change().fillna(0.0)
+            d["macro_spx_ret"] = spx_ret
+            d["macro_gold_spx_div"] = (gold_ret - spx_ret).rolling(5).mean().fillna(0.0)
+        else:
+            d["macro_spx_ret"] = d["macro_gold_spx_div"] = 0.0
+
+        # COT/central bank buying proxy: gold up + DXY up + yields up
+        has_dxy   = "dxy"       in macro.columns and macro["dxy"].abs().sum() > 0
+        has_yield = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
+        if has_dxy and has_yield:
+            dxy_ret   = macro["dxy"].pct_change().fillna(0.0)
+            yield_chg = macro["yield_10y"].diff().fillna(0.0)
+            d["cot_cb_buying_proxy"]  = ((gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)).astype(float)
+            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+        else:
+            d["cot_cb_buying_proxy"] = d["cot_cb_buying_freq20"] = 0.0
+    else:
+        for col in ["macro_dxy_ret", "macro_dxy_z20", "macro_vix_level", "macro_vix_spike",
+                    "macro_yield_10y_chg", "macro_spx_ret", "macro_gold_spx_div",
+                    "cot_cb_buying_proxy", "cot_cb_buying_freq20"]:
+            d[col] = 0.0
+
+    # ── Target ────────────────────────────────────────────────────────────────
+    d["target"] = (c.shift(-1) > c).astype(int)
+
+    return d.dropna()
+
+
+# ── Fetch macro data ──────────────────────────────────────────────────────────
+macro_df = None
+print("Fetching macro data (DXY, VIX, yields, SPX) …")
+try:
+    import yfinance as yf
+    _macro_tickers = {
+        "dxy": "DX-Y.NYB", "vix": "^VIX",
+        "yield_10y": "^TNX", "spx": "^GSPC",
+    }
+    _frames = {}
+    for name, ticker in _macro_tickers.items():
+        try:
+            raw = yf.download(ticker, start="2019-01-01", progress=False, auto_adjust=True)
+            if not raw.empty:
+                close = raw["Close"].squeeze()
+                close.index = pd.to_datetime(close.index).tz_localize(None)
+                _frames[name] = close.rename(name)
+        except Exception:
+            pass
+    if _frames:
+        macro_df = pd.concat(_frames.values(), axis=1).ffill()
+        print(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")
+    else:
+        print("  No macro data fetched — proceeding without")
+except Exception as _me:
+    print(f"  Macro fetch failed ({_me}) — proceeding without")
 
 
 print("Engineering features …")
-dff = add_features(df)
+dff = add_features(df, macro_df=macro_df)
 
-FEATURE_COLS = [
-    "sma_5", "sma_10", "sma_20", "sma_50",
-    "ema_5", "ema_10", "ema_20", "ema_50",
-    "rsi_14", "roc_5", "roc_20",
-    "atr_14", "bb_width",
-    "macd", "macd_signal", "macd_hist",
-    "close_vs_sma20", "close_vs_sma50",
-    "vol_ratio",
-]
+# All columns except OHLCV and target are features
+EXCLUDE = {"open", "high", "low", "close", "volume", "target"}
+FEATURE_COLS = [c for c in dff.columns if c not in EXCLUDE]
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
@@ -236,11 +391,12 @@ scaler = StandardScaler()
 X_train_s = scaler.fit_transform(X_train)
 X_test_s  = scaler.transform(X_test)
 
-print("Training RandomForest …")
+print("Training RandomForest (enhanced stationary features) …")
 clf = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=6,
-    min_samples_leaf=10,
+    n_estimators=300,
+    max_depth=8,
+    min_samples_leaf=5,
+    max_features="sqrt",
     class_weight="balanced",
     random_state=42,
     n_jobs=-1,
@@ -267,6 +423,9 @@ print("Running backtest …")
 test_df   = dff.iloc[split:].copy()
 test_df["signal_prob"] = y_prob
 test_df["signal"]      = (y_prob > 0.52).astype(int)   # slight confidence threshold
+# Recompute ATR14 on the test slice for position sizing (atr_pct is normalised;
+# we need the raw ATR in price units for stop/TP calculation)
+test_df["_atr14"] = _atr(test_df, 14)
 
 INITIAL_CAPITAL = 100_000.0
 POSITION_SIZE   = 0.10          # 10% of equity per trade
@@ -328,7 +487,7 @@ for i, (date, row) in enumerate(test_df.iterrows()):
             in_trade = False
 
     if not in_trade and row["signal"] == 1:
-        atr = row["atr_14"]
+        atr = row["_atr14"] if not np.isnan(row["_atr14"]) else row["close"] * 0.01
         entry_price = row["close"]
         stop_price  = entry_price - STOP_LOSS_ATR   * atr
         tp_price    = entry_price + TAKE_PROFIT_ATR * atr
@@ -381,7 +540,7 @@ perf = {
     "dataset":          _data_label,
     "data_source":      "Yahoo Finance GC=F (real)" if _USING_REAL_DATA else "Synthetic GBM (fallback)",
     "real_data":        _USING_REAL_DATA,
-    "model":            "RandomForestClassifier (200 trees, depth 6)",
+    "model":            f"RandomForestClassifier (300 trees, depth 8, {len(FEATURE_COLS)} stationary features)",
     "backtest_period":  f"{test_df.index[0].date()} – {test_df.index[-1].date()}",
     "initial_capital":  INITIAL_CAPITAL,
     "final_equity":     round(equity, 2),
