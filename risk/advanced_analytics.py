@@ -39,16 +39,26 @@ class VaRResult:
     confidence_level: float  # e.g., 0.95 for 95%
     time_horizon: int  # Days
     method: str
+    # scaling_approximate is True when sqrt(t) was used as a fallback because
+    # there was insufficient history for direct multi-day window estimation.
+    # It is also True for parametric/Monte Carlo methods that assume normality,
+    # since real gold/FX returns have fat tails and volatility clustering.
+    scaling_approximate: bool = False
+    scaling_note: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
-        return {
+        d = {
             'var_value': self.var_value,
             'confidence_level': self.confidence_level,
             'time_horizon': self.time_horizon,
             'method': self.method,
-            'timestamp': self.timestamp.isoformat()
+            'timestamp': self.timestamp.isoformat(),
         }
+        if self.scaling_approximate:
+            d['scaling_approximate'] = True
+            d['scaling_note'] = self.scaling_note
+        return d
 
 
 @dataclass
@@ -243,6 +253,9 @@ class AdvancedRiskAnalytics:
         # 1-day VaR at the requested confidence level
         var_percentile = np.percentile(returns, (1 - confidence_level) * 100)
 
+        scaling_approximate = False
+        scaling_note = ""
+
         if time_horizon == 1:
             var_scaled = var_percentile
         else:
@@ -255,15 +268,23 @@ class AdvancedRiskAnalytics:
                 ])
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
-                # Insufficient history — fall back to sqrt(t) with a warning
+                # Insufficient history — fall back to sqrt(t) with a warning.
+                # sqrt(t) is only valid for i.i.d. normal returns; real gold/FX
+                # returns have fat tails and autocorrelation so this is approximate.
                 import warnings as _w
                 _w.warn(
                     f"calculate_var_historical: insufficient data for {t}-day window "
-                    f"({len(returns)} bars). Falling back to sqrt(t) scaling.",
+                    f"({len(returns)} bars). Falling back to sqrt(t) scaling "
+                    f"(approximate — valid only for i.i.d. normal returns).",
                     RuntimeWarning,
                     stacklevel=3,
                 )
                 var_scaled = var_percentile * np.sqrt(time_horizon)
+                scaling_approximate = True
+                scaling_note = (
+                    f"sqrt(t) fallback used: only {len(returns)} bars available for "
+                    f"{t}-day window. Result is approximate (assumes i.i.d. normal returns)."
+                )
 
         if portfolio_value:
             var_value = abs(var_scaled * portfolio_value)
@@ -274,7 +295,9 @@ class AdvancedRiskAnalytics:
             var_value=var_value,
             confidence_level=confidence_level,
             time_horizon=time_horizon,
-            method='historical'
+            method='historical',
+            scaling_approximate=scaling_approximate,
+            scaling_note=scaling_note,
         )
 
     def calculate_var_parametric(
@@ -287,7 +310,14 @@ class AdvancedRiskAnalytics:
         """
         Calculate Parametric (Variance-Covariance) VaR.
 
-        Assumes normal distribution of returns.
+        Assumes returns are normally distributed.  For gold/FX intraday returns
+        this assumption is violated: empirical kurtosis is typically 4–8 (fat
+        tails) and volatility is autocorrelated.  The result will underestimate
+        tail risk at high confidence levels (99%+).
+
+        Multi-day scaling uses mu_t = mu*t, sigma_t = sigma*sqrt(t) — the
+        correct formula under normality.  The sqrt(t) component is approximate
+        for real returns with autocorrelation or GARCH effects.
 
         Args:
             returns: Array of historical returns
@@ -296,13 +326,30 @@ class AdvancedRiskAnalytics:
             portfolio_value: Optional portfolio value for dollar VaR
 
         Returns:
-            VaRResult object
+            VaRResult with scaling_approximate=True (normality assumed)
         """
         from scipy import stats
 
         confidence_level = confidence_level or self.var_confidence
 
-        # Calculate mean and std
+        # Test normality (Jarque-Bera) and warn if rejected at 5% level.
+        # This is informational — the calculation proceeds regardless.
+        if len(returns) >= 20:
+            try:
+                _, jb_pvalue = stats.jarque_bera(returns)
+                if jb_pvalue < 0.05:
+                    import warnings as _w
+                    _w.warn(
+                        f"calculate_var_parametric: Jarque-Bera normality test rejected "
+                        f"(p={jb_pvalue:.4f}). Returns are non-normal; parametric VaR "
+                        f"will underestimate tail risk. Consider calculate_var_historical() "
+                        f"or calculate_var_multiday() instead.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+            except Exception:
+                pass  # scipy not available or test failed — proceed silently
+
         mean_return = np.mean(returns)
         std_return = np.std(returns)
 
@@ -333,7 +380,17 @@ class AdvancedRiskAnalytics:
             var_value=var_final,
             confidence_level=confidence_level,
             time_horizon=time_horizon,
-            method='parametric'
+            method='parametric',
+            # Parametric VaR always assumes normality; flag as approximate for
+            # any asset with fat tails (gold, FX, crypto).
+            scaling_approximate=True,
+            scaling_note=(
+                "Parametric VaR assumes normally distributed returns. "
+                "Gold/FX returns have fat tails (excess kurtosis); this method "
+                "underestimates tail risk at high confidence levels. "
+                "Use calculate_var_historical() or calculate_var_multiday() for "
+                "more accurate estimates."
+            ),
         )
 
     def calculate_var_monte_carlo(
@@ -342,22 +399,35 @@ class AdvancedRiskAnalytics:
         confidence_level: float = None,
         time_horizon: int = 1,
         num_simulations: int = None,
-        portfolio_value: float = None
+        portfolio_value: float = None,
+        use_historical_bootstrap: bool = False,
     ) -> VaRResult:
         """
         Calculate Monte Carlo VaR.
 
-        Uses simulated returns based on historical distribution.
+        Two simulation modes:
+
+        Gaussian (default, use_historical_bootstrap=False)
+            Simulates t-day returns from N(mu*t, sigma*sqrt(t)).  Fast but
+            assumes normality — underestimates tail risk for fat-tailed assets.
+            sqrt(t) scaling is approximate for autocorrelated returns.
+
+        Historical bootstrap (use_historical_bootstrap=True)
+            Resamples 1-day returns with replacement and sums t draws to form
+            each t-day path.  Preserves the empirical fat-tail distribution
+            without assuming normality.  Preferred for gold/FX.
 
         Args:
-            returns: Array of historical returns
+            returns: Array of historical 1-day returns
             confidence_level: VaR confidence (default from config)
             time_horizon: Time horizon in days
-            num_simulations: Number of simulations
+            num_simulations: Number of simulated paths
             portfolio_value: Optional portfolio value for dollar VaR
+            use_historical_bootstrap: If True, use bootstrap resampling instead
+                of Gaussian simulation (more accurate for fat-tailed assets)
 
         Returns:
-            VaRResult object
+            VaRResult; scaling_approximate=True when Gaussian mode is used
         """
         confidence_level = confidence_level or self.var_confidence
         num_simulations = num_simulations or self.mc_simulations
@@ -366,20 +436,45 @@ class AdvancedRiskAnalytics:
         std_return = np.std(returns)
 
         # Use a local Generator so we do not corrupt the global numpy RNG state.
-        # A fixed seed is intentionally NOT used here: each call should produce
-        # an independent Monte Carlo estimate.  If reproducibility is required
-        # for a specific test, pass a seeded Generator via the rng parameter.
         rng = np.random.default_rng()
-        simulated_returns = rng.normal(
-            mean_return * time_horizon,
-            std_return * np.sqrt(time_horizon),
-            num_simulations,
-        )
+
+        if use_historical_bootstrap and len(returns) >= time_horizon:
+            # Bootstrap: resample 1-day returns and sum t draws per path.
+            # Preserves empirical fat tails and skewness without normality assumption.
+            idx = rng.integers(0, len(returns), size=(num_simulations, time_horizon))
+            simulated_returns = returns[idx].sum(axis=1)
+            scaling_approximate = False
+            scaling_note = ""
+            method_tag = "monte_carlo_bootstrap"
+        else:
+            # Gaussian simulation: N(mu*t, sigma*sqrt(t)).
+            # sqrt(t) scaling is the Basel II rule — valid only for i.i.d. normal
+            # returns.  For gold/FX with fat tails this underestimates tail risk.
+            if use_historical_bootstrap and len(returns) < time_horizon:
+                import warnings as _w
+                _w.warn(
+                    f"calculate_var_monte_carlo: insufficient history for bootstrap "
+                    f"({len(returns)} bars < {time_horizon}-day horizon). "
+                    f"Falling back to Gaussian simulation (approximate).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            simulated_returns = rng.normal(
+                mean_return * time_horizon,
+                std_return * np.sqrt(time_horizon),
+                num_simulations,
+            )
+            scaling_approximate = True
+            scaling_note = (
+                "Gaussian Monte Carlo uses sqrt(t) scaling which assumes i.i.d. normal "
+                "returns. Gold/FX returns have fat tails; this underestimates tail risk. "
+                "Set use_historical_bootstrap=True for a distribution-free estimate."
+            )
+            method_tag = "monte_carlo_gaussian"
 
         # Calculate VaR from simulations
         var_value = -np.percentile(simulated_returns, (1 - confidence_level) * 100)
 
-        # Convert to dollar value if portfolio value provided
         if portfolio_value:
             var_final = abs(var_value * portfolio_value)
         else:
@@ -389,7 +484,9 @@ class AdvancedRiskAnalytics:
             var_value=var_final,
             confidence_level=confidence_level,
             time_horizon=time_horizon,
-            method='monte_carlo'
+            method=method_tag,
+            scaling_approximate=scaling_approximate,
+            scaling_note=scaling_note,
         )
 
     def calculate_var_multiday(
@@ -453,7 +550,15 @@ class AdvancedRiskAnalytics:
         if method == "overlapping":
             # Overlapping t-day cumulative returns
             if len(returns) < time_horizon + 1:
-                # Not enough data — fall back to sqrt(t)
+                # Not enough data — fall back to sqrt(t) with explicit warning.
+                import warnings as _w
+                _w.warn(
+                    f"calculate_var_multiday: only {len(returns)} bars available for "
+                    f"{time_horizon}-day horizon. Falling back to sqrt(t) scaling "
+                    f"(approximate — valid only for i.i.d. normal returns).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 var_1d = np.percentile(returns, (1 - confidence_level) * 100)
                 var_scaled = var_1d * np.sqrt(time_horizon)
                 val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
@@ -462,6 +567,12 @@ class AdvancedRiskAnalytics:
                     confidence_level=confidence_level,
                     time_horizon=time_horizon,
                     method="multiday_sqrtt_fallback",
+                    scaling_approximate=True,
+                    scaling_note=(
+                        f"sqrt(t) fallback: only {len(returns)} bars available for "
+                        f"{time_horizon}-day window. Collect more history for accurate "
+                        f"multi-day VaR."
+                    ),
                 )
             multiday_returns = np.array([
                 np.sum(returns[i:i + time_horizon])
