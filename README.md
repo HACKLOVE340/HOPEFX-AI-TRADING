@@ -13,8 +13,6 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 open http://localhost:8000/docs
 ```
 
-> **Single entry point:** `app.py` — all other `main*.py` files are deprecated stubs.
-
 ---
 
 <div align="center">
@@ -63,18 +61,20 @@ open http://localhost:8000/docs
 | Paper trading | Live — results at /api/performance/public |
 | ML accuracy (test) | 48.3% |
 
-### Model Metrics — 50-year training target
+> ⚠️ **17 trades over 9 months cannot produce a statistically significant Sharpe ratio or win rate.**
+> This backtest proves the pipeline runs end-to-end. It is not a trading signal.
+
+### Model Metrics
 
 | Model | Accuracy | F1 | Training data |
 |---|---|---|---|
-| XGBoost | pending retrain | — | ~12,600 daily bars, GC=F 1974–present (class-balanced) |
-| RandomForest | pending retrain | — | ~12,600 daily bars, GC=F 1974–present (class-balanced) |
+| XGBoost | 49.0% | 0.419 | 11,457 H1 bars, GC=F |
+| RandomForest | 48.6% | — | 11,457 H1 bars, GC=F |
 
-> **Previous metrics** (11,457 H1 bars, retrained 2026-03-24): XGBoost 49.0% / RF 48.6%.
-> Run the retrain command below to update these numbers with 50 years of data + macro features.
-> Expected accuracy after macro features (DXY, VIX, yields, SPX): **65–75%**.
-
-**Honest caveats**: Near-random accuracy (~49%) on short training windows reflects the difficulty of next-bar direction prediction on H1 gold. Extending to 50 years of daily data adds macro regime context (1970s inflation, 2008 crisis, COVID) that H1 bars alone cannot capture. Walk-forward validation prevents look-ahead bias. Treat all numbers as infrastructure proof until a full 50-year retrain is complete.
+> **These numbers are near chance level.** Next-bar direction prediction on H1 gold is a hard problem.
+> Research literature consistently shows 52–58% as a realistic ceiling on daily bars with standard
+> technical features. The 50-year macro retrain pipeline is built and ready — it has not been run yet.
+> Run the command below to update these numbers. Do not trade live capital on 49% accuracy.
 
 **Reproduce the synthetic backtest:**
 ```bash
@@ -86,8 +86,8 @@ python examples/generate_proof_artifacts.py
 # Full 50-year daily history with macro features — takes ~10 min
 python ml/train_with_macro.py --years 50
 
-# Quick smoke test (5 years, no macro)
-python ml/train_with_macro.py --years 5 --no-macro
+# Quick smoke test (10 years, no macro)
+python ml/train_with_macro.py --years 10 --no-macro
 ```
 
 **Legacy retrain (H1 bars only):**
@@ -100,21 +100,22 @@ python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboo
 
 ---
 
-## What Changed (2026-03-24)
+## What Changed (current)
 
 | Fix | Detail |
 |---|---|
-| **Data scheduler wired** | `DataScheduler` starts automatically at app startup; fetches OANDA or yfinance H1 bars daily |
-| **11,457 H1 bars fetched** | `data/XAU_USD_H1.csv` covers 2024-03-24 to 2026-03-24; gold correctly at ~$4,400 |
-| **Models retrained** | XGBoost + RandomForest trained on current GC=F data; stale $1,668 training set replaced |
-| **20 Grafana metrics registered** | All 21 dashboard panel expressions now resolve; no more "No data" panels |
-| **Grafana name mismatches fixed** | 5 panel expressions corrected to match emitted metric names |
-| **`prometheus_monitoring.py` implemented** | Replaced 2-line stub; `/metrics` endpoint live with 15s sync loop |
-| **FIX adapter pass blocks fixed** | 7 silent `except: pass` replaced with `logger.debug()`; failures now visible |
-| **MetricCollector deadlock fixed** | `threading.Lock` to `threading.RLock`; `Counter.inc()` no longer hangs |
-| **XGBoost v2 API fix** | `early_stopping_rounds` moved to constructor in XGBoost >= 2.0; training pipeline updated |
-| **81 integration tests** | 6 previously empty/stub test files now have real passing tests |
-| **`manifest.json` path fixed** | `random_forest_model.pkl` now exists at the path the manifest references |
+| **Test suite green** | 2435 passed, 0 failed — bcrypt, auth, smoke, capsys, JWT secret isolation all fixed |
+| **Deprecated entry points deleted** | `main.py`, `main_ultimate.py`, `main_mcc_wrapper.py`, `main_ultimate_integrated.py` removed |
+| **startup_event() refactored** | 428 lines → 78 lines; all factories in `core/startup_factories.py` |
+| **Email: SendGrid primary** | `core/email_service.py` uses SendGrid API first, SMTP fallback, dev log last |
+| **Type hints complete** | `core/signal_engine.py` fully annotated; coverage restored to ≥86% |
+| **bcrypt 4.x compatibility** | Downgraded to 4.0.1; SHA-256 pre-hash for passwords >72 bytes |
+| **JWT secret isolation** | Test modules pin their own secret in fixtures; no cross-contamination |
+| **Event bus /tmp fix** | `MemoryMappedEventStore` test uses 1 MB instead of 1 GB pre-allocation |
+| **Data scheduler wired** | `DataScheduler` starts automatically at app startup |
+| **Models retrained** | XGBoost + RandomForest trained on current GC=F data |
+| **Prometheus metrics** | `/metrics` endpoint live with 15s sync loop, 41 registered metrics |
+| **Grafana dashboards** | 4 dashboards, 27 panels — all metric names verified |
 
 ---
 
@@ -128,7 +129,6 @@ python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboo
 - **SHAP explainability** — feature importance and counterfactual explanations via `/api/explainability`
 - **Model drift detection** — `hopefx_model_drift_score` metric tracked in Prometheus
 - **Automated retraining pipeline** — `ml/run_training.py` with hyperparameter tuning via Optuna
-- **AI Explainability module** — `explainability/explainer.py` (446 lines), REST API at `/api/explainability`
 
 ### Trading Execution
 - **FIX 4.4 adapter** — `execution/fix_adapter.py`, quickfix backend with pyfixmsg fallback
@@ -159,10 +159,10 @@ python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboo
 - **11,457 H1 bars** — `data/XAU_USD_H1.csv`, XAUUSD 2024-03-24 to 2026-03-24
 - **Real-Time Price Engine** — `data/real_time_price_engine.py`, WebSocket + REST feed
 
-### New Modules (v2)
-- **No-Code Strategy Builder** — `nocode/builder.py` (468 lines), plain-English strategy parsing, REST API at `/api/nocode`
-- **Chart Replay Engine** — `replay/engine.py` (473 lines), historical bar-by-bar replay with practice orders, REST API at `/api/replay`
-- **AI Explainability** — `explainability/explainer.py` (446 lines), SHAP-style feature attribution, REST API at `/api/explainability`
+### Additional Modules
+- **No-Code Strategy Builder** — `nocode/builder.py`, plain-English strategy parsing, REST API at `/api/nocode`
+- **Chart Replay Engine** — `replay/engine.py`, historical bar-by-bar replay with practice orders, REST API at `/api/replay`
+- **AI Explainability** — `explainability/explainer.py`, SHAP-style feature attribution, REST API at `/api/explainability`
 - **Execution Transparency** — `transparency/engine.py`, slippage tracking, fill quality reports, REST API at `/api/transparency`
 - **Research Notebooks** — `research/`, in-app notebook engine at `/api/research`
 
@@ -194,7 +194,6 @@ python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboo
 ```
 HOPEFX-AI-TRADING/
 ├── app.py                    # FastAPI server — 22 routers, lifespan startup
-├── main.py                   # Standalone app entry point
 ├── kill_switch.py            # System-wide halt (API + file + env + event bus)
 ├── prometheus_monitoring.py  # /metrics endpoint + MetricsRegistry sync
 │
@@ -205,11 +204,19 @@ HOPEFX-AI-TRADING/
 ├── execution/                # FIX adapter, OMS, trade executor, position tracker
 ├── risk/                     # RiskManager, circuit breakers, VaR, FIA compliance
 │
+├── core/
+│   ├── component_registry.py # Dependency-ordered startup registry
+│   ├── startup_factories.py  # Component factory functions (extracted from startup_event)
+│   ├── signal_engine.py      # Strategy → risk → order pipeline (background task)
+│   ├── email_service.py      # SendGrid primary, SMTP fallback, dev log
+│   └── position_reconciler.py
+│
 ├── ml/                       # ML pipeline
 │   ├── training.py           # RF + XGBoost + LSTM training with walk-forward split
 │   ├── run_training.py       # CLI training runner
+│   ├── train_with_macro.py   # 50-year macro retrain (DXY, VIX, yields, SPX)
 │   ├── features/             # 66-feature technical engineering
-│   └── saved_models/GCF/     # Trained weights + manifest.json (retrained 2026-03-24)
+│   └── saved_models/GCF/     # Trained weights + manifest.json
 │
 ├── data/                     # Data pipeline
 │   ├── scheduler.py          # Daily OANDA/yfinance fetch (wired to app startup)
@@ -217,10 +224,14 @@ HOPEFX-AI-TRADING/
 │   ├── real_time_price_engine.py
 │   └── XAU_USD_H1.csv        # 11,457 H1 bars, 2024-03-24 to 2026-03-24
 │
+├── notifications/
+│   ├── manager.py            # SendGrid primary, SMTP fallback, Telegram, Discord
+│   └── alert_engine.py       # Rule-based alert routing
+│
 ├── infrastructure/           # Metrics registry (41 collectors), health, logging
-├── nocode/                   # No-code strategy builder (468 lines)
-├── replay/                   # Chart replay engine (473 lines)
-├── explainability/           # AI explainability / SHAP (446 lines)
+├── nocode/                   # No-code strategy builder
+├── replay/                   # Chart replay engine
+├── explainability/           # AI explainability / SHAP
 ├── transparency/             # Execution transparency / TCA
 │
 ├── grafana/                  # 4 dashboards, 27 panels — all metric names verified
@@ -229,14 +240,14 @@ HOPEFX-AI-TRADING/
 ├── helm/hopefx/              # Kubernetes Helm chart (HPA, PDB, secrets)
 ├── k8s/                      # Raw Kubernetes manifests
 │
-├── tests/                    # 81 passing tests
-│   ├── test_copy_trading.py  # 20 tests — CopyTradingEngine
-│   ├── test_integration/     # 5 tests — full pipeline
-│   ├── integration/          # 9 tests — broker lifecycle
-│   ├── e2e/                  # 5 tests — trading flow
-│   ├── test_chaos/           # 19 tests — failure modes
-│   └── unit/                 # Unit tests per module
-└── test_integration.py       # 23 tests — cross-module integration
+└── tests/                    # 2435 passing tests
+    ├── test_auth_gates.py    # 56 tests — RBAC enforcement
+    ├── test_auth_pentest.py  # 18 tests — JWT security
+    ├── test_smoke_critical.py # 30 tests — module import smoke
+    ├── test_copy_trading.py  # 20 tests — CopyTradingEngine
+    ├── integration/          # API, broker, Redis integration
+    ├── unit/                 # Per-module unit tests
+    └── e2e/                  # End-to-end trading flow
 ```
 
 ---
@@ -273,7 +284,7 @@ cp .env.example .env
 ### Run (API server only)
 
 ```bash
-python app.py
+uvicorn app:app --host 0.0.0.0 --port 8000
 # Swagger UI:  http://localhost:8000/docs
 # Metrics:     http://localhost:8000/metrics
 # Health:      http://localhost:8000/health
@@ -305,14 +316,22 @@ python -m data.scheduler
 
 # Retrain RandomForest + XGBoost on current data
 python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboost
+
+# Full 50-year macro retrain (recommended before live use)
+python ml/train_with_macro.py --years 50
 ```
 
 ### Run tests
 
 ```bash
-pip install pytest pytest-asyncio
-pytest test_integration.py tests/ -q --override-ini="addopts="
-# Expected: 79 passed, 2 skipped
+pip install pytest pytest-asyncio pytest-cov
+
+# Full suite (excludes Redis integration — requires running Redis)
+pytest tests/ --ignore=tests/integration/test_redis.py -q
+# Expected: 2435 passed, 18 skipped
+
+# With Redis
+pytest tests/ -q
 ```
 
 ---
@@ -321,9 +340,9 @@ pytest test_integration.py tests/ -q --override-ini="addopts="
 
 | Group | Prefix | Description |
 |---|---|---|
-| Auth | `/api/auth` | Login, register, JWT refresh, 2FA |
+| Auth | `/auth` | Login, register, JWT refresh, 2FA |
 | Trading | `/api/trading` | Orders, positions, OHLCV, market data |
-| Admin | `/api/admin` | System config, risk settings, activity log |
+| Admin | `/admin` | System config, risk settings, activity log |
 | Backtesting | `/api/backtest` | Run backtests, hyperopt, walk-forward |
 | Monetization | `/api/monetization` | Subscriptions, licensing |
 | Kill Switch | `/api/kill-switch` | Activate / deactivate / status |
@@ -342,6 +361,8 @@ pytest test_integration.py tests/ -q --override-ini="addopts="
 | Replay | `/api/replay` | Historical chart replay with practice orders |
 | ML | `/api/ml` | Model predictions, feature importance |
 | Hyperopt | `/api/hyperopt` | Strategy parameter optimisation |
+| Status (JSON) | `/api/status/json` | Machine-readable system status |
+| Status (HTML) | `/status` | Public status page |
 | Metrics | `/metrics` | Prometheus scrape endpoint |
 | Health | `/health` | Component health check |
 | Docs | `/docs` | Swagger UI |
@@ -355,20 +376,30 @@ pytest test_integration.py tests/ -q --override-ini="addopts="
 | `DATABASE_URL` | SQLite | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection |
 | `APP_ENV` | `development` | `development` / `staging` / `production` |
+| `SECURITY_JWT_SECRET` | dev default | JWT signing secret — **set in production** |
 | `PAPER_TRADING_BALANCE` | `10000` | Starting balance for paper broker |
 | `OANDA_ACCOUNT_ID` | — | OANDA practice account ID |
 | `OANDA_API_KEY` | — | OANDA API key |
 | `HOPEFX_KILL_SWITCH_TOKEN` | — | Token required to deactivate kill switch via API |
+| `SENDGRID_API_KEY` | — | SendGrid API key for transactional email |
+| `FROM_EMAIL` | `noreply@hopefx.io` | Sender address for transactional email |
+| `SMTP_HOST` | — | SMTP host (fallback if SendGrid not configured) |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | — | SMTP username |
+| `SMTP_PASSWORD` | — | SMTP password |
 | `PROMETHEUS_SCRAPE_INTERVAL_SECONDS` | `15` | Metrics sync cadence |
 | `RISK_MAX_POSITION_SIZE_PCT` | `0.02` | Max position size as % of equity |
 | `RISK_MAX_DRAWDOWN_PCT` | `0.10` | Max drawdown before halt |
 | `RISK_MAX_DAILY_LOSS_PCT` | `0.05` | Daily loss limit |
 | `SIGNAL_ENGINE_SYMBOLS` | `XAUUSD,EURUSD,GBPUSD` | Symbols for signal engine |
+| `SIGNAL_ENGINE_AUTO_TRADE` | `false` | Enable auto-execution of signals |
 | `FEATURE_EXPLAINABILITY` | `false` | Enable explainability module |
 | `FEATURE_NOCODE` | `false` | Enable no-code builder |
 | `FEATURE_REPLAY` | `false` | Enable chart replay |
 | `FEATURE_TRANSPARENCY` | `false` | Enable transparency reports |
 | `GF_SECURITY_ADMIN_PASSWORD` | required | Grafana admin password |
+
+The app starts without any `.env` file — all variables have safe defaults for local development.
 
 ---
 
@@ -383,39 +414,57 @@ Four Grafana dashboards are provisioned automatically on `docker-compose up`:
 | Broker Connectivity | 6 | Broker status, round-trip latency, rejection rate, active broker, failover events, FIX heartbeat |
 | System Health | 7 | API request rate, error rate, p95 latency, CPU, memory, Redis clients, DB pool |
 
-All 21 Grafana metric expressions are verified against registered `MetricsRegistry` collectors.
+All 27 Grafana panel expressions are verified against registered `MetricsRegistry` collectors.
 
 ---
 
 ## Security
 
 1. Never commit credentials — use environment variables or `.env` (gitignored)
-2. `HOPEFX_KILL_SWITCH_TOKEN` must be set to enable authenticated kill switch deactivation
-3. `GF_SECURITY_ADMIN_PASSWORD` is required — Docker Compose refuses to start without it
-4. All API keys encrypted at rest via Fernet (`config/config_manager.py`)
-5. JWT tokens with configurable expiry; 2FA supported
-6. AML gate and compliance checks on all order flow
+2. `SECURITY_JWT_SECRET` must be set to a strong random value in production
+3. `HOPEFX_KILL_SWITCH_TOKEN` must be set to enable authenticated kill switch deactivation
+4. `GF_SECURITY_ADMIN_PASSWORD` is required — Docker Compose refuses to start without it
+5. All API keys encrypted at rest via Fernet (`config/config_manager.py`)
+6. JWT tokens with configurable expiry; 2FA supported
+7. AML gate and compliance checks on all order flow
+8. Passwords hashed with bcrypt (SHA-256 pre-hash handles inputs >72 bytes)
 
 See [SECURITY.md](./SECURITY.md) for full guidelines.
+
+---
+
+## Known Limitations
+
+| Area | Status |
+|---|---|
+| ML accuracy | 49% on H1 data — near chance. 50-year macro retrain not yet run. |
+| Backtest depth | 17 trades over 9 months — insufficient for Sharpe significance. |
+| FIX adapter | 3 `pass` blocks in `execution/fix_adapter.py` — not production-ready. |
+| PPO reward | 1 bp holding cost — far below real transaction costs. |
+| VaR scaling | `sqrt(t)` approximation — documented, not calibrated. |
+| Email deliverability | SendGrid configured but not warmed up — set `SENDGRID_API_KEY` before production use. |
+
+See [CRITICAL_FLAWS.md](./CRITICAL_FLAWS.md) for the full audit trail.
 
 ---
 
 ## Testing
 
 ```bash
-pip install pytest pytest-asyncio
+pip install pytest pytest-asyncio pytest-cov
 
-# Full suite
-pytest test_integration.py tests/ -q --override-ini="addopts="
+# Full suite (excludes Redis — requires running Redis instance)
+pytest tests/ --ignore=tests/integration/test_redis.py -q
+# Expected: 2435 passed, 18 skipped
 
-# Individual suites
-pytest tests/test_copy_trading.py -q --override-ini="addopts="   # 20 tests
-pytest tests/test_chaos/ -q --override-ini="addopts="            # 19 tests
-pytest tests/integration/ -q --override-ini="addopts="           # 9 tests
-pytest tests/e2e/ -q --override-ini="addopts="                   # 5 tests
+# Specific suites
+pytest tests/test_auth_gates.py -q        # 56 tests — RBAC
+pytest tests/test_auth_pentest.py -q      # 18 tests — JWT security
+pytest tests/test_smoke_critical.py -q    # 30 tests — module imports
+pytest tests/test_copy_trading.py -q      # 20 tests — copy trading
+pytest tests/integration/ -q             # API + broker integration
+pytest tests/unit/ -q                    # Per-module unit tests
 ```
-
-Expected: **79 passed, 2 skipped** (FastAPI skipped when not installed).
 
 ---
 
@@ -423,8 +472,9 @@ Expected: **79 passed, 2 skipped** (FastAPI skipped when not installed).
 
 | Document | Description |
 |---|---|
+| [CRITICAL_FLAWS.md](./CRITICAL_FLAWS.md) | Audit findings, fix history, open items |
 | [INSTALLATION.md](./INSTALLATION.md) | Full installation guide |
-| [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) | Audit findings + fix history with commit hashes |
+| [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) | Static + dynamic audit with commit hashes |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Production deployment guide |
 | [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) | Pre-launch checklist |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Contribution guidelines |
@@ -441,7 +491,7 @@ Expected: **79 passed, 2 skipped** (FastAPI skipped when not installed).
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-feature`)
 3. Make changes and add tests
-4. Run `pytest test_integration.py tests/ -q --override-ini="addopts="` — all must pass
+4. Run `pytest tests/ --ignore=tests/integration/test_redis.py -q` — all must pass
 5. Submit a pull request
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
