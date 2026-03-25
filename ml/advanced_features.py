@@ -578,11 +578,15 @@ def build_advanced_features(
 
     d["_target"] = y_raw
 
-    # ── Drop OHLCV and NaN ────────────────────────────────────────────────────
+    # ── Sanitise: replace inf with NaN, then drop ─────────────────────────────
+    # Inf values arise from division by zero in early bars (e.g. pct_change on
+    # the first bar, Amihud illiquidity when volume=0, Hurst on short windows).
+    # sklearn's StandardScaler raises ValueError on inf — replace before drop.
     exclude      = {"open", "high", "low", "close", "volume", "_target"}
     feature_cols = [c for c in d.columns if c not in exclude]
 
-    d = d[feature_cols + ["_target"]].dropna()
+    d = d[feature_cols + ["_target"]]
+    d = d.replace([np.inf, -np.inf], np.nan).dropna()
 
     X = d[feature_cols]
     y = d["_target"].astype(int)
