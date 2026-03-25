@@ -1,11 +1,12 @@
-setup_py = '''from setuptools import setup, find_packages
-
+"""
+'''from setuptools import setup, find_packages
+setup_py = 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-
+"""
 setup(
     name="hopefx-ai-trading",
     version="2.0.0",
