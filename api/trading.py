@@ -194,6 +194,33 @@ async def place_order(
         except Exception as risk_exc:
             logger.error("Risk check error (allowing trade): %s", risk_exc)
 
+        # ── Explicit CVaR pre-trade gate ─────────────────────────────────────
+        # Runs independently of assess_risk() so a CVaR breach always blocks
+        # order submission, even if assess_risk() was skipped or errored.
+        try:
+            cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
+            if not cvar_allowed:
+                logger.warning(
+                    "Order blocked by CVaR gate: user=%s reason=%s",
+                    user.sub, cvar_reason,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"CVaR limit breached: {cvar_reason}",
+                )
+            logger.debug("CVaR pre-trade gate passed: user=%s %s", user.sub, cvar_reason)
+        except HTTPException:
+            raise
+        except Exception as cvar_exc:
+            logger.error(
+                "CVaR pre-trade check error (blocking order for safety): user=%s %s",
+                user.sub, cvar_exc, exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="CVaR risk check unavailable — order rejected for safety",
+            )
+
     # ── Compliance / audit log ───────────────────────────────────────────────
     if hasattr(app_state, "compliance_manager") and app_state.compliance_manager is not None:
         try:
