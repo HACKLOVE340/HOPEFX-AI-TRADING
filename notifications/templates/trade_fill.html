@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Order Filled — {{ symbol }}{% endblock %}
+
+{% block header_badge %}
+  <span style="background-color:{% if side | lower == 'buy' %}#16a34a{% else %}#dc2626{% endif %};
+               color:#ffffff;font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;
+               text-transform:uppercase;letter-spacing:0.5px;">
+    {{ side | upper }}
+  </span>
+{% endblock %}
+
+{% block content %}
+  <h1 style="margin:0 0 4px 0;font-size:22px;font-weight:700;color:#0f172a;">
+    Order Filled
+  </h1>
+  <p style="margin:0 0 24px 0;font-size:14px;color:#64748b;">{{ timestamp }}</p>
+
+  <!-- Fill details -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;
+                margin-bottom:24px;">
+    <tr>
+      <td style="padding:20px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td width="33%" style="padding-bottom:16px;">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Symbol</span>
+              <span style="font-size:18px;font-weight:700;color:#0f172a;">{{ symbol }}</span>
+            </td>
+            <td width="33%" style="padding-bottom:16px;">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Side</span>
+              <span style="font-size:18px;font-weight:700;
+                           color:{% if side | lower == 'buy' %}#16a34a{% else %}#dc2626{% endif %};">
+                {{ side | upper }}
+              </span>
+            </td>
+            <td width="33%" style="padding-bottom:16px;">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Quantity</span>
+              <span style="font-size:18px;font-weight:700;color:#0f172a;">{{ qty }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td width="33%">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Fill Price</span>
+              <span style="font-size:16px;font-weight:600;color:#0f172a;">{{ price }}</span>
+            </td>
+            <td width="33%">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">P&amp;L</span>
+              <span style="font-size:16px;font-weight:600;
+                           color:{% if pnl is defined and pnl >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+                {% if pnl is defined %}{{ '%+.2f' | format(pnl) }}{% else %}—{% endif %}
+              </span>
+            </td>
+            <td width="33%">
+              <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                           text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Account Balance</span>
+              <span style="font-size:16px;font-weight:600;color:#0f172a;">
+                {% if account_balance is defined %}{{ account_balance }}{% else %}—{% endif %}
+              </span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  {% if order_id %}
+  <p style="margin:0;font-size:12px;color:#94a3b8;">Order ID: {{ order_id }}</p>
+  {% endif %}
+{% endblock %}
