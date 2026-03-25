@@ -21,6 +21,7 @@ import AIStrategyGenerator from './pages/AIStrategyGenerator'
 import TwoFactorSetup from './pages/TwoFactorSetup'
 import EconomicCalendar from './pages/EconomicCalendar'
 import WatchlistPage from './pages/Watchlist'
+import PriceAlerts from './pages/PriceAlerts'
 
 function App() {
   const navigate = useNavigate()
@@ -62,6 +63,7 @@ function App() {
       <Route path="/2fa-setup"    element={<AuthGuard><Layout><TwoFactorSetup /></Layout></AuthGuard>} />
       <Route path="/calendar"     element={<AuthGuard><Layout><EconomicCalendar /></Layout></AuthGuard>} />
       <Route path="/watchlist"    element={<AuthGuard><Layout><WatchlistPage /></Layout></AuthGuard>} />
+      <Route path="/alerts"       element={<AuthGuard><Layout><PriceAlerts /></Layout></AuthGuard>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
