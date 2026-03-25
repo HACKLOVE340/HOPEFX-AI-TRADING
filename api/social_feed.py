@@ -24,16 +24,32 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from api.db_store import db_get, db_set
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feed", tags=["Social Feed"])
 
-# ── In-memory stores (replace with DB in production) ─────────────────────────
+# ── In-memory stores ──────────────────────────────────────────────────────────
 
 _feed_items: Dict[str, dict] = {}          # signal_id → feed item
 _reactions:  Dict[str, Dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
 _comments:   Dict[str, List[dict]] = {}    # signal_id → list of comments
 _opted_in:   set = set()                   # user_ids who opted into public feed
+
+# ── Persistence helpers ───────────────────────────────────────────────────────
+
+def _load_opted_in() -> None:
+    """Load opted-in user set from DB on first access."""
+    global _opted_in
+    if _opted_in:
+        return
+    val = db_get("social_feed:opted_in")
+    if isinstance(val, list):
+        _opted_in = set(val)
+
+
+def _save_opted_in() -> None:
+    db_set("social_feed:opted_in", list(_opted_in), changed_by="social_feed")
 
 
 # ── Seed demo data ────────────────────────────────────────────────────────────
@@ -206,18 +222,23 @@ async def get_comments(signal_id: str):
 @router.post("/opt-in")
 async def opt_in(user: TokenPayload = Depends(get_current_user)):
     """Opt the current user into having their signals appear in the public feed."""
+    _load_opted_in()
     _opted_in.add(user.sub)
+    _save_opted_in()
     return {"opted_in": True, "user_id": user.sub}
 
 
 @router.post("/opt-out")
 async def opt_out(user: TokenPayload = Depends(get_current_user)):
     """Opt the current user out of the public feed."""
+    _load_opted_in()
     _opted_in.discard(user.sub)
+    _save_opted_in()
     return {"opted_in": False, "user_id": user.sub}
 
 
 @router.get("/status/me")
 async def my_feed_status(user: TokenPayload = Depends(get_current_user)):
     """Return whether the current user is opted into the public feed."""
+    _load_opted_in()
     return {"opted_in": user.sub in _opted_in}
