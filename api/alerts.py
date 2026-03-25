@@ -15,8 +15,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +89,12 @@ def _serialise(alert) -> Dict[str, Any]:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/")
-async def create_alert(body: CreateAlertIn, request: Request):
-    """Create a price alert. Accepts the frontend's conditions-array format."""
+async def create_alert(
+    body: CreateAlertIn,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Create a price alert. Requires: authenticated user."""
     engine = _get_engine(request)
 
     if not body.conditions:
@@ -123,8 +129,9 @@ async def list_alerts(
     request: Request,
     symbol: Optional[str] = None,
     status: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
 ):
-    """List all alerts, optionally filtered by symbol or status."""
+    """List all alerts, optionally filtered by symbol or status. Requires: authenticated user."""
     engine = _get_engine(request)
 
     try:
@@ -143,8 +150,9 @@ async def get_trigger_history(
     symbol: Optional[str] = None,
     alert_id: Optional[str] = None,
     limit: int = 50,
+    user: TokenPayload = Depends(get_current_user),
 ):
-    """Return the last N alert trigger events."""
+    """Return the last N alert trigger events. Requires: authenticated user."""
     engine = _get_engine(request)
     history = engine.get_trigger_history(symbol, alert_id, limit)
     # history items are plain dicts from the engine
@@ -152,15 +160,24 @@ async def get_trigger_history(
 
 
 @router.get("/active")
-async def get_active_alerts(request: Request, symbol: Optional[str] = None):
-    """Return only active (non-paused, non-expired) alerts."""
+async def get_active_alerts(
+    request: Request,
+    symbol: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return only active (non-paused, non-expired) alerts. Requires: authenticated user."""
     engine = _get_engine(request)
     alerts = engine.get_active_alerts(symbol)
     return [_serialise(a) for a in alerts]
 
 
 @router.get("/{alert_id}")
-async def get_alert(alert_id: str, request: Request):
+async def get_alert(
+    alert_id: str,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Get a single alert by ID. Requires: authenticated user."""
     engine = _get_engine(request)
     alert = engine.get_alert(alert_id)
     if not alert:
@@ -169,7 +186,12 @@ async def get_alert(alert_id: str, request: Request):
 
 
 @router.delete("/{alert_id}")
-async def delete_alert(alert_id: str, request: Request):
+async def delete_alert(
+    alert_id: str,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Delete an alert. Requires: authenticated user."""
     engine = _get_engine(request)
     if not engine.delete_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -177,7 +199,12 @@ async def delete_alert(alert_id: str, request: Request):
 
 
 @router.post("/{alert_id}/pause")
-async def pause_alert(alert_id: str, request: Request):
+async def pause_alert(
+    alert_id: str,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Pause an alert. Requires: authenticated user."""
     engine = _get_engine(request)
     if not engine.pause_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
@@ -185,7 +212,12 @@ async def pause_alert(alert_id: str, request: Request):
 
 
 @router.post("/{alert_id}/resume")
-async def resume_alert(alert_id: str, request: Request):
+async def resume_alert(
+    alert_id: str,
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Resume a paused alert. Requires: authenticated user."""
     engine = _get_engine(request)
     if not engine.resume_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
