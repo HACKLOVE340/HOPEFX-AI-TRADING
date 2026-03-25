@@ -61,6 +61,7 @@ from api.whitelabel_admin import router as whitelabel_router
 from api.billing import router as billing_router
 from api.platform import router as platform_router, setup_rate_limiting, init_sentry
 from api.advanced_trading import router as advanced_router
+from api.ml import router as ml_router
 
 # GraphQL — strawberry-graphql (api/graphql_schema.py avoids shadowing graphql-core)
 try:
@@ -120,6 +121,7 @@ app.include_router(whitelabel_router)
 app.include_router(billing_router)
 app.include_router(platform_router)
 app.include_router(advanced_router)
+app.include_router(ml_router)
 
 # Mount GraphQL at /graphql — GraphiQL playground available at GET /graphql
 if _graphql_available and _graphql_router is not None:
