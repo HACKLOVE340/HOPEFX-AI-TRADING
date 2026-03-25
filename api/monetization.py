@@ -9,11 +9,15 @@ REST API endpoints for monetization features including:
 - Analytics
 """
 
-from fastapi import APIRouter, HTTPException, status, Query, Body
-from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Dict, Any
-from decimal import Decimal
+import logging
 from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Body, HTTPException, Query, status
+from pydantic import BaseModel, EmailStr, Field
+
+logger = logging.getLogger(__name__)
 
 from monetization import (
     # Pricing
@@ -480,7 +484,10 @@ async def get_affiliate_referrals(
         try:
             status_enum = ReferralStatus(status)
         except ValueError:
-            pass
+            logger.warning(
+                "get_affiliate_referrals: unrecognised status value %r — returning all referrals",
+                status,
+            )
 
     referrals = affiliate_manager.get_affiliate_referrals(
         affiliate_id,
@@ -558,7 +565,10 @@ async def search_strategies(
         try:
             category_enum = StrategyCategory(category.lower())
         except ValueError:
-            pass
+            logger.warning(
+                "search_strategies: unrecognised category value %r — returning all categories",
+                category,
+            )
 
     strategies = strategy_marketplace.search_strategies(
         query=query,
