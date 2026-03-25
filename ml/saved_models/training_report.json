@@ -1,54 +1,54 @@
 {
   "symbol": "GC=F",
-  "years": 8,
+  "years": 50,
   "macro_features": true,
   "feature_count": 85,
-  "sample_count": 1962,
-  "trained_at": "2026-03-25T05:48:09.327270+00:00",
+  "sample_count": 6365,
+  "trained_at": "2026-03-25T18:39:57.220756+00:00",
   "walkforward_xgb": {
     "model": "xgb",
     "folds": [
       {
         "fold": 1,
-        "train_size": 327,
-        "test_size": 327,
-        "accuracy": 0.4526,
-        "f1": 0.4244
+        "train_size": 1065,
+        "test_size": 1060,
+        "accuracy": 0.4887,
+        "f1": 0.191
       },
       {
         "fold": 2,
-        "train_size": 654,
-        "test_size": 327,
-        "accuracy": 0.5199,
-        "f1": 0.6104
+        "train_size": 2125,
+        "test_size": 1060,
+        "accuracy": 0.4962,
+        "f1": 0.4483
       },
       {
         "fold": 3,
-        "train_size": 981,
-        "test_size": 327,
-        "accuracy": 0.4985,
-        "f1": 0.3643
+        "train_size": 3185,
+        "test_size": 1060,
+        "accuracy": 0.5264,
+        "f1": 0.5997
       },
       {
         "fold": 4,
-        "train_size": 1308,
-        "test_size": 327,
-        "accuracy": 0.4924,
-        "f1": 0.3852
+        "train_size": 4245,
+        "test_size": 1060,
+        "accuracy": 0.5028,
+        "f1": 0.4918
       },
       {
         "fold": 5,
-        "train_size": 1635,
-        "test_size": 327,
-        "accuracy": 0.5199,
-        "f1": 0.6005
+        "train_size": 5305,
+        "test_size": 1060,
+        "accuracy": 0.5208,
+        "f1": 0.5544
       }
     ],
-    "mean_accuracy": 0.4967,
-    "std_accuracy": 0.0247,
-    "mean_f1": 0.477,
-    "t_stat": -0.2708,
-    "p_value": 0.8,
+    "mean_accuracy": 0.507,
+    "std_accuracy": 0.0144,
+    "mean_f1": 0.457,
+    "t_stat": 0.9698,
+    "p_value": 0.387,
     "significant": false
   },
   "walkforward_rf": {
@@ -56,53 +56,53 @@
     "folds": [
       {
         "fold": 1,
-        "train_size": 327,
-        "test_size": 327,
-        "accuracy": 0.4893,
-        "f1": 0.4924
+        "train_size": 1065,
+        "test_size": 1060,
+        "accuracy": 0.483,
+        "f1": 0.1046
       },
       {
         "fold": 2,
-        "train_size": 654,
-        "test_size": 327,
-        "accuracy": 0.5443,
-        "f1": 0.674
+        "train_size": 2125,
+        "test_size": 1060,
+        "accuracy": 0.4585,
+        "f1": 0.1633
       },
       {
         "fold": 3,
-        "train_size": 981,
-        "test_size": 327,
-        "accuracy": 0.5596,
-        "f1": 0.5789
+        "train_size": 3185,
+        "test_size": 1060,
+        "accuracy": 0.4877,
+        "f1": 0.6091
       },
       {
         "fold": 4,
-        "train_size": 1308,
-        "test_size": 327,
-        "accuracy": 0.4251,
-        "f1": 0.1826
+        "train_size": 4245,
+        "test_size": 1060,
+        "accuracy": 0.5075,
+        "f1": 0.3902
       },
       {
         "fold": 5,
-        "train_size": 1635,
-        "test_size": 327,
-        "accuracy": 0.5535,
-        "f1": 0.6907
+        "train_size": 5305,
+        "test_size": 1060,
+        "accuracy": 0.5321,
+        "f1": 0.5797
       }
     ],
-    "mean_accuracy": 0.5144,
-    "std_accuracy": 0.0511,
-    "mean_f1": 0.5237,
-    "t_stat": 0.5617,
-    "p_value": 0.6043,
+    "mean_accuracy": 0.4938,
+    "std_accuracy": 0.0247,
+    "mean_f1": 0.3694,
+    "t_stat": -0.5049,
+    "p_value": 0.6402,
     "significant": false
   },
   "final_xgb": {
     "model": "xgb",
-    "train_size": 1569,
-    "test_size": 393,
-    "accuracy": 0.5242,
-    "f1": 0.5926,
+    "train_size": 5092,
+    "test_size": 1273,
+    "accuracy": 0.5287,
+    "f1": 0.5268,
     "feature_count": 85,
     "features": [
       "returns",
@@ -194,10 +194,10 @@
   },
   "final_rf": {
     "model": "rf",
-    "train_size": 1569,
-    "test_size": 393,
-    "accuracy": 0.5242,
-    "f1": 0.6222,
+    "train_size": 5092,
+    "test_size": 1273,
+    "accuracy": 0.5467,
+    "f1": 0.581,
     "feature_count": 85,
     "features": [
       "returns",
