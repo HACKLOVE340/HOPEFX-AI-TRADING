@@ -6,7 +6,7 @@ export function OrderPanel() {
   const [size, setSize] = useState('0.01')
   const [stopLoss, setStopLoss] = useState('')
   const [takeProfit, setTakeProfit] = useState('')
-  const tick = useStore((state) => state.ticks['XAUUSD'])
+  const tick = useStore((state) => state.prices['XAUUSD'])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
