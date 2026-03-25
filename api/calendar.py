@@ -147,7 +147,10 @@ async def get_upcoming(
             try:
                 min_imp = EventImportance(importance.lower())
             except ValueError:
-                pass
+                logger.warning(
+                    "get_upcoming: unrecognised importance value %r — returning all events",
+                    importance,
+                )
         events = cal.get_upcoming_events(hours_ahead=hours, min_importance=min_imp)
         return [_event_to_out(e) for e in events]
     except Exception as exc:
