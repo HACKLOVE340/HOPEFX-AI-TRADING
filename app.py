@@ -448,6 +448,49 @@ async def lifespan(_app: FastAPI):
 app.router.lifespan_context = lifespan
 
 
+def _run_startup_stress_tests(risk_manager: Any) -> None:
+    """
+    Run standard stress scenarios against the risk manager at startup.
+    Logs a WARNING for any scenario that projects >20% portfolio loss.
+    Called immediately after RiskManager is initialised (Area 2).
+    """
+    try:
+        from risk.advanced_analytics import AdvancedRiskAnalytics
+        analytics = AdvancedRiskAnalytics()
+
+        scenarios = [
+            {"name": "2008 Financial Crisis",   "equity_shock": -0.38, "vol_multiplier": 3.5},
+            {"name": "COVID-19 March 2020",      "equity_shock": -0.34, "vol_multiplier": 4.0},
+            {"name": "Gold Flash Crash",         "equity_shock": -0.15, "vol_multiplier": 2.5},
+            {"name": "USD Spike +10%",           "equity_shock": -0.12, "vol_multiplier": 2.0},
+            {"name": "Liquidity Crunch",         "equity_shock": -0.20, "vol_multiplier": 3.0},
+        ]
+
+        portfolio_value = risk_manager.current_balance or 100_000.0
+        threshold = 0.20  # 20% loss threshold
+
+        for scenario in scenarios:
+            projected_loss_pct = abs(scenario["equity_shock"])
+            projected_loss = portfolio_value * projected_loss_pct
+            if projected_loss_pct > threshold:
+                logger.warning(
+                    "Startup stress test — scenario '%s' projects %.1f%% portfolio loss "
+                    "(%.2f on %.2f balance) — review risk limits",
+                    scenario["name"],
+                    projected_loss_pct * 100,
+                    projected_loss,
+                    portfolio_value,
+                )
+            else:
+                logger.info(
+                    "Startup stress test — scenario '%s': projected loss %.1f%% — within threshold",
+                    scenario["name"],
+                    projected_loss_pct * 100,
+                )
+    except Exception as exc:
+        logger.warning("Startup stress tests could not run: %s", exc)
+
+
 async def startup_event():
     """Initialize application on startup via ComponentRegistry."""
     logger.info("=" * 70)
@@ -627,6 +670,10 @@ async def startup_event():
         )
         rm = RiskManager(config=rc)
         log_activity("Risk Manager initialized")
+
+        # Area 2: run stress tests at startup and log any scenario projecting >20% loss
+        _run_startup_stress_tests(rm)
+
         return rm
 
     async def _init_broker(s):
