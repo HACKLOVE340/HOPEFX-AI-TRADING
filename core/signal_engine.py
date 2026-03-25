@@ -17,6 +17,15 @@ from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
+# ── Macro-aware ML model (loaded lazily) ─────────────────────────────────────
+try:
+    from ml import get_active_model, get_model_version
+    _ML_AVAILABLE = True
+except Exception:
+    _ML_AVAILABLE = False
+    def get_active_model(): return None   # type: ignore[misc]
+    def get_model_version(): return "none"  # type: ignore[misc]
+
 # Symbols the engine watches (overridden by ALLOWED_SYMBOLS env var)
 import os
 _SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
@@ -125,10 +134,50 @@ async def _tick(app_state: Any):
         if signal is None:
             continue
 
+        direction = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
+        base_confidence = getattr(signal, "confidence", 0.0)
+
+        # ── ML model probability enrichment ──────────────────────────────────
+        ml_probability = base_confidence
+        active_model = get_active_model() if _ML_AVAILABLE else None
+        model_ver = get_model_version() if _ML_AVAILABLE else "none"
+
+        if active_model is not None:
+            try:
+                import pandas as pd
+                import numpy as np
+                # Build a minimal feature row from available OHLCV data
+                prices = data.get("prices", [data["close"]])
+                closes = pd.Series(prices)
+                feat = {
+                    "close": data["close"],
+                    "open":  data["open"],
+                    "high":  data["high"],
+                    "low":   data["low"],
+                    "volume": data.get("volume", 0),
+                    "ret_1":  closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
+                    "ret_5":  closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
+                    "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+                    "vol_20": closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0,
+                }
+                X = pd.DataFrame([feat])
+                # Use predict_proba if available, else predict
+                if hasattr(active_model, "predict_proba"):
+                    proba = active_model.predict_proba(X)
+                    # Take probability of the positive class
+                    ml_probability = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+                elif hasattr(active_model, "predict"):
+                    ml_probability = float(active_model.predict(X)[0])
+                logger.debug("ML model (%s) probability for %s: %.4f", model_ver, symbol, ml_probability)
+            except Exception as ml_exc:
+                logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
+
         signal_payload = {
             "symbol": symbol,
-            "direction": signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type),
-            "confidence": getattr(signal, "confidence", 0.0),
+            "direction": direction,
+            "confidence": base_confidence,
+            "probability": ml_probability,
+            "model_version": model_ver,
             "entry_price": getattr(signal, "entry_price", data["close"]),
             "stop_loss": getattr(signal, "stop_loss", None),
             "take_profit": getattr(signal, "take_profit", None),
@@ -136,9 +185,26 @@ async def _tick(app_state: Any):
             "source": "strategy_brain",
         }
 
+        # ── Publish typed SignalEvent ─────────────────────────────────────────
+        try:
+            from events.typed_events import EventEnvelope, SignalEvent, publish_sync
+            typed_signal = SignalEvent(
+                symbol=symbol,
+                action=direction.upper(),
+                confidence=base_confidence,
+                probability=ml_probability,
+                entry_price=signal_payload["entry_price"],
+                stop_loss=signal_payload["stop_loss"],
+                take_profit=signal_payload["take_profit"],
+                model_version=model_ver,
+            )
+            publish_sync(EventEnvelope.wrap(source="signal_engine", payload=typed_signal, model_version=model_ver))
+        except Exception as ev_exc:
+            logger.debug("Typed event publish failed: %s", ev_exc)
+
         logger.info(
-            "Brain consensus: %s %s confidence=%.2f",
-            symbol, signal_payload["direction"], signal_payload["confidence"],
+            "Brain consensus: %s %s confidence=%.2f ml_prob=%.4f model=%s",
+            symbol, direction, base_confidence, ml_probability, model_ver,
         )
 
         # ── Broadcast signal over WebSocket ──────────────────────────────────
