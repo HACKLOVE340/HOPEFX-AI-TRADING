@@ -1069,17 +1069,104 @@ async def get_status():
 
 # ── SendGrid email webhook ────────────────────────────────────────────────────
 
+def _verify_sendgrid_signature(
+    public_key_b64: str,
+    payload: bytes,
+    signature_b64: str,
+    timestamp: str,
+) -> bool:
+    """
+    Verify a SendGrid Event Webhook ECDSA P-256 signature.
+
+    SendGrid signs the concatenation of (timestamp + payload) with an
+    ECDSA P-256 private key.  The matching public key is available in the
+    SendGrid dashboard under Settings → Mail Settings → Event Webhook →
+    Signature Verification.
+
+    Args:
+        public_key_b64: Base64-encoded DER public key from SendGrid dashboard.
+        payload:        Raw request body bytes.
+        signature_b64:  Value of the X-Twilio-Email-Event-Webhook-Signature header.
+        timestamp:      Value of the X-Twilio-Email-Event-Webhook-Timestamp header.
+
+    Returns:
+        True if the signature is valid, False otherwise.
+    """
+    try:
+        import base64
+        from cryptography.hazmat.primitives.asymmetric.ec import (
+            ECDSA, EllipticCurvePublicKey,
+        )
+        from cryptography.hazmat.primitives.hashes import SHA256
+        from cryptography.hazmat.primitives.serialization import load_der_public_key
+        from cryptography.exceptions import InvalidSignature
+
+        der = base64.b64decode(public_key_b64)
+        pub_key: EllipticCurvePublicKey = load_der_public_key(der)  # type: ignore[assignment]
+        sig = base64.b64decode(signature_b64)
+        # SendGrid signs timestamp + payload (no separator)
+        signed_payload = timestamp.encode() + payload
+        pub_key.verify(sig, signed_payload, ECDSA(SHA256()))
+        return True
+    except InvalidSignature:
+        return False
+    except Exception as exc:
+        logger.error("SendGrid signature verification error: %s", exc)
+        return False
+
+
 @app.post("/api/email/webhook", tags=["Email"], include_in_schema=False)
 async def sendgrid_webhook(request: Request):
     """
-    Receive SendGrid event webhooks (bounce, spam_report, unsubscribe).
-    Suppresses future sends to affected addresses by writing to email_suppressions.
-    Configure in SendGrid dashboard: Settings → Mail Settings → Event Webhook.
+    Receive SendGrid Event Webhook POSTs (bounce, spam_report, unsubscribe).
+
+    Authentication:
+      Verifies the ECDSA P-256 signature using the public key from
+      SENDGRID_WEBHOOK_PUBLIC_KEY env var.  Requests without a valid
+      signature are rejected with 403.  Set SENDGRID_WEBHOOK_VERIFY=false
+      to disable verification during local development only.
+
+    Suppression:
+      Writes bounced/spam/unsubscribed addresses to email_suppressions.
+      EmailChannel.send() checks this table before every dispatch.
+
+    SendGrid setup:
+      Settings → Mail Settings → Event Webhook → Signature Verification
+      Copy the public key and set SENDGRID_WEBHOOK_PUBLIC_KEY=<value>
     """
+    raw_body = await request.body()
+
+    # ── Signature verification ────────────────────────────────────────────────
+    verify = os.getenv("SENDGRID_WEBHOOK_VERIFY", "true").lower() != "false"
+    webhook_pub_key = os.getenv("SENDGRID_WEBHOOK_PUBLIC_KEY", "")
+
+    if verify:
+        if not webhook_pub_key:
+            logger.error(
+                "SendGrid webhook received but SENDGRID_WEBHOOK_PUBLIC_KEY is not set — "
+                "rejecting request. Set the key or SENDGRID_WEBHOOK_VERIFY=false for dev."
+            )
+            raise HTTPException(status_code=403, detail="Webhook signature key not configured")
+
+        sig = request.headers.get("X-Twilio-Email-Event-Webhook-Signature", "")
+        ts = request.headers.get("X-Twilio-Email-Event-Webhook-Timestamp", "")
+
+        if not sig or not ts:
+            logger.warning("SendGrid webhook missing signature headers — rejected")
+            raise HTTPException(status_code=403, detail="Missing webhook signature headers")
+
+        if not _verify_sendgrid_signature(webhook_pub_key, raw_body, sig, ts):
+            logger.critical(
+                "SendGrid webhook SIGNATURE INVALID — possible spoofed request from %s",
+                request.client.host if request.client else "unknown",
+            )
+            raise HTTPException(status_code=403, detail="Invalid webhook signature")
+
+    # ── Parse events ──────────────────────────────────────────────────────────
     try:
-        events = await request.json()
+        import json as _json
+        events = _json.loads(raw_body)
     except Exception:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     if not isinstance(events, list):
@@ -1097,7 +1184,6 @@ async def sendgrid_webhook(request: Request):
         try:
             from database.models import EmailSuppression
             from sqlalchemy.orm import sessionmaker
-            from sqlalchemy import text as _text
             if app_state.db_engine:
                 Session = sessionmaker(bind=app_state.db_engine)
                 with Session() as session:
