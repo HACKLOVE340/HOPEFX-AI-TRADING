@@ -17,9 +17,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Macro-aware ML model (loaded lazily) ─────────────────────────────────────
+# ── Advanced ML predictor (122-feature, 68% OOS accuracy) ────────────────────
 try:
-    from ml import get_active_model, get_model_version
+    from ml import get_active_model, get_model_version, get_advanced_predictor
     _ML_AVAILABLE: bool = True
 except Exception:
     _ML_AVAILABLE = False
@@ -29,6 +29,9 @@ except Exception:
 
     def get_model_version() -> str:  # type: ignore[misc]
         return "none"
+
+    def get_advanced_predictor() -> Optional[Any]:  # type: ignore[misc]
+        return None
 
 # Symbols the engine watches (overridden by ALLOWED_SYMBOLS env var)
 import os
@@ -147,37 +150,81 @@ async def _tick(app_state: Any) -> None:
         base_confidence: float = getattr(signal, "confidence", 0.0)
 
         # ── ML model probability enrichment ──────────────────────────────────
+        # Uses the advanced OOS model (122 stationary features, 68% OOS acc)
+        # when available. Falls back to the basic active model for backward
+        # compatibility. The advanced predictor requires a rolling OHLCV
+        # DataFrame; the signal engine passes the full bar history from the
+        # broker feed so the feature pipeline can compute rolling windows.
         ml_probability: float = base_confidence
-        active_model: Optional[Any] = get_active_model() if _ML_AVAILABLE else None
-        model_ver: str = get_model_version() if _ML_AVAILABLE else "none"
+        model_ver: str = "none"
 
-        if active_model is not None:
+        if _ML_AVAILABLE:
             try:
                 import pandas as pd
                 import numpy as np
-                # Build a minimal feature row from available OHLCV data
-                prices = data.get("prices", [data["close"]])
-                closes = pd.Series(prices)
-                feat = {
-                    "close": data["close"],
-                    "open":  data["open"],
-                    "high":  data["high"],
-                    "low":   data["low"],
-                    "volume": data.get("volume", 0),
-                    "ret_1":  closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
-                    "ret_5":  closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
-                    "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-                    "vol_20": closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0,
-                }
-                X = pd.DataFrame([feat])
-                # Use predict_proba if available, else predict
-                if hasattr(active_model, "predict_proba"):
-                    proba = active_model.predict_proba(X)
-                    # Take probability of the positive class
-                    ml_probability = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
-                elif hasattr(active_model, "predict"):
-                    ml_probability = float(active_model.predict(X)[0])
-                logger.debug("ML model (%s) probability for %s: %.4f", model_ver, symbol, ml_probability)
+
+                # ── Path 1: Advanced predictor (preferred) ────────────────
+                adv_predictor = get_advanced_predictor()
+                if adv_predictor is not None and adv_predictor.is_available:
+                    prices  = data.get("prices",  [data["close"]])
+                    highs   = data.get("highs",   [data["high"]])
+                    lows    = data.get("lows",    [data["low"]])
+                    volumes = data.get("volumes", [data.get("volume", 0)])
+
+                    # Reconstruct a rolling OHLCV DataFrame from the bar list.
+                    # The broker feed provides up to 100 bars; we need >= 100
+                    # for reliable feature computation.
+                    n = len(prices)
+                    ohlcv_df = pd.DataFrame({
+                        "open":   prices,   # open not tracked per-bar; use close as proxy
+                        "high":   highs   if len(highs)   == n else prices,
+                        "low":    lows    if len(lows)    == n else prices,
+                        "close":  prices,
+                        "volume": volumes if len(volumes) == n else [0.0] * n,
+                    })
+                    # Overwrite last bar with actual OHLCV
+                    ohlcv_df.iloc[-1] = [
+                        data["open"], data["high"], data["low"],
+                        data["close"], data.get("volume", 0),
+                    ]
+
+                    ml_probability = adv_predictor.predict_proba(ohlcv_df)
+                    model_ver = adv_predictor.version
+                    logger.debug(
+                        "Advanced ML (%s) prob for %s: %.4f",
+                        model_ver, symbol, ml_probability,
+                    )
+
+                else:
+                    # ── Path 2: Basic active model (fallback) ─────────────
+                    active_model = get_active_model()
+                    model_ver    = get_model_version()
+                    if active_model is not None:
+                        prices  = data.get("prices", [data["close"]])
+                        closes  = pd.Series(prices)
+                        feat = {
+                            "close":  data["close"],
+                            "open":   data["open"],
+                            "high":   data["high"],
+                            "low":    data["low"],
+                            "volume": data.get("volume", 0),
+                            "ret_1":  closes.pct_change(1).iloc[-1]  if len(closes) > 1  else 0,
+                            "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,
+                            "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+                            "vol_20": closes.pct_change().rolling(20).std().iloc[-1]
+                                      if len(closes) > 20 else 0,
+                        }
+                        X = pd.DataFrame([feat])
+                        if hasattr(active_model, "predict_proba"):
+                            proba = active_model.predict_proba(X)
+                            ml_probability = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+                        elif hasattr(active_model, "predict"):
+                            ml_probability = float(active_model.predict(X)[0])
+                        logger.debug(
+                            "Basic ML (%s) prob for %s: %.4f",
+                            model_ver, symbol, ml_probability,
+                        )
+
             except Exception as ml_exc:
                 logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
 
