@@ -33,21 +33,21 @@ export function PositionTable() {
               <td className="py-3 font-medium">{pos.symbol}</td>
               <td className="py-3">
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  pos.side === 'buy' 
+                  pos.side === 'long'
                     ? 'bg-green-500/10 text-green-400' 
                     : 'bg-red-500/10 text-red-400'
                 }`}>
                   {pos.side.toUpperCase()}
                 </span>
               </td>
-              <td className="py-3">{pos.qty}</td>
-              <td className="py-3">{pos.entryPrice.toFixed(2)}</td>
-              <td className="py-3">-</td>
+              <td className="py-3">{pos.size}</td>
+              <td className="py-3">{pos.entry_price.toFixed(2)}</td>
+              <td className="py-3">{pos.current_price.toFixed(2)}</td>
               <td className={`py-3 text-right font-medium ${
-                pos.unrealizedPnl > 0 ? 'text-green-400' : 
-                pos.unrealizedPnl < 0 ? 'text-red-400' : 'text-slate-400'
+                pos.unrealized_pnl > 0 ? 'text-green-400' : 
+                pos.unrealized_pnl < 0 ? 'text-red-400' : 'text-slate-400'
               }`}>
-                {pos.unrealizedPnl > 0 ? '+' : ''}{pos.unrealizedPnl.toFixed(2)}
+                {pos.unrealized_pnl > 0 ? '+' : ''}{pos.unrealized_pnl.toFixed(2)}
               </td>
               <td className="py-3 text-center">
                 <button className="px-3 py-1 bg-red-500/10 text-red-400 rounded text-xs hover:bg-red-500/20">

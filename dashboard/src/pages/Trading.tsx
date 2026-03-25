@@ -9,7 +9,7 @@ export function Trading() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const tick = useStore((state) => state.ticks['XAUUSD'])
+  const tick = useStore((state) => state.prices['XAUUSD'])
 
   useEffect(() => {
     if (!chartContainerRef.current) return

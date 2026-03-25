@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Trading } from './pages/Trading'
@@ -10,39 +10,53 @@ import { Settings } from './pages/Settings'
 import { Performance } from './pages/Performance'
 import PropFirmTracker from './pages/PropFirmTracker'
 import Onboarding from './pages/Onboarding'
+import LandingPage from './pages/LandingPage'
+import Marketplace from './pages/Marketplace'
+import Affiliate from './pages/Affiliate'
+import CryptoCheckout from './pages/CryptoCheckout'
+import StatusPage from './pages/StatusPage'
+import Login from './pages/Login'
+import AuthGuard from './components/AuthGuard'
 
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Redirect to onboarding on first visit (unless already done or already there)
+  // Redirect to onboarding on first visit (unless already done or on a public page)
   useEffect(() => {
+    const publicPaths = ['/', '/landing', '/login', '/status', '/marketplace', '/affiliate', '/checkout']
     const done = localStorage.getItem('hopefx_onboarding_step')
-    if (!done && location.pathname !== '/onboarding') {
+    if (!done && !publicPaths.includes(location.pathname) && location.pathname !== '/onboarding') {
       navigate('/onboarding', { replace: true })
     }
   }, [])
 
   return (
     <Routes>
-      {/* Onboarding has its own full-screen layout */}
+      {/* Public full-screen pages */}
+      <Route path="/"        element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
+      <Route path="/login"   element={<Login />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route path="/status"  element={<StatusPage />} />
 
-      {/* All other pages use the sidebar Layout */}
-      <Route path="/*" element={
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/trading" element={<Trading />} />
-            <Route path="/prop-firm" element={<PropFirmTracker />} />
-            <Route path="/copy-trading" element={<CopyTrading />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/performance" element={<Performance />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Layout>
-      } />
+      {/* Public pages inside Layout */}
+      <Route path="/marketplace" element={<Layout><Marketplace /></Layout>} />
+      <Route path="/affiliate"   element={<Layout><Affiliate /></Layout>} />
+      <Route path="/checkout"    element={<Layout><CryptoCheckout /></Layout>} />
+
+      {/* Authenticated pages inside Layout */}
+      <Route path="/dashboard"    element={<AuthGuard><Layout><Dashboard /></Layout></AuthGuard>} />
+      <Route path="/trading"      element={<AuthGuard><Layout><Trading /></Layout></AuthGuard>} />
+      <Route path="/prop-firm"    element={<AuthGuard><Layout><PropFirmTracker /></Layout></AuthGuard>} />
+      <Route path="/copy-trading" element={<AuthGuard><Layout><CopyTrading /></Layout></AuthGuard>} />
+      <Route path="/leaderboard"  element={<AuthGuard><Layout><Leaderboard /></Layout></AuthGuard>} />
+      <Route path="/wallet"       element={<AuthGuard><Layout><Wallet /></Layout></AuthGuard>} />
+      <Route path="/performance"  element={<AuthGuard><Layout><Performance /></Layout></AuthGuard>} />
+      <Route path="/settings"     element={<AuthGuard><Layout><Settings /></Layout></AuthGuard>} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

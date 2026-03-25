@@ -16,7 +16,7 @@ import { SignalExplanation } from '../components/SignalExplanation'
 import { MacroPanel } from '../components/MacroPanel'
 
 export function Dashboard() {
-  const equity = useStore((state) => state.equity)
+  const equity = useStore((state) => state.account?.equity ?? 0)
   const [stats, setStats] = useState({
     dailyReturn: 1.23,
     totalReturn: 15.4,

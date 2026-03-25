@@ -5,8 +5,10 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false)
   const [latency, setLatency] = useState(0)
   const [socket, setSocket] = useState<WebSocket | null>(null)
-  const addTick = useStore((state) => state.addTick)
-  const updateEquity = useStore((state) => state.updateEquity)
+  const setPrice = useStore((state) => state.setPrice)
+  const setAccount = useStore((state) => state.setAccount)
+  const setWsStatus = useStore((state) => state.setWsStatus)
+  const setHeartbeat = useStore((state) => state.setHeartbeat)
 
   useEffect(() => {
     // VITE_WS_URL takes precedence; fall back to a relative URL derived from
@@ -33,22 +35,27 @@ export function useWebSocket() {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      
+      const now = Date.now()
+
       switch (data.type) {
         case 'pong':
-          setLatency(Date.now() - new Date(data.timestamp).getTime())
+          setLatency(now - new Date(data.timestamp).getTime())
+          setHeartbeat(now)
           break
         case 'tick':
-          addTick(data.data)
+          setPrice(data.data)
           break
         case 'order_fill':
-          // Update positions
+          // positions updated via REST poll
           break
         case 'prediction':
-          // Update ML signals
+          // signals updated via REST poll
           break
         case 'equity_update':
-          updateEquity(data.data.equity)
+          setAccount(data.data)
+          break
+        case 'ws_status':
+          setWsStatus(data.status)
           break
       }
     }
@@ -58,7 +65,7 @@ export function useWebSocket() {
     return () => {
       ws.close()
     }
-  }, [addTick, updateEquity])
+  }, [setPrice, setAccount, setWsStatus, setHeartbeat])
 
   const sendCommand = useCallback((command: object) => {
     if (socket?.readyState === WebSocket.OPEN) {
