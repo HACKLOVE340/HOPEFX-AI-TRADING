@@ -246,9 +246,29 @@ def get_db() -> Session:
 
 # CORS + security headers configuration
 def setup_cors(app: FastAPI):
-    """Setup CORS middleware with restricted origins."""
-    raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000')
+    """Setup CORS middleware with restricted origins.
+
+    In production set ALLOWED_ORIGINS to your frontend domain(s):
+        ALLOWED_ORIGINS=https://app.hopefx.io,https://hopefx.io
+
+    The default (localhost:3000) is intentionally restrictive so the app
+    starts safely without any .env file, but it will block browser requests
+    from any non-localhost origin.
+    """
+    import logging as _logging
+    _cors_logger = _logging.getLogger(__name__)
+
+    raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:8000')
     allowed_origins = [o.strip() for o in raw.split(',') if o.strip()]
+
+    app_env = os.getenv('APP_ENV', 'development')
+    if app_env == 'production' and all('localhost' in o for o in allowed_origins):
+        _cors_logger.warning(
+            "CORS is restricted to localhost in a production environment. "
+            "Set ALLOWED_ORIGINS to your frontend domain(s) to allow browser access."
+        )
+
+    _cors_logger.info("CORS allowed origins: %s", allowed_origins)
 
     app.add_middleware(
         CORSMiddleware,
