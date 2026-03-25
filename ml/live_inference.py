@@ -17,11 +17,22 @@ Usage
 The predictor requires at least 100 bars of OHLCV history to produce
 reliable features (rolling windows up to 60 bars + Hurst 40-bar window).
 Fewer bars return probability=0.5 (neutral) with a warning.
+
+Feature cache
+-------------
+Under load (100 users watching live charts) recomputing all 122 features
+on every price tick is expensive. A Redis-backed cache with a 1-minute TTL
+stores the serialised feature vector keyed by (symbol, last_bar_timestamp).
+Falls back to in-memory LRU when Redis is unavailable.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -32,6 +43,114 @@ logger = logging.getLogger(__name__)
 
 _SAVED = Path(__file__).parent / "saved_models"
 _MIN_BARS = 100  # minimum bars for reliable feature computation
+_CACHE_TTL = int(os.getenv("FEATURE_CACHE_TTL_SECONDS", "60"))  # 1-minute default
+_CACHE_PREFIX = "hopefx:features:"
+
+
+# ── Feature cache ─────────────────────────────────────────────────────────────
+
+
+class _FeatureCache:
+    """
+    Redis-backed feature vector cache with in-memory LRU fallback.
+
+    Keys are SHA-256 hashes of (symbol, last_bar_close_time).
+    Values are JSON-serialised feature dicts with a TTL of _CACHE_TTL seconds.
+
+    The cache is transparent — callers never need to know whether Redis is
+    available. On a cache miss the caller recomputes and calls set().
+    """
+
+    _MAX_MEM = 128  # in-memory fallback capacity (entries)
+
+    def __init__(self) -> None:
+        self._redis = None
+        self._mem: dict[str, tuple[float, str]] = {}  # key → (expires_at, value)
+        self._connected = False
+
+    def _try_connect(self) -> None:
+        if self._connected:
+            return
+        self._connected = True
+        try:
+            import redis as _redis_lib
+
+            url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            client = _redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+            client.ping()
+            self._redis = client
+            logger.debug("Feature cache: Redis connected at %s", url)
+        except Exception as exc:
+            logger.debug("Feature cache: Redis unavailable (%s) — using in-memory LRU", exc)
+
+    @staticmethod
+    def _make_key(symbol: str, last_ts: Any) -> str:
+        raw = f"{symbol}:{last_ts}"
+        return _CACHE_PREFIX + hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def get(self, symbol: str, last_ts: Any) -> Optional[pd.DataFrame]:
+        """Return cached feature DataFrame or None on miss/error."""
+        self._try_connect()
+        key = self._make_key(symbol, last_ts)
+        try:
+            if self._redis is not None:
+                raw = self._redis.get(key)
+                if raw:
+                    return pd.DataFrame([json.loads(raw)])
+            else:
+                entry = self._mem.get(key)
+                if entry and entry[0] > time.monotonic():
+                    return pd.DataFrame([json.loads(entry[1])])
+                elif entry:
+                    del self._mem[key]
+        except Exception as exc:
+            logger.debug("Feature cache get error: %s", exc)
+        return None
+
+    def set(self, symbol: str, last_ts: Any, features: pd.DataFrame) -> None:
+        """Store feature DataFrame in cache with TTL."""
+        self._try_connect()
+        key = self._make_key(symbol, last_ts)
+        try:
+            row = features.iloc[0].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            payload = json.dumps(row.to_dict())
+            if self._redis is not None:
+                self._redis.setex(key, _CACHE_TTL, payload)
+            else:
+                # Evict oldest entry if at capacity
+                if len(self._mem) >= self._MAX_MEM:
+                    oldest = min(self._mem, key=lambda k: self._mem[k][0])
+                    del self._mem[oldest]
+                self._mem[key] = (time.monotonic() + _CACHE_TTL, payload)
+        except Exception as exc:
+            logger.debug("Feature cache set error: %s", exc)
+
+    def invalidate(self, symbol: str) -> int:
+        """Remove all cached entries for a symbol. Returns count deleted."""
+        self._try_connect()
+        deleted = 0
+        try:
+            if self._redis is not None:
+                pattern = f"{_CACHE_PREFIX}*"
+                keys = self._redis.keys(pattern)
+                if keys:
+                    deleted = self._redis.delete(*keys)
+            else:
+                before = len(self._mem)
+                self._mem.clear()
+                deleted = before
+        except Exception as exc:
+            logger.debug("Feature cache invalidate error: %s", exc)
+        return deleted
+
+    @property
+    def backend(self) -> str:
+        self._try_connect()
+        return "redis" if self._redis is not None else "memory"
+
+
+# Module-level cache singleton
+_feature_cache = _FeatureCache()
 
 
 class AdvancedModelPredictor:
@@ -54,12 +173,14 @@ class AdvancedModelPredictor:
         self,
         model_path: Optional[Path] = None,
         min_bars: int = _MIN_BARS,
+        cache: Optional[_FeatureCache] = None,
     ) -> None:
         self.model_path = model_path or (_SAVED / "advanced_oos.pkl")
         self.min_bars = min_bars
         self._model: Optional[Any] = None
         self._feature_names: Optional[list] = None
         self._version = "advanced_oos_v1"
+        self._cache: _FeatureCache = cache or _feature_cache
 
     # ── Model loading ─────────────────────────────────────────────────────────
 
@@ -93,13 +214,26 @@ class AdvancedModelPredictor:
         self,
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
+        symbol: str = "XAUUSD",
     ) -> Optional[pd.DataFrame]:
         """
         Build the advanced feature matrix from a rolling OHLCV window.
 
+        Results are cached in Redis (or in-memory) for _CACHE_TTL seconds
+        keyed by (symbol, last_bar_timestamp). Under load this prevents
+        recomputing 122 features for every concurrent user on the same tick.
+
         Returns the last row as a single-row DataFrame, or None if
         feature building fails.
         """
+        # ── Cache lookup ──────────────────────────────────────────────────────
+        last_ts = ohlcv.index[-1] if hasattr(ohlcv.index, "__len__") else len(ohlcv)
+        cached = self._cache.get(symbol, last_ts)
+        if cached is not None:
+            logger.debug("Feature cache HIT for %s @ %s", symbol, last_ts)
+            return cached
+
+        # ── Cache miss — compute features ─────────────────────────────────────
         try:
             from ml.advanced_features import build_advanced_features
 
@@ -115,7 +249,10 @@ class AdvancedModelPredictor:
             )
             if X.empty:
                 return None
-            return X.iloc[[-1]]  # last bar only
+            result = X.iloc[[-1]]  # last bar only
+            self._cache.set(symbol, last_ts, result)
+            logger.debug("Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts)
+            return result
         except Exception as exc:
             logger.warning("Feature build failed: %s", exc)
             return None
@@ -126,6 +263,7 @@ class AdvancedModelPredictor:
         self,
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
+        symbol: str = "XAUUSD",
     ) -> float:
         """
         Return the probability that the next bar closes higher (0–1).
@@ -147,7 +285,7 @@ class AdvancedModelPredictor:
             )
             return 0.5
 
-        X = self._build_features(ohlcv, macro_df=macro_df)
+        X = self._build_features(ohlcv, macro_df=macro_df, symbol=symbol)
         if X is None or X.empty:
             return 0.5
 
@@ -165,6 +303,7 @@ class AdvancedModelPredictor:
         self,
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
+        symbol: str = "XAUUSD",
         threshold_long: float = 0.58,
         threshold_short: float = 0.42,
     ) -> Dict[str, Any]:
@@ -179,7 +318,7 @@ class AdvancedModelPredictor:
         threshold_long  : Minimum probability to generate a long signal
         threshold_short : Maximum probability to generate a short signal
         """
-        prob = self.predict_proba(ohlcv, macro_df=macro_df)
+        prob = self.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
         last = ohlcv.iloc[-1]
 
         if prob >= threshold_long:
