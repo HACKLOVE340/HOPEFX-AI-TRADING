@@ -74,8 +74,8 @@ def _decode_token(token: str) -> TokenPayload:
                     )
             except HTTPException:
                 raise
-            except Exception:
-                pass  # blacklist unavailable — allow token (fail open)
+            except Exception as exc:
+                logger.warning("Token blacklist check failed, allowing token (fail-open): %s", exc)
 
         return TokenPayload(**payload)
     except HTTPException:

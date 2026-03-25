@@ -298,8 +298,8 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     try:
         from api.db_store import db_set
         db_set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
 
     return FomcRegimeStatus(**_fomc_regime_override)
 
@@ -319,8 +319,8 @@ async def get_fomc_regime() -> FomcRegimeStatus:
             stored = db_get("fomc_regime_override")
             if stored:
                 _fomc_regime_override.update(stored)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("FOMC regime load from DB failed (non-fatal): %s", exc)
 
     # Auto-expire
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):
@@ -349,6 +349,6 @@ async def clear_fomc_regime() -> dict:
     try:
         from api.db_store import db_delete
         db_delete("fomc_regime_override")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("FOMC regime DB delete failed (non-fatal): %s", exc)
     return {"cleared": True}

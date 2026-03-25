@@ -27,7 +27,8 @@ def _get_session():
         if not mgr:
             return None
         return mgr.get_session()
-    except Exception:
+    except Exception as exc:
+        logger.debug("db_store: could not obtain DB session: %s", exc)
         return None
 
 

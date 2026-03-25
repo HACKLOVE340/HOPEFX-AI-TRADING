@@ -241,8 +241,8 @@ async def broker_status():
                 balance = broker.get_account_balance()
             elif hasattr(broker, "balance"):
                 balance = broker.balance
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Could not retrieve broker balance: %s", exc)
 
         return {
             "connected": True,

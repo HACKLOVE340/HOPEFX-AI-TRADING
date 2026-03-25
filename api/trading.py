@@ -251,8 +251,8 @@ async def place_order(
         try:
             from core.metrics import ORDERS_TOTAL
             ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
-        except Exception:
-            pass
+        except Exception as metric_exc:
+            logger.debug("Prometheus metric update skipped: %s", metric_exc)
 
         return {
             "status": "success",
@@ -263,12 +263,12 @@ async def place_order(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Order error for user=%s: %s", user.sub, exc)
+        logger.error("Order error for user=%s: %s", user.sub, exc, exc_info=True)
         try:
             from core.metrics import ORDERS_TOTAL
             ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
-        except Exception:
-            pass
+        except Exception as metric_exc:
+            logger.debug("Prometheus metric update skipped: %s", metric_exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
@@ -653,8 +653,8 @@ def _make_strategy_router():
             from api.calendar import _fomc_regime_override
             if _fomc_regime_override.get("active"):
                 fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
 
         size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
         tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
@@ -709,8 +709,8 @@ def _make_strategy_router():
 # Register the sub-router on the module-level router
 try:
     router.include_router(_make_strategy_router())
-except Exception:
-    pass
+except Exception as exc:
+    logger.error("Failed to register strategy sub-router: %s", exc, exc_info=True)
 
 
 # ── Regime status endpoint ────────────────────────────────────────────────────

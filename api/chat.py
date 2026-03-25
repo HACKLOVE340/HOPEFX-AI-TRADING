@@ -104,7 +104,7 @@ async def clear_chat_history(session_id: Optional[str] = None):
     if key in _agents:
         try:
             _agents[key]._history = []
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Chat history clear failed for session %s: %s", key, exc)
         del _agents[key]
     return {"cleared": True, "session_id": key}

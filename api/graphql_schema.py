@@ -93,8 +93,8 @@ class Query:
                         volume=int(tick.get("volume", 0)),
                         timestamp=datetime.utcnow().isoformat(),
                     )]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("GraphQL live price fetch failed, using stub data: %s", exc)
         import random
         random.seed(42)
         base = 2350.0 if "XAU" in symbol else 1.085
@@ -137,8 +137,8 @@ class Query:
                     free_margin=float(info.get("free_margin", 0)),
                     pnl=float(info.get("unrealized_pnl", 0)),
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("GraphQL account info fetch failed, using stub data: %s", exc)
         return AccountInfo(balance=10000, equity=10420, margin=200, free_margin=9820, pnl=420)
 
     @strawberry.field(description="Performance summary")
