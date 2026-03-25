@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -301,17 +302,16 @@ const Marketplace: React.FC = () => {
   const loadStrategies = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ sort_by: sortBy, limit: '50' });
-      if (category !== 'all') params.set('category', category);
-      if (search) params.set('query', search);
-      const res = await fetch(`/api/monetization/marketplace/strategies?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setStrategies(data.strategies ?? []);
-      } else {
-        setStrategies(MOCK_STRATEGIES);
-      }
+      const params: Record<string, string> = { sort_by: sortBy, limit: '50' };
+      if (category !== 'all') params.category = category;
+      if (search) params.query = search;
+      const res = await api.get<{ strategies: Strategy[]; total: number }>(
+        '/api/monetization/marketplace/strategies',
+        { params }
+      );
+      setStrategies(res.data.strategies ?? []);
     } catch (_) {
+      // Backend unavailable — show seeded demo data
       setStrategies(MOCK_STRATEGIES);
     } finally {
       setLoading(false);
@@ -321,22 +321,20 @@ const Marketplace: React.FC = () => {
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
 
   useEffect(() => {
-    fetch('/api/monetization/marketplace/stats')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d && setStats(d))
+    api.get<{ total_strategies: number; total_subscribers: number }>(
+      '/api/monetization/marketplace/stats'
+    )
+      .then(r => setStats(r.data))
       .catch(() => setStats({ total_strategies: MOCK_STRATEGIES.length, total_subscribers: 1209 }));
   }, []);
 
   const handleSelect = async (s: Strategy) => {
     setSelected(s);
     try {
-      const res = await fetch(`/api/monetization/marketplace/strategies/${s.strategy_id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedReviews(data.reviews ?? []);
-      } else {
-        setSelectedReviews(MOCK_REVIEWS);
-      }
+      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(
+        `/api/monetization/marketplace/strategies/${s.strategy_id}`
+      );
+      setSelectedReviews(res.data.reviews ?? []);
     } catch (_) {
       setSelectedReviews(MOCK_REVIEWS);
     }
@@ -344,10 +342,9 @@ const Marketplace: React.FC = () => {
 
   const handleSubscribe = async (s: Strategy) => {
     try {
-      await fetch('/api/monetization/marketplace/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buyer_id: 'demo_user', strategy_id: s.strategy_id }),
+      await api.post('/api/monetization/marketplace/purchase', {
+        buyer_id: 'demo_user',
+        strategy_id: s.strategy_id,
       });
     } catch (_) {}
     setSubscribed(prev => new Set([...prev, s.strategy_id]));
