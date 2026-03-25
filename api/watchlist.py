@@ -50,8 +50,8 @@ def _get_user_id(request: Request) -> str:
             secret = os.getenv("JWT_SECRET_KEY", "hopefx-secret-key-change-in-production")
             payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
             return str(payload.get("sub", "demo"))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Watchlist user extraction failed, using query param fallback: %s", exc)
     return request.query_params.get("user_id", "demo")
 
 

@@ -5,12 +5,15 @@ Institutional-grade OMS with order lifecycle management
 """
 
 import asyncio
+import logging
 from typing import Dict, List, Optional, Set, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum, auto
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class OrderStatus(Enum):
@@ -230,9 +233,9 @@ class OrderLifecycleManager:
             try:
                 callback(order, context)
             except Exception as e:
-                print(f"Callback error: {e}")
-        
-        print(f"✅ Order {order.id[:8]}: {current.name} -> {new_status.name}")
+                logger.error("OMS callback error for order %s status %s: %s", order.id[:8], new_status.name, e, exc_info=True)
+
+        logger.info("Order %s: %s -> %s", order.id[:8], current.name, new_status.name)
         return True
     
     def get_order_book(self, symbol: str) -> Dict:

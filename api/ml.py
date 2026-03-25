@@ -72,15 +72,15 @@ def _get_predictor():
     try:
         from ml.models.ensemble import EnsemblePredictor
         return EnsemblePredictor()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("EnsemblePredictor unavailable, trying saved model: %s", exc)
     try:
         import joblib, pathlib
         path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
         if path.exists():
             return joblib.load(str(path))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Saved ML model load failed: %s", exc)
     return None
 
 

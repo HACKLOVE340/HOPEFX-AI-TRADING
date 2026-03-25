@@ -112,7 +112,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         try:
             from api.auth import _decode_token
             return _decode_token(credentials.credentials)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Token decode failed: %s", exc)
             raise HTTPException(status_code=401, detail="Invalid or expired token",
                                 headers={"WWW-Authenticate": "Bearer"})
 

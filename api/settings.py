@@ -69,8 +69,8 @@ def _get_user_id(request: Request) -> str:
             secret = os.getenv("JWT_SECRET_KEY", "hopefx-secret-key-change-in-production")
             payload = pyjwt.decode(token, secret, algorithms=["HS256"])
             return str(payload.get("sub", "anonymous"))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Settings user extraction failed, defaulting to anonymous: %s", exc)
     return "anonymous"
 
 

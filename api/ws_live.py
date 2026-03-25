@@ -75,7 +75,8 @@ class LiveConnectionManager:
         if ws:
             try:
                 await ws.send_text(json.dumps(msg))
-            except Exception:
+            except Exception as exc:
+                logger.debug("WebSocket send failed for %s, disconnecting: %s", cid, exc)
                 self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
@@ -87,7 +88,8 @@ class LiveConnectionManager:
                 if ws:
                     try:
                         await ws.send_text(json.dumps(msg))
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("WebSocket broadcast failed for %s, marking dead: %s", cid, exc)
                         dead.append(cid)
         for cid in dead:
             self.disconnect(cid)

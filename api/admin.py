@@ -59,7 +59,8 @@ def _load_persisted_risk_settings() -> Dict[str, Any]:
         if not _RISK_SETTINGS_FILE.exists():
             return {}
         return json.loads(_RISK_SETTINGS_FILE.read_text())
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load persisted risk settings from %s: %s", _RISK_SETTINGS_FILE, exc)
         return {}
 
 
@@ -232,8 +233,8 @@ async def decide_kyc(
                         html=f"<p>{msg_map[body.action]}</p>",
                         text=msg_map[body.action],
                     )
-        except Exception:
-            pass  # email failure is non-fatal
+        except Exception as email_exc:
+            logger.warning("KYC notification email failed (non-fatal): %s", email_exc)
 
         return {
             "status": "success",

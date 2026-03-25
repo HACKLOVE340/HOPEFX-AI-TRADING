@@ -5,6 +5,7 @@ Secure external interface for clients and integrations
 """
 
 import asyncio
+import logging
 import os
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -14,6 +15,8 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone
 import jwt
 import hashlib
+
+logger = logging.getLogger(__name__)
 
 try:
     import redis as _redis_lib
@@ -47,7 +50,8 @@ class APIGateway:
                     redis_url, socket_connect_timeout=2, socket_timeout=2
                 )
                 self._redis_client.ping()
-            except Exception:
+            except Exception as exc:
+                logger.warning("Gateway Redis unavailable, degrading to in-process rate limiter: %s", exc)
                 self._redis_client = None  # degrade to in-process fallback
 
         # Middleware
@@ -98,8 +102,8 @@ class APIGateway:
                                 "Retry-After": str(_WINDOW),
                             },
                         )
-                except Exception:
-                    pass  # Redis unavailable — degrade gracefully, don't block traffic
+                except Exception as exc:
+                    logger.debug("Gateway Redis rate-limit check failed, degrading gracefully: %s", exc)
             else:
                 # In-process fallback (single-worker only)
                 now = datetime.now(timezone.utc)

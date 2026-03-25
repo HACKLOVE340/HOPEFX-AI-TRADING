@@ -5,11 +5,14 @@ Intelligent order routing across multiple brokers with best execution
 """
 
 import asyncio
+import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -122,7 +125,7 @@ class SmartOrderRouter:
                     score.avg_slippage_bps = np.mean([f.get('slippage_bps', 0) for f in recent_fills])
                 
             except Exception as e:
-                # Degrade score on error
+                logger.warning("Broker score update failed for %s, degrading reliability: %s", broker_id, e)
                 self.scores[broker_id].reliability_score *= 0.9
     
     def _explain_selection(self, score: BrokerScore) -> str:
@@ -151,12 +154,12 @@ class SmartOrderRouter:
             return {**result, 'routing': decision}
             
         except Exception as e:
-            print(f"Primary broker {primary_broker} failed: {e}")
-            
+            logger.error("Primary broker %s failed: %s", primary_broker, e, exc_info=True)
+
             # Try alternatives
             for fallback in decision['alternative_brokers']:
                 try:
-                    print(f"Trying fallback: {fallback}")
+                    logger.warning("Trying fallback broker: %s", fallback)
                     result = await self._execute_with_timeout(fallback, order)
                     return {
                         **result,
@@ -167,6 +170,7 @@ class SmartOrderRouter:
                         }
                     }
                 except Exception as e2:
+                    logger.error("Fallback broker %s also failed: %s", fallback, e2, exc_info=True)
                     continue
             
             # All failed
