@@ -68,6 +68,7 @@ jobs:
           --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \
           --cov=execution \
           --cov-report=xml --cov-report=term-missing \
+          --cov-fail-under=60 \
           --junitxml=test-results.xml
 
     - name: Publish test results
