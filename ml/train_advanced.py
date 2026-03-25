@@ -412,15 +412,115 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def oos_eval_advanced(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_oos: pd.DataFrame,
+    y_oos: pd.Series,
+) -> Dict:
+    """
+    Train the stacking ensemble on X_train/y_train; evaluate on held-out X_oos/y_oos.
+
+    Uses a faster XGBoost+calibration pipeline (not the full stacker) so the
+    OOS run completes in reasonable time on large datasets.  The full stacker
+    is trained separately in train_final_model().
+
+    Returns accuracy, F1, AUC, and a one-sided binomial p-value testing
+    H0: accuracy <= 0.5.
+    """
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, classification_report
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+    from scipy.stats import binomtest
+    import xgboost as xgb
+
+    base = xgb.XGBClassifier(
+        n_estimators=500,
+        max_depth=5,
+        learning_rate=0.03,
+        subsample=0.75,
+        colsample_bytree=0.75,
+        min_child_weight=3,
+        gamma=0.05,
+        reg_alpha=0.1,
+        reg_lambda=1.5,
+        scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+        use_label_encoder=False,
+        eval_metric="logloss",
+        random_state=42,
+        n_jobs=-1,
+    )
+    cal   = CalibratedClassifierCV(base, method="isotonic", cv=3)
+    model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
+    model.fit(X_train, y_train)
+
+    preds = model.predict(X_oos)
+    proba = model.predict_proba(X_oos)[:, 1]
+    acc   = accuracy_score(y_oos, preds)
+    f1    = f1_score(y_oos, preds, zero_division=0)
+    try:
+        auc = roc_auc_score(y_oos, proba)
+    except Exception:
+        auc = 0.5
+
+    n = len(y_oos)
+    k = int(round(acc * n))
+    binom_result = binomtest(k, n, p=0.5, alternative="greater")
+    p_value = float(binom_result.pvalue)
+
+    logger.info(
+        "OOS advanced  acc=%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
+        acc, f1, auc, n, k, p_value, p_value < 0.05,
+    )
+    logger.info("\n%s", classification_report(y_oos, preds))
+
+    # Save OOS model
+    out_path = MODEL_DIR / "advanced_oos.pkl"
+    joblib.dump(model, out_path)
+    logger.info("Saved OOS model → %s", out_path)
+
+    return {
+        "train_size":          len(X_train),
+        "oos_size":            n,
+        "correct_predictions": k,
+        "accuracy":            round(acc, 4),
+        "f1":                  round(f1, 4),
+        "auc":                 round(auc, 4),
+        "p_value_binomial":    round(p_value, 4),
+        "significant":         bool(p_value < 0.05),
+        "test":                "one-sided binomial (H0: accuracy <= 0.5)",
+    }
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Train advanced XAUUSD stacking ensemble")
-    parser.add_argument("--years",     type=int,   default=8,     help="Years of history")
-    parser.add_argument("--symbol",    default="GC=F",            help="Yahoo Finance symbol")
-    parser.add_argument("--no-macro",  action="store_true",       help="Skip macro features")
-    parser.add_argument("--horizon",   type=int,   default=1,     help="Prediction horizon (bars)")
-    parser.add_argument("--splits",    type=int,   default=8,     help="Walk-forward CV splits")
-    parser.add_argument("--min-move",  type=float, default=0.25,  help="Min ATR move for filtered target")
-    parser.add_argument("--no-filter", action="store_true",       help="Disable filtered target")
+    parser = argparse.ArgumentParser(
+        description="Train advanced XAUUSD stacking ensemble",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python ml/train_advanced.py --years 50              # full 50-year history\n"
+            "  python ml/train_advanced.py --years 50 --oos-years 3  # 3-year held-out OOS\n"
+            "  python ml/train_advanced.py --years 8 --no-macro    # quick test\n"
+        ),
+    )
+    parser.add_argument("--years",     type=int,   default=8,     help="Years of history (default: 8; use 50 for full dataset)")
+    parser.add_argument("--symbol",    default="GC=F",            help="Yahoo Finance symbol (default: GC=F)")
+    parser.add_argument("--no-macro",  action="store_true",       help="Skip macro features (DXY, VIX, yields, SPX)")
+    parser.add_argument("--horizon",   type=int,   default=1,     help="Prediction horizon in bars (default: 1)")
+    parser.add_argument("--splits",    type=int,   default=8,     help="Walk-forward CV splits (default: 8)")
+    parser.add_argument("--min-move",  type=float, default=0.25,  help="Min ATR move for filtered target (default: 0.25)")
+    parser.add_argument("--no-filter", action="store_true",       help="Disable filtered target (train on all bars)")
+    parser.add_argument(
+        "--oos-years", type=float, default=0.0,
+        help=(
+            "Reserve the last N years as a completely held-out OOS period. "
+            "The model is trained on all data before this window and evaluated "
+            "on it with a one-sided binomial p-value test (H0: accuracy <= 0.5). "
+            "Default: 0 (no separate OOS period; use walk-forward CV only). "
+            "Recommended: --oos-years 3 for a 50-year dataset."
+        ),
+    )
     args = parser.parse_args()
 
     from ml.advanced_features import build_advanced_features
@@ -452,9 +552,37 @@ def main():
         logger.error("Too few samples (%d) after filtering — reduce --min-move", len(X))
         sys.exit(1)
 
-    # ── Walk-forward evaluation ───────────────────────────────────────────────
+    # ── OOS split (if requested) ──────────────────────────────────────────────
+    # Carve the OOS period off the END of the dataset before any model training.
+    # This is the only valid way to estimate live performance — the OOS set is
+    # never seen during training or hyperparameter selection.
+    oos_n = 0
+    X_cv, y_cv = X, y
+    X_oos, y_oos = None, None
+
+    if args.oos_years > 0:
+        oos_n = int(round(args.oos_years * 252))   # ~252 trading days/year
+        oos_n = min(oos_n, len(X) // 4)            # cap at 25% of data
+        if oos_n < 30:
+            logger.warning(
+                "--oos-years %.1f produces only %d bars — too few for reliable OOS eval. "
+                "Increase --oos-years or --years.",
+                args.oos_years, oos_n,
+            )
+            oos_n = 0
+        else:
+            X_cv, y_cv = X.iloc[:-oos_n], y.iloc[:-oos_n]
+            X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
+            logger.info(
+                "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
+                len(X_cv), oos_n, args.oos_years,
+                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
+                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
+            )
+
+    # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
     logger.info("\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits)
-    wf = walk_forward_eval(X, y, n_splits=args.splits)
+    wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits)
 
     logger.info(
         "Walk-forward  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  p=%.4f  significant=%s",
@@ -466,29 +594,39 @@ def main():
         wf.get("significant",   False),
     )
 
-    # ── Train final stacking ensemble ─────────────────────────────────────────
+    # ── Train final stacking ensemble (on CV portion) ─────────────────────────
     logger.info("\n=== Training final stacking ensemble ===")
-    final_model, final_metrics = train_final_model(X, y)
+    final_model, final_metrics = train_final_model(X_cv, y_cv)
 
     # Feature importance
-    importance = extract_feature_importance(final_model, list(X.columns))
+    importance = extract_feature_importance(final_model, list(X_cv.columns))
     if importance:
         logger.info("Top features: %s", list(importance.keys())[:10])
 
+    # ── Held-out OOS evaluation ───────────────────────────────────────────────
+    oos_metrics: Dict = {}
+    if X_oos is not None:
+        logger.info("\n=== Held-out OOS evaluation (%d bars) ===", oos_n)
+        oos_metrics = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
+
     # ── Save report ───────────────────────────────────────────────────────────
     report = {
-        "symbol":          args.symbol,
-        "years":           args.years,
-        "macro_features":  macro_df is not None,
-        "filtered_target": not args.no_filter,
-        "min_move_atr":    args.min_move,
-        "horizon":         args.horizon,
-        "sample_count":    len(X),
-        "feature_count":   X.shape[1],
-        "trained_at":      datetime.now(timezone.utc).isoformat(),
-        "walkforward":     wf,
-        "final":           final_metrics,
-        "top_features":    importance,
+        "symbol":           args.symbol,
+        "years":            args.years,
+        "oos_years":        args.oos_years,
+        "macro_features":   macro_df is not None,
+        "filtered_target":  not args.no_filter,
+        "min_move_atr":     args.min_move,
+        "horizon":          args.horizon,
+        "sample_count":     len(X),
+        "cv_sample_count":  len(X_cv),
+        "oos_sample_count": oos_n,
+        "feature_count":    X.shape[1],
+        "trained_at":       datetime.now(timezone.utc).isoformat(),
+        "walkforward":      wf,
+        "final":            final_metrics,
+        "oos":              oos_metrics,
+        "top_features":     importance,
     }
 
     report_path = MODEL_DIR / "advanced_training_report.json"
@@ -501,7 +639,10 @@ def main():
     print("ADVANCED TRAINING SUMMARY")
     print("=" * 65)
     print(f"  Symbol          : {args.symbol}  ({args.years} years)")
-    print(f"  Samples         : {len(X)}  (after filtered-target)")
+    print(f"  Symbol          : {args.symbol}  ({args.years} years)")
+    print(f"  Samples (total) : {len(X)}  (after filtered-target)")
+    print(f"  CV samples      : {len(X_cv)}")
+    print(f"  OOS samples     : {oos_n}  ({args.oos_years:.1f} years held out)")
     print(f"  Features        : {X.shape[1]}")
     print(f"  Macro features  : {macro_df is not None}")
     print()
@@ -514,8 +655,16 @@ def main():
     print(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
     print(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
     print(f"  Final holdout AUC     : {final_metrics['auc']:.3f}")
-    print()
 
+    if oos_metrics:
+        print()
+        sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
+        print(f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}  (n={oos_metrics['oos_size']})")
+        print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
+        print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
+        print(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
+
+    print()
     acc = final_metrics["accuracy"]
     if acc >= 0.85:
         print("  ✓ TARGET MET: accuracy >= 85%")
