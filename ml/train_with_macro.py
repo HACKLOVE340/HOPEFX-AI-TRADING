@@ -87,7 +87,12 @@ def build_features(
     prediction_horizon: int = 1,
 ) -> Tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix and binary direction target."""
-    from ml.training import FeatureEngineer
+    # ml/training/ directory shadows ml/training.py — import directly from the file
+    import importlib.util as _ilu, sys as _sys
+    _spec = _ilu.spec_from_file_location("ml._training_module", Path(__file__).parent / "training.py")
+    _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+    FeatureEngineer = _mod.FeatureEngineer
     fe = FeatureEngineer(
         include_indicators=True,
         include_lags=True,
