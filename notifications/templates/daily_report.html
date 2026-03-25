@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Daily P&L Report — {{ report_date }}{% endblock %}
+
+{% block header_badge %}
+  <span style="background-color:#0f172a;color:#94a3b8;font-size:11px;font-weight:600;
+               padding:3px 10px;border-radius:12px;text-transform:uppercase;letter-spacing:0.5px;">
+    Daily Report
+  </span>
+{% endblock %}
+
+{% block content %}
+  <h1 style="margin:0 0 4px 0;font-size:22px;font-weight:700;color:#0f172a;">
+    Daily P&amp;L Summary
+  </h1>
+  <p style="margin:0 0 24px 0;font-size:14px;color:#64748b;">{{ report_date }}</p>
+
+  <!-- Top-line P&L -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:{% if daily_pnl >= 0 %}#f0fdf4{% else %}#fef2f2{% endif %};
+                border:1px solid {% if daily_pnl >= 0 %}#bbf7d0{% else %}#fecaca{% endif %};
+                border-radius:6px;margin-bottom:24px;">
+    <tr>
+      <td style="padding:20px 24px;">
+        <span style="display:block;font-size:12px;font-weight:600;color:#94a3b8;
+                     text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+          Daily P&amp;L
+        </span>
+        <span style="font-size:32px;font-weight:700;
+                     color:{% if daily_pnl >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+          {{ '%+.2f' | format(daily_pnl) }}
+        </span>
+        {% if daily_pnl_pct is defined %}
+        <span style="font-size:16px;font-weight:500;margin-left:8px;
+                     color:{% if daily_pnl_pct >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+          ({{ '%+.2f' | format(daily_pnl_pct) }}%)
+        </span>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Stats table -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="border:1px solid #e2e8f0;border-radius:6px;margin-bottom:24px;
+                border-collapse:collapse;">
+    <thead>
+      <tr style="background-color:#f8fafc;">
+        <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;
+                   color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;
+                   border-bottom:1px solid #e2e8f0;">Metric</th>
+        <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:600;
+                   color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;
+                   border-bottom:1px solid #e2e8f0;">Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;">
+          Account Equity
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#0f172a;
+                   text-align:right;border-bottom:1px solid #f1f5f9;">
+          {{ equity | default('—') }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;">
+          Total Trades
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#0f172a;
+                   text-align:right;border-bottom:1px solid #f1f5f9;">
+          {{ total_trades | default('—') }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;">
+          Win Rate
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#0f172a;
+                   text-align:right;border-bottom:1px solid #f1f5f9;">
+          {{ win_rate | default('—') }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;">
+          Sharpe Ratio
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#0f172a;
+                   text-align:right;border-bottom:1px solid #f1f5f9;">
+          {{ sharpe | default('—') }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;border-bottom:1px solid #f1f5f9;">
+          Max Drawdown
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;
+                   color:{% if max_drawdown is defined and max_drawdown > 0.05 %}#dc2626{% else %}#0f172a{% endif %};
+                   text-align:right;border-bottom:1px solid #f1f5f9;">
+          {{ max_drawdown | default('—') }}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;font-size:14px;color:#334155;">
+          Open Positions
+        </td>
+        <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#0f172a;text-align:right;">
+          {{ open_positions | default('—') }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Equity curve image (optional) -->
+  {% if equity_curve_url %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="margin-bottom:24px;">
+    <tr>
+      <td>
+        <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;color:#94a3b8;
+                  text-transform:uppercase;letter-spacing:0.5px;">Equity Curve</p>
+        <img src="{{ equity_curve_url }}" alt="Equity Curve"
+             style="max-width:100%;height:auto;border-radius:4px;border:1px solid #e2e8f0;" />
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {% if dashboard_url %}
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="border-radius:6px;background-color:#0f172a;">
+        <a href="{{ dashboard_url }}"
+           style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;
+                  color:#ffffff;text-decoration:none;border-radius:6px;">
+          View Full Report
+        </a>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+{% endblock %}

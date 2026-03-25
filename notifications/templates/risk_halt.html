@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Halt Triggered{% endblock %}
+
+{% block header_badge %}
+  <span style="background-color:#dc2626;color:#ffffff;font-size:11px;font-weight:600;
+               padding:3px 10px;border-radius:12px;text-transform:uppercase;letter-spacing:0.5px;">
+    HALT
+  </span>
+{% endblock %}
+
+{% block content %}
+  <!-- Warning banner -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;
+                margin-bottom:24px;">
+    <tr>
+      <td style="padding:16px 20px;">
+        <span style="font-size:15px;font-weight:600;color:#991b1b;">
+          ⚠ Trading has been automatically halted
+        </span>
+      </td>
+    </tr>
+  </table>
+
+  <h1 style="margin:0 0 4px 0;font-size:22px;font-weight:700;color:#0f172a;">
+    Risk Halt Triggered
+  </h1>
+  <p style="margin:0 0 24px 0;font-size:14px;color:#64748b;">{{ halt_time }}</p>
+
+  <!-- Halt details -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;
+                margin-bottom:24px;">
+    <tr>
+      <td style="padding:20px 24px;">
+        <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                     text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Halt Reason</span>
+        <span style="font-size:16px;font-weight:600;color:#991b1b;">{{ reason }}</span>
+
+        {% if resume_time %}
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;" />
+        <span style="display:block;font-size:11px;font-weight:600;color:#94a3b8;
+                     text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
+          Scheduled Resume
+        </span>
+        <span style="font-size:15px;color:#334155;">{{ resume_time }}</span>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Resume instructions -->
+  <h2 style="margin:0 0 12px 0;font-size:16px;font-weight:600;color:#0f172a;">
+    Resume Instructions
+  </h2>
+  <ol style="margin:0 0 24px 0;padding-left:20px;color:#334155;font-size:14px;line-height:1.8;">
+    <li>Review the halt reason and confirm the underlying condition has resolved.</li>
+    <li>Log in to the HOPEFX dashboard and navigate to <strong>Risk → Kill Switch</strong>.</li>
+    <li>Provide your HMAC-authenticated deactivation token to resume trading.</li>
+    <li>Monitor positions closely for the first 30 minutes after resumption.</li>
+  </ol>
+
+  {% if dashboard_url %}
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td style="border-radius:6px;background-color:#dc2626;">
+        <a href="{{ dashboard_url }}"
+           style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;
+                  color:#ffffff;text-decoration:none;border-radius:6px;">
+          Open Risk Dashboard
+        </a>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+{% endblock %}

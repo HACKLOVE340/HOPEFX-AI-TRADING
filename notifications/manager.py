@@ -347,13 +347,30 @@ class EmailChannel(NotificationChannel):
             f"---\nThis is an automated message from HOPEFX AI Trading System"
         )
 
+        # Render HTML template if one is specified in notification.data
+        html_body: Optional[str] = None
+        template_name = notification.data.get('email_template')
+        if template_name:
+            try:
+                from notifications.email_renderer import render_email
+                html_body = render_email(
+                    template_name,
+                    title=notification.title,
+                    message=notification.message,
+                    level=notification.level.value,
+                    timestamp=datetime.fromtimestamp(notification.timestamp).isoformat(),
+                    **{k: v for k, v in notification.data.items() if k != 'email_template'},
+                )
+            except Exception as exc:
+                logger.warning("Email template render failed, using plain text: %s", exc)
+
         if self._send_mode == 'sendgrid':
             return await asyncio.get_event_loop().run_in_executor(
-                None, self._send_via_sendgrid, recipients, subject, plain_body
+                None, self._send_via_sendgrid, recipients, subject, plain_body, html_body
             )
         elif self._send_mode == 'smtp':
             return await asyncio.get_event_loop().run_in_executor(
-                None, self._send_via_smtp, recipients, subject, plain_body
+                None, self._send_via_smtp, recipients, subject, plain_body, html_body
             )
         return False
 
@@ -361,7 +378,10 @@ class EmailChannel(NotificationChannel):
     # SendGrid transport
     # ------------------------------------------------------------------
 
-    def _send_via_sendgrid(self, recipients: List[str], subject: str, body: str) -> bool:
+    def _send_via_sendgrid(
+        self, recipients: List[str], subject: str, body: str,
+        html_body: Optional[str] = None
+    ) -> bool:
         try:
             sg = SendGridAPIClient(api_key=self.sendgrid_api_key)
             message = Mail(
@@ -370,6 +390,8 @@ class EmailChannel(NotificationChannel):
                 subject=subject,
                 plain_text_content=body,
             )
+            if html_body:
+                message.html_content = HtmlContent(html_body)
             response = sg.send(message)
             if response.status_code in (200, 202):
                 logger.debug("SendGrid email sent (status %s)", response.status_code)
@@ -384,13 +406,18 @@ class EmailChannel(NotificationChannel):
     # SMTP fallback transport
     # ------------------------------------------------------------------
 
-    def _send_via_smtp(self, recipients: List[str], subject: str, body: str) -> bool:
+    def _send_via_smtp(
+        self, recipients: List[str], subject: str, body: str,
+        html_body: Optional[str] = None
+    ) -> bool:
         try:
-            msg = MIMEMultipart()
+            msg = MIMEMultipart('alternative')
             msg['From'] = self.from_addr or self.username
             msg['To'] = ", ".join(recipients)
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain'))
+            if html_body:
+                msg.attach(MIMEText(html_body, 'html'))
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
                 server.login(self.username, self.password)
