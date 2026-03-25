@@ -57,6 +57,7 @@ from api.journal import router as journal_router
 from api.profiles import router as profiles_router
 from api.social_feed import router as social_feed_router
 from api.mobile import router as mobile_router
+from api.whitelabel_admin import router as whitelabel_router
 
 # GraphQL — strawberry-graphql (api/graphql_schema.py avoids shadowing graphql-core)
 try:
@@ -112,6 +113,7 @@ app.include_router(journal_router)
 app.include_router(profiles_router)
 app.include_router(social_feed_router)
 app.include_router(mobile_router)
+app.include_router(whitelabel_router)
 
 # Mount GraphQL at /graphql — GraphiQL playground available at GET /graphql
 if _graphql_available and _graphql_router is not None:
