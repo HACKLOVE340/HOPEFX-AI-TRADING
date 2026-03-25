@@ -362,7 +362,122 @@ def add_intermarket_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. Target engineering
+# 9. COT / central bank buying proxy features
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_cot_proxy_features(df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """
+    Proxy features for speculative positioning and central bank demand.
+
+    The 2022-2026 gold bull market was driven by central bank buying and
+    geopolitical risk — factors absent from the basic feature set.  Direct
+    COT data requires a CFTC feed; these proxies are computable from
+    price/volume and cross-asset data available via Yahoo Finance.
+
+    Features
+    --------
+    cot_oi_momentum_5   : 5-bar rate of change of open interest (volume proxy)
+    cot_oi_momentum_20  : 20-bar rate of change of open interest
+    cot_large_spec_proxy: Gold ETF (GLD) vs futures divergence — when GLD
+                          outperforms futures, institutional/ETF demand is
+                          rising (central bank / sovereign wealth fund proxy)
+    cot_net_long_proxy  : Composite score: OI rising + price rising = net long
+                          accumulation; OI rising + price falling = distribution
+    cot_demand_surge    : Binary flag: OI momentum > 1 std AND price > 0
+    cot_cb_buying_proxy : Gold rising while DXY also rising AND yields rising
+                          — the only scenario where gold defies macro headwinds
+                          is central bank / geopolitical demand
+    cot_geopolitical    : VIX spike + gold outperforming SPX (risk-off premium)
+    """
+    d = df.copy()
+
+    # ── Open interest proxy (volume as OI substitute) ─────────────────────────
+    # Gold futures volume is a reasonable OI proxy for daily data.
+    if "volume" in d.columns and d["volume"].sum() > 0:
+        vol = d["volume"].replace(0, np.nan)
+        d["cot_oi_momentum_5"]  = vol.pct_change(5).fillna(0.0)
+        d["cot_oi_momentum_20"] = vol.pct_change(20).fillna(0.0)
+
+        # Net long proxy: OI direction × price direction
+        oi_dir    = np.sign(d["cot_oi_momentum_5"])
+        price_dir = np.sign(d["close"].pct_change())
+        d["cot_net_long_proxy"] = (oi_dir * price_dir).fillna(0.0)
+
+        # Demand surge: OI momentum > 1 std above its 60-bar mean AND price up
+        oi_mom_mean = d["cot_oi_momentum_5"].rolling(60).mean()
+        oi_mom_std  = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
+        oi_z        = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
+        d["cot_demand_surge"] = (
+            (oi_z > 1.0) & (d["close"].pct_change() > 0)
+        ).astype(float)
+    else:
+        for col in ["cot_oi_momentum_5", "cot_oi_momentum_20",
+                    "cot_net_long_proxy", "cot_demand_surge"]:
+            d[col] = 0.0
+
+    # ── Cross-asset proxies (require macro_df) ────────────────────────────────
+    if macro_df is not None and not macro_df.empty:
+        macro = macro_df.copy()
+        if macro.index.tz is not None:
+            macro.index = macro.index.tz_localize(None)
+        macro.index = pd.to_datetime(macro.index).normalize()
+        macro = macro.reindex(d.index, method="ffill").fillna(0.0)
+
+        gold_ret = d["close"].pct_change().fillna(0.0)
+
+        # GLD vs futures divergence (institutional demand proxy)
+        # When GLD ETF (spot demand) outperforms futures, it signals
+        # physical/institutional buying rather than speculative positioning.
+        if "gold_etf" in macro.columns and macro["gold_etf"].abs().sum() > 0:
+            gld_ret = macro["gold_etf"].pct_change().fillna(0.0)
+            d["cot_large_spec_proxy"] = (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
+        else:
+            d["cot_large_spec_proxy"] = 0.0
+
+        # Central bank buying proxy: gold up + DXY up + yields up
+        # This is the signature of demand that defies macro headwinds —
+        # the dominant driver of the 2022-2026 bull market.
+        has_dxy    = "dxy"       in macro.columns and macro["dxy"].abs().sum() > 0
+        has_yield  = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
+        if has_dxy and has_yield:
+            dxy_ret   = macro["dxy"].pct_change().fillna(0.0)
+            yield_chg = macro["yield_10y"].diff().fillna(0.0)
+            # All three rising simultaneously = central bank / geopolitical demand
+            d["cot_cb_buying_proxy"] = (
+                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
+            ).astype(float)
+            # Rolling 20-bar frequency of this pattern (persistence measure)
+            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+        else:
+            d["cot_cb_buying_proxy"]  = 0.0
+            d["cot_cb_buying_freq20"] = 0.0
+
+        # Geopolitical premium: VIX spike + gold outperforming SPX
+        has_vix = "vix" in macro.columns and macro["vix"].abs().sum() > 0
+        has_spx = "spx" in macro.columns and macro["spx"].abs().sum() > 0
+        if has_vix and has_spx:
+            vix_spike = (macro["vix"] > 25).astype(float)
+            spx_ret   = macro["spx"].pct_change().fillna(0.0)
+            gold_vs_spx = gold_ret - spx_ret
+            d["cot_geopolitical"] = (
+                vix_spike * (gold_vs_spx > 0).astype(float)
+            ).fillna(0.0)
+            # 20-bar rolling geopolitical premium score
+            d["cot_geo_score20"] = d["cot_geopolitical"].rolling(20).mean().fillna(0.0)
+        else:
+            d["cot_geopolitical"] = 0.0
+            d["cot_geo_score20"]  = 0.0
+
+    else:
+        for col in ["cot_large_spec_proxy", "cot_cb_buying_proxy",
+                    "cot_cb_buying_freq20", "cot_geopolitical", "cot_geo_score20"]:
+            d[col] = 0.0
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Target engineering
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_filtered_target(
@@ -435,6 +550,7 @@ def build_advanced_features(
     d = add_calendar_features(d)
     d = add_trend_features(d)
     d = add_intermarket_features(d, macro_df=macro_df)
+    d = add_cot_proxy_features(d, macro_df=macro_df)
 
     # ── Macro + regime features ───────────────────────────────────────────────
     if macro_df is not None and not macro_df.empty:
