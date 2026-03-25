@@ -56,6 +56,7 @@ from api.watchlist import router as watchlist_router
 from api.journal import router as journal_router
 from api.profiles import router as profiles_router
 from api.social_feed import router as social_feed_router
+from api.mobile import router as mobile_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -101,6 +102,7 @@ app.include_router(watchlist_router)
 app.include_router(journal_router)
 app.include_router(profiles_router)
 app.include_router(social_feed_router)
+app.include_router(mobile_router)
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
