@@ -264,6 +264,18 @@ class KillSwitch:
         # Persist state to JSON so the next process restart can restore it.
         self._persist_state()
 
+        # Send risk-halt email alert (fire-and-forget, never blocks trading halt)
+        try:
+            from notifications.email_triggers import send_risk_halt_email
+
+            send_risk_halt_email(
+                reason=reason,
+                drawdown_pct=0.0,   # caller can override via callback if needed
+                limit_pct=0.0,
+            )
+        except Exception as _email_exc:
+            logger.debug("Risk halt email skipped (non-critical): %s", _email_exc)
+
     def _persist_state(self) -> None:
         """
         Write activation state to a JSON file next to the flag file.
