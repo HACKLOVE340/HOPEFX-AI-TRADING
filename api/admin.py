@@ -290,7 +290,7 @@ async def get_kyc_status(
 # ── New endpoints expected by tests ──────────────────────────────────────────
 
 
-@router.get("/api/system-info")
+@router.get("/api/system-info", response_model=None, summary="Server version and uptime")
 def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
     """Server version and uptime. Requires: role >= 'admin'."""
     return {
@@ -338,7 +338,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     }
 
 
-@router.get("/api/system-metrics")
+@router.get("/api/system-metrics", response_model=None, summary="System resource metrics")
 def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """Prometheus-style system metrics. Requires: role >= 'admin'."""
     uptime_secs = time.time() - _start_time

@@ -90,10 +90,38 @@ from kill_switch import KillSwitch, create_kill_switch_router
 # Initialize FastAPI app — lifespan is wired below after it is defined
 app = FastAPI(
     title="HOPEFX AI Trading API",
-    description="REST API for HOPEFX AI Trading Framework",
-    version="2.0.0",
+    description=(
+        "REST API for the HOPEFX AI Trading Framework.\n\n"
+        "## Authentication\n"
+        "All trading and user endpoints require a **Bearer JWT** token.\n"
+        "Obtain a token via `POST /api/auth/login`, then pass it as:\n"
+        "`Authorization: Bearer <token>`\n\n"
+        "## Rate limits\n"
+        "Auth endpoints: 10 req/60 s per IP. Trading endpoints: 60 req/min per user.\n\n"
+        "## Environments\n"
+        "Set `BROKER_TYPE=paper` (default) for paper trading. "
+        "Set `BROKER_TYPE=oanda` + `OANDA_PRACTICE=true` for OANDA practice.\n\n"
+        "## Shared response schemas\n"
+        "See `api/schemas.py` for `AccountResponse`, `TradeOut`, `RiskMetricsResponse`, "
+        "`RegimeResponse`, `SystemStatusResponse`, `SignalOut`, and `BrokerStatusResponse`."
+    ),
+    version="11.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Auth", "description": "Login, logout, token refresh, 2FA"},
+        {"name": "Trading", "description": "Orders, positions, account, prices"},
+        {"name": "Signals", "description": "AI signal generation and history"},
+        {"name": "Watchlist", "description": "Per-user symbol watchlists (auth required)"},
+        {"name": "AI Chat", "description": "LLM assistant (auth required — OpenAI-backed)"},
+        {"name": "Risk", "description": "Risk metrics, kill switch, CVaR"},
+        {"name": "Admin", "description": "System status, logs, KYC (admin role required)"},
+        {"name": "Monetization", "description": "Subscriptions, payments, marketplace"},
+        {"name": "Calendar", "description": "Economic calendar events"},
+        {"name": "Performance", "description": "Backtest and live performance metrics"},
+        {"name": "Broker", "description": "Broker connection status and management"},
+        {"name": "ML", "description": "Model inference, training status, feature importance"},
+    ],
 )
 
 # Include routers
