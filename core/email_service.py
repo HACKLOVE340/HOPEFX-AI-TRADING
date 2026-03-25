@@ -1,11 +1,18 @@
 """
-Email delivery service.
+core/email_service.py
+=====================
+Transactional email delivery (verification, password reset, login alerts).
 
-Sends transactional emails (verification, password reset) via SMTP.
-Falls back to logging when SMTP is not configured (dev mode).
+Delivery priority:
+  1. SendGrid API  — if SENDGRID_API_KEY is set (95-99% deliverability)
+  2. Raw SMTP      — if SMTP_HOST + SMTP_USER + SMTP_PASSWORD are set (fallback)
+  3. Dev log       — if neither is configured (logs token to stdout for local dev)
 
-Required env vars for live delivery:
-    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, FROM_EMAIL
+Required env vars for SendGrid:
+    SENDGRID_API_KEY, FROM_EMAIL
+
+Required env vars for SMTP fallback:
+    SMTP_HOST, SMTP_PORT (default 587), SMTP_USER, SMTP_PASSWORD, FROM_EMAIL
 
 Optional:
     APP_BASE_URL  — base URL for links (default: http://localhost:8000)
@@ -16,16 +23,41 @@ from __future__ import annotations
 
 import logging
 import os
-import smtplib
 import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 APP_ENV = os.getenv("APP_ENV", "development")
+
+
+# ── Transport helpers ─────────────────────────────────────────────────────────
+
+def _send_via_sendgrid(to: str, subject: str, html: str, text: str) -> bool:
+    """Send via SendGrid API. Returns True on success."""
+    api_key = os.getenv("SENDGRID_API_KEY", "")
+    from_email = os.getenv("FROM_EMAIL", "noreply@hopefx.io")
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+        sg = SendGridAPIClient(api_key=api_key)
+        message = Mail(
+            from_email=from_email,
+            to_emails=to,
+            subject=subject,
+            plain_text_content=text,
+            html_content=html,
+        )
+        response = sg.send(message)
+        if response.status_code in (200, 202):
+            logger.info("Email sent via SendGrid: to=%s subject=%s", to, subject)
+            return True
+        logger.error("SendGrid error %s: %s", response.status_code, response.body)
+        return False
+    except Exception as exc:
+        logger.error("SendGrid delivery failed to %s: %s", to, exc)
+        return False
 
 
 def _smtp_config() -> Optional[dict]:
@@ -42,16 +74,15 @@ def _smtp_config() -> Optional[dict]:
     }
 
 
-def _send(to: str, subject: str, html: str, text: str) -> bool:
-    """Send an email. Returns True on success, False on failure."""
+def _send_via_smtp(to: str, subject: str, html: str, text: str) -> bool:
+    """Send via raw SMTP (fallback). Returns True on success."""
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
     cfg = _smtp_config()
     if not cfg:
-        # Dev mode: log instead of sending
-        logger.info(
-            "EMAIL (dev — SMTP not configured): to=%s subject=%s\n%s",
-            to, subject, text,
-        )
-        return True
+        return False
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -74,11 +105,29 @@ def _send(to: str, subject: str, html: str, text: str) -> bool:
                 if cfg["user"]:
                     server.login(cfg["user"], cfg["password"])
                 server.sendmail(cfg["from_email"], to, msg.as_string())
-        logger.info("Email sent: to=%s subject=%s", to, subject)
+        logger.info("Email sent via SMTP: to=%s subject=%s", to, subject)
         return True
     except Exception as exc:
-        logger.error("Email delivery failed to %s: %s", to, exc)
+        logger.error("SMTP delivery failed to %s: %s", to, exc)
         return False
+
+
+def _send(to: str, subject: str, html: str, text: str) -> bool:
+    """Send an email using the best available transport."""
+    # 1. SendGrid (primary — high deliverability)
+    if os.getenv("SENDGRID_API_KEY"):
+        return _send_via_sendgrid(to, subject, html, text)
+
+    # 2. SMTP fallback
+    if _smtp_config():
+        return _send_via_smtp(to, subject, html, text)
+
+    # 3. Dev mode — log instead of sending
+    logger.info(
+        "EMAIL (dev — no transport configured): to=%s subject=%s\n%s",
+        to, subject, text,
+    )
+    return True
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -94,18 +143,18 @@ def send_verification_email(to_email: str, username: str, token: str) -> bool:
         f"This link expires in 24 hours.\n\n"
         f"If you did not create a HOPEFX account, ignore this email.\n"
     )
-    html = f"""
-<html><body>
-<h2>Verify your HOPEFX account</h2>
-<p>Hi {username},</p>
-<p>Please verify your email address:</p>
-<p><a href="{link}" style="background:#1a73e8;color:#fff;padding:10px 20px;
-   text-decoration:none;border-radius:4px;">Verify Email</a></p>
-<p>Or copy this link: <code>{link}</code></p>
-<p>This link expires in 24 hours.</p>
-<p>If you did not create a HOPEFX account, ignore this email.</p>
-</body></html>
-"""
+    html = (
+        f"<html><body>"
+        f"<h2>Verify your HOPEFX account</h2>"
+        f"<p>Hi {username},</p>"
+        f"<p>Please verify your email address:</p>"
+        f'<p><a href="{link}" style="background:#1a73e8;color:#fff;padding:10px 20px;'
+        f'text-decoration:none;border-radius:4px;">Verify Email</a></p>'
+        f"<p>Or copy this link: <code>{link}</code></p>"
+        f"<p>This link expires in 24 hours.</p>"
+        f"<p>If you did not create a HOPEFX account, ignore this email.</p>"
+        f"</body></html>"
+    )
     if APP_ENV != "production":
         logger.info("VERIFY TOKEN (dev): %s", token)
     return _send(to_email, subject, html, text)
@@ -123,18 +172,18 @@ def send_password_reset_email(to_email: str, username: str, token: str) -> bool:
         f"This link expires in 1 hour.\n\n"
         f"If you did not request a reset, ignore this email — your password is unchanged.\n"
     )
-    html = f"""
-<html><body>
-<h2>Reset your HOPEFX password</h2>
-<p>Hi {username},</p>
-<p>A password reset was requested for your account.</p>
-<p><a href="{link}" style="background:#d93025;color:#fff;padding:10px 20px;
-   text-decoration:none;border-radius:4px;">Reset Password</a></p>
-<p>Or copy this link: <code>{link}</code></p>
-<p>This link expires in 1 hour.</p>
-<p>If you did not request a reset, ignore this email.</p>
-</body></html>
-"""
+    html = (
+        f"<html><body>"
+        f"<h2>Reset your HOPEFX password</h2>"
+        f"<p>Hi {username},</p>"
+        f"<p>A password reset was requested for your account.</p>"
+        f'<p><a href="{link}" style="background:#d93025;color:#fff;padding:10px 20px;'
+        f'text-decoration:none;border-radius:4px;">Reset Password</a></p>'
+        f"<p>Or copy this link: <code>{link}</code></p>"
+        f"<p>This link expires in 1 hour.</p>"
+        f"<p>If you did not request a reset, ignore this email.</p>"
+        f"</body></html>"
+    )
     if APP_ENV != "production":
         logger.info("RESET TOKEN (dev): %s", token)
     return _send(to_email, subject, html, text)
@@ -151,16 +200,15 @@ def send_login_alert(to_email: str, username: str, ip: str, device: str) -> bool
         f"If this was you, no action is needed.\n"
         f"If not, change your password immediately at {APP_BASE_URL}/auth/forgot-password\n"
     )
-    html = f"""
-<html><body>
-<h2>New login detected</h2>
-<p>Hi {username},</p>
-<p>A new login was detected on your HOPEFX account.</p>
-<ul>
-  <li><strong>IP:</strong> {ip}</li>
-  <li><strong>Device:</strong> {device or 'unknown'}</li>
-</ul>
-<p>If this was not you, <a href="{APP_BASE_URL}/auth/forgot-password">reset your password</a> immediately.</p>
-</body></html>
-"""
+    html = (
+        f"<html><body>"
+        f"<h2>New login detected</h2>"
+        f"<p>Hi {username},</p>"
+        f"<p>A new login was detected on your HOPEFX account.</p>"
+        f"<ul><li><strong>IP:</strong> {ip}</li>"
+        f"<li><strong>Device:</strong> {device or 'unknown'}</li></ul>"
+        f'<p>If this was not you, <a href="{APP_BASE_URL}/auth/forgot-password">'
+        f"reset your password</a> immediately.</p>"
+        f"</body></html>"
+    )
     return _send(to_email, subject, html, text)
