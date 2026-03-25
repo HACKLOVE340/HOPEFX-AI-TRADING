@@ -17,6 +17,7 @@ import CryptoCheckout from './pages/CryptoCheckout'
 import StatusPage from './pages/StatusPage'
 import Login from './pages/Login'
 import AuthGuard from './components/AuthGuard'
+import AIStrategyGenerator from './pages/AIStrategyGenerator'
 
 function App() {
   const navigate = useNavigate()
@@ -54,6 +55,7 @@ function App() {
       <Route path="/wallet"       element={<AuthGuard><Layout><Wallet /></Layout></AuthGuard>} />
       <Route path="/performance"  element={<AuthGuard><Layout><Performance /></Layout></AuthGuard>} />
       <Route path="/settings"     element={<AuthGuard><Layout><Settings /></Layout></AuthGuard>} />
+      <Route path="/ai-strategy"  element={<AuthGuard><Layout><AIStrategyGenerator /></Layout></AuthGuard>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
