@@ -31,6 +31,21 @@ import ABTesting            from './pages/ABTesting';
 import CorrelationDashboard from './pages/CorrelationDashboard';
 import CustomIndicators     from './pages/CustomIndicators';
 
+// ── Ported pages (dashboard → frontend) ──────────────────────────────────────
+import Trading              from './pages/Trading';
+import TradeJournal         from './pages/TradeJournal';
+import Performance          from './pages/Performance';
+import WatchlistPage        from './pages/Watchlist';
+import PropFirmTracker      from './pages/PropFirmTracker';
+import EconomicCalendar     from './pages/EconomicCalendar';
+import PriceAlerts          from './pages/PriceAlerts';
+import CopyTrading          from './pages/CopyTrading';
+import Leaderboard          from './pages/Leaderboard';
+import AIStrategyGenerator  from './pages/AIStrategyGenerator';
+import Onboarding           from './pages/Onboarding';
+import TwoFactorSetup       from './pages/TwoFactorSetup';
+import Wallet               from './pages/Wallet';
+
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
 import { useStore, selectIsAuth, selectUser, selectWsStatus } from './store';
@@ -42,21 +57,32 @@ const queryClient = new QueryClient({
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { path: '/dashboard',     label: 'Dashboard',     icon: '📊', auth: true  },
-  { path: '/feed',          label: 'Signal Feed',   icon: '📡', auth: true  },
-  { path: '/risk-calc',     label: 'Risk Calc',     icon: '🧮', auth: true  },
-  { path: '/walk-forward',  label: 'Walk-Forward',  icon: '📈', auth: true  },
-  { path: '/ab-testing',    label: 'A/B Testing',   icon: '⚗️', auth: true  },
-  { path: '/correlation',   label: 'Correlation',   icon: '🔗', auth: true  },
-  { path: '/indicators',    label: 'Indicators',    icon: '📐', auth: true  },
-  { path: '/profile',       label: 'Profile',       icon: '👤', auth: true  },
-  { path: '/marketplace',   label: 'Marketplace',   icon: '🛒', auth: false },
-  { path: '/affiliate',     label: 'Affiliate',     icon: '🤝', auth: false },
-  { path: '/checkout',      label: 'Upgrade',       icon: '💳', auth: false },
-  { path: '/whitelabel',    label: 'Whitelabel',    icon: '🏷️', auth: true  },
-  { path: '/admin',         label: 'Admin',         icon: '🛡️', auth: true  },
-  { path: '/status',        label: 'Status',        icon: '🟢', auth: false },
-  { path: '/settings',      label: 'Settings',      icon: '⚙️', auth: true  },
+  { path: '/dashboard',     label: 'Dashboard',       icon: '📊', auth: true  },
+  { path: '/trading',       label: 'Trading',         icon: '📉', auth: true  },
+  { path: '/journal',       label: 'Trade Journal',   icon: '📓', auth: true  },
+  { path: '/performance',   label: 'Performance',     icon: '🏆', auth: true  },
+  { path: '/watchlist',     label: 'Watchlist',       icon: '👁️', auth: true  },
+  { path: '/prop-firm',     label: 'Prop Firm',       icon: '🛡️', auth: true  },
+  { path: '/calendar',      label: 'Calendar',        icon: '📅', auth: true  },
+  { path: '/alerts',        label: 'Price Alerts',    icon: '🔔', auth: true  },
+  { path: '/copy-trading',  label: 'Copy Trading',    icon: '🔁', auth: true  },
+  { path: '/leaderboard',   label: 'Leaderboard',     icon: '🥇', auth: false },
+  { path: '/ai-strategy',   label: 'AI Strategy',     icon: '🤖', auth: true  },
+  { path: '/feed',          label: 'Signal Feed',     icon: '📡', auth: true  },
+  { path: '/risk-calc',     label: 'Risk Calc',       icon: '🧮', auth: true  },
+  { path: '/walk-forward',  label: 'Walk-Forward',    icon: '📈', auth: true  },
+  { path: '/ab-testing',    label: 'A/B Testing',     icon: '⚗️', auth: true  },
+  { path: '/correlation',   label: 'Correlation',     icon: '🔗', auth: true  },
+  { path: '/indicators',    label: 'Indicators',      icon: '📐', auth: true  },
+  { path: '/profile',       label: 'Profile',         icon: '👤', auth: true  },
+  { path: '/wallet',        label: 'Wallet',          icon: '💰', auth: true  },
+  { path: '/marketplace',   label: 'Marketplace',     icon: '🛒', auth: false },
+  { path: '/affiliate',     label: 'Affiliate',       icon: '🤝', auth: false },
+  { path: '/checkout',      label: 'Upgrade',         icon: '💳', auth: false },
+  { path: '/whitelabel',    label: 'Whitelabel',      icon: '🏷️', auth: true  },
+  { path: '/admin',         label: 'Admin',           icon: '🔧', auth: true  },
+  { path: '/status',        label: 'Status',          icon: '🟢', auth: false },
+  { path: '/settings',      label: 'Settings',        icon: '⚙️', auth: true  },
 ];
 
 // ── WS dot ────────────────────────────────────────────────────────────────────
@@ -176,6 +202,20 @@ const AppShell: React.FC = () => {
           <Route path="/correlation"  element={<AuthGuard><CorrelationDashboard /></AuthGuard>} />
           <Route path="/indicators"   element={<AuthGuard><CustomIndicators /></AuthGuard>} />
 
+          {/* Ported pages from dashboard/ */}
+          <Route path="/trading"      element={<AuthGuard><Trading /></AuthGuard>} />
+          <Route path="/journal"      element={<AuthGuard><TradeJournal /></AuthGuard>} />
+          <Route path="/performance"  element={<Performance />} />
+          <Route path="/watchlist"    element={<AuthGuard><WatchlistPage /></AuthGuard>} />
+          <Route path="/prop-firm"    element={<AuthGuard><PropFirmTracker /></AuthGuard>} />
+          <Route path="/calendar"     element={<AuthGuard><EconomicCalendar /></AuthGuard>} />
+          <Route path="/alerts"       element={<AuthGuard><PriceAlerts /></AuthGuard>} />
+          <Route path="/copy-trading" element={<AuthGuard><CopyTrading /></AuthGuard>} />
+          <Route path="/leaderboard"  element={<Leaderboard />} />
+          <Route path="/ai-strategy"  element={<AuthGuard><AIStrategyGenerator /></AuthGuard>} />
+          <Route path="/wallet"       element={<AuthGuard><Wallet /></AuthGuard>} />
+          <Route path="/2fa-setup"    element={<AuthGuard><TwoFactorSetup /></AuthGuard>} />
+
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
@@ -188,11 +228,12 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <Routes>
-        <Route path="/"        element={<LandingPage />} />
-        <Route path="/landing" element={<LandingPage />} />
-        <Route path="/login"    element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/*"       element={<AppShell />} />
+        <Route path="/"           element={<LandingPage />} />
+        <Route path="/landing"    element={<LandingPage />} />
+        <Route path="/login"      element={<Login />} />
+        <Route path="/register"   element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/*"          element={<AppShell />} />
       </Routes>
     </BrowserRouter>
   </QueryClientProvider>
