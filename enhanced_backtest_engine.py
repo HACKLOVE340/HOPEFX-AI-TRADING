@@ -282,20 +282,35 @@ class TransactionCostModel:
     clearing_fee_bps: float = 0.1
     exchange_fee_bps: float = 0.2
     sec_fee_bps: float = 0.00227              # US equities only
-    
+
     # Variable costs (implicit)
     spread_markup_bps: float = 0.8
     slippage_model: SlippageModel = SlippageModel.SQUARE_ROOT
-    
+
     # Almgren-Chriss parameters
     temporary_impact_coefficient: float = 0.142   # η (eta)
     permanent_impact_coefficient: float = 0.314  # γ (gamma)
     decay_exponent: float = 0.6                  # β (beta)
-    
+
     # Advanced features
     use_volatility_adjustment: bool = True
     use_order_flow_toxicity: bool = True
     use_adaptive_spread: bool = True
+
+    # ── Overnight financing (swap) ────────────────────────────────────────────
+    # Charged every bar on open position notional.  Expressed as an annual rate
+    # and scaled to the bar frequency by the engine.
+    #
+    # XAUUSD typical swap rates (2024):
+    #   Long  (buy gold): ~−0.40% p.a. (you pay the carry)
+    #   Short (sell gold): ~+0.20% p.a. (you receive, but less than you pay on long)
+    #
+    # The default 0.40% p.a. is the long-side cost.  For a more accurate model
+    # pass separate long/short rates via overnight_rate_long_annual and
+    # overnight_rate_short_annual.
+    overnight_rate_annual: float = 0.004       # 0.40% p.a. — XAUUSD long swap (default)
+    overnight_rate_long_annual: float = 0.004  # 0.40% p.a. — long position carry cost
+    overnight_rate_short_annual: float = -0.002  # −0.20% p.a. — short position (receive)
     
     def calculate_market_impact(self,
                                order_size: float,
@@ -1295,33 +1310,69 @@ class EnhancedBacktestEngine:
     def process_tick(self, tick: TickData) -> Dict[str, Any]:
         """
         Process a single tick with full market microstructure analysis.
+
+        Overnight financing is charged every tick on open position notional.
+        The per-tick rate is derived from the annual rate in TransactionCostModel
+        scaled by the estimated number of ticks per year (252 trading days ×
+        ticks_per_day, where ticks_per_day defaults to 1 for daily bars and is
+        set by the caller via self._ticks_per_day).
         """
         self.current_time = tick.timestamp
-        
+
         # Update microstructure
         self.microstructure.add_tick(tick)
-        
+
         # Update price history
         self.price_history[tick.symbol].append(tick.mid)
-        
-        # Update positions with current mark-to-market
+
+        # ── Overnight financing ───────────────────────────────────────────────
+        # Charged every bar on open position notional.  The per-bar rate is
+        # annual_rate / 365 / bars_per_day.  bars_per_day defaults to 1 (daily
+        # bars); set self._bars_per_day before calling process_tick for intraday.
+        bars_per_day: float = getattr(self, "_bars_per_day", 1.0)
+        financing_paid_this_tick: float = 0.0
+
         for symbol, position in self.positions.items():
-            if symbol == tick.symbol:
-                position.update_mfe_mae(tick.mid, tick.timestamp)
-        
+            if position.size == 0:
+                continue
+            current_price = tick.mid if symbol == tick.symbol else (
+                self.price_history[symbol][-1] if self.price_history[symbol] else position.avg_entry_price
+            )
+            notional = abs(position.size) * current_price
+
+            # Select rate by side
+            from_long = position.side.name == "BUY" if hasattr(position.side, "name") else str(position.side) == "BUY"
+            if from_long:
+                annual_rate = getattr(self.cost_model, "overnight_rate_long_annual",
+                                      getattr(self.cost_model, "overnight_rate_annual", 0.004))
+            else:
+                annual_rate = getattr(self.cost_model, "overnight_rate_short_annual",
+                                      -getattr(self.cost_model, "overnight_rate_annual", 0.004) * 0.5)
+
+            per_bar_rate = annual_rate / 365.0 / bars_per_day
+            financing_cost = notional * per_bar_rate  # positive = cost, negative = receipt
+
+            if financing_cost != 0.0:
+                self.capital -= financing_cost
+                position.total_financing_paid += financing_cost
+                financing_paid_this_tick += financing_cost
+
+            # Update MFE/MAE
+            position.update_mfe_mae(current_price, tick.timestamp)
+
         # Calculate equity
         equity = self._calculate_equity(tick)
         self.equity_curve.append((tick.timestamp, equity))
-        
+
         # Update risk manager
         self.risk_manager.current_capital = equity
-        
+
         # Check intraday risk
         can_trade, risk_msg = self.risk_manager.check_intraday_risk(tick.timestamp)
-        
+
         # Get execution recommendation
         exec_rec = self.microstructure.get_execution_recommendation()
-        
+
         return {
             'equity': equity,
             'can_trade': can_trade,
@@ -1329,7 +1380,8 @@ class EnhancedBacktestEngine:
             'regime': exec_rec['regime'],
             'regime_confidence': exec_rec['confidence'],
             'toxicity': exec_rec['toxicity'],
-            'execution_recommendation': exec_rec
+            'execution_recommendation': exec_rec,
+            'financing_paid': financing_paid_this_tick,
         }
     
     def _calculate_equity(self, mark_tick: TickData) -> float:
@@ -1748,7 +1800,16 @@ class EnhancedBacktestEngine:
                 'avg_latency_ms': np.mean([e.get('latency_ms', 0) for e in self.execution_log]),
                 'total_commission': sum(e['costs'].get('commission', 0) for e in self.execution_log if 'costs' in e),
                 'total_slippage_cost': sum(e['costs'].get('market_impact', 0) for e in self.execution_log if 'costs' in e),
-                'cost_drag_pct': (sum(e['costs'].get('total_cost', 0) for e in self.execution_log if 'costs' in e) / self.initial_capital) * 100 if self.initial_capital > 0 else 0
+                'cost_drag_pct': (sum(e['costs'].get('total_cost', 0) for e in self.execution_log if 'costs' in e) / self.initial_capital) * 100 if self.initial_capital > 0 else 0,
+                # Overnight financing totals across all positions (open + closed)
+                'total_financing_paid': sum(
+                    p.total_financing_paid for p in self.positions.values()
+                ),
+                'financing_drag_pct': (
+                    sum(p.total_financing_paid for p in self.positions.values())
+                    / self.initial_capital * 100
+                ) if self.initial_capital > 0 else 0,
+                'overnight_rate_annual_pct': getattr(self.cost_model, 'overnight_rate_annual', 0.004) * 100,
             },
             'regime_performance': self._analyze_regime_performance(),
             'mfe_mae_analysis': {
