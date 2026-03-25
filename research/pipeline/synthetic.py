@@ -231,13 +231,13 @@ class RegimeSynthesizer:
         self._feature_std: Optional[np.ndarray] = None
         self._fitted = False
 
-    # ── Normalisation ─────────────────────────────────────────────────────────
+    # ── Normalisation (min-max to [-1, 1] for GAN stability) ─────────────────
 
     def _normalise(self, X: np.ndarray) -> np.ndarray:
-        return (X - self._feature_mean) / (self._feature_std + 1e-8)
+        return 2.0 * (X - self._feature_mean) / (self._feature_std + 1e-8) - 1.0
 
     def _denormalise(self, X: np.ndarray) -> np.ndarray:
-        return X * (self._feature_std + 1e-8) + self._feature_mean
+        return (np.clip(X, -1.0, 1.0) + 1.0) / 2.0 * (self._feature_std + 1e-8) + self._feature_mean
 
     # ── Sequence builder ──────────────────────────────────────────────────────
 
@@ -273,9 +273,11 @@ class RegimeSynthesizer:
         lr            : Learning rate
         n_critic      : Discriminator updates per generator update (WGAN)
         """
-        # Normalise
-        self._feature_mean = X.mean(axis=0)
-        self._feature_std = X.std(axis=0)
+        # Normalise using min/max so generated values stay in a bounded range.
+        # _feature_mean stores the per-feature minimum.
+        # _feature_std  stores the per-feature range (max - min).
+        self._feature_mean = X.min(axis=0)
+        self._feature_std = X.max(axis=0) - X.min(axis=0)
         X_norm = self._normalise(X)
 
         seqs, labs = self._make_sequences(X_norm, regime_labels)

@@ -193,30 +193,32 @@ class _RegimeSpecialist:
     Swapped for EnsemblePredictor if available.
     """
 
+    # Minimum samples needed to train a specialist reliably
+    _MIN_SAMPLES = 80
+
     def __init__(self, regime_id: int, n_estimators: int = 200):
         self.regime_id = regime_id
-        if ENSEMBLE_AVAILABLE:
-            self._model = EnsemblePredictor(n_features=40, tune_trials=10, n_cv_splits=3)
-            self._is_ensemble = True
-        else:
-            self._model = GradientBoostingClassifier(
-                n_estimators=n_estimators,
-                max_depth=5,
-                learning_rate=0.05,
-                subsample=0.8,
-                random_state=42,
-            )
-            self._is_ensemble = False
+        self._is_ensemble = False
+        self._model = GradientBoostingClassifier(
+            n_estimators=n_estimators,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.8,
+            random_state=42,
+        )
         self._fitted = False
 
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> "_RegimeSpecialist":
         if len(np.unique(y)) < 2:
-            logger.warning("Regime %d: only one class in training data — skipping", self.regime_id)
+            logger.warning("Regime %d: only one class — skipping", self.regime_id)
             return self
-        if self._is_ensemble:
-            self._model.fit(X, y)
-        else:
-            self._model.fit(X.values, y)
+        if len(y) < self._MIN_SAMPLES:
+            logger.warning(
+                "Regime %d: only %d samples (< %d) — skipping specialist",
+                self.regime_id, len(y), self._MIN_SAMPLES,
+            )
+            return self
+        self._model.fit(X.values, y)
         self._fitted = True
         logger.info("Regime %d specialist fitted on %d samples", self.regime_id, len(y))
         return self
@@ -224,8 +226,6 @@ class _RegimeSpecialist:
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         if not self._fitted:
             return np.full(len(X), 0.5, dtype=np.float32)
-        if self._is_ensemble:
-            return self._model.predict_proba(X)
         return self._model.predict_proba(X.values)[:, 1]
 
 

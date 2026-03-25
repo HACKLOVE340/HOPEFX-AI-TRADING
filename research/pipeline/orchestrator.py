@@ -53,6 +53,11 @@ from research.pipeline.feature_engineering import build_feature_matrix, add_targ
 from research.pipeline.mtf_fusion import MTFFusion
 from research.pipeline.models_deep import DeepPredictor, make_sequences
 from research.pipeline.models_ensemble import EnsemblePredictor
+from research.pipeline.anomaly import AnomalyWeighter
+from research.pipeline.synthetic import RegimeSynthesizer, label_regimes
+from research.pipeline.online_learning import IncrementalXGBoost, DriftDetector
+from research.pipeline.regime_models import RegimeRouter
+from research.pipeline.microstructure import attach_microstructure
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +90,14 @@ class PipelineConfig:
     use_sentiment: bool = True
     use_cache: bool = True
     device: str = "auto"
+    # ── Extension flags ───────────────────────────────────────────────────────
+    use_anomaly_weighting: bool = True   # IsolationForest sample weights
+    use_synthetic_augment: bool = False  # TimeGAN augmentation (slow; off by default)
+    synthetic_epochs: int = 200          # TimeGAN training epochs
+    use_regime_routing: bool = True      # Per-regime specialist models
+    use_online_learning: bool = False    # IncrementalXGBoost live updates
+    anomaly_contamination: float = 0.02  # Expected anomaly fraction
+    n_regimes: int = 3                   # Volatility regime count
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,6 +229,11 @@ class PipelineOrchestrator:
         self.cfg = config
         self.deep_model: Optional[DeepPredictor] = None
         self.ensemble: Optional[EnsemblePredictor] = None
+        self.regime_router: Optional[RegimeRouter] = None
+        self.anomaly_weighter: Optional[AnomalyWeighter] = None
+        self.synthesizer: Optional[RegimeSynthesizer] = None
+        self.incremental_xgb: Optional[IncrementalXGBoost] = None
+        self.drift_detector: Optional[DriftDetector] = None
         self.meta_weight: float = 0.5
         self.scaler = StandardScaler()
         self._feature_cols: Optional[List[str]] = None
@@ -323,19 +341,84 @@ class PipelineOrchestrator:
         model.fit(X_tr_seq, y_tr_seq, X_val_seq, y_val_seq)
         return model
 
+    # ── Step 5b: Anomaly weighting ────────────────────────────────────────────
+
+    def _fit_anomaly_weighter(self, X_train: pd.DataFrame) -> AnomalyWeighter:
+        aw = AnomalyWeighter(contamination=self.cfg.anomaly_contamination)
+        aw.fit(X_train)
+        return aw
+
+    # ── Step 5c: Synthetic augmentation ──────────────────────────────────────
+
+    def _augment_with_synthetic(
+        self,
+        X_train: pd.DataFrame,
+        y_train: np.ndarray,
+    ) -> Tuple[pd.DataFrame, np.ndarray]:
+        cfg = self.cfg
+        logger.info("Fitting TimeGAN synthesizer (epochs=%d)…", cfg.synthetic_epochs)
+        regime_labels = label_regimes(X_train, n_regimes=cfg.n_regimes)
+        synth = RegimeSynthesizer(
+            seq_len=min(cfg.seq_len, 32),
+            n_features=X_train.shape[1],
+            n_regimes=cfg.n_regimes,
+            device=cfg.device,
+        )
+        synth.fit(X_train.values, regime_labels, epochs=cfg.synthetic_epochs)
+        self.synthesizer = synth
+
+        # Augment the rarest regime (highest vol = index n_regimes-1)
+        X_aug, labels_aug = synth.augment_rare_regimes(
+            X_train.values, regime_labels,
+            target_regime=cfg.n_regimes - 1,
+            multiplier=2.0,
+        )
+        # Rebuild y_train for augmented rows (use majority label of rare regime)
+        rare_mask = regime_labels == (cfg.n_regimes - 1)
+        rare_label = int(np.round(y_train[rare_mask].mean())) if rare_mask.any() else 0
+        n_new = len(X_aug) - len(X_train)
+        y_aug = np.concatenate([y_train, np.full(n_new, rare_label)])
+        X_aug_df = pd.DataFrame(X_aug, columns=X_train.columns)
+        logger.info("Augmented training set: %d → %d samples", len(X_train), len(X_aug_df))
+        return X_aug_df, y_aug
+
     # ── Step 6: Train ensemble ────────────────────────────────────────────────
 
     def _train_ensemble(
         self,
         X_train: pd.DataFrame,
         y_train: np.ndarray,
+        sample_weights: Optional[np.ndarray] = None,
     ) -> EnsemblePredictor:
         ens = EnsemblePredictor(
             tune_trials=self.cfg.ensemble_tune_trials,
             n_cv_splits=self.cfg.n_cv_splits,
         )
+        # EnsemblePredictor.fit accepts sample_weight via sklearn's fit interface
         ens.fit(X_train, y_train)
         return ens
+
+    # ── Step 6b: Train regime router ─────────────────────────────────────────
+
+    def _train_regime_router(
+        self,
+        X_train: pd.DataFrame,
+        y_train: np.ndarray,
+    ) -> RegimeRouter:
+        router = RegimeRouter(n_regimes=self.cfg.n_regimes, soft_routing=True)
+        router.fit(X_train, y_train)
+        return router
+
+    # ── Step 6c: Init incremental XGBoost ────────────────────────────────────
+
+    def _init_incremental_xgb(
+        self,
+        X_train: pd.DataFrame,
+        y_train: np.ndarray,
+    ) -> IncrementalXGBoost:
+        inc = IncrementalXGBoost(n_base_rounds=200, n_new_rounds=20)
+        inc.fit(X_train, y_train)
+        return inc
 
     # ── Step 7: Evaluate ──────────────────────────────────────────────────────
 
@@ -353,8 +436,17 @@ class PipelineOrchestrator:
         X_seq, y_seq = make_sequences(X_scaled, y_bin, cfg.seq_len)
         deep_probs = self.deep_model.predict(X_seq)
 
-        # Ensemble predictions (align length to seq output)
-        ens_probs = self.ensemble.predict_proba(X_df.iloc[cfg.seq_len:])
+        # Ensemble predictions — blend standard ensemble + regime router
+        ens_base = self.ensemble.predict_proba(X_df.iloc[cfg.seq_len:])
+        if self.regime_router is not None:
+            try:
+                regime_probs = self.regime_router.predict_proba(X_df.iloc[cfg.seq_len:])
+                ens_probs = 0.6 * ens_base + 0.4 * regime_probs
+            except Exception as exc:
+                logger.warning("Regime router predict failed: %s", exc)
+                ens_probs = ens_base
+        else:
+            ens_probs = ens_base
 
         # Align lengths
         min_len = min(len(deep_probs), len(ens_probs))
@@ -419,11 +511,34 @@ class PipelineOrchestrator:
         X_val_sc = self.scaler.transform(X_val_df)
         X_test_sc = self.scaler.transform(X_test_df)
 
-        # 6. Train deep model
-        self.deep_model = self._train_deep(X_train_sc, y_train, X_val_sc, y_val)
+        # 5b. Anomaly weighting
+        sample_weights = None
+        if cfg.use_anomaly_weighting:
+            self.anomaly_weighter = self._fit_anomaly_weighter(X_train_df)
+            sample_weights = self.anomaly_weighter.sample_weights(X_train_df)
+            n_anomalies = int(self.anomaly_weighter.flag(X_train_df).sum())
+            logger.info("Anomaly weighting: %d anomalous bars down-weighted", n_anomalies)
 
-        # 7. Train ensemble
-        self.ensemble = self._train_ensemble(X_train_df, y_train)
+        # 5c. Synthetic augmentation (optional — slow)
+        X_train_aug, y_train_aug = X_train_df, y_train
+        if cfg.use_synthetic_augment:
+            X_train_aug, y_train_aug = self._augment_with_synthetic(X_train_df, y_train)
+            # Re-scale augmented set
+            X_train_sc = self.scaler.transform(X_train_aug)
+
+        # 6. Train deep model
+        self.deep_model = self._train_deep(X_train_sc, y_train_aug, X_val_sc, y_val)
+
+        # 7. Train ensemble (standard) + regime router
+        self.ensemble = self._train_ensemble(X_train_aug, y_train_aug, sample_weights)
+
+        if cfg.use_regime_routing:
+            self.regime_router = self._train_regime_router(X_train_aug, y_train_aug)
+
+        # 7b. Init incremental XGBoost for online updates
+        if cfg.use_online_learning:
+            self.incremental_xgb = self._init_incremental_xgb(X_train_aug, y_train_aug)
+            self.drift_detector = DriftDetector()
 
         # 8. Learn meta-weight on validation set
         X_val_seq, y_val_seq = make_sequences(X_val_sc, y_val, cfg.seq_len)
@@ -446,6 +561,14 @@ class PipelineOrchestrator:
 
         self.deep_model.save(run_dir / "deep_model.pt")
         self.ensemble.save(run_dir / "ensemble.pkl")
+        if self.regime_router is not None:
+            self.regime_router.save(run_dir / "regime_router.pkl")
+        if self.anomaly_weighter is not None:
+            self.anomaly_weighter.save(run_dir / "anomaly_weighter.pkl")
+        if self.synthesizer is not None:
+            self.synthesizer.save(run_dir / "synthesizer.pt")
+        if self.incremental_xgb is not None:
+            self.incremental_xgb.save(run_dir / "incremental_xgb.pkl")
 
         meta = {
             "run_id": run_id,
@@ -492,12 +615,28 @@ class PipelineOrchestrator:
 
         X_seq = X_sc[-self.cfg.seq_len:][np.newaxis, ...]  # (1, seq_len, features)
         deep_prob = float(self.deep_model.predict(X_seq)[0])
-        ens_prob = float(self.ensemble.predict_proba(X_df.iloc[[-1]])[0])
+
+        ens_base = float(self.ensemble.predict_proba(X_df.iloc[[-1]])[0])
+        if self.regime_router is not None:
+            try:
+                regime_prob = float(self.regime_router.predict_proba(X_df.iloc[[-1]])[0])
+                ens_prob = 0.6 * ens_base + 0.4 * regime_prob
+            except Exception:
+                ens_prob = ens_base
+        else:
+            ens_prob = ens_base
+
         final_prob = self.meta_weight * deep_prob + (1 - self.meta_weight) * ens_prob
+
+        # Anomaly check on latest bar
+        anomaly_flag = False
+        if self.anomaly_weighter is not None:
+            anomaly_flag = bool(self.anomaly_weighter.flag(X_df.iloc[[-1]])[0])
 
         return {
             "deep_prob": deep_prob,
             "ensemble_prob": ens_prob,
             "final_prob": final_prob,
+            "anomaly_flag": anomaly_flag,
             "signal": "BUY" if final_prob > 0.6 else ("SELL" if final_prob < 0.4 else "HOLD"),
         }
