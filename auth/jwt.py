@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -20,8 +22,16 @@ if SECRET_KEY == _default_secret:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 
-# Password hashing
+# Password hashing — bcrypt with SHA-256 pre-hash to handle passwords >72 bytes.
+# bcrypt silently truncates at 72 bytes; pre-hashing avoids that limit while
+# keeping the full bcrypt cost factor for brute-force resistance.
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _prepare_password(password: str) -> str:
+    """SHA-256 + base64 encode so bcrypt never sees >72 bytes."""
+    digest = hashlib.sha256(password.encode("utf-8")).digest()
+    return base64.b64encode(digest).decode("ascii")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -49,8 +59,8 @@ def verify_token(token: str, credentials_exception):
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_prepare_password(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(_prepare_password(plain_password), hashed_password)
