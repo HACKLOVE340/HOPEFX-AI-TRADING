@@ -45,6 +45,10 @@ from api.performance import router as performance_router
 from api.explain import router as explain_router
 from api.macro import router as macro_router
 from api.broker import router as broker_router
+from api.landing import router as landing_router
+from api.payments import router as payments_router
+from api.settings import router as settings_router
+from api.status import router as status_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -79,6 +83,10 @@ app.include_router(performance_router)
 app.include_router(explain_router)
 app.include_router(macro_router)
 app.include_router(broker_router)
+app.include_router(landing_router)
+app.include_router(payments_router)
+app.include_router(settings_router)
+app.include_router(status_router)
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
@@ -550,6 +558,28 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"⚠ Order Flow router not available: {e}")
             log_activity(f"Order Flow router unavailable: {e}")
+
+        try:
+            from data.time_and_sales import TimeAndSalesService, create_time_and_sales_router
+            time_and_sales_service = TimeAndSalesService()
+            app.include_router(create_time_and_sales_router(time_and_sales_service))
+            app_state.time_and_sales_service = time_and_sales_service
+            logger.info("✓ Time & Sales router registered (/api/timesales)")
+            log_activity("Time & Sales router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Time & Sales router not available: {e}")
+            log_activity(f"Time & Sales router unavailable: {e}")
+
+        try:
+            from analysis.order_flow_dashboard import OrderFlowDashboard, create_dashboard_router
+            order_flow_dashboard = OrderFlowDashboard()
+            app.include_router(create_dashboard_router(order_flow_dashboard))
+            app_state.order_flow_dashboard = order_flow_dashboard
+            logger.info("✓ Order Flow Dashboard router registered (/api/dashboard)")
+            log_activity("Order Flow Dashboard router registered")
+        except Exception as e:
+            logger.warning(f"⚠ Order Flow Dashboard router not available: {e}")
+            log_activity(f"Order Flow Dashboard router unavailable: {e}")
 
         try:
             from analysis.market_scanner import MarketScanner, create_scanner_router
