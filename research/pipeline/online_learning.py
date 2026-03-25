@@ -1,0 +1,412 @@
+"""
+research/pipeline/online_learning.py
+=======================================
+Incremental / online learning layer.
+
+Extends the existing ml/online_learner.py (EWC + replay for neural nets) with:
+  1. IncrementalXGBoost  — XGBoost trained in chunks via `xgb_model` warm-start
+  2. OnlineEnsemble      — combines IncrementalXGBoost + the deep OnlineLearner
+  3. DriftDetector       — Page-Hinkley test to flag concept drift and trigger
+                           selective re-training
+
+Design principles
+-----------------
+- No full re-train on every new bar: too slow for live trading.
+- Warm-start XGBoost: pass the previous booster as `xgb_model` to `train()`.
+  Each call adds `n_new_rounds` trees on top of the existing forest.
+- The deep model (from ml/online_learner.py) uses EWC + experience replay to
+  update weights without catastrophic forgetting.
+- DriftDetector monitors prediction error; when drift is detected it signals
+  the orchestrator to trigger a partial re-train on a recent window.
+
+Usage
+-----
+    from research.pipeline.online_learning import IncrementalXGBoost, DriftDetector
+
+    model = IncrementalXGBoost(n_base_rounds=300, n_new_rounds=20)
+    model.fit(X_train, y_train)                    # initial fit
+
+    # Live loop
+    for X_new, y_new in stream:
+        model.update(X_new, y_new)                 # incremental update
+        preds = model.predict_proba(X_new)
+        drift = detector.update(y_new, preds)
+        if drift:
+            model.reset_and_refit(X_recent, y_recent)
+"""
+
+from __future__ import annotations
+
+import logging
+import pickle
+from collections import deque
+from pathlib import Path
+from typing import Deque, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+logger = logging.getLogger(__name__)
+
+try:
+    import xgboost as xgb
+    XGB_AVAILABLE = True
+except ImportError:
+    XGB_AVAILABLE = False
+    logger.warning("xgboost not installed — IncrementalXGBoost unavailable")
+
+# Import existing EWC-based online learner
+try:
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
+    from ml.online_learner import OnlineLearner as _DeepOnlineLearner
+    DEEP_ONLINE_AVAILABLE = True
+except Exception:
+    DEEP_ONLINE_AVAILABLE = False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Page-Hinkley drift detector
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DriftDetector:
+    """
+    Page-Hinkley test for concept drift detection.
+
+    Monitors the running mean of prediction errors.  When the cumulative
+    deviation exceeds a threshold, drift is flagged.
+
+    Parameters
+    ----------
+    delta     : Minimum acceptable mean shift (sensitivity)
+    threshold : Detection threshold λ — higher = less sensitive
+    alpha     : Forgetting factor for running mean (0 = no forgetting)
+    """
+
+    def __init__(self, delta: float = 0.005, threshold: float = 50.0, alpha: float = 0.01):
+        self.delta = delta
+        self.threshold = threshold
+        self.alpha = alpha
+        self._mean: float = 0.0
+        self._sum: float = 0.0
+        self._min_sum: float = 0.0
+        self._n: int = 0
+        self.drift_count: int = 0
+        self._error_history: Deque[float] = deque(maxlen=1000)
+
+    def update(self, y_true: np.ndarray, y_prob: np.ndarray) -> bool:
+        """
+        Feed new predictions and return True if drift is detected.
+
+        Parameters
+        ----------
+        y_true : Ground-truth binary labels
+        y_prob : Predicted probabilities
+        """
+        # Use log-loss as the error signal
+        eps = 1e-7
+        y_prob = np.clip(y_prob, eps, 1 - eps)
+        errors = -(y_true * np.log(y_prob) + (1 - y_true) * np.log(1 - y_prob))
+        mean_error = float(errors.mean())
+        self._error_history.append(mean_error)
+
+        # Update running mean with forgetting
+        self._mean = (1 - self.alpha) * self._mean + self.alpha * mean_error
+        self._n += 1
+
+        # Page-Hinkley statistic
+        self._sum += mean_error - self._mean - self.delta
+        self._min_sum = min(self._min_sum, self._sum)
+
+        ph_stat = self._sum - self._min_sum
+
+        if ph_stat > self.threshold:
+            self.drift_count += 1
+            self._reset_stat()
+            logger.warning(
+                "Concept drift detected (count=%d)  PH=%.2f  mean_error=%.4f",
+                self.drift_count, ph_stat, mean_error,
+            )
+            return True
+        return False
+
+    def _reset_stat(self) -> None:
+        self._sum = 0.0
+        self._min_sum = 0.0
+
+    def reset(self) -> None:
+        """Full reset — call after re-training."""
+        self._mean = 0.0
+        self._sum = 0.0
+        self._min_sum = 0.0
+        self._n = 0
+
+    @property
+    def recent_error(self) -> float:
+        if not self._error_history:
+            return 0.0
+        return float(np.mean(list(self._error_history)[-20:]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Incremental XGBoost
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IncrementalXGBoost:
+    """
+    XGBoost with warm-start incremental updates.
+
+    Each call to `update()` adds `n_new_rounds` trees to the existing booster
+    without re-training from scratch.  A sliding replay buffer ensures the
+    model doesn't forget older patterns entirely.
+
+    Parameters
+    ----------
+    n_base_rounds   : Trees in the initial full fit
+    n_new_rounds    : Trees added per incremental update
+    buffer_size     : Max samples kept in the replay buffer
+    feature_cols    : Column names (set automatically on first fit)
+    """
+
+    def __init__(
+        self,
+        n_base_rounds: int = 300,
+        n_new_rounds: int = 20,
+        buffer_size: int = 5000,
+        xgb_params: Optional[Dict] = None,
+    ):
+        if not XGB_AVAILABLE:
+            raise RuntimeError("xgboost required for IncrementalXGBoost")
+
+        self.n_base_rounds = n_base_rounds
+        self.n_new_rounds = n_new_rounds
+        self.buffer_size = buffer_size
+        self.xgb_params = xgb_params or {
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "objective": "binary:logistic",
+            "eval_metric": "logloss",
+            "tree_method": "hist",
+            "random_state": 42,
+            "n_jobs": -1,
+        }
+
+        self._booster: Optional[xgb.Booster] = None
+        self._scaler = StandardScaler()
+        self._feature_cols: Optional[List[str]] = None
+        self._replay_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
+        self._replay_y: Deque[float] = deque(maxlen=buffer_size)
+        self._update_count: int = 0
+
+    # ── Initial fit ───────────────────────────────────────────────────────────
+
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+        """Full initial training."""
+        self._feature_cols = list(X.columns)
+        X_sc = self._scaler.fit_transform(X)
+
+        dtrain = xgb.DMatrix(X_sc, label=y, feature_names=self._feature_cols)
+        self._booster = xgb.train(
+            self.xgb_params,
+            dtrain,
+            num_boost_round=self.n_base_rounds,
+            verbose_eval=False,
+        )
+
+        # Seed replay buffer
+        for i in range(len(X_sc)):
+            self._replay_X.append(X_sc[i])
+            self._replay_y.append(float(y[i]))
+
+        logger.info("IncrementalXGBoost initial fit: %d samples, %d trees", len(y), self.n_base_rounds)
+        return self
+
+    # ── Incremental update ────────────────────────────────────────────────────
+
+    def update(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+        """
+        Add new data and grow the booster by `n_new_rounds` trees.
+
+        Combines new data with a random sample from the replay buffer to
+        prevent catastrophic forgetting of older patterns.
+        """
+        if self._booster is None:
+            raise RuntimeError("Call fit() before update()")
+
+        X_sc = self._scaler.transform(X[self._feature_cols])
+
+        # Add to replay buffer
+        for i in range(len(X_sc)):
+            self._replay_X.append(X_sc[i])
+            self._replay_y.append(float(y[i]))
+
+        # Sample from replay buffer
+        buf_size = len(self._replay_X)
+        n_replay = min(buf_size, max(len(X_sc) * 4, 256))
+        idx = np.random.choice(buf_size, n_replay, replace=False)
+        X_replay = np.stack([self._replay_X[i] for i in idx])
+        y_replay = np.array([self._replay_y[i] for i in idx])
+
+        # Combine new + replay
+        X_combined = np.vstack([X_sc, X_replay])
+        y_combined = np.concatenate([y, y_replay])
+
+        dtrain = xgb.DMatrix(X_combined, label=y_combined, feature_names=self._feature_cols)
+        self._booster = xgb.train(
+            self.xgb_params,
+            dtrain,
+            num_boost_round=self.n_new_rounds,
+            xgb_model=self._booster,   # warm-start: append trees
+            verbose_eval=False,
+        )
+
+        self._update_count += 1
+        logger.debug(
+            "IncrementalXGBoost update #%d: +%d trees  total_trees=%d",
+            self._update_count,
+            self.n_new_rounds,
+            self._booster.num_boosted_rounds(),
+        )
+        return self
+
+    # ── Inference ─────────────────────────────────────────────────────────────
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        if self._booster is None:
+            raise RuntimeError("Model not fitted")
+        X_sc = self._scaler.transform(X[self._feature_cols])
+        dmat = xgb.DMatrix(X_sc, feature_names=self._feature_cols)
+        return self._booster.predict(dmat)
+
+    def predict(self, X: pd.DataFrame, threshold: float = 0.5) -> np.ndarray:
+        return (self.predict_proba(X) >= threshold).astype(int)
+
+    # ── Reset + refit ─────────────────────────────────────────────────────────
+
+    def reset_and_refit(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+        """
+        Full re-train on a recent window (called after drift detection).
+        Preserves the scaler fit from the original training data.
+        """
+        logger.info("IncrementalXGBoost: full re-train on %d samples after drift", len(y))
+        X_sc = self._scaler.transform(X[self._feature_cols])
+        dtrain = xgb.DMatrix(X_sc, label=y, feature_names=self._feature_cols)
+        self._booster = xgb.train(
+            self.xgb_params,
+            dtrain,
+            num_boost_round=self.n_base_rounds,
+            verbose_eval=False,
+        )
+        self._replay_X.clear()
+        self._replay_y.clear()
+        for i in range(len(X_sc)):
+            self._replay_X.append(X_sc[i])
+            self._replay_y.append(float(y[i]))
+        return self
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+
+    def save(self, path: str | Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+        logger.info("IncrementalXGBoost saved → %s", path)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "IncrementalXGBoost":
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        logger.info("IncrementalXGBoost loaded ← %s", path)
+        return obj
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Online ensemble: incremental XGB + deep EWC model
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OnlineEnsemble:
+    """
+    Live-updating ensemble combining IncrementalXGBoost and the EWC deep model.
+
+    The blend weight is updated online using a simple exponential moving
+    average of each model's recent accuracy.
+
+    Parameters
+    ----------
+    xgb_model   : Pre-fitted IncrementalXGBoost
+    deep_model  : Pre-fitted OnlineLearner (from ml/online_learner.py)
+    init_weight : Initial weight for XGBoost (0–1); deep gets 1 - init_weight
+    ema_alpha   : EMA decay for weight updates
+    """
+
+    def __init__(
+        self,
+        xgb_model: IncrementalXGBoost,
+        deep_model=None,
+        init_weight: float = 0.5,
+        ema_alpha: float = 0.05,
+    ):
+        self.xgb = xgb_model
+        self.deep = deep_model
+        self.w_xgb = init_weight
+        self.ema_alpha = ema_alpha
+        self.drift_detector = DriftDetector()
+        self._xgb_acc_ema: float = 0.5
+        self._deep_acc_ema: float = 0.5
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        xgb_prob = self.xgb.predict_proba(X)
+        if self.deep is not None:
+            try:
+                import torch
+                X_arr = X.values.astype(np.float32)
+                # Deep model expects (batch, seq, features) — use last bar only
+                X_t = torch.tensor(X_arr).unsqueeze(1)
+                self.deep.model.eval()
+                with torch.no_grad():
+                    deep_prob = self.deep.model(X_t).cpu().numpy().squeeze()
+                return self.w_xgb * xgb_prob + (1 - self.w_xgb) * deep_prob
+            except Exception:
+                pass
+        return xgb_prob
+
+    def update(
+        self,
+        X: pd.DataFrame,
+        y: np.ndarray,
+        X_arr: Optional[np.ndarray] = None,
+    ) -> bool:
+        """
+        Incremental update. Returns True if drift was detected.
+
+        Parameters
+        ----------
+        X     : Feature DataFrame for XGBoost update
+        y     : Ground-truth labels
+        X_arr : Numpy array for deep model update (optional)
+        """
+        # Update XGBoost
+        self.xgb.update(X, y)
+
+        # Update deep model
+        if self.deep is not None and X_arr is not None:
+            try:
+                self.deep.train_step((X_arr, y))
+            except Exception as exc:
+                logger.debug("Deep online update failed: %s", exc)
+
+        # Update blend weights based on recent accuracy
+        xgb_prob = self.xgb.predict_proba(X)
+        xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())
+        self._xgb_acc_ema = (1 - self.ema_alpha) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
+
+        total = self._xgb_acc_ema + self._deep_acc_ema
+        self.w_xgb = self._xgb_acc_ema / total if total > 0 else 0.5
+
+        # Check for drift
+        return self.drift_detector.update(y, xgb_prob)
