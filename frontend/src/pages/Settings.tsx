@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,8 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 
 const STORAGE_KEY = 'hopefx_notification_settings';
 
-function loadSettings(): NotificationSettings {
+/** localStorage fallback — used as initial state while API loads */
+function loadLocalSettings(): NotificationSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
@@ -46,7 +48,7 @@ function loadSettings(): NotificationSettings {
   return { ...DEFAULT_SETTINGS };
 }
 
-function saveSettings(s: NotificationSettings): void {
+function cacheLocalSettings(s: NotificationSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
@@ -137,47 +139,56 @@ const WebhookField: React.FC<WebhookFieldProps> = ({
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Settings: React.FC = () => {
-  const [settings, setSettings] = useState<NotificationSettings>(loadSettings);
-  const [saved, setSaved] = useState(false);
+  const [settings, setSettings] = useState<NotificationSettings>(loadLocalSettings);
+  const [saved,    setSaved]    = useState(false);
+  const [loading,  setLoading]  = useState(true);
+  const [saveErr,  setSaveErr]  = useState('');
   const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'sending' | 'ok' | 'fail'>>({
     discord: 'idle',
-    slack: 'idle',
-    telegram: 'idle',
+    slack:   'idle',
+    telegram:'idle',
   });
 
-  // Persist on every change
+  // Load from API on mount; fall back to localStorage if API unreachable
   useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+    api.get<NotificationSettings>('/api/settings/notifications')
+      .then((res) => {
+        const merged = { ...DEFAULT_SETTINGS, ...res.data };
+        setSettings(merged);
+        cacheLocalSettings(merged);
+      })
+      .catch(() => {
+        // API unavailable — keep localStorage values already in state
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  const update = (patch: Partial<NotificationSettings>) =>
-    setSettings((prev) => ({ ...prev, ...patch }));
+  const update = useCallback((patch: Partial<NotificationSettings>) =>
+    setSettings((prev) => ({ ...prev, ...patch })), []);
 
   const handleSave = async () => {
-    saveSettings(settings);
-    // POST to backend if available
+    setSaveErr('');
+    // Always write to localStorage as immediate fallback
+    cacheLocalSettings(settings);
     try {
-      await fetch('/api/settings/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-    } catch (_) {
-      // Backend may not be running in dev — settings are still saved locally
+      await api.post('/api/settings/notifications', settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      setSaveErr(detail ?? 'Failed to save to server — settings cached locally.');
+      // Still show saved indicator since local cache succeeded
+      setSaved(true);
+      setTimeout(() => { setSaved(false); setSaveErr(''); }, 4000);
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
   };
 
   const sendTest = async (channel: string) => {
     setTestStatus((prev) => ({ ...prev, [channel]: 'sending' }));
     try {
-      const res = await fetch('/api/notifications/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel, settings }),
-      });
-      setTestStatus((prev) => ({ ...prev, [channel]: res.ok ? 'ok' : 'fail' }));
+      await api.post('/api/notifications/test', { channel, settings });
+      setTestStatus((prev) => ({ ...prev, [channel]: 'ok' }));
     } catch (_) {
       setTestStatus((prev) => ({ ...prev, [channel]: 'fail' }));
     }
@@ -322,9 +333,14 @@ const Settings: React.FC = () => {
 
       {/* ── Save ─────────────────────────────────────────────────────────── */}
       <div style={styles.saveRow}>
-        <button onClick={handleSave} style={styles.saveBtn}>
-          {saved ? '✅ Saved' : 'Save settings'}
+        <button onClick={handleSave} style={{ ...styles.saveBtn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
+          {loading ? 'Loading…' : saved ? '✅ Saved' : 'Save settings'}
         </button>
+        {saveErr && (
+          <span style={{ fontSize: 12, color: '#fbbf24', marginLeft: 12 }}>
+            ⚠️ {saveErr}
+          </span>
+        )}
       </div>
     </div>
   );
