@@ -958,6 +958,21 @@ async def health_check():
     # WebSocket manager
     components["websocket"] = "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
 
+    # Email
+    # "healthy"   — SENDGRID_API_KEY is set (high-deliverability path)
+    # "degraded"  — only raw SMTP credentials available (low-deliverability fallback)
+    # "unavailable" — no credentials configured at all
+    import os as _os
+    _sg_key = _os.getenv("SENDGRID_API_KEY", "")
+    _smtp_host = _os.getenv("SMTP_HOST", "")
+    _smtp_user = _os.getenv("SMTP_USER", "") or _os.getenv("SMTP_USERNAME", "")
+    if _sg_key:
+        components["email"] = "healthy"
+    elif _smtp_host and _smtp_user:
+        components["email"] = "degraded"
+    else:
+        components["email"] = "unavailable"
+
     # Overall: degraded if any critical component is not healthy
     critical = ["api", "config", "database"]
     overall_status = "healthy" if all(
