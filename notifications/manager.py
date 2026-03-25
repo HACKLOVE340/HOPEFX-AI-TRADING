@@ -5,6 +5,7 @@ Multi-channel alerts with rate limiting, batching, and templating
 
 import asyncio
 import logging
+import os
 import time
 import json
 from typing import Dict, List, Optional, Any, Callable
@@ -32,6 +33,13 @@ try:
     SMTP_AVAILABLE = True
 except ImportError:
     SMTP_AVAILABLE = False
+
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, From, To, Subject, HtmlContent, PlainTextContent
+    SENDGRID_AVAILABLE = True
+except ImportError:
+    SENDGRID_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -241,75 +249,156 @@ class TelegramChannel(NotificationChannel):
 
 
 class EmailChannel(NotificationChannel):
-    """Email notifications"""
-    
+    """
+    Email notifications via SendGrid API (primary) or raw SMTP (fallback).
+
+    Priority:
+      1. SendGrid API — if SENDGRID_API_KEY env var is set.
+      2. Raw smtplib  — if SMTP credentials are configured (degraded mode).
+      3. Disabled     — if neither is configured.
+
+    Bounce/spam/unsubscribe suppressions are stored in the email_suppressions
+    DB table and checked before every send.
+    """
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__("email", config)
         self.smtp_host = config.get('smtp_host')
         self.smtp_port = config.get('smtp_port', 587)
         self.username = config.get('username')
         self.password = config.get('password')
-        self.from_addr = config.get('from_addr')
-        self.to_addrs = config.get('to_addrs', [])
-        
-        if not all([self.smtp_host, self.username, self.password]):
-            logger.warning("Email SMTP not fully configured")
+        self.from_addr = config.get('from_addr') or os.getenv('SMTP_FROM', '')
+        self.to_addrs: List[str] = config.get('to_addrs', [])
+
+        # Determine send mode
+        self.sendgrid_api_key: Optional[str] = os.getenv('SENDGRID_API_KEY') or config.get('sendgrid_api_key')
+        if self.sendgrid_api_key and SENDGRID_AVAILABLE:
+            self._send_mode = 'sendgrid'
+        elif self.smtp_host and self.username and self.password and SMTP_AVAILABLE:
+            self._send_mode = 'smtp'
+            logger.warning("Email: SENDGRID_API_KEY not set — using raw SMTP fallback (degraded deliverability)")
+        else:
+            self._send_mode = 'disabled'
+            logger.warning("Email: no credentials configured — channel disabled")
             self.enabled = False
-        
+
         # Higher rate limit for email
-        self.rate_limit_seconds = config.get('rate_limit_seconds', 300)  # 5 minutes
-    
+        self.rate_limit_seconds = config.get('rate_limit_seconds', 300)
+
+        # In-memory suppression cache (populated from DB on first use)
+        self._suppressed_emails: set = set()
+        self._suppressions_loaded = False
+
+    # ------------------------------------------------------------------
+    # Suppression helpers
+    # ------------------------------------------------------------------
+
+    def _load_suppressions(self) -> None:
+        """Load suppressed addresses from DB into the in-memory set."""
+        if self._suppressions_loaded:
+            return
+        try:
+            from database.connection import get_db_manager
+            from database.models import EmailSuppression
+            db = get_db_manager()
+            if db and hasattr(db, '_engine'):
+                from sqlalchemy.orm import sessionmaker
+                Session = sessionmaker(bind=db._engine)
+                with Session() as session:
+                    rows = session.query(EmailSuppression.email).all()
+                    self._suppressed_emails = {r.email.lower() for r in rows}
+        except Exception as exc:
+            logger.debug("Could not load email suppressions: %s", exc)
+        self._suppressions_loaded = True
+
+    def _is_suppressed(self, email: str) -> bool:
+        self._load_suppressions()
+        return email.lower() in self._suppressed_emails
+
+    # ------------------------------------------------------------------
+    # Async send entry point
+    # ------------------------------------------------------------------
+
     async def send(self, notification: Notification) -> bool:
-        if not self.enabled or not SMTP_AVAILABLE:
+        if not self.enabled:
             return False
-        
+
         if not self._check_rate_limit(notification.level.value):
             return False
-        
+
         # Only send WARNING and above via email
         if notification.level.value not in ['warning', 'error', 'critical']:
             return False
-        
-        def _send_sync():
-            try:
-                msg = MIMEMultipart()
-                msg['From'] = self.from_addr
-                msg['To'] = ", ".join(self.to_addrs)
-                msg['Subject'] = f"[HOPEFX] {notification.level.value.upper()}: {notification.title}"
-                
-                body = f"""
-HOPEFX Trading System Notification
 
-Level: {notification.level.value.upper()}
-Time: {datetime.fromtimestamp(notification.timestamp).isoformat()}
-Title: {notification.title}
+        # Filter suppressed recipients
+        recipients = [a for a in self.to_addrs if not self._is_suppressed(a)]
+        if not recipients:
+            logger.debug("Email: all recipients suppressed — skipping send")
+            return False
 
-Message:
-{notification.message}
+        subject = f"[HOPEFX] {notification.level.value.upper()}: {notification.title}"
+        plain_body = (
+            f"HOPEFX Trading System Notification\n\n"
+            f"Level: {notification.level.value.upper()}\n"
+            f"Time:  {datetime.fromtimestamp(notification.timestamp).isoformat()}\n"
+            f"Title: {notification.title}\n\n"
+            f"Message:\n{notification.message}\n\n"
+            f"Details:\n{json.dumps(notification.data, indent=2, default=str)}\n\n"
+            f"---\nThis is an automated message from HOPEFX AI Trading System"
+        )
 
-Details:
-{json.dumps(notification.data, indent=2, default=str)}
+        if self._send_mode == 'sendgrid':
+            return await asyncio.get_event_loop().run_in_executor(
+                None, self._send_via_sendgrid, recipients, subject, plain_body
+            )
+        elif self._send_mode == 'smtp':
+            return await asyncio.get_event_loop().run_in_executor(
+                None, self._send_via_smtp, recipients, subject, plain_body
+            )
+        return False
 
----
-This is an automated message from HOPEFX AI Trading System
-                """
-                
-                msg.attach(MIMEText(body, 'plain'))
-                
-                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                    server.starttls()
-                    server.login(self.username, self.password)
-                    server.send_message(msg)
-                
+    # ------------------------------------------------------------------
+    # SendGrid transport
+    # ------------------------------------------------------------------
+
+    def _send_via_sendgrid(self, recipients: List[str], subject: str, body: str) -> bool:
+        try:
+            sg = SendGridAPIClient(api_key=self.sendgrid_api_key)
+            message = Mail(
+                from_email=self.from_addr or 'noreply@hopefx.io',
+                to_emails=recipients,
+                subject=subject,
+                plain_text_content=body,
+            )
+            response = sg.send(message)
+            if response.status_code in (200, 202):
+                logger.debug("SendGrid email sent (status %s)", response.status_code)
                 return True
-                
-            except Exception as e:
-                logger.error(f"Email send failed: {e}")
-                return False
-        
-        # Run in thread pool
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _send_sync)
+            logger.error("SendGrid error %s: %s", response.status_code, response.body)
+            return False
+        except Exception as exc:
+            logger.error("SendGrid send failed: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # SMTP fallback transport
+    # ------------------------------------------------------------------
+
+    def _send_via_smtp(self, recipients: List[str], subject: str, body: str) -> bool:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = self.from_addr or self.username
+            msg['To'] = ", ".join(recipients)
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.username, self.password)
+                server.send_message(msg)
+            return True
+        except Exception as exc:
+            logger.error("SMTP send failed: %s", exc)
+            return False
 
 
 class ConsoleChannel(NotificationChannel):
@@ -648,34 +737,59 @@ class NotificationManager:
 
     def _send_email(self, message: str, level: "NotificationLevel" = None,
                     metadata: Dict = None) -> None:
-        """Send email notification via SMTP (sync)."""
-        import smtplib
-        from email.mime.text import MIMEText
-        smtp_host = (self.config.get("smtp_host") or
-                     self.config.get("email_smtp_host") or
-                     ("localhost" if self.config.get("email_enabled") else ""))
-        smtp_port = int(self.config.get("smtp_port", 587))
-        username = self.config.get("smtp_username", "")
-        password = self.config.get("smtp_password", "")
+        """Send email notification — SendGrid primary, SMTP fallback (sync)."""
         to_addr = (self.config.get("smtp_to") or
-                   self.config.get("email_to") or username)
-        if not smtp_host or not username:
+                   self.config.get("email_to") or
+                   self.config.get("smtp_username", ""))
+        if not to_addr:
             logger.debug("Email not configured; skipping")
             return
+
+        from_addr = (self.config.get("smtp_from") or
+                     os.getenv("SMTP_FROM") or
+                     self.config.get("smtp_username", "noreply@hopefx.io"))
+        subject = f"[HOPEFX] {getattr(level, 'value', 'INFO').upper()}: {message[:60]}"
         body = message
         if metadata:
             body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in metadata.items())
-        msg = MIMEText(body)
-        msg["Subject"] = f"[HOPEFX] {getattr(level, 'value', 'INFO').upper()}: {message[:60]}"
-        msg["From"] = username
-        msg["To"] = to_addr
+
+        sendgrid_key = os.getenv("SENDGRID_API_KEY") or self.config.get("sendgrid_api_key", "")
+        if sendgrid_key and SENDGRID_AVAILABLE:
+            try:
+                sg = SendGridAPIClient(api_key=sendgrid_key)
+                mail = Mail(
+                    from_email=from_addr,
+                    to_emails=[to_addr],
+                    subject=subject,
+                    plain_text_content=body,
+                )
+                sg.send(mail)
+                return
+            except Exception as exc:
+                logger.error("SendGrid send failed: %s", exc)
+                # Fall through to SMTP
+
+        # SMTP fallback
+        smtp_host = (self.config.get("smtp_host") or
+                     self.config.get("email_smtp_host") or "")
+        smtp_port = int(self.config.get("smtp_port", 587))
+        username = self.config.get("smtp_username", "")
+        password = self.config.get("smtp_password", "")
+        if not smtp_host or not username:
+            logger.debug("SMTP not configured; skipping email fallback")
+            return
         try:
+            from email.mime.text import MIMEText
+            msg = MIMEText(body)
+            msg["Subject"] = subject
+            msg["From"] = from_addr
+            msg["To"] = to_addr
             with smtplib.SMTP(smtp_host, smtp_port) as server:
                 server.starttls()
                 server.login(username, password)
-                server.sendmail(username, [to_addr], msg.as_string())
+                server.sendmail(from_addr, [to_addr], msg.as_string())
         except Exception as exc:
-            logger.error(f"Email send failed: {exc}")
+            logger.error("SMTP send failed: %s", exc)
 
     def get_status(self) -> Dict[str, Any]:
         """Get notification manager status"""

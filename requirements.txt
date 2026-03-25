@@ -129,3 +129,16 @@ slowapi>=0.1.9
 
 # ── Error tracking ────────────────────────────────────────────────────────────
 # sentry-sdk already in requirements.txt above; listed here for visibility
+
+
+# ── Email deliverability ──────────────────────────────────────────────────────
+sendgrid>=6.11.0
+
+# ── Templating ────────────────────────────────────────────────────────────────
+jinja2>=3.1.0
+
+# ── Statistical testing ───────────────────────────────────────────────────────
+scipy>=1.12.0
+
+# ── Property-based testing ────────────────────────────────────────────────────
+hypothesis>=6.100.0

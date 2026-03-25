@@ -19,7 +19,7 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
@@ -28,7 +28,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -1004,6 +1004,52 @@ async def get_status():
 
 
 # /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
+
+# ── SendGrid email webhook ────────────────────────────────────────────────────
+
+@app.post("/api/email/webhook", tags=["Email"], include_in_schema=False)
+async def sendgrid_webhook(request: Request):
+    """
+    Receive SendGrid event webhooks (bounce, spam_report, unsubscribe).
+    Suppresses future sends to affected addresses by writing to email_suppressions.
+    Configure in SendGrid dashboard: Settings → Mail Settings → Event Webhook.
+    """
+    try:
+        events = await request.json()
+    except Exception:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    if not isinstance(events, list):
+        events = [events]
+
+    suppression_events = {"bounce", "spam_report", "unsubscribe", "group_unsubscribe"}
+    suppressed: List[str] = []
+
+    for event in events:
+        event_type = event.get("event", "")
+        email = event.get("email", "").lower().strip()
+        if not email or event_type not in suppression_events:
+            continue
+
+        try:
+            from database.models import EmailSuppression
+            from sqlalchemy.orm import sessionmaker
+            from sqlalchemy import text as _text
+            if app_state.db_engine:
+                Session = sessionmaker(bind=app_state.db_engine)
+                with Session() as session:
+                    exists = session.query(EmailSuppression).filter_by(email=email).first()
+                    if not exists:
+                        session.add(EmailSuppression(email=email, reason=event_type))
+                        session.commit()
+                        suppressed.append(email)
+                        logger.info("Email suppressed: %s (reason: %s)", email, event_type)
+        except Exception as exc:
+            logger.error("Failed to record email suppression for %s: %s", email, exc)
+
+    return {"suppressed": suppressed, "processed": len(events)}
+
 
 # Root endpoint
 @app.get("/", tags=["System"])

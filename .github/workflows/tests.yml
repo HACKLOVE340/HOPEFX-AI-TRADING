@@ -46,9 +46,11 @@ jobs:
           ${{ runner.os }}-pip-
     
     - name: Install dependencies
+      # Use lightweight CI requirements to avoid C-extension build failures
+      # (ta-lib, MetaTrader5, tensorflow, etc. are excluded from CI).
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements-ci.txt
         pip install "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6"
     
     - name: Run tests

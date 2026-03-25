@@ -14,13 +14,9 @@
 name: Codacy Security Scan
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ "main" ]
-  schedule:
-    - cron: '15 2 * * 2'
+  # Requires CODACY_PROJECT_TOKEN secret from codacy.com.
+  # Disabled automatic triggers until the token is configured in GitHub secrets.
+  workflow_dispatch:
 
 permissions:
   contents: read
