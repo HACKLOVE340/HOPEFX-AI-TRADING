@@ -178,3 +178,177 @@ async def set_auto_pause(config: AutoPauseConfig) -> AutoPauseConfig:
 @router.get("/auto-pause", response_model=AutoPauseConfig)
 async def get_auto_pause() -> AutoPauseConfig:
     return AutoPauseConfig(**_auto_pause_config)
+
+
+# ── FOMC calendar + post-event regime adjustment ──────────────────────────────
+
+# Known 2024-2026 FOMC meeting dates (UTC, 18:00 = statement release)
+_FOMC_DATES = [
+    "2024-01-31", "2024-03-20", "2024-05-01", "2024-06-12",
+    "2024-07-31", "2024-09-18", "2024-11-07", "2024-12-18",
+    "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
+    "2025-07-30", "2025-09-17", "2025-11-05", "2025-12-17",
+    "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
+    "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
+]
+
+# In-memory store for post-event regime overrides
+_fomc_regime_override: dict = {
+    "active": False,
+    "outcome": None,        # "hawkish" | "dovish" | "neutral"
+    "set_at": None,
+    "expires_at": None,     # 48h after event
+    "position_size_multiplier": 1.0,
+    "notes": "",
+}
+
+
+class FomcEvent(BaseModel):
+    date: str
+    time_utc: str = "18:00"
+    minutes_until: int
+    is_next: bool
+    is_within_2h: bool
+
+
+class FomcRegimeOverride(BaseModel):
+    outcome: str  # "hawkish" | "dovish" | "neutral"
+    notes: str = ""
+
+
+class FomcRegimeStatus(BaseModel):
+    active: bool
+    outcome: Optional[str]
+    set_at: Optional[str]
+    expires_at: Optional[str]
+    position_size_multiplier: float
+    notes: str
+
+
+@router.get("/fomc", response_model=List[FomcEvent])
+async def get_fomc_calendar(upcoming_only: bool = True) -> List[FomcEvent]:
+    """
+    Return FOMC meeting dates with countdown timers.
+
+    upcoming_only=true (default) returns only future meetings.
+    The next meeting is flagged with is_next=True.
+    Meetings within 2 hours of statement release are flagged is_within_2h=True.
+    """
+    now = datetime.now(timezone.utc)
+    events = []
+    for date_str in _FOMC_DATES:
+        dt = datetime.fromisoformat(f"{date_str}T18:00:00+00:00")
+        delta_min = int((dt - now).total_seconds() / 60)
+        if upcoming_only and delta_min < -60:
+            continue
+        events.append(FomcEvent(
+            date=date_str,
+            time_utc="18:00",
+            minutes_until=max(0, delta_min),
+            is_next=False,
+            is_within_2h=abs(delta_min) <= 120,
+        ))
+
+    # Mark the soonest upcoming as is_next
+    upcoming = [e for e in events if e.minutes_until > 0]
+    if upcoming:
+        upcoming[0] = FomcEvent(**{**upcoming[0].model_dump(), "is_next": True})
+        events = [upcoming[0]] + events[1:]
+
+    return events
+
+
+@router.post("/fomc/regime", response_model=FomcRegimeStatus)
+async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
+    """
+    Record the FOMC outcome and apply a 48-hour regime adjustment.
+
+    Outcome classification:
+    - hawkish  → rate hike / hawkish surprise → reduce gold position size 20%
+    - dovish   → rate cut / dovish surprise   → increase gold position size 20%
+    - neutral  → as expected                  → no change
+
+    The multiplier is read by the signal engine when sizing positions.
+    """
+    outcome = body.outcome.lower()
+    if outcome not in ("hawkish", "dovish", "neutral"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="outcome must be hawkish | dovish | neutral")
+
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(hours=48)
+
+    multiplier = {"hawkish": 0.8, "dovish": 1.2, "neutral": 1.0}[outcome]
+
+    _fomc_regime_override.update({
+        "active": True,
+        "outcome": outcome,
+        "set_at": now.isoformat(),
+        "expires_at": expires.isoformat(),
+        "position_size_multiplier": multiplier,
+        "notes": body.notes,
+    })
+
+    logger.info(
+        "FOMC regime override set: outcome=%s multiplier=%.1f expires=%s",
+        outcome, multiplier, expires.isoformat(),
+    )
+
+    # Persist to DB so it survives restarts
+    try:
+        from api.db_store import db_set
+        db_set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
+    except Exception:
+        pass
+
+    return FomcRegimeStatus(**_fomc_regime_override)
+
+
+@router.get("/fomc/regime", response_model=FomcRegimeStatus)
+async def get_fomc_regime() -> FomcRegimeStatus:
+    """
+    Return the current FOMC regime override status.
+
+    If the override has expired, it is automatically cleared.
+    The position_size_multiplier is used by the signal engine.
+    """
+    # Load from DB on first call
+    if not _fomc_regime_override.get("active"):
+        try:
+            from api.db_store import db_get
+            stored = db_get("fomc_regime_override")
+            if stored:
+                _fomc_regime_override.update(stored)
+        except Exception:
+            pass
+
+    # Auto-expire
+    if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):
+        expires = datetime.fromisoformat(_fomc_regime_override["expires_at"])
+        if datetime.now(timezone.utc) > expires:
+            _fomc_regime_override.update({
+                "active": False,
+                "outcome": None,
+                "position_size_multiplier": 1.0,
+            })
+
+    return FomcRegimeStatus(**_fomc_regime_override)
+
+
+@router.delete("/fomc/regime")
+async def clear_fomc_regime() -> dict:
+    """Manually clear the FOMC regime override."""
+    _fomc_regime_override.update({
+        "active": False,
+        "outcome": None,
+        "set_at": None,
+        "expires_at": None,
+        "position_size_multiplier": 1.0,
+        "notes": "",
+    })
+    try:
+        from api.db_store import db_delete
+        db_delete("fomc_regime_override")
+    except Exception:
+        pass
+    return {"cleared": True}
