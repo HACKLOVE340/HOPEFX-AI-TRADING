@@ -107,7 +107,7 @@ python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboo
 
 | Fix | Detail |
 |---|---|
-| **Test suite green** | 2435 passed, 0 failed — bcrypt, auth, smoke, capsys, JWT secret isolation all fixed |
+| **Test suite green** | 2390 passed, 0 failed — bcrypt, auth, smoke, capsys, JWT secret isolation all fixed |
 | **Deprecated entry points deleted** | `main.py`, `main_ultimate.py`, `main_mcc_wrapper.py`, `main_ultimate_integrated.py` removed |
 | **startup_event() refactored** | 428 lines → 78 lines; all factories in `core/startup_factories.py` |
 | **Email: SendGrid primary** | `core/email_service.py` uses SendGrid API first, SMTP fallback, dev log last |
@@ -243,7 +243,7 @@ HOPEFX-AI-TRADING/
 ├── helm/hopefx/              # Kubernetes Helm chart (HPA, PDB, secrets)
 ├── k8s/                      # Raw Kubernetes manifests
 │
-└── tests/                    # 2435 passing tests
+└── tests/                    # 2390 passing tests
     ├── test_auth_gates.py    # 56 tests — RBAC enforcement
     ├── test_auth_pentest.py  # 18 tests — JWT security
     ├── test_smoke_critical.py # 30 tests — module import smoke
@@ -331,7 +331,7 @@ pip install pytest pytest-asyncio pytest-cov
 
 # Full suite (excludes Redis integration — requires running Redis)
 pytest tests/ --ignore=tests/integration/test_redis.py -q
-# Expected: 2435 passed, 18 skipped
+# Expected: 2390 passed, 18 skipped
 
 # With Redis
 pytest tests/ -q
@@ -458,7 +458,7 @@ pip install pytest pytest-asyncio pytest-cov
 
 # Full suite (excludes Redis — requires running Redis instance)
 pytest tests/ --ignore=tests/integration/test_redis.py -q
-# Expected: 2435 passed, 18 skipped
+# Expected: 2390 passed, 18 skipped
 
 # Specific suites
 pytest tests/test_auth_gates.py -q        # 56 tests — RBAC
