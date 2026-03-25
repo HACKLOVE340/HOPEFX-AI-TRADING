@@ -424,8 +424,8 @@ class RiskManager:
                         drawdown_pct=self.current_drawdown * 100,
                         limit_pct=self.config.max_drawdown_pct * 100,
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("FCM drawdown push failed (non-critical): %s", exc)
         elif margin_used_pct > 0.8:
             risk_level = RiskLevel.HIGH
             messages.append(f"High margin usage: {margin_used_pct:.2%}")
@@ -464,6 +464,57 @@ class RiskManager:
             messages=messages,
         )
     
+    # ------------------------------------------------------------------
+    # Position sizing helpers (Area 3 — split from _calculate_position_size_full)
+    # ------------------------------------------------------------------
+
+    def _compute_kelly_fraction(self, p: float, b: float) -> float:
+        """
+        Compute the Kelly fraction f* = (p*b - q) / b, scaled by kelly_fraction.
+
+        Args:
+            p: Win probability, clamped to [0.30, 0.75].
+            b: Win/loss ratio (reward / risk per share).
+
+        Returns:
+            Kelly fraction as a decimal (e.g. 0.05 = 5% of equity).
+        """
+        p = max(0.30, min(0.75, p))
+        q = 1.0 - p
+        raw_kelly = (p * b - q) / b if b > 0 else 0.0
+        return max(0.0, raw_kelly * self.config.kelly_fraction)
+
+    def _apply_correlation_penalty(
+        self, symbol: str, positions: List[Dict], base_pct: float
+    ) -> float:
+        """
+        Reduce base_pct by the correlation penalty for the given symbol.
+
+        Args:
+            symbol:    Instrument being sized.
+            positions: Current open positions.
+            base_pct:  Starting risk percentage before penalty.
+
+        Returns:
+            Adjusted risk percentage after correlation penalty.
+        """
+        penalty = self._calculate_correlation_penalty(symbol, positions)
+        return base_pct * (1.0 - penalty)
+
+    def _apply_risk_limits(self, pct: float, equity: float) -> float:
+        """
+        Clamp pct to the configured max_position_size_pct and apply
+        volatility / drawdown scaling factors.
+
+        Args:
+            pct:    Proposed risk percentage.
+            equity: Current account equity (unused here but kept for signature).
+
+        Returns:
+            Final risk percentage after all caps.
+        """
+        return min(pct, self.config.max_position_size_pct)
+
     def _calculate_position_size_full(
         self,
         symbol: str,
@@ -549,39 +600,32 @@ class RiskManager:
         
         # Win probability: prefer signal['probability'] when available (Area 2).
         # Bounds-clamp to [0.30, 0.75] to prevent degenerate Kelly fractions.
-        # Fall back to signal_strength proxy when key is absent.
-        _raw_p = signal_strength  # signal_strength is passed as a kwarg; may carry probability
-        # The caller may pass probability via the signal dict; check kwargs
+        _raw_p = signal_strength
         _prob_from_signal = getattr(self, '_last_signal_probability', None)
         if _prob_from_signal is not None:
             _raw_p = _prob_from_signal
             self._last_signal_probability = None  # consume
-        win_probability = max(0.30, min(0.75, _raw_p if _raw_p is not None else 0.5))
 
-        # Kelly criterion: f* = (p*b - q) / b
-        b = risk_reward
-        p = win_probability
-        q = 1 - p
+        # ── Helper 1: Kelly fraction ──────────────────────────────────────────
+        position_risk_pct = self._compute_kelly_fraction(
+            p=_raw_p if _raw_p is not None else 0.5,
+            b=risk_reward,
+        )
 
-        kelly_pct = (p * b - q) / b if b > 0 else 0
-        
-        # Apply Kelly fraction and safety caps
-        position_risk_pct = kelly_pct * self.config.kelly_fraction
-        
-        # Cap at max position size
-        position_risk_pct = min(position_risk_pct, self.config.max_position_size_pct)
-        
-        # Reduce for high volatility
-        volatility_factor = max(0.3, 1.0 - (volatility * 2))  # 0.3 to 1.0
+        # Volatility and drawdown scaling (inline — not extracted, these are
+        # continuous adjustments rather than discrete limit checks)
+        volatility_factor = max(0.3, 1.0 - (volatility * 2))
         position_risk_pct *= volatility_factor
-        
-        # Reduce for high drawdown
-        drawdown_factor = max(0.5, 1.0 - (self.current_drawdown * 5))  # 0.5 to 1.0
+        drawdown_factor = max(0.5, 1.0 - (self.current_drawdown * 5))
         position_risk_pct *= drawdown_factor
-        
-        # Check correlation with existing positions
-        correlation_penalty = self._calculate_correlation_penalty(symbol, existing_positions)
-        position_risk_pct *= (1 - correlation_penalty)
+
+        # ── Helper 2: correlation penalty ────────────────────────────────────
+        position_risk_pct = self._apply_correlation_penalty(
+            symbol, existing_positions, position_risk_pct
+        )
+
+        # ── Helper 3: hard risk limits ────────────────────────────────────────
+        position_risk_pct = self._apply_risk_limits(position_risk_pct, account_equity)
         
         # Calculate position size
         risk_amount = account_equity * position_risk_pct
@@ -654,7 +698,7 @@ class RiskManager:
             stop_loss_price=stop_loss_price,
             take_profit_price=take_profit_price,
             approved=True,
-            reason=f"Kelly: {kelly_pct:.2%}, Risk/Reward: {risk_reward:.2f}, "
+            reason=f"Kelly: {position_risk_pct:.2%}, Risk/Reward: {risk_reward:.2f}, "
                    f"VolFactor: {volatility_factor:.2f}, DD_Factor: {drawdown_factor:.2f}"
         )
     

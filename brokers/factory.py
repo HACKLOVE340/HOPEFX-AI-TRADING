@@ -18,59 +18,61 @@ class BrokerFactory:
         """Lazy-register all built-in brokers on first use."""
         if cls._brokers:
             return
+        # Each broker is optional — missing SDK or credentials are expected in CI.
+        # Log at debug so the absence is traceable without polluting startup logs.
         try:
             from brokers.paper_trading import PaperTradingBroker
             cls._brokers["paper"] = PaperTradingBroker
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("paper broker unavailable: %s", exc)
         try:
             from brokers.alpaca import AlpacaConnector
             cls._brokers["alpaca"] = AlpacaConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("alpaca broker unavailable: %s", exc)
         try:
             from brokers.binance import BinanceConnector
             cls._brokers["binance"] = BinanceConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("binance broker unavailable: %s", exc)
         try:
             from brokers.oanda import OANDAConnector
             cls._brokers["oanda"] = OANDAConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("oanda broker unavailable: %s", exc)
         try:
             from brokers.mt5 import MT5Connector
             cls._brokers["mt5"] = MT5Connector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mt5 broker unavailable: %s", exc)
         try:
             from brokers.interactive_brokers import InteractiveBrokersConnector
             cls._brokers["ib"] = InteractiveBrokersConnector
             cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("interactive_brokers broker unavailable: %s", exc)
         try:
             from brokers.prop_firms.ftmo import FTMOConnector
             cls._brokers["ftmo"] = FTMOConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("ftmo broker unavailable: %s", exc)
         try:
             from brokers.prop_firms.topstep import TopstepTraderConnector
             cls._brokers["topstep"] = TopstepTraderConnector
             cls._brokers["topsteptrader"] = TopstepTraderConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("topstep broker unavailable: %s", exc)
         try:
             from brokers.prop_firms.the5ers import The5ersConnector
             cls._brokers["the5ers"] = The5ersConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("the5ers broker unavailable: %s", exc)
         try:
             from brokers.prop_firms.myforexfunds import MyForexFundsConnector
             cls._brokers["myforexfunds"] = MyForexFundsConnector
             cls._brokers["mff"] = MyForexFundsConnector
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("myforexfunds broker unavailable: %s", exc)
 
     @classmethod
     def register_broker(cls, name: str, broker_class: type) -> None:
@@ -79,8 +81,8 @@ class BrokerFactory:
             from brokers.base import BrokerConnector
             if not (isinstance(broker_class, type) and issubclass(broker_class, BrokerConnector)):
                 raise ValueError(f"{broker_class} is not a BrokerConnector subclass")
-        except ImportError:
-            pass
+        except ImportError as exc:
+            logger.debug("BrokerConnector base class unavailable during registration: %s", exc)
         cls._brokers[name.lower()] = broker_class
         logger.info(f"Broker registered: {name}")
 

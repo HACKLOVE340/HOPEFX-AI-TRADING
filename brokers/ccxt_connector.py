@@ -101,8 +101,8 @@ class CCXTConnector(BrokerConnector):
             try:
                 import asyncio
                 asyncio.get_event_loop().run_until_complete(self._exchange.close())
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("CCXT exchange close failed: %s", exc)
         self.connected = False
         self._exchange = None
         return True
