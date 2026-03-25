@@ -123,3 +123,9 @@ reportlab>=4.0.0
 
 # ── GraphQL ───────────────────────────────────────────────────────────────────
 strawberry-graphql[fastapi]>=0.200.0
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+slowapi>=0.1.9
+
+# ── Error tracking ────────────────────────────────────────────────────────────
+# sentry-sdk already in requirements.txt above; listed here for visibility
