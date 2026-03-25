@@ -1,0 +1,223 @@
+"""
+Social Signal Feed API
+
+Endpoints:
+  GET  /api/feed                    — paginated community signal feed
+  POST /api/feed/{signal_id}/react  — thumbs up / thumbs down
+  POST /api/feed/{signal_id}/comment — add a comment
+  GET  /api/feed/{signal_id}/comments — list comments
+  POST /api/feed/opt-in             — opt current user into public feed
+  POST /api/feed/opt-out            — opt current user out of public feed
+
+High-confidence signals (>= 70%) from the signal engine are published here.
+Users can react and comment. Copy-count is tracked per signal.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, get_current_user
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/feed", tags=["Social Feed"])
+
+# ── In-memory stores (replace with DB in production) ─────────────────────────
+
+_feed_items: Dict[str, dict] = {}          # signal_id → feed item
+_reactions:  Dict[str, Dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
+_comments:   Dict[str, List[dict]] = {}    # signal_id → list of comments
+_opted_in:   set = set()                   # user_ids who opted into public feed
+
+
+# ── Seed demo data ────────────────────────────────────────────────────────────
+
+def _seed_demo():
+    import random
+    random.seed(7)
+    symbols    = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD"]
+    directions = ["BUY", "SELL"]
+    usernames  = ["AlgoTrader_X", "GoldHunter", "FXWizard", "PropKing", "QuietEdge"]
+    for i in range(12):
+        sid = f"demo-sig-{i:03d}"
+        sym = random.choice(symbols)
+        direction = random.choice(directions)
+        conf = round(70 + random.random() * 25, 1)
+        pnl  = round((random.random() - 0.4) * 350, 2)
+        copies = random.randint(0, 18)
+        _feed_items[sid] = {
+            "signal_id":  sid,
+            "symbol":     sym,
+            "direction":  direction,
+            "confidence": conf,
+            "entry_price": round(2300 + random.random() * 100, 2) if "XAU" in sym else round(1.05 + random.random() * 0.05, 5),
+            "pnl":        pnl,
+            "copies":     copies,
+            "username":   random.choice(usernames),
+            "trader_id":  f"trader-{i:03d}",
+            "thumbs_up":   random.randint(0, 24),
+            "thumbs_down": random.randint(0, 6),
+            "comment_count": random.randint(0, 5),
+            "is_public":  True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _reactions[sid] = {}
+        _comments[sid]  = []
+
+
+_seed_demo()
+
+
+# ── Models ────────────────────────────────────────────────────────────────────
+
+class ReactionBody(BaseModel):
+    reaction: str = Field(..., pattern="^(up|down)$")
+
+
+class CommentBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
+    """Called by the signal engine to publish a high-confidence signal."""
+    sid = signal.get("signal_id") or str(uuid.uuid4())
+    item = {
+        "signal_id":   sid,
+        "symbol":      signal.get("symbol", "XAU/USD"),
+        "direction":   signal.get("direction", "BUY"),
+        "confidence":  signal.get("confidence", 70.0),
+        "entry_price": signal.get("entry_price", 0.0),
+        "pnl":         signal.get("pnl", 0.0),
+        "copies":      0,
+        "username":    username,
+        "trader_id":   trader_id,
+        "thumbs_up":   0,
+        "thumbs_down": 0,
+        "comment_count": 0,
+        "is_public":   True,
+        "created_at":  datetime.now(timezone.utc).isoformat(),
+    }
+    _feed_items[sid] = item
+    _reactions[sid]  = {}
+    _comments[sid]   = []
+    return item
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("")
+async def get_feed(
+    page:   int = 1,
+    limit:  int = 20,
+    symbol: Optional[str] = None,
+):
+    """Return paginated community signal feed (public — no auth required)."""
+    items = [v for v in _feed_items.values() if v.get("is_public")]
+    if symbol:
+        items = [i for i in items if i["symbol"] == symbol]
+    items.sort(key=lambda x: x["created_at"], reverse=True)
+    start = (page - 1) * limit
+    return {
+        "items":   items[start: start + limit],
+        "total":   len(items),
+        "page":    page,
+        "pages":   max(1, (len(items) + limit - 1) // limit),
+    }
+
+
+@router.post("/{signal_id}/react")
+async def react_to_signal(
+    signal_id: str,
+    body: ReactionBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Toggle a thumbs-up or thumbs-down reaction on a signal."""
+    if signal_id not in _feed_items:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    item = _feed_items[signal_id]
+    prev = _reactions[signal_id].get(user.sub)
+
+    # Remove previous reaction counts
+    if prev == "up":
+        item["thumbs_up"] = max(0, item["thumbs_up"] - 1)
+    elif prev == "down":
+        item["thumbs_down"] = max(0, item["thumbs_down"] - 1)
+
+    # Toggle: clicking same reaction removes it
+    if prev == body.reaction:
+        _reactions[signal_id].pop(user.sub, None)
+        new_reaction = None
+    else:
+        _reactions[signal_id][user.sub] = body.reaction
+        new_reaction = body.reaction
+        if body.reaction == "up":
+            item["thumbs_up"] += 1
+        else:
+            item["thumbs_down"] += 1
+
+    return {
+        "signal_id":   signal_id,
+        "thumbs_up":   item["thumbs_up"],
+        "thumbs_down": item["thumbs_down"],
+        "your_reaction": new_reaction,
+    }
+
+
+@router.post("/{signal_id}/comment")
+async def add_comment(
+    signal_id: str,
+    body: CommentBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Add a comment to a feed signal."""
+    if signal_id not in _feed_items:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    comment = {
+        "comment_id": str(uuid.uuid4()),
+        "signal_id":  signal_id,
+        "user_id":    user.sub,
+        "username":   getattr(user, "username", user.sub),
+        "text":       body.text,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _comments[signal_id].append(comment)
+    _feed_items[signal_id]["comment_count"] = len(_comments[signal_id])
+    return comment
+
+
+@router.get("/{signal_id}/comments")
+async def get_comments(signal_id: str):
+    """Return all comments for a signal (public)."""
+    if signal_id not in _feed_items:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return {"comments": _comments.get(signal_id, [])}
+
+
+@router.post("/opt-in")
+async def opt_in(user: TokenPayload = Depends(get_current_user)):
+    """Opt the current user into having their signals appear in the public feed."""
+    _opted_in.add(user.sub)
+    return {"opted_in": True, "user_id": user.sub}
+
+
+@router.post("/opt-out")
+async def opt_out(user: TokenPayload = Depends(get_current_user)):
+    """Opt the current user out of the public feed."""
+    _opted_in.discard(user.sub)
+    return {"opted_in": False, "user_id": user.sub}
+
+
+@router.get("/status/me")
+async def my_feed_status(user: TokenPayload = Depends(get_current_user)):
+    """Return whether the current user is opted into the public feed."""
+    return {"opted_in": user.sub in _opted_in}
