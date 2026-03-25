@@ -52,6 +52,7 @@ from api.status import router as status_router
 from api.brain import router as brain_router
 from api.two_factor import router as two_factor_router
 from api.calendar import router as calendar_router
+from api.watchlist import router as watchlist_router
 from cache import MarketDataCache
 from config import initialize_config
 from config.feature_flags import flags as feature_flags
@@ -93,6 +94,7 @@ app.include_router(status_router)
 app.include_router(brain_router)
 app.include_router(two_factor_router)
 app.include_router(calendar_router)
+app.include_router(watchlist_router)
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
