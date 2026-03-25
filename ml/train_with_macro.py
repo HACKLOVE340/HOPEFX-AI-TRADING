@@ -310,14 +310,101 @@ def train_final_model(
     }
 
 
+def oos_eval(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_oos: pd.DataFrame,
+    y_oos: pd.Series,
+    model_type: str = "xgb",
+) -> Dict:
+    """
+    Train on X_train/y_train, evaluate on a completely held-out X_oos/y_oos.
+
+    The OOS set is never seen during training or hyperparameter selection.
+    Reports accuracy, F1, and a one-sided binomial p-value testing H0: accuracy <= 0.5.
+
+    The binomial test is more appropriate than a t-test here because we have
+    a single OOS period (not multiple folds) and the test statistic is a count
+    of correct predictions out of N independent Bernoulli trials.
+    """
+    import xgboost as xgb
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, f1_score, classification_report
+    from scipy.stats import binomtest
+    import joblib
+
+    if model_type == "xgb":
+        model = xgb.XGBClassifier(
+            n_estimators=500,
+            max_depth=4,
+            learning_rate=0.03,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            min_child_weight=5,
+            gamma=0.1,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
+            scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
+            use_label_encoder=False,
+            eval_metric="logloss",
+            random_state=42,
+            n_jobs=-1,
+        )
+    else:
+        model = RandomForestClassifier(
+            n_estimators=500,
+            max_depth=8,
+            min_samples_leaf=5,
+            max_features="sqrt",
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1,
+        )
+
+    model.fit(X_train, y_train)
+    preds = model.predict(X_oos)
+    acc   = accuracy_score(y_oos, preds)
+    f1    = f1_score(y_oos, preds, zero_division=0)
+    n     = len(y_oos)
+    k     = int(round(acc * n))  # number of correct predictions
+
+    # One-sided binomial test: H0 = p(correct) <= 0.5
+    binom_result = binomtest(k, n, p=0.5, alternative="greater")
+    p_value = float(binom_result.pvalue)
+
+    logger.info(
+        "OOS %s  acc=%.3f  f1=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
+        model_type.upper(), acc, f1, n, k, p_value, p_value < 0.05,
+    )
+    logger.info("\n%s", classification_report(y_oos, preds))
+
+    # Save OOS model
+    out_path = MODEL_DIR / f"{model_type}_macro_oos.pkl"
+    joblib.dump(model, out_path)
+    logger.info("Saved OOS model to %s", out_path)
+
+    return {
+        "model": model_type,
+        "train_size": len(X_train),
+        "oos_size": n,
+        "correct_predictions": k,
+        "accuracy": round(acc, 4),
+        "f1": round(f1, 4),
+        "p_value_binomial": round(p_value, 4),
+        "significant": bool(p_value < 0.05),
+        "test": "one-sided binomial (H0: accuracy <= 0.5)",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train XAUUSD direction models with macro features",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python ml/train_with_macro.py --years 50          # full history\n"
-            "  python ml/train_with_macro.py --years 5 --no-macro  # quick test\n"
+            "  python ml/train_with_macro.py --years 50              # full history\n"
+            "  python ml/train_with_macro.py --years 50 --oos-years 3  # 3-year OOS\n"
+            "  python ml/train_with_macro.py --years 5 --no-macro    # quick test\n"
         ),
     )
     parser.add_argument(
@@ -329,6 +416,15 @@ def main():
     parser.add_argument("--no-macro", action="store_true", help="Skip macro features (DXY, VIX, yields, SPX)")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)")
     parser.add_argument("--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)")
+    parser.add_argument(
+        "--oos-years", type=float, default=0.0,
+        help=(
+            "Reserve the last N years as a completely held-out OOS period. "
+            "The model is trained on all data before this window and evaluated "
+            "on it with a one-sided binomial p-value test. "
+            "Default: 0 (no separate OOS period; use walk-forward CV only)."
+        ),
+    )
     args = parser.parse_args()
 
     # ── Fetch data ────────────────────────────────────────────────────────────
@@ -345,19 +441,50 @@ def main():
     X, y = build_features(ohlcv, macro_df, prediction_horizon=args.horizon)
     logger.info("Feature matrix: %d rows × %d columns", *X.shape)
 
-    # ── Walk-forward evaluation ───────────────────────────────────────────────
+    # ── OOS split (if requested) ──────────────────────────────────────────────
+    # The OOS period is carved off the END of the dataset before any model
+    # training or CV.  It is never seen during training or hyperparameter
+    # selection — this is the only valid way to estimate live performance.
+    oos_n = 0
+    X_cv, y_cv = X, y
+    X_oos, y_oos = None, None
+
+    if args.oos_years > 0:
+        oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
+        oos_n = min(oos_n, len(X) // 4)           # cap at 25% of data
+        if oos_n < 30:
+            logger.warning(
+                "--oos-years %.1f produces only %d bars — too few for reliable OOS eval. "
+                "Increase --oos-years or --years.",
+                args.oos_years, oos_n,
+            )
+            oos_n = 0
+        else:
+            X_cv, y_cv = X.iloc[:-oos_n], y.iloc[:-oos_n]
+            X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
+            logger.info(
+                "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
+                len(X_cv), oos_n, args.oos_years,
+                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
+                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
+            )
+
+    # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
     report = {
         "symbol": args.symbol,
         "years": args.years,
+        "oos_years": args.oos_years,
         "macro_features": macro_df is not None,
         "feature_count": X.shape[1],
         "sample_count": len(X),
+        "cv_sample_count": len(X_cv),
+        "oos_sample_count": oos_n,
         "trained_at": datetime.now(timezone.utc).isoformat(),
     }
 
     for model_type in ("xgb", "rf"):
         logger.info("\n=== Walk-forward CV: %s ===", model_type.upper())
-        wf = walk_forward_eval(X, y, n_splits=args.splits, model_type=model_type)
+        wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits, model_type=model_type)
         report[f"walkforward_{model_type}"] = wf
         logger.info(
             "%s  mean_acc=%.3f±%.3f  p=%.4f  significant=%s",
@@ -366,11 +493,18 @@ def main():
             wf["p_value"], wf["significant"],
         )
 
-    # ── Train final models ────────────────────────────────────────────────────
+    # ── Train final models (on CV portion) ───────────────────────────────────
     logger.info("\n=== Training final models ===")
     for model_type in ("xgb", "rf"):
-        _, final_metrics = train_final_model(X, y, model_type=model_type)
+        _, final_metrics = train_final_model(X_cv, y_cv, model_type=model_type)
         report[f"final_{model_type}"] = final_metrics
+
+    # ── Held-out OOS evaluation ───────────────────────────────────────────────
+    if X_oos is not None:
+        logger.info("\n=== Held-out OOS evaluation (%d bars) ===", oos_n)
+        for model_type in ("xgb", "rf"):
+            oos_metrics = oos_eval(X_cv, y_cv, X_oos, y_oos, model_type=model_type)
+            report[f"oos_{model_type}"] = oos_metrics
 
     # ── Save report ───────────────────────────────────────────────────────────
     report_path = MODEL_DIR / "training_report.json"
@@ -383,7 +517,7 @@ def main():
     print("TRAINING SUMMARY")
     print("=" * 60)
     for model_type in ("xgb", "rf"):
-        wf = report[f"walkforward_{model_type}"]
+        wf  = report[f"walkforward_{model_type}"]
         fin = report[f"final_{model_type}"]
         print(f"\n{model_type.upper()}")
         print(f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}")
@@ -392,6 +526,12 @@ def main():
         print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
         print(f"  Final holdout F1      : {fin['f1']:.3f}")
         print(f"  Features used         : {fin['feature_count']}")
+        if f"oos_{model_type}" in report:
+            oos = report[f"oos_{model_type}"]
+            sig = "✓ significant" if oos["significant"] else "✗ not significant"
+            print(f"  OOS accuracy          : {oos['accuracy']:.3f}  (n={oos['oos_size']})")
+            print(f"  OOS F1                : {oos['f1']:.3f}")
+            print(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
     print("=" * 60)
 
     return report
