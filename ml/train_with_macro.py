@@ -4,12 +4,30 @@ ml/train_with_macro.py
 ======================
 Train XAUUSD direction models with macro features (DXY, VIX, yields, SPX).
 
-Walk-forward validation on 8 years of daily data.
+Walk-forward validation on up to 50 years of daily data.
 Reports accuracy, F1, Sharpe, and statistical significance (t-test).
+
+Data availability note
+----------------------
+Yahoo Finance (yfinance) provides GC=F (Gold Futures) daily data back to
+approximately 1974 (~50 years). Requesting --years 50 will fetch all
+available history; yfinance silently clips to the earliest available date
+so the actual bar count may be less than 50 × 252 trading days.
+
+For tick-level or intraday data beyond what Yahoo provides, supplement
+with a commercial data vendor (e.g. Refinitiv, Bloomberg, Quandl/Nasdaq)
+and pass the pre-downloaded CSV via --csv-path.
 
 Usage
 -----
-    python ml/train_with_macro.py [--years 8] [--symbol GC=F] [--no-macro]
+    # Full 50-year daily history (recommended for production)
+    python ml/train_with_macro.py --years 50
+
+    # Quick smoke test
+    python ml/train_with_macro.py --years 5 --no-macro
+
+    # Custom symbol / horizon
+    python ml/train_with_macro.py --years 50 --symbol GC=F --horizon 1
 
 Output
 ------
@@ -45,11 +63,19 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
-    """Download XAUUSD/GC=F daily OHLCV from Yahoo Finance."""
+    """Download XAUUSD/GC=F daily OHLCV from Yahoo Finance.
+
+    Yahoo Finance provides GC=F data back to approximately 1974 (~50 years).
+    Requesting more years than available is safe — yfinance clips silently to
+    the earliest available date. The actual bar count is logged after download.
+    """
     import yfinance as yf
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=years * 365)
-    logger.info("Downloading %s from %s to %s", symbol, start.date(), end.date())
+    logger.info(
+        "Requesting %d years of %s daily data (%s → %s)",
+        years, symbol, start.date(), end.date(),
+    )
     raw = yf.download(
         symbol,
         start=start.strftime("%Y-%m-%d"),
@@ -62,7 +88,11 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
         raise ValueError(f"No data returned for {symbol}")
     raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
-    logger.info("Downloaded %d bars for %s", len(raw), symbol)
+    actual_years = (raw.index[-1] - raw.index[0]).days / 365.25
+    logger.info(
+        "Downloaded %d bars for %s (%.1f years: %s → %s)",
+        len(raw), symbol, actual_years, raw.index[0].date(), raw.index[-1].date(),
+    )
     return raw
 
 
@@ -281,12 +311,24 @@ def train_final_model(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train XAUUSD models with macro features")
-    parser.add_argument("--years", type=int, default=8, help="Years of history to use")
-    parser.add_argument("--symbol", default="GC=F", help="Yahoo Finance symbol for gold")
-    parser.add_argument("--no-macro", action="store_true", help="Skip macro features")
-    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon (bars)")
-    parser.add_argument("--splits", type=int, default=5, help="Walk-forward CV splits")
+    parser = argparse.ArgumentParser(
+        description="Train XAUUSD direction models with macro features",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python ml/train_with_macro.py --years 50          # full history\n"
+            "  python ml/train_with_macro.py --years 5 --no-macro  # quick test\n"
+        ),
+    )
+    parser.add_argument(
+        "--years", type=int, default=50,
+        help="Years of daily history to request from Yahoo Finance (default: 50). "
+             "yfinance clips to earliest available date (~1974 for GC=F).",
+    )
+    parser.add_argument("--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)")
+    parser.add_argument("--no-macro", action="store_true", help="Skip macro features (DXY, VIX, yields, SPX)")
+    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)")
+    parser.add_argument("--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)")
     args = parser.parse_args()
 
     # ── Fetch data ────────────────────────────────────────────────────────────

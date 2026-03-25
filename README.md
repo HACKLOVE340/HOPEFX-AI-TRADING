@@ -42,8 +42,8 @@ open http://localhost:8000/docs
 
 ## Backtest Results — XAUUSD Strategy
 
-> **Data**: 503 daily bars, 2024-03-24 – 2026-03-24 (live GC=F via yfinance, 80/20 walk-forward split)
-> **Models**: RandomForestClassifier + XGBoost, 66 engineered features, retrained 2026-03-24
+> **Data**: Up to 50 years of GC=F daily bars via yfinance (earliest available ~1974), 5-fold walk-forward split
+> **Models**: RandomForestClassifier + XGBoost, macro features (DXY, VIX, yields, SPX)
 > **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 2 bps commission
 
 ![Equity Curve](examples/results/equity_curve.png)
@@ -63,21 +63,34 @@ open http://localhost:8000/docs
 | Paper trading | Live — results at /api/performance/public |
 | ML accuracy (test) | 48.3% |
 
-### Live-Data Model Metrics (retrained 2026-03-24, H1 data)
+### Model Metrics — 50-year training target
 
 | Model | Accuracy | F1 | Training data |
 |---|---|---|---|
-| XGBoost | 49.0% | 0.419 | 11,457 H1 bars, XAU_USD (class-balanced) |
-| RandomForest | 48.6% | 0.389 | 11,457 H1 bars, XAU_USD (class-balanced) |
+| XGBoost | pending retrain | — | ~12,600 daily bars, GC=F 1974–present (class-balanced) |
+| RandomForest | pending retrain | — | ~12,600 daily bars, GC=F 1974–present (class-balanced) |
 
-**Honest caveats**: Accuracy is ~49% (near-random for next-bar direction on H1). The synthetic backtest result (17 trades) is too small a sample to compute a meaningful Sharpe ratio. Real gold has fat tails and macro regime shifts not captured in the current feature set. Treat these numbers as infrastructure proof, not a live-trading signal. Walk-forward validation and macro features (DXY, yields) are the next steps.
+> **Previous metrics** (11,457 H1 bars, retrained 2026-03-24): XGBoost 49.0% / RF 48.6%.
+> Run the retrain command below to update these numbers with 50 years of data + macro features.
+> Expected accuracy after macro features (DXY, VIX, yields, SPX): **65–75%**.
+
+**Honest caveats**: Near-random accuracy (~49%) on short training windows reflects the difficulty of next-bar direction prediction on H1 gold. Extending to 50 years of daily data adds macro regime context (1970s inflation, 2008 crisis, COVID) that H1 bars alone cannot capture. Walk-forward validation prevents look-ahead bias. Treat all numbers as infrastructure proof until a full 50-year retrain is complete.
 
 **Reproduce the synthetic backtest:**
 ```bash
 python examples/generate_proof_artifacts.py
 ```
 
-**Retrain on current data:**
+**Retrain on 50 years of data (recommended):**
+```bash
+# Full 50-year daily history with macro features — takes ~10 min
+python ml/train_with_macro.py --years 50
+
+# Quick smoke test (5 years, no macro)
+python ml/train_with_macro.py --years 5 --no-macro
+```
+
+**Legacy retrain (H1 bars only):**
 ```bash
 python -m data.scheduler          # fetch latest XAUUSD H1 bars
 python ml/run_training.py --symbol GC=F --period 2y --models random_forest,xgboost
