@@ -27,6 +27,7 @@ __all__ = [
     'create_ml_router',
     'get_active_model',
     'get_model_version',
+    'get_advanced_predictor',
 ]
 
 # Module metadata
@@ -60,14 +61,33 @@ def _try_load(path: _Path) -> _Optional[_Any]:
 
 
 def _load_models() -> None:
-    """Lazy-load all saved models on first access."""
+    """Lazy-load all saved models on first access.
+
+    Priority (highest to lowest):
+      1. advanced_oos.pkl  — 122-feature calibrated XGBoost, 68% OOS accuracy
+      2. xgb_macro.pkl     — basic macro XGBoost (50% OOS accuracy)
+      3. xgb_xauusd.pkl    — baseline XGBoost
+      4. rf_macro.pkl      — basic macro RF
+      5. rf_xauusd.pkl     — baseline RF
+    """
     global _macro_xgb, _macro_rf, _baseline_xgb, _baseline_rf, _model_version
 
-    # Prefer macro-aware models
+    # Top priority: advanced OOS model (122 stationary features, p=0.0000)
+    _advanced_oos = _try_load(_SAVED / "advanced_oos.pkl")
+    if _advanced_oos is not None:
+        _macro_xgb = _advanced_oos
+        _model_version = "advanced_oos_v1"
+        _ml_logger.info(
+            "Active ML model: advanced OOS (advanced_oos.pkl) — "
+            "68.0%% OOS accuracy, p=0.0000, 122 features"
+        )
+        return
+
+    # Fallback: macro-aware models
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
     _macro_rf  = _try_load(_SAVED / "rf_macro.pkl")
 
-    # Fallback to baseline models
+    # Fallback: baseline models
     _baseline_xgb = _try_load(_SAVED / "xgb_xauusd.pkl")
     _baseline_rf  = _try_load(_SAVED / "rf_xauusd.pkl")
 
@@ -79,7 +99,10 @@ def _load_models() -> None:
         _ml_logger.info("Active ML model: baseline XGBoost (xgb_xauusd.pkl)")
     else:
         _model_version = "none"
-        _ml_logger.warning("No trained ML model found in %s — signal engine will use strategy-only signals", _SAVED)
+        _ml_logger.warning(
+            "No trained ML model found in %s — signal engine will use "
+            "strategy-only signals", _SAVED
+        )
 
 
 def get_active_model() -> _Optional[_Any]:
@@ -100,6 +123,14 @@ def get_model_version() -> str:
     if _model_version == "none":
         _load_models()
     return _model_version
+# ── Advanced predictor (122-feature live inference) ───────────────────────────
+try:
+    from ml.live_inference import get_advanced_predictor
+except Exception:
+    def get_advanced_predictor():  # type: ignore[misc]
+        return None
+
+
 __author__ = 'HOPEFX Development Team'
 __description__ = 'Machine learning models for price prediction and signal classification'
 
