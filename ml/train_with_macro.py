@@ -139,6 +139,56 @@ def build_features(
     return X, y_class
 
 
+def _compute_fold_sharpe(
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    preds: np.ndarray,
+    annualise: bool = True,
+) -> float:
+    """
+    Compute annualised Sharpe ratio for a single walk-forward fold.
+
+    Strategy: go long (+1) when pred=1, short (-1) when pred=0.
+    Realised return proxy: next-bar close return × signal direction.
+
+    The 'returns' or 'log_returns' column in X_test is used as the
+    next-bar return proxy (it is the 1-bar lagged return, so it represents
+    the return that was realised on the bar being predicted).
+
+    This is a 1-bar holding period with no transaction costs — an upper
+    bound on strategy performance, not a live trading estimate.
+
+    Returns 0.0 if the return series cannot be reconstructed.
+    """
+    # Prefer log_returns (more stationary), fall back to returns
+    ret_col = None
+    for candidate in ("log_returns", "returns", "returns_lag_1", "log_ret_lag_1"):
+        if candidate in X_test.columns:
+            ret_col = candidate
+            break
+
+    if ret_col is None:
+        return 0.0
+
+    bar_returns = X_test[ret_col].values
+    # Signal: +1 for long (pred=1), -1 for short (pred=0)
+    signal = np.where(preds == 1, 1.0, -1.0)
+    strategy_returns = signal * bar_returns
+
+    if len(strategy_returns) < 2:
+        return 0.0
+
+    mu  = np.mean(strategy_returns)
+    std = np.std(strategy_returns, ddof=1)
+    if std == 0.0:
+        return 0.0
+
+    sharpe = mu / std
+    if annualise:
+        sharpe *= np.sqrt(252)  # daily bars → annualised
+    return float(np.clip(sharpe, -10.0, 10.0))
+
+
 def walk_forward_eval(
     X: pd.DataFrame,
     y: pd.Series,
@@ -197,36 +247,41 @@ def walk_forward_eval(
         acc = accuracy_score(y_test, preds)
         f1  = f1_score(y_test, preds, zero_division=0)
 
-        # Simulated trade returns: go long when pred=1, short when pred=0
-        # Use next-bar close return as the realised P&L proxy
-        if hasattr(X_test.index, '__len__') and len(X_test) > 1:
-            # Align returns to test set
-            pass
+        # ── Sharpe ratio from simulated long/short strategy ───────────────────
+        # Signal: +1 (long) when pred=1, -1 (short) when pred=0.
+        # Realised P&L proxy: next-bar close return × signal direction.
+        # This is a 1-bar holding period with no transaction costs — an upper
+        # bound on strategy performance, not a live trading estimate.
+        # Annualised Sharpe = mean(daily_ret) / std(daily_ret) × sqrt(252).
+        sharpe = _compute_fold_sharpe(X_test, y_test, preds)
 
         fold_results.append({
-            "fold": fold + 1,
+            "fold":       fold + 1,
             "train_size": len(train_idx),
-            "test_size": len(test_idx),
-            "accuracy": round(acc, 4),
-            "f1": round(f1, 4),
+            "test_size":  len(test_idx),
+            "accuracy":   round(acc, 4),
+            "f1":         round(f1, 4),
+            "sharpe":     round(sharpe, 4),
         })
         logger.info(
-            "Fold %d/%d  acc=%.3f  f1=%.3f  train=%d  test=%d",
-            fold + 1, n_splits, acc, f1, len(train_idx), len(test_idx),
+            "Fold %d/%d  acc=%.3f  f1=%.3f  sharpe=%.3f  train=%d  test=%d",
+            fold + 1, n_splits, acc, f1, sharpe, len(train_idx), len(test_idx),
         )
 
-    accs = [r["accuracy"] for r in fold_results]
-    f1s  = [r["f1"] for r in fold_results]
+    accs    = [r["accuracy"] for r in fold_results]
+    f1s     = [r["f1"]       for r in fold_results]
+    sharpes = [r["sharpe"]   for r in fold_results]
 
     # One-sample t-test: H0 = mean accuracy == 0.5 (random)
     t_stat, p_value = stats.ttest_1samp(accs, 0.5)
 
     return {
-        "model": model_type,
-        "folds": fold_results,
+        "model":        model_type,
+        "folds":        fold_results,
         "mean_accuracy": round(float(np.mean(accs)), 4),
         "std_accuracy":  round(float(np.std(accs)), 4),
         "mean_f1":       round(float(np.mean(f1s)), 4),
+        "mean_sharpe":   round(float(np.mean(sharpes)), 4),
         "t_stat":        round(float(t_stat), 4),
         "p_value":       round(float(p_value), 4),
         "significant":   bool(p_value < 0.05),
@@ -522,6 +577,7 @@ def main():
         print(f"\n{model_type.upper()}")
         print(f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}")
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
+        print(f"  Walk-forward Sharpe   : {wf.get('mean_sharpe', 0.0):.3f}  (annualised, 1-bar, no costs)")
         print(f"  p-value (vs random)   : {wf['p_value']:.4f}  {'✓ significant' if wf['significant'] else '✗ not significant'}")
         print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
         print(f"  Final holdout F1      : {fin['f1']:.3f}")
