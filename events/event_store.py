@@ -306,3 +306,31 @@ async def publish_event(
     )
     await get_event_store().append(event)
     return event
+
+
+# ── Typed event bus integration ───────────────────────────────────────────────
+# Re-export the typed event system so callers can import from one place.
+from events.typed_events import (  # noqa: E402
+    EventEnvelope,
+    PriceTickEvent,
+    SignalEvent,
+    OrderFilledEvent,
+    RiskHaltEvent,
+    PositionDriftEvent,
+    RegimeChangeEvent,
+    CircuitBreakerEvent,
+    subscribe as subscribe_typed,
+    unsubscribe as unsubscribe_typed,
+    publish as publish_typed,
+    publish_sync as publish_typed_sync,
+)
+
+__all__ = [
+    # Legacy
+    "EventType", "DomainEvent", "EventStore", "get_event_store", "publish_event",
+    # Typed
+    "EventEnvelope",
+    "PriceTickEvent", "SignalEvent", "OrderFilledEvent", "RiskHaltEvent",
+    "PositionDriftEvent", "RegimeChangeEvent", "CircuitBreakerEvent",
+    "subscribe_typed", "unsubscribe_typed", "publish_typed", "publish_typed_sync",
+]
