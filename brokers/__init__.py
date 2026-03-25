@@ -1152,8 +1152,9 @@ def create_broker(broker_type: str, config: Dict) -> BaseBroker:
 # Override with the dict-config-based PaperTradingBroker that tests expect
 try:
     from brokers.paper_trading import PaperTradingBroker  # noqa: F811
-except Exception:
-    pass
+except Exception as _exc:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
 
 
 from brokers.factory import BrokerFactory
