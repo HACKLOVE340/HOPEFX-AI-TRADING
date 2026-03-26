@@ -264,3 +264,182 @@ class MTFFusion:
         }
         available = {k: v for k, v in agg.items() if k in df.columns}
         return df.resample("1D").agg(available).dropna(subset=["close"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MTFFusionStore — live inference store
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MTFFusionStore:
+    """
+    Production store that loads H4 and D1 OHLCV from the data scheduler CSVs,
+    computes regime features, and aligns them to any H1 OHLCV DataFrame at
+    inference time.
+
+    Lifecycle
+    ---------
+    1. `await store.bootstrap()` — called once at startup by init_mtf_store().
+       Loads H4 and D1 CSVs written by DataScheduler.  Falls back to yfinance
+       if CSVs are missing.
+    2. `store.align_to_h1(ohlcv_df)` — called per tick in _compute_ml_probability().
+       Returns a DataFrame with d_* and h_* columns aligned to the H1 index.
+
+    Thread safety: bootstrap() is called once; align_to_h1() is read-only after that.
+    """
+
+    def __init__(
+        self,
+        symbol: str = "XAU_USD",
+        data_dir: str = "data",
+    ) -> None:
+        self.symbol = symbol
+        self.data_dir = data_dir
+        self._h4_df: Optional[pd.DataFrame] = None
+        self._d1_df: Optional[pd.DataFrame] = None
+        self._fusion = MTFFusion(resample_hourly_from_5m=False)
+        self._bootstrapped: bool = False
+
+    # ── Bootstrap ─────────────────────────────────────────────────────────────
+
+    async def bootstrap(self) -> "MTFFusionStore":
+        """
+        Load H4 and D1 OHLCV data.  Non-blocking — runs in a thread executor.
+        Falls back gracefully when data is unavailable.
+        """
+        import asyncio
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._load_data)
+        return self
+
+    def _load_data(self) -> None:
+        """Synchronous data load — called from bootstrap() via executor."""
+        import os
+        from pathlib import Path
+
+        data_dir = Path(self.data_dir)
+
+        # Try scheduler CSVs first
+        h4_path = data_dir / f"{self.symbol}_H4.csv"
+        d1_path = data_dir / f"{self.symbol}_D.csv"
+
+        self._h4_df = self._load_csv(h4_path, "H4")
+        self._d1_df = self._load_csv(d1_path, "D1")
+
+        # Fall back to yfinance if CSVs missing
+        if self._h4_df is None or self._d1_df is None:
+            self._load_from_yfinance()
+
+        self._bootstrapped = True
+        logger.info(
+            "MTFFusionStore bootstrapped: H4=%s bars, D1=%s bars",
+            len(self._h4_df) if self._h4_df is not None else 0,
+            len(self._d1_df) if self._d1_df is not None else 0,
+        )
+
+    def _load_csv(self, path, label: str) -> Optional[pd.DataFrame]:
+        """Load a scheduler CSV into a UTC-indexed OHLCV DataFrame."""
+        try:
+            from pathlib import Path
+            if not Path(path).exists():
+                logger.debug("MTFFusionStore: %s CSV not found at %s", label, path)
+                return None
+            df = pd.read_csv(path, parse_dates=["time"])
+            df = df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
+            # Normalise column names to lowercase
+            df.columns = [c.lower() for c in df.columns]
+            ts_col = next((c for c in ("timestamp", "time", "date", "datetime") if c in df.columns), None)
+            if ts_col is None:
+                logger.warning("MTFFusionStore: no timestamp column in %s", path)
+                return None
+            df = df.set_index(ts_col)
+            df.index = pd.to_datetime(df.index, utc=True)
+            df = df.sort_index()
+            required = {"open", "high", "low", "close"}
+            if not required.issubset(df.columns):
+                logger.warning("MTFFusionStore: missing OHLC columns in %s", path)
+                return None
+            return df[list(required | ({"volume"} & set(df.columns)))]
+        except Exception as exc:
+            logger.warning("MTFFusionStore: failed to load %s: %s", path, exc)
+            return None
+
+    def _load_from_yfinance(self) -> None:
+        """Fallback: fetch H4 and D1 from yfinance (GC=F proxy for XAU_USD)."""
+        try:
+            import yfinance as yf
+            ticker = "GC=F"
+            logger.info("MTFFusionStore: falling back to yfinance (%s)", ticker)
+
+            if self._h4_df is None:
+                raw = yf.download(ticker, period="2y", interval="1h", progress=False, auto_adjust=True)
+                if not raw.empty:
+                    raw.columns = [c.lower() for c in raw.columns]
+                    raw.index = pd.to_datetime(raw.index, utc=True)
+                    # Resample 1h → 4h
+                    agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+                    available = {k: v for k, v in agg.items() if k in raw.columns}
+                    self._h4_df = raw.resample("4h").agg(available).dropna(subset=["close"])
+
+            if self._d1_df is None:
+                raw = yf.download(ticker, period="10y", interval="1d", progress=False, auto_adjust=True)
+                if not raw.empty:
+                    raw.columns = [c.lower() for c in raw.columns]
+                    raw.index = pd.to_datetime(raw.index, utc=True)
+                    self._d1_df = raw.dropna(subset=["close"])
+
+        except Exception as exc:
+            logger.warning("MTFFusionStore: yfinance fallback failed: %s", exc)
+
+    # ── Inference ─────────────────────────────────────────────────────────────
+
+    def align_to_h1(self, ohlcv_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """
+        Align H4 and D1 regime features to the provided H1 OHLCV DataFrame.
+
+        Parameters
+        ----------
+        ohlcv_df : H1 OHLCV DataFrame with DatetimeIndex (UTC).
+
+        Returns
+        -------
+        DataFrame with d_* and h_* columns aligned to ohlcv_df.index,
+        or None if the store is not bootstrapped or data is unavailable.
+        """
+        if not self._bootstrapped:
+            logger.debug("MTFFusionStore.align_to_h1: not bootstrapped yet")
+            return None
+
+        if self._d1_df is None and self._h4_df is None:
+            return None
+
+        try:
+            # Ensure ohlcv_df has UTC index
+            idx = ohlcv_df.index
+            if idx.tz is None:
+                idx = idx.tz_localize("UTC")
+
+            # Build daily regime features
+            daily_df = self._d1_df if self._d1_df is not None else MTFFusion.resample_to_daily(ohlcv_df)
+            daily_regime = _compute_daily_regime(daily_df)
+            daily_aligned = _align_to_intraday(idx, daily_regime, shift_periods=1)
+
+            # Build hourly regime features from H4 (or skip)
+            if self._h4_df is not None:
+                hourly_regime = _compute_hourly_regime(self._h4_df)
+                hourly_aligned = _align_to_intraday(idx, hourly_regime, shift_periods=1)
+            else:
+                hourly_aligned = pd.DataFrame(index=idx)
+
+            result = pd.concat([daily_aligned, hourly_aligned], axis=1)
+            regime_cols = [c for c in result.columns if c.startswith(("d_", "h_"))]
+            result[regime_cols] = result[regime_cols].fillna(0)
+            return result
+
+        except Exception as exc:
+            logger.warning("MTFFusionStore.align_to_h1 failed: %s", exc)
+            return None
+
+    @property
+    def is_ready(self) -> bool:
+        """True when bootstrap has completed and at least one timeframe is loaded."""
+        return self._bootstrapped and (self._d1_df is not None or self._h4_df is not None)

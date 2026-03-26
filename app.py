@@ -599,8 +599,10 @@ async def startup_event():
         .register("regime_router",        F.init_regime_router,          required=False, deps=["strategy_brain"])
         # ── Macro feature store (must start before signal engine) ────────────
         .register("macro_store",          F.init_macro_store,            required=False, deps=["config"])
+        # ── MTF fusion store (Phase 1 — H4/D1 regime features) ───────────────
+        .register("mtf_store",            F.init_mtf_store,              required=False, deps=["data_scheduler"])
         # ── Engines ───────────────────────────────────────────────────────────
-        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker", "macro_store"])
+        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker", "macro_store", "mtf_store"])
         .register("reconciler",           F.init_reconciler,             required=False, deps=["database", "broker"])
         .register("telegram_bot",         F.init_telegram_bot,           required=False, deps=["alert_engine"])
         .register("mobile",               _app(F.init_mobile),           required=False, deps=["config"])
