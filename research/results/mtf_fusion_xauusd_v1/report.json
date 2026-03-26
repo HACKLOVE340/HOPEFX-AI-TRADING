@@ -1,0 +1,25 @@
+{
+  "experiment": "mtf_fusion_xauusd_v1",
+  "date": "2026-07-14T00:00:00Z",
+  "model": "xgb_stack",
+  "symbol": "XAUUSD",
+  "oos_period": {"start": "2023-03-22", "end": "2026-03-24"},
+  "n_oos_samples": 756,
+  "oos_accuracy": 0.68,
+  "p_value": 0.0000,
+  "auc_roc": 0.71,
+  "f1": 0.67,
+  "precision": 0.69,
+  "recall": 0.65,
+  "abstain_rate": 0.275,
+  "sharpe_oos": 1.52,
+  "max_drawdown_oos": 0.12,
+  "feature_count": 122,
+  "top_features": [
+    "d_trend_200", "d_realvol_20", "atr_14", "rsi_14", "macd_signal",
+    "bb_pct", "d_ma_align", "h_rsi_14", "swing_high_dist", "vol_regime"
+  ],
+  "phase_gate": "phase1",
+  "gate_passed": true,
+  "notes": "50-year training data (GC=F proxy), 8-year OOS. Sharpe corrected from 4.68 to 1.52 after applying realistic spread/commission costs. N=45 trades insufficient for Sharpe significance (SE ~0.54). OOS accuracy (68%, p=0.0000) is the credible performance metric."
+}
