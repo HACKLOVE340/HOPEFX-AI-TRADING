@@ -8,12 +8,19 @@ Runs as a background asyncio task. On each tick:
 4. If approved → places order via broker
 5. Broadcasts result over WebSocket
 6. Logs to ComplianceManager audit trail
+
+Phase chain (Phases 1–4 are optional and gated by feature flags):
+  Phase 1: MTFFusionStore — H4/D1 regime features appended at inference
+  Phase 2: AnomalyWeightStore — down-weight signals on anomalous bars
+  Phase 3: OnlineLearnerStore — incremental XGBoost blend on confirmed fills
+  Phase 4: DeepEnsembleStore — LSTM/Transformer/TCN/Hybrid stacking
 """
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +115,9 @@ def _get_anomaly_store() -> Optional[Any]:
             logger.debug("AnomalyWeightStore init failed: %s", exc)
     return _anomaly_store
 
+
+if not _ML_AVAILABLE:
+    # Provide no-op stubs so the rest of the module can reference these names
     def get_active_model() -> Optional[Any]:  # type: ignore[misc]
         return None
 
@@ -119,7 +129,6 @@ def _get_anomaly_store() -> Optional[Any]:
 
 
 # Symbols the engine watches (overridden by ALLOWED_SYMBOLS env var)
-import os
 
 _SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
 _INTERVAL_SECONDS = int(os.getenv("SIGNAL_ENGINE_INTERVAL", "60"))
@@ -401,7 +410,7 @@ def _compute_ml_probability(
                 mtf_df=mtf_df,
             )
 
-            # Phase 2: anomaly weighting — down-weight on anomalous bars
+            # ── Phase 2: anomaly weighting ────────────────────────────────────
             anomaly_weight = 1.0
             anomaly_store = _get_anomaly_store()
             if anomaly_store is not None:
@@ -409,32 +418,42 @@ def _compute_ml_probability(
                     anomaly_weight = anomaly_store.update_and_score(ohlcv_df)
                     if anomaly_weight < 1.0:
                         # Blend probability toward neutral (0.5) by the weight
+                        prob_before = prob
                         prob = 0.5 + (prob - 0.5) * anomaly_weight
                         logger.debug(
-                            "Anomaly weight %.2f applied for %s → prob %.4f",
-                            anomaly_weight, symbol, prob,
+                            "Phase2 anomaly: weight=%.2f %s %.4f→%.4f",
+                            anomaly_weight, symbol, prob_before, prob,
                         )
                 except Exception as aw_exc:
                     logger.debug("Anomaly weighting failed (non-fatal): %s", aw_exc)
 
-            # Phase 3: online learning blend — 0.7 * advanced + 0.3 * online
+            # ── Phase 3: online learning blend ────────────────────────────────
+            # Store the post-anomaly prob as primary_prob for adaptive weight updates
+            primary_prob_for_online = float(prob)
             online_store = _get_online_learner_store()
             if online_store is not None and online_store.is_ready:
                 try:
                     prob = online_store.blend(prob, ohlcv_df)
+                    logger.debug(
+                        "Phase3 online blend: %s → %.4f", symbol, prob
+                    )
                 except Exception as ol_exc:
                     logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
 
-            # Phase 4: deep ensemble blend — (1-w) * prob + w * deep_prob
+            # ── Phase 4: deep ensemble blend ──────────────────────────────────
             deep_store = _get_deep_ensemble_store()
             if deep_store is not None and deep_store.is_active:
                 try:
                     prob = deep_store.blend(prob, ohlcv_df)
+                    logger.debug(
+                        "Phase4 deep blend: %s → %.4f", symbol, prob
+                    )
                 except Exception as de_exc:
                     logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
 
             logger.debug(
-                "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s, anomaly_w=%.2f)",
+                "ML chain (%s) %s: final=%.4f "
+                "[macro=%s mtf=%s anomaly_w=%.2f]",
                 adv_predictor.version, symbol, prob,
                 "yes" if macro_df is not None else "no",
                 "yes" if mtf_df is not None else "no",
@@ -483,13 +502,21 @@ def _compute_ml_probability(
 def notify_fill(
     features: "pd.DataFrame",
     label: int,
+    primary_prob: Optional[float] = None,
 ) -> None:
     """
     Notify the online learner of a confirmed fill (Phase 3).
 
     Call this from the execution path after a trade is confirmed:
         from core.signal_engine import notify_fill
-        notify_fill(feature_df, label=1)  # 1=profitable, 0=loss
+        notify_fill(feature_df, label=1, primary_prob=0.72)
+
+    Parameters
+    ----------
+    features     : Feature DataFrame for the filled bar.
+    label        : 1 if the trade was profitable, 0 otherwise.
+    primary_prob : Primary model probability at signal time (used by
+                   AdaptiveBlendWeights to update primary/online weights).
 
     Safe to call when FEATURE_ONLINE_LEARNING=false — no-op in that case.
     """
@@ -497,9 +524,62 @@ def notify_fill(
     if store is None:
         return
     try:
-        store.on_fill(features, label)
+        store.on_fill(features, label, primary_prob=primary_prob)
     except Exception as exc:
         logger.debug("notify_fill failed (non-fatal): %s", exc)
+
+
+def get_signal_engine_status() -> Dict[str, Any]:
+    """
+    Return a health-check dict for all active Phase 1–4 stores.
+
+    Suitable for exposing via a /health or /status API endpoint.
+    """
+    status: Dict[str, Any] = {
+        "ml_available": _ML_AVAILABLE,
+        "symbols": _SYMBOLS,
+        "interval_seconds": _INTERVAL_SECONDS,
+        "auto_trade": _AUTO_TRADE,
+    }
+
+    # Phase 1: MTF
+    try:
+        from config.feature_flags import flags
+        status["phase1_mtf_enabled"] = getattr(flags, "MTF_FUSION", True)
+    except Exception:
+        status["phase1_mtf_enabled"] = None
+
+    try:
+        from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+        if _MTF_STORE_SINGLETON is not None:
+            status["phase1_mtf"] = _MTF_STORE_SINGLETON.status()
+        else:
+            status["phase1_mtf"] = {"is_ready": False}
+    except Exception:
+        status["phase1_mtf"] = {"is_ready": False}
+
+    # Phase 2: Anomaly
+    anomaly = _get_anomaly_store()
+    if anomaly is not None and hasattr(anomaly, "status"):
+        status["phase2_anomaly"] = anomaly.status()
+    else:
+        status["phase2_anomaly"] = {"fitted": False}
+
+    # Phase 3: Online learner
+    online = _get_online_learner_store()
+    if online is not None and hasattr(online, "status"):
+        status["phase3_online"] = online.status()
+    else:
+        status["phase3_online"] = {"ready": False}
+
+    # Phase 4: Deep ensemble
+    deep = _get_deep_ensemble_store()
+    if deep is not None and hasattr(deep, "status"):
+        status["phase4_deep"] = deep.status()
+    else:
+        status["phase4_deep"] = {"active": False}
+
+    return status
 
 
 async def _publish_and_broadcast(
