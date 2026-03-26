@@ -410,3 +410,220 @@ class OnlineEnsemble:
 
         # Check for drift
         return self.drift_detector.update(y, xgb_prob)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OnlineLearnerStore — production live-inference store for signal engine
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OnlineLearnerStore:
+    """
+    Production online learning store for the signal engine (Phase 3).
+
+    Maintains an IncrementalXGBoost that updates its weights on each confirmed
+    fill.  At inference time, its probability is blended with the primary model:
+
+        final_prob = PRIMARY_WEIGHT * advanced_prob + ONLINE_WEIGHT * online_prob
+
+    Default blend: 0.7 * advanced + 0.3 * online (spec-defined).
+
+    The online learner starts in a "warming up" state and only contributes to
+    the blend after `min_fills` confirmed fills have been processed.
+
+    Drift detection: when the Page-Hinkley test fires, the online learner is
+    reset and retrained on the recent fill buffer.
+
+    Parameters
+    ----------
+    primary_weight : Weight for the primary (advanced_oos.pkl) model.
+    online_weight  : Weight for the online learner (1 - primary_weight).
+    min_fills      : Minimum confirmed fills before the online learner contributes.
+    buffer_size    : Max fills kept in the replay buffer for drift recovery.
+    """
+
+    PRIMARY_WEIGHT: float = 0.7
+    ONLINE_WEIGHT:  float = 0.3
+
+    def __init__(
+        self,
+        primary_weight: float = 0.7,
+        online_weight: float = 0.3,
+        min_fills: int = 20,
+        buffer_size: int = 500,
+    ) -> None:
+        self.primary_weight = primary_weight
+        self.online_weight  = online_weight
+        self.min_fills      = min_fills
+        self._model: Optional[IncrementalXGBoost] = None
+        self._drift_detector = DriftDetector()
+        self._fill_buffer_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
+        self._fill_buffer_y: Deque[float]       = deque(maxlen=buffer_size)
+        self._fill_count: int = 0
+        self._ready: bool = False
+
+    # ── Warm-up check ─────────────────────────────────────────────────────────
+
+    @property
+    def is_ready(self) -> bool:
+        """True when the online learner has enough fills to contribute."""
+        return self._ready and self._model is not None
+
+    # ── On confirmed fill ─────────────────────────────────────────────────────
+
+    def on_fill(
+        self,
+        features: pd.DataFrame,
+        label: int,
+    ) -> bool:
+        """
+        Update the online learner with a confirmed fill.
+
+        Parameters
+        ----------
+        features : Feature DataFrame for the filled bar (same columns as primary model).
+        label    : 1 if the trade was profitable (price went up), 0 otherwise.
+
+        Returns
+        -------
+        drift_detected : True if concept drift was detected and model was reset.
+        """
+        if not XGB_AVAILABLE:
+            return False
+
+        y = np.array([float(label)])
+        self._fill_buffer_X.append(features.values[0] if len(features) > 0 else np.zeros(1))
+        self._fill_buffer_y.append(float(label))
+        self._fill_count += 1
+
+        # Initial fit once we have enough fills
+        if self._model is None and self._fill_count >= self.min_fills:
+            self._initial_fit()
+            return False
+
+        if self._model is None:
+            return False
+
+        # Incremental update
+        try:
+            self._model.update(features, y)
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore.on_fill update failed: %s", exc)
+            return False
+
+        # Drift detection
+        try:
+            proba = self._model.predict_proba(features)
+            drift = self._drift_detector.update(y, proba)
+            if drift:
+                logger.warning(
+                    "OnlineLearnerStore: drift detected after %d fills — resetting",
+                    self._fill_count,
+                )
+                self._reset_and_refit()
+                return True
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore drift check failed: %s", exc)
+
+        return False
+
+    def _initial_fit(self) -> None:
+        """Fit the online learner on the accumulated fill buffer."""
+        try:
+            X = np.array(list(self._fill_buffer_X))
+            y = np.array(list(self._fill_buffer_y))
+            cols = [f"f{i}" for i in range(X.shape[1])]
+            X_df = pd.DataFrame(X, columns=cols)
+            self._model = IncrementalXGBoost(n_base_rounds=100, n_new_rounds=10)
+            self._model.fit(X_df, y)
+            self._ready = True
+            logger.info(
+                "OnlineLearnerStore: initial fit on %d fills", len(y)
+            )
+        except Exception as exc:
+            logger.warning("OnlineLearnerStore initial fit failed: %s", exc)
+
+    def _reset_and_refit(self) -> None:
+        """Reset after drift and refit on recent buffer."""
+        try:
+            X = np.array(list(self._fill_buffer_X))
+            y = np.array(list(self._fill_buffer_y))
+            cols = [f"f{i}" for i in range(X.shape[1])]
+            X_df = pd.DataFrame(X, columns=cols)
+            if self._model is not None:
+                self._model.reset_and_refit(X_df, y)
+            self._drift_detector.reset()
+            logger.info("OnlineLearnerStore: reset and refit on %d fills", len(y))
+        except Exception as exc:
+            logger.warning("OnlineLearnerStore reset_and_refit failed: %s", exc)
+
+    # ── Inference ─────────────────────────────────────────────────────────────
+
+    def blend(
+        self,
+        advanced_prob: float,
+        features: pd.DataFrame,
+    ) -> float:
+        """
+        Blend the primary model probability with the online learner.
+
+        Returns advanced_prob unchanged when the online learner is not ready.
+
+        Parameters
+        ----------
+        advanced_prob : Probability from the primary model (advanced_oos.pkl).
+        features      : Feature DataFrame for the current bar.
+
+        Returns
+        -------
+        blended_prob : 0.7 * advanced_prob + 0.3 * online_prob (when ready).
+        """
+        if not self.is_ready or self._model is None:
+            return advanced_prob
+
+        try:
+            # Align feature columns to what the online model was trained on
+            n_cols = len(self._fill_buffer_X[0]) if self._fill_buffer_X else 0
+            if n_cols == 0:
+                return advanced_prob
+
+            cols = [f"f{i}" for i in range(n_cols)]
+            feat_arr = features.values
+            if feat_arr.shape[1] >= n_cols:
+                X_df = pd.DataFrame(feat_arr[:, :n_cols], columns=cols)
+            else:
+                # Pad with zeros if feature count mismatch
+                pad = np.zeros((feat_arr.shape[0], n_cols - feat_arr.shape[1]))
+                X_df = pd.DataFrame(
+                    np.hstack([feat_arr, pad]), columns=cols
+                )
+
+            online_prob = float(self._model.predict_proba(X_df)[0])
+            blended = self.primary_weight * advanced_prob + self.online_weight * online_prob
+            logger.debug(
+                "OnlineLearner blend: adv=%.4f online=%.4f → %.4f",
+                advanced_prob, online_prob, blended,
+            )
+            return float(np.clip(blended, 0.0, 1.0))
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore.blend failed (non-fatal): %s", exc)
+            return advanced_prob
+
+    # ── Diagnostics ───────────────────────────────────────────────────────────
+
+    @property
+    def fill_count(self) -> int:
+        return self._fill_count
+
+    @property
+    def drift_count(self) -> int:
+        return self._drift_detector.drift_count
+
+    def status(self) -> Dict:
+        return {
+            "ready": self.is_ready,
+            "fill_count": self._fill_count,
+            "drift_count": self._drift_detector.drift_count,
+            "recent_error": self._drift_detector.recent_error,
+            "primary_weight": self.primary_weight,
+            "online_weight": self.online_weight,
+        }
