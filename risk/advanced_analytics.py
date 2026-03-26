@@ -7,9 +7,26 @@ Professional-grade risk management tools:
 - Stress testing framework
 - Drawdown analysis
 - Risk-adjusted performance metrics
+
+VaR multi-day scaling policy (P4)
+----------------------------------
+``calculate_var_historical`` and ``calculate_var_parametric`` use sqrt(t) only
+as a last-resort fallback when there is insufficient history for direct
+multi-day window estimation.  Both methods set ``scaling_approximate=True``
+and emit a RuntimeWarning when the fallback fires.
+
+For production risk limits on XAUUSD (time_horizon > 1), always use:
+  - ``calculate_var_multiday()``  — direct overlapping/non-overlapping windows
+  - ``calculate_var_ewma()``      — EWMA-weighted historical simulation
+
+The module-level ``ENFORCE_MULTIDAY_VAR`` flag (default True) causes
+``calculate_var_historical`` and ``calculate_var_parametric`` to raise
+``RuntimeError`` when called with ``time_horizon > 1`` in production, forcing
+callers to use the correct multi-day methods.  Set to False only in tests.
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -18,6 +35,17 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Production enforcement flag (P4)
+# ---------------------------------------------------------------------------
+# When True, calculate_var_historical and calculate_var_parametric raise
+# RuntimeError for time_horizon > 1, forcing callers to use
+# calculate_var_multiday or calculate_var_ewma.
+#
+# Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 in .env to disable (tests / legacy callers).
+# Default: True in production.
+ENFORCE_MULTIDAY_VAR: bool = os.getenv("HOPEFX_VAR_ENFORCE_MULTIDAY", "1") != "0"
 
 
 class RiskMetricType(Enum):
@@ -243,17 +271,28 @@ class AdvancedRiskAnalytics:
         Returns:
             VaRResult object
 
-        Note on sqrt(t) scaling
-        -----------------------
+        Note on sqrt(t) scaling (P4)
+        ----------------------------
         Scaling 1-day VaR by sqrt(t) is the Basel II square-root-of-time rule.
         It is only theoretically valid when returns are i.i.d. and normally
-        distributed — an assumption that is violated by real financial returns
-        (fat tails, autocorrelation, volatility clustering).  For gold/FX
-        intraday returns the error can be material at horizons beyond 1 day.
-        A more robust alternative is to compute multi-day VaR directly from
-        overlapping or non-overlapping multi-day return windows.
+        distributed — an assumption violated by real financial returns (fat
+        tails, autocorrelation, volatility clustering).  For gold/FX intraday
+        returns the error can be material at horizons beyond 1 day.
+
+        When ENFORCE_MULTIDAY_VAR=True (default), calling this method with
+        time_horizon > 1 raises RuntimeError.  Use calculate_var_multiday()
+        or calculate_var_ewma() for production risk limits on XAUUSD.
         """
         confidence_level = confidence_level or self.var_confidence
+
+        # P4 enforcement: block sqrt(t) paths for multi-day production limits
+        if time_horizon > 1 and ENFORCE_MULTIDAY_VAR:
+            raise RuntimeError(
+                f"calculate_var_historical called with time_horizon={time_horizon} > 1. "
+                "sqrt(t) scaling is not valid for XAUUSD (fat tails, autocorrelation). "
+                "Use calculate_var_multiday() or calculate_var_ewma() instead. "
+                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only)."
+            )
 
         # 1-day VaR at the requested confidence level
         var_percentile = np.percentile(returns, (1 - confidence_level) * 100)
@@ -264,8 +303,8 @@ class AdvancedRiskAnalytics:
         if time_horizon == 1:
             var_scaled = var_percentile
         else:
+            # ENFORCE_MULTIDAY_VAR=False path (tests / legacy callers only).
             # Multi-day VaR via overlapping return windows (no sqrt(t) assumption).
-            # Compute t-day overlapping returns and take the percentile directly.
             t = int(time_horizon)
             if len(returns) >= t * 2:
                 multi_day = np.array(
@@ -333,10 +372,26 @@ class AdvancedRiskAnalytics:
 
         Returns:
             VaRResult with scaling_approximate=True (normality assumed)
+
+        Note (P4)
+        ---------
+        When ENFORCE_MULTIDAY_VAR=True (default), calling this method with
+        time_horizon > 1 raises RuntimeError.  Use calculate_var_multiday()
+        or calculate_var_ewma() for production risk limits on XAUUSD.
         """
         from scipy import stats
 
         confidence_level = confidence_level or self.var_confidence
+
+        # P4 enforcement: block sqrt(t) paths for multi-day production limits
+        if time_horizon > 1 and ENFORCE_MULTIDAY_VAR:
+            raise RuntimeError(
+                f"calculate_var_parametric called with time_horizon={time_horizon} > 1. "
+                "Parametric sqrt(t) scaling assumes i.i.d. normal returns — invalid for "
+                "XAUUSD (fat tails, autocorrelation). "
+                "Use calculate_var_multiday() or calculate_var_ewma() instead. "
+                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only)."
+            )
 
         # Test normality (Jarque-Bera) and warn if rejected at 5% level.
         # This is informational — the calculation proceeds regardless.
@@ -369,6 +424,7 @@ class AdvancedRiskAnalytics:
         if time_horizon == 1:
             var_scaled = var_value
         else:
+            # ENFORCE_MULTIDAY_VAR=False path (tests / legacy callers only).
             # Scale mean and std to the t-day horizon, then recompute VaR.
             # Under normality: mu_t = mu*t, sigma_t = sigma*sqrt(t).
             # This is more accurate than scaling the 1-day VaR by sqrt(t)
@@ -626,51 +682,86 @@ class AdvancedRiskAnalytics:
         captures volatility clustering (GARCH-like) without requiring a full
         GARCH fit.
 
+        For time_horizon > 1, EWMA-scaled returns are summed over overlapping
+        t-day windows — no sqrt(t) assumption.  This is the recommended method
+        for production risk limits on XAUUSD.
+
         decay = 0.94 is the RiskMetrics daily decay factor.
         decay = 0.97 is recommended for weekly data.
 
         Args:
             returns        : 1-day return series
             confidence_level: VaR confidence level
-            time_horizon   : Horizon in days (sqrt(t) applied after EWMA scaling)
+            time_horizon   : Horizon in days
             portfolio_value: Optional portfolio value
             decay          : EWMA decay factor λ (0 < λ < 1)
 
         Returns:
             VaRResult with method='ewma'
         """
-
         confidence_level = confidence_level or self.var_confidence
 
         if len(returns) < 10:
+            # Delegate to 1-day historical (no multi-day scaling needed)
             return self.calculate_var_historical(
-                returns, confidence_level, time_horizon, portfolio_value
+                returns, confidence_level, 1, portfolio_value
             )
 
         # Compute EWMA variance
         ewma_var = np.zeros(len(returns))
         ewma_var[0] = returns[0] ** 2
-        for t in range(1, len(returns)):
-            ewma_var[t] = decay * ewma_var[t - 1] + (1 - decay) * returns[t] ** 2
+        for i in range(1, len(returns)):
+            ewma_var[i] = decay * ewma_var[i - 1] + (1 - decay) * returns[i] ** 2
 
         current_vol = np.sqrt(ewma_var[-1])
         hist_vol = np.sqrt(np.mean(ewma_var))
 
         if hist_vol == 0:
             return self.calculate_var_historical(
-                returns, confidence_level, time_horizon, portfolio_value
+                returns, confidence_level, 1, portfolio_value
             )
 
         # Scale historical returns by vol ratio (volatility-weighted HS)
         vol_ratio = current_vol / hist_vol
         scaled_returns = returns * vol_ratio
 
-        var_1d = np.percentile(scaled_returns, (1 - confidence_level) * 100)
+        scaling_approximate = False
+        scaling_note = ""
 
-        # For multi-day: use sqrt(t) on the EWMA-scaled 1-day VaR.
-        # This is still an approximation but is more accurate than plain
-        # sqrt(t) because the 1-day VaR already reflects current vol regime.
-        var_scaled = var_1d * np.sqrt(time_horizon)
+        if time_horizon <= 1:
+            var_percentile = np.percentile(scaled_returns, (1 - confidence_level) * 100)
+            var_scaled = var_percentile
+        else:
+            t = int(time_horizon)
+            if len(scaled_returns) >= t * 2:
+                # Overlapping t-day windows on EWMA-scaled returns.
+                # No sqrt(t) assumption — captures autocorrelation and fat tails.
+                multi_day = np.array(
+                    [
+                        np.sum(scaled_returns[i : i + t])
+                        for i in range(len(scaled_returns) - t + 1)
+                    ]
+                )
+                var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
+            else:
+                # Insufficient history — sqrt(t) fallback with explicit warning.
+                import warnings as _w
+
+                _w.warn(
+                    f"calculate_var_ewma: insufficient data for {t}-day overlapping "
+                    f"windows ({len(scaled_returns)} bars). Falling back to sqrt(t) "
+                    f"scaling (approximate).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                var_1d = np.percentile(scaled_returns, (1 - confidence_level) * 100)
+                var_scaled = var_1d * np.sqrt(time_horizon)
+                scaling_approximate = True
+                scaling_note = (
+                    f"sqrt(t) fallback: only {len(scaled_returns)} bars for "
+                    f"{t}-day window. Collect more history for accurate EWMA VaR."
+                )
+
         val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
 
         return VaRResult(
@@ -678,7 +769,52 @@ class AdvancedRiskAnalytics:
             confidence_level=confidence_level,
             time_horizon=time_horizon,
             method="ewma",
+            scaling_approximate=scaling_approximate,
+            scaling_note=scaling_note,
         )
+
+    def recommended_var(
+        self,
+        returns: np.ndarray,
+        confidence_level: float = None,
+        time_horizon: int = 1,
+        portfolio_value: float = None,
+    ) -> "VaRResult":
+        """
+        Return the recommended VaR estimate for XAUUSD production risk limits.
+
+        Routing logic:
+          time_horizon == 1  → calculate_var_historical (direct percentile)
+          time_horizon  > 1  → calculate_var_ewma (EWMA-weighted overlapping windows)
+
+        This method always avoids sqrt(t) scaling and is safe to call regardless
+        of the ENFORCE_MULTIDAY_VAR flag.
+
+        Args:
+            returns        : 1-day return series
+            confidence_level: VaR confidence level (default from config)
+            time_horizon   : Horizon in days
+            portfolio_value: Optional portfolio value for dollar VaR
+
+        Returns:
+            VaRResult from the appropriate method
+        """
+        if time_horizon <= 1:
+            # Temporarily bypass enforcement for 1-day call
+            orig = ENFORCE_MULTIDAY_VAR
+            import risk.advanced_analytics as _self_mod
+            _self_mod.ENFORCE_MULTIDAY_VAR = False
+            try:
+                result = self.calculate_var_historical(
+                    returns, confidence_level, 1, portfolio_value
+                )
+            finally:
+                _self_mod.ENFORCE_MULTIDAY_VAR = orig
+            return result
+        else:
+            return self.calculate_var_ewma(
+                returns, confidence_level, time_horizon, portfolio_value
+            )
 
     def calculate_cvar(
         self,
