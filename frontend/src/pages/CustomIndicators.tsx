@@ -4,7 +4,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createChart, LineSeries, type IChartApi } from 'lightweight-charts';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
@@ -48,7 +48,7 @@ const CustomIndicators: React.FC = () => {
 
   const loadIndicators = useCallback(async () => {
     try {
-      const res = await authApi.get('/api/indicators');
+      const res = await api.get('/indicators');
       setIndicators(res.data.indicators || []);
     } catch { setIndicators([]); }
   }, []);
@@ -58,7 +58,7 @@ const CustomIndicators: React.FC = () => {
   const runPreview = async () => {
     setLoading(true); setError('');
     try {
-      const res = await authApi.post('/api/indicators/preview', { formula, symbol, periods: 100 });
+      const res = await api.post('/indicators/preview', { formula, symbol, periods: 100 });
       setPreview(res.data.data || []);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Formula error');
@@ -70,7 +70,7 @@ const CustomIndicators: React.FC = () => {
   const save = async () => {
     if (!name.trim()) { setError('Enter a name first.'); return; }
     try {
-      await authApi.post('/api/indicators', { name, formula, symbol, color });
+      await api.post('/indicators', { name, formula, symbol, color });
       setMsg(`Saved "${name}"`);
       await loadIndicators();
     } catch { setError('Failed to save.'); }
@@ -78,7 +78,7 @@ const CustomIndicators: React.FC = () => {
 
   const del = async (id: string) => {
     try {
-      await authApi.delete(`/api/indicators/${id}`);
+      await api.delete(`/indicators/${id}`);
       setIndicators(prev => prev.filter(i => i.id !== id));
     } catch { /* ignore */ }
   };

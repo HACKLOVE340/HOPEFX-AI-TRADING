@@ -171,7 +171,7 @@ const Settings: React.FC = () => {
     // Always write to localStorage as immediate fallback
     cacheLocalSettings(settings);
     try {
-      await api.post('/api/settings/notifications', settings);
+      await api.post('/settings/notifications', settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err: unknown) {
@@ -187,7 +187,7 @@ const Settings: React.FC = () => {
   const sendTest = async (channel: string) => {
     setTestStatus((prev) => ({ ...prev, [channel]: 'sending' }));
     try {
-      await api.post('/api/notifications/test', { channel, settings });
+      await api.post('/notifications/test', { channel, settings });
       setTestStatus((prev) => ({ ...prev, [channel]: 'ok' }));
     } catch (_) {
       setTestStatus((prev) => ({ ...prev, [channel]: 'fail' }));

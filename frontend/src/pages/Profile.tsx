@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,11 +165,11 @@ const Profile: React.FC = () => {
   const loadProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const endpoint = isOwnProfile ? '/api/profiles/me' : `/api/profiles/${traderId}`;
-      const res = await authApi.get(endpoint);
+      const endpoint = isOwnProfile ? '/profiles/me' : `/profiles/${traderId}`;
+      const res = await api.get(endpoint);
       setProfile(res.data);
 
-      const sigRes = await authApi.get(`/api/profiles/${res.data.trader_id}/signals`);
+      const sigRes = await api.get(`/profiles/${res.data.trader_id}/signals`);
       setSignals(sigRes.data.signals || []);
     } catch {
       // Demo fallback
@@ -209,9 +209,9 @@ const Profile: React.FC = () => {
     if (!profile) return;
     try {
       if (following) {
-        await authApi.delete(`/api/profiles/${profile.trader_id}/follow`);
+        await api.delete(`/profiles/${profile.trader_id}/follow`);
       } else {
-        await authApi.post(`/api/profiles/${profile.trader_id}/follow`);
+        await api.post(`/profiles/${profile.trader_id}/follow`);
       }
       setFollowing(!following);
       setProfile((p) => p ? {
@@ -223,7 +223,7 @@ const Profile: React.FC = () => {
 
   const handleSave = async (updates: Partial<ProfileData>) => {
     try {
-      const res = await authApi.put('/api/profiles/me', updates);
+      const res = await api.put('/profiles/me', updates);
       setProfile(res.data);
     } catch { /* ignore */ }
     setEditing(false);

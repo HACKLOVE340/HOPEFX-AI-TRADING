@@ -30,7 +30,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 _bearer = HTTPBearer(auto_error=False)
 
 # Module-level service reference — injected from app.py startup

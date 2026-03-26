@@ -47,7 +47,7 @@ export const authApi = {
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),
   activateFreeTier: (userId: string, refCode?: string) =>
-    api.post('/api/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
+    api.post('/auth/activate-free-tier', { user_id: userId, ref_code: refCode }),
 };
 
 export const tradingApi = {

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 app_state = None
 
