@@ -391,6 +391,13 @@ async def _publish_and_broadcast(
         except Exception as ws_exc:
             logger.warning("Signal broadcast failed: %s", ws_exc)
 
+    # Discord community bot — post signal embed to configured channel
+    try:
+        from notifications.discord_bot import discord_signal_bot
+        await discord_signal_bot.post_signal(signal_payload)
+    except Exception as discord_exc:
+        logger.debug("Discord signal post failed: %s", discord_exc)
+
 
 async def _execute_if_approved(
     app_state: Any,
