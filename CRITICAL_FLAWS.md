@@ -178,3 +178,182 @@ Proceed to paper trading before committing real capital.
 **All minimum requirements are now met. The enhanced feature set achieves p<0.05 on
 a 3-year held-out OOS period (acc=68.0%, p=0.0000). Proceed to live paper trading
 before committing real capital.**
+
+---
+
+## V12 Fixes (2026-03-25) — This Session
+
+### ✅ FIXED — Fallback model (xgb_macro.pkl) still had 20 close_lag_N features
+
+**Was:** `xgb_macro.pkl` on disk was trained before the non-stationary feature
+removal. It had 85 features including 20 `close_lag_N` raw price levels. If
+`advanced_oos.pkl` failed to load, the live system silently degraded to a model
+with known-bad features and no demonstrated edge.
+
+**Fix:**
+- Retrained `xgb_macro.pkl` with 65 stationary features (all `close_lag_N` removed)
+- Added CRITICAL log in `ml/__init__.py._load_models()` when fallback activates
+- Added WARNING log when fallback model is active, stating ~50% OOS accuracy
+- Fires Sentry fatal-level issue via `capture_ml_fallback_event()`
+- Fires Discord critical alert via `discord_signal_bot.post_ml_fallback_alert()`
+
+**Files:** `ml/saved_models/xgb_macro.pkl`, `ml/__init__.py`
+
+---
+
+### ✅ FIXED — MacroStore not populated at startup (macro features missing at inference)
+
+**Was:** `ml/macro_store.py` (245 lines) was never called in `startup_factories.py`.
+No startup task loaded historical DXY/yield/VIX data. No background job updated it.
+Even after the signal engine was patched to pass `macro_df`, the store was empty.
+
+**Fix:**
+- New `ml/macro_bootstrap.py`: fetches DXY/VIX/US10Y/US2Y/SPX/GLD from yfinance
+  into `data/macro/` CSVs; best-effort, non-blocking, skips if files are < 24 h old
+- New `core/startup_factories.py::init_macro_store()`: bootstraps CSVs at startup,
+  loads all series into the module-level `macro_store` singleton, attaches to
+  `app_state`, schedules daily 18:00 UTC refresh background task
+- Registered `'macro_store'` in `app.py` ComponentRegistry before `'signal_engine'`
+
+**Files:** `ml/macro_bootstrap.py` (new), `core/startup_factories.py`, `app.py`
+
+---
+
+### ✅ FIXED — Signal engine did not pass macro_df to advanced predictor (P1 critical)
+
+**Was:** `core/signal_engine.py` line ~207:
+```python
+ml_probability = adv_predictor.predict_proba(ohlcv_df)  # no macro_df
+```
+The 68% OOS accuracy was achieved with 122 features including DXY, VIX, yields,
+SPX, and COT proxies. At inference, the live model ran on a degraded feature set.
+
+**Fix:** `_compute_ml_probability()` now:
+1. Calls `_fetch_macro_df(ohlcv_df, symbol)` to align MacroStore series to the
+   hourly OHLCV index
+2. Passes `macro_df` to `adv_predictor.predict_proba(ohlcv_df, macro_df=macro_df)`
+3. Logs DEBUG when macro features are present, WARNING when store is empty
+
+**Files:** `core/signal_engine.py`
+
+---
+
+### ✅ FIXED — place_order() was a 201-line monolith (financial safety risk)
+
+**Was:** The function that places real orders was 201 lines with no sub-function
+decomposition. Bugs anywhere were hard to isolate. Handled input validation, risk
+checks, broker routing, position tracking, and P&L recording in one function.
+
+**Fix:** Decomposed into 5 focused sub-functions (each ≤50 lines):
+- `_validate_order()` — broker availability + prop-firm rules
+- `_apply_risk_checks()` — RiskManager.assess_risk() + CVaR pre-trade gate
+- `_log_compliance()` — pre-execution compliance audit record
+- `_route_to_broker()` — broker.place_market_order() + error handling
+- `_record_fill()` — WebSocket/FCM/email/Prometheus + response
+
+`place_order()` itself is now 29 lines. API contract unchanged.
+
+**Files:** `api/trading.py`
+
+---
+
+### ✅ FIXED — _tick() was a 290-line handler (latency and correctness risk)
+
+**Was:** The tick handler — runs on every price update — grew to 290 lines as the
+advanced ML path was added. Long tick handlers are a latency and correctness risk.
+
+**Fix:** Decomposed into 6 focused sub-functions (each ≤70 lines):
+- `_compute_signal()` — StrategyBrain consensus
+- `_build_ohlcv_df()` — reconstruct rolling OHLCV DataFrame
+- `_fetch_macro_df()` — align MacroStore to hourly index
+- `_compute_ml_probability()` — advanced/fallback ML enrichment with macro
+- `_publish_and_broadcast()` — event bus + WebSocket + Discord
+- `_execute_if_approved()` — risk filter + auto-trade execution
+
+`_tick()` itself is now 58 lines. No behaviour change.
+
+**Files:** `core/signal_engine.py`
+
+---
+
+### ✅ ADDED — OANDA region routing
+
+**Was:** `OANDAConnector` and `AsyncOANDAConnector` had hardcoded US endpoints.
+No way to route to EU or APAC clusters for lower latency or data residency.
+
+**Fix:**
+- `resolve_oanda_urls(region, practice)` returns REST + streaming URLs for
+  `us` / `eu` / `sg` regions
+- Both connectors accept `region=` parameter and expose `self.region` and
+  `self.stream_url`
+- `OANDA_REGION` env var sets the default (default: `'us'`)
+- Unknown region logs WARNING and falls back to `'us'`
+
+**Files:** `brokers/oanda.py`
+
+---
+
+### ✅ ADDED — Sentry production performance monitoring config
+
+**Was:** `init_sentry()` was an 8-line stub: DSN + traces_sample_rate + send_default_pii.
+No integrations, no PII scrubbing, no performance profiling, no ML fallback alerts.
+
+**Fix:** New `monitoring/sentry_config.py`:
+- FastAPI, SQLAlchemy, Redis, aiohttp integrations (auto-detected)
+- `before_send` hook: scrubs 15 sensitive field names, drops /health noise
+- `before_send_transaction`: drops health/metrics transactions to save quota
+- Global tags: service, environment, release, model_version, oanda_region
+- `capture_ml_fallback_event()`: fires fatal-level Sentry issue on model degradation
+- `start_transaction()`: context manager for manual performance instrumentation
+
+**Files:** `monitoring/sentry_config.py` (new), `api/platform.py`, `ml/__init__.py`
+
+---
+
+### ✅ ADDED — Discord community bot for signal posting
+
+**Was:** No community-facing signal channel. Users had no visibility into live signals
+without API access.
+
+**Fix:** New `notifications/discord_bot.py`:
+- Rich embeds: colour-coded direction, confidence bar (10-block ASCII), ML probability,
+  model version, entry/SL/TP, risk/reward ratio
+- Fallback model warning field injected when macro_xgb or fallback model is active
+- Rate-limited per symbol (default 5 min cooldown)
+- Async-first (aiohttp) with sync fallback (requests)
+- Retry with exponential backoff on Discord 429 responses
+- `post_ml_fallback_alert()`: critical embed when advanced model unavailable
+- Wired into `_publish_and_broadcast()` in signal engine
+- ML fallback fires Discord alert alongside Sentry alert
+
+**Files:** `notifications/discord_bot.py` (new), `core/signal_engine.py`, `ml/__init__.py`
+
+---
+
+### ✅ ADDED — Load test improvements (k6 + Locust)
+
+**k6/load_tests.js:**
+- Added `stress` and `breakpoint` scenarios
+- Custom metrics: signalLatency, mlLatency, authFailures, riskBlocks, ordersFilled
+- Thresholds: p95 signal < 300 ms, p95 ML < 800 ms, p99 order < 1 s
+- New test functions: signal, ML predict, ML status, risk status, Prometheus, account
+
+**locust/load_tests.py:**
+- Added `MLResearcher` user class (weight 2): ml_status, ml_predict, ml_accuracy,
+  signal_latest, ml_models, feature_groups
+- `THINK_TIME` multiplier, `SIGNAL_SYMBOL` env var
+- `on_test_stop` prints p95, p99, RPS, failure rate; fails CI if error rate > 1%
+
+**Files:** `k6/load_tests.js`, `locust/load_tests.py`
+
+---
+
+## Remaining Open Items
+
+| Priority | Item | Status |
+|----------|------|--------|
+| P1 | Start 30-day OANDA paper trading run | ❌ Not started |
+| P2 | Accumulate trade count (need ~170 for Sharpe SE ≤ ±0.3) | ❌ Ongoing |
+| P3 | Wire research/pipeline LSTM as optional signal layer | ❌ Research only |
+| P4 | Replace sqrt(t) VaR in historical + parametric paths | ⚠️ Documented, not enforced |
+| P5 | Alembic migration for dedicated watchlists table | ⚠️ Using JSON column |
