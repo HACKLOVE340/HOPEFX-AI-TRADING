@@ -6,8 +6,11 @@ Incremental / online learning layer.
 Extends the existing ml/online_learner.py (EWC + replay for neural nets) with:
   1. IncrementalXGBoost  — XGBoost trained in chunks via `xgb_model` warm-start
   2. OnlineEnsemble      — combines IncrementalXGBoost + the deep OnlineLearner
-  3. DriftDetector       — Page-Hinkley test to flag concept drift and trigger
-                           selective re-training
+  3. DriftDetector       — Page-Hinkley test to flag concept drift
+  4. ADWINDriftDetector  — Adaptive Windowing (ADWIN) for more sensitive drift
+  5. AdaptiveBlendWeights — online update of primary/online blend weights based
+                            on recent accuracy of each model
+  6. OnlineLearnerStore  — production store with persistence and warm-start
 
 Design principles
 -----------------
@@ -18,6 +21,8 @@ Design principles
   update weights without catastrophic forgetting.
 - DriftDetector monitors prediction error; when drift is detected it signals
   the orchestrator to trigger a partial re-train on a recent window.
+- AdaptiveBlendWeights tracks rolling accuracy of primary vs online model and
+  shifts blend weights toward the better-performing model.
 
 Usage
 -----
@@ -39,6 +44,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+import threading
 from collections import deque
 from pathlib import Path
 from typing import Deque, Dict, List, Optional, Tuple
@@ -148,6 +154,202 @@ class DriftDetector:
         if not self._error_history:
             return 0.0
         return float(np.mean(list(self._error_history)[-20:]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADWIN drift detector
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ADWINDriftDetector:
+    """
+    Adaptive Windowing (ADWIN) drift detector.
+
+    ADWIN maintains a variable-length window of recent error values and
+    detects drift by testing whether the mean of any sub-window differs
+    significantly from the rest.  It is more sensitive than Page-Hinkley
+    for gradual drift and automatically adjusts its window size.
+
+    This is a lightweight pure-Python implementation suitable for the
+    fill rates seen in live trading (not a streaming big-data scenario).
+
+    Parameters
+    ----------
+    delta       : Confidence parameter — smaller = more sensitive (default 0.002).
+    max_buckets : Maximum number of exponential histogram buckets.
+    """
+
+    def __init__(self, delta: float = 0.002, max_buckets: int = 5) -> None:
+        self.delta = delta
+        self.max_buckets = max_buckets
+        self._window: Deque[float] = deque()
+        self._total: float = 0.0
+        self._n: int = 0
+        self.drift_count: int = 0
+
+    def update(self, error: float) -> bool:
+        """
+        Add one error observation and return True if drift is detected.
+
+        Parameters
+        ----------
+        error : Scalar prediction error for the latest observation.
+        """
+        self._window.append(error)
+        self._total += error
+        self._n += 1
+
+        # Limit window to avoid O(n²) scan on very long runs
+        if self._n > 2000:
+            removed = self._window.popleft()
+            self._total -= removed
+            self._n -= 1
+
+        return self._detect_change()
+
+    def _detect_change(self) -> bool:
+        """
+        Scan all cut-points in the window for a significant mean shift.
+        Uses Hoeffding bound: |μ₀ - μ₁| > ε_cut → drift.
+        """
+        if self._n < 30:
+            return False
+
+        window = list(self._window)
+        n = len(window)
+        total = self._total
+
+        cumsum = 0.0
+        for i in range(1, n):
+            cumsum += window[i - 1]
+            n0, n1 = i, n - i
+            mu0 = cumsum / n0
+            mu1 = (total - cumsum) / n1
+
+            # Hoeffding bound for the cut-point
+            m = 1.0 / (1.0 / n0 + 1.0 / n1)
+            epsilon_cut = np.sqrt(np.log(2.0 / self.delta) / (2.0 * m))
+
+            if abs(mu0 - mu1) >= epsilon_cut:
+                self.drift_count += 1
+                # Discard the older half of the window
+                for _ in range(i):
+                    removed = self._window.popleft()
+                    self._total -= removed
+                    self._n -= 1
+                logger.warning(
+                    "ADWIN drift detected (count=%d): |μ₀-μ₁|=%.4f ε=%.4f",
+                    self.drift_count, abs(mu0 - mu1), epsilon_cut,
+                )
+                return True
+        return False
+
+    def reset(self) -> None:
+        """Full reset — call after re-training."""
+        self._window.clear()
+        self._total = 0.0
+        self._n = 0
+
+    @property
+    def window_size(self) -> int:
+        return self._n
+
+    @property
+    def mean_error(self) -> float:
+        if self._n == 0:
+            return 0.0
+        return self._total / self._n
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Adaptive blend weights
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AdaptiveBlendWeights:
+    """
+    Online update of primary/online blend weights based on recent accuracy.
+
+    Tracks rolling accuracy of the primary model and the online learner
+    separately.  Shifts blend weights toward the better-performing model
+    using exponential moving average updates.
+
+    The weights are constrained to [min_weight, max_weight] to prevent
+    the online learner from dominating before it has enough data.
+
+    Parameters
+    ----------
+    initial_primary : Starting weight for the primary model (default 0.7).
+    learning_rate   : EMA learning rate for weight updates (default 0.05).
+    min_primary     : Minimum weight for the primary model (default 0.5).
+    max_primary     : Maximum weight for the primary model (default 0.95).
+    window          : Rolling window for accuracy tracking (default 50).
+    """
+
+    def __init__(
+        self,
+        initial_primary: float = 0.7,
+        learning_rate: float = 0.05,
+        min_primary: float = 0.5,
+        max_primary: float = 0.95,
+        window: int = 50,
+    ) -> None:
+        self._primary_weight = float(np.clip(initial_primary, min_primary, max_primary))
+        self.learning_rate = learning_rate
+        self.min_primary = min_primary
+        self.max_primary = max_primary
+        self._primary_correct: Deque[float] = deque(maxlen=window)
+        self._online_correct:  Deque[float] = deque(maxlen=window)
+
+    def update(
+        self,
+        label: int,
+        primary_prob: float,
+        online_prob: float,
+    ) -> None:
+        """
+        Update blend weights based on which model was more accurate.
+
+        Parameters
+        ----------
+        label        : True binary label (0 or 1).
+        primary_prob : Primary model probability.
+        online_prob  : Online learner probability.
+        """
+        primary_correct = float(int(round(primary_prob)) == label)
+        online_correct  = float(int(round(online_prob))  == label)
+
+        self._primary_correct.append(primary_correct)
+        self._online_correct.append(online_correct)
+
+        if len(self._primary_correct) < 10:
+            return  # not enough data yet
+
+        primary_acc = float(np.mean(self._primary_correct))
+        online_acc  = float(np.mean(self._online_correct))
+
+        # Shift weight toward the better model
+        if primary_acc > online_acc:
+            target = self._primary_weight + self.learning_rate * (primary_acc - online_acc)
+        else:
+            target = self._primary_weight - self.learning_rate * (online_acc - primary_acc)
+
+        self._primary_weight = float(np.clip(target, self.min_primary, self.max_primary))
+
+    @property
+    def primary_weight(self) -> float:
+        return self._primary_weight
+
+    @property
+    def online_weight(self) -> float:
+        return 1.0 - self._primary_weight
+
+    def status(self) -> Dict:
+        return {
+            "primary_weight": round(self._primary_weight, 4),
+            "online_weight": round(self.online_weight, 4),
+            "primary_acc": round(float(np.mean(self._primary_correct)) if self._primary_correct else 0.0, 4),
+            "online_acc":  round(float(np.mean(self._online_correct))  if self._online_correct  else 0.0, 4),
+            "n_samples": len(self._primary_correct),
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -423,22 +625,31 @@ class OnlineLearnerStore:
     Maintains an IncrementalXGBoost that updates its weights on each confirmed
     fill.  At inference time, its probability is blended with the primary model:
 
-        final_prob = PRIMARY_WEIGHT * advanced_prob + ONLINE_WEIGHT * online_prob
+        final_prob = primary_weight * advanced_prob + online_weight * online_prob
 
     Default blend: 0.7 * advanced + 0.3 * online (spec-defined).
 
     The online learner starts in a "warming up" state and only contributes to
     the blend after `min_fills` confirmed fills have been processed.
 
-    Drift detection: when the Page-Hinkley test fires, the online learner is
-    reset and retrained on the recent fill buffer.
+    Drift detection: both Page-Hinkley and ADWIN detectors run in parallel.
+    Either firing triggers a reset and refit on the recent fill buffer.
+
+    Adaptive weights: when `adaptive_weights=True`, blend weights shift toward
+    the better-performing model based on rolling accuracy.
+
+    Persistence: when `persist_path` is set, the fitted model is saved after
+    each refit and loaded on startup for warm-start.
 
     Parameters
     ----------
-    primary_weight : Weight for the primary (advanced_oos.pkl) model.
-    online_weight  : Weight for the online learner (1 - primary_weight).
-    min_fills      : Minimum confirmed fills before the online learner contributes.
-    buffer_size    : Max fills kept in the replay buffer for drift recovery.
+    primary_weight   : Starting weight for the primary model (default 0.7).
+    online_weight    : Starting weight for the online learner (default 0.3).
+    min_fills        : Minimum fills before the online learner contributes.
+    buffer_size      : Max fills kept in the replay buffer.
+    adaptive_weights : Shift blend weights based on rolling accuracy.
+    use_adwin        : Use ADWIN in addition to Page-Hinkley for drift detection.
+    persist_path     : Path to save/load the fitted model for warm-start.
     """
 
     PRIMARY_WEIGHT: float = 0.7
@@ -450,16 +661,47 @@ class OnlineLearnerStore:
         online_weight: float = 0.3,
         min_fills: int = 20,
         buffer_size: int = 500,
+        adaptive_weights: bool = True,
+        use_adwin: bool = True,
+        persist_path: Optional[str] = None,
     ) -> None:
-        self.primary_weight = primary_weight
-        self.online_weight  = online_weight
-        self.min_fills      = min_fills
+        # Normalise weights to sum to 1
+        total = primary_weight + online_weight
+        self.primary_weight = primary_weight / total
+        self.online_weight  = online_weight  / total
+
+        self.min_fills       = min_fills
+        self.adaptive_weights = adaptive_weights
+        self.persist_path    = Path(persist_path) if persist_path else None
+
         self._model: Optional[IncrementalXGBoost] = None
-        self._drift_detector = DriftDetector()
+        self._ph_detector   = DriftDetector()
+        self._adwin_detector = ADWINDriftDetector() if use_adwin else None
+        self._blend_weights  = AdaptiveBlendWeights(
+            initial_primary=self.primary_weight,
+        ) if adaptive_weights else None
+
         self._fill_buffer_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
         self._fill_buffer_y: Deque[float]       = deque(maxlen=buffer_size)
         self._fill_count: int = 0
         self._ready: bool = False
+        self._lock = threading.Lock()
+
+        # Warm-start from persisted model
+        if self.persist_path and self.persist_path.exists():
+            self._load_persisted()
+
+    # ── Effective blend weights (adaptive or fixed) ───────────────────────────
+
+    @property
+    def _effective_primary_weight(self) -> float:
+        if self._blend_weights is not None:
+            return self._blend_weights.primary_weight
+        return self.primary_weight
+
+    @property
+    def _effective_online_weight(self) -> float:
+        return 1.0 - self._effective_primary_weight
 
     # ── Warm-up check ─────────────────────────────────────────────────────────
 
@@ -474,14 +716,16 @@ class OnlineLearnerStore:
         self,
         features: pd.DataFrame,
         label: int,
+        primary_prob: Optional[float] = None,
     ) -> bool:
         """
         Update the online learner with a confirmed fill.
 
         Parameters
         ----------
-        features : Feature DataFrame for the filled bar (same columns as primary model).
-        label    : 1 if the trade was profitable (price went up), 0 otherwise.
+        features     : Feature DataFrame for the filled bar.
+        label        : 1 if the trade was profitable, 0 otherwise.
+        primary_prob : Primary model probability at fill time (for adaptive weights).
 
         Returns
         -------
@@ -490,30 +734,51 @@ class OnlineLearnerStore:
         if not XGB_AVAILABLE:
             return False
 
-        y = np.array([float(label)])
-        self._fill_buffer_X.append(features.values[0] if len(features) > 0 else np.zeros(1))
-        self._fill_buffer_y.append(float(label))
-        self._fill_count += 1
+        with self._lock:
+            y = np.array([float(label)])
+            feat_row = features.values[0] if len(features) > 0 else np.zeros(1)
+            self._fill_buffer_X.append(feat_row.copy())
+            self._fill_buffer_y.append(float(label))
+            self._fill_count += 1
 
-        # Initial fit once we have enough fills
-        if self._model is None and self._fill_count >= self.min_fills:
-            self._initial_fit()
-            return False
+            # Initial fit once we have enough fills
+            if self._model is None and self._fill_count >= self.min_fills:
+                self._initial_fit()
+                return False
 
-        if self._model is None:
-            return False
+            if self._model is None:
+                return False
 
-        # Incremental update
-        try:
-            self._model.update(features, y)
-        except Exception as exc:
-            logger.debug("OnlineLearnerStore.on_fill update failed: %s", exc)
-            return False
+            # Incremental update
+            try:
+                self._model.update(features, y)
+            except Exception as exc:
+                logger.debug("OnlineLearnerStore.on_fill update failed: %s", exc)
+                return False
 
-        # Drift detection
-        try:
-            proba = self._model.predict_proba(features)
-            drift = self._drift_detector.update(y, proba)
+            # Drift detection (Page-Hinkley + ADWIN)
+            drift = False
+            try:
+                proba = self._model.predict_proba(features)
+                online_prob = float(proba[0])
+
+                # Page-Hinkley
+                drift = self._ph_detector.update(y, proba)
+
+                # ADWIN (log-loss error)
+                if self._adwin_detector is not None and not drift:
+                    eps = 1e-7
+                    p = float(np.clip(online_prob, eps, 1 - eps))
+                    logloss = -(label * np.log(p) + (1 - label) * np.log(1 - p))
+                    drift = self._adwin_detector.update(logloss)
+
+                # Adaptive weight update
+                if self._blend_weights is not None and primary_prob is not None:
+                    self._blend_weights.update(label, primary_prob, online_prob)
+
+            except Exception as exc:
+                logger.debug("OnlineLearnerStore drift check failed: %s", exc)
+
             if drift:
                 logger.warning(
                     "OnlineLearnerStore: drift detected after %d fills — resetting",
@@ -521,24 +786,22 @@ class OnlineLearnerStore:
                 )
                 self._reset_and_refit()
                 return True
-        except Exception as exc:
-            logger.debug("OnlineLearnerStore drift check failed: %s", exc)
 
-        return False
+            return False
 
     def _initial_fit(self) -> None:
         """Fit the online learner on the accumulated fill buffer."""
         try:
             X = np.array(list(self._fill_buffer_X))
             y = np.array(list(self._fill_buffer_y))
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             cols = [f"f{i}" for i in range(X.shape[1])]
             X_df = pd.DataFrame(X, columns=cols)
             self._model = IncrementalXGBoost(n_base_rounds=100, n_new_rounds=10)
             self._model.fit(X_df, y)
             self._ready = True
-            logger.info(
-                "OnlineLearnerStore: initial fit on %d fills", len(y)
-            )
+            logger.info("OnlineLearnerStore: initial fit on %d fills", len(y))
+            self._save_persisted()
         except Exception as exc:
             logger.warning("OnlineLearnerStore initial fit failed: %s", exc)
 
@@ -547,12 +810,16 @@ class OnlineLearnerStore:
         try:
             X = np.array(list(self._fill_buffer_X))
             y = np.array(list(self._fill_buffer_y))
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             cols = [f"f{i}" for i in range(X.shape[1])]
             X_df = pd.DataFrame(X, columns=cols)
             if self._model is not None:
                 self._model.reset_and_refit(X_df, y)
-            self._drift_detector.reset()
+            self._ph_detector.reset()
+            if self._adwin_detector is not None:
+                self._adwin_detector.reset()
             logger.info("OnlineLearnerStore: reset and refit on %d fills", len(y))
+            self._save_persisted()
         except Exception as exc:
             logger.warning("OnlineLearnerStore reset_and_refit failed: %s", exc)
 
@@ -575,7 +842,7 @@ class OnlineLearnerStore:
 
         Returns
         -------
-        blended_prob : 0.7 * advanced_prob + 0.3 * online_prob (when ready).
+        blended_prob : primary_weight * advanced_prob + online_weight * online_prob
         """
         if not self.is_ready or self._model is None:
             return advanced_prob
@@ -591,22 +858,45 @@ class OnlineLearnerStore:
             if feat_arr.shape[1] >= n_cols:
                 X_df = pd.DataFrame(feat_arr[:, :n_cols], columns=cols)
             else:
-                # Pad with zeros if feature count mismatch
                 pad = np.zeros((feat_arr.shape[0], n_cols - feat_arr.shape[1]))
-                X_df = pd.DataFrame(
-                    np.hstack([feat_arr, pad]), columns=cols
-                )
+                X_df = pd.DataFrame(np.hstack([feat_arr, pad]), columns=cols)
 
             online_prob = float(self._model.predict_proba(X_df)[0])
-            blended = self.primary_weight * advanced_prob + self.online_weight * online_prob
+            pw = self._effective_primary_weight
+            ow = self._effective_online_weight
+            blended = pw * advanced_prob + ow * online_prob
             logger.debug(
-                "OnlineLearner blend: adv=%.4f online=%.4f → %.4f",
-                advanced_prob, online_prob, blended,
+                "OnlineLearner blend: adv=%.4f online=%.4f w=[%.2f,%.2f] → %.4f",
+                advanced_prob, online_prob, pw, ow, blended,
             )
             return float(np.clip(blended, 0.0, 1.0))
         except Exception as exc:
             logger.debug("OnlineLearnerStore.blend failed (non-fatal): %s", exc)
             return advanced_prob
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+
+    def _save_persisted(self) -> None:
+        if self.persist_path is None or self._model is None:
+            return
+        try:
+            self.persist_path.parent.mkdir(parents=True, exist_ok=True)
+            self._model.save(self.persist_path)
+            logger.debug("OnlineLearnerStore: model saved → %s", self.persist_path)
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore persist save failed: %s", exc)
+
+    def _load_persisted(self) -> None:
+        if self.persist_path is None:
+            return
+        try:
+            self._model = IncrementalXGBoost.load(self.persist_path)
+            self._ready = True
+            logger.info(
+                "OnlineLearnerStore: warm-started from %s", self.persist_path
+            )
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore warm-start failed: %s", exc)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
@@ -616,14 +906,21 @@ class OnlineLearnerStore:
 
     @property
     def drift_count(self) -> int:
-        return self._drift_detector.drift_count
+        ph = self._ph_detector.drift_count
+        adwin = self._adwin_detector.drift_count if self._adwin_detector else 0
+        return ph + adwin
 
     def status(self) -> Dict:
+        blend_status = self._blend_weights.status() if self._blend_weights else {}
         return {
             "ready": self.is_ready,
             "fill_count": self._fill_count,
-            "drift_count": self._drift_detector.drift_count,
-            "recent_error": self._drift_detector.recent_error,
-            "primary_weight": self.primary_weight,
-            "online_weight": self.online_weight,
+            "ph_drift_count": self._ph_detector.drift_count,
+            "adwin_drift_count": self._adwin_detector.drift_count if self._adwin_detector else 0,
+            "recent_error": self._ph_detector.recent_error,
+            "primary_weight": round(self._effective_primary_weight, 4),
+            "online_weight": round(self._effective_online_weight, 4),
+            "adaptive_weights": self.adaptive_weights,
+            "blend_weights": blend_status,
+            "adwin_window": self._adwin_detector.window_size if self._adwin_detector else 0,
         }
