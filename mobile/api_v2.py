@@ -159,13 +159,22 @@ class MobileAPIServer:
         self.cache_service = cache_service
         self.rate_limiter = rate_limiter
         
-        # Add CORS middleware
+        # CORS: wildcard origins are incompatible with allow_credentials=True
+        # (browsers reject such responses per CORS spec).  Restrict to an
+        # explicit allowlist sourced from the environment; default to no
+        # cross-origin access so misconfigured deployments fail closed.
+        _raw_origins = os.getenv("MOBILE_CORS_ORIGINS", "")
+        _allowed_origins: list[str] = (
+            [o.strip() for o in _raw_origins.split(",") if o.strip()]
+            if _raw_origins
+            else []
+        )
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_origins=_allowed_origins,
+            allow_credentials=False,  # credentials require explicit origin list, never wildcard
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
         )
         
         # Setup routes

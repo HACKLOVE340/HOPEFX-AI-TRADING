@@ -40,6 +40,11 @@ import uvicorn
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# ── Startup validation — fail loud before any connections are opened ──────────
+# Import here so the check runs before broker/DB/Redis init.
+from config.startup_validator import validate_environment
+validate_environment(strict=True)  # calls sys.exit(1) on failure
+
 from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
 from auth.router import router as auth_router
 from api.trading import router as trading_router
