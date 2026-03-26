@@ -29,21 +29,27 @@
 
 import { check, group, sleep } from 'k6';
 import http from 'k6/http';
+import ws from 'k6/ws';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
 // ── Custom metrics ────────────────────────────────────────────────────────────
-const errorRate     = new Rate('error_rate');
-const orderLatency  = new Trend('order_latency_ms',  true);
-const signalLatency = new Trend('signal_latency_ms', true);
-const mlLatency     = new Trend('ml_latency_ms',     true);
-const authFailures  = new Counter('auth_failures');
-const riskBlocks    = new Counter('risk_blocks');
-const ordersFilled  = new Counter('orders_filled');
+const errorRate      = new Rate('error_rate');
+const orderLatency   = new Trend('order_latency_ms',   true);
+const signalLatency  = new Trend('signal_latency_ms',  true);
+const mlLatency      = new Trend('ml_latency_ms',      true);
+const macroLatency   = new Trend('macro_latency_ms',   true);
+const wsConnects     = new Counter('ws_connects');
+const wsMessages     = new Counter('ws_messages_received');
+const authFailures   = new Counter('auth_failures');
+const riskBlocks     = new Counter('risk_blocks');
+const ordersFilled   = new Counter('orders_filled');
+const rateLimitHits  = new Counter('rate_limit_hits');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const BASE_URL   = __ENV.BASE_URL    || 'http://localhost:8000';
-const AUTH_TOKEN = __ENV.AUTH_TOKEN  || '';
-const SCENARIO   = __ENV.SCENARIO   || 'smoke';
+const BASE_URL   = __ENV.BASE_URL     || 'http://localhost:8000';
+const WS_URL     = BASE_URL.replace(/^http/, 'ws');
+const AUTH_TOKEN = __ENV.AUTH_TOKEN   || '';
+const SCENARIO   = __ENV.SCENARIO    || 'smoke';
 const SIGNAL_SYM = __ENV.SIGNAL_SYMBOL || 'XAUUSD';
 const THINK_TIME = parseFloat(__ENV.THINK_TIME || '1.0');
 const SYMBOLS    = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'];
@@ -122,6 +128,7 @@ export const options = {
     order_latency_ms:   ['p(99)<1000'],  // p99 order < 1 s
     signal_latency_ms:  ['p(95)<300'],   // p95 signal < 300 ms
     ml_latency_ms:      ['p(95)<800'],   // p95 ML inference < 800 ms
+    macro_latency_ms:   ['p(95)<400'],   // p95 macro endpoint < 400 ms
     error_rate:         ['rate<0.01'],   // < 1% errors
     http_req_failed:    ['rate<0.01'],
   },
@@ -140,32 +147,33 @@ function headers(extra) {
 function checkOk(res, name, allowed) {
   allowed = allowed || [200];
   const ok = check(res, {
-    [name + ': status in allowed']: function(r) { return allowed.indexOf(r.status) !== -1; },
-    [name + ': not 500']:           function(r) { return r.status !== 500; },
-    [name + ': not 502/503/504']:   function(r) { return [502, 503, 504].indexOf(r.status) === -1; },
+    [name + ': status in allowed']: (r) => allowed.indexOf(r.status) !== -1,
+    [name + ': not 500']:           (r) => r.status !== 500,
+    [name + ': not 502/503/504']:   (r) => [502, 503, 504].indexOf(r.status) === -1,
   });
   errorRate.add(!ok);
+  if (res.status === 429) rateLimitHits.add(1);
   return ok;
 }
 
 // ── Test functions ────────────────────────────────────────────────────────────
 
 function testHealth() {
-  group('health', function() {
+  group('health', () => {
     const res = http.get(BASE_URL + '/health', { tags: { name: 'health' }, timeout: '5s' });
     checkOk(res, 'health', [200]);
   });
 }
 
 function testPublicStatus() {
-  group('public_status', function() {
+  group('public_status', () => {
     const res = http.get(BASE_URL + '/api/status', { tags: { name: 'status' } });
     checkOk(res, 'status', [200, 404]);
   });
 }
 
 function testMarketData() {
-  group('market_data', function() {
+  group('market_data', () => {
     const symbol = randomItem(SYMBOLS);
     const res = http.get(BASE_URL + '/api/market-data/' + symbol, {
       headers: headers(), tags: { name: 'market_data' },
@@ -175,7 +183,7 @@ function testMarketData() {
 }
 
 function testSignalEndpoint() {
-  group('signal', function() {
+  group('signal', () => {
     const start = Date.now();
     const res = http.get(BASE_URL + '/api/signals/latest?symbol=' + SIGNAL_SYM, {
       headers: headers(), tags: { name: 'signal_latest' },
@@ -186,7 +194,7 @@ function testSignalEndpoint() {
 }
 
 function testMLPredict() {
-  group('ml_predict', function() {
+  group('ml_predict', () => {
     const start = Date.now();
     const res = http.get(BASE_URL + '/api/ml/predict/' + SIGNAL_SYM, {
       headers: headers(), tags: { name: 'ml_predict' },
@@ -197,7 +205,7 @@ function testMLPredict() {
 }
 
 function testMLStatus() {
-  group('ml_status', function() {
+  group('ml_status', () => {
     const res = http.get(BASE_URL + '/api/ml/status', {
       headers: headers(), tags: { name: 'ml_status' },
     });
@@ -205,16 +213,47 @@ function testMLStatus() {
   });
 }
 
+function testMacroSnapshot() {
+  group('macro_snapshot', () => {
+    const start = Date.now();
+    const res = http.get(BASE_URL + '/api/macro/snapshot', {
+      headers: headers(), tags: { name: 'macro_snapshot' },
+    });
+    macroLatency.add(Date.now() - start);
+    checkOk(res, 'macro_snapshot', [200, 503]);
+  });
+}
+
+function testMacroStore() {
+  group('macro_store', () => {
+    const start = Date.now();
+    const res = http.get(BASE_URL + '/api/macro/store', {
+      headers: headers(), tags: { name: 'macro_store' },
+    });
+    macroLatency.add(Date.now() - start);
+    checkOk(res, 'macro_store', [200, 503]);
+  });
+}
+
+function testMacroFeatures() {
+  group('macro_features', () => {
+    const res = http.get(BASE_URL + '/api/macro/features', {
+      headers: headers(), tags: { name: 'macro_features' },
+    });
+    checkOk(res, 'macro_features', [200, 503]);
+  });
+}
+
 function testAuthLogin() {
-  group('auth_login', function() {
+  group('auth_login', () => {
     const res = http.post(
       BASE_URL + '/auth/login',
       JSON.stringify({ email: 'loadtest@example.com', password: 'LoadTest123!' }),
       { headers: headers(), tags: { name: 'auth_login' } },
     );
     const ok = check(res, {
-      'login: responds (not 500)': function(r) { return r.status !== 500; },
-      'login: responds fast':      function(r) { return r.timings.duration < 3000; },
+      'login: responds (not 500)': (r) => r.status !== 500,
+      'login: responds fast':      (r) => r.timings.duration < 3000,
     });
     if (res.status === 401) authFailures.add(1);
     errorRate.add(!ok);
@@ -223,29 +262,30 @@ function testAuthLogin() {
 
 function testOrderEndpoint() {
   if (!AUTH_TOKEN) return;
-  group('place_order', function() {
+  group('place_order', () => {
     const symbol = randomItem(SYMBOLS);
     const side   = randomItem(['buy', 'sell']);
     const start  = Date.now();
     const res = http.post(
       BASE_URL + '/api/trading/order',
-      JSON.stringify({ symbol: symbol, side: side, quantity: 0.01, order_type: 'market' }),
+      JSON.stringify({ symbol, side, quantity: 0.01, order_type: 'market' }),
       { headers: headers(), tags: { name: 'place_order' } },
     );
     orderLatency.add(Date.now() - start);
     const ok = check(res, {
-      'order: not 500':         function(r) { return r.status !== 500; },
-      'order: expected status': function(r) { return [201, 400, 401, 403, 422, 429, 503].indexOf(r.status) !== -1; },
+      'order: not 500':         (r) => r.status !== 500,
+      'order: expected status': (r) => [201, 400, 401, 403, 422, 429, 503].indexOf(r.status) !== -1,
     });
     errorRate.add(!ok);
     if (res.status === 201) ordersFilled.add(1);
     if (res.status === 403) riskBlocks.add(1);
+    if (res.status === 429) rateLimitHits.add(1);
   });
 }
 
 function testPositions() {
   if (!AUTH_TOKEN) return;
-  group('positions', function() {
+  group('positions', () => {
     const res = http.get(BASE_URL + '/api/trading/positions', {
       headers: headers(), tags: { name: 'positions' },
     });
@@ -255,7 +295,7 @@ function testPositions() {
 
 function testAccountInfo() {
   if (!AUTH_TOKEN) return;
-  group('account_info', function() {
+  group('account_info', () => {
     const res = http.get(BASE_URL + '/api/trading/account', {
       headers: headers(), tags: { name: 'account_info' },
     });
@@ -264,7 +304,7 @@ function testAccountInfo() {
 }
 
 function testRiskStatus() {
-  group('risk_status', function() {
+  group('risk_status', () => {
     const res = http.get(BASE_URL + '/api/risk/status', {
       headers: headers(), tags: { name: 'risk_status' },
     });
@@ -273,26 +313,81 @@ function testRiskStatus() {
 }
 
 function testPrometheusMetrics() {
-  group('prometheus', function() {
+  group('prometheus', () => {
     const res = http.get(BASE_URL + '/metrics', { tags: { name: 'prometheus_metrics' } });
     checkOk(res, 'prometheus', [200, 403, 404]);
   });
 }
 
+/**
+ * Rate-limit probe: send 15 rapid requests to an auth endpoint and verify
+ * that at least one 429 is returned (rate limiter is active).
+ * Only runs in smoke/load scenarios to avoid inflating error counts.
+ */
+function testRateLimitEnforced() {
+  if (SCENARIO !== 'smoke' && SCENARIO !== 'load') return;
+  group('rate_limit_probe', () => {
+    let got429 = false;
+    for (let i = 0; i < 15; i++) {
+      const res = http.post(
+        BASE_URL + '/auth/login',
+        JSON.stringify({ email: 'ratelimit@example.com', password: 'wrong' }),
+        { headers: headers(), tags: { name: 'rate_limit_probe' } },
+      );
+      if (res.status === 429) { got429 = true; break; }
+    }
+    check({ got429 }, {
+      'rate limiter active (got 429 after rapid requests)': (d) => d.got429,
+    });
+  });
+}
+
+/**
+ * WebSocket smoke test: connect to /ws/live, wait for one message, disconnect.
+ * Counts successful connections and messages received.
+ */
+function testWebSocket() {
+  if (SCENARIO !== 'smoke') return;  // WS test only in smoke to avoid VU exhaustion
+  group('websocket', () => {
+    const url = WS_URL + '/ws/live';
+    const params = AUTH_TOKEN ? { headers: { Authorization: 'Bearer ' + AUTH_TOKEN } } : {};
+    const res = ws.connect(url, params, (socket) => {
+      wsConnects.add(1);
+      socket.on('open', () => {
+        socket.send(JSON.stringify({ type: 'subscribe', symbol: SIGNAL_SYM }));
+      });
+      socket.on('message', (msg) => {
+        wsMessages.add(1);
+        socket.close();
+      });
+      socket.on('error', () => { socket.close(); });
+      socket.setTimeout(() => { socket.close(); }, 5000);
+    });
+    check(res, {
+      'ws: connected (101 or 200)': (r) => r && (r.status === 101 || r.status === 200),
+    });
+  });
+}
+
 // ── Main VU function ──────────────────────────────────────────────────────────
 export default function () {
-  testHealth();            sleep(0.1 * THINK_TIME);
-  testPublicStatus();      sleep(0.1 * THINK_TIME);
-  testMarketData();        sleep(0.2 * THINK_TIME);
-  testSignalEndpoint();    sleep(0.2 * THINK_TIME);
-  testMLStatus();          sleep(0.1 * THINK_TIME);
-  testMLPredict();         sleep(0.3 * THINK_TIME);
-  testRiskStatus();        sleep(0.1 * THINK_TIME);
-  testPrometheusMetrics(); sleep(0.1 * THINK_TIME);
-  testAuthLogin();         sleep(0.3 * THINK_TIME);
-  testOrderEndpoint();     sleep(0.2 * THINK_TIME);
-  testPositions();         sleep(0.2 * THINK_TIME);
-  testAccountInfo();       sleep(0.5 * THINK_TIME);
+  testHealth();              sleep(0.1 * THINK_TIME);
+  testPublicStatus();        sleep(0.1 * THINK_TIME);
+  testMarketData();          sleep(0.2 * THINK_TIME);
+  testSignalEndpoint();      sleep(0.2 * THINK_TIME);
+  testMLStatus();            sleep(0.1 * THINK_TIME);
+  testMLPredict();           sleep(0.3 * THINK_TIME);
+  testMacroSnapshot();       sleep(0.1 * THINK_TIME);
+  testMacroStore();          sleep(0.1 * THINK_TIME);
+  testMacroFeatures();       sleep(0.1 * THINK_TIME);
+  testRiskStatus();          sleep(0.1 * THINK_TIME);
+  testPrometheusMetrics();   sleep(0.1 * THINK_TIME);
+  testAuthLogin();           sleep(0.3 * THINK_TIME);
+  testRateLimitEnforced();   sleep(0.5 * THINK_TIME);
+  testWebSocket();           sleep(0.2 * THINK_TIME);
+  testOrderEndpoint();       sleep(0.2 * THINK_TIME);
+  testPositions();           sleep(0.2 * THINK_TIME);
+  testAccountInfo();         sleep(0.5 * THINK_TIME);
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -313,6 +408,6 @@ export function teardown(data) {
   console.log(
     'Load test complete: scenario=' + data.scenario +
     ' base_url=' + data.base_url +
-    ' started_at=' + data.started_at
+    ' started_at=' + data.started_at,
   );
 }
