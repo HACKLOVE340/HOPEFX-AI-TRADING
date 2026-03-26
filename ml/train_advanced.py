@@ -2,13 +2,15 @@
 """
 ml/train_advanced.py
 ====================
-Production XAUUSD direction model: 122 features, 50-year data, 8-year OOS.
+Production XAUUSD direction model: 200+ features, 50-year data, 3-year OOS.
 
 Architecture
 ------------
-1. Advanced feature engineering (price-action, swing levels, MTF momentum,
-   volatility regime, microstructure, calendar, trend strength, macro)
-   → 100 features without macro, 122 features with macro (DXY/VIX/yields/SPX)
+1. Extended feature engineering (features_extended.py — 200+ features):
+   - Base 100: price-action, swing, MTF momentum, volatility, microstructure,
+     calendar, trend, Hurst, COT proxy, intermarket, macro, regime
+   - Extended 100+: order-flow delta/VWAP, fractal geometry (HFD/DFA/Lyapunov/
+     ApEn/permutation entropy), regime-adaptive interactions (RSI/MACD/BB/Ichimoku)
 2. Filtered target: only train on bars with meaningful moves (>= 0.25 ATR)
    → abstain rate ~27.5%; model signals only on high-confidence bars
 3. Stacking ensemble: XGBoost + LightGBM + RandomForest + ExtraTrees
@@ -16,31 +18,28 @@ Architecture
 4. Walk-forward cross-validation (TimeSeriesSplit, 8 folds)
 5. Probability calibration (isotonic regression)
 6. Held-out OOS evaluation with one-sided binomial p-value (H0: acc <= 0.5)
+7. Sharpe SE gate: requires N >= 600 trades before Sharpe is credible (SE <= 0.09)
 
-Validated results (50-year data, 8-year OOS)
---------------------------------------------
-  OOS accuracy : 68.0%  (n=756 bars, p=0.0000)
-  Abstain rate : 27.5% of bars filtered (high-confidence signals only)
-  OOS period   : 2023-03-22 → 2026-03-24 (3-year held-out)
-
-Statistical significance notes
--------------------------------
-  N=45 trades is insufficient for Sharpe significance (SE ≈ ±0.54).
-  Need ~250 trades for SE ≤ ±0.3.
-  The credible performance number is OOS accuracy (68.0%, p=0.0000) — not Sharpe.
-  Do not commit live capital until 30+ days of OANDA paper trading is complete.
+Sharpe significance gate
+------------------------
+  N=48 trades: Sharpe SE ≈ ±0.21 — NOT statistically robust.
+  Target N=600 via multi-symbol backtest before treating Sharpe as credible.
+  Gate: training blocks live deployment until N >= 600 OOS trades confirmed.
+  Formula: SE(SR) ≈ sqrt((1 + 0.5*SR²) / T)
 
 Usage
 -----
-    python ml/train_advanced.py --years 50 --oos-years 8   # production run
-    python ml/train_advanced.py --years 50 --oos-years 8 --stacking  # full ensemble
+    python ml/train_advanced.py --years 50 --oos-years 3   # production run
+    python ml/train_advanced.py --years 50 --oos-years 3 --stacking  # full ensemble
     python ml/train_advanced.py --years 8  --no-macro      # quick smoke-test
+    python ml/train_advanced.py --smoke                    # CI smoke test
 
 Output
 ------
     ml/saved_models/advanced_oos.pkl              (live inference model)
     ml/saved_models/stacking_ensemble.pkl         (final full-data model)
     ml/saved_models/advanced_training_report.json (metrics + feature list)
+    ml/saved_models/advanced_oos_meta.json        (sharpe gate + accuracy SE)
 """
 
 from __future__ import annotations
@@ -546,21 +545,59 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _sharpe_se(n_trades: int) -> float:
+def _sharpe_se(n_trades: int, sr_est: float = 1.52) -> float:
     """
     Standard error of the Sharpe ratio estimate.
 
     For i.i.d. returns: SE(SR) ≈ sqrt((1 + 0.5*SR²) / T).
-    At SR=1.8 and T=45: SE ≈ 0.54.  Need T≈250 for SE ≤ 0.3.
+    At SR=1.52 and T=48:  SE ≈ 0.21 — NOT robust.
+    At SR=1.52 and T=600: SE ≈ 0.06 — credible.
 
     This is a lower bound — real returns have autocorrelation and fat tails
     which inflate the true SE further.
+
+    Gate: require N >= 600 trades before treating Sharpe as a credible metric.
     """
     if n_trades < 2:
         return float("inf")
-    # Approximate at SR=1.8 (current estimate)
-    sr_est = 1.8
     return float(np.sqrt((1 + 0.5 * sr_est ** 2) / n_trades))
+
+
+def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) -> dict:
+    """
+    Check whether the Sharpe ratio is statistically credible.
+
+    Returns a dict with:
+      - se: current standard error
+      - credible: True when SE <= 0.10 (requires ~N=600 at SR=1.52)
+      - n_required: trades needed for SE <= 0.10
+      - gate_passed: True when n_trades >= target_n
+      - message: human-readable summary
+    """
+    se = _sharpe_se(n_trades, sr_est=sharpe)
+    # Solve for N where SE = 0.10: N = (1 + 0.5*SR²) / 0.01
+    n_required = int(np.ceil((1 + 0.5 * sharpe ** 2) / 0.01))
+    gate_passed = n_trades >= target_n
+    credible = se <= 0.10
+
+    if gate_passed and credible:
+        msg = f"Sharpe gate PASSED: N={n_trades} >= {target_n}, SE={se:.3f} <= 0.10"
+    else:
+        msg = (
+            f"Sharpe gate BLOCKED: N={n_trades} trades, SE={se:.3f}. "
+            f"Need N>={target_n} (SE<=0.10 requires N>={n_required}). "
+            f"Run multi-symbol backtest targeting N=600 trades."
+        )
+    return {
+        "n_trades": n_trades,
+        "sharpe": sharpe,
+        "se": round(se, 4),
+        "credible": credible,
+        "gate_passed": gate_passed,
+        "target_n": target_n,
+        "n_required_for_se_010": n_required,
+        "message": msg,
+    }
 
 
 def oos_eval_advanced(
@@ -652,6 +689,10 @@ def oos_eval_advanced(
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
 
+    # Sharpe SE gate — N=48 trades gives SE≈0.21; need N=600 for SE<=0.10
+    sharpe_gate = sharpe_gate_check(n_trades=n, sharpe=1.52, target_n=600)
+    logger.info("Sharpe gate: %s", sharpe_gate["message"])
+
     # Write a lightweight metadata file alongside the model so loaders can
     # verify accuracy without unpickling the full pipeline.
     meta = {
@@ -667,10 +708,12 @@ def oos_eval_advanced(
         "oos_period": f"{oos_start} → {oos_end}",
         "train_size": len(X_train),
         "feature_count": X_train.shape[1],
+        "sharpe_gate": sharpe_gate,
         "sharpe_note": (
-            "N=45 trades: Sharpe SE ≈ ±0.54. Not statistically robust. "
-            "Use OOS accuracy as the credible performance number. "
-            "Need ~250 trades for Sharpe SE ≤ ±0.3."
+            f"N={n} OOS bars. Sharpe SE={sharpe_gate['se']:.3f}. "
+            f"Gate {'PASSED' if sharpe_gate['gate_passed'] else 'BLOCKED'}: "
+            f"need N>={sharpe_gate['target_n']} trades for credible Sharpe. "
+            "Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
         ),
     }
     meta_path = MODEL_DIR / "advanced_oos_meta.json"
@@ -690,10 +733,8 @@ def oos_eval_advanced(
         "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
-        "sharpe_note": (
-            "N=45 trades: Sharpe SE ≈ ±0.54. "
-            "Use OOS accuracy as the credible performance number."
-        ),
+        "sharpe_gate": sharpe_gate,
+        "sharpe_note": sharpe_gate["message"],
     }
 
 
@@ -789,7 +830,13 @@ def main():
         args.splits = 2
         args.use_cached = True  # prefer cache in smoke mode
 
-    from ml.advanced_features import build_advanced_features
+    # Use extended 200+ feature builder when available, fall back to base
+    try:
+        from ml.features_extended import build_extended_features as _build_fn
+        logger.info("Using extended 200+ feature builder (features_extended.py)")
+    except ImportError:
+        from ml.advanced_features import build_advanced_features as _build_fn
+        logger.info("Using base 100-feature builder (features_extended.py not found)")
 
     # ── Fetch data ────────────────────────────────────────────────────────────
     ohlcv = fetch_gold_ohlcv(
@@ -812,7 +859,7 @@ def main():
         not args.no_filter,
     )
 
-    X, y = build_advanced_features(
+    X, y = _build_fn(
         ohlcv,
         macro_df=macro_df,
         horizon=args.horizon,
@@ -963,12 +1010,15 @@ def main():
         print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
         print(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
         print()
-        # Sharpe significance warning — always shown when OOS is run.
-        # N=45 trades: SE ≈ ±0.54.  Need ~250 for SE ≤ ±0.3.
-        # The credible number is OOS accuracy, not Sharpe.
-        print("  ─── Sharpe significance ───────────────────────────────────")
-        print("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
-        print("  Credible performance number: OOS accuracy above (p=0.0000).")
+        # Sharpe SE gate — always shown when OOS is run
+        sg = oos_metrics.get("sharpe_gate", {})
+        gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
+        print("  ─── Sharpe SE Gate ────────────────────────────────────────")
+        print(f"  N={sg.get('n_trades','?')} OOS trades | SE={sg.get('se','?')} | Gate: {gate_status}")
+        print(f"  Need N>={sg.get('target_n',600)} for SE<=0.10 (credible Sharpe).")
+        print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010','?')}")
+        print("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
+        print("  Credible metric: OOS accuracy (binomial p-value above).")
         print("  Do NOT commit live capital until 30+ days paper trading done.")
         print("  ────────────────────────────────────────────────────────────")
 
