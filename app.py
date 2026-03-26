@@ -603,6 +603,8 @@ async def startup_event():
         .register("mtf_store",            F.init_mtf_store,              required=False, deps=["data_scheduler"])
         # ── Engines ───────────────────────────────────────────────────────────
         .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker", "macro_store", "mtf_store"])
+        # ── Hourly ML retraining (online update + full retrain) ───────────────
+        .register("hourly_trainer",       F.init_hourly_trainer,         required=False, deps=["data_scheduler"])
         .register("reconciler",           F.init_reconciler,             required=False, deps=["database", "broker"])
         .register("telegram_bot",         F.init_telegram_bot,           required=False, deps=["alert_engine"])
         .register("mobile",               _app(F.init_mobile),           required=False, deps=["config"])
