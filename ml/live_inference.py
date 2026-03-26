@@ -206,8 +206,8 @@ class AdvancedModelPredictor:
                     fallback_model="xgb_macro.pkl",
                     fallback_accuracy=0.503,
                 )
-            except Exception:
-                pass
+            except Exception as sentry_exc:
+                logger.debug("Sentry capture failed (non-fatal): %s", sentry_exc)
             return False
 
     @property
