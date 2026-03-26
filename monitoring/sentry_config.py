@@ -145,10 +145,17 @@ def init_sentry() -> bool:
     """
     dsn = os.getenv("SENTRY_DSN", "")
     if not dsn:
-        logger.info(
-            "Sentry disabled — set SENTRY_DSN to enable error tracking and "
-            "performance monitoring"
-        )
+        env = os.getenv("APP_ENV", "development")
+        if env == "production":
+            logger.warning(
+                "SENTRY_DSN is not set in production — production errors will NOT be "
+                "reported. Sign up at https://sentry.io (free tier: 5K errors/month), "
+                "create a FastAPI project, and set SENTRY_DSN in your .env."
+            )
+        else:
+            logger.info(
+                "Sentry disabled (SENTRY_DSN not set) — set it to enable error tracking"
+            )
         return False
 
     try:
