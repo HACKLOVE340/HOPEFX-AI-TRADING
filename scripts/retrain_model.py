@@ -270,7 +270,47 @@ Examples:
         default=_DEFAULT_MODEL_DIR,
         help=f"Output directory for saved weights (default: {_DEFAULT_MODEL_DIR})",
     )
+    parser.add_argument(
+        "--advanced",
+        action="store_true",
+        help=(
+            "Run the advanced 122-feature stacking ensemble (ml/train_advanced.py). "
+            "Equivalent to: python ml/train_advanced.py --years <years> --oos-years 8 "
+            "--use-cached. Produces advanced_oos.pkl for live inference."
+        ),
+    )
+    parser.add_argument(
+        "--oos-years",
+        type=float,
+        default=8.0,
+        help="OOS years for --advanced mode (default: 8.0)",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Smoke-test mode for --advanced: 2 years, no OOS, no macro, 2 splits (~30 s)",
+    )
     args = parser.parse_args()
+
+    # ── Advanced mode: delegate to train_advanced.py ──────────────────────────
+    if args.advanced or args.smoke:
+        import subprocess
+        cmd = [
+            sys.executable, str(_ROOT / "ml" / "train_advanced.py"),
+            "--years", str(args.years),
+            "--oos-years", str(args.oos_years),
+            "--use-cached",
+        ]
+        if args.smoke:
+            cmd.append("--smoke")
+        if args.symbol and args.symbol not in ("XAU_USD", "XAUUSD"):
+            # Map OANDA symbol to yfinance ticker
+            _YF_MAP = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
+            yf_sym = _YF_MAP.get(args.symbol, args.symbol)
+            cmd += ["--symbol", yf_sym]
+        logger.info("Running advanced training: %s", " ".join(cmd))
+        result = subprocess.run(cmd, check=False)
+        sys.exit(result.returncode)
 
     symbols = [args.symbol] if args.symbol else _DEFAULT_SYMBOLS
     symbols = [s.strip() for s in symbols]

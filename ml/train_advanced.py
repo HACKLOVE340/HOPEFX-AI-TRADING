@@ -77,8 +77,42 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
-    """Download XAUUSD/GC=F daily OHLCV from Yahoo Finance."""
+def fetch_gold_ohlcv(
+    symbol: str,
+    years: int,
+    use_cached: bool = False,
+    cached_csv: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Download XAUUSD/GC=F daily OHLCV from Yahoo Finance.
+
+    Parameters
+    ----------
+    symbol      : Yahoo Finance ticker (e.g. 'GC=F')
+    years       : Years of history to fetch
+    use_cached  : If True, try to load from cached_csv before downloading
+    cached_csv  : Path to cached CSV (default: data/XAUUSD_40Y.csv)
+    """
+    # ── Try cached CSV first ──────────────────────────────────────────────────
+    if use_cached:
+        csv_path = Path(cached_csv or (ROOT / "data" / "XAUUSD_40Y.csv"))
+        if csv_path.exists():
+            logger.info("Loading cached OHLCV from %s", csv_path)
+            df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+            df.columns = [c.lower() for c in df.columns]
+            # Trim to requested years
+            cutoff = datetime.now(timezone.utc) - timedelta(days=years * 365)
+            if df.index.tz is not None:
+                cutoff = cutoff
+            else:
+                cutoff = cutoff.replace(tzinfo=None)
+            df = df[df.index >= cutoff]
+            if not df.empty:
+                logger.info("Loaded %d bars from cache (%s → %s)", len(df),
+                            df.index[0].date(), df.index[-1].date())
+                return df
+            logger.warning("Cached CSV empty after date filter — falling back to download")
+
     import yfinance as yf
 
     end = datetime.now(timezone.utc)
@@ -722,12 +756,48 @@ def main():
             "Set to 0 to disable OOS and use walk-forward CV only."
         ),
     )
+    parser.add_argument(
+        "--use-cached",
+        action="store_true",
+        help=(
+            "Load OHLCV from data/XAUUSD_40Y.csv instead of downloading. "
+            "Speeds up repeated runs and CI. Falls back to download if file missing."
+        ),
+    )
+    parser.add_argument(
+        "--cached-csv",
+        type=str,
+        default=None,
+        help="Path to cached OHLCV CSV (used with --use-cached; default: data/XAUUSD_40Y.csv)",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help=(
+            "Smoke-test mode: 2 years, no OOS, no macro, 2 CV splits. "
+            "Completes in ~30 s. For CI and quick sanity checks."
+        ),
+    )
     args = parser.parse_args()
+
+    # ── Smoke-test overrides ──────────────────────────────────────────────────
+    if args.smoke:
+        logger.info("Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2")
+        args.years = 2
+        args.oos_years = 0.0
+        args.no_macro = True
+        args.splits = 2
+        args.use_cached = True  # prefer cache in smoke mode
 
     from ml.advanced_features import build_advanced_features
 
     # ── Fetch data ────────────────────────────────────────────────────────────
-    ohlcv = fetch_gold_ohlcv(args.symbol, args.years)
+    ohlcv = fetch_gold_ohlcv(
+        args.symbol,
+        args.years,
+        use_cached=getattr(args, "use_cached", False),
+        cached_csv=getattr(args, "cached_csv", None),
+    )
     end_dt = datetime.now(timezone.utc)
     start_dt = end_dt - timedelta(days=args.years * 365)
 
