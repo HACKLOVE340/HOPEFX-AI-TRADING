@@ -95,10 +95,24 @@ class ProductionConfigManager:
         if api_url and not api_url.startswith('https://'):
             raise SecureConfigError("Production API must use HTTPS")
         
-        # Check for weak JWT secret
-        jwt_secret = os.getenv('JWT_SECRET_KEY', '')
+        # Check for weak JWT secret — accept canonical name or legacy alias.
+        jwt_secret = (
+            os.getenv("SECURITY_JWT_SECRET", "").strip()
+            or os.getenv("JWT_SECRET_KEY", "").strip()
+        )
+        if not jwt_secret:
+            raise SecureConfigError(
+                "SECURITY_JWT_SECRET is not set. "
+                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
         if len(jwt_secret) < 32:
-            raise SecureConfigError("JWT_SECRET_KEY must be at least 32 characters")
+            raise SecureConfigError(
+                f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32."
+            )
+        if jwt_secret.startswith("CHANGE_ME"):
+            raise SecureConfigError(
+                "SECURITY_JWT_SECRET contains a placeholder value. Replace before deploying."
+            )
     
     def _initialize_development(self) -> None:
         """Development: Generate temporary keys with warnings"""

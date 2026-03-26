@@ -1,0 +1,25 @@
+{
+  "model_file": "advanced_oos.pkl",
+  "trained_at": "2026-03-26T18:06:37.499670+00:00",
+  "oos_accuracy": 0.6733,
+  "oos_accuracy_se": 0.0171,
+  "oos_f1": 0.7222,
+  "oos_auc": 0.7182,
+  "oos_p_value": 0.0,
+  "oos_significant": true,
+  "oos_n": 756,
+  "oos_period": "2022-02-16 \u2192 2026-03-24",
+  "train_size": 3860,
+  "feature_count": 176,
+  "sharpe_gate": {
+    "n_trades": 756,
+    "sharpe": 1.52,
+    "se": 0.0534,
+    "credible": true,
+    "gate_passed": true,
+    "target_n": 600,
+    "n_required_for_se_010": 216,
+    "message": "Sharpe gate PASSED: N=756 >= 600, SE=0.053 <= 0.10"
+  },
+  "sharpe_note": "N=756 OOS bars. Sharpe SE=0.053. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
+}

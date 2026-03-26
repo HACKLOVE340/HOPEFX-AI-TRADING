@@ -169,34 +169,11 @@ def decrypt_totp_secret(stored: str) -> str:
 
 
 # ── Password hashing ─────────────────────────────────────────────────────────
-# Use passlib pbkdf2_sha256 — avoids bcrypt version compatibility issues while
-# still being a secure, well-tested KDF.
-try:
-    from passlib.context import CryptContext
-
-    _pwd_ctx = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-
-    def hash_password(plain: str) -> str:
-        return _pwd_ctx.hash(plain)
-
-    def verify_password(plain: str, hashed: str) -> bool:
-        return _pwd_ctx.verify(plain, hashed)
-
-except ImportError:
-    import hashlib as _hl
-
-    def hash_password(plain: str) -> str:  # type: ignore[misc]
-        salt = secrets.token_hex(16)
-        h = _hl.pbkdf2_hmac("sha256", plain.encode(), salt.encode(), 260_000)
-        return f"pbkdf2:{salt}:{h.hex()}"
-
-    def verify_password(plain: str, hashed: str) -> bool:  # type: ignore[misc]
-        try:
-            _, salt, stored = hashed.split(":")
-            h = _hl.pbkdf2_hmac("sha256", plain.encode(), salt.encode(), 260_000)
-            return h.hex() == stored
-        except Exception:
-            return False
+# Delegate to auth.jwt which uses bcrypt (SHA-256 pre-hash, cost 12).
+# A single implementation ensures the hash written at registration is always
+# the same scheme verified at login — previously this module used pbkdf2_sha256
+# while auth.jwt used bcrypt, causing "hash could not be identified" on login.
+from auth.jwt import hash_password, verify_password  # noqa: F401
 
 
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
