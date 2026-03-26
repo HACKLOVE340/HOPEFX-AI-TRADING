@@ -1,6 +1,6 @@
 {
   "experiment": "mtf_fusion_xauusd_v1",
-  "date": "2026-07-14T00:00:00Z",
+  "date": "2026-03-26T00:00:00Z",
   "model": "xgb_stack",
   "symbol": "XAUUSD",
   "oos_period": {"start": "2023-03-22", "end": "2026-03-24"},
