@@ -509,25 +509,21 @@ def setup_rate_limiting(app):
 
 def init_sentry():
     """
-    Initialise Sentry SDK if SENTRY_DSN is set.
-    Safe to call even if sentry-sdk is not installed.
+    Initialise Sentry SDK with full performance monitoring.
+
+    Delegates to monitoring/sentry_config.py which configures:
+    - Error tracking + stack traces
+    - Performance monitoring (traces_sample_rate, profiles_sample_rate)
+    - FastAPI, SQLAlchemy, Redis, aiohttp integrations
+    - Custom before_send hook (PII scrubbing, health-check noise filtering)
+    - Global tags: service, environment, release, model_version, oanda_region
+    - ML fallback alert via capture_ml_fallback_event()
+
+    Environment variables: SENTRY_DSN, SENTRY_TRACES_SAMPLE_RATE,
+    SENTRY_PROFILES_SAMPLE_RATE, SENTRY_ENVIRONMENT, SENTRY_RELEASE, APP_ENV
     """
-    dsn = os.getenv("SENTRY_DSN", "")
-    if not dsn:
-        logger.info("Sentry disabled (SENTRY_DSN not set)")
-        return
-
     try:
-        import sentry_sdk
-
-        sentry_sdk.init(
-            dsn=dsn,
-            environment=os.getenv("APP_ENV", "development"),
-            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
-            send_default_pii=False,
-        )
-        logger.info("Sentry initialised (env=%s)", os.getenv("APP_ENV", "development"))
-    except ImportError:
-        logger.warning("sentry-sdk not installed — error tracking disabled")
+        from monitoring.sentry_config import init_sentry as _init
+        _init()
     except Exception as exc:
-        logger.warning("Sentry init failed: %s", exc)
+        logger.warning("Sentry init failed (non-fatal): %s", exc)
