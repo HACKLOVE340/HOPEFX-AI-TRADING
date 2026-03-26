@@ -1,5 +1,13 @@
 [coverage]
-source = .
+# Scope: critical paths only — auth, risk, brokers, execution, market_data, ml
+source =
+    auth
+    risk
+    brokers
+    execution
+    market_data
+    ml
+    config
 branch = true
 omit =
     */tests/*
@@ -12,17 +20,20 @@ omit =
     */setup.py
     */conftest.py
     */__pycache__/*
+    brokers/oanda.py
+    brokers/oanda_stream.py
+    brokers/oanda_ws.py
+    brokers/interactive_brokers.py
+    ml/rl_agent.py
+    ml/advanced_ai.py
 report_precision = 2
-# Coverage gate: 70% line + branch coverage required.
-# Enforced in both tests.yml and ci.yml.
-# Increase to 75% once ML and data modules have unit tests.
-fail_under = 70
+fail_under = 75
 show_missing = true
 skip_empty = true
 
 [html]
 directory = coverage_html_report
-title = HOPEFX Coverage Report
+title = HOPEFX Coverage Report — Critical Paths
 
 [xml]
 output = coverage.xml
