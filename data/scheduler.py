@@ -542,7 +542,7 @@ async def backfill(
     Backfill historical OHLCV data from OANDA practice API.
 
     Fetches data in _OANDA_MAX_COUNT-bar chunks from ``from_date`` to
-    ``to_date`` (defaults: 8 years ago → now).  Skips bars already in the CSV.
+    ``to_date`` (defaults: 2015-01-01 → now).  Skips bars already in the CSV.
 
     For intraday timeframes (M1–H4), OANDA practice API provides full history.
     For D/W/M, yfinance provides longer history (GC=F back to ~1974).
@@ -553,7 +553,10 @@ async def backfill(
     if to_date is None:
         to_date = now
     if from_date is None:
-        from_date = now - timedelta(days=365 * 8)
+        # Default: 2015-01-01 — covers 10+ years of H1 data for regime analysis
+        # and multi-cycle backtesting (2015 USD rally, 2018 correction, 2020 COVID,
+        # 2022 rate hike cycle, 2024-2026 gold bull run).
+        from_date = datetime(2015, 1, 1, tzinfo=timezone.utc)
 
     if granularity not in TIMEFRAME_SECONDS:
         logger.error("Unsupported granularity: %s", granularity)
@@ -647,11 +650,13 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python -m data.scheduler                          # update all timeframes\n"
-            "  python -m data.scheduler --timeframe H1           # update H1 only\n"
-            "  python -m data.scheduler --backfill               # backfill 8y H1\n"
+            "  python -m data.scheduler                                    # update all timeframes\n"
+            "  python -m data.scheduler --timeframe H1                     # update H1 only\n"
+            "  python -m data.scheduler --backfill                         # backfill H1 from 2015-01-01\n"
+            "  python -m data.scheduler --backfill --from 2015-01-01       # explicit 2015 start\n"
+            "  python -m data.scheduler --backfill --symbol XAU_USD --granularity H1 --from 2015-01-01\n"
             "  python -m data.scheduler --backfill --granularity M5 --from 2022-01-01\n"
-            "  python -m data.scheduler --backfill --granularity D  # daily bars\n"
+            "  python -m data.scheduler --backfill --granularity D         # daily bars (max history)\n"
         ),
     )
     parser.add_argument(
@@ -678,7 +683,7 @@ if __name__ == "__main__":
         "--from",
         dest="from_date",
         default=None,
-        help="Backfill start date YYYY-MM-DD (default: 8 years ago)",
+        help="Backfill start date YYYY-MM-DD (default: 2015-01-01)",
     )
     parser.add_argument(
         "--to",
