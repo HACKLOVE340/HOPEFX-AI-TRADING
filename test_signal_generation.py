@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import talib
 
@@ -52,7 +51,7 @@ def main(file_path):
     data = load_data(file_path)
     if data is not None:
         data = generate_signals(data)
-        model = train_model(data)
+        train_model(data)
         test_edge_cases(data)
         print(data['Signal'].value_counts())
         # More validation can be added here

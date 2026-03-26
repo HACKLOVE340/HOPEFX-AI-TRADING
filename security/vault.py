@@ -4,18 +4,19 @@ HOPEFX Hardware Security Module (HSM) Integration
 Enterprise-grade key management with secure enclaves
 """
 
-import os
 import hashlib
 import hmac
+import json
+import os
 import secrets
-from typing import Dict, Optional, List, Tuple
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Dict, Optional
+
 from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-import base64
-import json
 
 
 @dataclass
@@ -275,7 +276,7 @@ class APICredentialManager:
     def rotate_credential(self, name: str, new_api_key: str, new_api_secret: str):
         """Rotate credentials with zero downtime"""
         # Store new credentials
-        old_cred = self.credentials.get(name)
+        self.credentials.get(name)
         
         self.add_credential(name, new_api_key, new_api_secret)
         

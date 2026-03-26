@@ -8,7 +8,6 @@ Tests for:
 - Alert management
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
 
@@ -110,7 +109,7 @@ class TestAlert:
         """Test creating an alert."""
         from notifications.alert_engine import (
             Alert, AlertCondition, AlertConditionType, 
-            AlertPriority, AlertStatus
+            AlertPriority
         )
 
         condition = AlertCondition(
@@ -137,7 +136,7 @@ class TestAlert:
         """Test alert active status check."""
         from notifications.alert_engine import (
             Alert, AlertCondition, AlertConditionType, 
-            AlertPriority, AlertStatus
+            AlertStatus
         )
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
@@ -348,7 +347,7 @@ class TestAlertEngine:
 
         engine = AlertEngine()
 
-        alert1 = engine.create_alert("Active", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
+        engine.create_alert("Active", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
         alert2 = engine.create_alert("Paused", "EURUSD", AlertConditionType.PRICE_BELOW, 1.10)
 
         engine.pause_alert(alert2.id)

@@ -10,7 +10,7 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 
 # ================================================================
@@ -170,7 +170,6 @@ class TestChartPattern:
 
     def test_direction_values(self):
         """direction field accepts bullish/bearish/neutral."""
-        from analysis.patterns.chart_patterns import ChartPattern
 
         for direction in ("bullish", "bearish", "neutral"):
             p = self._make_pattern(direction=direction)

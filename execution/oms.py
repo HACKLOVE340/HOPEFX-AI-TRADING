@@ -400,7 +400,7 @@ class ComplexOrderManager:
         Iceberg order: Only shows display_size at a time.
         When slice fills, next slice is revealed.
         """
-        iceberg_id = str(uuid.uuid4())
+        str(uuid.uuid4())
 
         # Create parent order (invisible)
         parent = Order(

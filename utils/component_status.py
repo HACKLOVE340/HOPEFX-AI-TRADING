@@ -8,7 +8,6 @@ Author: HOPEFX Development Team
 Version: 1.0.0
 """
 
-import sys
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any

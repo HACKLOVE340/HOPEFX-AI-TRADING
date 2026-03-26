@@ -10,7 +10,7 @@ import sys
 import types
 import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Inject stub modules for optional heavy dependencies BEFORE any broker import
@@ -96,11 +96,9 @@ _ib_module.LimitOrder = MagicMock
 _ib_module.StopOrder = MagicMock
 from brokers.advanced_orders import (
     AdvancedOrderManager,
-    Order as AdvOrder,
     OrderSide as AdvOrderSide,
     OrderType as AdvOrderType,
     OrderStatus as AdvOrderStatus,
-    TimeInForce,
 )
 from brokers.factory import BrokerFactory
 from brokers.prop_firms.ftmo import FTMOConnector

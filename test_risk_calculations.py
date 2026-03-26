@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 
 class TestRiskCalculations(unittest.TestCase):
 
@@ -20,7 +19,6 @@ class TestRiskCalculations(unittest.TestCase):
         # Test trailing stop logic, assuming a price movement
         entry_price = 100
         trailing_stop_distance = 5  # $5 trailing stop
-        current_price = 110
         trailing_stop = entry_price + trailing_stop_distance
         self.assertEqual(trailing_stop, 105)  # Trailing stop should adjust
 
@@ -43,7 +41,7 @@ class TestRiskCalculations(unittest.TestCase):
         equity = 0  # $0 equity
         atr = float('inf')  # Infinite ATR
         with self.assertRaises(ZeroDivisionError):
-            position_size = equity / atr  # Should raise an error
+            equity / atr  # Should raise an error
 
 if __name__ == '__main__':
     unittest.main()

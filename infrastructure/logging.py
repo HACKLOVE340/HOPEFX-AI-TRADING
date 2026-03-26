@@ -16,10 +16,9 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 import socket
-import platform
 
 try:
     from pythonjsonlogger import jsonlogger

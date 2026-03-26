@@ -2,7 +2,6 @@
 Tests for Institutional Flow Detector (analysis/institutional_flow.py)
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
 

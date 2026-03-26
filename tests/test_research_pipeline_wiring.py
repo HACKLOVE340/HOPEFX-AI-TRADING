@@ -13,10 +13,7 @@ Feature flags are tested via env-var overrides.
 
 from __future__ import annotations
 
-import os
-import sys
-from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd

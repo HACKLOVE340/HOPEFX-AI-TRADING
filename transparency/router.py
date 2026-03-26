@@ -1,5 +1,7 @@
 """transparency/router.py — FastAPI router for execution transparency."""
 
+from datetime import timezone
+
 from transparency.engine import ExecutionTransparencyEngine
 
 def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
@@ -12,7 +14,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter
     from pydantic import BaseModel
     from typing import Optional
 

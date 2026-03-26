@@ -4,14 +4,13 @@ HOPEFX Telemetry & Monitoring
 Production-grade observability with Prometheus/Grafana integration
 """
 
-import time
 import asyncio
-from typing import Dict, List, Optional, Callable
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from collections import defaultdict
-import json
-import socket
+from typing import Callable, Dict, List
+
+import numpy as np
 
 
 @dataclass

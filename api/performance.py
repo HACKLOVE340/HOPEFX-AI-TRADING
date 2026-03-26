@@ -76,7 +76,7 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
 
     values = [p.value for p in curve]
     start = curve[0].value
-    end = values[-1]
+    values[-1]
 
     # Max drawdown
     peak = start

@@ -26,7 +26,6 @@ Run this script to regenerate the chart:
 from __future__ import annotations
 
 import argparse
-import os
 import textwrap
 from pathlib import Path
 

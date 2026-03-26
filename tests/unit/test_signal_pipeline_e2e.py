@@ -14,7 +14,7 @@ tests/unit/test_signal_pipeline_e2e.py
 
 import pytest
 from pathlib import Path
-from risk.manager import RiskManager, RiskConfig, PositionSizingResult
+from risk.manager import RiskManager, RiskConfig
 
 
 # ---------------------------------------------------------------------------

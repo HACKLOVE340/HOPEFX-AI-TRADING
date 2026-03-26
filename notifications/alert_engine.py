@@ -14,8 +14,8 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Callable, Union
-from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Optional, Any, Callable
+from dataclasses import dataclass, field
 from enum import Enum
 import threading
 import uuid

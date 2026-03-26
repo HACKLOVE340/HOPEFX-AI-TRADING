@@ -254,7 +254,7 @@ class AdvancedFeatureEngineer:
         body = abs(df["close"] - df["open"])
         upper_shadow = df["high"] - np.maximum(df["close"], df["open"])
         lower_shadow = np.minimum(df["close"], df["open"]) - df["low"]
-        range_size = df["high"] - df["low"]
+        df["high"] - df["low"]
 
         # Hammer/Hanging Man
         df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (

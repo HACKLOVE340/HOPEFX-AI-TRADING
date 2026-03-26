@@ -15,8 +15,8 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 from collections import defaultdict
 import math
 
@@ -690,7 +690,7 @@ class OrderFlowAnalyzer:
         """
         # Parse timeframe
         tf_minutes = self._parse_timeframe(timeframe)
-        tf_delta = timedelta(minutes=tf_minutes)
+        timedelta(minutes=tf_minutes)
 
         trades = self._trades.get(symbol, [])
         if not trades:

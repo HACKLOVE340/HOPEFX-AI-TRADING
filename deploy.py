@@ -10,7 +10,6 @@ Features:
 - Automatic rollback capabilities
 """
 
-import subprocess
 import sys
 
 class DeploymentManager:

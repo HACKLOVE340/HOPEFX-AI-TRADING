@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
-from collections import deque
 
 try:
     import redis

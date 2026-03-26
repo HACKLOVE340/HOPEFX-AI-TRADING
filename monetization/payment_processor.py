@@ -11,7 +11,7 @@ from typing import Optional, Dict, Callable
 from decimal import Decimal
 from enum import Enum
 
-from .pricing import SubscriptionTier, pricing_manager
+from .pricing import SubscriptionTier
 from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
 from .invoices import invoice_generator

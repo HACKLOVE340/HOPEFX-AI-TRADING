@@ -2,8 +2,7 @@
 Mobile Trading Engine
 """
 
-from typing import Dict, Any, Optional
-from decimal import Decimal
+from typing import Dict, Any
 
 
 class MobileTradingEngine:

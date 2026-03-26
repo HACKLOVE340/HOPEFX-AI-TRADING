@@ -8,15 +8,12 @@ import asyncio
 import pytest
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum
 import logging
 import time
-import random
-import string
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 # Import components to test
 try:
@@ -161,7 +158,7 @@ class UnitTests:
         
         # Invalid tick should raise
         try:
-            invalid = TickData(
+            TickData(
                 timestamp=datetime.now(timezone.utc),
                 bid=1950.0,
                 ask=1949.0,  # Invalid: ask < bid

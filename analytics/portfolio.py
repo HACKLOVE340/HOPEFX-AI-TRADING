@@ -5,7 +5,7 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import json
@@ -14,7 +14,6 @@ warnings.filterwarnings('ignore')
 
 # Visualization
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 
 try:
     import seaborn as sns
@@ -463,7 +462,7 @@ class MultiAssetBacktester:
         # Calculate performance metrics
         returns = equity_df['equity'].pct_change().dropna()
         
-        print(f"\nBacktest complete:")
+        print("\nBacktest complete:")
         print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
         print(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
         print(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
@@ -675,7 +674,7 @@ def create_portfolio_report(
     risk_analyzer.plot_drawdowns(save_path=str(dd_path))
     
     print(f"\nPortfolio report complete: {report_path}")
-    print(f"Key metrics:")
+    print("Key metrics:")
     print(f"  Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
     print(f"  Sortino Ratio: {metrics['sortino_ratio']:.2f}")
     print(f"  Max Drawdown: {metrics['max_drawdown']:.2%}")

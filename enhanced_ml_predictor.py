@@ -20,18 +20,14 @@ License: Proprietary - Institutional Use Only
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple, Any, Union, Callable, Set
+from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum, auto
+from datetime import datetime, timezone
+from enum import Enum
 from collections import deque, defaultdict
-from functools import lru_cache, partial
 import logging
 import json
-import pickle
 import warnings
-from pathlib import Path
-import hashlib
 
 # ML/DL Libraries
 try:
@@ -304,7 +300,7 @@ class AdvancedFeatureEngineer:
             if all(c in df.columns for c in ['open', 'high', 'low']):
                 log_ho = np.log(df['high'] / df['open'])
                 log_lo = np.log(df['low'] / df['open'])
-                log_co = np.log(df['close'] / df['open'])
+                np.log(df['close'] / df['open'])
                 
                 features[f'garman_klass_{w}'] = np.sqrt(
                     0.5 * log_ho ** 2 - (2 * np.log(2) - 1) * log_lo ** 2
@@ -989,7 +985,7 @@ class DeepLearningModel:
             },
             epistemic_uncertainty=epistemic,
             aleatoric_uncertainty=aleatoric,
-            total_uncertainty=epistemic + aleatic,
+            total_uncertainty=epistemic + aleatoric,
             prediction_interval=(
                 float(stats['return']['p5'][0][0]),
                 float(stats['return']['p95'][0][0])
@@ -1480,7 +1476,7 @@ class EnhancedMLPredictor:
         # Optimization results
         self.best_config: Optional[ModelConfig] = None
         
-        logger.info(f"EnhancedMLPredictor initialized")
+        logger.info("EnhancedMLPredictor initialized")
         logger.info(f"  Sequence length: {sequence_length}")
         logger.info(f"  Prediction horizon: {prediction_horizon}")
         logger.info(f"  GPU enabled: {self.use_gpu}")
@@ -1590,7 +1586,7 @@ class EnhancedMLPredictor:
             )
             
             # Build and train model
-            model = DeepLearningModel(config)
+            DeepLearningModel(config)
             
             # Quick training for evaluation
             # Would use cross-validation here
@@ -1988,7 +1984,7 @@ def run_ml_test():
         print(f"Average confidence: {report['recent_performance']['avg_confidence']:.1%}")
     
     print(f"\nFeatures used: {report['feature_count']}")
-    print(f"Top 5 features:")
+    print("Top 5 features:")
     for feat, imp in list(report['top_features'].items())[:5]:
         print(f"  {feat}: {imp:.4f}")
     

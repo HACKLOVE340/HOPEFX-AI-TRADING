@@ -4,10 +4,7 @@ Extended tests for the component status module.
 Covers the individual _check_* functions and print_component_status_report.
 """
 
-import pytest
-from io import StringIO
 from unittest.mock import patch
-import sys
 
 
 class TestComponentStatusIndividualChecks:
@@ -28,31 +25,31 @@ class TestComponentStatusIndividualChecks:
         assert status.health == ComponentHealth.HEALTHY
 
     def test_check_database_available(self):
-        from utils.component_status import _check_database, ComponentHealth
+        from utils.component_status import _check_database
         status = _check_database()
         assert status.name == 'database'
         assert status.available is True
 
     def test_check_brokers_available(self):
-        from utils.component_status import _check_brokers, ComponentHealth
+        from utils.component_status import _check_brokers
         status = _check_brokers()
         assert status.name == 'brokers'
         assert status.available is True
 
     def test_check_strategies_available(self):
-        from utils.component_status import _check_strategies, ComponentHealth
+        from utils.component_status import _check_strategies
         status = _check_strategies()
         assert status.name == 'strategies'
         assert status.available is True
 
     def test_check_risk_available(self):
-        from utils.component_status import _check_risk, ComponentHealth
+        from utils.component_status import _check_risk
         status = _check_risk()
         assert status.name == 'risk'
         assert status.available is True
 
     def test_check_notifications_available(self):
-        from utils.component_status import _check_notifications, ComponentHealth
+        from utils.component_status import _check_notifications
         status = _check_notifications()
         assert status.name == 'notifications'
         assert status.available is True
@@ -114,7 +111,6 @@ class TestComponentStatusIndividualChecks:
 
     def test_check_config_import_error(self):
         """Test config check when import fails."""
-        from utils.component_status import ComponentHealth
         import builtins
         original_import = builtins.__import__
 
@@ -131,7 +127,7 @@ class TestComponentStatusIndividualChecks:
 
     def test_check_cache_import_error(self):
         """Test that _check_cache handles ImportError gracefully when cache module unavailable."""
-        from utils.component_status import _check_cache, ComponentHealth
+        from utils.component_status import _check_cache
         # Normal call should succeed since cache module is importable
         status = _check_cache()
         assert status.name == 'cache'

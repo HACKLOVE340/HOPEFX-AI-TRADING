@@ -1,6 +1,7 @@
 """replay/router.py — FastAPI router for chart replay endpoints."""
 
 from replay.engine import ChartReplayEngine
+from replay.models import ReplaySpeed
 
 def create_replay_router(engine: 'ChartReplayEngine'):
     """

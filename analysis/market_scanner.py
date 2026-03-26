@@ -509,14 +509,14 @@ class MarketScanner:
         # Moving averages
         ma_20 = data.get('ma_20', data.get('sma_20', price))
         ma_50 = data.get('ma_50', data.get('sma_50', price))
-        ma_200 = data.get('ma_200', data.get('sma_200', price))
+        data.get('ma_200', data.get('sma_200', price))
 
         # Indicators
         rsi = data.get('rsi', data.get('rsi_14', 50))
         macd = data.get('macd', 0)
         macd_signal = data.get('macd_signal', 0)
-        stoch_k = data.get('stoch_k', 50)
-        stoch_d = data.get('stoch_d', 50)
+        data.get('stoch_k', 50)
+        data.get('stoch_d', 50)
         atr = data.get('atr', 0)
 
         # Historical levels

@@ -5,7 +5,6 @@ Creates visualizations of backtest results.
 """
 
 import logging
-import pandas as pd
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)

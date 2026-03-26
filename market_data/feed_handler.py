@@ -5,12 +5,16 @@ Ultra-low latency tick processing with normalization
 """
 
 import asyncio
-from typing import Dict, List, Callable, Optional, Set
+import json
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from collections import deque
-import struct
-import numpy as np
+from typing import Callable, Dict, List, Optional, Set
+
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]
 
 
 @dataclass

@@ -6,7 +6,6 @@ Web interface for monitoring the Master Control Core
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 import asyncio
-import json
 from datetime import datetime, timezone
 
 

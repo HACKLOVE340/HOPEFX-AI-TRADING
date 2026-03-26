@@ -1,7 +1,6 @@
 import requests
 import psutil
 import json
-from datetime import datetime
 
 class HealthCheckService:
     def __init__(self):
@@ -56,13 +55,13 @@ class HealthCheckService:
         }
 
     def aggregate_health_status(self):
+        # Connections are injected at runtime; use None as safe default
         status = {
-            "api": self.check_api('http://your.api.url'),
-            # Add other service checks here
-            "db": self.check_database(your_db_connection),
-            "cache": self.check_cache(your_cache_service),
-            "broker": self.check_broker_connections(your_broker),
-            "market_data": self.check_market_data_feed('http://market.data.url'),
+            "api": self.check_api('http://localhost:8000'),
+            "db": self.check_database(None),
+            "cache": self.check_cache(None),
+            "broker": self.check_broker_connections(None),
+            "market_data": self.check_market_data_feed('http://localhost:8000'),
             "system_resources": self.monitor_system_resources(),
         }
         status['alerts'] = self.alerts

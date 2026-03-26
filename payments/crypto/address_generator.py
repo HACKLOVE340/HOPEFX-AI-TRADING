@@ -4,7 +4,6 @@ Address Generator
 Generates unique deposit addresses with BIP32/BIP44 derivation support.
 """
 
-from typing import Dict
 import logging
 import hashlib
 

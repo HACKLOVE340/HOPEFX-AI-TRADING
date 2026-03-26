@@ -11,8 +11,7 @@ PRODUCTION VERSION with all critical fixes:
 import asyncio
 import logging
 import time
-import uuid
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -521,7 +520,7 @@ class HOPEFXBrain:
         returns = np.diff(closes_arr) / closes_arr[:-1]
         
         # Volatility (annualized)
-        volatility = np.std(returns) * np.sqrt(252 * 24)
+        np.std(returns) * np.sqrt(252 * 24)
         
         # Trend using linear regression
         x = np.arange(len(closes_arr[-20:]))
@@ -566,7 +565,7 @@ class HOPEFXBrain:
         trend = (second_half - first_half) / first_half if first_half > 0 else 0
         
         # Volatility
-        volatility = (std_close / mean_close) * 100 if mean_close > 0 else 0
+        (std_close / mean_close) * 100 if mean_close > 0 else 0
         
         # ATR approximation
         atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:])) / 14

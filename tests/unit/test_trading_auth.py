@@ -13,7 +13,7 @@ Covers:
 
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict
 from unittest.mock import AsyncMock, MagicMock
 
 import importlib.util
@@ -54,7 +54,7 @@ if "api" not in sys.modules:
 auth_module = _load_module("api.auth", _API_DIR / "auth.py")
 trading_module = _load_module("api.trading", _API_DIR / "trading.py")
 
-from api.auth import _ROLE_RANK, require_role, get_current_user, validate_order_symbol, validate_order_quantity
+from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity
 router = trading_module.router
 
 

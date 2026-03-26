@@ -7,7 +7,7 @@ Covers uncovered code paths in:
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
 import logging
 
 
@@ -259,7 +259,7 @@ class TestNotificationManagerExtended:
         return NotificationManager(config=config)
 
     def test_send_console_info(self, mgr, caplog):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationLevel
         with caplog.at_level(logging.INFO):
             mgr._send_console('Test info message', NotificationLevel.INFO)
         # Just verify the method runs without exception; log may go to different logger
@@ -298,7 +298,7 @@ class TestNotificationManagerExtended:
                               NotificationChannel.DISCORD])
 
     def test_notify_discord_no_webhook(self, mgr, caplog):
-        from notifications.manager import NotificationLevel, NotificationChannel
+        from notifications.manager import NotificationLevel
         with caplog.at_level(logging.WARNING):
             mgr._send_discord('Test', NotificationLevel.INFO, None)
         # Should log that webhook not configured

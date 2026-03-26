@@ -6,7 +6,6 @@ and exercise cross-module interactions: broker <-> risk manager, metrics
 registry, kill switch, and data scheduler imports.
 """
 
-import asyncio
 import pytest
 
 

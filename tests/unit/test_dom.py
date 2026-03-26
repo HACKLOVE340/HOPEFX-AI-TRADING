@@ -7,7 +7,6 @@ Tests for:
 """
 
 import pytest
-from datetime import datetime
 
 
 class TestOrderBookLevel:

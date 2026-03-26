@@ -4,14 +4,17 @@ Comprehensive health monitoring with dependency checks
 """
 
 import asyncio
-import time
-import psutil
+import logging
 import os
-from typing import Dict, List, Any, Optional, Callable
-from dataclasses import dataclass, field, asdict
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import json
+from typing import Any, Callable, Dict, List, Optional
+
+import psutil
+
+logger = logging.getLogger(__name__)
 
 try:
     from aiohttp import web
@@ -525,8 +528,8 @@ async def start_health_server(host: str = "0.0.0.0", port: int = 8080, checker: 
         
         # Format as Prometheus metrics
         metrics = []
-        metrics.append(f"# HELP hopefx_health Overall health status")
-        metrics.append(f"# TYPE hopefx_health gauge")
+        metrics.append("# HELP hopefx_health Overall health status")
+        metrics.append("# TYPE hopefx_health gauge")
         status_value = 1 if health.status == HealthStatus.HEALTHY else 0
         metrics.append(f"hopefx_health{{status=\"{health.status.value}\"}} {status_value}")
         

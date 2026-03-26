@@ -19,8 +19,8 @@ import logging
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Dict, List
 
 from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType, StrategyStatus
 
@@ -702,7 +702,7 @@ class TestRSIStrategy:
         """Flat prices should produce neutral RSI (≈50) → HOLD."""
         s = self._make()
         rng = np.random.default_rng(99)
-        prices = 1900.0 + rng.uniform(-0.5, 0.5, 60)
+        1900.0 + rng.uniform(-0.5, 0.5, 60)
         df = make_ohlcv_data(periods=60, noise=0.01, seed=55)
         result = s.generate_signal(df)
         assert result["type"] in ("BUY", "SELL", "HOLD")
@@ -1154,7 +1154,6 @@ class TestITS8OSStrategy:
         assert "signal" in result
 
     def test_kill_zone_analysis_in_zone(self, strategy):
-        from datetime import time as dtime
         ts = datetime(2023, 1, 1, 9, 0, 0)  # 09:00 UTC – NY window
         result = strategy._analyze_kill_zones(ts)
         assert "in_kill_zone" in result

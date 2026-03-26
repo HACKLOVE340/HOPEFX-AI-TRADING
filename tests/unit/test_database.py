@@ -2,9 +2,6 @@
 Tests for the database models module.
 """
 
-import pytest
-from datetime import datetime
-from decimal import Decimal
 
 from database.models import (
     Base,

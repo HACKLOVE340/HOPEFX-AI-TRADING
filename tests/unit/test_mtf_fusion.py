@@ -17,8 +17,6 @@ Covers:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -273,7 +271,6 @@ class TestMTFFeatureFlag:
     def test_flag_enabled_by_default(self):
         from config.feature_flags import flags
         # Default is True — MTF fusion is on unless explicitly disabled
-        import os
         os.environ.pop("FEATURE_MTF_FUSION", None)
         assert flags.MTF_FUSION is True
 

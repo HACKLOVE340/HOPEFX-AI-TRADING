@@ -24,18 +24,14 @@ Environment variables
 from __future__ import annotations
 
 import ast
-import asyncio
 import importlib.util
-import inspect
 import logging
 import os
-import sys
 import tempfile
 import textwrap
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import openai
@@ -209,7 +205,7 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
             return None, f"Banned token '{token}' found in generated code"
 
     try:
-        tree = ast.parse(code)
+        ast.parse(code)
     except SyntaxError as exc:
         return None, f"SyntaxError: {exc}"
 

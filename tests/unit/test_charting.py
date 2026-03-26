@@ -3,8 +3,6 @@ Tests for the charting module.
 """
 
 import pytest
-import numpy as np
-from datetime import datetime
 
 from charting.chart_engine import Chart, ChartEngine, ChartType
 from charting.indicators import Indicator, SMA, EMA, RSI, IndicatorLibrary

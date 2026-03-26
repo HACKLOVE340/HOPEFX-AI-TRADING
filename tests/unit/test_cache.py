@@ -2,10 +2,7 @@
 Tests for the cache module.
 """
 
-import pytest
-import time
-from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from cache.market_data_cache import (
     Timeframe,

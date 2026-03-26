@@ -13,11 +13,10 @@ Enhances the base OrderFlowAnalyzer with:
 """
 
 import logging
-import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

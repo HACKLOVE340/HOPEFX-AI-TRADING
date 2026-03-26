@@ -5,8 +5,7 @@ Unit tests for risk management.
 import pytest
 from decimal import Decimal
 
-from core.domain_enums import TradeDirection
-from core.domain_models import Account, Signal
+from core.domain_models import Account
 from risk.manager import RiskManager, RiskConfig
 from risk.position_sizing import PositionSizer
 from kill_switch import KillSwitch

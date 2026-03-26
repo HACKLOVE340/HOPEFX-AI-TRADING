@@ -265,7 +265,7 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        proba = (
+        (
             model.predict_proba(X_test)[:, 1]
             if hasattr(model, "predict_proba")
             else preds

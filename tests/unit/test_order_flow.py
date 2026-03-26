@@ -8,7 +8,6 @@ Tests for:
 - Delta/Cumulative Delta
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
 

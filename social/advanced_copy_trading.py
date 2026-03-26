@@ -9,9 +9,8 @@ Advanced Copy Trading Engine
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import uuid
-import json
 from enum import Enum
 
 class TradeStatus(Enum):

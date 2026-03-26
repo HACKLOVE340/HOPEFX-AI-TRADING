@@ -9,7 +9,6 @@ Tests cover:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 @pytest.mark.unit

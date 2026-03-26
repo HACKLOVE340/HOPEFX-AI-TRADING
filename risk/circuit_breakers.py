@@ -164,7 +164,7 @@ class CircuitBreaker:
         cutoff_hour = now - timedelta(hours=1)
 
         recent_minute = sum(1 for t in self.orders_last_minute if t > cutoff_minute)
-        recent_hour = sum(1 for t in self.orders_last_hour if t > cutoff_hour)
+        sum(1 for t in self.orders_last_hour if t > cutoff_hour)
 
         if recent_minute >= self.limits.max_orders_per_minute:
             await self._trigger_circuit_breaker(
@@ -192,7 +192,6 @@ class CircuitBreaker:
             if self.state == CircuitState.OPEN:
                 return  # Already open
 
-            old_state = self.state
             self.state = CircuitState.OPEN
 
             # Record breach

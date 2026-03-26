@@ -2,7 +2,6 @@
 Tests for the component status utilities module.
 """
 
-import pytest
 
 from utils.component_status import (
     ComponentStatus,

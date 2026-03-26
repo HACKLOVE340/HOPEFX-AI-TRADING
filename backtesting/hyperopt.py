@@ -32,7 +32,7 @@ Usage:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd

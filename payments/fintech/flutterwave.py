@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict
 import logging
-import hashlib
 
 logger = logging.getLogger(__name__)
 

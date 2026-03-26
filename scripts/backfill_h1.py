@@ -130,7 +130,7 @@ async def _run(args: argparse.Namespace) -> None:
     total_bars_estimate = int((to_dt - from_dt).total_seconds() / bar_secs)
     output_path = _csv_path(args.symbol, args.granularity)
 
-    print(f"\nHOPEFX H1 Backfill")
+    print("\nHOPEFX H1 Backfill")
     print("=" * 50)
     print(f"  Symbol      : {args.symbol}")
     print(f"  Granularity : {args.granularity}")

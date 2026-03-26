@@ -10,7 +10,6 @@ from enum import Enum
 from typing import Dict, Optional, List, Tuple
 from dataclasses import dataclass
 import logging
-import hashlib
 import secrets
 
 logger = logging.getLogger(__name__)

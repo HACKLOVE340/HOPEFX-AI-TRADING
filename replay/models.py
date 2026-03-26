@@ -1,6 +1,6 @@
 """replay/models.py — Data models for chart replay."""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

@@ -6,7 +6,11 @@ CUDA-powered inference for sub-millisecond predictions
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
+from typing import Dict, List
+
+import numpy as np
 
 try:
     import torch

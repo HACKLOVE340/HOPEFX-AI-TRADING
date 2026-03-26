@@ -3,9 +3,7 @@ Unit tests for Broker connectors.
 """
 
 import pytest
-from datetime import datetime
 
-from brokers import PaperTradingBroker
 from brokers.base import OrderType, OrderSide, OrderStatus
 
 
@@ -78,7 +76,7 @@ class TestPaperTradingBroker:
         # Cancel it
         result = paper_broker.cancel_order(order_id)
 
-        assert result == True
+        assert result
         canceled_order = paper_broker.get_order(order_id)
         assert canceled_order.status == OrderStatus.CANCELLED
 
@@ -101,7 +99,7 @@ class TestPaperTradingBroker:
     def test_close_position(self, paper_broker):
         """Test closing a position."""
         # Open a position
-        order = paper_broker.place_order(
+        paper_broker.place_order(
             symbol="EUR_USD",
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
@@ -112,7 +110,7 @@ class TestPaperTradingBroker:
         # Close it (using symbol, not position_id)
         result = paper_broker.close_position("EUR_USD")
 
-        assert result == True
+        assert result
 
     def test_calculate_pnl_profit(self, paper_broker):
         """Test P&L calculation for profitable trade."""
@@ -134,7 +132,7 @@ class TestPaperTradingBroker:
         result = paper_broker.close_position("EUR_USD")
 
         # Should have made profit
-        assert result == True
+        assert result
         assert paper_broker.balance > initial_balance  # Balance should increase
 
     def test_calculate_pnl_loss(self, paper_broker):
@@ -157,7 +155,7 @@ class TestPaperTradingBroker:
         result = paper_broker.close_position("EUR_USD")
 
         # Should have lost money
-        assert result == True
+        assert result
         assert paper_broker.balance < initial_balance  # Balance should decrease
 
     def test_get_account_info(self, paper_broker):

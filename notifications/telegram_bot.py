@@ -30,7 +30,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class TelegramBot:
             logger.warning("Telegram bot not started: TELEGRAM_BOT_TOKEN not set")
             return
         try:
-            from telegram.ext import Application, CommandHandler
+            from telegram.ext import Application
             self._app = Application.builder().token(self.token).build()
             self._register_handlers()
             await self._app.initialize()

@@ -2,9 +2,7 @@
 Tests for the social trading module.
 """
 
-import pytest
 from decimal import Decimal
-from datetime import datetime
 
 from social.copy_trading import CopyTradingEngine, CopyRelationship
 from social.leaderboards import LeaderboardManager, LeaderboardEntry

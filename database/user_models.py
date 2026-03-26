@@ -14,8 +14,7 @@ from datetime import datetime
 from database.models import Base
 
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, Text,
-    Integer, ForeignKey, Index, Enum as SAEnum,
+    Column, String, Boolean, DateTime, Integer, ForeignKey, Index,
 )
 from sqlalchemy.orm import relationship
 

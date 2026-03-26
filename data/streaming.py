@@ -13,7 +13,7 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -503,7 +503,7 @@ def create_streaming_router(service: StreamingService):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
     import json
 
     router = APIRouter(prefix="/api/stream", tags=["Streaming"])

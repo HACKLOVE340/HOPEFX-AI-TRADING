@@ -6,7 +6,6 @@ end-to-end without requiring external services.
 """
 
 import pytest
-from decimal import Decimal
 
 
 class TestFullTradePipeline:

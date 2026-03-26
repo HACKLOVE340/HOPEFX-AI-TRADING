@@ -20,7 +20,9 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -429,7 +431,7 @@ def _compute_ml_probability(
 
             # ── Phase 3: online learning blend ────────────────────────────────
             # Store the post-anomaly prob as primary_prob for adaptive weight updates
-            primary_prob_for_online = float(prob)
+            float(prob)
             online_store = _get_online_learner_store()
             if online_store is not None and online_store.is_ready:
                 try:

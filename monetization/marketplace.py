@@ -4,10 +4,9 @@ Strategy listings, pricing engine, subscription management, license validation
 """
 
 import json
-import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
@@ -521,7 +520,7 @@ class SubscriptionManager:
         
         # Calculate price
         base_price = strategy.price_monthly if billing_cycle == "monthly" else strategy.price_yearly
-        price_info = self.pricing.calculate_price(base_price, tier, billing_cycle)
+        self.pricing.calculate_price(base_price, tier, billing_cycle)
         
         # Create subscription
         subscription_id = secrets.token_hex(16)
@@ -743,9 +742,9 @@ class PurchaseStatus(_enum.Enum):
     REFUNDED = "refunded"
 
 # Dataclass-style aliases
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime
 
 @dataclass
 class MarketplaceStrategy:
@@ -843,8 +842,9 @@ class StrategyMarketplace:
         self._reviews: Dict[str, _Review] = {}
         self.config = config or {}
 
-    def list_strategy(self, creator_id: str, name: str = "", description: str = "",
-                      category=None, price=0, tags=None) -> _StrategyListing:
+    def _list_strategy_internal(self, creator_id: str, name: str = "", description: str = "",
+                                category=None, price=0, tags=None) -> _StrategyListing:
+        """Internal strategy listing creation (used by list_strategy shim)."""
         sid = str(_uuid.uuid4())
         s = _StrategyListing(strategy_id=sid, creator_id=creator_id, name=name,
                               description=description, category=category,

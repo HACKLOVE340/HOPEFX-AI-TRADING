@@ -1,5 +1,4 @@
 import pytest
-from datetime import datetime
 from social.marketplace import StrategyMarketplace, StrategyListing
 
 class TestStrategyMarketplace:

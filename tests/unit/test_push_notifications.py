@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,7 +120,7 @@ class TestFCMHttpCall:
         mock_response.read.return_value = b'{"success": 1, "failure": 0}'
 
         with patch("urllib.request.urlopen", return_value=mock_response) as mock_open:
-            result = mgr.send_notification("user-fcm", "Title", "Body")
+            mgr.send_notification("user-fcm", "Title", "Body")
 
         assert mock_open.called
         # The request should include the Authorization header

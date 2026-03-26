@@ -8,12 +8,11 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import pandas as pd
-from scipy import signal
 from scipy.ndimage import argrelextrema
 
 logger = logging.getLogger(__name__)
@@ -263,11 +262,6 @@ class AdvancedPatternDetector:
         patterns = []
         
         # Fibonacci ratios for harmonic patterns
-        GARTLEY_RATIOS = {
-            'XA_to_AB': (0.618, 0.618),
-            'AB_to_BC': (0.382, 0.886),
-            'BC_to_CD': (1.272, 1.618)
-        }
         
         peaks = argrelextrema(high, np.greater, order=5)[0]
         troughs = argrelextrema(low, np.less, order=5)[0]

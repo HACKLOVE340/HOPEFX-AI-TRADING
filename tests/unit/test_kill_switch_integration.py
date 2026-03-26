@@ -11,12 +11,9 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
 
 from risk.manager import RiskManager, RiskConfig
 

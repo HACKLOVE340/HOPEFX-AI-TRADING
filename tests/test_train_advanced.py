@@ -162,7 +162,6 @@ class TestWalkForwardEval:
 class TestOosEvalAdvanced:
     @pytest.fixture(scope="class")
     def cv_oos_split(self, tmp_path_factory):
-        from ml.advanced_features import build_advanced_features
         import ml.train_advanced as ta
 
         # Redirect MODEL_DIR to a temp directory so tests don't pollute saved_models/
@@ -174,7 +173,6 @@ class TestOosEvalAdvanced:
 
     def test_accuracy_in_range(self, cv_oos_split):
         from ml.train_advanced import oos_eval_advanced
-        import ml.train_advanced as ta
 
         X_cv, y_cv, X_oos, y_oos = cv_oos_split
         result = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
@@ -293,7 +291,6 @@ class TestExtractFeatureImportance:
 class TestCLIDefaults:
     def _parse(self, args: list[str]) -> argparse.Namespace:
         """Parse args using the same parser as main() without running training."""
-        import importlib, sys
 
         # Patch sys.argv and import the module's parser setup
         parser = argparse.ArgumentParser()

@@ -30,8 +30,6 @@ Enhanced features (v3):
 """
 
 import json
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -44,7 +42,6 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parent.parent

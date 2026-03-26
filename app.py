@@ -30,11 +30,10 @@ logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 import uvicorn
 
 # Add project root to path
@@ -42,7 +41,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
-from auth.router import router as auth_router, set_auth_service
+from auth.router import router as auth_router
 from api.trading import router as trading_router
 from api.monetization import router as monetization_router
 from api.backtesting import router as backtesting_router
@@ -79,10 +78,7 @@ except Exception as _gql_err:
     _graphql_router = None
     _graphql_available = False
     logger.warning("GraphQL router not loaded: %s", _gql_err)
-from cache import MarketDataCache
-from config import initialize_config
 from config.feature_flags import flags as feature_flags
-from database.models import Base
 from kill_switch import KillSwitch, create_kill_switch_router
 
 # (logging and logger already configured at module top)
@@ -504,7 +500,7 @@ def _run_startup_stress_tests(risk_manager: Any) -> None:
     """
     try:
         from risk.advanced_analytics import AdvancedRiskAnalytics
-        analytics = AdvancedRiskAnalytics()
+        AdvancedRiskAnalytics()
 
         scenarios = [
             {"name": "2008 Financial Crisis",   "equity_shock": -0.38, "vol_multiplier": 3.5},

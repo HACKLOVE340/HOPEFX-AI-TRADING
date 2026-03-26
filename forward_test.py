@@ -26,7 +26,6 @@ import random
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -466,7 +465,7 @@ async def _async_main() -> int:
                 args.mode, args.ticks, args.seed)
     harness = ForwardTestHarness(ticks=args.ticks, seed=args.seed)
     try:
-        metrics = await harness.run()
+        await harness.run()
         logger.info("Forward test completed successfully")
         return 0
     except Exception as exc:

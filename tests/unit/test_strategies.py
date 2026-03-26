@@ -4,10 +4,7 @@ Unit tests for trading strategies.
 
 import pytest
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 
-from strategies import BaseStrategy, StrategyManager
 from strategies.ma_crossover import MovingAverageCrossover
 
 
@@ -21,7 +18,7 @@ class TestBaseStrategy:
 
         assert strategy.name == "MockStrategy"
         assert strategy.symbol == "EUR_USD"
-        assert strategy.is_active == False
+        assert not strategy.is_active
         assert strategy.performance['total_signals'] == 0
 
     def test_strategy_start_stop(self, test_config, mock_strategy):
@@ -29,10 +26,10 @@ class TestBaseStrategy:
         strategy = mock_strategy()
 
         strategy.start()
-        assert strategy.is_active == True
+        assert strategy.is_active
 
         strategy.stop()
-        assert strategy.is_active == False
+        assert not strategy.is_active
 
     def test_strategy_pause_resume(self, test_config, mock_strategy):
         """Test pausing and resuming strategy."""
@@ -40,10 +37,10 @@ class TestBaseStrategy:
 
         strategy.start()
         strategy.pause()
-        assert strategy.is_active == False
+        assert not strategy.is_active
 
         strategy.resume()
-        assert strategy.is_active == True
+        assert strategy.is_active
 
     def test_update_performance(self, test_config, mock_strategy):
         """Test performance tracking."""

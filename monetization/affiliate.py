@@ -12,14 +12,13 @@ This module handles:
 import logging
 import secrets
 import string
-import hashlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
 from dataclasses import dataclass
 
-from .pricing import SubscriptionTier, pricing_manager
+from .pricing import SubscriptionTier
 
 logger = logging.getLogger(__name__)
 

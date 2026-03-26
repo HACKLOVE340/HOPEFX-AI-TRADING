@@ -10,7 +10,7 @@ Comprehensive tests for Phases 17-26 modules:
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 import numpy as np
 
 
@@ -48,7 +48,6 @@ class TestChartReplayExtended:
         engine.stop(session.session_id)
 
     def test_play_finished_session_returns_false(self, engine, session):
-        from replay import ReplayState
         engine.stop(session.session_id)  # Mark as finished
         result = engine.play(session.session_id)
         assert result is False
@@ -796,7 +795,6 @@ class TestTeamsExtended:
 
     @pytest.fixture
     def team_with_owner(self, manager):
-        from teams import UserRole
         team = manager.create_team('Alpha Team', 'owner1@test.com', 'Owner One',
                                    owner_id='owner1')
         return team
@@ -826,7 +824,7 @@ class TestTeamsExtended:
         viewer_inv = manager.invite_member(
             team_with_owner.team_id, 'viewer@x.com', UserRole.VIEWER, 'owner1'
         )
-        viewer = manager.accept_invitation(viewer_inv.token, 'viewer1', 'Viewer One')
+        manager.accept_invitation(viewer_inv.token, 'viewer1', 'Viewer One')
         result = manager.invite_member(
             team_with_owner.team_id, 'new@x.com', UserRole.TRADER, 'viewer1'
         )

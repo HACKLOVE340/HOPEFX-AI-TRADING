@@ -5,8 +5,7 @@ Tracks positions, equity, and generates performance history.
 """
 
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datetime import datetime
 import logging
 from backtesting.events import FillEvent

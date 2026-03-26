@@ -12,7 +12,6 @@ tests/unit/test_risk_properties.py
   8. update_equity never produces negative current_drawdown
 """
 
-import pytest
 import numpy as np
 from pathlib import Path
 

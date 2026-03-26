@@ -12,7 +12,6 @@ This module provides security-related utilities for the HOPEFX AI Trading platfo
 import os
 import re
 import logging
-import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Pattern

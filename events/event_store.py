@@ -3,11 +3,10 @@ HOPEFX Event Store
 Event sourcing for complete audit trail and replay capability
 """
 
-import json
 import logging
 import uuid
 from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from collections import defaultdict

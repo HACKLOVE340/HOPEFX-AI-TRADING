@@ -8,7 +8,7 @@ import base64
 import hashlib
 import secrets
 import logging
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Tuple, List
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -137,7 +137,6 @@ class SecureVault:
         """
         try:
             # Store old cipher
-            old_cipher = self._cipher
             
             # Set new key
             self._master_key = new_master_key

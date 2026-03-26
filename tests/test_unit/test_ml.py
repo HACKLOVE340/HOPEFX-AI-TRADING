@@ -3,7 +3,6 @@
 import asyncio
 import pytest
 import numpy as np
-from datetime import datetime, timezone
 
 try:
     from ml.online_learner import XGBoostOnlineModel  # type: ignore[import]
@@ -50,7 +49,7 @@ def test_drift_detection():
 
     # Feed reference-like samples to fill the buffer
     for val in np.random.normal(0, 0.01, 100):
-        result = detector.update(float(val))
+        detector.update(float(val))
 
     # Now feed shifted samples — detector should trip
     metrics = None

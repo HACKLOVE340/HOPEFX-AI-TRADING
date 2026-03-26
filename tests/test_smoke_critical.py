@@ -7,7 +7,6 @@ without crashing. No external services required.
 
 from __future__ import annotations
 
-import importlib
 import pytest
 
 

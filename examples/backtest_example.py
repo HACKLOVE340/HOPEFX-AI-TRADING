@@ -10,7 +10,7 @@ import logging
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict
 
 import numpy as np
 
@@ -309,7 +309,7 @@ def main():
         fig, axes = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
         
         # Equity curve
-        timestamps = [e['timestamp'][:10] for e in engine.equity_curve[::24]]  # Daily samples
+        [e['timestamp'][:10] for e in engine.equity_curve[::24]]  # Daily samples
         equities = [e['equity'] for e in engine.equity_curve[::24]]
         
         axes[0].plot(range(len(equities)), equities, label='Equity', color='#2E86AB', linewidth=2)

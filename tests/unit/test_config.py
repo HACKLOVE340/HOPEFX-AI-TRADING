@@ -4,7 +4,6 @@ Tests for the config management module.
 
 import pytest
 import os
-from unittest.mock import patch
 
 from config.config_manager import (
     EncryptionManager,

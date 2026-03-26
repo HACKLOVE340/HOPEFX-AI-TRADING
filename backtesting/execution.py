@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from backtesting.events import OrderEvent, FillEvent
-from backtesting.engine import Order, OrderStatus
+from backtesting.engine import Order
 
 
 class OrderResult:

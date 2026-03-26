@@ -6,11 +6,9 @@ Professional trading dashboard with WebSocket updates
 import asyncio
 import json
 import logging
-from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass, asdict
+from typing import Dict, Optional, Any, Set
 from datetime import datetime, timezone
 from collections import deque
-import random
 
 try:
     from aiohttp import web, WSMsgType

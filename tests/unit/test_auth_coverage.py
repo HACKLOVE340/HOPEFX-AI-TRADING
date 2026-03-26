@@ -9,10 +9,8 @@ No external services required — all DB calls are mocked.
 
 from __future__ import annotations
 
-import os
-import sys
 import pytest
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone, timedelta
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

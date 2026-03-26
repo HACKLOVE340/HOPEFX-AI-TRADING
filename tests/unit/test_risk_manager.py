@@ -4,12 +4,9 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
 import pytest
-import pytest_asyncio
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-import asyncio
+from datetime import datetime, timezone
 
-from risk.manager import RiskManager, RiskCheckResult, RiskLevel
+from risk.manager import RiskManager, RiskLevel
 from risk.advanced_analytics import RiskAnalytics
 from database.models import Trade, Position, Account
 
@@ -153,12 +150,9 @@ Integration tests for broker connectivity and order execution
 """
 
 import pytest
-import asyncio
 from unittest.mock import Mock, patch
 
 from brokers.oanda import OandaBroker
-from brokers.paper_trading import PaperTradingBroker
-from brokers.factory import BrokerFactory
 
 class TestOandaIntegration:
     """Test OANDA API integration with mock responses"""
@@ -223,8 +217,6 @@ End-to-end trading workflow tests
 """
 
 import pytest
-import asyncio
-from datetime import datetime, timezone
 
 class TestTradingWorkflow:
     """Full system integration test"""

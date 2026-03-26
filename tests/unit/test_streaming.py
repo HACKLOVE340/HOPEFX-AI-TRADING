@@ -3,7 +3,7 @@ Tests for Real-Time Streaming Service (data/streaming.py)
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 
 class TestTick:
