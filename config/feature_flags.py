@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import os
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -476,9 +476,12 @@ class FeatureFlags:
         default=False,
         status=FeatureStatus.EXPERIMENTAL,
         description=(
-            "Phase 2: Anomaly weighting. Signals generated during anomalous "
-            "market conditions (Isolation Forest score > 0.7) are down-weighted "
-            "by 50%. Prerequisite: Phase 1 complete + 30-day paper trading run."
+            "Phase 2: Anomaly weighting (IF+LOF ensemble). Signals on anomalous "
+            "bars are blended toward neutral by down_weight_factor (default 0.5). "
+            "Gate: 30-day OANDA paper run must complete and paper Sharpe must not "
+            "drop by more than 0.2 after enabling. "
+            "Set OANDA_PAPER_RUN_START_UTC to the ISO-8601 start timestamp. "
+            "Enable with FEATURE_ANOMALY_WEIGHTING=true after gate passes."
         ),
     )
     ONLINE_LEARNING = _FeatureDef(
@@ -486,10 +489,13 @@ class FeatureFlags:
         default=False,
         status=FeatureStatus.EXPERIMENTAL,
         description=(
-            "Phase 3: Online learning with drift detection. Blends the primary "
-            "model (0.7) with an IncrementalXGBoost that updates on each "
-            "confirmed fill (0.3). Prerequisite: Phase 2 complete + 90-day paper "
-            "trading run."
+            "Phase 3: Online learning with ADWIN+Page-Hinkley drift detection. "
+            "Blends primary model (default 0.7) with IncrementalXGBoost that "
+            "updates on each confirmed fill (default 0.3). Adaptive weights shift "
+            "toward the better-performing model. "
+            "Gate: 90-day OANDA paper run with >= 500 fills. "
+            "Set OANDA_PAPER_RUN_START_UTC and OANDA_PAPER_FILL_COUNT. "
+            "Enable with FEATURE_ONLINE_LEARNING=true after gate passes."
         ),
     )
     DEEP_ENSEMBLE = _FeatureDef(
@@ -497,9 +503,12 @@ class FeatureFlags:
         default=False,
         status=FeatureStatus.EXPERIMENTAL,
         description=(
-            "Phase 4: Deep learning ensemble (LSTM/Transformer/TCN). Adds a "
-            "third stacking component when OOS accuracy exceeds 70% (p<0.001). "
-            "Prerequisite: Phase 3 complete + GPU training infrastructure."
+            "Phase 4: Deep learning ensemble (LSTM/Transformer/TCN/Hybrid). "
+            "Blends deep model probability (default weight 0.2) with the Phase 3 "
+            "output. Gate: OOS accuracy >= 70% AND p-value < 0.001 (enforced in "
+            "DeepEnsembleStore.load()). GPU training required. "
+            "Set DEEP_ENSEMBLE_MODEL_PATH and DEEP_ENSEMBLE_META_PATH. "
+            "Enable with FEATURE_DEEP_ENSEMBLE=true after training and OOS eval."
         ),
     )
 
@@ -588,6 +597,176 @@ class FeatureFlags:
 
 
 # ---------------------------------------------------------------------------
+# Phase gate enforcement helpers
+# ---------------------------------------------------------------------------
+
+def check_phase2_gate() -> Tuple[bool, str]:
+    """
+    Verify the Phase 2 (anomaly weighting) paper-trading gate.
+
+    Reads OANDA_PAPER_RUN_START_UTC from the environment and checks that
+    at least 30 calendar days have elapsed since the paper run started.
+
+    Returns
+    -------
+    (passed, reason) : bool and human-readable explanation.
+    """
+    import os
+    from datetime import datetime, timedelta, timezone
+
+    start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
+    if not start_str:
+        return False, (
+            "OANDA_PAPER_RUN_START_UTC not set. "
+            "Set to ISO-8601 UTC timestamp when the paper run started."
+        )
+    try:
+        start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        elapsed = datetime.now(timezone.utc) - start
+        required = timedelta(days=30)
+        if elapsed < required:
+            remaining = required - elapsed
+            return False, (
+                f"Phase 2 gate: {elapsed.days} days elapsed, "
+                f"{remaining.days} days remaining (need 30)."
+            )
+        return True, f"Phase 2 gate passed: {elapsed.days} days elapsed."
+    except ValueError as exc:
+        return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
+
+
+def check_phase3_gate() -> Tuple[bool, str]:
+    """
+    Verify the Phase 3 (online learning) paper-trading gate.
+
+    Checks that:
+    1. At least 90 calendar days have elapsed since OANDA_PAPER_RUN_START_UTC.
+    2. OANDA_PAPER_FILL_COUNT >= 500.
+
+    Returns
+    -------
+    (passed, reason) : bool and human-readable explanation.
+    """
+    import os
+    from datetime import datetime, timedelta, timezone
+
+    # Check fill count
+    fill_count_str = os.getenv("OANDA_PAPER_FILL_COUNT", "0")
+    try:
+        fill_count = int(fill_count_str)
+    except ValueError:
+        return False, f"OANDA_PAPER_FILL_COUNT is not an integer: {fill_count_str!r}"
+
+    if fill_count < 500:
+        return False, (
+            f"Phase 3 gate: {fill_count} fills recorded, need >= 500. "
+            "Set OANDA_PAPER_FILL_COUNT after the paper run completes."
+        )
+
+    # Check elapsed days
+    start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
+    if not start_str:
+        return False, (
+            "OANDA_PAPER_RUN_START_UTC not set. "
+            "Set to ISO-8601 UTC timestamp when the paper run started."
+        )
+    try:
+        start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        elapsed = datetime.now(timezone.utc) - start
+        required = timedelta(days=90)
+        if elapsed < required:
+            remaining = required - elapsed
+            return False, (
+                f"Phase 3 gate: {elapsed.days} days elapsed, "
+                f"{remaining.days} days remaining (need 90)."
+            )
+        return True, (
+            f"Phase 3 gate passed: {elapsed.days} days elapsed, "
+            f"{fill_count} fills."
+        )
+    except ValueError as exc:
+        return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
+
+
+def check_phase4_gate(
+    oos_accuracy: float,
+    p_value: float,
+    oos_accuracy_gate: float = 0.70,
+    p_value_gate: float = 0.001,
+) -> Tuple[bool, str]:
+    """
+    Verify the Phase 4 (deep ensemble) OOS gate.
+
+    Both conditions must pass atomically.  This mirrors the check in
+    DeepEnsembleStore._check_oos_gate() but is callable independently
+    for pre-flight validation before enabling the flag.
+
+    Parameters
+    ----------
+    oos_accuracy      : OOS accuracy from the trained model's meta JSON.
+    p_value           : p-value from the trained model's meta JSON.
+    oos_accuracy_gate : Minimum required OOS accuracy (default 0.70).
+    p_value_gate      : Maximum allowed p-value (default 0.001).
+
+    Returns
+    -------
+    (passed, reason) : bool and human-readable explanation.
+    """
+    reasons = []
+    if oos_accuracy < oos_accuracy_gate:
+        reasons.append(
+            f"OOS accuracy {oos_accuracy:.1%} < gate {oos_accuracy_gate:.1%}"
+        )
+    if p_value >= p_value_gate:
+        reasons.append(
+            f"p-value {p_value:.4f} >= gate {p_value_gate:.4f}"
+        )
+    if reasons:
+        return False, "Phase 4 gate failed: " + "; ".join(reasons)
+    return True, (
+        f"Phase 4 gate passed: OOS={oos_accuracy:.1%} p={p_value:.4f}"
+    )
+
+
+def check_sharpe_gate(
+    sharpe_before: float,
+    sharpe_after: float,
+    max_drop: float = 0.2,
+) -> Tuple[bool, str]:
+    """
+    Verify the Phase 2 Sharpe gate.
+
+    The paper trading Sharpe must not decrease by more than `max_drop`
+    over a 30-day window after enabling anomaly weighting.
+
+    Parameters
+    ----------
+    sharpe_before : Sharpe ratio before enabling anomaly weighting.
+    sharpe_after  : Sharpe ratio after enabling anomaly weighting.
+    max_drop      : Maximum allowed Sharpe drop (default 0.2).
+
+    Returns
+    -------
+    (passed, reason) : bool and human-readable explanation.
+    """
+    drop = sharpe_before - sharpe_after
+    if drop > max_drop:
+        return False, (
+            f"Sharpe gate failed: dropped {drop:.3f} "
+            f"({sharpe_before:.3f} → {sharpe_after:.3f}), "
+            f"max allowed drop = {max_drop:.3f}."
+        )
+    return True, (
+        f"Sharpe gate passed: drop={drop:.3f} "
+        f"({sharpe_before:.3f} → {sharpe_after:.3f})."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
@@ -597,4 +776,12 @@ class FeatureFlags:
 #:     if flags.SOCIAL_TRADING: ...
 flags = FeatureFlags()
 
-__all__ = ["FeatureFlags", "FeatureStatus", "flags"]
+__all__ = [
+    "FeatureFlags",
+    "FeatureStatus",
+    "flags",
+    "check_phase2_gate",
+    "check_phase3_gate",
+    "check_phase4_gate",
+    "check_sharpe_gate",
+]
