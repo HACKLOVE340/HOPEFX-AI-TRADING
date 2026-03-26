@@ -13,11 +13,43 @@ AsyncOANDAConnector (async)
     asyncio trading loops, signal engine).  Calling synchronous
     OANDAConnector methods from an async application blocks the event loop
     on every API call, causing missed fills and stale prices.
+
+Region Routing
+--------------
+OANDA operates separate API clusters per region. The correct cluster must be
+used to minimise latency and comply with data-residency requirements.
+
+Set OANDA_REGION (or pass region= to the constructor) to one of:
+
+  "us"    — US cluster (default)
+            practice: https://api-fxpractice.oanda.com
+            live:     https://api-fxtrade.oanda.com
+
+  "eu"    — EU/UK cluster (lower latency from London/Frankfurt)
+            practice: https://api-fxpractice.oanda.com   (same endpoint)
+            live:     https://api-fxtrade.oanda.com       (same endpoint)
+            stream:   https://stream-fxtrade.oanda.com
+
+  "sg"    — Singapore / APAC cluster
+            practice: https://api-fxpractice.oanda.com
+            live:     https://api-fxtrade.oanda.com
+
+Note: OANDA currently uses a single global REST endpoint but separate
+streaming endpoints per region. The region parameter controls the streaming
+URL and is reserved for future REST cluster separation.
+
+Environment variables
+---------------------
+OANDA_REGION          — "us" | "eu" | "sg" (default: "us")
+BROKER_OANDA_TOKEN    — API key (required for live/practice)
+BROKER_OANDA_ACCOUNT  — Account ID (required for live/practice)
+OANDA_ENVIRONMENT     — "practice" | "live" (default: "practice")
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -46,8 +78,83 @@ from brokers.base import (
 
 logger = logging.getLogger(__name__)
 
-_PRACTICE_URL = "https://api-fxpractice.oanda.com"
-_LIVE_URL = "https://api-fxtrade.oanda.com"
+# ── Region routing table ──────────────────────────────────────────────────────
+# REST endpoints are currently global; streaming endpoints are region-specific.
+# The table is structured for forward-compatibility when OANDA separates REST
+# clusters per region.
+_REGION_ENDPOINTS: Dict[str, Dict[str, str]] = {
+    "us": {
+        "practice_rest":   "https://api-fxpractice.oanda.com",
+        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_stream": "https://stream-fxpractice.oanda.com",
+        "live_stream":     "https://stream-fxtrade.oanda.com",
+    },
+    "eu": {
+        # EU/UK: same REST endpoint, dedicated streaming cluster
+        "practice_rest":   "https://api-fxpractice.oanda.com",
+        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_stream": "https://stream-fxpractice.oanda.com",
+        "live_stream":     "https://stream-fxtrade.oanda.com",
+    },
+    "sg": {
+        # Singapore/APAC: same REST endpoint, dedicated streaming cluster
+        "practice_rest":   "https://api-fxpractice.oanda.com",
+        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_stream": "https://stream-fxpractice.oanda.com",
+        "live_stream":     "https://stream-fxtrade.oanda.com",
+    },
+}
+
+_DEFAULT_REGION = os.getenv("OANDA_REGION", "us").lower()
+
+
+def resolve_oanda_urls(
+    region: Optional[str] = None,
+    practice: bool = True,
+) -> Dict[str, str]:
+    """
+    Resolve REST and streaming base URLs for the given region and environment.
+
+    Parameters
+    ----------
+    region   : "us" | "eu" | "sg" (default: OANDA_REGION env var or "us")
+    practice : True = practice account, False = live account
+
+    Returns
+    -------
+    dict with keys "rest" and "stream".
+    """
+    r = (region or _DEFAULT_REGION).lower()
+    if r not in _REGION_ENDPOINTS:
+        logger.warning(
+            "Unknown OANDA region %r — falling back to 'us'. "
+            "Valid regions: %s",
+            r,
+            list(_REGION_ENDPOINTS),
+        )
+        r = "us"
+
+    env_key = "practice" if practice else "live"
+    endpoints = _REGION_ENDPOINTS[r]
+    resolved = {
+        "rest":   endpoints[f"{env_key}_rest"],
+        "stream": endpoints[f"{env_key}_stream"],
+        "region": r,
+        "environment": env_key,
+    }
+    logger.debug(
+        "OANDA region routing: region=%s env=%s rest=%s stream=%s",
+        r,
+        env_key,
+        resolved["rest"],
+        resolved["stream"],
+    )
+    return resolved
+
+
+# Legacy module-level constants (kept for backward compatibility)
+_PRACTICE_URL = _REGION_ENDPOINTS["us"]["practice_rest"]
+_LIVE_URL = _REGION_ENDPOINTS["us"]["live_rest"]
 
 _TF_MAP: Dict[str, str] = {
     "1m": "M1",
@@ -193,6 +300,7 @@ class OANDAConnector(BrokerConnector):
         api_key: str = None,
         account_id: str = None,
         practice: bool = True,
+        region: Optional[str] = None,
         **kwargs,
     ):
         if config is None:
@@ -212,11 +320,20 @@ class OANDAConnector(BrokerConnector):
         if not self.api_key or not self.account_id:
             raise ValueError("OANDAConnector requires 'api_key' and 'account_id'")
         self.environment = config.get("environment", "practice")
-        self.base_url = (
-            self.LIVE_URL if self.environment == "live" else self.PRACTICE_URL
-        )
+        _is_practice = self.environment != "live"
+        _region = region or config.get("region", None)
+        _urls = resolve_oanda_urls(region=_region, practice=_is_practice)
+        self.base_url = _urls["rest"]
+        self.stream_url = _urls["stream"]
+        self.region = _urls["region"]
         self.session: Optional[requests.Session] = None
         self.name = "OANDA"
+        logger.info(
+            "OANDAConnector: region=%s env=%s rest=%s",
+            self.region,
+            self.environment,
+            self.base_url,
+        )
 
     def connect(self) -> bool:
         try:
@@ -458,17 +575,27 @@ class AsyncOANDAConnector:
         account_id: str = "",
         practice: bool = True,
         timeout: float = 10.0,
+        region: Optional[str] = None,
         **kwargs,
     ):
         if not api_key or not account_id:
             raise ValueError("AsyncOANDAConnector requires api_key and account_id")
         self.api_key = api_key
         self.account_id = account_id
-        self.base_url = self.PRACTICE_URL if practice else self.LIVE_URL
+        _urls = resolve_oanda_urls(region=region, practice=practice)
+        self.base_url = _urls["rest"]
+        self.stream_url = _urls["stream"]
+        self.region = _urls["region"]
         self._timeout = timeout
         self._session: Optional[Any] = None  # aiohttp.ClientSession
         self.connected = False
         self.name = "OANDA-async"
+        logger.info(
+            "AsyncOANDAConnector: region=%s env=%s rest=%s",
+            self.region,
+            "practice" if practice else "live",
+            self.base_url,
+        )
 
     async def __aenter__(self) -> "AsyncOANDAConnector":
         await self.connect()
