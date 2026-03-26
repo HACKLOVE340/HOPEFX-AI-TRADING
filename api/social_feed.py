@@ -263,7 +263,7 @@ leaderboard_router = APIRouter(prefix="/api/social", tags=["Social Feed"])
 
 @leaderboard_router.get("/leaderboard", summary="Trader performance leaderboard")
 async def get_leaderboard(
-    period: str = _Query("monthly", regex="^(monthly|quarterly|all)$"),
+    period: str = _Query("monthly", pattern="^(monthly|quarterly|all)$"),
     limit: int = _Query(20, ge=1, le=100),
 ):
     """
