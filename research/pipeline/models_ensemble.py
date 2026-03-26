@@ -9,7 +9,16 @@ Design
 - SHAP-based feature importance → recursive feature elimination
 - Walk-forward cross-validation (TimeSeriesSplit) to prevent look-ahead bias
 - Stacking meta-learner: logistic regression on base-model OOF predictions
-- Calibrated probabilities via isotonic regression
+- Calibrated probabilities via isotonic regression (Platt scaling fallback)
+- ExtraTrees base estimator added for diversity
+
+DeepEnsembleStore hardening
+----------------------------
+- Atomic OOS gate: both accuracy AND p-value must pass before activation
+- Retry-once on load failure (transient I/O errors)
+- Thread-safe singleton guard (double-checked locking)
+- Scaler persisted alongside model for consistent feature normalisation
+- status() exposes gate values for health-check endpoints
 
 Why stronger than a single model
 ---------------------------------
@@ -21,17 +30,19 @@ trust each base model.
 
 from __future__ import annotations
 
+import json
 import logging
 import pickle
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, StackingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import log_loss, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 
@@ -268,6 +279,18 @@ class EnsemblePredictor:
             ),
         ))
 
+        # ExtraTrees adds diversity via random feature thresholds
+        estimators.append((
+            "et",
+            ExtraTreesClassifier(
+                n_estimators=300,
+                max_depth=10,
+                min_samples_leaf=5,
+                n_jobs=-1,
+                random_state=43,
+            ),
+        ))
+
         return estimators
 
     def fit(self, X: pd.DataFrame, y: np.ndarray) -> "EnsemblePredictor":
@@ -277,10 +300,10 @@ class EnsemblePredictor:
         X_scaled = self.scaler.fit_transform(X)
         X_df = pd.DataFrame(X_scaled, columns=self._feature_cols)
 
-        # Initial XGB for feature selection
+        # Initial model for feature selection
         if XGB_AVAILABLE:
             seed_model = xgb.XGBClassifier(
-                n_estimators=100, max_depth=5, use_label_encoder=False,
+                n_estimators=100, max_depth=5,
                 eval_metric="logloss", random_state=42, n_jobs=-1,
             )
             seed_model.fit(X_df, y)
@@ -294,7 +317,11 @@ class EnsemblePredictor:
 
         # Build and fit stacking ensemble
         base = self._build_base_estimators(X_sel, y)
-        meta = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+        # Ridge-regularised meta-learner with class balancing
+        meta = LogisticRegression(
+            C=0.5, max_iter=2000, random_state=42,
+            class_weight="balanced", solver="lbfgs",
+        )
         self.stack_ = StackingClassifier(
             estimators=base,
             final_estimator=meta,
@@ -304,10 +331,17 @@ class EnsemblePredictor:
         )
 
         if self.calibrate:
-            self.stack_ = CalibratedClassifierCV(self.stack_, method="isotonic", cv=3)
+            # Isotonic regression calibration; fall back to sigmoid if too few samples
+            method = "isotonic" if len(y) >= 1000 else "sigmoid"
+            self.stack_ = CalibratedClassifierCV(
+                self.stack_, method=method, cv=3,
+            )
 
         self.stack_.fit(X_sel, y)
-        logger.info("Ensemble fitted on %d samples, %d features", len(y), X_sel.shape[1])
+        logger.info(
+            "Ensemble fitted: %d samples, %d features, calibrate=%s",
+            len(y), X_sel.shape[1], self.calibrate,
+        )
         return self
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
@@ -321,10 +355,14 @@ class EnsemblePredictor:
 
     def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> Dict[str, float]:
         prob = self.predict_proba(X)
-        return {
-            "auc": roc_auc_score(y, prob),
-            "logloss": log_loss(y, prob),
+        preds = (prob >= 0.5).astype(int)
+        result: Dict[str, float] = {
+            "auc": float(roc_auc_score(y, prob)),
+            "logloss": float(log_loss(y, prob)),
+            "accuracy": float(accuracy_score(y, preds)),
+            "f1": float(f1_score(y, preds, zero_division=0)),
         }
+        return result
 
     def save(self, path: str | Path) -> None:
         path = Path(path)
@@ -335,8 +373,13 @@ class EnsemblePredictor:
 
     @classmethod
     def load(cls, path: str | Path) -> "EnsemblePredictor":
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         with open(path, "rb") as f:
             obj = pickle.load(f)
+        if not isinstance(obj, cls):
+            raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
         logger.info("Ensemble loaded ← %s", path)
         return obj
 
@@ -349,33 +392,39 @@ class DeepEnsembleStore:
     """
     Production deep learning ensemble store for the signal engine (Phase 4).
 
-    Loads a trained DeepPredictor (LSTM / Transformer / TCN) from disk and
-    blends its probability as a third component in the stacking ensemble:
+    Loads a trained DeepPredictor (LSTM / Transformer / TCN / Hybrid) from disk
+    and blends its probability with the advanced model:
 
-        final_prob = w_adv * advanced_prob
-                   + w_ens * ensemble_prob   (EnsemblePredictor, optional)
-                   + w_deep * deep_prob      (DeepPredictor)
+        final_prob = (1 - deep_weight) * advanced_prob + deep_weight * deep_prob
 
-    Gate: the deep model is only loaded and used when:
+    Gate (both conditions must pass atomically):
       1. FEATURE_DEEP_ENSEMBLE=true
-      2. The model file exists at `model_path`
-      3. The OOS accuracy metadata file shows accuracy > oos_accuracy_gate
-         and p-value < p_value_gate
+      2. Model file exists at `model_path`
+      3. OOS accuracy in metadata >= oos_accuracy_gate (default 0.70)
+      4. p-value in metadata < p_value_gate (default 0.001)
 
-    If any gate fails, the store returns the advanced_prob unchanged.
+    If any gate fails, the store returns advanced_prob unchanged.
+
+    Thread safety: load() is idempotent and protected by a lock.  blend() is
+    read-only after load() completes.
 
     Parameters
     ----------
-    model_path        : Path to the saved DeepPredictor (.pt or .pkl).
+    model_path        : Path to the saved DeepPredictor (.pt).
     meta_path         : Path to the OOS metadata JSON sidecar.
     oos_accuracy_gate : Minimum OOS accuracy to activate (default: 0.70).
     p_value_gate      : Maximum p-value to activate (default: 0.001).
     deep_weight       : Weight for the deep model in the blend (default: 0.2).
     seq_len           : Sequence length expected by the deep model.
+    scaler_path       : Optional path to a StandardScaler for feature normalisation.
     """
 
-    DEFAULT_MODEL_PATH = "ml/saved_models/deep_ensemble.pt"
-    DEFAULT_META_PATH  = "ml/saved_models/deep_ensemble_meta.json"
+    DEFAULT_MODEL_PATH  = "ml/saved_models/deep_ensemble.pt"
+    DEFAULT_META_PATH   = "ml/saved_models/deep_ensemble_meta.json"
+    DEFAULT_SCALER_PATH = "ml/saved_models/deep_ensemble_scaler.pkl"
+
+    # Number of features extracted by _extract_features()
+    N_FEATURES = 6
 
     def __init__(
         self,
@@ -385,81 +434,138 @@ class DeepEnsembleStore:
         p_value_gate: float = 0.001,
         deep_weight: float = 0.20,
         seq_len: int = 60,
+        scaler_path: Optional[str] = None,
     ) -> None:
         self.model_path        = Path(model_path)
         self.meta_path         = Path(meta_path)
         self.oos_accuracy_gate = oos_accuracy_gate
         self.p_value_gate      = p_value_gate
-        self.deep_weight       = deep_weight
+        self.deep_weight       = float(np.clip(deep_weight, 0.0, 1.0))
         self.seq_len           = seq_len
+        self.scaler_path       = Path(scaler_path) if scaler_path else None
+
         self._predictor: Optional[object] = None
+        self._scaler: Optional[StandardScaler] = None
         self._active: bool = False
         self._oos_accuracy: float = 0.0
         self._p_value: float = 1.0
+        self._load_lock = threading.Lock()
+        self._load_attempted: bool = False
+        self._gate_failure_reason: str = ""
 
     # ── Load ──────────────────────────────────────────────────────────────────
 
     def load(self) -> bool:
         """
-        Load the deep model and validate OOS gates.
+        Load the deep model and validate OOS gates atomically.
 
         Returns True if the model is loaded and passes all gates.
+        Idempotent: subsequent calls return the cached result.
         Safe to call even when PyTorch is unavailable.
         """
-        if not self.model_path.exists():
-            logger.info(
-                "DeepEnsembleStore: model not found at %s — Phase 4 inactive",
-                self.model_path,
-            )
-            return False
+        with self._load_lock:
+            if self._load_attempted:
+                return self._active
 
-        # Check OOS metadata gate
-        if not self._check_oos_gate():
-            return False
+            self._load_attempted = True
 
-        try:
-            from research.pipeline.models_deep import DeepPredictor
-            self._predictor = DeepPredictor.load(str(self.model_path))
+            # Gate 1: model file must exist
+            if not self.model_path.exists():
+                self._gate_failure_reason = f"model not found: {self.model_path}"
+                logger.info(
+                    "DeepEnsembleStore: %s — Phase 4 inactive",
+                    self._gate_failure_reason,
+                )
+                return False
+
+            # Gate 2+3: OOS metadata must pass accuracy AND p-value
+            if not self._check_oos_gate():
+                return False
+
+            # Load model (retry once on transient I/O error)
+            for attempt in range(2):
+                try:
+                    from research.pipeline.models_deep import DeepPredictor
+                    self._predictor = DeepPredictor.load(str(self.model_path))
+                    break
+                except FileNotFoundError:
+                    self._gate_failure_reason = f"model file disappeared: {self.model_path}"
+                    logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
+                    return False
+                except Exception as exc:
+                    if attempt == 0:
+                        logger.debug("DeepEnsembleStore: load attempt 1 failed: %s", exc)
+                        continue
+                    self._gate_failure_reason = f"load failed: {exc}"
+                    logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
+                    return False
+
+            # Load optional scaler
+            if self.scaler_path and self.scaler_path.exists():
+                try:
+                    with open(self.scaler_path, "rb") as f:
+                        self._scaler = pickle.load(f)
+                    logger.debug("DeepEnsembleStore: scaler loaded ← %s", self.scaler_path)
+                except Exception as exc:
+                    logger.debug("DeepEnsembleStore: scaler load failed (non-fatal): %s", exc)
+
             self._active = True
             logger.info(
-                "DeepEnsembleStore: loaded %s (OOS=%.1f%%, p=%.4f, weight=%.2f)",
+                "DeepEnsembleStore: active — model=%s OOS=%.1f%% p=%.4f weight=%.2f",
                 self.model_path.name,
                 self._oos_accuracy * 100,
                 self._p_value,
                 self.deep_weight,
             )
             return True
-        except Exception as exc:
-            logger.warning("DeepEnsembleStore: load failed: %s", exc)
-            return False
 
     def _check_oos_gate(self) -> bool:
-        """Read OOS metadata and verify accuracy > gate and p < gate."""
+        """
+        Read OOS metadata and verify BOTH accuracy >= gate AND p < gate.
+        Both conditions must pass — failing either blocks activation.
+        """
         if not self.meta_path.exists():
-            logger.debug("DeepEnsembleStore: no metadata at %s", self.meta_path)
+            self._gate_failure_reason = f"metadata not found: {self.meta_path}"
+            logger.debug("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
         try:
-            import json
             with open(self.meta_path) as f:
                 meta = json.load(f)
+
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))
             self._p_value      = float(meta.get("p_value", 1.0))
 
-            if self._oos_accuracy < self.oos_accuracy_gate:
+            # Both gates must pass atomically
+            acc_ok = self._oos_accuracy >= self.oos_accuracy_gate
+            pval_ok = self._p_value < self.p_value_gate
+
+            if not acc_ok:
+                self._gate_failure_reason = (
+                    f"OOS accuracy {self._oos_accuracy:.1%} < gate {self.oos_accuracy_gate:.1%}"
+                )
                 logger.info(
-                    "DeepEnsembleStore: OOS accuracy %.1f%% < gate %.1f%% — inactive",
-                    self._oos_accuracy * 100, self.oos_accuracy_gate * 100,
+                    "DeepEnsembleStore: %s — inactive", self._gate_failure_reason
                 )
                 return False
-            if self._p_value >= self.p_value_gate:
+
+            if not pval_ok:
+                self._gate_failure_reason = (
+                    f"p-value {self._p_value:.4f} >= gate {self.p_value_gate:.4f}"
+                )
                 logger.info(
-                    "DeepEnsembleStore: p-value %.4f >= gate %.4f — inactive",
-                    self._p_value, self.p_value_gate,
+                    "DeepEnsembleStore: %s — inactive", self._gate_failure_reason
                 )
                 return False
+
             return True
+
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            self._gate_failure_reason = f"metadata parse error: {exc}"
+            logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
+            return False
         except Exception as exc:
-            logger.warning("DeepEnsembleStore: metadata read failed: %s", exc)
+            self._gate_failure_reason = f"metadata read failed: {exc}"
+            logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
 
     # ── Inference ─────────────────────────────────────────────────────────────
@@ -468,19 +574,17 @@ class DeepEnsembleStore:
         self,
         advanced_prob: float,
         ohlcv_df: "pd.DataFrame",
-        scaler: Optional[object] = None,
     ) -> float:
         """
         Blend the deep model probability with the advanced model probability.
 
-        Returns advanced_prob unchanged when the deep model is not active.
+        Returns advanced_prob unchanged when the deep model is not active or
+        when feature extraction fails.
 
         Parameters
         ----------
         advanced_prob : Probability from the primary model (post Phase 2/3 blend).
         ohlcv_df      : H1 OHLCV DataFrame (at least seq_len rows).
-        scaler        : Optional StandardScaler to normalise features before
-                        passing to the deep model.
 
         Returns
         -------
@@ -490,59 +594,72 @@ class DeepEnsembleStore:
             return advanced_prob
 
         try:
-            import numpy as _np
-            from research.pipeline.models_deep import make_sequences
-
-            # Build feature matrix from OHLCV
             feat = self._extract_features(ohlcv_df)
             if feat is None or len(feat) < self.seq_len:
                 return advanced_prob
 
-            if scaler is not None:
+            # Apply scaler if available
+            if self._scaler is not None:
                 try:
-                    feat = scaler.transform(feat)
+                    feat = self._scaler.transform(feat)
                 except Exception:
-                    pass
+                    pass  # proceed without scaling
 
             # Build sequence: (1, seq_len, n_features)
-            X_seq = feat[-self.seq_len:][_np.newaxis, :, :]
-            deep_prob = float(self._predictor.predict(X_seq)[0])
-            deep_prob = float(_np.clip(deep_prob, 0.0, 1.0))
+            X_seq = feat[-self.seq_len:][np.newaxis, :, :]
+            deep_prob = float(self._predictor.predict(X_seq)[0])  # type: ignore[union-attr]
+            deep_prob = float(np.clip(deep_prob, 0.0, 1.0))
 
             adv_weight = 1.0 - self.deep_weight
             blended = adv_weight * advanced_prob + self.deep_weight * deep_prob
             logger.debug(
-                "DeepEnsemble blend: adv=%.4f deep=%.4f → %.4f",
-                advanced_prob, deep_prob, blended,
+                "DeepEnsemble blend: adv=%.4f deep=%.4f w=%.2f → %.4f",
+                advanced_prob, deep_prob, self.deep_weight, blended,
             )
-            return float(_np.clip(blended, 0.0, 1.0))
+            return float(np.clip(blended, 0.0, 1.0))
         except Exception as exc:
             logger.debug("DeepEnsembleStore.blend failed (non-fatal): %s", exc)
             return advanced_prob
 
     @staticmethod
     def _extract_features(ohlcv_df: "pd.DataFrame") -> Optional["np.ndarray"]:
-        """Extract a compact stationary feature matrix from OHLCV for deep model input."""
+        """
+        Extract a 6-feature stationary matrix from OHLCV for deep model input.
+
+        Features: log_ret, hl_range, vol_z, atr14, sma20_dist, rsi_norm
+        All NaN/Inf values are replaced with 0.
+        """
         try:
-            import numpy as _np
             c  = ohlcv_df["close"]
             h  = ohlcv_df["high"]
             lo = ohlcv_df["low"]
-            v  = ohlcv_df.get("volume", pd.Series(_np.ones(len(c)), index=c.index))
+            v  = ohlcv_df.get(
+                "volume", pd.Series(np.ones(len(c)), index=c.index)
+            )
 
-            log_ret   = _np.log(c / c.shift(1)).fillna(0).values
-            hl_range  = ((h - lo) / c.replace(0, _np.nan)).fillna(0).values
-            vol_z     = ((v - v.rolling(20).mean()) / v.rolling(20).std().replace(0, _np.nan)).fillna(0).values
-            atr14     = ((h - lo).rolling(14).mean() / c.replace(0, _np.nan)).fillna(0).values
-            sma20_d   = ((c - c.rolling(20).mean()) / c.replace(0, _np.nan)).fillna(0).values
-            rsi_raw   = c.diff()
-            gain      = rsi_raw.clip(lower=0).ewm(com=13, adjust=False).mean()
-            loss      = (-rsi_raw).clip(lower=0).ewm(com=13, adjust=False).mean()
-            rsi       = (100 - 100 / (1 + gain / loss.replace(0, _np.nan))).fillna(50).values / 100.0
+            log_ret  = np.log(c / c.shift(1)).fillna(0).values
+            hl_range = ((h - lo) / c.replace(0, np.nan)).fillna(0).values
+            vol_z    = (
+                (v - v.rolling(20).mean()) /
+                v.rolling(20).std().replace(0, np.nan)
+            ).fillna(0).values
+            atr14    = (
+                (h - lo).rolling(14).mean() / c.replace(0, np.nan)
+            ).fillna(0).values
+            sma20_d  = (
+                (c - c.rolling(20).mean()) / c.replace(0, np.nan)
+            ).fillna(0).values
 
-            feat = _np.column_stack([log_ret, hl_range, vol_z, atr14, sma20_d, rsi])
-            feat = _np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
-            return feat.astype(_np.float32)
+            rsi_raw = c.diff()
+            gain    = rsi_raw.clip(lower=0).ewm(com=13, adjust=False).mean()
+            loss    = (-rsi_raw).clip(lower=0).ewm(com=13, adjust=False).mean()
+            rsi     = (
+                100 - 100 / (1 + gain / loss.replace(0, np.nan))
+            ).fillna(50).values / 100.0
+
+            feat = np.column_stack([log_ret, hl_range, vol_z, atr14, sma20_d, rsi])
+            feat = np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
+            return feat.astype(np.float32)
         except Exception:
             return None
 
@@ -564,9 +681,12 @@ class DeepEnsembleStore:
         return {
             "active": self._active,
             "model_path": str(self.model_path),
-            "oos_accuracy": self._oos_accuracy,
-            "p_value": self._p_value,
+            "meta_path": str(self.meta_path),
+            "oos_accuracy": round(self._oos_accuracy, 4),
+            "p_value": round(self._p_value, 6),
             "deep_weight": self.deep_weight,
             "oos_accuracy_gate": self.oos_accuracy_gate,
             "p_value_gate": self.p_value_gate,
+            "load_attempted": self._load_attempted,
+            "gate_failure_reason": self._gate_failure_reason,
         }
