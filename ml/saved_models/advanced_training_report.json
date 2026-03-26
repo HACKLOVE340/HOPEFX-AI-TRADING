@@ -1,73 +1,97 @@
 {
   "symbol": "GC=F",
-  "years": 50,
-  "oos_years": 3.0,
+  "years": 2,
+  "oos_years": 0.0,
   "macro_features": true,
   "filtered_target": true,
   "min_move_atr": 0.25,
   "horizon": 1,
-  "sample_count": 4615,
-  "cv_sample_count": 3859,
-  "oos_sample_count": 756,
+  "sample_count": 326,
+  "cv_sample_count": 326,
+  "oos_sample_count": 0,
   "feature_count": 122,
-  "trained_at": "2026-03-25T21:06:14.275630+00:00",
+  "trained_at": "2026-03-26T12:15:11.828361+00:00",
   "walkforward": {
     "folds": [
       {
         "fold": 1,
-        "train_size": 643,
-        "test_size": 643,
-        "accuracy": 0.6081,
-        "f1": 0.6379,
-        "auc": 0.6387
+        "train_size": 37,
+        "test_size": 36,
+        "accuracy": 0.5556,
+        "f1": 0.6923,
+        "auc": 0.4
       },
       {
         "fold": 2,
-        "train_size": 1286,
-        "test_size": 643,
-        "accuracy": 0.6003,
-        "f1": 0.6124,
-        "auc": 0.6753
+        "train_size": 73,
+        "test_size": 36,
+        "accuracy": 0.5278,
+        "f1": 0.6667,
+        "auc": 0.3746
       },
       {
         "fold": 3,
-        "train_size": 1929,
-        "test_size": 643,
-        "accuracy": 0.633,
-        "f1": 0.6911,
-        "auc": 0.6877
+        "train_size": 109,
+        "test_size": 36,
+        "accuracy": 0.6667,
+        "f1": 0.75,
+        "auc": 0.6582
       },
       {
         "fold": 4,
-        "train_size": 2572,
-        "test_size": 643,
-        "accuracy": 0.6858,
-        "f1": 0.7029,
-        "auc": 0.7237
+        "train_size": 145,
+        "test_size": 36,
+        "accuracy": 0.6111,
+        "f1": 0.6316,
+        "auc": 0.7045
       },
       {
         "fold": 5,
-        "train_size": 3215,
-        "test_size": 643,
-        "accuracy": 0.6392,
-        "f1": 0.6848,
-        "auc": 0.682
+        "train_size": 181,
+        "test_size": 36,
+        "accuracy": 0.5278,
+        "f1": 0.6531,
+        "auc": 0.4923
+      },
+      {
+        "fold": 6,
+        "train_size": 217,
+        "test_size": 36,
+        "accuracy": 0.5833,
+        "f1": 0.6809,
+        "auc": 0.5616
+      },
+      {
+        "fold": 7,
+        "train_size": 253,
+        "test_size": 36,
+        "accuracy": 0.6111,
+        "f1": 0.7083,
+        "auc": 0.5035
+      },
+      {
+        "fold": 8,
+        "train_size": 289,
+        "test_size": 36,
+        "accuracy": 0.5556,
+        "f1": 0.6522,
+        "auc": 0.6062
       }
     ],
-    "mean_accuracy": 0.6333,
-    "std_accuracy": 0.0301,
-    "mean_f1": 0.6658,
-    "mean_auc": 0.6815,
-    "t_stat": 8.8704,
-    "p_value": 0.0009,
+    "mean_accuracy": 0.5799,
+    "std_accuracy": 0.0449,
+    "mean_f1": 0.6794,
+    "mean_auc": 0.5376,
+    "t_stat": 4.7104,
+    "p_value": 0.0022,
     "significant": true
   },
   "final": {
-    "train_size": 3087,
-    "test_size": 772,
-    "accuracy": 0.649,
-    "f1": 0.7012,
-    "auc": 0.6927,
+    "train_size": 260,
+    "test_size": 66,
+    "accuracy": 0.6212,
+    "f1": 0.7423,
+    "auc": 0.5222,
     "feature_count": 122,
     "features": [
       "pa_body_ratio",
@@ -194,16 +218,27 @@
       "regime_hurst"
     ]
   },
-  "oos": {
-    "train_size": 3859,
-    "oos_size": 756,
-    "correct_predictions": 514,
-    "accuracy": 0.6799,
-    "f1": 0.7346,
-    "auc": 0.7213,
-    "p_value_binomial": 0.0,
-    "significant": true,
-    "test": "one-sided binomial (H0: accuracy <= 0.5)"
-  },
-  "top_features": {}
+  "oos": {},
+  "top_features": {
+    "cal_month_cos": 0.020058,
+    "di_diff": 0.01873,
+    "rvol_60": 0.018525,
+    "pa_bull_candle": 0.01779,
+    "regime_momentum": 0.016867,
+    "macro_risk_off_score": 0.01683,
+    "parkinson_vol": 0.016829,
+    "mom_10": 0.016796,
+    "cot_large_spec_proxy": 0.016331,
+    "williams_r": 0.016045,
+    "dist_to_swing_low": 0.015465,
+    "pa_lower_wick": 0.015277,
+    "dist_ma_10": 0.015218,
+    "macro_real_rate_proxy": 0.015207,
+    "mom_roc": 0.015119,
+    "plus_di_14": 0.014963,
+    "cal_dow": 0.014599,
+    "macro_gold_headwind": 0.014488,
+    "adx_14": 0.014169,
+    "macro_gold_tailwind": 0.014098
+  }
 }
