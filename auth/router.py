@@ -246,8 +246,11 @@ async def register(body: RegisterRequest, request: Request):
         logger.debug("Free tier assignment skipped: %s", _tier_err)
 
     response = {"message": msg}
-    # Expose token in non-production so devs can test without SMTP
-    if verify_token and os.getenv("APP_ENV", "development") != "production":
+    # Expose token only in explicit test mode (APP_ENV=test) so devs can test
+    # without SMTP.  Never expose in development or staging — those environments
+    # may share infrastructure with production and a leaked token is a live
+    # account-takeover vector.
+    if verify_token and os.getenv("APP_ENV", "").lower() == "test":
         response["_dev_verify_token"] = verify_token
     return response
 
@@ -352,7 +355,8 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
             logger.warning("Password reset email failed: %s", _e)
 
     response = {"message": msg}
-    if reset_token and os.getenv("APP_ENV", "development") != "production":
+    # Same restriction as register: only expose in APP_ENV=test.
+    if reset_token and os.getenv("APP_ENV", "").lower() == "test":
         response["_dev_reset_token"] = reset_token
     return response
 
