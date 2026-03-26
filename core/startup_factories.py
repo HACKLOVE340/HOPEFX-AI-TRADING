@@ -94,11 +94,16 @@ async def init_database(s: Any) -> Any:
     from database.models import Base
 
     conn_str = s.config.database.get_connection_string()
-    engine = create_engine(
-        conn_str,
-        pool_size=s.config.database.connection_pool_size,
-        max_overflow=s.config.database.max_overflow,
-    )
+
+    # SQLite does not support pool_size / max_overflow — only pass them for
+    # PostgreSQL/MySQL connections.
+    is_sqlite = conn_str.startswith("sqlite")
+    engine_kwargs: dict = {}
+    if not is_sqlite:
+        engine_kwargs["pool_size"] = s.config.database.connection_pool_size
+        engine_kwargs["max_overflow"] = s.config.database.max_overflow
+
+    engine = create_engine(conn_str, **engine_kwargs)
     try:
         from alembic.config import Config as AlembicConfig
 
