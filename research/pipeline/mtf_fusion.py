@@ -18,9 +18,17 @@ intraday models cannot see from 5-min bars alone.  This module:
 The result is a single wide DataFrame where every intraday bar has access to
 the current daily and hourly context — without any future leakage.
 
+MTFFusionStore improvements
+----------------------------
+- Module-level singleton (_MTF_STORE_SINGLETON) for signal engine access
+- push_bar(): live bar update appends to H4/D1 buffers without full reload
+- status(): health-check dict with bar counts and bootstrap state
+- Thread-safe: push_bar() and align_to_h1() share a read-write lock
+- Graceful degradation: returns None (not raises) on any failure
+
 Usage
 -----
-    from research.pipeline.mtf_fusion import MTFFusion
+    from research.pipeline.mtf_fusion import MTFFusion, MTFFusionStore
 
     fusion = MTFFusion()
     intraday_enriched = fusion.enrich(
@@ -33,12 +41,17 @@ Usage
 from __future__ import annotations
 
 import logging
-from typing import Optional
+import threading
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Module-level singleton — populated by init_mtf_store() at startup.
+# signal_engine._fetch_mtf_df() reads this when app_state.mtf_store is absent.
+_MTF_STORE_SINGLETON: Optional["MTFFusionStore"] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -283,9 +296,16 @@ class MTFFusionStore:
        if CSVs are missing.
     2. `store.align_to_h1(ohlcv_df)` — called per tick in _compute_ml_probability().
        Returns a DataFrame with d_* and h_* columns aligned to the H1 index.
+    3. `store.push_bar(bar, timeframe)` — called by the data scheduler to append
+       a new completed bar without a full reload.
 
-    Thread safety: bootstrap() is called once; align_to_h1() is read-only after that.
+    Thread safety: a RLock protects _h4_df and _d1_df.  bootstrap() acquires
+    the lock for the full load; push_bar() and align_to_h1() acquire it briefly.
     """
+
+    # Maximum bars to keep in memory (prevents unbounded growth)
+    MAX_H4_BARS = 5000   # ~2.8 years of H4
+    MAX_D1_BARS = 10000  # ~40 years of daily
 
     def __init__(
         self,
@@ -298,6 +318,8 @@ class MTFFusionStore:
         self._d1_df: Optional[pd.DataFrame] = None
         self._fusion = MTFFusion(resample_hourly_from_5m=False)
         self._bootstrapped: bool = False
+        self._lock = threading.RLock()
+        self._bootstrap_error: Optional[str] = None
 
     # ── Bootstrap ─────────────────────────────────────────────────────────────
 
@@ -305,36 +327,46 @@ class MTFFusionStore:
         """
         Load H4 and D1 OHLCV data.  Non-blocking — runs in a thread executor.
         Falls back gracefully when data is unavailable.
+        Registers self as the module-level singleton after successful load.
         """
         import asyncio
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._load_data)
+        # Register as module singleton so signal_engine can find it
+        global _MTF_STORE_SINGLETON
+        _MTF_STORE_SINGLETON = self
         return self
 
     def _load_data(self) -> None:
         """Synchronous data load — called from bootstrap() via executor."""
-        import os
         from pathlib import Path
 
-        data_dir = Path(self.data_dir)
+        with self._lock:
+            data_dir = Path(self.data_dir)
 
-        # Try scheduler CSVs first
-        h4_path = data_dir / f"{self.symbol}_H4.csv"
-        d1_path = data_dir / f"{self.symbol}_D.csv"
+            # Try scheduler CSVs first
+            h4_path = data_dir / f"{self.symbol}_H4.csv"
+            d1_path = data_dir / f"{self.symbol}_D.csv"
 
-        self._h4_df = self._load_csv(h4_path, "H4")
-        self._d1_df = self._load_csv(d1_path, "D1")
+            self._h4_df = self._load_csv(h4_path, "H4")
+            self._d1_df = self._load_csv(d1_path, "D1")
 
-        # Fall back to yfinance if CSVs missing
-        if self._h4_df is None or self._d1_df is None:
-            self._load_from_yfinance()
+            # Fall back to yfinance if CSVs missing
+            if self._h4_df is None or self._d1_df is None:
+                self._load_from_yfinance()
 
-        self._bootstrapped = True
-        logger.info(
-            "MTFFusionStore bootstrapped: H4=%s bars, D1=%s bars",
-            len(self._h4_df) if self._h4_df is not None else 0,
-            len(self._d1_df) if self._d1_df is not None else 0,
-        )
+            # Trim to max bars
+            if self._h4_df is not None and len(self._h4_df) > self.MAX_H4_BARS:
+                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS:]
+            if self._d1_df is not None and len(self._d1_df) > self.MAX_D1_BARS:
+                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS:]
+
+            self._bootstrapped = True
+            logger.info(
+                "MTFFusionStore bootstrapped: H4=%s bars, D1=%s bars",
+                len(self._h4_df) if self._h4_df is not None else 0,
+                len(self._d1_df) if self._d1_df is not None else 0,
+            )
 
     def _load_csv(self, path, label: str) -> Optional[pd.DataFrame]:
         """Load a scheduler CSV into a UTC-indexed OHLCV DataFrame."""
@@ -390,6 +422,61 @@ class MTFFusionStore:
         except Exception as exc:
             logger.warning("MTFFusionStore: yfinance fallback failed: %s", exc)
 
+    # ── Live bar update ───────────────────────────────────────────────────────
+
+    def push_bar(
+        self,
+        bar: pd.Series,
+        timeframe: str,
+    ) -> None:
+        """
+        Append a completed OHLCV bar to the in-memory buffer.
+
+        Called by the data scheduler when a new H4 or D1 bar closes.
+        Avoids a full reload for each new bar.
+
+        Parameters
+        ----------
+        bar       : pd.Series with index [open, high, low, close, volume]
+                    and a DatetimeIndex name (UTC timestamp).
+        timeframe : 'H4' or 'D1'
+        """
+        tf = timeframe.upper()
+        if tf not in ("H4", "D1"):
+            logger.debug("MTFFusionStore.push_bar: unknown timeframe %s", timeframe)
+            return
+
+        with self._lock:
+            try:
+                new_row = pd.DataFrame([bar])
+                new_row.index = pd.to_datetime([bar.name], utc=True)
+                new_row.columns = [c.lower() for c in new_row.columns]
+
+                if tf == "H4":
+                    if self._h4_df is None:
+                        self._h4_df = new_row
+                    else:
+                        # Avoid duplicate timestamps
+                        if new_row.index[0] not in self._h4_df.index:
+                            self._h4_df = pd.concat([self._h4_df, new_row]).sort_index()
+                            if len(self._h4_df) > self.MAX_H4_BARS:
+                                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS:]
+                else:  # D1
+                    if self._d1_df is None:
+                        self._d1_df = new_row
+                    else:
+                        if new_row.index[0] not in self._d1_df.index:
+                            self._d1_df = pd.concat([self._d1_df, new_row]).sort_index()
+                            if len(self._d1_df) > self.MAX_D1_BARS:
+                                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS:]
+
+                logger.debug(
+                    "MTFFusionStore.push_bar: %s bar appended (%s)",
+                    tf, bar.name,
+                )
+            except Exception as exc:
+                logger.debug("MTFFusionStore.push_bar failed: %s", exc)
+
     # ── Inference ─────────────────────────────────────────────────────────────
 
     def align_to_h1(self, ohlcv_df: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -409,37 +496,55 @@ class MTFFusionStore:
             logger.debug("MTFFusionStore.align_to_h1: not bootstrapped yet")
             return None
 
-        if self._d1_df is None and self._h4_df is None:
-            return None
+        with self._lock:
+            if self._d1_df is None and self._h4_df is None:
+                return None
 
-        try:
-            # Ensure ohlcv_df has UTC index
-            idx = ohlcv_df.index
-            if idx.tz is None:
-                idx = idx.tz_localize("UTC")
+            try:
+                # Ensure ohlcv_df has UTC index
+                idx = ohlcv_df.index
+                if idx.tz is None:
+                    idx = idx.tz_localize("UTC")
 
-            # Build daily regime features
-            daily_df = self._d1_df if self._d1_df is not None else MTFFusion.resample_to_daily(ohlcv_df)
-            daily_regime = _compute_daily_regime(daily_df)
-            daily_aligned = _align_to_intraday(idx, daily_regime, shift_periods=1)
+                # Build daily regime features
+                daily_df = (
+                    self._d1_df
+                    if self._d1_df is not None
+                    else MTFFusion.resample_to_daily(ohlcv_df)
+                )
+                daily_regime = _compute_daily_regime(daily_df)
+                daily_aligned = _align_to_intraday(idx, daily_regime, shift_periods=1)
 
-            # Build hourly regime features from H4 (or skip)
-            if self._h4_df is not None:
-                hourly_regime = _compute_hourly_regime(self._h4_df)
-                hourly_aligned = _align_to_intraday(idx, hourly_regime, shift_periods=1)
-            else:
-                hourly_aligned = pd.DataFrame(index=idx)
+                # Build hourly regime features from H4 (or skip)
+                if self._h4_df is not None:
+                    hourly_regime = _compute_hourly_regime(self._h4_df)
+                    hourly_aligned = _align_to_intraday(idx, hourly_regime, shift_periods=1)
+                else:
+                    hourly_aligned = pd.DataFrame(index=idx)
 
-            result = pd.concat([daily_aligned, hourly_aligned], axis=1)
-            regime_cols = [c for c in result.columns if c.startswith(("d_", "h_"))]
-            result[regime_cols] = result[regime_cols].fillna(0)
-            return result
+                result = pd.concat([daily_aligned, hourly_aligned], axis=1)
+                regime_cols = [c for c in result.columns if c.startswith(("d_", "h_"))]
+                result[regime_cols] = result[regime_cols].fillna(0)
+                return result
 
-        except Exception as exc:
-            logger.warning("MTFFusionStore.align_to_h1 failed: %s", exc)
-            return None
+            except Exception as exc:
+                logger.warning("MTFFusionStore.align_to_h1 failed: %s", exc)
+                return None
 
     @property
     def is_ready(self) -> bool:
         """True when bootstrap has completed and at least one timeframe is loaded."""
         return self._bootstrapped and (self._d1_df is not None or self._h4_df is not None)
+
+    def status(self) -> Dict:
+        """Return a health-check dict for monitoring endpoints."""
+        with self._lock:
+            return {
+                "bootstrapped": self._bootstrapped,
+                "is_ready": self.is_ready,
+                "h4_bars": len(self._h4_df) if self._h4_df is not None else 0,
+                "d1_bars": len(self._d1_df) if self._d1_df is not None else 0,
+                "symbol": self.symbol,
+                "data_dir": self.data_dir,
+                "bootstrap_error": self._bootstrap_error,
+            }
