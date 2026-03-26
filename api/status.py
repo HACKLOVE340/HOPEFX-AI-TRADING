@@ -15,10 +15,11 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,34 @@ _uptime_history: Dict[str, float] = {}
 _start_time = time.time()
 
 
+# ── Response models ───────────────────────────────────────────────────────────
+
+
+class StatusJsonResponse(BaseModel):
+    status: str
+    uptime_seconds: int
+    uptime_human: str
+    checked_at: str
+    components: Dict[str, Any]
+
+
+class UptimeDay(BaseModel):
+    date: str
+    uptime_pct: float
+
+
+class StatusHistoryResponse(BaseModel):
+    history: List[UptimeDay]
+
+
 # ── JSON endpoint ─────────────────────────────────────────────────────────────
 
 
-@router.get("/api/status/json", summary="Machine-readable system status")
+@router.get(
+    "/api/status/json",
+    response_model=StatusJsonResponse,
+    summary="Machine-readable system status",
+)
 async def status_json():
     """
     Returns current health of all system components.
@@ -52,7 +77,11 @@ async def status_json():
     }
 
 
-@router.get("/api/status/history", summary="90-day uptime history")
+@router.get(
+    "/api/status/history",
+    response_model=StatusHistoryResponse,
+    summary="90-day uptime history",
+)
 async def status_history():
     """Return daily uptime percentages for the last 90 days."""
     today = datetime.now(timezone.utc).date()

@@ -9,10 +9,11 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 from api.auth import TokenPayload, require_role
 
@@ -73,7 +74,24 @@ def apply_persisted_risk_settings() -> None:
     pass
 
 
-@router.get("/status")
+class AdminStatusResponse(BaseModel):
+    components: Dict[str, bool]
+
+
+class SimpleStatusResponse(BaseModel):
+    status: str
+
+
+class RiskSettingsResponse(BaseModel):
+    status: str
+    settings: Dict[str, Any]
+
+
+@router.get(
+    "/status",
+    response_model=AdminStatusResponse,
+    summary="Full system component status",
+)
 async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     """Full system status. Requires: role >= 'admin'."""
     if not app_state:
@@ -96,7 +114,11 @@ async def get_logs(
     return activity_log[-limit:]
 
 
-@router.post("/pause")
+@router.post(
+    "/pause",
+    response_model=SimpleStatusResponse,
+    summary="Pause all automated trading",
+)
 async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
     """Pause all trading. Requires: role >= 'admin'."""
     if not app_state or not app_state.brain:
@@ -106,7 +128,11 @@ async def pause_trading(user: TokenPayload = Depends(require_role("admin"))):
     return {"status": "paused"}
 
 
-@router.post("/resume")
+@router.post(
+    "/resume",
+    response_model=SimpleStatusResponse,
+    summary="Resume automated trading",
+)
 async def resume_trading(user: TokenPayload = Depends(require_role("admin"))):
     """Resume trading. Requires: role >= 'admin'."""
     if not app_state or not app_state.brain:
@@ -116,7 +142,11 @@ async def resume_trading(user: TokenPayload = Depends(require_role("admin"))):
     return {"status": "resumed"}
 
 
-@router.post("/risk-settings")
+@router.post(
+    "/risk-settings",
+    response_model=RiskSettingsResponse,
+    summary="Update live risk management parameters",
+)
 async def update_risk_settings(
     settings: Dict,
     user: TokenPayload = Depends(require_role("admin")),
@@ -132,8 +162,6 @@ async def update_risk_settings(
 
 
 # ── KYC management ────────────────────────────────────────────────────────────
-
-from pydantic import BaseModel
 
 
 class KYCDecision(BaseModel):

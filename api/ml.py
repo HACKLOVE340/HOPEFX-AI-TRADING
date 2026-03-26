@@ -135,6 +135,22 @@ class ModelInfo(BaseModel):
     trained_at: Optional[str] = None
 
 
+class FeatureEntry(BaseModel):
+    name: str
+    importance: float
+
+
+class FeatureImportancesResponse(BaseModel):
+    features: List[FeatureEntry]
+    model_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+class RetrainResponse(BaseModel):
+    status: str
+    message: str
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -252,7 +268,11 @@ async def predict(symbol: str, body: PredictRequest):
     )
 
 
-@router.get("/features")
+@router.get(
+    "/features",
+    response_model=FeatureImportancesResponse,
+    summary="Feature importances for the active XGBoost model",
+)
 async def get_feature_importances():
     """
     Return feature importances for the active XGBoost model.
@@ -295,7 +315,12 @@ async def get_feature_importances():
     return {"features": [], "note": "Feature importances unavailable"}
 
 
-@router.post("/retrain", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/retrain",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=RetrainResponse,
+    summary="Trigger background model retraining (admin only)",
+)
 async def trigger_retrain(
     background_tasks: BackgroundTasks,
     user: TokenPayload = Depends(get_current_user),
