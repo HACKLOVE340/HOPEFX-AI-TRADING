@@ -369,67 +369,11 @@ async def paper_trading_status():
     For full phase-gate status (Phase 2 / Phase 3 readiness), use
     GET /api/status/paper-trading/gate.
     """
-    import json
-    import pathlib
-
-    stamp_path = pathlib.Path("data/oanda_paper_start.json")
-
-    if not stamp_path.exists():
-        oanda_token = (
-            os.getenv("BROKER_OANDA_TOKEN", "")
-            or os.getenv("OANDA_API_KEY", "")
-        )
-        if oanda_token:
-            note = (
-                "OANDA credentials are set but the broker has not connected yet. "
-                "Start the server with BROKER_TYPE=oanda to begin the 30-day run."
-            )
-        else:
-            note = (
-                "Clock not started. Set BROKER_OANDA_TOKEN (or OANDA_API_KEY) "
-                "and BROKER_OANDA_ACCOUNT, then restart with BROKER_TYPE=oanda."
-            )
-        return {
-            "started": False,
-            "started_utc": None,
-            "elapsed_days": 0.0,
-            "remaining_days": 30.0,
-            "target_days": 30,
-            "complete": False,
-            "environment": None,
-            "account_id": None,
-            "note": note,
-        }
-
     try:
-        data = json.loads(stamp_path.read_text())
-        started_utc_str = data.get("started_utc", "")
-        started_dt = datetime.fromisoformat(started_utc_str)
-        now = datetime.now(timezone.utc)
-        elapsed = (now - started_dt).total_seconds() / 86400.0
-        target = float(data.get("target_days", 30))
-        remaining = max(0.0, target - elapsed)
-        complete = elapsed >= target
-
-        note = (
-            f"Run complete — {elapsed:.1f} days elapsed."
-            if complete
-            else f"{elapsed:.1f} days elapsed, {remaining:.1f} days remaining."
-        )
-
-        return {
-            "started": True,
-            "started_utc": started_utc_str,
-            "elapsed_days": round(elapsed, 2),
-            "remaining_days": round(remaining, 2),
-            "target_days": int(target),
-            "complete": complete,
-            "environment": data.get("environment"),
-            "account_id": data.get("account_id"),
-            "note": note,
-        }
+        from brokers.oanda_paper_clock import get_clock
+        return get_clock().status()
     except Exception as exc:
-        logger.warning("paper_trading_status: failed to read stamp file: %s", exc)
+        logger.warning("paper_trading_status: clock unavailable: %s", exc)
         return {
             "started": False,
             "started_utc": None,
@@ -439,7 +383,7 @@ async def paper_trading_status():
             "complete": False,
             "environment": None,
             "account_id": None,
-            "note": f"Error reading paper trading stamp: {exc}",
+            "note": f"Clock unavailable: {exc}",
         }
 
 

@@ -349,6 +349,16 @@ class OANDAConnector(BrokerConnector):
             )
             r.raise_for_status()
             self.connected = True
+            # Start the 30-day paper trading clock on first successful connection
+            try:
+                from brokers.oanda_paper_clock import get_clock
+                env = "live" if "api-fxtrade" in self.base_url else "practice"
+                get_clock().maybe_start(
+                    account_id=self.account_id,
+                    environment=env,
+                )
+            except Exception as _clk_exc:
+                logger.debug("Paper clock start skipped: %s", _clk_exc)
             return True
         except Exception as exc:
             logger.error("OANDA connect failed: %s", exc)
@@ -621,6 +631,16 @@ class AsyncOANDAConnector:
                 resp.raise_for_status()
             self.connected = True
             logger.info("AsyncOANDAConnector connected (%s)", self.base_url)
+            # Start the 30-day paper trading clock on first successful connection
+            try:
+                from brokers.oanda_paper_clock import get_clock
+                env = "live" if "api-fxtrade" in self.base_url else "practice"
+                get_clock().maybe_start(
+                    account_id=self.account_id,
+                    environment=env,
+                )
+            except Exception as _clk_exc:
+                logger.debug("Paper clock start skipped: %s", _clk_exc)
             return True
         except Exception as exc:
             logger.error("AsyncOANDAConnector connect failed: %s", exc)
