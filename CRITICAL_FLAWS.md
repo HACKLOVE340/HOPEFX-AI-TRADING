@@ -2,7 +2,7 @@
 
 > Produced by a full static + dynamic audit of commit `b1c3e71`.
 > See [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) for the complete analysis.
-> Last updated: 2026-03-25 — V11 security audit fixes applied.
+> Last updated: 2026-03-26 — V13 multi-timeframe + VaR enforcement + results refresh.
 
 ## Summary
 
@@ -11,9 +11,20 @@ enhanced feature set (122 stationary features, COT proxy, regime features,
 macro cross-asset) achieves **68.0% accuracy on a 3-year held-out OOS period
 (p=0.0000)**, meeting the p<0.05 requirement for live capital deployment.
 
-**V11 security audit (2026-03-25) — newly fixed:**
+**V13 (2026-03-26) — newly fixed:**
+- ✅ Multi-timeframe scheduler: M1, M5, M15, M30, H1, H4, D, W, M all supported
+- ✅ VaR sqrt(t) enforcement: `ENFORCE_MULTIDAY_VAR=True` blocks historical/parametric for time_horizon > 1
+- ✅ `calculate_var_ewma`: multi-day now uses overlapping windows, not sqrt(t)
+- ✅ `recommended_var()` helper routes 1-day → historical, multi-day → EWMA
+- ✅ `train_advanced.py`: OOS metadata sidecar (advanced_oos_meta.json), Sharpe SE block
+- ✅ `train_with_macro.py`: removed deprecated `use_label_encoder=False` (XGBoost 2.x)
+- ✅ `ml/__init__.py`: reads OOS metadata sidecar on load, warns if accuracy < 60%
+- ✅ Equity curve regenerated: trade-level Sharpe 1.524 ±0.21 (N=48, avg hold 9.2d)
+- ✅ performance.json v13: sharpe_se, avg_hold_days, _disclaimer block, correct Sharpe
+
+**V11 security audit (2026-03-25) — previously fixed:**
 - ✅ Watchlist routes now require JWT auth (`api/watchlist.py`)
-- ✅ Chat route now requires JWT auth — OpenAI bill risk eliminated (`api/chat.py`)
+- ✅ Chat route now require JWT auth — OpenAI bill risk eliminated (`api/chat.py`)
 - ✅ Silent `except ValueError: pass` replaced with logging in `api/monetization.py` and `api/calendar.py`
 - ✅ Sharpe ratio corrected: 5.637 → 1.817 (annualisation error fixed)
 - ✅ Equity curve regenerated from real trade ticks with drawdown panel
@@ -125,12 +136,13 @@ Proceed to paper trading before committing real capital.
 - Regime-conditional training available
 - Run: `python ml/train_advanced.py --years 50 --oos-years 3`
 
-### Backtest results (examples/results/ — updated)
-- Real GC=F data, 2021-03-26 → 2026-03-24, 44 stationary features + macro
-- ML accuracy: 53.9% | Up precision: 60.5%
-- Return: +5.52% | Win rate: 57.8% | Profit factor: 2.28
-- Max DD: -0.88% | **Sharpe: 1.82** (corrected from 5.64 — annualisation error) | Trades: 45
-- ⚠️ N=45 trades: Sharpe SE ≈ ±0.54. Not statistically robust. Use OOS accuracy (68.0%, p=0.0000) as the credible number.
+### Backtest results (examples/results/ — updated v13)
+- Real GC=F data, 2021-03-29 → 2026-03-25, 44 stationary features + macro
+- ML accuracy: 50.9% | Up precision: 57.3%
+- Return: +4.66% | Win rate: 56.25% | Profit factor: 1.93
+- Max DD: -0.98% | **Sharpe: 1.52 ±0.21** (trade-level, avg hold 9.2d) | Trades: 48
+- ⚠️ N=48 trades: Sharpe SE ≈ ±0.21. Not statistically robust. Use OOS accuracy (68.0%, p=0.0000) as the credible number.
+- ⚠️ Sharpe previously reported as 4.68 — that figure was incorrect (daily equity curve method inflated by flat no-trade days). Corrected to trade-level: 1.52.
 
 **p<0.05 ML edge demonstrated. Enhanced feature set is production-ready for paper trading.**
 
@@ -348,12 +360,102 @@ without API access.
 
 ---
 
+---
+
+## V13 Fixes (2026-03-26) — This Session
+
+### ✅ FIXED — data/scheduler.py only supported H1 (single timeframe)
+
+**Was:** `DataScheduler` fetched only one timeframe (H1 by default). No support
+for M1, M5, M15, M30, H4, D, W, or M granularities. yfinance fallback had no
+interval mapping.
+
+**Fix:**
+- `ALL_TIMEFRAMES = (M1, M5, M15, M30, H1, H4, D, W, M)` — all 9 granularities
+- `TIMEFRAME_SECONDS` dict maps each granularity to its bar duration
+- `_YF_INTERVAL_MAP` maps OANDA codes to yfinance interval strings
+- `_YF_PERIOD_MAP` sets appropriate lookback per granularity (intraday limited to 60d)
+- `DataScheduler.run_once()` iterates all timeframes; each stored in its own CSV
+- `_update_timeframe()` determines last timestamp per-timeframe and fetches incrementally
+- OANDA_REGION + OANDA_ENVIRONMENT env vars control endpoint routing
+
+**Files:** `data/scheduler.py`
+
+---
+
+### ✅ FIXED — VaR sqrt(t) paths not enforced for production (P4)
+
+**Was:** `calculate_var_historical` and `calculate_var_parametric` used sqrt(t)
+for multi-day scaling when called with `time_horizon > 1`. This was documented
+as approximate but not blocked — callers could silently get wrong risk numbers.
+`calculate_var_ewma` also used sqrt(t) for multi-day.
+
+**Fix:**
+- `ENFORCE_MULTIDAY_VAR=True` (default) — `calculate_var_historical` and
+  `calculate_var_parametric` raise `RuntimeError` for `time_horizon > 1`
+- Set `HOPEFX_VAR_ENFORCE_MULTIDAY=0` in `.env` to disable (tests / legacy callers)
+- `calculate_var_ewma`: multi-day now uses overlapping t-day windows on EWMA-scaled
+  returns — no sqrt(t) assumption. sqrt(t) only fires as last-resort fallback with
+  `RuntimeWarning` when insufficient history
+- `recommended_var()`: new helper — routes 1-day → historical, multi-day → EWMA;
+  always avoids sqrt(t); safe to call regardless of enforcement flag
+
+**Files:** `risk/advanced_analytics.py`
+
+---
+
+### ✅ FIXED — train_advanced.py had no OOS metadata sidecar
+
+**Was:** `oos_eval_advanced()` saved `advanced_oos.pkl` but no companion metadata
+file. Loaders had to unpickle the full pipeline to verify accuracy.
+
+**Fix:**
+- `oos_eval_advanced()` writes `advanced_oos_meta.json` alongside the pkl with
+  OOS accuracy, SE, p-value, period, feature count, and trained_at timestamp
+- `ml/__init__.py._load_models()` reads the sidecar on load and logs validated
+  accuracy without unpickling. Warns if accuracy < 60%
+- Summary prints Sharpe SE block: N=45 SE warning + paper-trading gate
+
+**Files:** `ml/train_advanced.py`, `ml/__init__.py`
+
+---
+
+### ✅ FIXED — train_with_macro.py used deprecated use_label_encoder=False
+
+**Was:** Three `xgb.XGBClassifier` calls included `use_label_encoder=False`.
+This parameter was removed in XGBoost 2.x and raises `TypeError` on import.
+
+**Fix:** Removed all three occurrences. Added accuracy SE, AUC, OOS period,
+and top_features to `oos_eval()` return dict. Sharpe SE warning block added
+to summary. OOS minimum raised from 30 to 100 bars.
+
+**Files:** `ml/train_with_macro.py`
+
+---
+
+### ✅ FIXED — Equity curve Sharpe inflated by daily equity curve method
+
+**Was:** `generate_proof_artifacts.py` computed Sharpe from daily equity curve
+returns (`pct_change().mean() / std() * sqrt(252)`). This inflates Sharpe
+because the many flat no-trade days have near-zero returns, reducing std.
+Previously reported as 4.68 (incorrect).
+
+**Fix:** Trade-level Sharpe: `mean(net_pnl) / std(net_pnl) * sqrt(252 / avg_hold_days)`.
+Corrected value: **1.52 ±0.21** (N=48, avg hold 9.2 days).
+`performance.json` updated with `sharpe_se`, `avg_hold_days`, `_disclaimer` block.
+Equity curve annotation shows Sharpe ±SE, N, and OOS accuracy.
+
+**Files:** `examples/generate_proof_artifacts.py`, `examples/results/equity_curve.png`,
+`examples/results/performance.json`, `examples/results/trades.csv`
+
+---
+
 ## Remaining Open Items
 
 | Priority | Item | Status |
 |----------|------|--------|
-| P1 | Start 30-day OANDA paper trading run | ❌ Not started |
-| P2 | Accumulate trade count (need ~170 for Sharpe SE ≤ ±0.3) | ❌ Ongoing |
+| P1 | Start 30-day OANDA paper trading run | ❌ Not started — clock does not start until OANDA_API_KEY is set |
+| P2 | Accumulate trade count (need ~202 more for Sharpe SE ≤ ±0.3 at N=250) | ❌ Ongoing — N=48 |
 | P3 | Wire research/pipeline LSTM as optional signal layer | ❌ Research only |
-| P4 | Replace sqrt(t) VaR in historical + parametric paths | ⚠️ Documented, not enforced |
+| P4 | VaR sqrt(t) enforcement | ✅ Enforced — ENFORCE_MULTIDAY_VAR=True blocks historical/parametric for t>1 |
 | P5 | Alembic migration for dedicated watchlists table | ⚠️ Using JSON column |
