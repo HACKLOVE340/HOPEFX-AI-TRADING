@@ -349,3 +349,69 @@ All 21 Grafana dashboard metric names are registered in `MetricsRegistry`. Zero 
 | `9b772cd` | Add missing random_forest_model.pkl to fix manifest.json broken path |
 | `b13125f` | Retrain ML models on current XAUUSD data (2024-03 to 2026-03) |
 | `8fb5153` | Update README with current state, live backtest results, and all v2 changes |
+
+---
+
+## Part 4 — Corrections & Updates (2026-07-14)
+
+### Sharpe Ratio Correction
+
+**Previously reported:** Sharpe = 4.68
+
+**Corrected:** Sharpe = **1.52** (trade-level)
+
+**Root cause:** The 4.68 figure was computed from the bar-level equity curve
+(`equity.pct_change()`). Flat no-trade bars suppress the return standard
+deviation, inflating the Sharpe ratio. The correct method uses trade-level
+returns: `mean(net_pnl) / std(net_pnl) * sqrt(252 / avg_hold_days)`.
+
+| Metric | Old (incorrect) | New (corrected) |
+|--------|-----------------|-----------------|
+| Sharpe ratio | 4.68 (bar-level) | **1.52** (trade-level) |
+| Method | equity.pct_change() | mean(net_pnl)/std(net_pnl) |
+| N trades at report | 48 | 48 |
+| Sharpe SE | not reported | +/-0.21 (N=48, not robust) |
+| Credible metric | Sharpe 4.68 | OOS accuracy 68.0% (p=0.0000) |
+
+The fix is in `backtest/engine.py` — `sharpe_ratio` now uses trade-level
+returns. The old bar-level method is removed from primary reporting.
+
+### Backtest Cost Model Corrections
+
+| Parameter | Old | New | Reason |
+|-----------|-----|-----|--------|
+| Commission | $5 flat | $7 flat | Realistic XAUUSD CFD round-trip |
+| Slippage pip | $0.0001 (forex) | $0.10 (gold) | Gold pip = $0.10, not $0.0001 |
+| Slippage at $2000 gold | ~$0.00 | $0.30 | 3 pips x $0.10 = $0.30 |
+| Position sizing | Fixed lot | Quarter-Kelly | 1% risk/trade, capped by cash |
+| R:R filter | None | min 1.5:1 | Reject signals below threshold |
+
+### Feature Flag Corrections
+
+57 flags in `.env.example` now match exactly the env_var names in
+`config/feature_flags.py`. Previously 18 flags were listed, 3 had wrong
+names (`FEATURE_ORDER_FLOW`, `FEATURE_NOCODE_BUILDER`, `FEATURE_REPLAY_ENGINE`).
+
+### OANDA Paper Trading Clock
+
+`init_broker()` now auto-detects OANDA credentials and starts the 30-day
+paper trading clock on first successful connection. Clock persisted in
+`data/oanda_paper_start.json`. Status available at `GET /api/status/paper-trading`.
+
+### Research Pipeline Wiring
+
+All four research phases are now wired in `core/signal_engine.py`:
+
+| Phase | Component | Default |
+|-------|-----------|---------|
+| 1 | MTFFusionStore | on |
+| 2 | AnomalyWeightStore | off |
+| 3 | OnlineLearnerStore | off |
+| 4 | DeepEnsembleStore | off |
+
+### Trade Count Target
+
+Target: N=600 trades for Sharpe SE <= +/-0.029.
+Current: ~48 trades (SE +/-0.21 — not robust).
+Path: multi-symbol backtest (XAU/USDT + BTC/USDT + ETH/USDT) with
+ABSTAIN_THRESHOLD=0.52 accumulates ~600 trades over 3 years of hourly data.
