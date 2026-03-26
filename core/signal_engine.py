@@ -35,6 +35,27 @@ try:
 except Exception:
     _ML_AVAILABLE = False
 
+# ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
+_anomaly_store: Optional[Any] = None
+
+def _get_anomaly_store() -> Optional[Any]:
+    """Return the module-level AnomalyWeightStore singleton, creating it on first call."""
+    global _anomaly_store
+    try:
+        from config.feature_flags import flags
+        if not flags.ANOMALY_WEIGHTING:
+            return None
+    except Exception:
+        return None
+    if _anomaly_store is None:
+        try:
+            from research.pipeline.anomaly import AnomalyWeightStore
+            _anomaly_store = AnomalyWeightStore()
+            logger.info("AnomalyWeightStore initialised (Phase 2)")
+        except Exception as exc:
+            logger.debug("AnomalyWeightStore init failed: %s", exc)
+    return _anomaly_store
+
     def get_active_model() -> Optional[Any]:  # type: ignore[misc]
         return None
 
@@ -327,13 +348,29 @@ def _compute_ml_probability(
                 ohlcv_df, macro_df=macro_df, symbol=symbol,
                 mtf_df=mtf_df,
             )
+
+            # Phase 2: anomaly weighting — down-weight on anomalous bars
+            anomaly_weight = 1.0
+            anomaly_store = _get_anomaly_store()
+            if anomaly_store is not None:
+                try:
+                    anomaly_weight = anomaly_store.update_and_score(ohlcv_df)
+                    if anomaly_weight < 1.0:
+                        # Blend probability toward neutral (0.5) by the weight
+                        prob = 0.5 + (prob - 0.5) * anomaly_weight
+                        logger.debug(
+                            "Anomaly weight %.2f applied for %s → prob %.4f",
+                            anomaly_weight, symbol, prob,
+                        )
+                except Exception as aw_exc:
+                    logger.debug("Anomaly weighting failed (non-fatal): %s", aw_exc)
+
             logger.debug(
-                "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s)",
-                adv_predictor.version,
-                symbol,
-                prob,
+                "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s, anomaly_w=%.2f)",
+                adv_predictor.version, symbol, prob,
                 "yes" if macro_df is not None else "no",
                 "yes" if mtf_df is not None else "no",
+                anomaly_weight,
             )
             return float(prob), adv_predictor.version
 
