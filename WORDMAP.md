@@ -562,4 +562,74 @@ All agents operate as Python classes/services coordinated through the FastAPI ap
 
 ---
 
+---
+
+## Corrections & Updates (2026-07-14)
+
+### Sharpe Ratio
+
+| Item | Old | Corrected |
+|------|-----|-----------|
+| Sharpe ratio | 4.68 (bar-level, inflated) | **1.52** (trade-level) |
+| Method | equity.pct_change() | mean(net_pnl)/std(net_pnl)*sqrt(252/hold_days) |
+| SE at N=48 | not reported | ±0.21 — not statistically robust |
+| SE at N=250 | — | ±0.045 — minimum acceptable |
+| SE at N=600 | — | ±0.029 — target (statistically robust) |
+| Credible metric | Sharpe 4.68 | OOS accuracy 68.0% (p=0.0000) |
+
+The bar-level Sharpe (4.68) was inflated by flat no-trade days suppressing
+the return standard deviation. The corrected trade-level Sharpe is 1.52.
+`backtest/engine.py` now reports trade-level Sharpe with SE in all outputs.
+
+### Backtest Cost Model
+
+| Parameter | Old | Corrected |
+|-----------|-----|-----------|
+| Commission | $5 flat | $7 flat (realistic XAUUSD CFD) |
+| Gold pip value | $0.0001 (forex) | $0.10 (gold pip = $0.10) |
+| Slippage at $2000 gold | ~$0.00 | $0.30 (3 pips × $0.10) |
+| Position sizing | Fixed lot | Quarter-Kelly (1% risk/trade) |
+| R:R filter | None | min 1.5:1 |
+
+### Feature Flags
+
+57 flags in `.env.example` now match exactly the env_var names in
+`config/feature_flags.py`. Previously 3 flags had wrong names:
+
+| Old (wrong) | Corrected |
+|-------------|-----------|
+| `FEATURE_ORDER_FLOW` | `FEATURE_ORDER_FLOW_ANALYSIS` / `FEATURE_ORDER_FLOW_ADVANCED` / `FEATURE_ORDER_FLOW_DASHBOARD` |
+| `FEATURE_NOCODE_BUILDER` | `FEATURE_NOCODE` |
+| `FEATURE_REPLAY_ENGINE` | `FEATURE_REPLAY` |
+
+`features/flags.py` is now a thin shim that delegates to `config.feature_flags`.
+
+### Research Pipeline (Phases 1–4)
+
+All four research phases are wired in `core/signal_engine.py`:
+
+| Phase | Module | Flag | Default |
+|-------|--------|------|---------|
+| 1 | `research/pipeline/mtf_fusion.py` | `FEATURE_MTF_FUSION` | on |
+| 2 | `research/pipeline/anomaly.py` | `FEATURE_ANOMALY_WEIGHTING` | off |
+| 3 | `research/pipeline/online_learning.py` | `FEATURE_ONLINE_LEARNING` | off |
+| 4 | `research/pipeline/models_ensemble.py` | `FEATURE_DEEP_ENSEMBLE` | off |
+
+### OANDA Paper Trading Clock
+
+`core/startup_factories.py::init_broker()` now auto-detects OANDA credentials.
+On first successful connection, `data/oanda_paper_start.json` is written with
+the UTC start timestamp. Clock survives restarts. Status at:
+`GET /api/status/paper-trading`
+
+### New Test Files
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `tests/test_backtest_engine_fixes.py` | 25 | Trade-level Sharpe, Kelly sizing, gold slippage, R:R filter |
+| `tests/test_oanda_paper_clock.py` | 13 | Paper trading clock, init_broker fallback |
+| `tests/test_sentry_wiring.py` | 25 | DSN wiring, PII scrubbing, ML fallback alert |
+| `tests/test_research_pipeline_wiring.py` | 26 | Phase 1–4 feature flag gates |
+| `tests/test_trade_count_sharpe_se.py` | 26 | Trade-level Sharpe SE, multi-symbol, N=600 |
+
 _This WordMap is auto-generated from code analysis. Update by re-running the generation script or editing this file directly._
