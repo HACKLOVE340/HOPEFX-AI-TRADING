@@ -5,7 +5,6 @@ Tests use the real CopyTradingEngine from the production module — no mocks.
 """
 
 import pytest
-import asyncio
 from decimal import Decimal
 
 from social.copy_trading import CopyTradingEngine, CopyRelationship, RiskLimitExceeded

@@ -8,10 +8,9 @@ Falls back to in-memory storage when no DB session factory is available.
 import hashlib
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 

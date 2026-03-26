@@ -54,7 +54,7 @@ class FIAComplianceManager:
     def check_max_order_size(self, order_size: float, symbol: str) -> RiskCheckResult:
         """Validate order size against maximum limits"""
         max_size = self.config.get("max_order_size", 100)  # lots
-        max_notional = self.config.get("max_order_notional", 1000000)  # USD
+        self.config.get("max_order_notional", 1000000)  # USD
 
         if abs(order_size) > max_size:
             return RiskCheckResult(

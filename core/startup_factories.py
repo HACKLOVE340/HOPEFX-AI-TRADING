@@ -304,8 +304,6 @@ async def init_broker(s: Any) -> Any:
     ``data/oanda_paper_start.json``.  The file is created on first
     successful OANDA connection and read by the /api/status endpoint.
     """
-    import json
-    import pathlib
     from api.admin import log_activity
 
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()

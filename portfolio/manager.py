@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 
@@ -78,7 +78,7 @@ class PortfolioManager:
         if method == "equal":
             w = {a: 1.0 / n for a in assets}
             mu = returns.mean()
-            sigma = returns.std()
+            returns.std()
             port_ret = sum(w[a] * mu[a] for a in assets)
             port_vol = float(np.sqrt(np.dot(list(w.values()), np.dot(returns.cov().values, list(w.values())))))
             sharpe = port_ret / port_vol if port_vol > 0 else 0.0

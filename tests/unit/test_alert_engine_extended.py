@@ -11,10 +11,7 @@ Covers:
 - Background monitoring
 """
 
-import asyncio
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 class TestAlertEngineExtended:
@@ -146,7 +143,7 @@ class TestAlertEngineExtended:
         assert all(a.priority == AlertPriority.CRITICAL for a in alerts)
 
     def test_get_alerts_filter_combined(self, engine):
-        from notifications.alert_engine import AlertConditionType, AlertStatus
+        from notifications.alert_engine import AlertStatus
         alerts = engine.get_alerts(
             symbol='XAUUSD',
             status=AlertStatus.ACTIVE
@@ -157,7 +154,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_cross_above(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Cross Above',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_CROSS_ABOVE,
@@ -178,7 +175,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_cross_below(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Cross Below',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_CROSS_BELOW,
@@ -199,7 +196,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_inside_range(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Inside Range',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_INSIDE_RANGE,
@@ -220,7 +217,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_outside_range(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Outside Range',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_OUTSIDE_RANGE,
@@ -241,7 +238,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_change_pct(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Pct Change',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_CHANGE_PCT,
@@ -263,7 +260,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_price_change_abs(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Abs Change',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_CHANGE_ABS,
@@ -285,7 +282,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_volume_spike(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Volume Spike',
             symbol='XAUUSD',
             condition_type=AlertConditionType.VOLUME_SPIKE,
@@ -305,7 +302,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_indicator_above(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Indicator Above',
             symbol='XAUUSD',
             condition_type=AlertConditionType.INDICATOR_ABOVE,
@@ -326,7 +323,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_indicator_below(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Indicator Below',
             symbol='XAUUSD',
             condition_type=AlertConditionType.INDICATOR_BELOW,
@@ -347,7 +344,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_rsi_oversold(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='RSI Oversold',
             symbol='XAUUSD',
             condition_type=AlertConditionType.RSI_OVERSOLD,
@@ -367,7 +364,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_spread_above(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Wide Spread',
             symbol='XAUUSD',
             condition_type=AlertConditionType.SPREAD_ABOVE,
@@ -387,7 +384,7 @@ class TestAlertEngineExtended:
 
     def test_check_alerts_imbalance_threshold(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Imbalance',
             symbol='XAUUSD',
             condition_type=AlertConditionType.IMBALANCE_THRESHOLD,
@@ -408,7 +405,7 @@ class TestAlertEngineExtended:
     def test_check_alerts_no_previous_price_cross(self, engine):
         """Test cross conditions with no previous price."""
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Cross No Prev',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_CROSS_ABOVE,
@@ -432,7 +429,7 @@ class TestAlertEngineExtended:
     def test_check_alerts_price_range_no_threshold_2(self, engine):
         """Test range condition without threshold_2 does not trigger."""
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Range No Threshold2',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_INSIDE_RANGE,
@@ -581,7 +578,7 @@ class TestAlertEngineExtended:
 
     def test_trigger_to_dict(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Trigger Dict Test',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_ABOVE,
@@ -607,7 +604,7 @@ class TestAlertEngineExtended:
 
     def test_custom_message_template(self, engine):
         from notifications.alert_engine import AlertConditionType
-        alert = engine.create_alert(
+        engine.create_alert(
             name='Template Test',
             symbol='XAUUSD',
             condition_type=AlertConditionType.PRICE_ABOVE,

@@ -1,7 +1,7 @@
 import requests
 import redis
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 class NewsFilterIntegration:
     def __init__(self, redis_host='localhost', redis_port=6379, event_cache_duration=300):

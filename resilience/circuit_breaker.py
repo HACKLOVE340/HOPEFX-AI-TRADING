@@ -7,7 +7,7 @@ Prevents cascade failures and ensures system stability
 import asyncio
 from typing import Dict, Callable, Optional
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum, auto
 
 
@@ -66,7 +66,7 @@ class CircuitBreaker:
             self._on_success()
             return result
             
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
     

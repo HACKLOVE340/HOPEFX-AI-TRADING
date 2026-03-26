@@ -9,7 +9,6 @@ import logging
 import logging.handlers
 import json
 from datetime import datetime, timezone
-from typing import Optional
 import os
 
 class JSONFormatter(logging.Formatter):

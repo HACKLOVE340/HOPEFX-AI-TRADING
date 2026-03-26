@@ -7,9 +7,8 @@ Security Management
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime, timedelta, timezone
-from functools import wraps
 
 logger = logging.getLogger(__name__)
 

@@ -104,7 +104,8 @@ circuitbreaker>=2.0.0
 # On Ubuntu/Debian: sudo apt-get install libquickfix-dev
 # On macOS:         brew install quickfix
 quickfix>=1.15.1; sys_platform != "win32"
-pyfixmsg>=0.0.14
+# pyfixmsg/simplefix removed — not available on PyPI for Python 3.12; FIX adapter uses quickfix or stub
+simplefix>=1.0.1
 
 # ── System / process monitoring ───────────────────────────────────────────────
 psutil>=5.9.0

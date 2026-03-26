@@ -10,7 +10,6 @@ Covers:
 import pytest
 import numpy as np
 import pandas as pd
-from unittest.mock import MagicMock, patch, Mock
 from sklearn.ensemble import RandomForestClassifier
 
 
@@ -112,7 +111,7 @@ class TestRandomForestClassifierExtended:
         rf = RandomForestTradingClassifier(config={'n_estimators': 10})
         X_np, y = training_data
         X_df = pd.DataFrame(X_np, columns=[f'col_{i}' for i in range(X_np.shape[1])])
-        metrics = rf.train(X_df, y)
+        rf.train(X_df, y)
         assert rf.feature_names == list(X_df.columns)
 
     # --- predict ---

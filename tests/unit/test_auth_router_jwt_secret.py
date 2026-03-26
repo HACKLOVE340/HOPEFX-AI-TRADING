@@ -12,7 +12,6 @@ Verifies that _get_current_user_id:
   8. Raises HTTP 401 for a completely malformed token string.
 """
 
-import os
 import sys
 import time
 

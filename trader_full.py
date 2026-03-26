@@ -26,7 +26,6 @@ import asyncio
 import logging
 import os
 import signal
-import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 

@@ -30,7 +30,12 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
+
+import pandas as pd
+
+if TYPE_CHECKING:
+    from ml.macro_store import MacroStore
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +148,7 @@ def daily_refresh() -> int:
     return bootstrap(force=True)
 
 
-def load_into_store(store: "MacroStore") -> int:  # type: ignore[name-defined]
+def load_into_store(store: "MacroStore") -> int:
     """
     Load all available CSVs from MACRO_DATA_DIR into a MacroStore instance.
 

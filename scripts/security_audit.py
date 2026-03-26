@@ -4,8 +4,6 @@ Security audit script to check for secrets and vulnerabilities.
 Run before every deployment.
 """
 #!/usr/bin/env python3
-import ast
-import os
 import re
 import sys
 from pathlib import Path
@@ -60,7 +58,7 @@ def check_env_file() -> list[str]:
     issues = []
     
     env_file = Path('.env')
-    env_example = Path('.env.example')
+    Path('.env.example')
     
     if not env_file.exists():
         issues.append("CRITICAL: .env file not found")

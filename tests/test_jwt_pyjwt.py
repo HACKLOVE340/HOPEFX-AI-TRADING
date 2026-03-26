@@ -10,7 +10,6 @@ from __future__ import annotations
 import importlib.util
 import os
 import pathlib
-import sys
 import time
 
 import pytest
@@ -43,7 +42,6 @@ _CRED_EXC = _FakeExc("invalid credentials")
 
 def test_jose_not_imported():
     """python-jose must not be present in the module's imports."""
-    import importlib
     # jose should not be importable (or at least not used by auth/jwt.py)
     src = pathlib.Path(__file__).parent.parent / "auth" / "jwt.py"
     content = src.read_text()

@@ -6,10 +6,9 @@ SQLAlchemy with connection pooling, retries, and monitoring
 import logging
 import time
 import threading
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
 
 try:
     from sqlalchemy import create_engine, event, text

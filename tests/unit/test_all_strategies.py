@@ -6,7 +6,7 @@ This file aims to increase test coverage to 80%+.
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from strategies.base import StrategyConfig
 
@@ -297,7 +297,7 @@ class TestBaseStrategyComprehensive:
         assert config.name == "TestStrategy"
         assert config.symbol == "EUR_USD"
         assert config.timeframe == "1H"
-        assert config.enabled == True
+        assert config.enabled
         assert config.risk_per_trade == 2.0
         assert config.max_positions == 5
         assert config.parameters['fast'] == 10

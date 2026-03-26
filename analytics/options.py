@@ -4,7 +4,6 @@ Options Trading and Greeks
 
 import math
 from typing import Dict
-from decimal import Decimal
 
 
 class OptionsAnalyzer:

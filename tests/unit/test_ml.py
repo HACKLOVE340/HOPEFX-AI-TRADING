@@ -5,8 +5,6 @@ Tests for the ML module.
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
 
 from ml.features.technical import TechnicalFeatureEngineer
 
@@ -138,7 +136,7 @@ class TestTechnicalFeatureEngineer:
         """Test that feature_names list is populated."""
         fe = TechnicalFeatureEngineer()
         
-        result = fe.create_features(sample_ohlcv_data)
+        fe.create_features(sample_ohlcv_data)
         
         # feature_names should not include OHLCV columns
         assert 'open' not in fe.feature_names

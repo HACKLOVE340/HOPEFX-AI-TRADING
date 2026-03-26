@@ -47,7 +47,7 @@ import pickle
 import threading
 from collections import deque
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Deque, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -67,7 +67,6 @@ try:
     import sys
     from pathlib import Path as _P
     sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
-    from ml.online_learner import OnlineLearner as _DeepOnlineLearner
     DEEP_ONLINE_AVAILABLE = True
 except Exception:
     DEEP_ONLINE_AVAILABLE = False

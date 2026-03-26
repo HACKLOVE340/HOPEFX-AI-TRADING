@@ -7,7 +7,6 @@ Tests for:
 - Opportunity Detection
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 
 

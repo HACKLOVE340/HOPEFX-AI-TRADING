@@ -66,7 +66,7 @@ class ABTestRequest(BaseModel):
 
 def _simulate_ab_test(req: ABTestRequest) -> dict:
     """Simulate parallel paper trading for two strategies."""
-    rng = random.Random(hash(req.strategy_a + req.strategy_b) % 10000)
+    random.Random(hash(req.strategy_a + req.strategy_b) % 10000)
 
     def run_strategy(name: str, seed_offset: int) -> dict:
         r = random.Random(seed_offset)

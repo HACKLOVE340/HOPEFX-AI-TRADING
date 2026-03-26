@@ -5,7 +5,10 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from typing import Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -117,7 +120,7 @@ class Settings(BaseSettings):
     log_dir: Path = Path("./logs")
 
     @model_validator(mode="after")
-    def validate_paths(self) -> Self:
+    def validate_paths(self) -> "Settings":
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.ml.model_path.mkdir(parents=True, exist_ok=True)

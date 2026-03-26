@@ -1,6 +1,6 @@
 """transparency/models.py — Data models for execution transparency."""
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

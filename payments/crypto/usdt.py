@@ -6,7 +6,7 @@ Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) netwo
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 from enum import Enum
 import logging
 import hashlib

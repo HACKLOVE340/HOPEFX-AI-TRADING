@@ -6,7 +6,6 @@ Prevents bad trades through pre-execution checks.
 
 import logging
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Optional, Tuple
 
 logger = logging.getLogger('validation')

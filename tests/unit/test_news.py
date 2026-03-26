@@ -10,7 +10,7 @@ Tests for:
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 
 # ============================================================

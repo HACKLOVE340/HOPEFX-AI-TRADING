@@ -60,7 +60,7 @@ def initialize_database(db_url='sqlite:///trading.db'):
 
 # Schema validation
 def validate_schema(engine):
-    inspector = inspect(engine)
+    inspect(engine)
     # Add validation logic here
 
 # Recovery logic

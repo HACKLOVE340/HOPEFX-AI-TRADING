@@ -29,7 +29,7 @@ def _route_paths(router) -> list:
 @pytest.mark.unit
 class TestResearchModule:
     def test_imports(self):
-        from research import ResearchNotebookEngine, create_research_router
+        from research import create_research_router
         assert callable(create_research_router)
 
     def test_router_prefix_and_routes(self):
@@ -72,7 +72,7 @@ class TestResearchModule:
 @pytest.mark.unit
 class TestExplainabilityModule:
     def test_imports(self):
-        from explainability import AIExplainer, create_explainability_router
+        from explainability import create_explainability_router
         assert callable(create_explainability_router)
 
     def test_router_prefix_and_routes(self):
@@ -118,7 +118,7 @@ class TestExplainabilityModule:
 @pytest.mark.unit
 class TestTransparencyModule:
     def test_imports(self):
-        from transparency import ExecutionTransparencyEngine, create_transparency_router
+        from transparency import create_transparency_router
         assert callable(create_transparency_router)
 
     def test_router_prefix_and_routes(self):
@@ -178,7 +178,7 @@ class TestTransparencyModule:
 @pytest.mark.unit
 class TestTeamsModule:
     def test_imports(self):
-        from teams import TeamManager, create_teams_router
+        from teams import create_teams_router
         assert callable(create_teams_router)
 
     def test_router_prefix_and_routes(self):
@@ -235,7 +235,7 @@ class TestTeamsModule:
 @pytest.mark.unit
 class TestNoCodeModule:
     def test_imports(self):
-        from nocode import NoCodeStrategyBuilder, create_nocode_router
+        from nocode import create_nocode_router
         assert callable(create_nocode_router)
 
     def test_router_prefix_and_routes(self):
@@ -295,7 +295,7 @@ class TestNoCodeModule:
 @pytest.mark.unit
 class TestReplayModule:
     def test_imports(self):
-        from replay import ChartReplayEngine, create_replay_router
+        from replay import create_replay_router
         assert callable(create_replay_router)
 
     def test_router_prefix_and_routes(self):
@@ -326,7 +326,7 @@ class TestReplayModule:
 
     def test_engine_play_pause_stop(self):
         from datetime import datetime
-        from replay import ChartReplayEngine, ReplayState
+        from replay import ChartReplayEngine
         engine = ChartReplayEngine()
         session = engine.create_session(
             symbol="EURUSD",
@@ -360,7 +360,7 @@ class TestReplayModule:
 @pytest.mark.unit
 class TestMLModule:
     def test_imports(self):
-        from ml import TechnicalFeatureEngineer, create_ml_router
+        from ml import create_ml_router
         assert callable(create_ml_router)
 
     def test_router_prefix_and_routes(self):

@@ -10,15 +10,13 @@ import time
 import json
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 try:
     import requests
 except ImportError:
     requests = None  # type: ignore
 from enum import Enum
-import queue
-import threading
 
 try:
     import aiohttp

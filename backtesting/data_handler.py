@@ -5,8 +5,7 @@ Manages historical data loading, validation, and access for backtesting.
 """
 
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from datetime import datetime
 import logging
 

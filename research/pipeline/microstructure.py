@@ -63,7 +63,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from datetime import datetime, timezone
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Deque, Dict, List, Optional
 
 import numpy as np
 import pandas as pd

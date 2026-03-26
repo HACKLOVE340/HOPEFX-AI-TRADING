@@ -1,8 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from typing import List, Dict
 import plotly.graph_objs as go
-import pandas as pd
 
 # DashboardDataManager manages market data
 class DashboardDataManager:
@@ -63,7 +61,7 @@ class DashboardApp:
 
         @self.app.get('/api/statistics/{symbol}')
         async def get_statistics(symbol: str):
-            data = self.data_manager.get_market_data(symbol)
+            self.data_manager.get_market_data(symbol)
             # Here you can add logic to calculate statistics
             return {"statistics": "Sample statistics"}
 

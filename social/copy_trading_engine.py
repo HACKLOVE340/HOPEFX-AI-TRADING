@@ -8,16 +8,12 @@ Advanced Copy Trading & Social Trading Engine
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta, timezone
 import uuid
-import hashlib
 
-import pandas as pd
-import numpy as np
-from sqlalchemy import Column, String, Float, Boolean, DateTime, JSON
 from sqlalchemy.ext.declarative import declarative_base
 
 logger = logging.getLogger(__name__)

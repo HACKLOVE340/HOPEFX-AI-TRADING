@@ -8,7 +8,6 @@ Tests for all security modules including:
 - Security configuration validation
 """
 
-import pytest
 import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -19,7 +18,6 @@ from utils.security import (
     CredentialRotationTracker,
     SecurityConfigValidator,
     AuditEventType,
-    SecurityLevel,
     generate_secure_key,
     generate_secure_salt,
     check_security_setup

@@ -48,11 +48,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ Real-time P&L, exposure, and portfolio optimization
 """
 
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -108,7 +108,6 @@ class PortfolioManager:
             self.positions[symbol] = Position(symbol=symbol)
         
         pos = self.positions[symbol]
-        prev_unrealized = pos.unrealized_pnl
         
         pos.add_trade(quantity, price, side)
         

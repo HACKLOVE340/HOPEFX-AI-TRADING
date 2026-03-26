@@ -7,11 +7,10 @@ Smart order execution with slippage modeling and safety checks.
 import logging
 import time
 from dataclasses import dataclass
-from decimal import Decimal
 from enum import Enum
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any
 
-from validation import OrderValidator, Order, ValidationResult
+from validation import OrderValidator, Order
 
 logger = logging.getLogger('execution')
 

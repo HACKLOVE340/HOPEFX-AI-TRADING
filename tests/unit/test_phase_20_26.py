@@ -1000,7 +1000,6 @@ class TestWhiteLabelManagerResellers:
         assert new_tier == ResellerTier.PLATINUM
 
     def test_upgrade_reseller_tier_no_change(self, manager):
-        from whitelabel import ResellerTier
         r = manager.create_reseller("SameCo", "sc@sc.com")
         r.total_tenants = 0  # Already at STANDARD threshold
         result = manager.upgrade_reseller_tier(r.reseller_id)
@@ -1026,7 +1025,6 @@ class TestWhiteLabelManagerExportImport:
         return WhiteLabelManager()
 
     def test_export_tenant_config(self, manager):
-        from whitelabel import FeatureFlag
         t = manager.create_tenant("ExportTest", "et@et.com")
         manager.update_theme(t.tenant_id, {"app_name": "ExportApp"})
         config = manager.export_tenant_config(t.tenant_id)
@@ -1069,7 +1067,7 @@ class TestWhiteLabelManagerSummary:
 
     @pytest.fixture
     def manager(self):
-        from whitelabel import WhiteLabelManager, TenantStatus
+        from whitelabel import WhiteLabelManager
         mgr = WhiteLabelManager()
         t1 = mgr.create_tenant("A", "a@a.com", trial_days=0)  # ACTIVE
         t2 = mgr.create_tenant("B", "b@b.com", trial_days=7)  # TRIAL

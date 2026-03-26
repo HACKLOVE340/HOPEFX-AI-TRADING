@@ -2,9 +2,7 @@
 Tests for the analytics module.
 """
 
-import pytest
 import numpy as np
-from decimal import Decimal
 
 from analytics.portfolio import PortfolioOptimizer
 from analytics.risk import RiskAnalyzer
@@ -179,7 +177,8 @@ class TestSimulationEngine:
         engine = SimulationEngine()
         
         parameters = {'param1': 10, 'param2': 20}
-        fitness_func = lambda x: x['param1'] + x['param2']
+        def fitness_func(x):
+            return x['param1'] + x['param2']
         
         result = engine.genetic_algorithm_optimization(
             parameters=parameters,

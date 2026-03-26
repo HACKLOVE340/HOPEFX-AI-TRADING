@@ -20,25 +20,15 @@ License: Proprietary - Institutional Use Only
 """
 
 import numpy as np
-import pandas as pd
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Callable, Tuple, Any, Union, Set
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Tuple, Any
 from enum import Enum, IntEnum, auto
 from datetime import datetime, timedelta, timezone
-from collections import deque, defaultdict, OrderedDict
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from functools import lru_cache, partial
+from collections import deque, defaultdict
 import logging
 import json
-import pickle
 import gzip
-import hashlib
-from pathlib import Path
 import warnings
-import asyncio
-from abc import ABC, abstractmethod
-import heapq
-import bisect
 
 # Performance libraries
 try:
@@ -883,7 +873,7 @@ class MarketMicrostructureAnalyzer:
             return
         
         # Calculate features
-        features = self._extract_regime_features()
+        self._extract_regime_features()
         
         # Rule-based classification (ML could be added)
         volatility = np.sqrt(self.realized_variance) if self.realized_variance > 0 else 0
@@ -1675,7 +1665,7 @@ class EnhancedBacktestEngine:
             return False, {'error': 'Invalid order type'}
         
         # Calculate costs
-        notional = abs(size) * fill_price
+        abs(size) * fill_price
         costs = self.cost_model.total_cost(
             size, fill_price,
             participation_rate=participation,
@@ -1866,7 +1856,7 @@ class EnhancedBacktestEngine:
         
         # Equity curve analysis
         equity_values = [e[1] for e in self.equity_curve]
-        equity_times = [e[0] for e in self.equity_curve]
+        [e[0] for e in self.equity_curve]
         
         # Calculate returns
         if len(equity_values) > 1:
@@ -2384,7 +2374,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print(f"Total Return: {meta['total_return_pct']:+.2f}%")
     
     stats = report['trade_statistics']
-    print(f"\n--- Trade Statistics ---")
+    print("\n--- Trade Statistics ---")
     print(f"Total Trades: {stats['total_trades']}")
     print(f"Win Rate: {stats['win_rate']:.1%}")
     print(f"Profit Factor: {stats['profit_factor']:.2f}")
@@ -2395,7 +2385,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print(f"Largest Loss: ${stats['largest_loss']:,.2f}")
     
     risk = report['risk_metrics']
-    print(f"\n--- Risk Metrics ---")
+    print("\n--- Risk Metrics ---")
     print(f"Max Drawdown: {risk['max_drawdown_pct']:.2f}%")
     print(f"Sharpe Ratio: {risk['sharpe_ratio']:.2f}")
     print(f"Sortino Ratio: {risk['sortino_ratio']:.2f}")
@@ -2404,14 +2394,14 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print(f"CVaR (95%): {risk['cvar_95']:.4f}")
     
     exec_quality = report['execution_quality']
-    print(f"\n--- Execution Quality ---")
+    print("\n--- Execution Quality ---")
     print(f"Avg Slippage: {exec_quality['avg_slippage_bps']:.2f} bps")
     print(f"Avg Latency: {exec_quality['avg_latency_ms']:.2f} ms")
     print(f"Total Commission: ${exec_quality['total_commission']:,.2f}")
     print(f"Cost Drag: {exec_quality['cost_drag_pct']:.3f}%")
     
     # Regime performance
-    print(f"\n--- Performance by Regime ---")
+    print("\n--- Performance by Regime ---")
     for regime, perf in report['regime_performance'].items():
         print(f"{regime:25}: {perf['total_trades']:3d} trades | "
               f"P&L: ${perf['total_pnl']:>10,.2f} | "
@@ -2422,7 +2412,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     engine.save_state("backtest_state.json.gz")
     
     # Risk manager report
-    print(f"\n--- Risk Manager Status ---")
+    print("\n--- Risk Manager Status ---")
     risk_report = report['risk_manager_report']
     print(f"Kill Switch Active: {risk_report['risk_metrics']['kill_switch']}")
     print(f"Circuit Breaker Level: {risk_report['risk_metrics']['circuit_breaker']}")

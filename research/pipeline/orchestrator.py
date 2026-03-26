@@ -57,7 +57,6 @@ from research.pipeline.anomaly import AnomalyWeighter
 from research.pipeline.synthetic import RegimeSynthesizer, label_regimes
 from research.pipeline.online_learning import IncrementalXGBoost, DriftDetector
 from research.pipeline.regime_models import RegimeRouter
-from research.pipeline.microstructure import attach_microstructure
 
 logger = logging.getLogger(__name__)
 

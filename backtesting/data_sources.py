@@ -10,9 +10,8 @@ Includes multiple FREE data sources:
 """
 
 import pandas as pd
-import numpy as np
-from typing import Optional, Dict, List, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Any
+from datetime import datetime
 import logging
 import os
 
@@ -159,7 +158,7 @@ class BrokerDataSource(DataSource):
             broker: Broker connector instance
         """
         self.broker = broker
-        logger.info(f"Initialized broker data source")
+        logger.info("Initialized broker data source")
 
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get historical data from broker."""

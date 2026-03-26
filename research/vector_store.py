@@ -30,7 +30,6 @@ import hashlib
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -50,7 +49,6 @@ def _compute_features(df) -> Optional[np.ndarray]:
     Returns None if there are fewer than _WINDOW rows.
     """
     try:
-        import pandas as pd
         import ta
 
         if len(df) < _WINDOW:

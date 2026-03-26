@@ -1366,7 +1366,7 @@ def train_ml_pipeline(
 
         # Build and train
         lstm_model.build_model()
-        train_info = lstm_model.fit(
+        lstm_model.fit(
             X_lstm_train,
             y_lstm_train,
             X_lstm_test,
@@ -1401,7 +1401,7 @@ def train_ml_pipeline(
         print("\nTraining XGBoost...")
 
         xgb_model = XGBoostModel(model_type="classifier")
-        train_info = xgb_model.fit(
+        xgb_model.fit(
             X_train_scaled, y_train_class.values, X_test_scaled, y_test_class.values
         )
 
@@ -1438,7 +1438,7 @@ def train_ml_pipeline(
         print("\nTraining Random Forest...")
 
         rf_model = RandomForestModel(model_type="classifier", n_estimators=100)
-        train_info = rf_model.fit(X_train_scaled, y_train_class.values)
+        rf_model.fit(X_train_scaled, y_train_class.values)
 
         # Evaluate
         metrics = rf_model.evaluate(X_test_scaled, y_test_class.values)
@@ -1522,7 +1522,7 @@ def walk_forward_validate(
         )
 
     fold_results: List[Dict[str, Any]] = []
-    fe = FeatureEngineer()
+    FeatureEngineer()
 
     for fold in range(n_splits):
         train_end = min_train + fold * fold_size

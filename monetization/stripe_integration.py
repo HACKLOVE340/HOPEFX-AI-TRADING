@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from enum import Enum
 
-from .pricing import SubscriptionTier, BillingCycle, pricing_manager
+from .pricing import SubscriptionTier, BillingCycle
 
 logger = logging.getLogger(__name__)
 

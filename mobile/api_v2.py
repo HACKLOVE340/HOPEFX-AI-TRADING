@@ -12,18 +12,13 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, timezone
 import uuid
-import json
 import asyncio
-from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, Header, Query, BackgroundTasks, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials as HTTPAuthCredentials
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 import jwt
 import bcrypt
-import aiohttp
 
 logger = logging.getLogger(__name__)
 

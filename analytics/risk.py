@@ -3,7 +3,6 @@ Risk Analytics
 """
 
 from typing import List, Dict
-from decimal import Decimal
 import numpy as np
 
 

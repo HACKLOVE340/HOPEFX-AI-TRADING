@@ -4,14 +4,14 @@ WebSocket and REST hybrid data feed with automatic failover
 """
 
 import asyncio
+import json
 import logging
 import time
-import json
-import threading
-from typing import Dict, List, Optional, Callable, Any
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from collections import defaultdict, deque
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
+
 import numpy as np
 
 try:

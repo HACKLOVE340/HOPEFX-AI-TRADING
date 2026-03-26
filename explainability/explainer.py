@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 
 from explainability.models import (
-    ExplanationType, FeatureContribution, DecisionNode,
+    FeatureContribution, DecisionNode,
     Explanation, ModelPerformanceExplanation,
 )
 
@@ -120,7 +120,7 @@ class AIExplainer:
         try:
             if hasattr(model, 'feature_importances_'):
                 importances = model.feature_importances_
-                feature_names = list(features.keys())
+                list(features.keys())
                 
                 for i, (name, value) in enumerate(features.items()):
                     if i < len(importances):

@@ -13,7 +13,7 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field, asdict
 from collections import deque
 from enum import Enum

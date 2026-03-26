@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 import numpy as np
@@ -507,8 +506,8 @@ def run_multi_symbol_backtest(
           f"SE ±{pooled_se:.3f}  "
           f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})")
     print(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
-    print(f"\nNOTE: Sharpe is trade-level (corrected). "
-          f"Bar-level Sharpe is NOT reported here.")
+    print("\nNOTE: Sharpe is trade-level (corrected). "
+          "Bar-level Sharpe is NOT reported here.")
 
     return {
         "symbol_results": symbol_results,

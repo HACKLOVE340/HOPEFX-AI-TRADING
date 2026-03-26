@@ -4,13 +4,18 @@ HOPEFX Compliance & Audit System
 Meets regulatory requirements for financial trading
 """
 
+import asyncio
 import hashlib
 import json
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-import asyncio
+from typing import Dict, List, Optional
+
+try:
+    import aiofiles
+except ImportError:
+    aiofiles = None  # type: ignore[assignment]
 
 
 class AuditLevel(Enum):
@@ -85,7 +90,6 @@ class ImmutableAuditLog:
     
     def _persist_record(self, record: AuditRecord):
         """Write to append-only log"""
-        import aiofiles
         
         filename = f"{self.log_path}audit_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
         
@@ -93,7 +97,11 @@ class ImmutableAuditLog:
         asyncio.create_task(self._async_write(filename, record))
     
     async def _async_write(self, filename: str, record: AuditRecord):
-        async with aiofiles.open(filename, 'a') as f:
+        if aiofiles is None:
+            import aiofiles as _aiofiles
+        else:
+            _aiofiles = aiofiles
+        async with _aiofiles.open(filename, 'a') as f:
             await f.write(json.dumps({
                 'timestamp': record.timestamp,
                 'seq': record.sequence_number,

@@ -14,9 +14,8 @@ import math
 from datetime import datetime
 
 import numpy as np
-import pytest
 
-from backtest.engine import BacktestConfig, BacktestEngine, BacktestResult, SimulatedBroker
+from backtest.engine import BacktestConfig, BacktestEngine, SimulatedBroker
 
 
 # ---------------------------------------------------------------------------

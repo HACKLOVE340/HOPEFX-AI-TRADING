@@ -82,7 +82,7 @@ class TradeExecutor:
 
         symbol = signal["symbol"]
         action = signal["action"]
-        size = signal["size"]
+        signal["size"]
 
         # Validate action
         if action not in ["buy", "sell", "close"]:

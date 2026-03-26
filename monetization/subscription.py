@@ -25,7 +25,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Dict, List
 from enum import Enum
-from decimal import Decimal
 
 from .pricing import SubscriptionTier, pricing_manager
 
@@ -230,17 +229,15 @@ class SubscriptionManager:
         self._subscriptions: Dict[str, Subscription] = {}
         self._user_subscriptions: Dict[str, str] = {}  # user_id -> subscription_id
 
-    def create_subscription(
+    def _create_subscription_base(
         self,
         user_id: str,
         tier: SubscriptionTier,
         duration_days: int = 30,
         access_code: Optional[str] = None,
-        auto_renew: bool = True
+        auto_renew: bool = True,
     ) -> Subscription:
-        """Create a new subscription"""
-        import uuid
-
+        """Internal base subscription creation (no Stripe fields)."""
         subscription_id = f"SUB-{uuid.uuid4().hex[:12].upper()}"
         start_date = datetime.now(timezone.utc)
         end_date = start_date + timedelta(days=duration_days)
@@ -253,7 +250,7 @@ class SubscriptionManager:
             start_date=start_date,
             end_date=end_date,
             access_code=access_code,
-            auto_renew=auto_renew
+            auto_renew=auto_renew,
         )
 
         self._subscriptions[subscription_id] = subscription

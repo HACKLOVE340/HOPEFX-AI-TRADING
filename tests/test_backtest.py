@@ -5,7 +5,6 @@ Unit Tests for Backtesting Engine
 import unittest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 from backtesting.backtest_engine import BacktestEngine
 
 class TestBacktestEngine(unittest.TestCase):

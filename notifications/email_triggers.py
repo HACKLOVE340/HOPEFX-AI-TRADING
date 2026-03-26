@@ -65,7 +65,7 @@ _DEFAULT_TO = os.getenv("SMTP_TO", "")
 def _get_email_channel():
     """Return the EmailChannel from the global NotificationManager, or None."""
     try:
-        from notifications.manager import EmailChannel, NotificationManager
+        from notifications.manager import NotificationManager
 
         mgr = NotificationManager.get_instance()
         return mgr.channels.get("email")

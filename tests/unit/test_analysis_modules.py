@@ -12,8 +12,8 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, time, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class TestMarketRegimeDetector:
         assert result.volume_state == "unknown"
 
     def test_transition_probability_default_when_insufficient_history(self):
-        from analysis.market_analysis import MarketRegimeDetector, MarketRegime
+        from analysis.market_analysis import MarketRegimeDetector
 
         detector = MarketRegimeDetector()
         df = _make_ohlcv(n=200)
@@ -605,7 +605,7 @@ class TestMarketScannerExtended:
         return scanner
 
     def test_scan_breakout_criterion(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -627,7 +627,7 @@ class TestMarketScannerExtended:
         assert "breakout" in results[0].criteria_met
 
     def test_scan_price_above_ma(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -639,7 +639,7 @@ class TestMarketScannerExtended:
         assert "price_above_ma" in results[0].criteria_met
 
     def test_scan_price_below_ma(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -651,7 +651,7 @@ class TestMarketScannerExtended:
         assert "price_below_ma" in results[0].criteria_met
 
     def test_scan_rsi_overbought(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["EURUSD"])
@@ -663,7 +663,7 @@ class TestMarketScannerExtended:
         assert "rsi_overbought" in results[0].criteria_met
 
     def test_scan_rsi_oversold(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["EURUSD"])
@@ -675,7 +675,7 @@ class TestMarketScannerExtended:
         assert "rsi_oversold" in results[0].criteria_met
 
     def test_scan_momentum_bullish(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -686,7 +686,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_volume_spike(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -698,7 +698,7 @@ class TestMarketScannerExtended:
         assert "volume_spike" in results[0].criteria_met
 
     def test_scan_macd_bullish_cross(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["EURUSD"])
@@ -717,7 +717,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_macd_bearish_cross(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["EURUSD"])
@@ -736,7 +736,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_uptrend(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -748,7 +748,7 @@ class TestMarketScannerExtended:
         assert "uptrend" in results[0].criteria_met
 
     def test_scan_downtrend(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -759,7 +759,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_new_high(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -776,7 +776,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_new_low(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -793,7 +793,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_gap_up(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -810,7 +810,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_gap_down(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -827,7 +827,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_volatility_expansion(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -838,7 +838,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_ma_crossover_golden(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -859,7 +859,7 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_ma_crossover_death(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -880,7 +880,6 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_no_criteria_returns_empty(self):
-        from analysis.market_scanner import MarketScanner
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -889,7 +888,7 @@ class TestMarketScannerExtended:
         assert results == []
 
     def test_scan_required_criterion_not_met_excludes_symbol(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -904,7 +903,7 @@ class TestMarketScannerExtended:
         assert results == []
 
     def test_scan_results_sorted_by_strength_descending(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD", "EURUSD", "GBPUSD"])
@@ -920,7 +919,7 @@ class TestMarketScannerExtended:
         assert strengths == sorted(strengths, reverse=True)
 
     def test_get_stats_increments_on_scan(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -932,7 +931,7 @@ class TestMarketScannerExtended:
         assert after == before + 1
 
     def test_scan_result_direction_bullish(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType, SignalDirection
+        from analysis.market_scanner import ScanCriteriaType, SignalDirection
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -943,7 +942,7 @@ class TestMarketScannerExtended:
         assert results[0].direction == SignalDirection.BULLISH
 
     def test_scan_result_direction_bearish(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType, SignalDirection
+        from analysis.market_scanner import ScanCriteriaType, SignalDirection
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
@@ -954,7 +953,7 @@ class TestMarketScannerExtended:
         assert results[0].direction == SignalDirection.BEARISH
 
     def test_parallel_scan_produces_same_results(self):
-        from analysis.market_scanner import MarketScanner, ScanCriteriaType
+        from analysis.market_scanner import ScanCriteriaType
 
         data = {
             "XAUUSD": {"price": 1950.0, "rsi": 20},

@@ -3,7 +3,8 @@
 Build examples/end_to_end.ipynb with all cells executed and outputs embedded.
 Run once; the resulting .ipynb renders on GitHub without needing a kernel.
 """
-import base64, json, sys
+import base64
+import json
 from pathlib import Path
 import nbformat
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell, new_output
@@ -225,8 +226,7 @@ Image(ROOT / "examples" / "results" / "equity_curve.png", width=900)""",
 cells.append(md("## 6 · Feature Importance"))
 fi_lines = ""
 try:
-    import numpy as np
-    fi = sorted(zip(bundle["features"], clf.feature_importances_), key=lambda x: -x[1])
+    fi = sorted(zip(bundle["features"], clf.feature_importances_), key=lambda x: -x[1])  # noqa: F821
     fi_lines = "\n".join(f"  {name:<22} {imp:.4f}" for name, imp in fi[:10])
 except Exception:
     fi_lines = "  (load model to see importances)"

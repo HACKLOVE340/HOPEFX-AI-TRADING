@@ -13,10 +13,8 @@ These tests mock sentry_sdk so they run without the package installed.
 from __future__ import annotations
 
 import sys
-from types import ModuleType
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 # ---------------------------------------------------------------------------

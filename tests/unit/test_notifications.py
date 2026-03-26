@@ -2,7 +2,6 @@
 Tests for Notification Manager
 """
 
-import pytest
 from unittest.mock import Mock, patch, MagicMock
 from urllib.parse import urlparse
 from notifications.manager import (

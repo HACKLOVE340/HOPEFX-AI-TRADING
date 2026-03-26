@@ -14,7 +14,6 @@ import logging
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 from strategies.base import BaseStrategy, StrategyConfig, StrategyStatus
@@ -92,7 +91,6 @@ class TestStochasticSignalPaths:
     def strat(self):
         """Create stochastic strategy instance via _make_old_strategy pattern."""
         from strategies.stochastic import StochasticStrategy
-        from strategies.base import StrategyConfig
         config = StrategyConfig(name='Stoch_Test', symbol='XAUUSD', timeframe='1H')
 
         class _Concrete(StochasticStrategy):
@@ -244,7 +242,6 @@ class TestBreakoutSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.breakout import BreakoutStrategy
-        from strategies.base import StrategyConfig
         config = StrategyConfig(name='Breakout_Test', symbol='XAUUSD', timeframe='1H')
 
         class _Concrete(BreakoutStrategy):
@@ -266,7 +263,6 @@ class TestBreakoutSignalPaths:
         The assertion is permissive because the exact signal depends on the
         relative size of breakout_distance vs breakout_threshold_price.
         """
-        n = 50
         # Build a range and then price breaks below
         base = 1900.0
         prices = [base] * 40 + [base - 5.0] * 10  # Prices drop
@@ -295,7 +291,6 @@ class TestBreakoutSignalPaths:
 
     def test_approaching_support_buy(self, strat):
         """Cover line 180: approaching support."""
-        n = 50
         base = 1900.0
         # Price is slightly above the min (support)
         prices = [base] * 40 + [base + 1.0] * 10  # Small range
@@ -311,7 +306,6 @@ class TestBreakoutSignalPaths:
 
     def test_bearish_breakout_with_high_volume(self, strat):
         """Cover lines 130-145: bearish breakout with volume confirmation."""
-        n = 50
         base = 1900.0
         prices = [base] * 49 + [base - 50]
         highs = [base + 5] * 50
@@ -380,7 +374,6 @@ class TestBollingerBandsSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.bollinger_bands import BollingerBandsStrategy
-        from strategies.base import StrategyConfig
         config = StrategyConfig(name='BB_Test', symbol='XAUUSD', timeframe='1H')
 
         class _Concrete(BollingerBandsStrategy):
@@ -410,13 +403,13 @@ class TestBollingerBandsSignalPaths:
         # Construct bands such that prev was below lower, now crosses above
         sma_val = 1900.0
         std_val = 5.0
-        upper = sma_val + 2 * std_val  # 1910
-        lower = sma_val - 2 * std_val  # 1890
+        sma_val + 2 * std_val  # 1910
+        sma_val - 2 * std_val  # 1890
 
         # Override the calculation
         import pandas as pd
         idx = df.index
-        close = pd.Series(prices, index=idx)
+        pd.Series(prices, index=idx)
 
         # Hack: patch rolling calc by changing close values
         # prev price below lower band, current price above lower band
@@ -429,7 +422,6 @@ class TestBollingerBandsSignalPaths:
     def test_bounce_buy_above_lower_band(self, strat):
         """Cover line 85-87: price below lower band with bounce."""
         # Need price below lower band AND current > prev (bounce)
-        n = 25
         prices = [1900.0] * 23 + [1870.0, 1872.0]  # Below lower band, bouncing
         highs = [p + 5 for p in prices]
         lows = [p - 5 for p in prices]
@@ -440,7 +432,6 @@ class TestBollingerBandsSignalPaths:
 
     def test_price_above_upper_band_no_reversal(self, strat):
         """Cover lines 117-119: overbought without reversal (current >= prev)."""
-        n = 25
         prices = [1900.0] * 23 + [1930.0, 1931.0]  # Above upper, still rising
         df = _df(prices)
         result = strat.generate_signal(df)
@@ -448,7 +439,6 @@ class TestBollingerBandsSignalPaths:
 
     def test_price_crossing_below_upper_band_sell(self, strat):
         """Cover lines 130-131: prev_price > prev_upper, current < current_upper."""
-        n = 25
         prices = [1900.0] * 22 + [1940.0, 1941.0, 1895.0]
         df = _df(prices)
         result = strat.generate_signal(df)
@@ -465,7 +455,6 @@ class TestBollingerBandsSignalPaths:
 
     def test_walking_upper_band_buy(self, strat):
         """Cover lines 141-143: walking upper band (percent_b > 0.9)."""
-        n = 25
         # Construct close prices where percent_b > 0.9 and price > SMA
         # For BB(20, 2): need current price very near upper band
         # SMA ≈ 1900, std ≈ 1.0, upper ≈ 1902, lower ≈ 1898
@@ -480,7 +469,6 @@ class TestBollingerBandsSignalPaths:
 
     def test_walking_lower_band_sell(self, strat):
         """Cover lines 148-150: walking lower band (percent_b < 0.1)."""
-        n = 25
         # percent_b < 0.1 → price < lower + 0.1*(upper-lower) and price > lower
         prices = [1900.0] * 23 + [1898.1, 1898.2]
         df = _df(prices)
@@ -520,7 +508,6 @@ class TestRSISignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.rsi_strategy import RSIStrategy
-        from strategies.base import StrategyConfig
         config = StrategyConfig(name='RSI_Test', symbol='XAUUSD', timeframe='1H')
 
         class _Concrete(RSIStrategy):
@@ -649,7 +636,6 @@ class TestMeanReversionSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.mean_reversion import MeanReversionStrategy
-        from strategies.base import StrategyConfig
         config = StrategyConfig(name='MR_Test', symbol='XAUUSD', timeframe='1H')
 
         class _Concrete(MeanReversionStrategy):
@@ -673,7 +659,6 @@ class TestMeanReversionSignalPaths:
     def test_exit_long_sell_to_mean(self, strat):
         """Cover lines 104-108: LONG position reverts to mean."""
         strat.position = 'LONG'
-        n = 25
         # Price at or above SMA (reverted to mean)
         prices = [1900.0] * 24 + [1900.5]  # Price near mean
         df = _df(prices)
@@ -685,7 +670,6 @@ class TestMeanReversionSignalPaths:
     def test_exit_short_buy_to_mean(self, strat):
         """Cover lines 110-114: SHORT position reverts to mean."""
         strat.position = 'SHORT'
-        n = 25
         prices = [1900.0] * 24 + [1899.5]  # Price near mean
         df = _df(prices)
         result = strat.generate_signal(df)

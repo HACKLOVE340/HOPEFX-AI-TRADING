@@ -21,16 +21,14 @@ License: Proprietary - Institutional Use Only
 import asyncio
 import aiohttp
 import websockets
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Callable, Set, Any, Tuple, Union, AsyncIterator
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Set, Any, AsyncIterator
+from datetime import datetime, timezone
 from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import json
 import numpy as np
-import hashlib
 import time
 import random
 from abc import ABC, abstractmethod
@@ -491,7 +489,7 @@ class OandaProvider(DataProvider):
                         receive_time = datetime.now(timezone.utc)
                         
                         # Calculate latency
-                        latency = (receive_time - tick_time).total_seconds()
+                        (receive_time - tick_time).total_seconds()
                         
                         tick = MarketTick(
                             timestamp=NanosecondTimestamp(
@@ -999,7 +997,7 @@ async def run_realtime_test():
     print(f"Rate: {len(consensus_ticks)/elapsed:.1f} ticks/second")
     
     if latencies:
-        print(f"\n--- Latency Statistics ---")
+        print("\n--- Latency Statistics ---")
         print(f"Min: {min(latencies):.3f} ms")
         print(f"Max: {max(latencies):.3f} ms")
         print(f"Mean: {np.mean(latencies):.3f} ms")
@@ -1007,14 +1005,14 @@ async def run_realtime_test():
         print(f"P99: {np.percentile(latencies, 99):.3f} ms")
     
     # Health report
-    print(f"\n--- Provider Health ---")
+    print("\n--- Provider Health ---")
     health = aggregator.get_health_report()
     for name, status in health['providers'].items():
         print(f"{name:15}: {status['state']:12} | "
               f"Health: {status['health_score']:5.1f} | "
               f"Latency: {status['latency_p50_ms']:6.2f} ms")
     
-    print(f"\n--- Consensus Stats ---")
+    print("\n--- Consensus Stats ---")
     print(f"Ticks processed: {aggregator.stats['ticks_processed']}")
     print(f"Consensus formed: {aggregator.stats['consensus_formed']}")
     print(f"Disagreements: {aggregator.stats['disagreements']}")
@@ -1022,7 +1020,7 @@ async def run_realtime_test():
     
     # Sample consensus prices
     if consensus_ticks:
-        print(f"\n--- Sample Prices (last 5) ---")
+        print("\n--- Sample Prices (last 5) ---")
         for tick in consensus_ticks[-5:]:
             print(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} "
                   f"Spread={tick.spread_bps:.2f} bps")

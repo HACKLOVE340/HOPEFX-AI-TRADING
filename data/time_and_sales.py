@@ -16,7 +16,7 @@ import threading
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

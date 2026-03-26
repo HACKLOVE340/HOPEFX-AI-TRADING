@@ -7,7 +7,6 @@ drawdown analysis, and risk-adjusted performance metrics.
 
 import pytest
 import numpy as np
-from datetime import datetime
 
 
 def _make_returns(n: int = 500, seed: int = 42, mean: float = 0.0005, std: float = 0.01):

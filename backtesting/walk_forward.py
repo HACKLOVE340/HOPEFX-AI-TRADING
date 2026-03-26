@@ -7,9 +7,9 @@ Prevents overfitting with rolling train/test splits
 import logging
 import pandas as pd
 import numpy as np
-from typing import Any, List, Dict, Callable, Optional, Tuple
+from typing import Any, List, Dict, Callable, Tuple
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class WalkForwardEngine:
             
             # Extract data
             train_data = data.iloc[train_start:train_end]
-            purge_data = data.iloc[purge_start:purge_end]  # Not used (embargo)
+            data.iloc[purge_start:purge_end]  # Not used (embargo)
             test_data = data.iloc[test_start:test_end]
             
             logger.info(

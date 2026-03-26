@@ -8,14 +8,12 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import pandas as pd
-from scipy import signal
 from scipy.ndimage import argrelextrema
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -800,7 +798,7 @@ class AdvancedPatternDetector:
             
             # Group nearby peaks (resistance levels)
             for peak_idx in peaks:
-                peak_price = high[peak_idx]
+                high[peak_idx]
                 nearby_peaks = peaks[np.abs(peaks - peak_idx) <= 10]
                 
                 if len(nearby_peaks) >= 2:

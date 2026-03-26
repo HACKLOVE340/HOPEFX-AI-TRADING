@@ -2,7 +2,6 @@
 Tests for Invoice Generation System
 """
 
-import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from monetization.invoices import (
@@ -257,7 +256,7 @@ class TestInvoiceGenerator:
         generator = InvoiceGenerator()
         
         # Create various invoices
-        inv1 = generator.create_invoice(
+        generator.create_invoice(
             user_id="user-123",
             subscription_id="sub-1",
             tier=SubscriptionTier.STARTER,

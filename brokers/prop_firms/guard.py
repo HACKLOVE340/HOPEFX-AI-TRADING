@@ -85,7 +85,7 @@ def check_prop_firm_rules(account_info: Any) -> None:
     drawdown_cfg = _firm_rules.get("drawdown", {})
     max_daily_pct: float = drawdown_cfg.get("max_daily_drawdown_pct", 5.0)
     max_total_pct: float = drawdown_cfg.get("max_total_drawdown_pct", 10.0)
-    drawdown_mode: str = drawdown_cfg.get("drawdown_mode", "equity")
+    drawdown_cfg.get("drawdown_mode", "equity")
 
     # Total drawdown: equity vs balance (initial capital proxy)
     total_dd_pct = (balance - equity) / balance * 100.0

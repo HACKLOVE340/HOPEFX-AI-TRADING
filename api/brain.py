@@ -184,7 +184,7 @@ async def deploy_strategy(
     try:
         from nocode.builder import NoCodeStrategyBuilder
 
-        builder = NoCodeStrategyBuilder()
+        NoCodeStrategyBuilder()
         strategy_id = f"ai_{req.strategy_name.lower().replace(' ', '_')}"
         logger.info("Deploying AI strategy %s to %s mode", strategy_id, req.mode)
         return DeployResponse(

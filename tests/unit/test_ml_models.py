@@ -12,8 +12,7 @@ import os
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
 import tempfile
-from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd

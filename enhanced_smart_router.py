@@ -7,13 +7,12 @@ Multi-Venue Execution | AI-Powered Routing | Market Impact Optimization
 import asyncio
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Callable, Set
-from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Any, Set
+from datetime import datetime, timezone
 from enum import Enum, auto
 from collections import deque, defaultdict
 from abc import ABC, abstractmethod
 import logging
-import heapq
 
 logger = logging.getLogger(__name__)
 

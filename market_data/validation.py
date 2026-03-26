@@ -6,7 +6,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -114,7 +114,6 @@ class MarketDataValidator:
                 checks_passed += 1
         
         # 5. Required fields check
-        required = ['timestamp', 'price']  # or 'close', 'bid/ask'
         has_price = any(k in tick for k in ['price', 'close', 'bid', 'ask'])
         if has_price and 'timestamp' in tick:
             checks_passed += 1

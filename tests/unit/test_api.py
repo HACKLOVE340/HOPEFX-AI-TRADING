@@ -14,8 +14,8 @@ import pytest
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Optional
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -26,8 +26,6 @@ from fastapi.testclient import TestClient
 
 from api.trading import (
     StrategyCreateRequest,
-    StrategyResponse,
-    SignalResponse,
     PositionSizeRequest,
     PositionSizeResponse,
     router as trading_router,
@@ -397,7 +395,6 @@ from api.signals import (
     TradingSignal,
     SignalStrength,
     SignalDirection,
-    SignalAlert,
     SignalAnalytics,
     RealTimeSignalService,
 )
@@ -1049,7 +1046,6 @@ from api.websocket_server import (
     WebSocketManager,
     WebSocketMessage,
     ConnectionInfo,
-    ChannelType,
     get_websocket_manager,
     create_websocket_router,
 )
@@ -1246,7 +1242,7 @@ class TestWebSocketManager:
 
     async def test_send_to_user(self):
         ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws, user_id="user_abc")
+        self.manager.register_connection(ws, user_id="user_abc")
         ws.sent.clear()
         await self.manager.send_to_user("user_abc", {"alert": "test"})
         assert len(ws.sent) >= 1
@@ -1377,7 +1373,7 @@ class TestWebSocketManager:
 
     async def test_broadcast_alert_to_user(self):
         ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws, user_id="alert_user")
+        self.manager.register_connection(ws, user_id="alert_user")
         ws.sent.clear()
         await self.manager.broadcast_alert("alert_user", {"message": "price alert"})
         assert len(ws.sent) >= 1

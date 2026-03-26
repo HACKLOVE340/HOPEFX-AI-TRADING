@@ -231,7 +231,7 @@ class ITS8OSStrategy(BaseStrategy):
             recent_lows = [p["low"] for p in prices[-30:]]
 
             # Calculate volatility
-            price_range = max(recent_highs) - min(recent_lows)
+            max(recent_highs) - min(recent_lows)
             avg_price = np.mean(recent_prices)
             volatility = np.std(recent_prices) / avg_price
 

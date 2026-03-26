@@ -166,7 +166,7 @@ class StrategyOrchestra:
     def _on_position_closed(self, event: DomainEvent):
         data = event.decode()
         sid = data.get("strategy_id")
-        pnl = data.get("pnl", 0)
+        data.get("pnl", 0)
         if sid in self.performance:
             perf = self.performance[sid]
             perf.total_signals += 1

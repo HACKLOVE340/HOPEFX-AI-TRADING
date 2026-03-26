@@ -3,7 +3,6 @@
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import MagicMock
 
 
 @pytest.fixture

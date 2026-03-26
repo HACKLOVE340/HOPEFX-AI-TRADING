@@ -4,13 +4,10 @@ Covers MarketDataCache and ConfigManager with full branch and integration testin
 """
 
 import json
-import os
-import tempfile
 import threading
 from dataclasses import asdict
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -870,7 +867,7 @@ class TestConfigManagerInit:
         monkeypatch.setenv("CONFIG_ENCRYPTION_KEY", ENCRYPTION_KEY)
         monkeypatch.setenv("CONFIG_SALT", SALT_HEX)
         target = tmp_path / "cfg_dir"
-        mgr = ConfigManager(config_dir=str(target))
+        ConfigManager(config_dir=str(target))
         assert target.exists()
 
     def test_init_config_none_before_load(self, tmp_path, monkeypatch):

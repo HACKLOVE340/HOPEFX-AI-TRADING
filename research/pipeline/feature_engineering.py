@@ -28,7 +28,7 @@ dropped at the end of `build_feature_matrix()`.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd

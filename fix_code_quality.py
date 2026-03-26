@@ -4,7 +4,6 @@ Script to fix code quality issues automatically.
 Fixes whitespace, imports, and PEP8 compliance issues.
 """
 import re
-import os
 from pathlib import Path
 
 def fix_trailing_whitespace(file_path):

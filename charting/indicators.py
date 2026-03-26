@@ -1,7 +1,7 @@
 """Technical indicators for charting."""
 
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import Dict, List, Type
 
 logger = logging.getLogger(__name__)
 

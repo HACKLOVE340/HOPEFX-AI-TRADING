@@ -3,12 +3,10 @@ HOPEFX Backtesting Engine
 Event-driven backtesting with realistic execution simulation
 """
 
-import asyncio
 import logging
-from typing import Dict, List, Optional, Any, Callable, Tuple
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from collections import deque
+from datetime import datetime
 import json
 
 import numpy as np

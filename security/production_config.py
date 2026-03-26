@@ -4,10 +4,13 @@ Production-grade configuration security
 NO FALLBACK KEYS - Fail secure
 """
 
+import logging
 import os
 import secrets
 import sys
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 class SecureConfigError(Exception):
     """Raised when secure configuration cannot be established"""
@@ -76,7 +79,6 @@ class ProductionConfigManager:
     
     def _validate_production_environment(self) -> None:
         """Validate production environment security"""
-        checks = []
         
         # Check for debug mode
         debug = os.getenv('DEBUG', 'false').lower()

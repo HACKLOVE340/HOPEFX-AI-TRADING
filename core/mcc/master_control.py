@@ -224,10 +224,9 @@ class MasterControlCore:
         Combine signals from all active strategies.
         Weight by performance and confidence.
         """
-        votes = {"BUY": [], "SELL": [], "HOLD": []}
 
         for name in self.active_strategies:
-            strat = self.strategies[name]
+            self.strategies[name]
             # Get latest signal (would store in buffer)
             # Simplified: assume we have it
             pass

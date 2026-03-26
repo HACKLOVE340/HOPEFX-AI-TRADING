@@ -3,13 +3,16 @@ HOPEFX Metrics Collection System
 Prometheus-compatible metrics with custom collectors
 """
 
-import time
-import threading
-from typing import Dict, List, Any, Optional, Callable
-from dataclasses import dataclass, field
-from collections import defaultdict, deque
-from enum import Enum
 import json
+import logging
+import threading
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     import psutil

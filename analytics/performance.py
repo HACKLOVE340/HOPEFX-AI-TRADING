@@ -9,7 +9,7 @@ Comprehensive performance analytics including:
 - Risk metrics visualization data
 """
 
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -210,7 +210,7 @@ class PerformanceAnalytics:
         
         # Record equity point
         drawdown = self.high_water_mark - self.current_equity
-        drawdown_pct = drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
+        drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
         
         self._record_equity_point(
             self.current_equity,
@@ -272,7 +272,7 @@ class PerformanceAnalytics:
         win_rate = win_count / total_trades if total_trades > 0 else 0
         
         # PnL metrics
-        total_pnl = sum(t.pnl for t in filtered_trades)
+        sum(t.pnl for t in filtered_trades)
         gross_profit = sum(t.pnl for t in winning_trades)
         gross_loss = abs(sum(t.pnl for t in losing_trades))
         

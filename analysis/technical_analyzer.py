@@ -5,7 +5,7 @@ Advanced technical analysis with multi-timeframe confirmation
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict
 from dataclasses import dataclass
 
 @dataclass

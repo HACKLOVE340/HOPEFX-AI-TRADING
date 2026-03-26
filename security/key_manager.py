@@ -5,17 +5,11 @@ FIA 2024 Security Standards Compliant
 """
 
 import os
-import secrets
 import hashlib
 import base64
-from typing import Optional, Dict
-from pathlib import Path
+from typing import Optional
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +91,8 @@ class KeyManager:
     def rotate_key(self, new_key: str) -> None:
         """Rotate to new encryption key"""
         # Re-encrypt all data with new key
-        old_fernet = self.get_fernet()
-        new_fernet = Fernet(new_key.encode())
+        self.get_fernet()
+        Fernet(new_key.encode())
         
         logger.info("Starting key rotation...")
         # Implementation would re-encrypt all stored credentials

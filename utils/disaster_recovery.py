@@ -7,10 +7,9 @@ Automated backup, failover, and state restoration
 import asyncio
 import json
 import gzip
-import shutil
-from typing import Dict, List, Optional
+from typing import Dict, List
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import aiofiles
@@ -171,9 +170,9 @@ class FailoverManager:
         self.is_primary = (all_nodes[-1] == self.node_id)
         
         if self.is_primary:
-            print(f"✅ Elected as PRIMARY node")
+            print("✅ Elected as PRIMARY node")
         else:
-            print(f"⏸️ Running as SECONDARY node")
+            print("⏸️ Running as SECONDARY node")
     
     async def heartbeat_loop(self):
         """Send heartbeats to peers and monitor their health"""
