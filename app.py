@@ -656,6 +656,15 @@ async def shutdown_event():
         except Exception as e:
             logger.warning("Event store stop error: %s", e)
 
+    # Stop price engine (closes aiohttp ClientSession to avoid ResourceWarning)
+    price_engine = getattr(app_state, "price_engine", None)
+    if price_engine is not None and hasattr(price_engine, "stop"):
+        try:
+            await price_engine.stop()
+            logger.info("✓ Price engine stopped")
+        except Exception as _pe_err:
+            logger.warning("Price engine stop error: %s", _pe_err)
+
     if app_state.db_engine:
         app_state.db_engine.dispose()
         logger.info("✓ Database engine disposed")
