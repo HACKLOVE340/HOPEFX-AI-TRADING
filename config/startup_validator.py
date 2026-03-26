@@ -130,6 +130,55 @@ def validate_environment(*, strict: bool = True) -> None:
                 f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://"
             )
 
+    # ── Broker type + live trading guard ─────────────────────────────────────
+    broker_type = os.getenv("BROKER_TYPE", "paper").strip().lower()
+    valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}
+    if broker_type not in valid_broker_types:
+        errors.append(
+            f"INVALID  BROKER_TYPE={broker_type!r}: must be one of {sorted(valid_broker_types)}"
+        )
+
+    # Prevent accidental live auto-trading: SIGNAL_ENGINE_AUTO_TRADE=true
+    # requires BROKER_TYPE != paper in production.
+    auto_trade = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").strip().lower()
+    if auto_trade == "true" and broker_type == "paper" and not dev_mode:
+        errors.append(
+            "CONFLICT SIGNAL_ENGINE_AUTO_TRADE=true with BROKER_TYPE=paper in production — "
+            "set BROKER_TYPE to a live broker or disable auto-trading"
+        )
+
+    # OANDA credentials required when BROKER_TYPE=oanda
+    if broker_type == "oanda":
+        oanda_key = os.getenv("BROKER_OANDA_TOKEN", os.getenv("OANDA_API_KEY", "")).strip()
+        oanda_acct = os.getenv("BROKER_OANDA_ACCOUNT", os.getenv("OANDA_ACCOUNT_ID", "")).strip()
+        if not oanda_key:
+            errors.append(
+                "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda"
+            )
+        if not oanda_acct:
+            errors.append(
+                "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda"
+            )
+
+    # ── Kill switch deactivation token ───────────────────────────────────────
+    # Required in production: without it the kill switch can never be
+    # deactivated via the API after a drawdown-triggered halt.
+    ks_token = os.getenv("HOPEFX_KILL_SWITCH_TOKEN", "").strip()
+    if not dev_mode:
+        if not ks_token:
+            errors.append(
+                "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
+                'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        elif len(ks_token) < 32:
+            errors.append(
+                f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)"
+            )
+        elif ks_token.startswith("CHANGE_ME"):
+            errors.append(
+                "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying"
+            )
+
     # ── Optional validated vars ───────────────────────────────────────────────
     sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
     if sentry_dsn and not sentry_dsn.startswith("https://"):

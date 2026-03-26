@@ -1,6 +1,10 @@
 """
-HOPEFX Backtesting Engine
-Event-driven backtesting with realistic execution simulation
+backtest/engine.py — legacy backtesting engine.
+
+NOTE: The canonical backtesting package is `backtesting/`.
+This module is kept because it provides BacktestConfig and SimulatedBroker
+classes used by the test suite.  New code should use `backtesting.engine`.
+Do not add new features here.
 """
 
 import logging
