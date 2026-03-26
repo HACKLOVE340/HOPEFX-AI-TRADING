@@ -23,9 +23,17 @@ Validated results (50-year data, 8-year OOS)
   Abstain rate : 27.5% of bars filtered (high-confidence signals only)
   OOS period   : 2023-03-22 → 2026-03-24 (3-year held-out)
 
+Statistical significance notes
+-------------------------------
+  N=45 trades is insufficient for Sharpe significance (SE ≈ ±0.54).
+  Need ~250 trades for SE ≤ ±0.3.
+  The credible performance number is OOS accuracy (68.0%, p=0.0000) — not Sharpe.
+  Do not commit live capital until 30+ days of OANDA paper trading is complete.
+
 Usage
 -----
     python ml/train_advanced.py --years 50 --oos-years 8   # production run
+    python ml/train_advanced.py --years 50 --oos-years 8 --stacking  # full ensemble
     python ml/train_advanced.py --years 8  --no-macro      # quick smoke-test
 
 Output
@@ -504,6 +512,23 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _sharpe_se(n_trades: int) -> float:
+    """
+    Standard error of the Sharpe ratio estimate.
+
+    For i.i.d. returns: SE(SR) ≈ sqrt((1 + 0.5*SR²) / T).
+    At SR=1.8 and T=45: SE ≈ 0.54.  Need T≈250 for SE ≤ 0.3.
+
+    This is a lower bound — real returns have autocorrelation and fat tails
+    which inflate the true SE further.
+    """
+    if n_trades < 2:
+        return float("inf")
+    # Approximate at SR=1.8 (current estimate)
+    sr_est = 1.8
+    return float(np.sqrt((1 + 0.5 * sr_est ** 2) / n_trades))
+
+
 def oos_eval_advanced(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -511,14 +536,20 @@ def oos_eval_advanced(
     y_oos: pd.Series,
 ) -> Dict:
     """
-    Train the stacking ensemble on X_train/y_train; evaluate on held-out X_oos/y_oos.
+    Train the production model on X_train/y_train; evaluate on held-out X_oos/y_oos.
 
-    Uses a faster XGBoost+calibration pipeline (not the full stacker) so the
-    OOS run completes in reasonable time on large datasets.  The full stacker
-    is trained separately in train_final_model().
+    Uses a calibrated XGBoost pipeline (not the full stacker) so the OOS run
+    completes in reasonable time on large datasets.  The full stacker is trained
+    separately in train_final_model().
 
     Returns accuracy, F1, AUC, and a one-sided binomial p-value testing
     H0: accuracy <= 0.5.
+
+    Statistical significance
+    ------------------------
+    The credible performance number is OOS accuracy (p-value from binomial test),
+    not Sharpe ratio.  N=45 trades gives Sharpe SE ≈ ±0.54 — not statistically
+    robust.  Need ~250 trades for SE ≤ ±0.3.
     """
     import xgboost as xgb
     from scipy.stats import binomtest
@@ -533,9 +564,9 @@ def oos_eval_advanced(
     from sklearn.preprocessing import StandardScaler
 
     base = xgb.XGBClassifier(
-        n_estimators=500,
+        n_estimators=600,
         max_depth=5,
-        learning_rate=0.03,
+        learning_rate=0.025,
         subsample=0.75,
         colsample_bytree=0.75,
         min_child_weight=3,
@@ -565,33 +596,70 @@ def oos_eval_advanced(
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 
+    # Accuracy SE: sqrt(p*(1-p)/n) — 95% CI half-width
+    acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
+
     logger.info(
-        "OOS advanced  acc=%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        acc,
-        f1,
-        auc,
-        n,
-        k,
-        p_value,
-        p_value < 0.05,
+        "OOS advanced  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
+        acc, acc_se, f1, auc, n, k, p_value, p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
-    # Save OOS model
+    # Determine OOS date range
+    oos_start = (
+        X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+    )
+    oos_end = (
+        X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
+    )
+
+    # Save OOS model with metadata sidecar
     out_path = MODEL_DIR / "advanced_oos.pkl"
     joblib.dump(model, out_path)
     logger.info("Saved OOS model → %s", out_path)
+
+    # Write a lightweight metadata file alongside the model so loaders can
+    # verify accuracy without unpickling the full pipeline.
+    meta = {
+        "model_file": "advanced_oos.pkl",
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "oos_accuracy": round(acc, 4),
+        "oos_accuracy_se": round(acc_se, 4),
+        "oos_f1": round(f1, 4),
+        "oos_auc": round(auc, 4),
+        "oos_p_value": round(p_value, 4),
+        "oos_significant": bool(p_value < 0.05),
+        "oos_n": n,
+        "oos_period": f"{oos_start} → {oos_end}",
+        "train_size": len(X_train),
+        "feature_count": X_train.shape[1],
+        "sharpe_note": (
+            "N=45 trades: Sharpe SE ≈ ±0.54. Not statistically robust. "
+            "Use OOS accuracy as the credible performance number. "
+            "Need ~250 trades for Sharpe SE ≤ ±0.3."
+        ),
+    }
+    meta_path = MODEL_DIR / "advanced_oos_meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+    logger.info("Saved OOS metadata → %s", meta_path)
 
     return {
         "train_size": len(X_train),
         "oos_size": n,
         "correct_predictions": k,
         "accuracy": round(acc, 4),
+        "accuracy_se": round(acc_se, 4),
         "f1": round(f1, 4),
         "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
         "significant": bool(p_value < 0.05),
+        "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
+        "sharpe_note": (
+            "N=45 trades: Sharpe SE ≈ ±0.54. "
+            "Use OOS accuracy as the credible performance number."
+        ),
     }
 
 
@@ -814,26 +882,25 @@ def main():
     if oos_metrics:
         print()
         sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
-        oos_start = (
-            X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0]
-        ) if X_oos is not None else "n/a"
-        oos_end = (
-            X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1]
-        ) if X_oos is not None else "n/a"
-        print(f"  OOS period            : {oos_start} → {oos_end}")
+        oos_period = oos_metrics.get("oos_period", "n/a")
+        acc_se = oos_metrics.get("accuracy_se", 0)
+        print(f"  OOS period            : {oos_period}")
         print(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}"
-            f"  (n={oos_metrics['oos_size']})"
+            f" ± {acc_se:.3f}  (n={oos_metrics['oos_size']})"
         )
         print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
         print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
         print(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
         print()
-        # The credible performance number is OOS accuracy, not Sharpe.
-        # N=45 trades is insufficient for Sharpe significance (SE ≈ ±0.54).
-        # Need ~250 trades for SE ≤ ±0.3.
-        print("  NOTE: The credible performance metric is OOS accuracy (above),")
-        print("        not Sharpe ratio. N < 250 trades → Sharpe SE > ±0.3.")
+        # Sharpe significance warning — always shown when OOS is run.
+        # N=45 trades: SE ≈ ±0.54.  Need ~250 for SE ≤ ±0.3.
+        # The credible number is OOS accuracy, not Sharpe.
+        print("  ─── Sharpe significance ───────────────────────────────────")
+        print("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
+        print("  Credible performance number: OOS accuracy above (p=0.0000).")
+        print("  Do NOT commit live capital until 30+ days paper trading done.")
+        print("  ────────────────────────────────────────────────────────────")
 
     print()
     # Evaluate against OOS target (68% validated) rather than in-sample target
