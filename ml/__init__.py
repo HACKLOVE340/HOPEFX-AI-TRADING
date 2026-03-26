@@ -158,8 +158,8 @@ def _load_models() -> None:
             fallback_model="xgb_macro.pkl",
             fallback_accuracy=0.503,
         )
-    except Exception:
-        pass  # Sentry unavailable — CRITICAL log above is the fallback alert
+    except Exception as _sentry_exc:
+        _ml_logger.debug("Sentry capture failed (non-fatal): %s", _sentry_exc)
 
     # Post Discord alert so community operators are notified immediately
     try:
@@ -181,9 +181,9 @@ def _load_models() -> None:
             else:
                 loop.run_until_complete(_post_discord_fallback())
         except RuntimeError:
-            pass  # No event loop — Discord alert skipped
-    except Exception:
-        pass  # Discord unavailable — CRITICAL log is the fallback alert
+            _ml_logger.debug("No event loop available — Discord fallback alert skipped")
+    except Exception as _discord_exc:
+        _ml_logger.debug("Discord alert failed (non-fatal): %s", _discord_exc)
 
     # ── Priority 2: basic macro XGBoost (65 stationary features, ~50% OOS) ──
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
@@ -238,7 +238,10 @@ def get_model_version() -> str:
 # ── Advanced predictor (122-feature live inference) ───────────────────────────
 try:
     from ml.live_inference import get_advanced_predictor
-except Exception:
+except Exception as _live_inf_exc:
+    _ml_logger.warning(
+        "ml.live_inference unavailable — advanced predictor disabled: %s", _live_inf_exc
+    )
 
     def get_advanced_predictor():  # type: ignore[misc]
         return None
@@ -369,26 +372,22 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "significant": wf.get("significant", False),
                     "p_value": wf.get("p_value"),
                 }
-            except Exception:
-                pass
+            except Exception as _report_exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "Failed to read training report: %s", _report_exc
+                )
 
-        # Demo metrics (shown before first training run)
+        # No trained model yet — return honest untrained state.
+        # Do NOT return fabricated accuracy numbers here; the frontend
+        # must show "not trained" rather than misleading 87% figures.
         return {
-            "models": [
-                {
-                    "model": "Stacking Ensemble",
-                    "accuracy": 0.87,
-                    "auc": 0.91,
-                    "f1": 0.86,
-                },
-                {"model": "XGBoost", "accuracy": 0.83, "auc": 0.88, "f1": 0.82},
-                {"model": "Random Forest", "accuracy": 0.81, "auc": 0.85, "f1": 0.80},
-            ],
+            "models": [],
             "trained_at": None,
             "sample_count": None,
             "feature_count": None,
             "significant": False,
-            "note": "Run ml/train_advanced.py to populate real metrics",
+            "note": "No trained model found. Run: python ml/train_advanced.py --years 50 --oos-years 3",
         }
 
     @router.get("/predict/{symbol}")
@@ -416,8 +415,11 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "model": "Stacking Ensemble",
                     "note": "Based on last training run — retrain for live signals",
                 }
-            except Exception:
-                pass
+            except Exception as _pred_exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "Failed to read training report for predict: %s", _pred_exc
+                )
 
         return {
             "symbol": symbol,
