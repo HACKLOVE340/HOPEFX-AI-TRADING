@@ -31,15 +31,25 @@ class BacktestConfig:
     end_date: datetime
     symbols: List[str]
     initial_capital: float = 100000.0
-    commission_per_trade: float = 5.0  # Dollars
+    # Commission: $7 round-trip is realistic for XAUUSD CFD/futures (was $5)
+    commission_per_trade: float = 7.0
     slippage_model: str = "fixed"  # fixed, variable, none
-    slippage_pips: float = 0.5
+    # Gold spread: ~$0.30 typical, $0.50 conservative.  1 pip for gold = $0.10.
+    # 3 pips = $0.30 spread — realistic for OANDA XAU_USD practice account.
+    slippage_pips: float = 3.0
     allow_short: bool = True
     max_positions: int = 10
     # Overnight financing: annualised swap rate charged per bar on open notional.
     # ~0.4% p.a. is typical for XAUUSD long positions.
     overnight_rate_annual: float = 0.004
     bars_per_day: float = 24.0  # 24 for H1, 6 for H4, 1 for D
+    # Kelly-based position sizing.  0 = use fixed lot from signal.
+    # 0.25 = quarter-Kelly (recommended for live trading).
+    kelly_fraction: float = 0.25
+    # Risk per trade as fraction of equity (used when kelly_fraction > 0).
+    risk_per_trade: float = 0.01  # 1% of equity per trade
+    # Minimum R:R ratio to accept a trade (0 = no filter).
+    min_rr_ratio: float = 1.5
 
 
 @dataclass
@@ -52,6 +62,8 @@ class BacktestResult:
     win_rate: float
     profit_factor: float
     max_drawdown: float
+    # sharpe_ratio: trade-level Sharpe (mean/std of net_pnl * sqrt(252/avg_hold_days)).
+    # This is the credible number.  Bar-level Sharpe is inflated by flat no-trade days.
     sharpe_ratio: float
     equity_curve: List[Dict]
     trades: List[Dict]
@@ -70,6 +82,8 @@ class BacktestResult:
     p_value: float = 1.0
     is_significant: bool = False
     sample_size: int = 0
+    # Sharpe standard error: 1/sqrt(2*(N-1)) — valid for iid trade returns.
+    sharpe_se: float = 0.0
     # Monte Carlo (Area 1)
     mc_median_final: float = 0.0
     mc_p5_final: float = 0.0
@@ -301,7 +315,10 @@ class SimulatedBroker:
     
     def _calculate_slippage(self, price: float, bar_high: float = 0.0, bar_low: float = 0.0) -> float:
         """
-        Calculate execution slippage.
+        Calculate execution slippage as a fraction of price.
+
+        Gold (XAU/USD) pip convention: 1 pip = $0.10 (i.e. 0.1 USD per oz).
+        A 3-pip spread at $2000/oz = $0.30 = 0.015% — realistic for OANDA practice.
 
         'variable' model scales by the bar's high-low range relative to a 0.2%
         base spread, with a multiplier clamped to [0.5, 3.0].  Wide bars (high
@@ -312,22 +329,26 @@ class SimulatedBroker:
             return 0.0
 
         if self.config.slippage_model == 'fixed':
-            pip = 0.0001 if price > 10 else 0.01
+            # Gold pip = $0.10; forex pip = $0.0001.
+            # Detect gold by price > $100 (gold trades ~$1500–$3000).
+            pip = 0.10 if price > 100 else 0.0001
             return (self.config.slippage_pips * pip) / price
 
         if self.config.slippage_model == 'variable':
-            base_slippage = 0.002  # 0.2% base
+            # Base spread: 0.015% (~$0.30 at $2000 gold) — realistic for gold CFD.
+            base_slippage = 0.00015
             if price > 0 and bar_high > bar_low:
                 bar_range_pct = (bar_high - bar_low) / price
-                # Normalise: a 0.2% range gives multiplier=1.0
+                # Normalise: a 0.015% range gives multiplier=1.0
                 multiplier = bar_range_pct / base_slippage
                 multiplier = max(0.5, min(3.0, multiplier))
             else:
                 multiplier = 1.0
             return base_slippage * multiplier * 0.5  # half-spread model
 
-        # Legacy random fallback
-        return np.random.normal(0, self.config.slippage_pips * 0.0001)
+        # Legacy random fallback — use gold pip
+        pip = 0.10 if price > 100 else 0.0001
+        return abs(np.random.normal(0, self.config.slippage_pips * pip / price))
     
     def _record_trade(self, symbol: str, action: str, quantity: float,
                      entry_price: float, exit_price: float, 
@@ -457,6 +478,67 @@ class BacktestEngine:
         
         return self.results
     
+    def _kelly_position_size(
+        self,
+        signal: Dict,
+        current_price: float,
+    ) -> float:
+        """
+        Compute position size using fractional Kelly criterion.
+
+        Kelly fraction = (win_rate * avg_win - loss_rate * avg_loss) / avg_win
+        Hard caps:
+          - risk_dollars ≤ risk_per_trade * 2 * equity
+          - qty * price ≤ 0.95 * available_cash  (never exceed buying power)
+
+        Falls back to signal['size'] when kelly_fraction=0 or price=0.
+        """
+        if self.config.kelly_fraction <= 0 or current_price <= 0:
+            return float(signal.get('size', 1.0))
+
+        equity = self.broker.get_equity()
+        available_cash = self.broker.cash
+
+        trades = self.broker.trades
+        if len(trades) < 20:
+            # Not enough history — use fixed risk_per_trade with ATR stop
+            stop_distance = signal.get('stop_distance', current_price * 0.01)
+            if stop_distance > 0:
+                risk_dollars = equity * self.config.risk_per_trade
+                qty = risk_dollars / stop_distance
+            else:
+                qty = float(signal.get('size', 1.0))
+        else:
+            wins = [t['net_pnl'] for t in trades if t['net_pnl'] > 0]
+            losses = [abs(t['net_pnl']) for t in trades if t['net_pnl'] <= 0]
+            if not wins or not losses:
+                return float(signal.get('size', 1.0))
+
+            win_rate = len(wins) / len(trades)
+            avg_win = float(np.mean(wins))
+            avg_loss = float(np.mean(losses))
+
+            if avg_win <= 0:
+                return float(signal.get('size', 1.0))
+
+            # Full Kelly → fractional Kelly
+            kelly_f = (win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win
+            kelly_f = max(0.0, kelly_f) * self.config.kelly_fraction
+
+            risk_dollars = equity * min(kelly_f, self.config.risk_per_trade * 2)
+
+            stop_distance = signal.get('stop_distance', current_price * 0.01)
+            if stop_distance > 0:
+                qty = risk_dollars / stop_distance
+            else:
+                qty = risk_dollars / current_price
+
+        # Hard cap: never spend more than 95% of available cash
+        max_qty_by_cash = (available_cash * 0.95) / current_price
+        qty = min(qty, max_qty_by_cash)
+
+        return max(0.01, round(qty, 4))
+
     def _process_signal(
         self,
         signal: Dict,
@@ -464,7 +546,14 @@ class BacktestEngine:
         prices: Dict[str, float],
         bar_data: Optional[Dict[str, Dict]] = None,
     ) -> None:
-        """Process trading signal"""
+        """
+        Process a trading signal.
+
+        Applies:
+        - Minimum R:R filter (config.min_rr_ratio)
+        - Kelly-based position sizing (config.kelly_fraction)
+        - Realistic slippage using bar high/low
+        """
         symbol = signal.get('symbol')
         action = signal.get('action')
 
@@ -472,9 +561,24 @@ class BacktestEngine:
             return
 
         current_price = prices[symbol]
-        quantity = signal.get('size', 1000)
 
-        # Extract bar high/low for variable slippage
+        # ── R:R filter ────────────────────────────────────────────────────────
+        if self.config.min_rr_ratio > 0:
+            stop_dist = signal.get('stop_distance', 0.0)
+            tp_dist = signal.get('tp_distance', 0.0)
+            if stop_dist > 0 and tp_dist > 0:
+                rr = tp_dist / stop_dist
+                if rr < self.config.min_rr_ratio:
+                    logger.debug(
+                        "Signal rejected: R:R %.2f < min %.2f for %s",
+                        rr, self.config.min_rr_ratio, symbol,
+                    )
+                    return
+
+        # ── Position sizing ───────────────────────────────────────────────────
+        quantity = self._kelly_position_size(signal, current_price)
+
+        # ── Bar high/low for variable slippage ────────────────────────────────
         bar_high = bar_low = 0.0
         if bar_data and symbol in bar_data:
             bar_high = bar_data[symbol].get('high', 0.0)
@@ -493,6 +597,10 @@ class BacktestEngine:
                 'action': action,
                 'price': result['fill_price'],
                 'quantity': quantity,
+                'rr_ratio': (
+                    signal.get('tp_distance', 0) / signal.get('stop_distance', 1)
+                    if signal.get('stop_distance', 0) > 0 else None
+                ),
             })
     
     # ------------------------------------------------------------------
@@ -674,19 +782,38 @@ class BacktestEngine:
             if dd > max_drawdown:
                 max_drawdown = dd
 
-        # ── Bar returns for ratio calculations ────────────────────────
+        # ── Bar returns (used for Sortino/Omega/Tail only) ────────────
+        # NOTE: bar-level Sharpe is intentionally NOT used as the primary
+        # Sharpe.  Flat no-trade bars inflate the bar-level Sharpe by
+        # suppressing the denominator (std of returns).  The corrected
+        # Sharpe is computed at trade level below.
         ann_factor = np.sqrt(252.0 * self.config.bars_per_day)
         bar_returns = np.array([])
         if len(equity_values) > 1:
             eq_arr = np.array(equity_values, dtype=float)
             bar_returns = np.diff(eq_arr) / eq_arr[:-1]
 
-        # ── Sharpe ────────────────────────────────────────────────────
+        # ── Trade-level Sharpe (primary — corrected method) ───────────
+        # mean(net_pnl) / std(net_pnl) * sqrt(252 / avg_hold_days)
+        # This is the credible number reported in performance.json.
+        # Bar-level Sharpe (previously reported as 4.68) was inflated by
+        # flat no-trade days suppressing the return std.
         sharpe = 0.0
-        if len(bar_returns) > 0 and np.std(bar_returns) > 0:
-            sharpe = float(np.mean(bar_returns) / np.std(bar_returns) * ann_factor)
+        sharpe_se = 0.0
+        trade_pnls = np.array([t['net_pnl'] for t in trades], dtype=float)
+        if len(trade_pnls) >= 2 and np.std(trade_pnls) > 0:
+            # Estimate average hold time in days from equity curve length
+            n_bars = len(equity_values)
+            avg_hold_bars = n_bars / max(total_trades, 1)
+            avg_hold_days = avg_hold_bars / self.config.bars_per_day
+            trade_ann_factor = np.sqrt(252.0 / max(avg_hold_days, 0.04))
+            sharpe = float(
+                np.mean(trade_pnls) / np.std(trade_pnls, ddof=1) * trade_ann_factor
+            )
+            # Sharpe standard error: 1/sqrt(2*(N-1)) for iid returns
+            sharpe_se = float(1.0 / np.sqrt(2.0 * (len(trade_pnls) - 1)))
 
-        # ── Sortino ───────────────────────────────────────────────────
+        # ── Sortino (bar-level — acceptable for downside deviation) ───
         sortino = 0.0
         if len(bar_returns) > 0:
             downside = bar_returns[bar_returns < 0]
@@ -779,6 +906,15 @@ class BacktestEngine:
             'p_value': p_val,
             'is_significant': is_significant,
             'sample_size': sample_size,
+            # Trade-level Sharpe metadata
+            'sharpe_trade_level': sharpe,
+            'sharpe_se': sharpe_se,
+            'sharpe_note': (
+                f"Trade-level Sharpe: mean(net_pnl)/std(net_pnl)*sqrt(252/avg_hold_days). "
+                f"N={total_trades} — SE≈±{sharpe_se:.2f}. "
+                + ("Statistically robust (N≥250)." if total_trades >= 250
+                   else "Not statistically robust — use OOS accuracy as credible number.")
+            ),
             **{f'mc_{k}': v for k, v in mc.items()},
         }
 
@@ -791,6 +927,7 @@ class BacktestEngine:
             profit_factor=profit_factor,
             max_drawdown=max_drawdown,
             sharpe_ratio=sharpe,
+            sharpe_se=sharpe_se,
             equity_curve=self.broker.equity_curve,
             trades=trades,
             metrics=metrics,
@@ -836,6 +973,8 @@ class BacktestEngine:
         
         r = self.results
         
+        se_str = f"±{r.sharpe_se:.2f}" if r.sharpe_se > 0 else "n/a"
+        robust_str = "✅ robust" if r.total_trades >= 250 else f"⚠️  N={r.total_trades} (need ≥250)"
         report = f"""
 ╔════════════════════════════════════════════════════════════════╗
 ║                    HOPEFX BACKTEST REPORT                       ║
@@ -847,20 +986,30 @@ class BacktestEngine:
 ║ PERFORMANCE                                                    ║
 ║   Total Return:      {r.total_return*100:>10.2f}%                            ║
 ║   Final Equity:      ${r.equity_curve[-1]['equity'] if r.equity_curve else 0:>10,.2f}                          ║
-║   Sharpe Ratio:      {r.sharpe_ratio:>10.2f}                            ║
+║   Sharpe (trade):    {r.sharpe_ratio:>10.2f}  SE {se_str:<8}                   ║
+║   Sharpe robust:     {robust_str:<40}║
 ║   Max Drawdown:      {r.max_drawdown*100:>10.2f}%                            ║
+║   Sortino:           {r.sortino_ratio:>10.2f}                            ║
+║   Calmar:            {r.calmar_ratio:>10.2f}                            ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ TRADE STATISTICS                                               ║
 ║   Total Trades:      {r.total_trades:>10}                             ║
 ║   Win Rate:          {r.win_rate*100:>10.1f}%                            ║
-║   Profit Factor:      {r.profit_factor:>10.2f}                            ║
+║   Profit Factor:     {r.profit_factor:>10.2f}                            ║
 ║   Avg Trade P&L:     ${r.metrics.get('avg_trade_pnl', 0):>10.2f}                          ║
+║   Avg Win:           ${r.metrics.get('avg_winning_trade', 0):>10.2f}                          ║
+║   Avg Loss:          ${r.metrics.get('avg_losing_trade', 0):>10.2f}                          ║
 ╠════════════════════════════════════════════════════════════════╣
-║ Advanced Metrics                                               ║
+║ ADVANCED METRICS                                               ║
 ║   Recovery Factor:   {r.metrics.get('recovery_factor', 0):>10.2f}                            ║
 ║   Max Consec Wins:   {r.metrics.get('max_consecutive_wins', 0):>10}                             ║
 ║   Max Consec Losses: {r.metrics.get('max_consecutive_losses', 0):>10}                             ║
+║   MC Median Final:   {r.mc_median_final:>10.3f}x                           ║
+║   MC P5 Final:       {r.mc_p5_final:>10.3f}x                           ║
+║   MC Ruin Prob:      {r.mc_ruin_probability*100:>10.1f}%                            ║
 ╚════════════════════════════════════════════════════════════════╝
+NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
+      by flat no-trade days and is NOT reported here.
         """
         
         return report
