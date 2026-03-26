@@ -10,14 +10,46 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-# Secret key for JWT token – MUST be set via environment variable in production
-_default_secret = "CHANGE_ME_IN_PRODUCTION"
-SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY", _default_secret)
-if SECRET_KEY == _default_secret:
-    logger.warning(
-        "JWT_SECRET_KEY is not set – using insecure default. "
-        "Set the JWT_SECRET_KEY environment variable before deploying."
+# JWT signing secret — read from SECURITY_JWT_SECRET (preferred) or JWT_SECRET_KEY.
+# No hardcoded fallback: a missing or placeholder secret raises RuntimeError at
+# token-creation time so the failure is loud and immediate.
+def _load_secret() -> str:
+    val = (
+        os.environ.get("SECURITY_JWT_SECRET", "").strip()
+        or os.environ.get("JWT_SECRET_KEY", "").strip()
     )
+    if not val:
+        raise RuntimeError(
+            "SECURITY_JWT_SECRET is not set. "
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    if len(val) < 32:
+        raise RuntimeError(
+            f"SECURITY_JWT_SECRET is too short ({len(val)} chars). Must be >=32 characters."
+        )
+    if val.startswith("CHANGE_ME"):
+        raise RuntimeError(
+            "SECURITY_JWT_SECRET contains a placeholder value. "
+            "Replace it with a real random secret before deploying."
+        )
+    return val
+
+
+# Evaluated lazily so import does not fail in test environments that set the
+# env var after module import. Call _get_secret() instead of SECRET_KEY directly.
+def _get_secret() -> str:
+    return _load_secret()
+
+
+# Module-level alias kept for backward compatibility with code that reads
+# auth.jwt.SECRET_KEY directly — raises RuntimeError if secret is unset.
+@property  # type: ignore[misc]
+def SECRET_KEY() -> str:  # noqa: N802
+    return _load_secret()
+
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 
@@ -58,13 +90,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         else datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _get_secret(), algorithm=ALGORITHM)
 
 
 def verify_token(token: str, credentials_exception):
     """Decode and validate a JWT token. Raises credentials_exception on failure."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _get_secret(), algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
