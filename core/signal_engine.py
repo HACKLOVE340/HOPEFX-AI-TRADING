@@ -38,6 +38,27 @@ except Exception:
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
 _anomaly_store: Optional[Any] = None
 
+# ── Online learner store (Phase 3 — incremental XGBoost + drift detection) ───
+_online_learner_store: Optional[Any] = None
+
+def _get_online_learner_store() -> Optional[Any]:
+    """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
+    global _online_learner_store
+    try:
+        from config.feature_flags import flags
+        if not flags.ONLINE_LEARNING:
+            return None
+    except Exception:
+        return None
+    if _online_learner_store is None:
+        try:
+            from research.pipeline.online_learning import OnlineLearnerStore
+            _online_learner_store = OnlineLearnerStore()
+            logger.info("OnlineLearnerStore initialised (Phase 3)")
+        except Exception as exc:
+            logger.debug("OnlineLearnerStore init failed: %s", exc)
+    return _online_learner_store
+
 def _get_anomaly_store() -> Optional[Any]:
     """Return the module-level AnomalyWeightStore singleton, creating it on first call."""
     global _anomaly_store
@@ -365,6 +386,14 @@ def _compute_ml_probability(
                 except Exception as aw_exc:
                     logger.debug("Anomaly weighting failed (non-fatal): %s", aw_exc)
 
+            # Phase 3: online learning blend — 0.7 * advanced + 0.3 * online
+            online_store = _get_online_learner_store()
+            if online_store is not None and online_store.is_ready:
+                try:
+                    prob = online_store.blend(prob, ohlcv_df)
+                except Exception as ol_exc:
+                    logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
+
             logger.debug(
                 "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s, anomaly_w=%.2f)",
                 adv_predictor.version, symbol, prob,
@@ -410,6 +439,28 @@ def _compute_ml_probability(
         logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
 
     return base_confidence, "none"
+
+
+def notify_fill(
+    features: "pd.DataFrame",
+    label: int,
+) -> None:
+    """
+    Notify the online learner of a confirmed fill (Phase 3).
+
+    Call this from the execution path after a trade is confirmed:
+        from core.signal_engine import notify_fill
+        notify_fill(feature_df, label=1)  # 1=profitable, 0=loss
+
+    Safe to call when FEATURE_ONLINE_LEARNING=false — no-op in that case.
+    """
+    store = _get_online_learner_store()
+    if store is None:
+        return
+    try:
+        store.on_fill(features, label)
+    except Exception as exc:
+        logger.debug("notify_fill failed (non-fatal): %s", exc)
 
 
 async def _publish_and_broadcast(
