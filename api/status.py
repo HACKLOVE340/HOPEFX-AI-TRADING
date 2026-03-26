@@ -355,28 +355,19 @@ def _fmt_uptime(seconds: float) -> str:
 
 @router.get(
     "/api/status/paper-trading",
-    summary="OANDA 30-day paper trading run status",
+    summary="OANDA paper trading run status (simple clock)",
     tags=["Status"],
 )
 async def paper_trading_status():
     """
-    Returns the status of the 30-day OANDA paper trading run.
+    Returns the status of the 30-day OANDA paper trading run clock.
 
     The clock starts when OANDA_API_KEY (or BROKER_OANDA_TOKEN) is set and
     the broker connects successfully for the first time.  The start timestamp
     is persisted in ``data/oanda_paper_start.json`` and survives restarts.
 
-    Response fields
-    ---------------
-    started         : bool — True if the clock has started
-    started_utc     : ISO timestamp of first OANDA connection (or null)
-    elapsed_days    : float — days elapsed since clock start
-    remaining_days  : float — days remaining to reach 30-day target
-    target_days     : int — 30
-    complete        : bool — True when elapsed_days ≥ 30
-    environment     : "practice" | "live" | null
-    account_id      : first 8 chars of account ID (masked) or null
-    note            : human-readable status message
+    For full phase-gate status (Phase 2 / Phase 3 readiness), use
+    GET /api/status/paper-trading/gate.
     """
     import json
     import pathlib
@@ -450,3 +441,66 @@ async def paper_trading_status():
             "account_id": None,
             "note": f"Error reading paper trading stamp: {exc}",
         }
+
+
+@router.get(
+    "/api/status/paper-trading/gate",
+    summary="OANDA paper trading phase gate status (Phase 2 / Phase 3)",
+    tags=["Status"],
+)
+async def paper_trading_gate_status():
+    """
+    Returns the full phase-gate status for the OANDA paper trading run.
+
+    Phase 2 (Anomaly weighting) gate:
+      - 30 calendar days elapsed since run start
+      - Paper Sharpe drop < 0.2 after enabling
+
+    Phase 3 (Online learning) gate:
+      - 90 calendar days elapsed since run start
+      - >= 500 confirmed fills
+
+    State is persisted in data/paper_trading_gate.json and survives restarts.
+    Use POST /api/status/paper-trading/gate/fill to record fills from the
+    broker callback, or run:
+      python -m research.pipeline.paper_trading_gate --record-fill <pnl>
+    """
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+        gate = get_gate()
+        return gate.status()
+    except Exception as exc:
+        logger.warning("paper_trading_gate_status failed: %s", exc)
+        return {
+            "error": str(exc),
+            "phase2_ready": False,
+            "phase3_ready": False,
+            "note": "Gate unavailable — check research/pipeline/paper_trading_gate.py",
+        }
+
+
+@router.post(
+    "/api/status/paper-trading/gate/fill",
+    summary="Record a confirmed OANDA fill into the phase gate",
+    tags=["Status"],
+)
+async def paper_trading_gate_record_fill(pnl: float = 0.0):
+    """
+    Record a confirmed OANDA fill into the PaperTradingGate.
+
+    Called by the broker callback when a paper trade is filled.
+    Increments the fill counter used by the Phase 3 gate (>= 500 fills).
+
+    Parameters
+    ----------
+    pnl : Realised PnL of the fill in account currency (default 0.0).
+    """
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+        gate = get_gate()
+        count = gate.record_fill(pnl=pnl)
+        return {"status": "recorded", "fill_count": count, "pnl": pnl}
+    except Exception as exc:
+        logger.warning("paper_trading_gate_record_fill failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail=str(exc))

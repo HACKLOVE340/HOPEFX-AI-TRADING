@@ -179,16 +179,72 @@ def validate(practice: bool = True) -> bool:
     return True
 
 
+def validate_gate() -> None:
+    """Print the current PaperTradingGate phase status."""
+    print("\nPhase Gate Status")
+    print("=" * 40)
+    try:
+        from research.pipeline.paper_trading_gate import PaperTradingGate
+        gate = PaperTradingGate()
+        gate.print_status()
+
+        p2_ok, p2_reason = gate.phase2_ready()
+        p3_ok, p3_reason = gate.phase3_ready()
+
+        if not p2_ok:
+            print("\nTo start the 30-day clock:")
+            print("  python -m research.pipeline.paper_trading_gate --set-start")
+            print("\nTo record fills (called automatically by broker callback):")
+            print("  python -m research.pipeline.paper_trading_gate --record-fill <pnl>")
+        elif not p3_ok:
+            print("\nPhase 2 gate passed. Enable anomaly weighting:")
+            print("  FEATURE_ANOMALY_WEIGHTING=true  (in .env)")
+            print("\nPhase 3 requires 500 fills and 90 days.")
+        else:
+            print("\nAll phase gates passed. Enable online learning:")
+            print("  FEATURE_ONLINE_LEARNING=true  (in .env)")
+    except ImportError as exc:
+        print(f"  Gate module unavailable: {exc}")
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Validate OANDA API connectivity")
+    parser = argparse.ArgumentParser(
+        description="Validate OANDA API connectivity and paper trading gate status",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/validate_oanda.py              # validate practice API
+  python scripts/validate_oanda.py --gate       # show phase gate status only
+  python scripts/validate_oanda.py --live       # validate live endpoint (caution)
+  python scripts/validate_oanda.py --all        # API + gate status
+""",
+    )
     parser.add_argument(
         "--live",
         action="store_true",
         help="Test live endpoint instead of practice (use with caution)",
     )
+    parser.add_argument(
+        "--gate",
+        action="store_true",
+        help="Show phase gate status (Phase 2 / Phase 3 readiness)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run API validation AND show gate status",
+    )
     args = parser.parse_args()
 
+    if args.gate and not args.all:
+        validate_gate()
+        sys.exit(0)
+
     ok = validate(practice=not args.live)
+
+    if args.all or args.gate:
+        validate_gate()
+
     sys.exit(0 if ok else 1)
 
 
