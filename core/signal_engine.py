@@ -662,6 +662,24 @@ async def _execute_if_approved(
     if not _AUTO_TRADE:
         return
 
+    # Live trading gate — all 5 checks must pass before any order is placed.
+    # This is the authoritative pre-order safety check; it runs even when the
+    # execution engine's PreTradeGate is also active.
+    try:
+        from core.live_trading_gate import get_gate
+        gate_result = get_gate().check()
+        if not gate_result.allowed:
+            logger.warning(
+                "Auto-trade blocked by LiveTradingGate: %s", gate_result.reason
+            )
+            return
+    except Exception as _gate_exc:
+        # Gate unavailable → fail safe: block the trade.
+        logger.error(
+            "LiveTradingGate check raised an exception — blocking trade: %s", _gate_exc
+        )
+        return
+
     broker: Any = getattr(app_state, "broker", None)
     risk_manager: Any = getattr(app_state, "risk_manager", None)
     ws: Any = getattr(app_state, "ws_manager", None)

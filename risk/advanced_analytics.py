@@ -409,8 +409,10 @@ class AdvancedRiskAnalytics:
                         RuntimeWarning,
                         stacklevel=2,
                     )
-            except Exception:
-                pass  # scipy not available or test failed — proceed silently
+            except Exception as _jb_exc:
+                logger.debug(
+                    "calculate_var_parametric: Jarque-Bera test skipped: %s", _jb_exc
+                )
 
         mean_return = np.mean(returns)
         std_return = np.std(returns)
@@ -800,16 +802,12 @@ class AdvancedRiskAnalytics:
             VaRResult from the appropriate method
         """
         if time_horizon <= 1:
-            # Temporarily bypass enforcement for 1-day call
-            orig = ENFORCE_MULTIDAY_VAR
-            import risk.advanced_analytics as _self_mod
-            _self_mod.ENFORCE_MULTIDAY_VAR = False
-            try:
-                result = self.calculate_var_historical(
-                    returns, confidence_level, 1, portfolio_value
-                )
-            finally:
-                _self_mod.ENFORCE_MULTIDAY_VAR = orig
+            # Call calculate_var_historical directly with time_horizon=1.
+            # calculate_var_historical does not enforce the multiday flag for
+            # 1-day horizons, so no global mutation is needed.
+            result = self.calculate_var_historical(
+                returns, confidence_level, 1, portfolio_value
+            )
             return result
         else:
             return self.calculate_var_ewma(

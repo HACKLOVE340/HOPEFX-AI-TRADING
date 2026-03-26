@@ -28,7 +28,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
 
+# FastAPI Request imported at module scope so route annotations resolve correctly
+# under Pydantic v2 (inner-function imports create unresolvable ForwardRefs).
+try:
+    from fastapi import Request as _FastAPIRequest
+except ImportError:
+    _FastAPIRequest = None  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+# Pydantic request models — module-scope so Pydantic v2 can resolve them      #
+# for OpenAPI schema generation (inner-function classes break forward refs).   #
+# --------------------------------------------------------------------------- #
+try:
+    from pydantic import BaseModel as _BaseModel
+
+    class _KSActivateRequest(_BaseModel):
+        reason: str = "manual activation via API"
+
+    class _KSDeactivateRequest(_BaseModel):
+        token: str = ""
+
+except ImportError:  # pydantic not installed (e.g. minimal test env)
+    _KSActivateRequest = None   # type: ignore[assignment,misc]
+    _KSDeactivateRequest = None  # type: ignore[assignment,misc]
 
 # --------------------------------------------------------------------------- #
 # Default path for the manual file flag                                        #
@@ -468,11 +492,14 @@ def create_kill_switch_router(ks: "KillSwitch"):
     including the router, or use the dependency injection shown below.
     """
     try:
-        from fastapi import APIRouter, HTTPException, Depends, Request
+        from fastapi import APIRouter, HTTPException, Depends
         from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-        from pydantic import BaseModel
     except ImportError:
         logger.warning("FastAPI not available — kill switch router not created")
+        return None
+
+    if _FastAPIRequest is None:
+        logger.warning("FastAPI Request not available — kill switch router not created")
         return None
 
     router = APIRouter(prefix="/api/kill-switch", tags=["Kill Switch"])
@@ -511,11 +538,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
             raise HTTPException(status_code=403, detail="Role 'admin' required")
         return user
 
-    class ActivateRequest(BaseModel):
-        reason: str = "manual activation via API"
 
-    class DeactivateRequest(BaseModel):
-        token: str = ""
 
     @router.get("/status")
     async def get_status():
@@ -544,7 +567,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
         _ks_attempt_times[user_id].append(now)
 
     @router.post("/activate")
-    async def activate(req: ActivateRequest, request: Request, user=Depends(_require_admin)):
+    async def activate(req: _KSActivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)):
         """
         Halt all trading immediately.
 
@@ -574,7 +597,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
         }
 
     @router.post("/deactivate")
-    async def deactivate(req: DeactivateRequest, request: Request, user=Depends(_require_admin)):
+    async def deactivate(req: _KSDeactivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)):
         """
         Resume trading after a kill switch event.
 
