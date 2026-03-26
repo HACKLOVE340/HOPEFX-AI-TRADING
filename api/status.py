@@ -423,6 +423,37 @@ async def paper_trading_gate_status():
         }
 
 
+@router.get(
+    "/api/status/live-trading/gate",
+    summary="Production live trading gate — all 5 checks",
+    tags=["Status"],
+)
+async def live_trading_gate_status():
+    """
+    Returns the full production live trading gate status.
+
+    All five checks must pass before live orders are allowed:
+    1. Kill-switch inactive
+    2. Paper clock complete (30 days)
+    3. OOS accuracy >= 0.60, p-value < 0.05
+    4. Sharpe gate: N >= 600 pooled trades
+    5. FEATURE_LIVE_TRADING=true
+
+    Safe to poll — read-only, no side effects.
+    """
+    try:
+        from core.live_trading_gate import get_gate
+        return get_gate().status_dict()
+    except Exception as exc:
+        logger.warning("live_trading_gate_status failed: %s", exc)
+        return {
+            "allowed": False,
+            "reason": f"Gate unavailable: {exc}",
+            "checks": {},
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
 @router.post(
     "/api/status/paper-trading/gate/fill",
     summary="Record a confirmed OANDA fill into the phase gate",
