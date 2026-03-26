@@ -788,6 +788,31 @@ async def init_signal_engine(s: Any) -> Any:
     t = asyncio.create_task(run_signal_engine(s))
     s.background_tasks.append(t)
     log_activity("Signal engine started")
+
+    # Post a startup alert to Discord so the community knows the engine is live.
+    # Best-effort — a missing webhook URL or network error must not block startup.
+    try:
+        from notifications.discord_bot import discord_signal_bot  # noqa: PLC0415
+        broker_type = os.getenv("BROKER_TYPE", "paper")
+        env_label   = os.getenv("APP_ENV", "development")
+        asyncio.create_task(
+            discord_signal_bot.post_alert(
+                message=(
+                    f"**HOPEFX Signal Engine Online** — `{env_label}` environment\n"
+                    f"Broker: `{broker_type}` | Auto-trade: `{os.getenv('SIGNAL_ENGINE_AUTO_TRADE', 'false')}`\n"
+                    "Monitoring XAUUSD for consensus signals. Posts will appear here automatically."
+                ),
+                level="info",
+                details={
+                    "Symbols":    os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD"),
+                    "Interval":   f"{os.getenv('SIGNAL_ENGINE_INTERVAL', '300')}s",
+                    "Model":      "advanced_oos.pkl (68% OOS accuracy)",
+                },
+            )
+        )
+    except Exception as _disc_exc:
+        logger.debug("Discord startup alert skipped: %s", _disc_exc)
+
     return t
 
 
