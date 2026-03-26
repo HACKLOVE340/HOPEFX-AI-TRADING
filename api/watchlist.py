@@ -35,6 +35,11 @@ router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 # In-memory fallback (used when DB unavailable)
 _watchlists: Dict[str, List[str]] = {}
 
+
+def _reset_watchlists() -> None:
+    """Clear in-memory state. Used by tests to prevent cross-test leakage."""
+    _watchlists.clear()
+
 DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
 
 _BASE_PRICES: Dict[str, float] = {
