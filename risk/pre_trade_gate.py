@@ -256,8 +256,8 @@ class PreTradeGate:
             if _SENTRY:
                 try:
                     sentry_sdk.capture_exception(exc)
-                except Exception:
-                    pass
+                except Exception as _sentry_exc:
+                    logger.debug("Sentry capture failed (non-fatal): %s", _sentry_exc)
             # BLOCK the trade — a broken risk check is not a pass
             raise RiskManagerError(msg) from exc
 

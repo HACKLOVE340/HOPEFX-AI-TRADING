@@ -1045,3 +1045,43 @@ async def get_regime_history(limit: int = 20):
         return {"history": regime_router.regime_history(limit=limit)}
     except Exception as exc:
         return {"history": [], "error": str(exc)}
+
+
+# ── Stress test endpoint ──────────────────────────────────────────────────────
+
+@router.get("/stress-test", response_model=None, summary="Run historical stress scenarios on current position")
+async def run_stress_test(
+    position_value: float = 10000.0,
+    equity: float = 100000.0,
+    leverage: float = 1.0,
+    max_loss_pct: float = 0.20,
+):
+    """
+    Apply historical and hypothetical stress scenarios to a position.
+
+    Returns scenario-by-scenario P&L impact and a gate pass/fail result.
+    Scenarios include COVID crash (-12.5%), 2022 rate shock (-20%),
+    2013 taper tantrum (-28%), GFC 2008 (-30%), and others.
+
+    Parameters
+    ----------
+    position_value : Current position size in USD.
+    equity         : Total account equity in USD (used for gate check).
+    leverage       : Leverage multiplier (1.0 = no leverage).
+    max_loss_pct   : Gate threshold — any scenario exceeding this fraction
+                     of equity marks gate_passed=False.
+    """
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+    try:
+        from risk.stress_test import run_all_scenarios
+        return run_all_scenarios(
+            position_value=position_value,
+            equity=equity,
+            leverage=leverage,
+            max_loss_pct=max_loss_pct,
+        )
+    except Exception as exc:
+        _logger.error("Stress test failed: %s", exc, exc_info=True)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}")
