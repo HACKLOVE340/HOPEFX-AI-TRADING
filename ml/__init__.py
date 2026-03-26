@@ -65,44 +65,75 @@ def _load_models() -> None:
     """Lazy-load all saved models on first access.
 
     Priority (highest to lowest):
-      1. advanced_oos.pkl  — 122-feature calibrated XGBoost, 68% OOS accuracy
-      2. xgb_macro.pkl     — basic macro XGBoost (50% OOS accuracy)
-      3. xgb_xauusd.pkl    — baseline XGBoost
+      1. advanced_oos.pkl  — 122-feature calibrated XGBoost, 68% OOS accuracy (p=0.0000)
+      2. xgb_macro.pkl     — basic macro XGBoost, 65 stationary features, ~50% OOS
+      3. xgb_xauusd.pkl    — baseline XGBoost (no macro)
       4. rf_macro.pkl      — basic macro RF
       5. rf_xauusd.pkl     — baseline RF
+
+    FALLBACK WARNING
+    ----------------
+    If advanced_oos.pkl fails to load (version mismatch, missing file, import
+    error), the engine falls back to xgb_macro.pkl which has ~50% OOS accuracy
+    — no demonstrated edge above chance.  A CRITICAL log is emitted so
+    operators can detect silent degradation in log aggregators (Sentry, Datadog,
+    CloudWatch).  The fallback model has had all close_lag_N non-stationary
+    features removed as of this version.
     """
     global _macro_xgb, _macro_rf, _baseline_xgb, _baseline_rf, _model_version
 
-    # Top priority: advanced OOS model (122 stationary features, p=0.0000)
+    # ── Priority 1: advanced OOS model (122 stationary features, p=0.0000) ──
     _advanced_oos = _try_load(_SAVED / "advanced_oos.pkl")
     if _advanced_oos is not None:
         _macro_xgb = _advanced_oos
         _model_version = "advanced_oos_v1"
         _ml_logger.info(
-            "Active ML model: advanced OOS (advanced_oos.pkl) — "
-            "68.0%% OOS accuracy, p=0.0000, 122 features"
+            "Active ML model: advanced_oos.pkl — "
+            "68.0%% OOS accuracy, p=0.0000, 122 stationary features"
         )
         return
 
-    # Fallback: macro-aware models
+    # ── CRITICAL: advanced model unavailable — falling back ──────────────────
+    # This means advanced_oos.pkl is missing, corrupt, or incompatible with
+    # the installed scikit-learn/xgboost version.  The fallback model has
+    # ~50% OOS accuracy (no demonstrated edge).  Operator action required.
+    _ml_logger.critical(
+        "FALLBACK ACTIVATED: advanced_oos.pkl could not be loaded from %s. "
+        "The live signal engine is now running on the basic fallback model "
+        "(xgb_macro.pkl, ~50%% OOS accuracy, no demonstrated edge above chance). "
+        "This is a SILENT DEGRADATION from 68%% to ~50%% accuracy. "
+        "Fix: ensure advanced_oos.pkl exists and scikit-learn/xgboost versions "
+        "match the training environment. Re-run: python ml/train_advanced.py "
+        "--years 50 --oos-years 3",
+        _SAVED,
+    )
+
+    # ── Priority 2: basic macro XGBoost (65 stationary features, ~50% OOS) ──
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
     _macro_rf = _try_load(_SAVED / "rf_macro.pkl")
 
-    # Fallback: baseline models
+    # ── Priority 3: baseline models (no macro) ───────────────────────────────
     _baseline_xgb = _try_load(_SAVED / "xgb_xauusd.pkl")
     _baseline_rf = _try_load(_SAVED / "rf_xauusd.pkl")
 
     if _macro_xgb is not None:
         _model_version = "macro_xgb_v1"
-        _ml_logger.info("Active ML model: macro XGBoost (xgb_macro.pkl)")
+        _ml_logger.warning(
+            "FALLBACK MODEL ACTIVE: xgb_macro.pkl (65 stationary features, "
+            "~50%% OOS accuracy, p>0.05 — no demonstrated edge). "
+            "Signals are strategy-only quality. Do not trade live capital."
+        )
     elif _baseline_xgb is not None:
         _model_version = "baseline_xgb_v1"
-        _ml_logger.info("Active ML model: baseline XGBoost (xgb_xauusd.pkl)")
+        _ml_logger.warning(
+            "FALLBACK MODEL ACTIVE: xgb_xauusd.pkl (baseline, no macro features, "
+            "~49%% OOS accuracy). Signals are strategy-only quality."
+        )
     else:
         _model_version = "none"
         _ml_logger.warning(
             "No trained ML model found in %s — signal engine will use "
-            "strategy-only signals",
+            "strategy-only signals (no ML probability enrichment)",
             _SAVED,
         )
 
