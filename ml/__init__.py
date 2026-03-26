@@ -34,14 +34,16 @@ __all__ = [
 __version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
+import hashlib as _hashlib
+import json as _json
 import logging as _logging
-import pickle as _pickle
 from pathlib import Path as _Path
 from typing import Any as _Any
 from typing import Optional as _Optional
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
+_CHECKSUM_FILE = _SAVED / "model_checksums.json"
 
 # Loaded model instances (None until first call to get_active_model())
 _macro_xgb: _Any = None
@@ -51,14 +53,92 @@ _baseline_rf: _Any = None
 _model_version: str = "none"
 
 
-def _try_load(path: _Path) -> _Optional[_Any]:
-    """Load a pickle model; return None on any failure."""
+def _sha256(path: _Path) -> str:
+    """Return the SHA-256 hex digest of a file."""
+    h = _hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _verify_checksum(path: _Path) -> bool:
+    """
+    Verify a model file against the stored SHA-256 checksum.
+
+    Returns True if:
+    - The checksum file does not exist (first run — no baseline yet).
+    - The file matches the stored checksum.
+
+    Returns False (and logs CRITICAL) if the file has been tampered with.
+    The checksum file is written automatically on first successful load so
+    subsequent loads can detect modifications.
+    """
+    if not _CHECKSUM_FILE.exists():
+        # First run — record checksums for all existing models
+        _record_checksums()
+        return True
+
     try:
-        with open(path, "rb") as f:
-            return _pickle.load(f)
+        stored = _json.loads(_CHECKSUM_FILE.read_text())
     except Exception as exc:
-        _ml_logger.debug("Could not load %s: %s", path.name, exc)
+        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
+        return True
+
+    name = path.name
+    if name not in stored:
+        # New model file not yet in checksum registry — record and allow
+        _record_checksums()
+        return True
+
+    actual = _sha256(path)
+    if actual != stored[name]:
+        _ml_logger.critical(
+            "MODEL INTEGRITY FAILURE: %s checksum mismatch. "
+            "Expected %s, got %s. "
+            "The file may have been tampered with. Refusing to load.",
+            name, stored[name][:16] + "...", actual[:16] + "...",
+        )
+        return False
+    return True
+
+
+def _record_checksums() -> None:
+    """Write SHA-256 checksums for all .pkl files in saved_models/."""
+    try:
+        checksums = {}
+        for pkl in _SAVED.glob("*.pkl"):
+            checksums[pkl.name] = _sha256(pkl)
+        _CHECKSUM_FILE.write_text(_json.dumps(checksums, indent=2))
+        _ml_logger.info("Model checksums recorded: %d files", len(checksums))
+    except Exception as exc:
+        _ml_logger.warning("Could not record model checksums: %s", exc)
+
+
+def _try_load(path: _Path) -> _Optional[_Any]:
+    """Load a model file via joblib with SHA-256 integrity check.
+
+    Uses joblib (not raw pickle) — joblib handles numpy arrays more safely
+    and is the standard for sklearn/XGBoost pipelines.  Raw pickle is kept
+    as a fallback for files that joblib cannot read.
+    """
+    if not path.exists():
         return None
+    if not _verify_checksum(path):
+        # Checksum mismatch — refuse to load potentially tampered model
+        return None
+    try:
+        import joblib as _joblib
+        return _joblib.load(path)
+    except Exception as _jl_exc:
+        _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
+        try:
+            import pickle as _pickle
+            with open(path, "rb") as f:
+                return _pickle.load(f)
+        except Exception as exc:
+            _ml_logger.debug("Could not load %s: %s", path.name, exc)
+            return None
 
 
 def _load_models() -> None:
