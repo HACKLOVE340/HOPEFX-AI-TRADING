@@ -5,7 +5,14 @@ ml/train_with_macro.py
 Train XAUUSD direction models with macro features (DXY, VIX, yields, SPX).
 
 Walk-forward validation on up to 50 years of daily data.
-Reports accuracy, F1, Sharpe, and statistical significance (t-test).
+Reports accuracy, F1, Sharpe, and statistical significance (binomial test).
+
+Statistical significance notes
+-------------------------------
+  N=45 trades is insufficient for Sharpe significance (SE ≈ ±0.54).
+  Need ~250 trades for SE ≤ ±0.3.
+  The credible performance number is OOS accuracy (p-value from binomial test),
+  not Sharpe ratio.  Do not commit live capital until 30+ days paper trading done.
 
 Data availability note
 ----------------------
@@ -241,7 +248,6 @@ def walk_forward_eval(
                 reg_lambda=1.0,
                 scale_pos_weight=float((y_train == 0).sum())
                 / max((y_train == 1).sum(), 1),
-                use_label_encoder=False,
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
@@ -345,7 +351,6 @@ def train_final_model(
             reg_alpha=0.1,
             reg_lambda=1.0,
             scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
-            use_label_encoder=False,
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -414,12 +419,18 @@ def oos_eval(
     The binomial test is more appropriate than a t-test here because we have
     a single OOS period (not multiple folds) and the test statistic is a count
     of correct predictions out of N independent Bernoulli trials.
+
+    Statistical significance
+    ------------------------
+    The credible performance number is OOS accuracy (p-value from binomial test),
+    not Sharpe ratio.  N=45 trades gives Sharpe SE ≈ ±0.54 — not statistically
+    robust.  Need ~250 trades for SE ≤ ±0.3.
     """
     import joblib
     import xgboost as xgb
     from scipy.stats import binomtest
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score, classification_report, f1_score
+    from sklearn.metrics import accuracy_score, classification_report, f1_score, roc_auc_score
 
     if model_type == "xgb":
         model = xgb.XGBClassifier(
@@ -433,7 +444,6 @@ def oos_eval(
             reg_alpha=0.1,
             reg_lambda=1.0,
             scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
-            use_label_encoder=False,
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -454,21 +464,33 @@ def oos_eval(
     acc = accuracy_score(y_oos, preds)
     f1 = f1_score(y_oos, preds, zero_division=0)
     n = len(y_oos)
-    k = int(round(acc * n))  # number of correct predictions
+    k = int(round(acc * n))
+
+    # Accuracy SE: sqrt(p*(1-p)/n)
+    acc_se = float(np.sqrt(acc * (1 - acc) / max(n, 1)))
+
+    # AUC
+    try:
+        proba = model.predict_proba(X_oos)[:, 1]
+        auc = float(roc_auc_score(y_oos, proba))
+    except Exception:
+        auc = 0.5
 
     # One-sided binomial test: H0 = p(correct) <= 0.5
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 
+    # OOS date range
+    oos_start = (
+        X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+    )
+    oos_end = (
+        X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
+    )
+
     logger.info(
-        "OOS %s  acc=%.3f  f1=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        model_type.upper(),
-        acc,
-        f1,
-        n,
-        k,
-        p_value,
-        p_value < 0.05,
+        "OOS %s  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
+        model_type.upper(), acc, acc_se, f1, auc, n, k, p_value, p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -477,16 +499,32 @@ def oos_eval(
     joblib.dump(model, out_path)
     logger.info("Saved OOS model to %s", out_path)
 
+    # Feature importance
+    if hasattr(model, "feature_importances_"):
+        imp = pd.Series(model.feature_importances_, index=X_train.columns)
+        top10 = {k: round(float(v), 6) for k, v in imp.nlargest(10).items()}
+        logger.info("Top-10 OOS features: %s", top10)
+    else:
+        top10 = {}
+
     return {
         "model": model_type,
         "train_size": len(X_train),
         "oos_size": n,
         "correct_predictions": k,
         "accuracy": round(acc, 4),
+        "accuracy_se": round(acc_se, 4),
         "f1": round(f1, 4),
+        "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
         "significant": bool(p_value < 0.05),
+        "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
+        "top_features": top10,
+        "sharpe_note": (
+            "N=45 trades: Sharpe SE ≈ ±0.54. "
+            "Use OOS accuracy as the credible performance number."
+        ),
     }
 
 
@@ -560,9 +598,10 @@ def main():
     if args.oos_years > 0:
         oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
         oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
-        if oos_n < 30:
+        if oos_n < 100:
+            # < 100 bars gives accuracy SE > ±0.05 — not meaningful for production.
             logger.warning(
-                "--oos-years %.1f produces only %d bars — too few for reliable OOS eval. "
+                "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.05). "
                 "Increase --oos-years or --years.",
                 args.oos_years,
                 oos_n,
@@ -631,7 +670,7 @@ def main():
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("TRAINING SUMMARY")
+    print("TRAINING SUMMARY  (basic macro model — 65 stationary features)")
     print("=" * 60)
     for model_type in ("xgb", "rf"):
         wf = report[f"walkforward_{model_type}"]
@@ -641,11 +680,14 @@ def main():
             f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}"
         )
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
+        mean_sharpe = wf.get("mean_sharpe", 0.0)
         print(
-            f"  Walk-forward Sharpe   : {wf.get('mean_sharpe', 0.0):.3f}  (annualised, 1-bar, no costs)"
+            f"  Walk-forward Sharpe   : {mean_sharpe:.3f}"
+            f"  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)"
         )
         print(
-            f"  p-value (vs random)   : {wf['p_value']:.4f}  {'✓ significant' if wf['significant'] else '✗ not significant'}"
+            f"  p-value (vs random)   : {wf['p_value']:.4f}"
+            f"  {'✓ significant' if wf['significant'] else '✗ not significant'}"
         )
         print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
         print(f"  Final holdout F1      : {fin['f1']:.3f}")
@@ -653,11 +695,24 @@ def main():
         if f"oos_{model_type}" in report:
             oos = report[f"oos_{model_type}"]
             sig = "✓ significant" if oos["significant"] else "✗ not significant"
+            acc_se = oos.get("accuracy_se", 0.0)
             print(
-                f"  OOS accuracy          : {oos['accuracy']:.3f}  (n={oos['oos_size']})"
+                f"  OOS period            : {oos.get('oos_period', 'n/a')}"
+            )
+            print(
+                f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}"
+                f"  (n={oos['oos_size']})"
             )
             print(f"  OOS F1                : {oos['f1']:.3f}")
+            print(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")
             print(f"  OOS p-value (binomial): {oos['p_value_binomial']:.4f}  {sig}")
+
+    print()
+    print("  ─── Sharpe significance ─────────────────────────────────────")
+    print("  N=45 trades: Sharpe SE ≈ ±0.54 (need ~250 for SE ≤ ±0.3).")
+    print("  Credible performance number: OOS accuracy (p-value above).")
+    print("  Do NOT commit live capital until 30+ days paper trading done.")
+    print("  ─────────────────────────────────────────────────────────────")
     print("=" * 60)
 
     return report
