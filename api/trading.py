@@ -325,15 +325,34 @@ async def _record_fill(
     except Exception as fcm_exc:
         logger.debug("FCM trade push skipped: %s", fcm_exc)
 
-    # Email notification
+    # Email notification — resolve user email from DB, fall back to SMTP_TO
     try:
-        from notifications.email_triggers import send_trade_fill_email
+        from notifications.email_triggers import send_trade_fill_email  # noqa: PLC0415
+
+        # Attempt to look up the authenticated user's email address so the
+        # notification goes to the right inbox rather than the system default.
+        user_email: str = ""
+        try:
+            from auth.service import AuthService  # noqa: PLC0415
+            _auth_svc = AuthService()
+            _db_user = _auth_svc.get_user_by_id(user_id)
+            if _db_user and getattr(_db_user, "email", None):
+                user_email = _db_user.email
+        except Exception as _ue_exc:
+            logger.debug("Could not resolve user email for fill notification: %s", _ue_exc)
+
         send_trade_fill_email(
             symbol=order.symbol,
             direction=order.side,
             quantity=order.quantity,
             fill_price=result.average_fill_price or 0.0,
+            net_pnl=getattr(result, "pnl", None),
             commission=getattr(result, "commission", 0.0),
+            to=user_email,
+        )
+        logger.debug(
+            "Trade fill email queued: user=%s symbol=%s side=%s",
+            user_id, order.symbol, order.side,
         )
     except Exception as email_exc:
         logger.debug("Trade fill email skipped: %s", email_exc)
