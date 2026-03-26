@@ -17,10 +17,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# Set JWT secret before importing any api modules
-os.environ.setdefault("SECURITY_JWT_SECRET", "integration-test-secret-key-32chars!!")
+# Pin the JWT secret for this module — must be set before any api.auth import.
+# We force-set (not setdefault) so other tests that mutate the env var don't
+# break our token verification.
+_TEST_SECRET = "integration-test-secret-key-32chars!!"
+os.environ["SECURITY_JWT_SECRET"] = _TEST_SECRET
 
-_SECRET = os.environ["SECURITY_JWT_SECRET"]
+_SECRET = _TEST_SECRET
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
@@ -40,16 +43,24 @@ def _auth(sub: str = "user-int-001", role: str = "trader") -> Dict[str, str]:
 
 # ── App fixtures ──────────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="module")
-def watchlist_client() -> TestClient:
-    from api.watchlist import router
+@pytest.fixture(autouse=True)
+def _pin_jwt_secret(monkeypatch):
+    """Ensure SECURITY_JWT_SECRET matches _TEST_SECRET for every test in this module."""
+    monkeypatch.setenv("SECURITY_JWT_SECRET", _TEST_SECRET)
 
+
+@pytest.fixture()
+def watchlist_client() -> TestClient:
+    """Fresh in-memory state per test — prevents cross-test leakage."""
+    from api.watchlist import _reset_watchlists, router
+
+    _reset_watchlists()
     app = FastAPI()
     app.include_router(router)
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def trading_client() -> TestClient:
     from api.trading import router
 
@@ -58,7 +69,7 @@ def trading_client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def signals_client() -> TestClient:
     from api.signals import create_signals_router
 
