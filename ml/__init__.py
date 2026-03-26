@@ -104,7 +104,7 @@ def _load_models() -> None:
         "This is a SILENT DEGRADATION from 68%% to ~50%% accuracy. "
         "Fix: ensure advanced_oos.pkl exists and scikit-learn/xgboost versions "
         "match the training environment. Re-run: python ml/train_advanced.py "
-        "--years 50 --oos-years 3",
+        "--years 50 --oos-years 8",
         _SAVED,
     )
     # Fire a Sentry fatal-level issue so operators get paged immediately
