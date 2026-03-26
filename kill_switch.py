@@ -442,7 +442,8 @@ class KillSwitch:
         try:
             data = event.decode() if hasattr(event, "decode") else {}
             reason = data.get("reason", "event bus signal")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Kill switch bus event decode failed: %s", exc)
             reason = "event bus signal"
         self._activate_internal(f"[bus] {reason}")
 

@@ -62,7 +62,13 @@ def _get_oanda_cb():
         from core.circuit_breaker import CircuitBreaker
 
         return CircuitBreaker.get("oanda", failure_threshold=5, reset_timeout=60.0)
-    except Exception:
+    except Exception as _cb_exc:
+        # Circuit breaker unavailable — log so operators know protection is off.
+        # Do not raise: the broker must still be usable without the CB module.
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "OANDA circuit breaker unavailable — broker calls unprotected: %s", _cb_exc
+        )
         return None
 
 
@@ -864,7 +870,9 @@ class OandaBroker:
                 self.api.get_account()
                 self.connected = True
                 return True
-            except Exception:
+            except Exception as exc:
+                logger.error("OandaBroker.connect failed: %s", exc, exc_info=True)
+                self.connected = False
                 return False
         self.connected = True
         return True
