@@ -128,7 +128,8 @@ strawberry-graphql[fastapi]>=0.200.0
 slowapi>=0.1.9
 
 # ── Error tracking ────────────────────────────────────────────────────────────
-# sentry-sdk already in requirements.txt above; listed here for visibility
+# Full FastAPI + SQLAlchemy + Redis + aiohttp integrations
+sentry-sdk[fastapi]>=1.40.0
 
 
 # ── Email deliverability ──────────────────────────────────────────────────────
