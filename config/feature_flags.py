@@ -458,6 +458,51 @@ class FeatureFlags:
         description="Portfolio analytics, performance reports, and risk analytics.",
     )
 
+    # ── Research integration path (Phases 1–4) ───────────────────────────
+
+    MTF_FUSION = _FeatureDef(
+        "FEATURE_MTF_FUSION",
+        default=True,
+        status=FeatureStatus.BETA,
+        description=(
+            "Phase 1: Multi-timeframe fusion. Loads H4 and D1 OHLCV at startup "
+            "and appends d_*/h_* regime features to the ML feature matrix at "
+            "inference time. Gate: OOS accuracy must remain ≥ 65% after adding "
+            "MTF features. Disable with FEATURE_MTF_FUSION=false."
+        ),
+    )
+    ANOMALY_WEIGHTING = _FeatureDef(
+        "FEATURE_ANOMALY_WEIGHTING",
+        default=False,
+        status=FeatureStatus.EXPERIMENTAL,
+        description=(
+            "Phase 2: Anomaly weighting. Signals generated during anomalous "
+            "market conditions (Isolation Forest score > 0.7) are down-weighted "
+            "by 50%. Prerequisite: Phase 1 complete + 30-day paper trading run."
+        ),
+    )
+    ONLINE_LEARNING = _FeatureDef(
+        "FEATURE_ONLINE_LEARNING",
+        default=False,
+        status=FeatureStatus.EXPERIMENTAL,
+        description=(
+            "Phase 3: Online learning with drift detection. Blends the primary "
+            "model (0.7) with an IncrementalXGBoost that updates on each "
+            "confirmed fill (0.3). Prerequisite: Phase 2 complete + 90-day paper "
+            "trading run."
+        ),
+    )
+    DEEP_ENSEMBLE = _FeatureDef(
+        "FEATURE_DEEP_ENSEMBLE",
+        default=False,
+        status=FeatureStatus.EXPERIMENTAL,
+        description=(
+            "Phase 4: Deep learning ensemble (LSTM/Transformer/TCN). Adds a "
+            "third stacking component when OOS accuracy exceeds 70% (p<0.001). "
+            "Prerequisite: Phase 3 complete + GPU training infrastructure."
+        ),
+    )
+
     # ── Experimental / Unreleased ─────────────────────────────────────────
 
     RESEARCH_MODULE = _FeatureDef(

@@ -459,6 +459,41 @@ async def init_macro_store(s: Any) -> Any:
     return macro_store
 
 
+async def init_mtf_store(s: Any) -> Any:
+    """
+    Bootstrap the MTFFusionStore at startup.
+
+    Loads H4 and D1 OHLCV from DataScheduler CSVs (or yfinance fallback),
+    computes regime features, and attaches the store to app_state so the
+    signal engine can call mtf_store.align_to_h1(ohlcv_df) at inference time.
+
+    Gate: only wired when FEATURE_MTF_FUSION=true (default: true).
+    OOS accuracy must remain ≥ 65% after adding MTF features.
+    """
+    from api.admin import log_activity
+    from config.feature_flags import flags
+
+    if not getattr(flags, "MTF_FUSION", True):
+        logger.info("MTFFusionStore: disabled by FEATURE_MTF_FUSION=false")
+        return None
+
+    try:
+        from research.pipeline.mtf_fusion import MTFFusionStore
+
+        symbol = os.getenv("DATA_SYMBOL", "XAU_USD")
+        data_dir = os.getenv("DATA_DIR", "data")
+        store = MTFFusionStore(symbol=symbol, data_dir=data_dir)
+        await store.bootstrap()
+        s.mtf_store = store
+        log_activity(
+            f"MTFFusionStore bootstrapped — ready={store.is_ready}"
+        )
+        return store
+    except Exception as exc:
+        logger.warning("MTFFusionStore init failed (non-fatal): %s", exc)
+        return None
+
+
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
     from core.signal_engine import run_signal_engine

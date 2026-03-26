@@ -262,15 +262,52 @@ def _fetch_macro_df(
         return None
 
 
+def _fetch_mtf_df(
+    ohlcv_df: "pd.DataFrame", app_state: Any = None
+) -> Optional[Any]:
+    """
+    Fetch MTF regime features from MTFFusionStore if available and enabled.
+
+    Returns a DataFrame with d_*/h_* columns aligned to ohlcv_df.index,
+    or None when the store is unavailable or the flag is off.
+    """
+    try:
+        from config.feature_flags import flags
+        if not flags.MTF_FUSION:
+            return None
+    except Exception:
+        pass
+
+    # Try app_state first (populated by init_mtf_store at startup)
+    store = getattr(app_state, "mtf_store", None)
+    if store is None:
+        # Module-level singleton fallback
+        try:
+            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+            store = _MTF_STORE_SINGLETON
+        except ImportError:
+            return None
+
+    if store is None or not getattr(store, "is_ready", False):
+        return None
+
+    try:
+        return store.align_to_h1(ohlcv_df)
+    except Exception as exc:
+        logger.debug("MTF align_to_h1 failed: %s", exc)
+        return None
+
+
 def _compute_ml_probability(
-    data: Dict[str, Any], symbol: str, base_confidence: float
+    data: Dict[str, Any], symbol: str, base_confidence: float,
+    app_state: Any = None,
 ) -> tuple:
     """
     Compute ML probability using the best available model.
 
     Returns (ml_probability: float, model_version: str).
 
-    Path 1 (preferred): advanced_oos.pkl with full macro feature set.
+    Path 1 (preferred): advanced_oos.pkl with full macro + MTF feature set.
     Path 2 (fallback):  basic xgb_macro.pkl with stationary OHLCV features.
     Path 3 (no model):  returns base_confidence unchanged.
     """
@@ -280,20 +317,23 @@ def _compute_ml_probability(
     try:
         import pandas as pd
 
-        # ── Path 1: Advanced predictor (122 features, 68% OOS) ───────────────
+        # ── Path 1: Advanced predictor (122+ features, 68% OOS) ──────────────
         adv_predictor = get_advanced_predictor()
         if adv_predictor is not None and adv_predictor.is_available:
             ohlcv_df = _build_ohlcv_df(data)
             macro_df = _fetch_macro_df(ohlcv_df, symbol)
+            mtf_df   = _fetch_mtf_df(ohlcv_df, app_state=app_state)
             prob = adv_predictor.predict_proba(
-                ohlcv_df, macro_df=macro_df, symbol=symbol
+                ohlcv_df, macro_df=macro_df, symbol=symbol,
+                mtf_df=mtf_df,
             )
             logger.debug(
-                "Advanced ML (%s) prob for %s: %.4f (macro=%s)",
+                "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s)",
                 adv_predictor.version,
                 symbol,
                 prob,
                 "yes" if macro_df is not None else "no",
+                "yes" if mtf_df is not None else "no",
             )
             return float(prob), adv_predictor.version
 
@@ -549,9 +589,9 @@ async def _tick(app_state: Any) -> None:
         base_confidence = sig_info["base_confidence"]
         signal = sig_info["signal"]
 
-        # 3. ML probability enrichment (advanced model with macro features)
+        # 3. ML probability enrichment (advanced model with macro + MTF features)
         ml_probability, model_ver = _compute_ml_probability(
-            data, symbol, base_confidence
+            data, symbol, base_confidence, app_state=app_state
         )
 
         # 4. Build signal payload

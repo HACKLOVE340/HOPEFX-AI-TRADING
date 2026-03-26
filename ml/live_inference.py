@@ -264,9 +264,19 @@ class AdvancedModelPredictor:
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
+        mtf_df: Optional[pd.DataFrame] = None,
     ) -> float:
         """
         Return the probability that the next bar closes higher (0–1).
+
+        Parameters
+        ----------
+        ohlcv     : H1 OHLCV DataFrame (at least min_bars rows)
+        macro_df  : Aligned macro features (DXY, VIX, yields, SPX) — optional
+        symbol    : Instrument symbol for logging
+        mtf_df    : MTF regime features (d_*/h_* columns from MTFFusionStore) — optional.
+                    When provided, appended to the feature matrix before prediction.
+                    Gate: only used when FEATURE_MTF_FUSION=true.
 
         Returns 0.5 (neutral) if:
         - The model file is missing
@@ -288,6 +298,21 @@ class AdvancedModelPredictor:
         X = self._build_features(ohlcv, macro_df=macro_df, symbol=symbol)
         if X is None or X.empty:
             return 0.5
+
+        # Append MTF regime features when available (Phase 1 integration)
+        if mtf_df is not None and not mtf_df.empty:
+            try:
+                # Align MTF features to the last row of X
+                mtf_last = mtf_df.reindex(X.index).ffill().fillna(0.0)
+                mtf_cols = [c for c in mtf_last.columns if c not in X.columns]
+                if mtf_cols:
+                    X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
+                    logger.debug(
+                        "MTF features appended: %d d_*/h_* columns for %s",
+                        len(mtf_cols), symbol,
+                    )
+            except Exception as mtf_exc:
+                logger.debug("MTF feature append failed (non-fatal): %s", mtf_exc)
 
         try:
             # Replace any inf/nan that slipped through
