@@ -138,201 +138,416 @@ async def run_signal_engine(app_state: Any) -> None:
         await asyncio.sleep(_INTERVAL_SECONDS)
 
 
+# ── _tick sub-functions ───────────────────────────────────────────────────────
+# _tick() was 290 lines. Split into four focused functions (each ≤70 lines)
+# so bugs in signal generation and order execution are easy to isolate.
+
+
+def _compute_signal(
+    brain: Any, data: Dict[str, Any], symbol: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Run StrategyBrain and return a signal dict, or None if no consensus.
+
+    Returns dict with keys: direction, base_confidence, signal (raw object).
+    """
+    result: Dict[str, Any] = brain.analyze_joint(data)
+    if not result.get("consensus_reached"):
+        logger.debug("No consensus for %s: %s", symbol, result.get("reason"))
+        return None
+
+    signal: Any = result.get("consensus_signal")
+    if signal is None:
+        return None
+
+    direction: str = (
+        signal.signal_type.value
+        if hasattr(signal.signal_type, "value")
+        else str(signal.signal_type)
+    )
+    return {
+        "direction": direction,
+        "base_confidence": getattr(signal, "confidence", 0.0),
+        "signal": signal,
+    }
+
+
+def _build_ohlcv_df(data: Dict[str, Any]) -> "pd.DataFrame":
+    """
+    Reconstruct a rolling OHLCV DataFrame from the broker bar list.
+
+    The broker feed provides up to 100 bars. The advanced predictor needs
+    >= 100 bars for reliable rolling-window feature computation.
+    """
+    import pandas as pd
+
+    prices = data.get("prices", [data["close"]])
+    highs = data.get("highs", [data["high"]])
+    lows = data.get("lows", [data["low"]])
+    volumes = data.get("volumes", [data.get("volume", 0)])
+    n = len(prices)
+
+    ohlcv_df = pd.DataFrame(
+        {
+            "open": prices,  # open not tracked per-bar; use close as proxy
+            "high": highs if len(highs) == n else prices,
+            "low": lows if len(lows) == n else prices,
+            "close": prices,
+            "volume": volumes if len(volumes) == n else [0.0] * n,
+        }
+    )
+    # Overwrite last bar with actual OHLCV from the tick
+    ohlcv_df.iloc[-1] = [
+        data["open"],
+        data["high"],
+        data["low"],
+        data["close"],
+        data.get("volume", 0),
+    ]
+    return ohlcv_df
+
+
+def _fetch_macro_df(
+    ohlcv_df: "pd.DataFrame", symbol: str
+) -> Optional["pd.DataFrame"]:
+    """
+    Align MacroStore series to the OHLCV hourly index.
+
+    Returns a DataFrame of macro features or None if the store is empty /
+    alignment fails. None is safe — the predictor falls back to OHLCV-only
+    features with a logged warning.
+    """
+    import pandas as pd
+
+    _store = _get_macro_store()
+    if _store is None or len(_store) == 0:
+        logger.debug(
+            "MacroStore empty for %s — advanced model on OHLCV features only "
+            "(accuracy may be lower than 68%%)",
+            symbol,
+        )
+        return None
+
+    try:
+        ohlcv_indexed = ohlcv_df.copy()
+        if not isinstance(ohlcv_indexed.index, pd.DatetimeIndex):
+            end_ts = datetime.now(timezone.utc)
+            idx = pd.date_range(
+                end=end_ts,
+                periods=len(ohlcv_indexed),
+                freq=pd.tseries.frequencies.to_offset("1h"),
+                tz="UTC",
+            )
+            ohlcv_indexed.index = idx
+
+        macro_df = _store.align_to_hourly(ohlcv_indexed)
+        if macro_df.empty or macro_df.shape[1] == 0:
+            logger.debug(
+                "MacroStore returned empty alignment for %s — "
+                "running advanced model without macro features",
+                symbol,
+            )
+            return None
+
+        logger.debug("MacroStore aligned %d series for %s", macro_df.shape[1], symbol)
+        return macro_df
+
+    except Exception as exc:
+        logger.warning(
+            "MacroStore alignment failed for %s: %s — "
+            "running advanced model without macro features",
+            symbol,
+            exc,
+        )
+        return None
+
+
+def _compute_ml_probability(
+    data: Dict[str, Any], symbol: str, base_confidence: float
+) -> tuple:
+    """
+    Compute ML probability using the best available model.
+
+    Returns (ml_probability: float, model_version: str).
+
+    Path 1 (preferred): advanced_oos.pkl with full macro feature set.
+    Path 2 (fallback):  basic xgb_macro.pkl with stationary OHLCV features.
+    Path 3 (no model):  returns base_confidence unchanged.
+    """
+    if not _ML_AVAILABLE:
+        return base_confidence, "none"
+
+    try:
+        import pandas as pd
+
+        # ── Path 1: Advanced predictor (122 features, 68% OOS) ───────────────
+        adv_predictor = get_advanced_predictor()
+        if adv_predictor is not None and adv_predictor.is_available:
+            ohlcv_df = _build_ohlcv_df(data)
+            macro_df = _fetch_macro_df(ohlcv_df, symbol)
+            prob = adv_predictor.predict_proba(
+                ohlcv_df, macro_df=macro_df, symbol=symbol
+            )
+            logger.debug(
+                "Advanced ML (%s) prob for %s: %.4f (macro=%s)",
+                adv_predictor.version,
+                symbol,
+                prob,
+                "yes" if macro_df is not None else "no",
+            )
+            return float(prob), adv_predictor.version
+
+        # ── Path 2: Basic fallback model (~50% OOS, stationary features) ─────
+        active_model = get_active_model()
+        model_ver = get_model_version()
+        if active_model is not None:
+            prices = data.get("prices", [data["close"]])
+            closes = pd.Series(prices)
+            feat = {
+                "close": data["close"],
+                "open": data["open"],
+                "high": data["high"],
+                "low": data["low"],
+                "volume": data.get("volume", 0),
+                "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
+                "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
+                "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+                "vol_20": (
+                    closes.pct_change().rolling(20).std().iloc[-1]
+                    if len(closes) > 20
+                    else 0
+                ),
+            }
+            X = pd.DataFrame([feat])
+            if hasattr(active_model, "predict_proba"):
+                proba = active_model.predict_proba(X)
+                prob = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+            elif hasattr(active_model, "predict"):
+                prob = float(active_model.predict(X)[0])
+            else:
+                prob = base_confidence
+            logger.debug("Basic ML (%s) prob for %s: %.4f", model_ver, symbol, prob)
+            return prob, model_ver
+
+    except Exception as ml_exc:
+        logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
+
+    return base_confidence, "none"
+
+
+async def _publish_and_broadcast(
+    app_state: Any,
+    symbol: str,
+    signal_payload: Dict[str, Any],
+) -> None:
+    """
+    Publish a typed SignalEvent to the event bus and broadcast over WebSocket.
+
+    Both steps are best-effort — failures are logged but do not block
+    the auto-trade path.
+    """
+    direction = signal_payload["direction"]
+    base_confidence = signal_payload["confidence"]
+    ml_probability = signal_payload["probability"]
+    model_ver = signal_payload["model_version"]
+
+    # Typed event bus
+    try:
+        from events.typed_events import EventEnvelope, SignalEvent, publish_sync
+
+        publish_sync(
+            EventEnvelope.wrap(
+                source="signal_engine",
+                payload=SignalEvent(
+                    symbol=symbol,
+                    action=direction.upper(),
+                    confidence=base_confidence,
+                    probability=ml_probability,
+                    entry_price=signal_payload["entry_price"],
+                    stop_loss=signal_payload["stop_loss"],
+                    take_profit=signal_payload["take_profit"],
+                    model_version=model_ver,
+                ),
+                model_version=model_ver,
+            )
+        )
+    except Exception as ev_exc:
+        logger.debug("Typed event publish failed: %s", ev_exc)
+
+    logger.info(
+        "Brain consensus: %s %s confidence=%.2f ml_prob=%.4f model=%s",
+        symbol,
+        direction,
+        base_confidence,
+        ml_probability,
+        model_ver,
+    )
+
+    # WebSocket broadcast
+    ws = getattr(app_state, "ws_manager", None)
+    if ws is not None:
+        try:
+            await ws.broadcast_signal(symbol, signal_payload)
+        except Exception as ws_exc:
+            logger.warning("Signal broadcast failed: %s", ws_exc)
+
+
+async def _execute_if_approved(
+    app_state: Any,
+    symbol: str,
+    signal_payload: Dict[str, Any],
+) -> None:
+    """
+    Apply risk filter and execute an auto-trade if approved.
+
+    Only runs when SIGNAL_ENGINE_AUTO_TRADE=true. Skips silently if the
+    risk manager blocks the trade or sizing is rejected.
+    """
+    if not _AUTO_TRADE:
+        return
+
+    broker: Any = getattr(app_state, "broker", None)
+    risk_manager: Any = getattr(app_state, "risk_manager", None)
+    ws: Any = getattr(app_state, "ws_manager", None)
+    if broker is None:
+        return
+
+    direction = signal_payload["direction"].upper()
+    if direction not in ("BUY", "SELL"):
+        return
+
+    # Risk gate + position sizing
+    quantity: float = 1000.0  # minimal fallback lot
+    if risk_manager is not None:
+        try:
+            account_info: Dict[str, Any] = await broker.get_account_info()
+            positions: List[Any] = await broker.get_positions()
+            positions_dicts: List[Dict[str, Any]] = [
+                {
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "current_price": getattr(p, "current_price", 0),
+                }
+                for p in positions
+            ]
+            assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
+            if not assessment.can_trade:
+                logger.info(
+                    "Auto-trade blocked by risk manager: %s", assessment.messages
+                )
+                return
+
+            equity: float = account_info.get("equity", 100_000)
+            sizing: Any = risk_manager.calculate_position_size(
+                symbol=symbol,
+                signal_strength=signal_payload["confidence"],
+                entry_price=signal_payload["entry_price"],
+                stop_loss_price=(
+                    signal_payload["stop_loss"]
+                    or signal_payload["entry_price"] * 0.99
+                ),
+                take_profit_price=(
+                    signal_payload["take_profit"]
+                    or signal_payload["entry_price"] * 1.02
+                ),
+                account_equity=equity,
+                volatility=0.1,
+                existing_positions=positions_dicts,
+            )
+            if not sizing.approved:
+                logger.info("Auto-trade sizing rejected: %s", sizing.reason)
+                return
+            quantity = sizing.recommended_size
+        except Exception as risk_exc:
+            logger.error("Risk check failed in signal engine: %s", risk_exc)
+            return
+
+    # Place order
+    try:
+        order = await broker.place_market_order(
+            symbol=symbol,
+            side=direction.lower(),
+            quantity=quantity,
+        )
+        logger.info(
+            "Auto-trade executed: %s %s confidence=%.2f qty=%s order_id=%s",
+            direction,
+            symbol,
+            signal_payload["confidence"],
+            quantity,
+            order.id,
+        )
+
+        # Compliance log
+        compliance = getattr(app_state, "compliance_manager", None)
+        if compliance is not None:
+            compliance.log_trade(
+                user_id="signal_engine",
+                trade_data={
+                    "symbol": symbol,
+                    "side": direction.lower(),
+                    "quantity": quantity,
+                    "source": "strategy_brain_auto",
+                    "confidence": signal_payload["confidence"],
+                },
+            )
+
+        # Broadcast fill
+        if ws is not None:
+            try:
+                await ws.broadcast_trade(
+                    symbol=symbol,
+                    price=order.average_fill_price or signal_payload["entry_price"],
+                    quantity=quantity,
+                    side=direction.lower(),
+                    trade_id=order.id,
+                )
+            except Exception:
+                pass
+
+    except Exception as order_exc:
+        logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
+
+
 async def _tick(app_state: Any) -> None:
-    """Process one tick for all watched symbols."""
+    """
+    Process one tick for all watched symbols.
+
+    Orchestrates four focused sub-functions:
+      _compute_signal()        — StrategyBrain consensus
+      _compute_ml_probability() — advanced/fallback ML enrichment with macro
+      _publish_and_broadcast() — event bus + WebSocket
+      _execute_if_approved()   — risk filter + auto-trade execution
+    """
     brain: Any = getattr(app_state, "strategy_brain", None)
     if brain is None:
         return
 
-    sym: str
     for sym in _SYMBOLS:
         symbol: str = sym.strip().upper()
+
+        # 1. Fetch OHLCV
         data: Optional[Dict[str, Any]] = await _fetch_market_data(
             symbol, app_state=app_state
         )
         if not data:
             continue
 
-        # ── Run StrategyBrain ────────────────────────────────────────────────
-        result: Dict[str, Any] = brain.analyze_joint(data)
-
-        if not result.get("consensus_reached"):
-            logger.debug("No consensus for %s: %s", symbol, result.get("reason"))
+        # 2. StrategyBrain consensus
+        sig_info = _compute_signal(brain, data, symbol)
+        if sig_info is None:
             continue
 
-        signal: Any = result.get("consensus_signal")
-        if signal is None:
-            continue
+        direction = sig_info["direction"]
+        base_confidence = sig_info["base_confidence"]
+        signal = sig_info["signal"]
 
-        direction: str = (
-            signal.signal_type.value
-            if hasattr(signal.signal_type, "value")
-            else str(signal.signal_type)
+        # 3. ML probability enrichment (advanced model with macro features)
+        ml_probability, model_ver = _compute_ml_probability(
+            data, symbol, base_confidence
         )
-        base_confidence: float = getattr(signal, "confidence", 0.0)
 
-        # ── ML model probability enrichment ──────────────────────────────────
-        # Uses the advanced OOS model (122 stationary features, 68% OOS acc)
-        # when available. Falls back to the basic active model for backward
-        # compatibility. The advanced predictor requires a rolling OHLCV
-        # DataFrame AND a macro_df aligned to the same hourly index.
-        #
-        # CRITICAL FIX (P1): macro_df is now fetched from the MacroStore and
-        # passed to predict_proba(). Without macro features the live model runs
-        # on a degraded feature set — the 68% OOS accuracy was achieved WITH
-        # macro features (DXY, VIX, yields, SPX, COT proxies).
-        ml_probability: float = base_confidence
-        model_ver: str = "none"
-
-        if _ML_AVAILABLE:
-            try:
-                import pandas as pd
-
-                # ── Path 1: Advanced predictor (preferred) ────────────────
-                adv_predictor = get_advanced_predictor()
-                if adv_predictor is not None and adv_predictor.is_available:
-                    prices = data.get("prices", [data["close"]])
-                    highs = data.get("highs", [data["high"]])
-                    lows = data.get("lows", [data["low"]])
-                    volumes = data.get("volumes", [data.get("volume", 0)])
-
-                    # Reconstruct a rolling OHLCV DataFrame from the bar list.
-                    # The broker feed provides up to 100 bars; we need >= 100
-                    # for reliable feature computation.
-                    n = len(prices)
-                    ohlcv_df = pd.DataFrame(
-                        {
-                            # open not tracked per-bar; use close as proxy
-                            "open": prices,
-                            "high": highs if len(highs) == n else prices,
-                            "low": lows if len(lows) == n else prices,
-                            "close": prices,
-                            "volume": volumes if len(volumes) == n else [0.0] * n,
-                        }
-                    )
-                    # Overwrite last bar with actual OHLCV
-                    ohlcv_df.iloc[-1] = [
-                        data["open"],
-                        data["high"],
-                        data["low"],
-                        data["close"],
-                        data.get("volume", 0),
-                    ]
-
-                    # ── Fetch macro features from MacroStore ──────────────
-                    # The advanced model was trained on 122 features including
-                    # DXY, VIX, yields, SPX, and COT proxies. Passing macro_df
-                    # restores the full feature set the model was trained on.
-                    # If the store is empty (no CSVs yet), macro_df is None and
-                    # the predictor falls back to OHLCV-only features with a
-                    # logged warning — this is safe but degrades accuracy.
-                    macro_df: Optional[Any] = None
-                    _store = _get_macro_store()
-                    if _store is not None and len(_store) > 0:
-                        try:
-                            # Give the OHLCV DataFrame a UTC DatetimeIndex so
-                            # MacroStore.align_to_hourly() can forward-fill.
-                            ohlcv_indexed = ohlcv_df.copy()
-                            if not isinstance(ohlcv_indexed.index, pd.DatetimeIndex):
-                                # Build an hourly index ending at now
-                                end_ts = datetime.now(timezone.utc)
-                                freq = pd.tseries.frequencies.to_offset("1h")
-                                idx = pd.date_range(
-                                    end=end_ts,
-                                    periods=len(ohlcv_indexed),
-                                    freq=freq,
-                                    tz="UTC",
-                                )
-                                ohlcv_indexed.index = idx
-                            macro_df = _store.align_to_hourly(ohlcv_indexed)
-                            if macro_df.empty or macro_df.shape[1] == 0:
-                                macro_df = None
-                                logger.debug(
-                                    "MacroStore returned empty alignment for %s — "
-                                    "running advanced model without macro features",
-                                    symbol,
-                                )
-                            else:
-                                logger.debug(
-                                    "MacroStore aligned %d series for %s",
-                                    macro_df.shape[1],
-                                    symbol,
-                                )
-                        except Exception as macro_exc:
-                            logger.warning(
-                                "MacroStore alignment failed for %s: %s — "
-                                "running advanced model without macro features",
-                                symbol,
-                                macro_exc,
-                            )
-                            macro_df = None
-                    else:
-                        logger.debug(
-                            "MacroStore empty for %s — advanced model running on "
-                            "OHLCV features only (accuracy may be lower than 68%%)",
-                            symbol,
-                        )
-
-                    # Pass both ohlcv_df and macro_df — this is the fix for the
-                    # P1 gap where macro features were never passed at inference.
-                    ml_probability = adv_predictor.predict_proba(
-                        ohlcv_df, macro_df=macro_df, symbol=symbol
-                    )
-                    model_ver = adv_predictor.version
-                    logger.debug(
-                        "Advanced ML (%s) prob for %s: %.4f (macro=%s)",
-                        model_ver,
-                        symbol,
-                        ml_probability,
-                        "yes" if macro_df is not None else "no",
-                    )
-
-                else:
-                    # ── Path 2: Basic active model (fallback) ─────────────
-                    active_model = get_active_model()
-                    model_ver = get_model_version()
-                    if active_model is not None:
-                        prices = data.get("prices", [data["close"]])
-                        closes = pd.Series(prices)
-                        feat = {
-                            "close": data["close"],
-                            "open": data["open"],
-                            "high": data["high"],
-                            "low": data["low"],
-                            "volume": data.get("volume", 0),
-                            "ret_1": closes.pct_change(1).iloc[-1]
-                            if len(closes) > 1
-                            else 0,
-                            "ret_5": closes.pct_change(5).iloc[-1]
-                            if len(closes) > 5
-                            else 0,
-                            "ret_20": closes.pct_change(20).iloc[-1]
-                            if len(closes) > 20
-                            else 0,
-                            "vol_20": closes.pct_change().rolling(20).std().iloc[-1]
-                            if len(closes) > 20
-                            else 0,
-                        }
-                        X = pd.DataFrame([feat])
-                        if hasattr(active_model, "predict_proba"):
-                            proba = active_model.predict_proba(X)
-                            ml_probability = (
-                                float(proba[0][1])
-                                if proba.shape[1] > 1
-                                else float(proba[0][0])
-                            )
-                        elif hasattr(active_model, "predict"):
-                            ml_probability = float(active_model.predict(X)[0])
-                        logger.debug(
-                            "Basic ML (%s) prob for %s: %.4f",
-                            model_ver,
-                            symbol,
-                            ml_probability,
-                        )
-
-            except Exception as ml_exc:
-                logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
-
+        # 4. Build signal payload
         signal_payload: Dict[str, Any] = {
             "symbol": symbol,
             "direction": direction,
@@ -346,150 +561,8 @@ async def _tick(app_state: Any) -> None:
             "source": "strategy_brain",
         }
 
-        # ── Publish typed SignalEvent ─────────────────────────────────────────
-        try:
-            from events.typed_events import EventEnvelope, SignalEvent, publish_sync
+        # 5. Publish to event bus + WebSocket
+        await _publish_and_broadcast(app_state, symbol, signal_payload)
 
-            typed_signal = SignalEvent(
-                symbol=symbol,
-                action=direction.upper(),
-                confidence=base_confidence,
-                probability=ml_probability,
-                entry_price=signal_payload["entry_price"],
-                stop_loss=signal_payload["stop_loss"],
-                take_profit=signal_payload["take_profit"],
-                model_version=model_ver,
-            )
-            publish_sync(
-                EventEnvelope.wrap(
-                    source="signal_engine",
-                    payload=typed_signal,
-                    model_version=model_ver,
-                )
-            )
-        except Exception as ev_exc:
-            logger.debug("Typed event publish failed: %s", ev_exc)
-
-        logger.info(
-            "Brain consensus: %s %s confidence=%.2f ml_prob=%.4f model=%s",
-            symbol,
-            direction,
-            base_confidence,
-            ml_probability,
-            model_ver,
-        )
-
-        # ── Broadcast signal over WebSocket ──────────────────────────────────
-        ws = getattr(app_state, "ws_manager", None)
-        if ws is not None:
-            try:
-                await ws.broadcast_signal(symbol, signal_payload)
-            except Exception as ws_exc:
-                logger.warning("Signal broadcast failed: %s", ws_exc)
-
-        # ── Auto-trade if enabled and risk approved ───────────────────────────
-        if not _AUTO_TRADE:
-            continue
-
-        broker: Any = getattr(app_state, "broker", None)
-        risk_manager: Any = getattr(app_state, "risk_manager", None)
-        if broker is None:
-            continue
-
-        # Map signal direction to order side
-        direction = signal_payload["direction"].upper()
-        if direction not in ("BUY", "SELL"):
-            continue
-
-        # Risk gate
-        quantity: float
-        if risk_manager is not None:
-            try:
-                account_info: Dict[str, Any] = await broker.get_account_info()
-                positions: List[Any] = await broker.get_positions()
-                positions_dicts: List[Dict[str, Any]] = [
-                    {
-                        "symbol": p.symbol,
-                        "quantity": p.quantity,
-                        "current_price": getattr(p, "current_price", 0),
-                    }
-                    for p in positions
-                ]
-                assessment: Any = risk_manager.assess_risk(
-                    account_info, positions_dicts
-                )
-                if not assessment.can_trade:
-                    logger.info(
-                        "Auto-trade blocked by risk manager: %s", assessment.messages
-                    )
-                    continue
-
-                # Calculate position size
-                equity: float = account_info.get("equity", 100_000)
-                sizing: Any = risk_manager.calculate_position_size(
-                    symbol=symbol,
-                    signal_strength=signal_payload["confidence"],
-                    entry_price=signal_payload["entry_price"],
-                    stop_loss_price=signal_payload["stop_loss"]
-                    or signal_payload["entry_price"] * 0.99,
-                    take_profit_price=signal_payload["take_profit"]
-                    or signal_payload["entry_price"] * 1.02,
-                    account_equity=equity,
-                    volatility=0.1,
-                    existing_positions=positions_dicts,
-                )
-                if not sizing.approved:
-                    logger.info("Auto-trade sizing rejected: %s", sizing.reason)
-                    continue
-                quantity = sizing.recommended_size
-            except Exception as risk_exc:
-                logger.error("Risk check failed in signal engine: %s", risk_exc)
-                continue
-        else:
-            quantity = 1000.0  # minimal fallback lot
-
-        # Place order
-        try:
-            order = await broker.place_market_order(
-                symbol=symbol,
-                side=direction.lower(),
-                quantity=quantity,
-            )
-            logger.info(
-                "Auto-trade executed: %s %s %s qty=%s order_id=%s",
-                direction,
-                symbol,
-                signal_payload["confidence"],
-                quantity,
-                order.id,
-            )
-
-            # Compliance log
-            compliance = getattr(app_state, "compliance_manager", None)
-            if compliance is not None:
-                compliance.log_trade(
-                    user_id="signal_engine",
-                    trade_data={
-                        "symbol": symbol,
-                        "side": direction.lower(),
-                        "quantity": quantity,
-                        "source": "strategy_brain_auto",
-                        "confidence": signal_payload["confidence"],
-                    },
-                )
-
-            # Broadcast fill
-            if ws is not None:
-                try:
-                    await ws.broadcast_trade(
-                        symbol=symbol,
-                        price=order.average_fill_price or signal_payload["entry_price"],
-                        quantity=quantity,
-                        side=direction.lower(),
-                        trade_id=order.id,
-                    )
-                except Exception:
-                    pass
-
-        except Exception as order_exc:
-            logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
+        # 6. Auto-trade if enabled and risk approved
+        await _execute_if_approved(app_state, symbol, signal_payload)
