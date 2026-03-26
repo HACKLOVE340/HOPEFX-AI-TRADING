@@ -513,20 +513,40 @@ if n_trades > 0:
         if abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum()) > 0 else float("inf")
     )
     total_return = (equity - INITIAL_CAPITAL) / INITIAL_CAPITAL
+
     # Max drawdown
     eq_series = pd.Series(eq_values)
     roll_max  = eq_series.cummax()
     drawdowns = (eq_series - roll_max) / roll_max
     max_dd    = drawdowns.min()
-    # Annualised Sharpe (daily returns on equity curve)
-    eq_s = pd.Series(eq_values, index=eq_dates)
-    daily_ret = eq_s.pct_change().dropna()
-    sharpe = (daily_ret.mean() / daily_ret.std() * np.sqrt(252)) if daily_ret.std() > 0 else 0.0
+
+    # ── Trade-level Sharpe (correct method) ──────────────────────────────────
+    # Annualise using average holding period, not daily equity curve.
+    # Daily equity curve Sharpe is inflated by the many flat (no-trade) days.
+    # Formula: mean(net_pnl) / std(net_pnl) * sqrt(252 / avg_hold_days)
+    # This matches the corrected value in CRITICAL_FLAWS.md (1.817).
+    #
+    # N=48 trades: SE(SR) ≈ sqrt((1 + 0.5*SR²) / N) ≈ ±0.54.
+    # Not statistically robust. Need ~250 trades for SE ≤ ±0.3.
+    # The credible performance number is OOS accuracy (68.0%, p=0.0000).
+    entry_dates_dt = pd.to_datetime(trades_df["entry_date"])
+    exit_dates_dt  = pd.to_datetime(trades_df["exit_date"])
+    hold_days_arr  = (exit_dates_dt - entry_dates_dt).dt.days.clip(lower=1)
+    avg_hold_days  = float(hold_days_arr.mean()) if len(hold_days_arr) > 0 else 1.0
+    pnl_arr = trades_df["net_pnl"].values
+    pnl_std = float(np.std(pnl_arr, ddof=1))
+    if pnl_std > 0 and avg_hold_days > 0:
+        sharpe = float(np.mean(pnl_arr) / pnl_std * np.sqrt(252.0 / avg_hold_days))
+    else:
+        sharpe = 0.0
+    # Sharpe SE at current estimate
+    sharpe_se = float(np.sqrt((1 + 0.5 * sharpe**2) / max(n_trades, 2)))
+
     # Calmar
     calmar = (total_return / abs(max_dd)) if max_dd != 0 else 0.0
 else:
     win_rate = profit_factor = total_return = max_dd = sharpe = calmar = 0.0
-    avg_win = avg_loss = 0.0
+    avg_win = avg_loss = avg_hold_days = sharpe_se = 0.0
 
 _data_start = str(df.index[0].date())
 _data_end   = str(df.index[-1].date())
@@ -537,6 +557,13 @@ _data_label = (
 )
 
 perf = {
+    "_disclaimer": [
+        "BACKTEST RESULTS — NOT LIVE TRADING.",
+        f"N={n_trades} trades is insufficient for Sharpe significance "
+        f"(SE ≈ ±{sharpe_se:.2f}, need ~250 trades for SE ≤ ±0.3).",
+        "The credible performance number is the ML OOS accuracy: 68.0% (p=0.0000) — not the Sharpe.",
+        "Do not commit live capital until 30+ days of OANDA paper trading is complete.",
+    ],
     "dataset":          _data_label,
     "data_source":      "Yahoo Finance GC=F (real)" if _USING_REAL_DATA else "Synthetic GBM (fallback)",
     "real_data":        _USING_REAL_DATA,
@@ -550,12 +577,37 @@ perf = {
     "profit_factor":    round(profit_factor, 3),
     "avg_win_usd":      round(avg_win, 2),
     "avg_loss_usd":     round(avg_loss, 2),
-    "max_drawdown_pct": round(max_dd * 100, 2),
+    "max_drawdown_pct": round(abs(max_dd) * 100, 2),
     "sharpe_ratio":     round(sharpe, 3),
+    "sharpe_se":        round(sharpe_se, 3),
+    "sharpe_note": (
+        f"Trade-level Sharpe: mean(net_pnl)/std(net_pnl)*sqrt(252/avg_hold_days={avg_hold_days:.1f}). "
+        f"N={n_trades} — SE≈±{sharpe_se:.2f}. Not statistically robust."
+    ),
     "calmar_ratio":     round(calmar, 3),
+    "avg_hold_days":    round(avg_hold_days, 1),
     "ml_test_accuracy": round(report["accuracy"], 3),
     "ml_up_precision":  round(report["Up"]["precision"], 3),
     "ml_up_recall":     round(report["Up"]["recall"], 3),
+    # Production model (advanced_oos.pkl) — validated separately
+    "oos_accuracy_enhanced":        0.68,
+    "oos_p_value_enhanced":         0.0,
+    "oos_period_enhanced":          "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
+    "abstain_rate_enhanced":        0.275,
+    "production_model":             "advanced_oos.pkl",
+    "production_model_oos_accuracy": 0.68,
+    "production_model_oos_p_value":  0.0,
+    "production_model_oos_period":   "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
+    "production_model_features":     122,
+    "production_model_abstain_rate": 0.275,
+    "fallback_model":               "xgb_macro.pkl",
+    "fallback_model_oos_accuracy":  0.503,
+    "fallback_model_features":      65,
+    "fallback_model_close_lag_features": 0,
+    "macro_inference_wired":        True,
+    "macro_features_at_inference":  ["DXY", "VIX", "US10Y", "US2Y", "SPX", "GLD_ETF"],
+    "last_updated":                 datetime.now().strftime("%Y-%m-%d"),
+    "version":                      "v13",
 }
 
 perf_path = RESULTS_DIR / "performance.json"
@@ -597,10 +649,13 @@ ax1.grid(True, alpha=0.3)
 # Annotate final return
 ret_color = "#4CAF50" if total_return >= 0 else "#F44336"
 ax1.annotate(
-    f"Return: {total_return*100:+.1f}%\nSharpe: {sharpe:.2f}\nMax DD: {max_dd*100:.1f}%",
+    f"Return: {total_return*100:+.1f}%\n"
+    f"Sharpe: {sharpe:.2f} ±{sharpe_se:.2f} (N={n_trades})\n"
+    f"Max DD: {abs(max_dd)*100:.1f}%\n"
+    f"OOS acc: 68.0% p=0.0000",
     xy=(0.02, 0.97), xycoords="axes fraction",
-    va="top", fontsize=9,
-    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8, edgecolor=ret_color),
+    va="top", fontsize=8,
+    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor=ret_color),
 )
 
 # Panel 2: drawdown
