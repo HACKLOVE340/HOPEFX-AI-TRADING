@@ -118,6 +118,30 @@ def _load_models() -> None:
     except Exception:
         pass  # Sentry unavailable — CRITICAL log above is the fallback alert
 
+    # Post Discord alert so community operators are notified immediately
+    try:
+        import asyncio as _asyncio
+        from notifications.discord_bot import discord_signal_bot
+
+        async def _post_discord_fallback():
+            await discord_signal_bot.post_ml_fallback_alert(
+                reason=f"advanced_oos.pkl not loadable from {_SAVED}",
+                fallback_model="xgb_macro.pkl",
+                fallback_accuracy=0.503,
+            )
+
+        # Fire-and-forget: post without blocking model loading
+        try:
+            loop = _asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_post_discord_fallback())
+            else:
+                loop.run_until_complete(_post_discord_fallback())
+        except RuntimeError:
+            pass  # No event loop — Discord alert skipped
+    except Exception:
+        pass  # Discord unavailable — CRITICAL log is the fallback alert
+
     # ── Priority 2: basic macro XGBoost (65 stationary features, ~50% OOS) ──
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
     _macro_rf = _try_load(_SAVED / "rf_macro.pkl")
