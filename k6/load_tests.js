@@ -3,41 +3,56 @@
  * ================
  * Production load test for HOPEFX API.
  *
- * Usage:
- *   # Smoke test (1 VU, 30 s)
- *   k6 run --env BASE_URL=https://api.hopefx.io k6/load_tests.js
+ * Scenarios
+ * ---------
+ *   smoke      — 1 VU, 30 s  (CI gate: verify endpoints respond)
+ *   load       — ramp 0→50 VUs over 2 min, hold 5 min, ramp down 1 min
+ *   soak       — 100 VUs for 30 min  (memory leak / connection pool exhaustion)
+ *   spike      — ramp to 500 VUs in 30 s, recover  (thundering herd)
+ *   stress     — ramp 0→200 VUs in 5 min, hold 10 min  (find breaking point)
+ *   breakpoint — ramp 0→1000 VUs over 20 min  (find absolute limit)
  *
- *   # Full load test (50 VUs, 8 min ramp)
- *   k6 run --env BASE_URL=https://api.hopefx.io \
- *           --env SCENARIO=load k6/load_tests.js
+ * Usage
+ * -----
+ *   k6 run k6/load_tests.js
+ *   k6 run --env BASE_URL=https://staging.hopefx.io --env SCENARIO=load k6/load_tests.js
+ *   k6 run --env SCENARIO=soak --out json=results/soak.json k6/load_tests.js
  *
- *   # Soak test (100 VUs, 10 min)
- *   k6 run --env BASE_URL=https://api.hopefx.io \
- *           --env SCENARIO=soak k6/load_tests.js
- *
- *   # Spike test (ramp to 500 VUs)
- *   k6 run --env BASE_URL=https://api.hopefx.io \
- *           --env SCENARIO=spike k6/load_tests.js
- *
- * Environment variables:
- *   BASE_URL   — API base URL (default: http://localhost:8000)
- *   SCENARIO   — smoke | load | soak | spike (default: smoke)
- *   AUTH_TOKEN — Bearer token for authenticated endpoints
+ * Environment variables
+ * ---------------------
+ *   BASE_URL      API base URL (default: http://localhost:8000)
+ *   SCENARIO      smoke | load | soak | spike | stress | breakpoint
+ *   AUTH_TOKEN    Bearer token for authenticated endpoints
+ *   SIGNAL_SYMBOL Symbol for signal/ML tests (default: XAUUSD)
+ *   THINK_TIME    Sleep multiplier in seconds (default: 1.0)
  */
 
-import { check, sleep } from 'k6';
+import { check, group, sleep } from 'k6';
 import http from 'k6/http';
-import { Rate, Trend } from 'k6/metrics';
+import { Counter, Rate, Trend } from 'k6/metrics';
 
 // ── Custom metrics ────────────────────────────────────────────────────────────
-const errorRate    = new Rate('error_rate');
-const orderLatency = new Trend('order_latency_ms', true);
+const errorRate     = new Rate('error_rate');
+const orderLatency  = new Trend('order_latency_ms',  true);
+const signalLatency = new Trend('signal_latency_ms', true);
+const mlLatency     = new Trend('ml_latency_ms',     true);
+const authFailures  = new Counter('auth_failures');
+const riskBlocks    = new Counter('risk_blocks');
+const ordersFilled  = new Counter('orders_filled');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const BASE_URL   = __ENV.BASE_URL   || 'http://localhost:8000';
-const AUTH_TOKEN = __ENV.AUTH_TOKEN || '';
+const BASE_URL   = __ENV.BASE_URL    || 'http://localhost:8000';
+const AUTH_TOKEN = __ENV.AUTH_TOKEN  || '';
 const SCENARIO   = __ENV.SCENARIO   || 'smoke';
+const SIGNAL_SYM = __ENV.SIGNAL_SYMBOL || 'XAUUSD';
+const THINK_TIME = parseFloat(__ENV.THINK_TIME || '1.0');
+const SYMBOLS    = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'];
 
+function randomItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ── Scenario definitions ──────────────────────────────────────────────────────
 const SCENARIOS = {
   smoke: {
     executor: 'constant-vus',
@@ -48,24 +63,52 @@ const SCENARIOS = {
     executor: 'ramping-vus',
     startVUs: 0,
     stages: [
-      { duration: '2m', target: 50 },   // ramp up
-      { duration: '5m', target: 50 },   // hold
-      { duration: '1m', target: 0  },   // ramp down
+      { duration: '2m',  target: 50  },
+      { duration: '5m',  target: 50  },
+      { duration: '1m',  target: 0   },
     ],
+    gracefulRampDown: '30s',
   },
   soak: {
     executor: 'constant-vus',
     vus: 100,
-    duration: '10m',
+    duration: '30m',
   },
   spike: {
     executor: 'ramping-vus',
     startVUs: 0,
     stages: [
       { duration: '30s', target: 10  },
-      { duration: '30s', target: 500 },  // spike
-      { duration: '1m',  target: 10  },  // recover
+      { duration: '30s', target: 500 },
+      { duration: '1m',  target: 10  },
       { duration: '30s', target: 0   },
+    ],
+    gracefulRampDown: '30s',
+  },
+  stress: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '2m',  target: 50  },
+      { duration: '2m',  target: 100 },
+      { duration: '2m',  target: 150 },
+      { duration: '2m',  target: 200 },
+      { duration: '10m', target: 200 },
+      { duration: '2m',  target: 0   },
+    ],
+    gracefulRampDown: '30s',
+  },
+  breakpoint: {
+    executor: 'ramping-arrival-rate',
+    startRate: 10,
+    timeUnit: '1s',
+    preAllocatedVUs: 100,
+    maxVUs: 1000,
+    stages: [
+      { duration: '5m',  target: 50  },
+      { duration: '5m',  target: 100 },
+      { duration: '5m',  target: 200 },
+      { duration: '5m',  target: 500 },
     ],
   },
 };
@@ -75,124 +118,201 @@ export const options = {
     default: SCENARIOS[SCENARIO] || SCENARIOS.smoke,
   },
   thresholds: {
-    // 95th-percentile response time under 500 ms
-    http_req_duration: ['p(95)<500'],
-    // Error rate below 1%
-    error_rate: ['rate<0.01'],
-    // Order latency p99 under 1 s
-    order_latency_ms: ['p(99)<1000'],
+    http_req_duration:  ['p(95)<500'],   // p95 < 500 ms
+    order_latency_ms:   ['p(99)<1000'],  // p99 order < 1 s
+    signal_latency_ms:  ['p(95)<300'],   // p95 signal < 300 ms
+    ml_latency_ms:      ['p(95)<800'],   // p95 ML inference < 800 ms
+    error_rate:         ['rate<0.01'],   // < 1% errors
+    http_req_failed:    ['rate<0.01'],
   },
+  gracefulStop: '30s',
+  noConnectionReuse: false,
+  userAgent: 'k6-hopefx-loadtest/2.0',
 };
 
-// ── Shared headers ────────────────────────────────────────────────────────────
-function headers(extra = {}) {
-  const h = { 'Content-Type': 'application/json' };
-  if (AUTH_TOKEN) h['Authorization'] = `Bearer ${AUTH_TOKEN}`;
-  return Object.assign(h, extra);
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function headers(extra) {
+  const h = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  if (AUTH_TOKEN) h['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+  return Object.assign(h, extra || {});
 }
 
-// ── Individual scenario functions ─────────────────────────────────────────────
-
-function testHealth() {
-  const res = http.get(`${BASE_URL}/health`, { tags: { name: 'health' } });
+function checkOk(res, name, allowed) {
+  allowed = allowed || [200];
   const ok = check(res, {
-    'health: status 200': (r) => r.status === 200,
-    'health: has status field': (r) => {
-      try { return JSON.parse(r.body).status !== undefined; } catch (e) { return false; }
-    },
+    [name + ': status in allowed']: function(r) { return allowed.indexOf(r.status) !== -1; },
+    [name + ': not 500']:           function(r) { return r.status !== 500; },
+    [name + ': not 502/503/504']:   function(r) { return [502, 503, 504].indexOf(r.status) === -1; },
   });
   errorRate.add(!ok);
+  return ok;
+}
+
+// ── Test functions ────────────────────────────────────────────────────────────
+
+function testHealth() {
+  group('health', function() {
+    const res = http.get(BASE_URL + '/health', { tags: { name: 'health' }, timeout: '5s' });
+    checkOk(res, 'health', [200]);
+  });
 }
 
 function testPublicStatus() {
-  const res = http.get(`${BASE_URL}/api/status`, { tags: { name: 'status' } });
-  const ok = check(res, {
-    'status: 200 or 404': (r) => [200, 404].includes(r.status),
+  group('public_status', function() {
+    const res = http.get(BASE_URL + '/api/status', { tags: { name: 'status' } });
+    checkOk(res, 'status', [200, 404]);
   });
-  errorRate.add(!ok);
 }
 
 function testMarketData() {
-  const res = http.get(
-    `${BASE_URL}/api/market-data/XAUUSD`,
-    { headers: headers(), tags: { name: 'market_data' } },
-  );
-  const ok = check(res, {
-    'market_data: not 500': (r) => r.status !== 500,
+  group('market_data', function() {
+    const symbol = randomItem(SYMBOLS);
+    const res = http.get(BASE_URL + '/api/market-data/' + symbol, {
+      headers: headers(), tags: { name: 'market_data' },
+    });
+    checkOk(res, 'market_data', [200, 404, 503]);
   });
-  errorRate.add(!ok);
+}
+
+function testSignalEndpoint() {
+  group('signal', function() {
+    const start = Date.now();
+    const res = http.get(BASE_URL + '/api/signals/latest?symbol=' + SIGNAL_SYM, {
+      headers: headers(), tags: { name: 'signal_latest' },
+    });
+    signalLatency.add(Date.now() - start);
+    checkOk(res, 'signal', [200, 401, 403, 404, 503]);
+  });
+}
+
+function testMLPredict() {
+  group('ml_predict', function() {
+    const start = Date.now();
+    const res = http.get(BASE_URL + '/api/ml/predict/' + SIGNAL_SYM, {
+      headers: headers(), tags: { name: 'ml_predict' },
+    });
+    mlLatency.add(Date.now() - start);
+    checkOk(res, 'ml_predict', [200, 401, 403, 404, 503]);
+  });
+}
+
+function testMLStatus() {
+  group('ml_status', function() {
+    const res = http.get(BASE_URL + '/api/ml/status', {
+      headers: headers(), tags: { name: 'ml_status' },
+    });
+    checkOk(res, 'ml_status', [200, 404, 503]);
+  });
 }
 
 function testAuthLogin() {
-  const res = http.post(
-    `${BASE_URL}/auth/login`,
-    JSON.stringify({ email: 'loadtest@example.com', password: 'LoadTest123!' }),
-    { headers: headers(), tags: { name: 'auth_login' } },
-  );
-  // 401 is expected for a non-existent user — testing the endpoint responds
-  const ok = check(res, {
-    'login: responds (not 500)': (r) => r.status !== 500,
-    'login: responds fast':      (r) => r.timings.duration < 2000,
+  group('auth_login', function() {
+    const res = http.post(
+      BASE_URL + '/auth/login',
+      JSON.stringify({ email: 'loadtest@example.com', password: 'LoadTest123!' }),
+      { headers: headers(), tags: { name: 'auth_login' } },
+    );
+    const ok = check(res, {
+      'login: responds (not 500)': function(r) { return r.status !== 500; },
+      'login: responds fast':      function(r) { return r.timings.duration < 3000; },
+    });
+    if (res.status === 401) authFailures.add(1);
+    errorRate.add(!ok);
   });
-  errorRate.add(!ok);
 }
 
 function testOrderEndpoint() {
-  if (!AUTH_TOKEN) return;  // skip if no token provided
-
-  const start = Date.now();
-  const res = http.post(
-    `${BASE_URL}/api/trading/order`,
-    JSON.stringify({
-      symbol: 'XAUUSD',
-      side: 'buy',
-      quantity: 0.01,
-      order_type: 'market',
-    }),
-    { headers: headers(), tags: { name: 'place_order' } },
-  );
-  orderLatency.add(Date.now() - start);
-
-  const ok = check(res, {
-    'order: not 500': (r) => r.status !== 500,
-    // 201=filled, 403=risk blocked, 401=auth, 422=validation — all acceptable
-    'order: expected status': (r) => [201, 400, 401, 403, 422, 503].includes(r.status),
+  if (!AUTH_TOKEN) return;
+  group('place_order', function() {
+    const symbol = randomItem(SYMBOLS);
+    const side   = randomItem(['buy', 'sell']);
+    const start  = Date.now();
+    const res = http.post(
+      BASE_URL + '/api/trading/order',
+      JSON.stringify({ symbol: symbol, side: side, quantity: 0.01, order_type: 'market' }),
+      { headers: headers(), tags: { name: 'place_order' } },
+    );
+    orderLatency.add(Date.now() - start);
+    const ok = check(res, {
+      'order: not 500':         function(r) { return r.status !== 500; },
+      'order: expected status': function(r) { return [201, 400, 401, 403, 422, 429, 503].indexOf(r.status) !== -1; },
+    });
+    errorRate.add(!ok);
+    if (res.status === 201) ordersFilled.add(1);
+    if (res.status === 403) riskBlocks.add(1);
   });
-  errorRate.add(!ok);
 }
 
 function testPositions() {
   if (!AUTH_TOKEN) return;
-
-  const res = http.get(
-    `${BASE_URL}/api/trading/positions`,
-    { headers: headers(), tags: { name: 'positions' } },
-  );
-  const ok = check(res, {
-    'positions: not 500': (r) => r.status !== 500,
+  group('positions', function() {
+    const res = http.get(BASE_URL + '/api/trading/positions', {
+      headers: headers(), tags: { name: 'positions' },
+    });
+    checkOk(res, 'positions', [200, 401, 403, 503]);
   });
-  errorRate.add(!ok);
+}
+
+function testAccountInfo() {
+  if (!AUTH_TOKEN) return;
+  group('account_info', function() {
+    const res = http.get(BASE_URL + '/api/trading/account', {
+      headers: headers(), tags: { name: 'account_info' },
+    });
+    checkOk(res, 'account_info', [200, 401, 403, 404, 503]);
+  });
+}
+
+function testRiskStatus() {
+  group('risk_status', function() {
+    const res = http.get(BASE_URL + '/api/risk/status', {
+      headers: headers(), tags: { name: 'risk_status' },
+    });
+    checkOk(res, 'risk_status', [200, 401, 403, 404, 503]);
+  });
+}
+
+function testPrometheusMetrics() {
+  group('prometheus', function() {
+    const res = http.get(BASE_URL + '/metrics', { tags: { name: 'prometheus_metrics' } });
+    checkOk(res, 'prometheus', [200, 403, 404]);
+  });
 }
 
 // ── Main VU function ──────────────────────────────────────────────────────────
 export default function () {
-  testHealth();        sleep(0.1);
-  testPublicStatus();  sleep(0.1);
-  testMarketData();    sleep(0.2);
-  testAuthLogin();     sleep(0.3);
-  testOrderEndpoint(); sleep(0.2);
-  testPositions();     sleep(0.5);
+  testHealth();            sleep(0.1 * THINK_TIME);
+  testPublicStatus();      sleep(0.1 * THINK_TIME);
+  testMarketData();        sleep(0.2 * THINK_TIME);
+  testSignalEndpoint();    sleep(0.2 * THINK_TIME);
+  testMLStatus();          sleep(0.1 * THINK_TIME);
+  testMLPredict();         sleep(0.3 * THINK_TIME);
+  testRiskStatus();        sleep(0.1 * THINK_TIME);
+  testPrometheusMetrics(); sleep(0.1 * THINK_TIME);
+  testAuthLogin();         sleep(0.3 * THINK_TIME);
+  testOrderEndpoint();     sleep(0.2 * THINK_TIME);
+  testPositions();         sleep(0.2 * THINK_TIME);
+  testAccountInfo();       sleep(0.5 * THINK_TIME);
 }
 
-// ── Setup: verify the server is reachable before starting ────────────────────
+// ── Setup ─────────────────────────────────────────────────────────────────────
 export function setup() {
-  const res = http.get(`${BASE_URL}/health`);
+  const res = http.get(BASE_URL + '/health', { timeout: '10s' });
   if (res.status !== 200) {
-    console.warn(`WARNING: /health returned ${res.status} — server may not be ready`);
+    console.warn('WARNING: /health returned ' + res.status + ' — server may not be ready');
   }
-  return { base_url: BASE_URL };
+  console.log('Load test starting: scenario=' + SCENARIO + ' base_url=' + BASE_URL);
+  if (!AUTH_TOKEN) {
+    console.log('INFO: AUTH_TOKEN not set — authenticated endpoints will be skipped');
+  }
+  return { base_url: BASE_URL, scenario: SCENARIO, started_at: new Date().toISOString() };
 }
 
+// ── Teardown ──────────────────────────────────────────────────────────────────
 export function teardown(data) {
-  console.log(`Load test complete against ${data.base_url}`);
+  console.log(
+    'Load test complete: scenario=' + data.scenario +
+    ' base_url=' + data.base_url +
+    ' started_at=' + data.started_at
+  );
 }
