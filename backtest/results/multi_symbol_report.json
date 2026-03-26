@@ -1,0 +1,68 @@
+{
+  "run_at": "2026-03-26T17:09:39.895813+00:00",
+  "years": 3,
+  "oos_frac": 0.4,
+  "target_n": 600,
+  "symbols": [
+    {
+      "symbol": "XAU/USD",
+      "ticker": "GC=F",
+      "n_trades": 101,
+      "win_rate": 0.4455,
+      "mean_pnl_pct": -0.00256,
+      "std_pnl_pct": 0.01544,
+      "sharpe": -2.6318,
+      "max_drawdown": 0.285,
+      "accuracy": 0.4489,
+      "f1": 0.5268,
+      "auc": 0.4505,
+      "oos_bars": 176,
+      "train_bars": 264,
+      "feature_count": 154
+    },
+    {
+      "symbol": "BTC/USD",
+      "ticker": "BTC-USD",
+      "n_trades": 62,
+      "win_rate": 0.5323,
+      "mean_pnl_pct": 0.003234,
+      "std_pnl_pct": 0.015414,
+      "sharpe": 3.3304,
+      "max_drawdown": 0.1343,
+      "accuracy": 0.4602,
+      "f1": 0.492,
+      "auc": 0.4903,
+      "oos_bars": 176,
+      "train_bars": 264,
+      "feature_count": 154
+    },
+    {
+      "symbol": "ETH/USD",
+      "ticker": "ETH-USD",
+      "n_trades": 37,
+      "win_rate": 0.4865,
+      "mean_pnl_pct": -7.4e-05,
+      "std_pnl_pct": 0.016328,
+      "sharpe": -0.0722,
+      "max_drawdown": 0.117,
+      "accuracy": 0.5739,
+      "f1": 0.5714,
+      "auc": 0.5625,
+      "oos_bars": 176,
+      "train_bars": 264,
+      "feature_count": 154
+    }
+  ],
+  "pooled": {
+    "n_total_trades": 200,
+    "pooled_sharpe": -0.3291,
+    "pooled_sharpe_se": 0.0726,
+    "pooled_mean_pnl": -0.000327,
+    "pooled_std_pnl": 0.015764,
+    "sharpe_gate_passed": false,
+    "sharpe_credible": true,
+    "target_n": 600,
+    "n_required_for_se_010": 106,
+    "message": "Sharpe gate BLOCKED: N=200 trades, SE=0.073. Need N>=600 (SE<=0.10 requires N>=106)."
+  }
+}
