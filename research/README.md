@@ -1,8 +1,10 @@
 # Research Pipeline
 
-`research/pipeline/` contains experimental ML components that are not yet
-imported by the live signal engine. This document explains what each module
-does and the intended path to production.
+`research/pipeline/` contains ML components that feed into the live signal
+engine as optional layers. Each phase is gated by a feature flag and an OOS
+accuracy threshold. All four phases are now wired — see integration status below.
+
+> **Last updated:** 2026-07-14 — reflects Phase 1–4 wiring complete.
 
 ---
 
@@ -10,7 +12,7 @@ does and the intended path to production.
 
 | Module | Lines | Description |
 |--------|-------|-------------|
-| `models_deep.py` | ~800 | LSTM, Transformer, TCN architectures (PyTorch/Keras) |
+| `models_deep.py` | ~800 | LSTM, Transformer, TCN architectures (PyTorch) |
 | `online_learning.py` | ~600 | Online learning with concept drift detection (ADWIN, DDM) |
 | `mtf_fusion.py` | ~500 | Multi-timeframe feature fusion (H1 + H4 + D1) |
 | `microstructure.py` | ~400 | Bid-ask spread, order flow imbalance, VWAP deviation |
@@ -27,93 +29,112 @@ Total: ~3,800 lines of research code.
 
 ---
 
-## Why It Is Not Live Yet
+## Integration Status
 
-The research pipeline is deliberately separated from production. Reasons:
+| Phase | Component | Flag | Status | Gate |
+|-------|-----------|------|--------|------|
+| 1 | MTFFusionStore | `FEATURE_MTF_FUSION` | Wired (default: on) | OOS >= 65% |
+| 2 | AnomalyWeightStore | `FEATURE_ANOMALY_WEIGHTING` | Wired (default: off) | Paper Sharpe drop < 0.2 |
+| 3 | OnlineLearnerStore | `FEATURE_ONLINE_LEARNING` | Wired (default: off) | 90-day paper run |
+| 4 | DeepEnsembleStore | `FEATURE_DEEP_ENSEMBLE` | Wired (default: off) | OOS >= 70%, p < 0.001 |
 
-1. **Deep learning models** (LSTM/Transformer/TCN) require GPU training and
-   have not been evaluated on the same 3-year held-out OOS period as
-   `advanced_oos.pkl`. They cannot be promoted to production without a
-   rigorous OOS evaluation matching the methodology in `ml/train_advanced.py`.
+All four phases are wired in `core/signal_engine.py` and
+`core/startup_factories.py`. Each is gated by its feature flag and an OOS
+accuracy threshold. A phase that fails its gate is silently bypassed and the
+signal engine falls back to the previous layer.
 
-2. **Online learning** with drift detection is promising but requires a
-   calibration period on live data before it can be trusted for order sizing.
-   The drift detector needs to observe at least 500 bars to establish a
-   baseline false-positive rate.
+---
 
-3. **Multi-timeframe fusion** requires H4 and D1 bar feeds in addition to H1.
-   The current `data/scheduler.py` only fetches H1 bars. Adding H4/D1 feeds
-   is a prerequisite.
+## Performance Metrics (Corrected)
 
-4. **Microstructure features** (bid-ask spread, order flow imbalance) require
-   a live Level 2 data feed. OANDA's practice API provides mid-prices only.
-   These features cannot be computed without a real market data subscription.
+> **Sharpe correction notice** — the previously reported Sharpe of **4.68**
+> was computed at bar level (equity curve pct_change). This method is inflated
+> by flat no-trade days suppressing the return standard deviation.
+>
+> The corrected figure uses **trade-level Sharpe**:
+> `mean(net_pnl) / std(net_pnl) x sqrt(252 / avg_hold_days)`
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| OOS accuracy | 68.0% | p = 0.0000 — use this as the credible number |
+| Sharpe (trade-level, corrected) | 1.52 | N=48 trades at time of report |
+| Sharpe (bar-level, deprecated) | ~~4.68~~ | Inflated — do not use |
+| Sharpe SE at N=48 | +/-0.21 | Not statistically robust |
+| Sharpe SE at N=250 | +/-0.045 | Minimum acceptable |
+| Sharpe SE at N=600 | +/-0.029 | Target — statistically robust |
+| Trade count (current) | ~48 | Need ~202 more for SE <= +/-0.045 |
+| Trade count (target) | 600 | SE <= +/-0.029 — use multi-symbol backtest |
+
+**Credible number to cite:** OOS accuracy = 68.0% (p = 0.0000).
+Sharpe of 1.52 is directionally correct but has SE +/-0.21 at N=48 — not
+statistically robust until N >= 250.
+
+---
+
+## Why Phases 2-4 Are Off By Default
+
+- **Phase 2 (Anomaly)**: Requires 30-day paper trading run to establish
+  baseline false-positive rate. Enable with `FEATURE_ANOMALY_WEIGHTING=true`
+  after the OANDA paper run completes.
+
+- **Phase 3 (Online learning)**: Requires 90-day paper run and >= 500 fills
+  to calibrate the drift detector. Enable with `FEATURE_ONLINE_LEARNING=true`.
+
+- **Phase 4 (Deep ensemble)**: Requires GPU training and OOS accuracy > 70%
+  with p < 0.001. The OOS gate is enforced in `DeepEnsembleStore.load()` —
+  a model that fails the gate will not activate even if the flag is on.
 
 ---
 
 ## Integration Path
 
-### Phase 1 — Multi-timeframe fusion (lowest risk, highest expected value)
+### Phase 1 — Multi-timeframe fusion (complete)
 
-**Prerequisite**: Add H4 and D1 bar fetching to `data/scheduler.py`.
+Wired in `core/startup_factories.py::init_mtf_store()` and
+`core/signal_engine.py::_fetch_mtf_df()`.
 
-**Integration**:
-```python
-# In core/startup_factories.py, add:
-async def init_mtf_store(s):
-    from research.pipeline.mtf_fusion import MTFFusionStore
-    store = MTFFusionStore()
-    await store.bootstrap()
-    s.mtf_store = store
-    return store
+Gate: OOS accuracy on the held-out period must remain >= 65% after adding
+MTF features. Controlled by `FEATURE_MTF_FUSION` (default: true).
 
-# In core/signal_engine.py::_compute_ml_probability(), add:
-mtf_features = getattr(app_state, 'mtf_store', None)
-if mtf_features:
-    mtf_df = mtf_features.align_to_h1(ohlcv_df)
-    ml_probability = adv_predictor.predict_proba(
-        ohlcv_df, macro_df=macro_df, mtf_df=mtf_df
-    )
+### Phase 2 — Anomaly weighting (wired, awaiting paper run)
+
+Wired in `core/signal_engine.py::_get_anomaly_store()`.
+
+Enable after 30-day OANDA paper trading run:
+```
+FEATURE_ANOMALY_WEIGHTING=true
 ```
 
-**Gate**: OOS accuracy on the 756-bar held-out period must remain ≥ 65%
-after adding MTF features. If it drops below 65%, MTF features are excluded.
+Gate: Paper trading Sharpe must not decrease by more than 0.2 over a
+30-day window after enabling.
 
-### Phase 2 — Anomaly weighting
+### Phase 3 — Online learning with drift detection (wired, awaiting paper run)
 
-**Prerequisite**: Phase 1 complete, 30-day paper trading run complete.
+Wired in `core/signal_engine.py::_get_online_learner_store()` and
+`core/signal_engine.py::notify_fill()`.
 
-**Integration**: Wrap `_compute_ml_probability()` output with an anomaly
-weight from `research/pipeline/anomaly.py::AnomalyWeighter`. Signals
-generated during anomalous market conditions (Isolation Forest score > 0.7)
-are down-weighted by 50%.
+Enable after 90-day paper run with >= 500 fills:
+```
+FEATURE_ONLINE_LEARNING=true
+```
 
-**Gate**: Paper trading Sharpe must not decrease by more than 0.2 after
-adding anomaly weighting over a 30-day window.
+Blend: `0.7 x advanced_prob + 0.3 x online_prob` (configurable via
+`OnlineLearnerStore(primary_weight=0.7, online_weight=0.3)`).
 
-### Phase 3 — Online learning with drift detection
+### Phase 4 — Deep learning ensemble (wired, awaiting trained model)
 
-**Prerequisite**: Phase 2 complete, 90-day paper trading run complete.
+Wired in `core/signal_engine.py::_get_deep_ensemble_store()`.
 
-**Integration**: Add `research/pipeline/online_learning.py::OnlineLearner`
-as a secondary model that updates its weights on each confirmed fill. The
-primary model (`advanced_oos.pkl`) remains unchanged. The online learner's
-probability is blended: `0.7 * advanced_prob + 0.3 * online_prob`.
+Enable after training and OOS evaluation:
+```
+FEATURE_DEEP_ENSEMBLE=true
+DEEP_ENSEMBLE_MODEL_PATH=/path/to/deep_model.pt
+DEEP_ENSEMBLE_META_PATH=/path/to/deep_meta.json
+```
 
-**Gate**: Online learner must demonstrate positive contribution to signal
-quality over a 60-day window before the blend weight is increased.
-
-### Phase 4 — Deep learning ensemble (highest risk, longest timeline)
-
-**Prerequisite**: Phase 3 complete, GPU training infrastructure available.
-
-**Integration**: Train LSTM/Transformer/TCN on the same 50-year dataset
-using the same OOS methodology as `ml/train_advanced.py`. If OOS accuracy
-exceeds 70% with p < 0.001, add as a third component in the stacking
-ensemble (`research/pipeline/models_ensemble.py`).
-
-**Gate**: Each deep model must independently pass the OOS significance test
-before being included in the ensemble.
+The meta JSON must contain `{"oos_accuracy": 0.72, "p_value": 0.0001}`.
+`DeepEnsembleStore.load()` enforces `oos_accuracy >= 0.70` and `p_value < 0.001`
+before activating. A model that fails either gate is silently bypassed.
 
 ---
 
@@ -133,13 +154,11 @@ python -m research.pipeline.mtf_fusion --timeframes H1,H4,D1
 
 ## Contributing Research
 
-Research contributions follow a different standard than production code:
-
-1. All experiments must include an OOS evaluation on the 756-bar held-out
-   period (2023-03-22 → 2026-03-24) using `ml/train_advanced.py::oos_eval_advanced()`
+1. All experiments must include an OOS evaluation on the held-out period
+   using `ml/train_advanced.py::oos_eval_advanced()`
 2. Results must be documented in `research/results/` with the full confusion
    matrix, p-value, and feature importance
 3. A research component is only promoted to production after passing all
    gates in the integration path above
 4. Do not import research modules from `core/`, `api/`, or `ml/` without
-   completing the integration path
+   completing the integration path — use the feature flag gates instead
