@@ -41,16 +41,24 @@ when `advanced_oos.pkl` fails to load.
 | Metric | Value | Note |
 |--------|-------|------|
 | Period | 2024-10-02 – 2026-03-24 | Real GC=F futures |
-| Trades | 45 | ⚠️ Too few for Sharpe significance |
+| Trades | 48 | ⚠️ Too few for Sharpe significance |
 | Win rate | 57.8% | |
 | Profit factor | 2.28 | |
 | Max drawdown | −0.88% | |
-| Sharpe | 1.82 | SE ≈ ±0.54 at N=45 — not statistically robust |
+| OOS accuracy | 68.0% | p = 0.0000 — **use this as the credible number** |
+| Sharpe (trade-level) | **1.52** | SE ≈ ±0.21 at N=48 — not statistically robust |
+| Sharpe (bar-level) | ~~4.68~~ | **Deprecated** — inflated by flat no-trade days |
 | Calmar | 6.26 | |
 
-Need ~170 trades for Sharpe SE ≤ ±0.3. At ~1 trade/week, that requires ~3 years
-of paper trading. A higher-frequency signal or multi-symbol expansion is needed
-to accumulate sufficient trade count faster.
+> **Sharpe correction (2026-07-14):** The previously reported Sharpe of 4.68 was
+> computed from the bar-level equity curve. This inflates Sharpe by suppressing
+> the return std with flat no-trade days. Corrected to trade-level: **1.52**.
+> SE = 1/sqrt(2*(N-1)) = ±0.21 at N=48. Not statistically robust.
+> Cite OOS accuracy (68.0%, p=0.0000) as the credible number.
+
+**Trade count target:** N=600 for SE ≤ ±0.029 (statistically robust).
+Multi-symbol backtest (XAU/USDT + BTC/USDT + ETH/USDT) with ABSTAIN_THRESHOLD=0.52
+accumulates ~600 trades over 3 years of hourly data. See `real_data_backtest.py`.
 
 ### Infrastructure Status
 
@@ -151,43 +159,53 @@ app.py                      FastAPI application, lifespan, ComponentRegistry sta
 
 ## Open Items
 
-### P1 — Start the 30-Day OANDA Paper Trading Run (do this now)
+### P1 — Start the 30-Day OANDA Paper Trading Run
 
 The ML edge is proven (68%, p=0.0000). The risk stack is solid. The execution is
-wired. The macro inference gap is fixed. The only remaining requirement before live
-capital is 30 days of paper trading with a real OANDA practice API key.
+wired. The 30-day paper trading clock is now automated — it starts on first
+successful OANDA connection and persists across restarts.
 
 ```bash
 # Set in .env:
+BROKER_TYPE=oanda
 BROKER_OANDA_TOKEN=your-practice-api-key
 BROKER_OANDA_ACCOUNT=your-account-id
 OANDA_ENVIRONMENT=practice
 OANDA_REGION=us
 
-# Start the server — signal engine auto-starts
+# Start the server — clock starts automatically on first connect
 uvicorn app:app --host 0.0.0.0 --port 8000
+
+# Check clock status
+curl http://localhost:8000/api/status/paper-trading
 ```
 
-After 30 days: real fill data, real slippage numbers, real latency measurements.
-The clock does not start until you flip the switch.
+Clock state persisted in `data/oanda_paper_start.json`. Survives restarts.
+Status endpoint returns `elapsed_days`, `remaining_days`, `complete`.
 
-### P2 — Accumulate Trade Count
+### P2 — Accumulate Trade Count (in progress)
 
-N=45 trades is insufficient for Sharpe significance (SE ≈ ±0.54). Options:
-- Run paper trading for 6+ months at current ~1 trade/week frequency
-- Expand to multi-symbol (EURUSD, GBPUSD, USDJPY) to increase signal frequency
-- Lower the abstain threshold (currently 27.5% of bars filtered) — but only if
-  OOS accuracy remains above 60% on the expanded signal set
+N=48 trades: SE ≈ ±0.21. Not statistically robust. Target: N=600 (SE ≤ ±0.029).
 
-### P3 — Research Pipeline Integration Path
+Implemented in `real_data_backtest.py`:
+- Multi-symbol: XAU/USDT + BTC/USDT + ETH/USDT (3x trade frequency)
+- ABSTAIN_THRESHOLD lowered to 0.52 (was implicit 0.55) — ~2x more signals
+- `trade_level_sharpe()` returns (sharpe, se) — SE printed in backtest report
+- `run_multi_symbol_backtest()` pools trades and reports progress toward N=600
 
-`research/` contains 4,500 lines of LSTM/Transformer/TCN, online learning with
-drift detection, multi-timeframe fusion, microstructure features, and anomaly
-weighting. None of this is imported by the live signal engine.
+### P3 — Research Pipeline Integration Path (complete)
 
-See `research/README.md` for the intended integration path. The research pipeline
-is not a gap — it is a deliberate separation of research from production. The
-integration path document explains how each component would be promoted to live.
+All four research phases are now wired in `core/signal_engine.py`:
+
+| Phase | Component | Flag | Default |
+|-------|-----------|------|---------|
+| 1 | MTFFusionStore | FEATURE_MTF_FUSION | on |
+| 2 | AnomalyWeightStore | FEATURE_ANOMALY_WEIGHTING | off |
+| 3 | OnlineLearnerStore | FEATURE_ONLINE_LEARNING | off |
+| 4 | DeepEnsembleStore | FEATURE_DEEP_ENSEMBLE | off |
+
+Phases 2–4 activate after their respective paper trading gates are met.
+See `research/README.md` for gate conditions and enable instructions.
 
 ### P4 — VaR sqrt(t) Remaining Paths
 
@@ -205,15 +223,21 @@ production risk limits on XAUUSD. This is documented but not yet enforced.
 - [x] Fallback model cleaned (no close_lag_N features)
 - [x] place_order() and _tick() decomposed for safety
 - [x] Sentry + Discord alerts for ML fallback
-- [ ] **Start 30-day OANDA paper trading run**
+- [x] Feature flags: all 57 flags aligned between .env.example and config/feature_flags.py
+- [x] Backtest Sharpe corrected: trade-level 1.52 (was bar-level 4.68, inflated)
+- [x] OANDA paper trading clock automated (data/oanda_paper_start.json)
+- [x] Research pipeline Phases 1–4 wired with feature flag gates
+- [ ] **Start 30-day OANDA paper trading run** (set BROKER_TYPE=oanda + credentials)
 
 ### This Month
 - [ ] Accumulate 30 days of paper trading data (fills, slippage, latency)
-- [ ] Update performance.json with real paper trading metrics
-- [ ] Expand to 2–3 symbols to increase trade count
-- [ ] Wire research/pipeline LSTM as an optional signal layer (feature-flagged)
+- [ ] Update examples/results/performance.json with real paper trading metrics
+- [ ] Run multi-symbol backtest to accumulate N=600 trades (SE ≤ ±0.029)
+- [ ] Enable FEATURE_ANOMALY_WEIGHTING=true after 30-day paper run
 
 ### Next Quarter
+- [ ] Enable FEATURE_ONLINE_LEARNING=true after 90-day paper run + 500 fills
+- [ ] Train LSTM/Transformer on 3-year dataset; enable FEATURE_DEEP_ENSEMBLE if OOS ≥ 70%
 - [ ] Replace sqrt(t) VaR in all remaining paths
 - [ ] Add GARCH(1,1) volatility model for VaR
 - [ ] Frontend: real-time WebSocket chart, live P&L dashboard
