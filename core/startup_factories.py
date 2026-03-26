@@ -603,6 +603,184 @@ async def init_mtf_store(s: Any) -> Any:
         return None
 
 
+async def init_anomaly_store(s: Any) -> Any:
+    """
+    Bootstrap the AnomalyWeightStore at startup (Phase 2).
+
+    Creates the IF+LOF ensemble anomaly detector and attaches it to app_state.
+    The signal engine reads it via _get_anomaly_store() on each tick.
+
+    Gate: only wired when FEATURE_ANOMALY_WEIGHTING=true.
+    Enable after 30-day OANDA paper trading run completes.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:  # type: ignore[misc]
+            logger.info(msg)
+
+    try:
+        from config.feature_flags import flags
+        if not getattr(flags, "ANOMALY_WEIGHTING", False):
+            logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
+            return None
+    except Exception:
+        return None
+
+    try:
+        from research.pipeline.anomaly import AnomalyWeightStore
+
+        persist_path = os.getenv(
+            "ANOMALY_STORE_PATH",
+            "ml/saved_models/anomaly_weight_store.pkl",
+        )
+        store = AnomalyWeightStore(
+            window_size=int(os.getenv("ANOMALY_WINDOW_SIZE", "500")),
+            refit_every=int(os.getenv("ANOMALY_REFIT_EVERY", "50")),
+            contamination=float(os.getenv("ANOMALY_CONTAMINATION", "0.02")),
+            down_weight_factor=float(os.getenv("ANOMALY_DOWN_WEIGHT", "0.5")),
+            use_lof=os.getenv("ANOMALY_USE_LOF", "true").lower() == "true",
+            persist_path=persist_path,
+        )
+        # Wire into signal engine module-level singleton
+        import core.signal_engine as _se
+        _se._anomaly_store = store
+        s.anomaly_store = store
+
+        log_activity(
+            f"AnomalyWeightStore initialised (Phase 2) — "
+            f"window={store.window_size} refit_every={store.refit_every} "
+            f"warm_start={store._fitted}"
+        )
+        return store
+    except Exception as exc:
+        logger.warning("AnomalyWeightStore init failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_online_learner_store(s: Any) -> Any:
+    """
+    Bootstrap the OnlineLearnerStore at startup (Phase 3).
+
+    Creates the IncrementalXGBoost + ADWIN drift detector and attaches it to
+    app_state.  The signal engine reads it via _get_online_learner_store().
+
+    Gate: only wired when FEATURE_ONLINE_LEARNING=true.
+    Enable after 90-day OANDA paper run with >= 500 fills.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:  # type: ignore[misc]
+            logger.info(msg)
+
+    try:
+        from config.feature_flags import flags
+        if not getattr(flags, "ONLINE_LEARNING", False):
+            logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
+            return None
+    except Exception:
+        return None
+
+    try:
+        from research.pipeline.online_learning import OnlineLearnerStore
+
+        persist_path = os.getenv(
+            "ONLINE_LEARNER_PATH",
+            "ml/saved_models/online_learner.pkl",
+        )
+        primary_w = float(os.getenv("ONLINE_PRIMARY_WEIGHT", "0.7"))
+        online_w  = float(os.getenv("ONLINE_ONLINE_WEIGHT",  "0.3"))
+        store = OnlineLearnerStore(
+            primary_weight=primary_w,
+            online_weight=online_w,
+            min_fills=int(os.getenv("ONLINE_MIN_FILLS", "20")),
+            buffer_size=int(os.getenv("ONLINE_BUFFER_SIZE", "500")),
+            adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower() == "true",
+            use_adwin=os.getenv("ONLINE_USE_ADWIN", "true").lower() == "true",
+            persist_path=persist_path,
+        )
+        # Wire into signal engine module-level singleton
+        import core.signal_engine as _se
+        _se._online_learner_store = store
+        s.online_learner_store = store
+
+        log_activity(
+            f"OnlineLearnerStore initialised (Phase 3) — "
+            f"blend=[{primary_w:.1f}/{online_w:.1f}] "
+            f"min_fills={store.min_fills} warm_start={store._ready}"
+        )
+        return store
+    except Exception as exc:
+        logger.warning("OnlineLearnerStore init failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_deep_ensemble_store(s: Any) -> Any:
+    """
+    Bootstrap the DeepEnsembleStore at startup (Phase 4).
+
+    Loads the trained DeepPredictor from disk, validates OOS gates, and
+    attaches the store to app_state.  The signal engine reads it via
+    _get_deep_ensemble_store().
+
+    Gate: only wired when FEATURE_DEEP_ENSEMBLE=true AND the model file
+    exists AND OOS accuracy >= 70% AND p-value < 0.001.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:  # type: ignore[misc]
+            logger.info(msg)
+
+    try:
+        from config.feature_flags import flags
+        if not getattr(flags, "DEEP_ENSEMBLE", False):
+            logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
+            return None
+    except Exception:
+        return None
+
+    try:
+        from research.pipeline.models_ensemble import DeepEnsembleStore
+
+        model_path  = os.getenv("DEEP_ENSEMBLE_MODEL_PATH",  DeepEnsembleStore.DEFAULT_MODEL_PATH)
+        meta_path   = os.getenv("DEEP_ENSEMBLE_META_PATH",   DeepEnsembleStore.DEFAULT_META_PATH)
+        scaler_path = os.getenv("DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH)
+
+        store = DeepEnsembleStore(
+            model_path=model_path,
+            meta_path=meta_path,
+            oos_accuracy_gate=float(os.getenv("DEEP_ENSEMBLE_OOS_GATE", "0.70")),
+            p_value_gate=float(os.getenv("DEEP_ENSEMBLE_PVAL_GATE", "0.001")),
+            deep_weight=float(os.getenv("DEEP_ENSEMBLE_WEIGHT", "0.20")),
+            seq_len=int(os.getenv("DEEP_ENSEMBLE_SEQ_LEN", "60")),
+            scaler_path=scaler_path if os.path.exists(scaler_path) else None,
+        )
+
+        activated = store.load()
+
+        if activated:
+            # Wire into signal engine module-level singleton
+            import core.signal_engine as _se
+            _se._deep_ensemble_store = store
+            s.deep_ensemble_store = store
+            log_activity(
+                f"DeepEnsembleStore active (Phase 4) — "
+                f"OOS={store.oos_accuracy:.1%} p={store.p_value:.4f} "
+                f"weight={store.deep_weight:.2f}"
+            )
+        else:
+            log_activity(
+                f"DeepEnsembleStore inactive (Phase 4) — "
+                f"{store._gate_failure_reason}"
+            )
+        return store if activated else None
+    except Exception as exc:
+        logger.warning("DeepEnsembleStore init failed (non-fatal): %s", exc)
+        return None
+
+
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
     from core.signal_engine import run_signal_engine
