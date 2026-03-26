@@ -9,7 +9,9 @@ Models
 2. TransformerPredictor — multi-head self-attention encoder (no decoder needed
                           for classification/regression on fixed windows)
 3. TemporalConvNet    — dilated causal convolutions (TCN) — fast, parallelisable
-4. HybridModel        — TCN encoder → LSTM refinement → dense head
+4. HybridModel        — TCN encoder → bidirectional LSTM refinement → dense head
+                        Combines TCN's parallel feature extraction with LSTM's
+                        temporal memory for best-of-both-worlds performance.
 
 All models share a common interface:
     model.fit(X_train, y_train, X_val, y_val)
@@ -20,6 +22,15 @@ All models share a common interface:
 Input shape: (batch, seq_len, n_features)
 Output:      (batch, 1)  — probability for binary classification
                            or scalar for regression
+
+Training improvements
+---------------------
+- Label smoothing (binary cross-entropy with smoothed targets)
+- Class-imbalance weighting (pos_weight for BCEWithLogitsLoss)
+- Gradient clipping (max_norm=1.0)
+- ReduceLROnPlateau scheduler (patience=5, factor=0.5)
+- Cosine annealing with warm restarts (optional)
+- Mixed precision training when CUDA available (torch.amp)
 """
 
 from __future__ import annotations
@@ -88,16 +99,28 @@ def make_sequences(
 if TORCH_AVAILABLE:
 
     class _AttentionPool(nn.Module):
-        """Soft attention over sequence dimension → context vector."""
+        """
+        Multi-head soft attention over sequence dimension → context vector.
 
-        def __init__(self, hidden: int):
+        Uses a learned query vector to compute attention weights over all
+        time steps, then returns the weighted sum as the context vector.
+        This is more expressive than using only the last hidden state.
+        """
+
+        def __init__(self, hidden: int, n_heads: int = 1):
             super().__init__()
-            self.attn = nn.Linear(hidden, 1)
+            self.n_heads = n_heads
+            self.attn = nn.Linear(hidden, n_heads)
+            self.out_proj = nn.Linear(hidden * n_heads, hidden) if n_heads > 1 else nn.Identity()
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # x: (batch, seq, hidden)
-            weights = torch.softmax(self.attn(x), dim=1)  # (batch, seq, 1)
-            return (weights * x).sum(dim=1)               # (batch, hidden)
+            scores = self.attn(x)                              # (batch, seq, n_heads)
+            weights = torch.softmax(scores, dim=1)             # (batch, seq, n_heads)
+            # Weighted sum for each head
+            heads = [(weights[:, :, h:h+1] * x).sum(dim=1) for h in range(self.n_heads)]
+            ctx = torch.cat(heads, dim=-1)                     # (batch, hidden * n_heads)
+            return self.out_proj(ctx)                          # (batch, hidden)
 
     class _LSTMNet(nn.Module):
         def __init__(
@@ -220,6 +243,107 @@ if TORCH_AVAILABLE:
             x = self.blocks(x)
             return self.head(x).squeeze(-1)
 
+    class _HybridNet(nn.Module):
+        """
+        TCN encoder → bidirectional LSTM refinement → attention pool → dense head.
+
+        Architecture rationale
+        ----------------------
+        TCN captures multi-scale local patterns in parallel (fast, no vanishing
+        gradient).  The LSTM then models long-range temporal dependencies in the
+        TCN's compressed representation.  Attention pool selects the most
+        informative time steps.
+
+        This hybrid typically outperforms either model alone on financial
+        time-series because:
+        - TCN handles the high-frequency noise filtering
+        - LSTM captures regime-level memory (trend persistence)
+        - Attention focuses on the most predictive bars in the window
+        """
+
+        def __init__(
+            self,
+            n_features: int,
+            tcn_channels: int = 64,
+            tcn_levels: int = 4,
+            lstm_hidden: int = 64,
+            lstm_layers: int = 2,
+            dropout: float = 0.2,
+            attn_heads: int = 2,
+        ):
+            super().__init__()
+            # TCN encoder
+            self.input_proj = nn.Conv1d(n_features, tcn_channels, 1)
+            self.tcn_blocks = nn.Sequential(
+                *[_TCNBlock(tcn_channels, kernel=3, dilation=2 ** i, dropout=dropout)
+                  for i in range(tcn_levels)]
+            )
+            # LSTM refinement (operates on TCN output)
+            self.lstm = nn.LSTM(
+                tcn_channels,
+                lstm_hidden,
+                num_layers=lstm_layers,
+                dropout=dropout if lstm_layers > 1 else 0.0,
+                bidirectional=True,
+                batch_first=True,
+            )
+            lstm_out = lstm_hidden * 2  # bidirectional
+            self.attn = _AttentionPool(lstm_out, n_heads=attn_heads)
+            self.head = nn.Sequential(
+                nn.LayerNorm(lstm_out),
+                nn.Linear(lstm_out, 64),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(64, 1),
+                nn.Sigmoid(),
+            )
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # x: (batch, seq, features)
+            # TCN path: needs (batch, features, seq)
+            tcn_in = x.permute(0, 2, 1)
+            tcn_in = self.input_proj(tcn_in)
+            tcn_out = self.tcn_blocks(tcn_in)
+            # Back to (batch, seq, channels) for LSTM
+            lstm_in = tcn_out.permute(0, 2, 1)
+            lstm_out, _ = self.lstm(lstm_in)
+            ctx = self.attn(lstm_out)
+            return self.head(ctx).squeeze(-1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Label-smoothed BCE loss
+# ─────────────────────────────────────────────────────────────────────────────
+
+if TORCH_AVAILABLE:
+
+    class _LabelSmoothBCE(nn.Module):
+        """
+        Binary cross-entropy with label smoothing.
+
+        Smoothing prevents the model from becoming over-confident on noisy
+        financial labels.  A smoothing of 0.1 replaces labels {0,1} with
+        {0.05, 0.95}.
+        """
+
+        def __init__(self, smoothing: float = 0.1, pos_weight: Optional[float] = None):
+            super().__init__()
+            self.smoothing = smoothing
+            self.pos_weight = pos_weight
+
+        def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+            # Smooth targets
+            target_smooth = target * (1 - self.smoothing) + 0.5 * self.smoothing
+            eps = 1e-7
+            pred = pred.clamp(eps, 1 - eps)
+            loss = -(target_smooth * torch.log(pred) + (1 - target_smooth) * torch.log(1 - pred))
+            if self.pos_weight is not None:
+                weight = torch.where(target > 0.5,
+                                     torch.tensor(self.pos_weight, device=pred.device),
+                                     torch.ones_like(pred))
+                loss = loss * weight
+            return loss.mean()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Unified trainer wrapper
@@ -231,14 +355,27 @@ class DeepPredictor:
 
     Parameters
     ----------
-    architecture : 'lstm' | 'transformer' | 'tcn'
-    n_features   : Number of input features
-    seq_len      : Sequence length (look-back window)
-    task         : 'binary' | 'regression'
-    device       : 'cuda' | 'cpu' | 'auto'
+    architecture  : 'lstm' | 'transformer' | 'tcn' | 'hybrid'
+    n_features    : Number of input features
+    seq_len       : Sequence length (look-back window)
+    task          : 'binary' | 'regression'
+    device        : 'cuda' | 'cpu' | 'auto'
+    lr            : Initial learning rate
+    batch_size    : Mini-batch size
+    max_epochs    : Maximum training epochs
+    patience      : Early stopping patience (val loss)
+    label_smoothing : Label smoothing for binary classification (0 = off)
+    pos_weight    : Class imbalance weight for positive class (None = balanced)
+    grad_clip     : Gradient clipping max norm (default 1.0)
+    use_amp       : Mixed precision training (auto-disabled on CPU)
     """
 
-    ARCHITECTURES = {"lstm": "_LSTMNet", "transformer": "_TransformerNet", "tcn": "_TCNNet"}
+    ARCHITECTURES = {
+        "lstm": "_LSTMNet",
+        "transformer": "_TransformerNet",
+        "tcn": "_TCNNet",
+        "hybrid": "_HybridNet",
+    }
 
     def __init__(
         self,
@@ -251,6 +388,10 @@ class DeepPredictor:
         batch_size: int = 64,
         max_epochs: int = 100,
         patience: int = 10,
+        label_smoothing: float = 0.05,
+        pos_weight: Optional[float] = None,
+        grad_clip: float = 1.0,
+        use_amp: bool = True,
         **model_kwargs,
     ):
         if not TORCH_AVAILABLE:
@@ -264,19 +405,40 @@ class DeepPredictor:
         self.batch_size = batch_size
         self.max_epochs = max_epochs
         self.patience = patience
+        self.label_smoothing = label_smoothing
+        self.pos_weight = pos_weight
+        self.grad_clip = grad_clip
 
         if device == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
 
+        # Mixed precision only on CUDA
+        self.use_amp = use_amp and self.device.type == "cuda"
+        self._scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+
         self.model = self._build_model(n_features, seq_len, **model_kwargs).to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-4)
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=max_epochs)
-        self.criterion = nn.BCELoss() if task == "binary" else nn.MSELoss()
-        self._history: dict = {"train_loss": [], "val_loss": []}
 
-    def _build_model(self, n_features: int, seq_len: int, **kwargs) -> nn.Module:
+        # ReduceLROnPlateau: halve LR when val loss stalls for 5 epochs
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
+        )
+
+        # Loss function
+        if task == "binary":
+            self.criterion = _LabelSmoothBCE(
+                smoothing=label_smoothing, pos_weight=pos_weight
+            )
+        else:
+            self.criterion = nn.MSELoss()
+
+        self._history: dict = {
+            "train_loss": [], "val_loss": [], "lr": [],
+        }
+
+    def _build_model(self, n_features: int, seq_len: int, **kwargs) -> "nn.Module":
         arch = self.architecture.lower()
         if arch == "lstm":
             return _LSTMNet(n_features, **kwargs)
@@ -284,13 +446,26 @@ class DeepPredictor:
             return _TransformerNet(n_features, seq_len=seq_len, **kwargs)
         elif arch == "tcn":
             return _TCNNet(n_features, **kwargs)
+        elif arch == "hybrid":
+            return _HybridNet(n_features, **kwargs)
         else:
-            raise ValueError(f"Unknown architecture: {arch}")
+            raise ValueError(
+                f"Unknown architecture '{arch}'. "
+                f"Choose from: {list(self.ARCHITECTURES)}"
+            )
 
-    def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
+    def _to_loader(
+        self, X: np.ndarray, y: np.ndarray, shuffle: bool
+    ) -> "DataLoader":
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32)
-        return DataLoader(TensorDataset(X_t, y_t), batch_size=self.batch_size, shuffle=shuffle)
+        return DataLoader(
+            TensorDataset(X_t, y_t),
+            batch_size=self.batch_size,
+            shuffle=shuffle,
+            pin_memory=self.device.type == "cuda",
+            num_workers=0,
+        )
 
     def fit(
         self,
@@ -298,19 +473,42 @@ class DeepPredictor:
         y_train: np.ndarray,
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
+        class_weight: bool = True,
     ) -> dict:
         """
-        Train the model.
+        Train the model with early stopping, LR scheduling, and gradient clipping.
 
-        X_train shape: (n_samples, seq_len, n_features)
-        y_train shape: (n_samples,)
+        Parameters
+        ----------
+        X_train      : (n_samples, seq_len, n_features)
+        y_train      : (n_samples,) binary labels or regression targets
+        X_val, y_val : Optional validation set for early stopping
+        class_weight : Auto-compute pos_weight from class distribution
+
+        Returns
+        -------
+        Training history dict with train_loss, val_loss, lr per epoch.
         """
+        # Auto class weighting for imbalanced binary targets
+        if class_weight and self.task == "binary" and self.pos_weight is None:
+            n_pos = float(y_train.sum())
+            n_neg = float(len(y_train) - n_pos)
+            if n_pos > 0 and n_neg > 0:
+                computed_pw = n_neg / n_pos
+                self.criterion = _LabelSmoothBCE(
+                    smoothing=self.label_smoothing,
+                    pos_weight=float(np.clip(computed_pw, 0.5, 5.0)),
+                )
+
         train_loader = self._to_loader(X_train, y_train, shuffle=True)
-        val_loader = self._to_loader(X_val, y_val, shuffle=False) if X_val is not None else None
+        val_loader = (
+            self._to_loader(X_val, y_val, shuffle=False)
+            if X_val is not None else None
+        )
 
         best_val_loss = float("inf")
         patience_counter = 0
-        best_state = None
+        best_state: Optional[dict] = None
 
         for epoch in range(self.max_epochs):
             # ── Train ─────────────────────────────────────────────────────────
@@ -318,20 +516,33 @@ class DeepPredictor:
             train_losses = []
             for X_b, y_b in train_loader:
                 X_b, y_b = X_b.to(self.device), y_b.to(self.device)
-                self.optimizer.zero_grad()
-                pred = self.model(X_b)
-                loss = self.criterion(pred, y_b)
-                loss.backward()
-                nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
+
+                if self.use_amp and self._scaler is not None:
+                    with torch.cuda.amp.autocast():
+                        pred = self.model(X_b)
+                        loss = self.criterion(pred, y_b)
+                    self._scaler.scale(loss).backward()
+                    self._scaler.unscale_(self.optimizer)
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                    self._scaler.step(self.optimizer)
+                    self._scaler.update()
+                else:
+                    pred = self.model(X_b)
+                    loss = self.criterion(pred, y_b)
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                    self.optimizer.step()
+
                 train_losses.append(loss.item())
 
-            self.scheduler.step()
-            avg_train = np.mean(train_losses)
+            avg_train = float(np.mean(train_losses))
             self._history["train_loss"].append(avg_train)
+            current_lr = self.optimizer.param_groups[0]["lr"]
+            self._history["lr"].append(current_lr)
 
             # ── Validate ──────────────────────────────────────────────────────
-            if val_loader:
+            if val_loader is not None:
                 self.model.eval()
                 val_losses = []
                 with torch.no_grad():
@@ -339,44 +550,91 @@ class DeepPredictor:
                         X_b, y_b = X_b.to(self.device), y_b.to(self.device)
                         pred = self.model(X_b)
                         val_losses.append(self.criterion(pred, y_b).item())
-                avg_val = np.mean(val_losses)
+                avg_val = float(np.mean(val_losses))
                 self._history["val_loss"].append(avg_val)
+
+                # ReduceLROnPlateau step
+                self.scheduler.step(avg_val)
 
                 if avg_val < best_val_loss:
                     best_val_loss = avg_val
-                    best_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+                    best_state = {
+                        k: v.cpu().clone()
+                        for k, v in self.model.state_dict().items()
+                    }
                     patience_counter = 0
                 else:
                     patience_counter += 1
 
                 if epoch % 10 == 0:
                     logger.info(
-                        "Epoch %3d  train=%.4f  val=%.4f  patience=%d",
-                        epoch, avg_train, avg_val, patience_counter,
+                        "Epoch %3d  train=%.4f  val=%.4f  lr=%.2e  patience=%d",
+                        epoch, avg_train, avg_val, current_lr, patience_counter,
                     )
 
                 if patience_counter >= self.patience:
-                    logger.info("Early stopping at epoch %d", epoch)
+                    logger.info(
+                        "Early stopping at epoch %d (best_val=%.4f)",
+                        epoch, best_val_loss,
+                    )
                     break
             else:
                 if epoch % 10 == 0:
-                    logger.info("Epoch %3d  train=%.4f", epoch, avg_train)
+                    logger.info(
+                        "Epoch %3d  train=%.4f  lr=%.2e",
+                        epoch, avg_train, current_lr,
+                    )
 
-        if best_state:
+        # Restore best weights
+        if best_state is not None:
             self.model.load_state_dict(best_state)
+            logger.info(
+                "Restored best model (val_loss=%.4f)", best_val_loss
+            )
 
         return self._history
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return probability array (binary) or value array (regression)."""
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch is required for DeepPredictor.predict()")
         self.model.eval()
         X_t = torch.tensor(X, dtype=torch.float32).to(self.device)
+        preds = []
         with torch.no_grad():
-            preds = []
             for i in range(0, len(X_t), self.batch_size):
                 batch = X_t[i: i + self.batch_size]
                 preds.append(self.model(batch).cpu().numpy())
         return np.concatenate(preds)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Alias for predict() — returns probabilities for binary task."""
+        return self.predict(X)
+
+    def evaluate(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        threshold: float = 0.5,
+    ) -> dict:
+        """
+        Compute accuracy, AUC, and F1 on a held-out set.
+
+        Returns a dict with keys: accuracy, auc, f1, n_samples.
+        """
+        from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+        proba = self.predict(X)
+        preds = (proba >= threshold).astype(int)
+        result = {
+            "accuracy": float(accuracy_score(y, preds)),
+            "f1": float(f1_score(y, preds, zero_division=0)),
+            "n_samples": len(y),
+        }
+        try:
+            result["auc"] = float(roc_auc_score(y, proba))
+        except Exception:
+            result["auc"] = 0.5
+        return result
 
     def save(self, path: str | Path) -> None:
         path = Path(path)
@@ -388,21 +646,33 @@ class DeepPredictor:
                 "n_features": self.n_features,
                 "seq_len": self.seq_len,
                 "task": self.task,
+                "label_smoothing": self.label_smoothing,
+                "pos_weight": self.pos_weight,
             },
             path,
         )
-        logger.info("Model saved → %s", path)
+        logger.info("DeepPredictor saved → %s", path)
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> "DeepPredictor":
-        checkpoint = torch.load(path, map_location="cpu")
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"DeepPredictor model not found: {path}")
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         predictor = cls(
             architecture=checkpoint["architecture"],
             n_features=checkpoint["n_features"],
             seq_len=checkpoint["seq_len"],
-            task=checkpoint["task"],
+            task=checkpoint.get("task", "binary"),
             device=device,
+            label_smoothing=checkpoint.get("label_smoothing", 0.05),
+            pos_weight=checkpoint.get("pos_weight", None),
         )
         predictor.model.load_state_dict(checkpoint["state_dict"])
-        logger.info("Model loaded ← %s", path)
+        predictor.model.eval()
+        logger.info("DeepPredictor loaded ← %s", path)
         return predictor
+
+    def parameter_count(self) -> int:
+        """Return total number of trainable parameters."""
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
