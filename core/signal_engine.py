@@ -712,20 +712,91 @@ async def _execute_if_approved(
                 return
 
             equity: float = account_info.get("equity", 100_000)
+
+            # ── ML probability gate ───────────────────────────────────────────
+            # Skip trades where the ML model has low conviction.
+            # Threshold: 0.58 (slightly above the 50% abstain boundary).
+            # This filters out marginal signals and concentrates capital on
+            # high-confidence setups where the 67%+ OOS edge is most reliable.
+            ml_prob: float = signal_payload.get("probability", 0.5)
+            _ML_MIN_PROB = float(os.getenv("ML_MIN_TRADE_PROB", "0.58"))
+            if ml_prob < _ML_MIN_PROB:
+                logger.info(
+                    "Auto-trade skipped: ML prob %.3f < threshold %.3f (%s)",
+                    ml_prob, _ML_MIN_PROB, symbol,
+                )
+                return
+
+            # ── ATR-based SL/TP ───────────────────────────────────────────────
+            # Use ATR(14) from the data buffer for volatility-adaptive levels.
+            # Gold at $3,000: ATR ≈ $25–$40/day.
+            # SL = 1.5× ATR below entry (tight enough to cut losers quickly).
+            # TP = 3.0× ATR above entry (2:1 R:R minimum).
+            # Falls back to percentage-based levels if ATR unavailable.
+            entry: float = signal_payload["entry_price"]
+            sl_price = signal_payload["stop_loss"]
+            tp_price = signal_payload["take_profit"]
+
+            if sl_price is None or tp_price is None:
+                # Compute ATR from recent highs/lows if available in data
+                try:
+                    highs = data.get("highs", [])
+                    lows  = data.get("lows",  [])
+                    closes_list = data.get("prices", [entry])
+                    if len(highs) >= 14 and len(lows) >= 14:
+                        import numpy as _np
+                        h = _np.array(highs[-15:], dtype=float)
+                        l = _np.array(lows[-15:],  dtype=float)
+                        c = _np.array(closes_list[-15:], dtype=float)
+                        tr = _np.maximum(h[1:] - l[1:],
+                             _np.maximum(abs(h[1:] - c[:-1]),
+                                         abs(l[1:] - c[:-1])))
+                        atr = float(_np.mean(tr[-14:]))
+                    else:
+                        # Fallback: 0.8% of price (typical gold daily range)
+                        atr = entry * 0.008
+                    sl_atr_mult = float(os.getenv("SL_ATR_MULT", "1.5"))
+                    tp_atr_mult = float(os.getenv("TP_ATR_MULT", "3.0"))
+                    if direction.upper() == "BUY":
+                        sl_price = entry - atr * sl_atr_mult
+                        tp_price = entry + atr * tp_atr_mult
+                    else:
+                        sl_price = entry + atr * sl_atr_mult
+                        tp_price = entry - atr * tp_atr_mult
+                    logger.debug(
+                        "ATR-based SL/TP: entry=%.2f atr=%.2f sl=%.2f tp=%.2f",
+                        entry, atr, sl_price, tp_price,
+                    )
+                except Exception as _atr_exc:
+                    logger.debug("ATR SL/TP calc failed, using pct fallback: %s", _atr_exc)
+                    sl_price = sl_price or (entry * 0.985 if direction.upper() == "BUY" else entry * 1.015)
+                    tp_price = tp_price or (entry * 1.03  if direction.upper() == "BUY" else entry * 0.97)
+
+            # ── ML-scaled signal strength ─────────────────────────────────────
+            # Pass ML probability as signal_strength so Kelly sizing scales up
+            # on high-conviction signals (prob 0.65+ gets larger allocation).
+            signal_strength = min(ml_prob, 0.80)  # cap at 80% to avoid over-sizing
+
+            # ── Volatility estimate from recent returns ────────────────────────
+            try:
+                import numpy as _np2
+                _prices = data.get("prices", [entry])
+                if len(_prices) >= 20:
+                    _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
+                    _vol = float(_np2.std(_rets)) * (252 ** 0.5)
+                else:
+                    _vol = 0.15  # gold annualised vol baseline
+            except Exception:
+                _vol = 0.15
+
             sizing: Any = risk_manager.calculate_position_size(
                 symbol=symbol,
-                signal_strength=signal_payload["confidence"],
-                entry_price=signal_payload["entry_price"],
-                stop_loss_price=(
-                    signal_payload["stop_loss"]
-                    or signal_payload["entry_price"] * 0.99
-                ),
-                take_profit_price=(
-                    signal_payload["take_profit"]
-                    or signal_payload["entry_price"] * 1.02
-                ),
+                signal_strength=signal_strength,
+                entry_price=entry,
+                stop_loss_price=sl_price,
+                take_profit_price=tp_price,
                 account_equity=equity,
-                volatility=0.1,
+                volatility=_vol,
                 existing_positions=positions_dicts,
             )
             if not sizing.approved:

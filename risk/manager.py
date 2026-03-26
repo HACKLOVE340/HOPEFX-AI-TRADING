@@ -31,15 +31,15 @@ class RiskLevel(Enum):
 class RiskConfig:
     """Risk management configuration"""
 
-    max_position_size_pct: float = 0.02  # 2% per position
+    max_position_size_pct: float = float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.05"))  # 5% per position (env-overridable)
     max_portfolio_exposure_pct: float = 0.5  # 50% total exposure
     max_drawdown_pct: float = 0.10  # 10% max drawdown
     daily_loss_limit_pct: float = 0.05  # 5% daily loss
     max_leverage: float = 1.0
-    min_risk_reward: float = 1.5
+    min_risk_reward: float = float(os.getenv("RISK_MIN_RR", "2.0"))  # 2:1 R:R minimum
     max_correlation: float = 0.7
     volatility_lookback: int = 20
-    kelly_fraction: float = 0.5  # Half Kelly for safety
+    kelly_fraction: float = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))  # Quarter Kelly — safer than half-Kelly for live deployment
     # Extended fields (used by test_risk_notification_extended)
     max_risk_per_trade: float = 2.0
     max_position_size: float = 10000.0
