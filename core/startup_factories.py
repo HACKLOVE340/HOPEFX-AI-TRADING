@@ -143,6 +143,39 @@ async def init_data_scheduler(s: Any) -> Any:
     return ds
 
 
+async def init_hourly_trainer(s: Any) -> Any:
+    """
+    Start the hourly ML model training loop.
+
+    Enabled only when ML_HOURLY_ENABLED=true. Runs two tiers:
+      - Online update every ML_HOURLY_INTERVAL_SECONDS (default 3600)
+      - Full retrain every ML_FULL_RETRAIN_HOURS (default 24)
+
+    Best-effort — a training failure never blocks the signal engine.
+    """
+    from api.admin import log_activity  # noqa: PLC0415
+    from ml.hourly_trainer import get_hourly_trainer  # noqa: PLC0415
+
+    trainer = get_hourly_trainer()
+    s.hourly_trainer = trainer
+
+    if trainer.enabled:
+        t = asyncio.create_task(trainer.start())
+        s.background_tasks.append(t)
+        log_activity(
+            f"Hourly ML trainer started — symbols={trainer.symbols} "
+            f"interval={trainer.interval_secs}s "
+            f"full_retrain_every={trainer.full_retrain_hrs}h"
+        )
+    else:
+        log_activity(
+            "Hourly ML trainer disabled (ML_HOURLY_ENABLED not set). "
+            "Set ML_HOURLY_ENABLED=true to enable incremental retraining."
+        )
+
+    return trainer
+
+
 async def init_websocket(s: Any, app: Any) -> Any:
     from api.admin import log_activity
     from api.websocket_server import WebSocketManager, create_websocket_router
