@@ -5,15 +5,20 @@ Wide, deep feature engineering for the prediction pipeline.
 
 Feature groups
 --------------
-1. Technical indicators  — RSI, MACD, Bollinger, ATR, OBV, Stochastic, CCI,
-                           Williams %R, Ichimoku cloud, VWAP deviation
-2. Lag features          — returns at 1/2/3/5/10/20/60 bars
-3. Rolling statistics    — mean, std, skew, kurtosis over multiple windows
-4. Fourier features      — dominant frequency components of close price
-5. Candlestick patterns  — body/wick ratios, engulfing, pin-bar, doji
-6. Volatility regime     — GARCH-proxy (squared returns), realised vol ratio
-7. Sentiment             — attached from RSS (see data_ingestion.py)
-8. Calendar              — hour, day-of-week, month, quarter, is_month_end
+1.  Technical indicators  — RSI, MACD, Bollinger, ATR, OBV, Stochastic, CCI,
+                            Williams %R, Ichimoku cloud, VWAP deviation
+2.  Lag features          — returns at 1/2/3/5/10/20/60 bars
+3.  Rolling statistics    — mean, std, skew, kurtosis over multiple windows
+4.  Fourier features      — dominant frequency components of close price
+5.  Candlestick patterns  — body/wick ratios, engulfing, pin-bar, doji
+6.  Volatility regime     — GARCH-proxy (squared returns), realised vol ratio
+7.  Sentiment             — attached from RSS (see data_ingestion.py)
+8.  Calendar              — hour, day-of-week, month, quarter, is_month_end
+9.  Swing levels          — pivot highs/lows, distance from key S/R levels
+10. Momentum divergence   — price vs RSI/MACD divergence signals
+11. Volume profile        — VWAP bands, volume-weighted momentum
+12. Microstructure proxy  — tick direction, spread proxy, trade intensity
+13. Regime context        — HMM-style vol regime, trend strength index
 
 All functions accept a DataFrame with columns open/high/low/close/volume
 and return an enriched copy.  NaN rows introduced by look-back windows are
@@ -23,11 +28,16 @@ dropped at the end of `build_feature_matrix()`.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy.fft import rfft, rfftfreq  # scipy is a transitive dep of sklearn
+
+try:
+    from scipy.fft import rfft, rfftfreq
+    _SCIPY_AVAILABLE = True
+except ImportError:
+    _SCIPY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +217,20 @@ def add_fourier_features(
     Rolling FFT over `window` bars of log-returns.
     Extracts the top-N dominant frequency amplitudes and phases.
     These capture cyclical patterns (weekly, monthly, quarterly rhythms).
+    Falls back to zero-filled columns when scipy is unavailable.
     """
     d = df.copy()
+    n = len(d)
+
+    # Pre-fill with zeros so downstream code always sees these columns
+    for k in range(n_components):
+        d[f"fft_amp_{k}"] = 0.0
+        d[f"fft_phase_{k}"] = 0.0
+
+    if not _SCIPY_AVAILABLE or n < window:
+        return d
+
     log_ret = np.log(d["close"] / d["close"].shift(1)).fillna(0).values
-    n = len(log_ret)
 
     amps = np.zeros((n, n_components))
     phases = np.zeros((n, n_components))
@@ -218,7 +238,6 @@ def add_fourier_features(
     for i in range(window, n):
         segment = log_ret[i - window: i]
         fft_vals = rfft(segment)
-        freqs = rfftfreq(window)
         magnitudes = np.abs(fft_vals)
         # Ignore DC component (index 0)
         top_idx = np.argsort(magnitudes[1:])[-n_components:] + 1
@@ -320,6 +339,285 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 9. Swing levels — pivot highs/lows and distance from key S/R
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_swing_levels(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
+    """
+    Identify rolling pivot highs/lows and compute distance from current price.
+
+    Columns added
+    -------------
+    swing_high_{lookback}  : Rolling max high over lookback bars (S/R level)
+    swing_low_{lookback}   : Rolling min low over lookback bars
+    swing_high_dist        : (swing_high - close) / close  — distance to resistance
+    swing_low_dist         : (close - swing_low) / close   — distance to support
+    swing_position         : close position within [swing_low, swing_high] range [0,1]
+    swing_breakout_up      : 1 if close > prior swing_high (breakout)
+    swing_breakout_dn      : 1 if close < prior swing_low  (breakdown)
+    """
+    d = df.copy()
+    c, h, lo = d["close"], d["high"], d["low"]
+
+    swing_high = h.rolling(lookback).max().shift(1)
+    swing_low  = lo.rolling(lookback).min().shift(1)
+    swing_range = (swing_high - swing_low).replace(0, np.nan)
+
+    d[f"swing_high_{lookback}"] = swing_high
+    d[f"swing_low_{lookback}"]  = swing_low
+    d["swing_high_dist"]  = (swing_high - c) / c.replace(0, np.nan)
+    d["swing_low_dist"]   = (c - swing_low) / c.replace(0, np.nan)
+    d["swing_position"]   = (c - swing_low) / swing_range
+    d["swing_breakout_up"] = (c > swing_high).astype(int)
+    d["swing_breakout_dn"] = (c < swing_low).astype(int)
+
+    # 52-week high/low distance (useful for daily data)
+    high_52w = h.rolling(252, min_periods=20).max()
+    low_52w  = lo.rolling(252, min_periods=20).min()
+    d["dist_52wh"] = (high_52w - c) / high_52w.replace(0, np.nan)
+    d["dist_52wl"] = (c - low_52w) / low_52w.replace(0, np.nan)
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Momentum divergence — price vs RSI/MACD divergence
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_momentum_divergence(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+    """
+    Detect bullish/bearish divergence between price and momentum oscillators.
+
+    A bullish divergence occurs when price makes a lower low but RSI makes a
+    higher low — suggesting weakening selling pressure.
+
+    Columns added
+    -------------
+    div_rsi_bull  : 1 if price lower low + RSI higher low (bullish divergence)
+    div_rsi_bear  : 1 if price higher high + RSI lower high (bearish divergence)
+    div_macd_bull : 1 if price lower low + MACD hist higher low
+    div_macd_bear : 1 if price higher high + MACD hist lower high
+    mom_strength  : Composite momentum: RSI z-score + MACD hist z-score
+    """
+    d = df.copy()
+    c = d["close"]
+
+    # Require RSI and MACD to already be computed
+    if "rsi_14" not in d.columns or "macd_hist" not in d.columns:
+        d = add_technical_indicators(d)
+
+    rsi  = d["rsi_14"]
+    macd = d["macd_hist"]
+
+    # Rolling window lows/highs for divergence detection
+    price_low  = c.rolling(window).min()
+    price_high = c.rolling(window).max()
+    rsi_low    = rsi.rolling(window).min()
+    rsi_high   = rsi.rolling(window).max()
+    macd_low   = macd.rolling(window).min()
+    macd_high  = macd.rolling(window).max()
+
+    # Bullish: price at new low but oscillator not at new low
+    d["div_rsi_bull"]  = ((c == price_low) & (rsi > rsi_low)).astype(int)
+    d["div_rsi_bear"]  = ((c == price_high) & (rsi < rsi_high)).astype(int)
+    d["div_macd_bull"] = ((c == price_low) & (macd > macd_low)).astype(int)
+    d["div_macd_bear"] = ((c == price_high) & (macd < macd_high)).astype(int)
+
+    # Composite momentum strength (z-scored)
+    rsi_z  = (rsi  - rsi.rolling(50).mean())  / rsi.rolling(50).std().replace(0, np.nan)
+    macd_z = (macd - macd.rolling(50).mean()) / macd.rolling(50).std().replace(0, np.nan)
+    d["mom_strength"] = (rsi_z.fillna(0) + macd_z.fillna(0)) / 2.0
+
+    # Rate of change of momentum
+    d["mom_roc_5"]  = rsi.pct_change(5)
+    d["mom_roc_20"] = rsi.pct_change(20)
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Volume profile — VWAP bands, volume-weighted momentum
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_volume_profile(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Volume-weighted price features and VWAP deviation bands.
+
+    Columns added
+    -------------
+    vwap_session    : Cumulative VWAP (reset daily if DatetimeIndex)
+    vwap_dev_pct    : (close - vwap) / vwap
+    vwap_band_upper : vwap + 2 * rolling std of (close - vwap)
+    vwap_band_lower : vwap - 2 * rolling std of (close - vwap)
+    vol_price_trend : OBV-style: sign(ret) * volume, rolling sum
+    vol_weighted_ret: Volume-weighted return (price change × volume)
+    vol_surge       : volume / rolling_mean_volume_20 — surge indicator
+    """
+    d = df.copy()
+    c = d["close"]
+    v = d.get("volume", pd.Series(np.ones(len(c)), index=c.index))
+    typical = (d["high"] + d["low"] + c) / 3
+
+    # Session VWAP (rolling 20-bar approximation for non-intraday data)
+    cum_tp_vol = (typical * v).rolling(20).sum()
+    cum_vol    = v.rolling(20).sum().replace(0, np.nan)
+    d["vwap_session"] = cum_tp_vol / cum_vol
+
+    vwap = d["vwap_session"]
+    vwap_dev = c - vwap
+    vwap_dev_std = vwap_dev.rolling(20).std().replace(0, np.nan)
+
+    d["vwap_dev_pct"]    = vwap_dev / vwap.replace(0, np.nan)
+    d["vwap_band_upper"] = vwap + 2 * vwap_dev_std
+    d["vwap_band_lower"] = vwap - 2 * vwap_dev_std
+    d["vwap_pct_b"]      = (c - d["vwap_band_lower"]) / (
+        (d["vwap_band_upper"] - d["vwap_band_lower"]).replace(0, np.nan)
+    )
+
+    # Volume-weighted momentum
+    sign_ret = np.sign(c.diff())
+    d["vol_price_trend"] = (sign_ret * v).rolling(20).sum()
+    d["vol_weighted_ret"] = (c.pct_change() * v).rolling(5).sum()
+
+    # Volume surge
+    vol_mean = v.rolling(20).mean().replace(0, np.nan)
+    d["vol_surge"] = v / vol_mean
+
+    # Accumulation/Distribution line
+    clv = ((c - d["low"]) - (d["high"] - c)) / (d["high"] - d["low"]).replace(0, np.nan)
+    d["ad_line"] = (clv * v).cumsum()
+    d["ad_line_ema"] = _ema(d["ad_line"], 14)
+    d["ad_divergence"] = d["ad_line"] - d["ad_line_ema"]
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. Microstructure proxy — tick direction, spread proxy, trade intensity
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_microstructure_proxy(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Microstructure features derived from OHLCV without order-book data.
+
+    These are proxies for the true microstructure features in
+    research/pipeline/microstructure.py, usable when only OHLCV is available.
+
+    Columns added
+    -------------
+    tick_dir        : +1 uptick, -1 downtick, 0 unchanged
+    tick_ema5       : EMA(5) of tick direction
+    spread_proxy    : (high - low) / close — proxy for bid-ask spread
+    spread_z20      : z-score of spread_proxy over 20 bars
+    close_loc       : (close - low) / (high - low) — close location [0,1]
+    buy_pressure    : close_loc as proxy for buy-side pressure
+    price_impact    : |ret| / vol_surge — price impact per unit volume
+    """
+    d = df.copy()
+    c = d["close"]
+    h, lo = d["high"], d["low"]
+    v = d.get("volume", pd.Series(np.ones(len(c)), index=c.index))
+
+    # Tick direction
+    tick = np.sign(c.diff()).fillna(0)
+    d["tick_dir"]  = tick
+    d["tick_ema5"] = _ema(tick, 5)
+    d["tick_run"]  = tick.groupby((tick != tick.shift()).cumsum()).cumcount() + 1
+    d["tick_run"]  = d["tick_run"] * tick  # signed run length
+
+    # Spread proxy
+    hl_range = (h - lo).replace(0, np.nan)
+    spread_proxy = hl_range / c.replace(0, np.nan)
+    spread_mean  = spread_proxy.rolling(20).mean()
+    spread_std   = spread_proxy.rolling(20).std().replace(0, np.nan)
+    d["spread_proxy"] = spread_proxy
+    d["spread_z20"]   = (spread_proxy - spread_mean) / spread_std
+
+    # Close location within bar
+    d["close_loc"]    = (c - lo) / hl_range
+    d["buy_pressure"] = d["close_loc"].rolling(5).mean()
+
+    # Price impact proxy
+    vol_mean = v.rolling(20).mean().replace(0, np.nan)
+    vol_surge = (v / vol_mean).replace(0, np.nan)
+    d["price_impact"] = c.pct_change().abs() / vol_surge
+
+    # Amihud illiquidity ratio (|ret| / volume)
+    d["amihud"] = c.pct_change().abs() / v.replace(0, np.nan)
+    d["amihud_ma20"] = d["amihud"].rolling(20).mean()
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. Regime context — trend strength, vol regime, HMM-style state
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_regime_context(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Regime-level context features for the current bar.
+
+    Columns added
+    -------------
+    trend_strength  : ADX-like directional movement index
+    trend_dir       : +1 uptrend, -1 downtrend, 0 sideways
+    vol_regime_3    : 3-class vol regime: 0=low, 1=medium, 2=high
+    regime_change   : 1 if vol_regime changed from prior bar
+    adx_14          : Average Directional Index (14)
+    di_plus         : +DI (directional indicator)
+    di_minus        : -DI
+    """
+    d = df.copy()
+    h, lo, c = d["high"], d["low"], d["close"]
+
+    # True Range and Directional Movement
+    tr = _true_range(d)
+    atr14 = tr.ewm(com=13, adjust=False).mean().replace(0, np.nan)
+
+    up_move   = h - h.shift(1)
+    down_move = lo.shift(1) - lo
+
+    plus_dm  = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+
+    plus_dm_s  = pd.Series(plus_dm,  index=d.index).ewm(com=13, adjust=False).mean()
+    minus_dm_s = pd.Series(minus_dm, index=d.index).ewm(com=13, adjust=False).mean()
+
+    di_plus  = 100 * plus_dm_s  / atr14
+    di_minus = 100 * minus_dm_s / atr14
+    dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus).replace(0, np.nan)
+    adx = dx.ewm(com=13, adjust=False).mean()
+
+    d["adx_14"]   = adx
+    d["di_plus"]  = di_plus
+    d["di_minus"] = di_minus
+
+    # Trend strength and direction
+    d["trend_strength"] = adx / 100.0  # normalised [0, 1]
+    d["trend_dir"] = np.where(di_plus > di_minus, 1, np.where(di_minus > di_plus, -1, 0))
+
+    # Volatility regime (3-class: low / medium / high)
+    log_ret = np.log(c / c.shift(1))
+    rv20 = log_ret.rolling(20).std() * np.sqrt(252)
+    q33  = rv20.rolling(252, min_periods=60).quantile(0.33)
+    q67  = rv20.rolling(252, min_periods=60).quantile(0.67)
+    vol_regime = pd.Series(1, index=d.index)  # default: medium
+    vol_regime = vol_regime.where(rv20 >= q33, 0)   # low
+    vol_regime = vol_regime.where(rv20 <= q67, 2)   # high
+    # Re-apply medium where both conditions fail
+    vol_regime = np.where(rv20 < q33, 0, np.where(rv20 > q67, 2, 1))
+    d["vol_regime_3"]  = vol_regime
+    d["regime_change"] = (pd.Series(vol_regime, index=d.index).diff().abs() > 0).astype(int)
+
+    # Choppiness index (measures trendiness vs choppiness)
+    atr_sum = tr.rolling(14).sum()
+    hl_range = (h.rolling(14).max() - lo.rolling(14).min()).replace(0, np.nan)
+    d["choppiness"] = 100 * np.log10(atr_sum / hl_range) / np.log10(14)
+
+    return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Master builder
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -329,19 +627,31 @@ def build_feature_matrix(
     fourier_components: int = 5,
     lag_periods: Optional[List[int]] = None,
     rolling_windows: Optional[List[int]] = None,
+    swing_lookback: int = 20,
     drop_na: bool = True,
+    include_microstructure: bool = True,
+    include_regime: bool = True,
+    include_volume_profile: bool = True,
+    include_divergence: bool = True,
+    include_swing: bool = True,
 ) -> pd.DataFrame:
     """
     Apply all feature groups in sequence and return a clean DataFrame.
 
     Parameters
     ----------
-    df                 : OHLCV DataFrame (DatetimeIndex, UTC)
-    fourier_window     : Look-back window for rolling FFT
-    fourier_components : Number of dominant FFT components to keep
-    lag_periods        : Override default lag periods
-    rolling_windows    : Override default rolling windows
-    drop_na            : Drop rows with any NaN (from look-back warm-up)
+    df                    : OHLCV DataFrame (DatetimeIndex, UTC)
+    fourier_window        : Look-back window for rolling FFT
+    fourier_components    : Number of dominant FFT components to keep
+    lag_periods           : Override default lag periods
+    rolling_windows       : Override default rolling windows
+    swing_lookback        : Lookback for pivot high/low detection
+    drop_na               : Drop rows with any NaN (from look-back warm-up)
+    include_microstructure: Add microstructure proxy features (group 12)
+    include_regime        : Add regime context features (group 13)
+    include_volume_profile: Add volume profile features (group 11)
+    include_divergence    : Add momentum divergence features (group 10)
+    include_swing         : Add swing level features (group 9)
 
     Returns
     -------
@@ -350,6 +660,8 @@ def build_feature_matrix(
     logger.info("Building feature matrix  shape=%s", df.shape)
 
     d = df.copy()
+
+    # Core groups (always applied)
     d = add_technical_indicators(d)
     d = add_lag_features(d, periods=lag_periods or LAG_PERIODS)
     d = add_rolling_stats(d, windows=rolling_windows or ROLLING_WINDOWS)
@@ -358,12 +670,32 @@ def build_feature_matrix(
     d = add_volatility_regime(d)
     d = add_calendar_features(d)
 
+    # Extended groups (optional but on by default)
+    if include_swing:
+        d = add_swing_levels(d, lookback=swing_lookback)
+    if include_divergence:
+        d = add_momentum_divergence(d)
+    if include_volume_profile:
+        d = add_volume_profile(d)
+    if include_microstructure:
+        d = add_microstructure_proxy(d)
+    if include_regime:
+        d = add_regime_context(d)
+
     if drop_na:
         before = len(d)
         d.dropna(inplace=True)
         logger.info("Dropped %d NaN rows (warm-up); final shape=%s", before - len(d), d.shape)
 
+    logger.info("Feature matrix complete: %d features", d.shape[1])
     return d
+
+
+def feature_names(df: pd.DataFrame) -> List[str]:
+    """Return the list of feature column names (excludes OHLCV and target columns)."""
+    exclude = {"open", "high", "low", "close", "volume", "vwap",
+               "target_ret", "target_dir", "target_bin"}
+    return [c for c in df.columns if c not in exclude]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
