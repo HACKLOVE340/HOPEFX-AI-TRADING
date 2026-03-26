@@ -91,16 +91,25 @@ python_functions = "test_*"
 
 [tool.coverage.run]
 source = ["."]
+branch = true
 omit = [
     "*/tests/*",
     "*/test_*.py",
     "*/__pycache__/*",
     "*/venv/*",
     "*/env/*",
+    "*/alembic/*",
+    "*/migrations/*",
+    "*/site-packages/*",
+    "*/setup.py",
+    "*/conftest.py",
 ]
 
 [tool.coverage.report]
 precision = 2
+fail_under = 70
+show_missing = true
+skip_empty = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

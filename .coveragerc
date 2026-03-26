@@ -1,16 +1,28 @@
 [coverage]
 source = .
+branch = true
 omit =
     */tests/*
     */examples/*
+    */migrations/*
+    */alembic/*
+    */venv/*
+    */.venv/*
+    */site-packages/*
+    */setup.py
+    */conftest.py
+    */__pycache__/*
 report_precision = 2
-# Minimum coverage gate enforced in CI.
-# tests.yml enforces 60% (floor). ci.yml enforces 70% (target).
-# Increase incrementally as integration tests are filled.
-fail_under = 60
+# Coverage gate: 70% line + branch coverage required.
+# Enforced in both tests.yml and ci.yml.
+# Increase to 75% once ML and data modules have unit tests.
+fail_under = 70
+show_missing = true
+skip_empty = true
 
 [html]
 directory = coverage_html_report
+title = HOPEFX Coverage Report
 
 [xml]
-directory = coverage_xml_report
+output = coverage.xml
