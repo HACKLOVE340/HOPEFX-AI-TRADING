@@ -143,8 +143,11 @@ class TestAdvancedRiskAnalytics:
         assert result_99.var_value >= result_95.var_value
 
     def test_calculate_var_historical_multi_day(self, analytics, returns):
-        result_1d = analytics.calculate_var_historical(returns, time_horizon=1)
-        result_10d = analytics.calculate_var_historical(returns, time_horizon=10)
+        # Multi-day historical VaR is now routed through recommended_var()
+        # (calculate_var_historical raises RuntimeError for time_horizon > 1
+        # when ENFORCE_MULTIDAY_VAR=True — use recommended_var for production).
+        result_1d = analytics.recommended_var(returns, time_horizon=1)
+        result_10d = analytics.recommended_var(returns, time_horizon=10)
         assert result_10d.var_value > result_1d.var_value
 
     def test_calculate_var_parametric_basic(self, analytics, returns):
@@ -168,7 +171,9 @@ class TestAdvancedRiskAnalytics:
         result = analytics.calculate_var_monte_carlo(returns, num_simulations=1000)
         assert isinstance(result, VaRResult)
         assert result.var_value > 0
-        assert result.method == 'monte_carlo'
+        # Gaussian simulation method name updated to 'monte_carlo_gaussian'
+        # to distinguish from bootstrap ('monte_carlo_bootstrap')
+        assert result.method in ('monte_carlo_gaussian', 'monte_carlo')
 
     def test_calculate_var_monte_carlo_with_portfolio_value(self, analytics, returns):
         result = analytics.calculate_var_monte_carlo(

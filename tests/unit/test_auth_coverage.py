@@ -35,15 +35,14 @@ class TestAuthService:
 
     def test_password_hashing(self):
         """Passwords must be hashed — plain text must never match hash."""
-        try:
-            from passlib.context import CryptContext
-        except ImportError:
-            pytest.skip("passlib not installed")
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        hashed = ctx.hash("MySecurePass123!")
+        # Use auth.jwt helpers (SHA-256 pre-hash + direct bcrypt) rather than
+        # passlib.CryptContext directly — passlib 1.7.x + bcrypt 4.x raises
+        # ValueError during backend detection on this Python/bcrypt version.
+        from auth.jwt import hash_password, verify_password
+        hashed = hash_password("MySecurePass123!")
         assert hashed != "MySecurePass123!"
-        assert ctx.verify("MySecurePass123!", hashed)
-        assert not ctx.verify("WrongPassword", hashed)
+        assert verify_password("MySecurePass123!", hashed)
+        assert not verify_password("WrongPassword", hashed)
 
     def test_jwt_encode_decode_roundtrip(self):
         """JWT encode → decode must preserve sub and role."""
