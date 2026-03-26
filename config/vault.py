@@ -113,12 +113,20 @@ class SecureVault:
         pass
 
     def secure_delete(self) -> None:
-        """Securely wipe vault keys."""
+        """Securely wipe vault keys from keyring and memory."""
         try:
             keyring.delete_password(self._service_name, self._key_name)
+        except Exception as e:
+            # Log but do not swallow — caller must know if keyring wipe failed
+            # so they can escalate (e.g. force pod restart, alert ops).
+            import logging as _logging
+            _logging.getLogger(__name__).error(
+                "SecureVault.secure_delete: keyring wipe failed: %s", e
+            )
+            raise VaultError(f"Keyring wipe failed — key may still be stored: {e}") from e
+        finally:
+            # Always zero the in-memory key regardless of keyring outcome
             self._fernet = None
-        except Exception:
-            pass
 
 
 # Global vault instance
