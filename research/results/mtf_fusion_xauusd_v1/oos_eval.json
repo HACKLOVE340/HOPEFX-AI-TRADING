@@ -1,0 +1,12 @@
+{
+  "oos_accuracy": 0.68,
+  "p_value": 0.0000,
+  "n_samples": 756,
+  "n_correct": 514,
+  "n_incorrect": 242,
+  "confidence_interval_95": [0.645, 0.715],
+  "test": "one-sided binomial (H0: accuracy <= 0.5)",
+  "abstain_rate": 0.275,
+  "abstain_threshold": "0.25 * ATR(14)",
+  "note": "Only bars with |return| >= 0.25*ATR are included in OOS evaluation. Abstained bars are excluded from accuracy calculation."
+}
