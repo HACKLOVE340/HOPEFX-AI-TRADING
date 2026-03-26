@@ -10,9 +10,12 @@ Features
 - Custom tags: environment, model_version, broker, region
 - Profiling (CPU profiling of slow transactions)
 - Release tracking (git SHA from GIT_COMMIT env var)
-- Sensitive data scrubbing (API keys, tokens, passwords)
+- Sensitive data scrubbing (API keys, tokens, passwords, account IDs, IPs)
 - FastAPI, SQLAlchemy, Redis, aiohttp integrations (auto-detected)
 - ML fallback alert: CRITICAL log events forwarded as Sentry issues
+- Paper trading clock alert: fires when 30-day gate expires
+- Sharpe gate alert: fires when N < 600 trades but live trading attempted
+- Kill-switch alert: fires when kill-switch trips
 - Custom before_send hook: strips PII and adds trading context
 
 Environment variables
@@ -27,17 +30,15 @@ GIT_COMMIT                  — git SHA injected by CI/CD pipeline
 
 Usage
 -----
-    from monitoring.sentry_config import init_sentry, capture_ml_fallback_event
-
-    # At app startup (called automatically by app.py via api/platform.py):
-    init_sentry()
-
-    # When the ML fallback activates (called from ml/__init__.py):
-    capture_ml_fallback_event(
-        reason="advanced_oos.pkl not found",
-        fallback_model="xgb_macro.pkl",
-        fallback_accuracy=0.503,
+    from monitoring.sentry_config import (
+        init_sentry,
+        capture_ml_fallback_event,
+        capture_paper_clock_alert,
+        capture_sharpe_gate_alert,
+        capture_kill_switch_alert,
     )
+
+    init_sentry()   # called automatically by app.py via api/platform.py
 """
 
 from __future__ import annotations
@@ -51,28 +52,55 @@ logger = logging.getLogger(__name__)
 # ── Sensitive field names to scrub from Sentry payloads ──────────────────────
 _SCRUB_FIELDS = frozenset(
     {
-        "password",
-        "api_key",
-        "api_secret",
-        "token",
-        "access_token",
-        "refresh_token",
-        "authorization",
-        "secret",
-        "private_key",
-        "broker_token",
-        "oanda_token",
-        "jwt",
-        "credit_card",
-        "card_number",
-        "cvv",
-        "ssn",
+        # Auth / credentials
+        "password", "passwd", "pwd",
+        "api_key", "api_secret", "api_token",
+        "token", "access_token", "refresh_token", "id_token",
+        "authorization", "auth", "bearer",
+        "secret", "secret_key", "private_key", "signing_key",
+        "broker_token", "oanda_token", "oanda_api_key",
+        "broker_oanda_token", "broker_alpaca_key", "broker_alpaca_secret",
+        "jwt", "session_token", "cookie",
+        # Financial PII
+        "credit_card", "card_number", "cvv", "cvc", "expiry",
+        "bank_account", "routing_number", "iban", "swift",
+        "stripe_key", "stripe_secret", "paypal_secret",
+        # Personal PII
+        "ssn", "social_security", "dob", "date_of_birth",
+        "email", "phone", "address", "ip_address", "ip",
+        "account_id", "user_id",  # scrub account IDs from payloads
+        # Database / infra
+        "database_url", "db_url", "redis_url", "postgres_url",
+        "smtp_password", "smtp_user",
+        "sentry_dsn",  # never leak the DSN itself
     }
 )
 
+# ── Regex patterns for PII in string values ───────────────────────────────────
+import re as _re
+_PII_PATTERNS = [
+    # Bearer tokens
+    (_re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", _re.I), "Bearer [Filtered]"),
+    # JWT tokens (3 base64 segments)
+    (_re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), "[JWT Filtered]"),
+    # OANDA API keys (32-char hex-like)
+    (_re.compile(r"\b[0-9a-f]{32}\b"), "[Key Filtered]"),
+    # IPv4 addresses
+    (_re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"), "[IP Filtered]"),
+    # Email addresses
+    (_re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"), "[Email Filtered]"),
+]
+
+
+def _scrub_string(s: str) -> str:
+    """Apply PII regex patterns to a string value."""
+    for pattern, replacement in _PII_PATTERNS:
+        s = pattern.sub(replacement, s)
+    return s
+
 
 def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively replace sensitive values with '[Filtered]'."""
+    """Recursively replace sensitive values with '[Filtered]' and scrub PII strings."""
     if not isinstance(d, dict):
         return d
     out = {}
@@ -82,7 +110,9 @@ def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, dict):
             out[k] = _scrub_dict(v)
         elif isinstance(v, list):
-            out[k] = [_scrub_dict(i) if isinstance(i, dict) else i for i in v]
+            out[k] = [_scrub_dict(i) if isinstance(i, dict) else (_scrub_string(i) if isinstance(i, str) else i) for i in v]
+        elif isinstance(v, str):
+            out[k] = _scrub_string(v)
         else:
             out[k] = v
     return out
@@ -325,6 +355,116 @@ def capture_ml_fallback_event(
         logger.debug("Sentry: ML fallback event captured")
     except Exception as exc:
         logger.debug("Sentry capture_ml_fallback_event failed: %s", exc)
+
+
+def capture_paper_clock_alert(
+    elapsed_days: float,
+    remaining_days: float,
+    account_id: str = "",
+    environment: str = "practice",
+) -> None:
+    """
+    Capture a Sentry warning when the 30-day paper trading clock expires
+    or when live trading is attempted before the clock completes.
+
+    Called by the production live trading gate when paper_clock.is_complete()
+    returns False but a live order is attempted.
+    """
+    try:
+        import sentry_sdk
+        with sentry_sdk.push_scope() as scope:
+            scope.set_level("warning")
+            scope.set_tag("alert_type", "paper_clock_gate")
+            scope.set_tag("oanda_environment", environment)
+            scope.set_extra("elapsed_days", elapsed_days)
+            scope.set_extra("remaining_days", remaining_days)
+            scope.set_extra(
+                "remediation",
+                f"Paper trading clock needs {remaining_days:.1f} more days. "
+                "Do not enable live trading until 30-day run is complete.",
+            )
+            sentry_sdk.capture_message(
+                f"PAPER CLOCK GATE: {elapsed_days:.1f}/{elapsed_days + remaining_days:.0f} days "
+                f"elapsed — live trading blocked until clock completes.",
+                level="warning",
+            )
+        logger.debug("Sentry: paper clock alert captured")
+    except Exception as exc:
+        logger.debug("Sentry capture_paper_clock_alert failed: %s", exc)
+
+
+def capture_sharpe_gate_alert(
+    n_trades: int,
+    sharpe: float,
+    se: float,
+    target_n: int = 600,
+) -> None:
+    """
+    Capture a Sentry warning when live trading is attempted but the Sharpe
+    SE gate has not been passed (N < target_n trades).
+
+    N=48 trades: SE=0.21 — not credible. Need N=600 for SE<=0.10.
+    """
+    try:
+        import sentry_sdk
+        with sentry_sdk.push_scope() as scope:
+            scope.set_level("warning")
+            scope.set_tag("alert_type", "sharpe_gate_blocked")
+            scope.set_extra("n_trades", n_trades)
+            scope.set_extra("sharpe_estimate", sharpe)
+            scope.set_extra("sharpe_se", se)
+            scope.set_extra("target_n", target_n)
+            scope.set_extra(
+                "remediation",
+                f"Run multi-symbol backtest (XAU+BTC+ETH) targeting N={target_n} trades. "
+                f"Current N={n_trades} gives SE={se:.3f} — not statistically credible.",
+            )
+            sentry_sdk.capture_message(
+                f"SHARPE GATE BLOCKED: N={n_trades} trades, SE={se:.3f} "
+                f"(need N>={target_n} for SE<=0.10). Sharpe={sharpe:.2f} not credible.",
+                level="warning",
+            )
+        logger.debug("Sentry: Sharpe gate alert captured")
+    except Exception as exc:
+        logger.debug("Sentry capture_sharpe_gate_alert failed: %s", exc)
+
+
+def capture_kill_switch_alert(
+    reason: str,
+    triggered_by: str = "system",
+    drawdown_pct: float = 0.0,
+) -> None:
+    """
+    Capture a Sentry critical alert when the kill-switch trips.
+
+    This is the highest-priority alert — it means all trading has been
+    halted due to a risk limit breach.
+    """
+    try:
+        import sentry_sdk
+        with sentry_sdk.push_scope() as scope:
+            scope.set_level("fatal")
+            scope.set_tag("alert_type", "kill_switch_triggered")
+            scope.set_tag("triggered_by", triggered_by)
+            scope.set_extra("reason", reason)
+            scope.set_extra("drawdown_pct", drawdown_pct)
+            scope.set_extra(
+                "impact",
+                "ALL live trading halted. Manual review required before re-enabling.",
+            )
+            scope.set_extra(
+                "remediation",
+                "Review risk limits in config/risk_limits.json. "
+                "Re-enable via POST /api/kill-switch/reset (admin only).",
+            )
+            sentry_sdk.capture_message(
+                f"KILL SWITCH TRIGGERED by {triggered_by}: {reason} "
+                f"(drawdown={drawdown_pct:.1f}%). ALL TRADING HALTED.",
+                level="fatal",
+            )
+        logger.critical("Sentry: kill-switch alert captured — %s", reason)
+    except Exception as exc:
+        logger.debug("Sentry capture_kill_switch_alert failed: %s", exc)
 
 
 def start_transaction(name: str, op: str = "task") -> Any:
