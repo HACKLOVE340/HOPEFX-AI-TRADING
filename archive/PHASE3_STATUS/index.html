@@ -1,0 +1,2138 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AI-powered gold and forex trading platform — guides, API reference, and tutorials.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.hopefx.io/archive/PHASE3_STATUS/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/banner.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Phase 3 Status: Wallet & Payment System - HOPEFX Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-XXXXXXXXXX"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-XXXXXXXXXX",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#phase-3-status-wallet-payment-system" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="HOPEFX Documentation" class="md-header__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HOPEFX Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Phase 3 Status: Wallet &amp; Payment System
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../INSTALLATION/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../API_GUIDE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../model_performance/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Model Performance
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../API_REFERENCE/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../ci_cd_pipeline/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CI/CD Pipeline
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../FAQ/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../CONTRIBUTING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../SECURITY/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Security
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DEBUGGING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Debugging
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DEPLOYMENT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Deployment
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HOPEFX Documentation" class="md-nav__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    HOPEFX Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../oanda_paper_trading_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OANDA Paper Trading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../live_trading_gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Trading Gate (30-day)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ORDER_FLOW_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Order Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SAMPLE_STRATEGIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOBILE_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mobile Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSET_DIVERSIFICATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset Diversification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MONETIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monetization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMUNITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_cd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEBUGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-progress-8-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Progress: 8% Complete
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current Progress: 8% Complete">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implemented-113-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ✅ Implemented (1/13 files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remaining-implementation-1213-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remaining Implementation (12/13 files)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remaining Implementation (12/13 files)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-wallet-system-2-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Wallet System (2 files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crypto-integration-5-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crypto Integration (5 files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nigerian-fintech-integration-3-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nigerian Fintech Integration (3 files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-compliance-2-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Compliance (2 files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features Implemented
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Implemented">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wallet-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Management ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wallet-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transaction-structure-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transaction Structure (Planned)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#payment-methods-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payment Methods (Planned)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Payment Methods (Planned)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#crypto-payments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crypto Payments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nigerian-fintech" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nigerian Fintech
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-features-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Features (Planned)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Features (Planned)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#transaction-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transaction Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wallet-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Timeline
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Timeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#week-1-current" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Week 1 (Current)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#week-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Week 2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#week-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Week 3
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#week-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Week 4
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies Required
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Endpoints (Planned)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API Endpoints (Planned)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#user-wallet-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User Wallet APIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#admin-wallet-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin Wallet APIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unit-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#end-to-end-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-End Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#success-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Success Criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="phase-3-status-wallet-payment-system">Phase 3 Status: Wallet &amp; Payment System<a class="headerlink" href="#phase-3-status-wallet-payment-system" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Phase 3 focuses on implementing a comprehensive wallet and payment system to handle:
+- Subscription payments ($1,800-$10,000/month)
+- Commission fees (0.1%-0.5% per trade)
+- User deposits and withdrawals
+- Admin revenue collection</p>
+<p><strong>Important:</strong> This system does NOT handle trading capital - that stays with brokers/prop firms.</p>
+<hr />
+<h2 id="current-progress-8-complete">Current Progress: 8% Complete<a class="headerlink" href="#current-progress-8-complete" title="Permanent link">&para;</a></h2>
+<h3 id="implemented-113-files">✅ Implemented (1/13 files)<a class="headerlink" href="#implemented-113-files" title="Permanent link">&para;</a></h3>
+<p><strong>1. payments/wallet.py</strong> (416 lines) ✅
+- Wallet creation and management
+- Dual wallet system (subscription + commission)
+- Credit/debit operations
+- Balance tracking and retrieval
+- Transfer between wallet types
+- Freeze/unfreeze functionality
+- Transaction history
+- In-memory storage (ready for database)</p>
+<hr />
+<h2 id="remaining-implementation-1213-files">Remaining Implementation (12/13 files)<a class="headerlink" href="#remaining-implementation-1213-files" title="Permanent link">&para;</a></h2>
+<h3 id="core-wallet-system-2-files">Core Wallet System (2 files)<a class="headerlink" href="#core-wallet-system-2-files" title="Permanent link">&para;</a></h3>
+<p><strong>2. payments/transaction_manager.py</strong> ⏳
+- Transaction recording and validation
+- Status management (pending, completed, failed, cancelled)
+- Transaction reversal support
+- Statement generation
+- User transaction history
+- ~370 lines estimated</p>
+<p><strong>3. payments/payment_gateway.py</strong> ⏳
+- Unified payment interface
+- Method routing (crypto vs fintech)
+- Fee calculation
+- Currency conversion
+- Payment confirmation
+- Statistics tracking
+- ~350 lines estimated</p>
+<h3 id="crypto-integration-5-files">Crypto Integration (5 files)<a class="headerlink" href="#crypto-integration-5-files" title="Permanent link">&para;</a></h3>
+<p><strong>4. payments/crypto/bitcoin.py</strong> ⏳
+- Bitcoin deposit/withdrawal
+- HD wallet address generation
+- Blockchain monitoring (3 confirmations)
+- Transaction broadcasting
+- Network fee calculation
+- ~450 lines estimated</p>
+<p><strong>5. payments/crypto/usdt.py</strong> ⏳
+- USDT support (TRC20 and ERC20 networks)
+- Smart contract interaction
+- Gas fee optimization
+- Multi-network support
+- ~400 lines estimated</p>
+<p><strong>6. payments/crypto/ethereum.py</strong> ⏳
+- Ethereum deposit/withdrawal
+- Web3 integration
+- Gas price estimation
+- Transaction signing
+- Receipt verification
+- ~420 lines estimated</p>
+<p><strong>7. payments/crypto/wallet_manager.py</strong> ⏳
+- Master wallet management
+- Hot/cold wallet separation
+- Address rotation
+- Private key security
+- Balance aggregation
+- ~480 lines estimated</p>
+<p><strong>8. payments/crypto/address_generator.py</strong> ⏳
+- Unique deposit address per user
+- BIP32/BIP44 compliance
+- Derivation path management
+- QR code generation
+- Address validation
+- ~320 lines estimated</p>
+<h3 id="nigerian-fintech-integration-3-files">Nigerian Fintech Integration (3 files)<a class="headerlink" href="#nigerian-fintech-integration-3-files" title="Permanent link">&para;</a></h3>
+<p><strong>9. payments/fintech/paystack.py</strong> ⏳
+- Payment initialization
+- Bank transfer, Card, USSD support
+- Webhook verification
+- Transfer to bank account
+- Transaction verification
+- ~550 lines estimated</p>
+<p><strong>10. payments/fintech/flutterwave.py</strong> ⏳
+- Payment link generation
+- Virtual account creation
+- Mobile money support
+- Webhook handling
+- Payout to bank
+- Currency conversion (NGN ↔ USD)
+- ~520 lines estimated</p>
+<p><strong>11. payments/fintech/bank_transfer.py</strong> ⏳
+- Nigerian bank integration
+- Account validation
+- Transfer initiation
+- Transfer status tracking
+- Fee calculation
+- Settlement handling
+- ~480 lines estimated</p>
+<h3 id="security-compliance-2-files">Security &amp; Compliance (2 files)<a class="headerlink" href="#security-compliance-2-files" title="Permanent link">&para;</a></h3>
+<p><strong>12. payments/security.py</strong> ⏳
+- 2FA verification for withdrawals
+- KYC validation
+- Transaction limits (daily, monthly)
+- IP whitelist
+- Device fingerprinting
+- Suspicious activity detection
+- ~420 lines estimated</p>
+<p><strong>13. payments/compliance.py</strong> ⏳
+- AML (Anti-Money Laundering) checks
+- Transaction monitoring
+- Large transaction reporting
+- Jurisdiction compliance
+- Audit trail
+- Regulatory reporting
+- ~350 lines estimated</p>
+<hr />
+<h2 id="features-implemented">Features Implemented<a class="headerlink" href="#features-implemented" title="Permanent link">&para;</a></h2>
+<h3 id="wallet-management">Wallet Management ✅<a class="headerlink" href="#wallet-management" title="Permanent link">&para;</a></h3>
+<p><strong>Wallet Creation:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">wallet</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">create_wallet</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">user_id</span><span class="o">=</span><span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">initial_balance</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s1">&#39;0.00&#39;</span><span class="p">),</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">currency</span><span class="o">=</span><span class="s1">&#39;USD&#39;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Credit Wallet (Deposit):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">success</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">transaction</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">credit_wallet</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">user_id</span><span class="o">=</span><span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">amount</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s1">&#39;4500.00&#39;</span><span class="p">),</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">wallet_type</span><span class="o">=</span><span class="s1">&#39;subscription&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">transaction_type</span><span class="o">=</span><span class="s1">&#39;deposit&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">method</span><span class="o">=</span><span class="s1">&#39;bitcoin&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">reference</span><span class="o">=</span><span class="s1">&#39;BTC-TX-123456&#39;</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Debit Wallet (Withdrawal/Payment):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">success</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">transaction</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">debit_wallet</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">user_id</span><span class="o">=</span><span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">amount</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s1">&#39;4500.00&#39;</span><span class="p">),</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">wallet_type</span><span class="o">=</span><span class="s1">&#39;subscription&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">transaction_type</span><span class="o">=</span><span class="s1">&#39;payment&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">reference</span><span class="o">=</span><span class="s1">&#39;SUB-2026-001&#39;</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Check Balance:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">balance</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">get_balance</span><span class="p">(</span><span class="s1">&#39;user123&#39;</span><span class="p">)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Returns:</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># {</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1">#     &#39;subscription_balance&#39;: 4500.00,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1">#     &#39;commission_balance&#39;: 150.00,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1">#     &#39;total_balance&#39;: 4650.00,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1">#     &#39;currency&#39;: &#39;USD&#39;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># }</span>
+</code></pre></div></p>
+<p><strong>Transfer Between Wallets:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">success</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">transfer_between_wallets</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">user_id</span><span class="o">=</span><span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">amount</span><span class="o">=</span><span class="n">Decimal</span><span class="p">(</span><span class="s1">&#39;100.00&#39;</span><span class="p">),</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">from_wallet</span><span class="o">=</span><span class="s1">&#39;commission&#39;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">to_wallet</span><span class="o">=</span><span class="s1">&#39;subscription&#39;</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Freeze/Unfreeze Wallet:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Freeze (security measure)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">success</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">freeze_wallet</span><span class="p">(</span><span class="s1">&#39;user123&#39;</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Unfreeze</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">success</span><span class="p">,</span> <span class="n">message</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">unfreeze_wallet</span><span class="p">(</span><span class="s1">&#39;user123&#39;</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Get Transaction History:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">transactions</span> <span class="o">=</span> <span class="n">wallet_manager</span><span class="o">.</span><span class="n">get_transaction_history</span><span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">user_id</span><span class="o">=</span><span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">limit</span><span class="o">=</span><span class="mi">50</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">)</span>
+</code></pre></div></p>
+<hr />
+<h2 id="data-models">Data Models<a class="headerlink" href="#data-models" title="Permanent link">&para;</a></h2>
+<h3 id="wallet-structure">Wallet Structure<a class="headerlink" href="#wallet-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s1">&#39;wallet_id&#39;</span><span class="p">:</span> <span class="s1">&#39;WAL-user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s1">&#39;user_id&#39;</span><span class="p">:</span> <span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s1">&#39;subscription_balance&#39;</span><span class="p">:</span> <span class="mf">4500.00</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s1">&#39;commission_balance&#39;</span><span class="p">:</span> <span class="mf">150.00</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="s1">&#39;total_balance&#39;</span><span class="p">:</span> <span class="mf">4650.00</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="s1">&#39;currency&#39;</span><span class="p">:</span> <span class="s1">&#39;USD&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;active&#39;</span><span class="p">,</span>  <span class="c1"># active, frozen, suspended, closed</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="s1">&#39;created_at&#39;</span><span class="p">:</span> <span class="s1">&#39;2026-02-13T10:00:00&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="s1">&#39;updated_at&#39;</span><span class="p">:</span> <span class="s1">&#39;2026-02-13T12:00:00&#39;</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="transaction-structure-planned">Transaction Structure (Planned)<a class="headerlink" href="#transaction-structure-planned" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="s1">&#39;transaction_id&#39;</span><span class="p">:</span> <span class="s1">&#39;TXN-20260213120000&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="s1">&#39;user_id&#39;</span><span class="p">:</span> <span class="s1">&#39;user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="s1">&#39;wallet_id&#39;</span><span class="p">:</span> <span class="s1">&#39;WAL-user123&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;deposit&#39;</span><span class="p">,</span>  <span class="c1"># deposit, withdrawal, payment, commission, transfer</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="s1">&#39;amount&#39;</span><span class="p">:</span> <span class="mf">4500.00</span><span class="p">,</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="s1">&#39;currency&#39;</span><span class="p">:</span> <span class="s1">&#39;USD&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;bitcoin&#39;</span><span class="p">,</span>  <span class="c1"># bitcoin, usdt, ethereum, paystack, flutterwave</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="s1">&#39;wallet_type&#39;</span><span class="p">:</span> <span class="s1">&#39;subscription&#39;</span><span class="p">,</span>  <span class="c1"># subscription, commission</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;completed&#39;</span><span class="p">,</span>  <span class="c1"># pending, completed, failed, cancelled</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="s1">&#39;reference&#39;</span><span class="p">:</span> <span class="s1">&#39;BTC-TX-123456&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="s1">&#39;balance_after&#39;</span><span class="p">:</span> <span class="mf">4500.00</span><span class="p">,</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="s1">&#39;created_at&#39;</span><span class="p">:</span> <span class="s1">&#39;2026-02-13T12:00:00&#39;</span><span class="p">,</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="s1">&#39;completed_at&#39;</span><span class="p">:</span> <span class="s1">&#39;2026-02-13T12:30:00&#39;</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="payment-methods-planned">Payment Methods (Planned)<a class="headerlink" href="#payment-methods-planned" title="Permanent link">&para;</a></h2>
+<h3 id="crypto-payments">Crypto Payments<a class="headerlink" href="#crypto-payments" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Currency</th>
+<th>Network</th>
+<th>Min Deposit</th>
+<th>Confirmations</th>
+<th>Withdrawal Fee</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BTC</td>
+<td>Bitcoin</td>
+<td>0.001 BTC</td>
+<td>3</td>
+<td>Network + 0.0005 BTC</td>
+</tr>
+<tr>
+<td>USDT</td>
+<td>TRC20</td>
+<td>$10</td>
+<td>19</td>
+<td>Network + $2</td>
+</tr>
+<tr>
+<td>USDT</td>
+<td>ERC20</td>
+<td>$10</td>
+<td>12</td>
+<td>Network + $2</td>
+</tr>
+<tr>
+<td>ETH</td>
+<td>Ethereum</td>
+<td>0.01 ETH</td>
+<td>12</td>
+<td>Network + 0.005 ETH</td>
+</tr>
+</tbody>
+</table>
+<h3 id="nigerian-fintech">Nigerian Fintech<a class="headerlink" href="#nigerian-fintech" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Methods</th>
+<th>Fee</th>
+<th>Settlement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paystack</td>
+<td>Card, Bank, USSD</td>
+<td>1.5% + ₦100 cap</td>
+<td>T+1</td>
+</tr>
+<tr>
+<td>Flutterwave</td>
+<td>Card, Bank, Mobile</td>
+<td>1.4%</td>
+<td>T+1</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="security-features-planned">Security Features (Planned)<a class="headerlink" href="#security-features-planned" title="Permanent link">&para;</a></h2>
+<h3 id="transaction-security">Transaction Security<a class="headerlink" href="#transaction-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>2FA required for withdrawals &gt; $1,000</li>
+<li>KYC verification for amounts &gt; $1,000</li>
+<li>Daily withdrawal limits</li>
+<li>Monthly transaction caps</li>
+<li>IP whitelist for admin operations</li>
+</ul>
+<h3 id="wallet-security">Wallet Security<a class="headerlink" href="#wallet-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Hot wallet limit ($10,000)</li>
+<li>Cold storage for bulk funds</li>
+<li>Multi-signature for large withdrawals</li>
+<li>Automatic freeze on suspicious activity</li>
+</ul>
+<h3 id="compliance">Compliance<a class="headerlink" href="#compliance" title="Permanent link">&para;</a></h3>
+<ul>
+<li>AML screening on deposits &gt; $10,000</li>
+<li>Transaction monitoring</li>
+<li>Regulatory reporting</li>
+<li>Audit trail (all operations logged)</li>
+</ul>
+<hr />
+<h2 id="implementation-timeline">Implementation Timeline<a class="headerlink" href="#implementation-timeline" title="Permanent link">&para;</a></h2>
+<h3 id="week-1-current">Week 1 (Current)<a class="headerlink" href="#week-1-current" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ Core wallet system</li>
+<li>⏳ Transaction manager</li>
+<li>⏳ Payment gateway</li>
+</ul>
+<h3 id="week-2">Week 2<a class="headerlink" href="#week-2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>⏳ Bitcoin integration</li>
+<li>⏳ USDT integration (TRC20/ERC20)</li>
+<li>⏳ Ethereum integration</li>
+</ul>
+<h3 id="week-3">Week 3<a class="headerlink" href="#week-3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>⏳ Crypto wallet manager</li>
+<li>⏳ Address generator</li>
+<li>⏳ Paystack integration</li>
+</ul>
+<h3 id="week-4">Week 4<a class="headerlink" href="#week-4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>⏳ Flutterwave integration</li>
+<li>⏳ Bank transfer handler</li>
+<li>⏳ Security module</li>
+<li>⏳ Compliance module</li>
+</ul>
+<p><strong>Total Estimated:</strong> 4 weeks</p>
+<hr />
+<h2 id="dependencies-required">Dependencies Required<a class="headerlink" href="#dependencies-required" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Crypto</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">web3</span><span class="o">==</span><span class="mf">6.0.0</span>           <span class="c1"># Ethereum and USDT (ERC20)</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">bitcoinlib</span><span class="o">==</span><span class="mf">0.6.14</span>    <span class="c1"># Bitcoin</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">tronpy</span><span class="o">==</span><span class="mf">0.3.0</span>         <span class="c1"># USDT (TRC20)</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">qrcode</span><span class="o">==</span><span class="mf">7.4.2</span>         <span class="c1"># QR code generation</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Nigerian Fintech</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">pypaystack2</span><span class="o">==</span><span class="mf">2.0.0</span>    <span class="c1"># Paystack</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="n">rave</span><span class="o">-</span><span class="n">python</span><span class="o">==</span><span class="mf">1.3.0</span>    <span class="c1"># Flutterwave</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Security</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="n">pyotp</span><span class="o">==</span><span class="mf">2.8.0</span>          <span class="c1"># 2FA (TOTP)</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="n">cryptography</span><span class="o">==</span><span class="mf">41.0.0</span>  <span class="c1"># Encryption</span>
+</code></pre></div>
+<hr />
+<h2 id="api-endpoints-planned">API Endpoints (Planned)<a class="headerlink" href="#api-endpoints-planned" title="Permanent link">&para;</a></h2>
+<h3 id="user-wallet-apis">User Wallet APIs<a class="headerlink" href="#user-wallet-apis" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>GET  /api/wallet/balance
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>POST /api/wallet/deposit/crypto
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>POST /api/wallet/deposit/fintech
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>POST /api/wallet/withdraw/crypto
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>POST /api/wallet/withdraw/fintech
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>GET  /api/wallet/transactions
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>GET  /api/wallet/deposit-address/{crypto}
+</code></pre></div>
+<h3 id="admin-wallet-apis">Admin Wallet APIs<a class="headerlink" href="#admin-wallet-apis" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>GET  /admin/wallet/revenue
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>POST /admin/wallet/withdraw
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>GET  /admin/wallet/pending-withdrawals
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>POST /admin/wallet/approve-withdrawal/{id}
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>GET  /admin/wallet/transactions
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>GET  /admin/wallet/stats
+</code></pre></div>
+<hr />
+<h2 id="testing-plan">Testing Plan<a class="headerlink" href="#testing-plan" title="Permanent link">&para;</a></h2>
+<h3 id="unit-tests">Unit Tests<a class="headerlink" href="#unit-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Wallet operations (credit, debit, transfer)</li>
+<li>Balance calculations</li>
+<li>Transaction validation</li>
+<li>Security checks</li>
+</ul>
+<h3 id="integration-tests">Integration Tests<a class="headerlink" href="#integration-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Crypto deposit flow</li>
+<li>Fintech payment flow</li>
+<li>Withdrawal processing</li>
+<li>Admin revenue withdrawal</li>
+</ul>
+<h3 id="end-to-end-tests">End-to-End Tests<a class="headerlink" href="#end-to-end-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Complete payment flow</li>
+<li>Multi-step transactions</li>
+<li>Error handling</li>
+<li>Edge cases</li>
+</ul>
+<hr />
+<h2 id="success-criteria">Success Criteria<a class="headerlink" href="#success-criteria" title="Permanent link">&para;</a></h2>
+<ul>
+<li>✅ Wallet creation and management</li>
+<li>✅ Balance tracking (dual wallets)</li>
+<li>⏳ Crypto payments (BTC, USDT, ETH)</li>
+<li>⏳ Nigerian fintech (Paystack, Flutterwave)</li>
+<li>⏳ User deposits and withdrawals</li>
+<li>⏳ Admin revenue withdrawals</li>
+<li>⏳ Transaction history and reporting</li>
+<li>⏳ Security features (2FA, KYC, limits)</li>
+<li>⏳ Compliance (AML, monitoring)</li>
+</ul>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Implement Transaction Manager</strong> - Record and validate all transactions</li>
+<li><strong>Create Payment Gateway</strong> - Unified interface for all methods</li>
+<li><strong>Build Crypto Integration</strong> - Bitcoin, USDT, Ethereum</li>
+<li><strong>Add Fintech Support</strong> - Paystack, Flutterwave</li>
+<li><strong>Security Layer</strong> - 2FA, KYC, limits, AML</li>
+<li><strong>API Endpoints</strong> - User and admin APIs</li>
+<li><strong>Testing</strong> - Comprehensive test suite</li>
+<li><strong>Documentation</strong> - User and developer guides</li>
+</ol>
+<hr />
+<p><strong>Status:</strong> Phase 3 Started (8% Complete)<br />
+<strong>Foundation:</strong> Wallet core implemented<br />
+<strong>Next:</strong> Transaction manager and payment gateway<br />
+<strong>Timeline:</strong> 4 weeks to completion  </p>
+<p>The wallet foundation is ready for payment method integrations! 💰🔐</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

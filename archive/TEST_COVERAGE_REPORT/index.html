@@ -1,0 +1,2518 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AI-powered gold and forex trading platform — guides, API reference, and tutorials.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.hopefx.io/archive/TEST_COVERAGE_REPORT/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/banner.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Test Coverage Report - HOPEFX Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-XXXXXXXXXX"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-XXXXXXXXXX",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#test-coverage-report" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="HOPEFX Documentation" class="md-header__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HOPEFX Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Test Coverage Report
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../INSTALLATION/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../API_GUIDE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../model_performance/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Model Performance
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../API_REFERENCE/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../ci_cd_pipeline/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CI/CD Pipeline
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../FAQ/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../CONTRIBUTING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../SECURITY/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Security
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DEBUGGING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Debugging
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DEPLOYMENT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Deployment
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HOPEFX Documentation" class="md-nav__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    HOPEFX Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../oanda_paper_trading_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OANDA Paper Trading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../live_trading_gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Trading Gate (30-day)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ORDER_FLOW_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Order Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SAMPLE_STRATEGIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOBILE_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mobile Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSET_DIVERSIFICATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset Diversification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MONETIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monetization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMUNITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_cd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEBUGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Executive Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overall-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overall Statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-by-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage by Module
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage by Module">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-coverage-modules-70" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Coverage Modules (&gt;70%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-coverage-modules-40-70" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium Coverage Modules (40-70%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-coverage-modules-40" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Low Coverage Modules (&lt;40%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zero-coverage-modules-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero Coverage Modules (0%)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Categories
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Categories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unit-tests-73-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unit Tests (73 tests)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-tests-10-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Tests (10 tests)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-gaps-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage Gaps Analysis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage Gaps Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#critical-gaps-high-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Critical Gaps (High Priority)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-priority-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium Priority Gaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#immediate-actions-this-week" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immediate Actions (This Week)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#short-term-next-2-weeks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Short Term (Next 2 Weeks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-term-next-month" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium Term (Next Month)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Infrastructure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Infrastructure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Organization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-test-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing Test Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage Goals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Coverage Goals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#target-coverage-by-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Coverage by Component
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-testing-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Testing Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration Testing Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-core-integration-tests-week-1-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Core Integration Tests (Week 1-2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-advanced-integration-tests-week-3-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Advanced Integration Tests (Week 3-4)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Next Steps">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#immediate-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immediate (Today)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#this-week" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        This Week
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-2-weeks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next 2 Weeks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#next-month" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Month
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="test-coverage-report">Test Coverage Report<a class="headerlink" href="#test-coverage-report" title="Permanent link">&para;</a></h1>
+<p><strong>Generated:</strong> February 14, 2026<br />
+<strong>Platform:</strong> Linux, Python 3.12.3<br />
+<strong>Test Framework:</strong> pytest 7.4.3 with pytest-cov 4.1.0</p>
+<hr />
+<h2 id="executive-summary">Executive Summary<a class="headerlink" href="#executive-summary" title="Permanent link">&para;</a></h2>
+<h3 id="overall-statistics">Overall Statistics<a class="headerlink" href="#overall-statistics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total Tests</strong></td>
+<td>83</td>
+</tr>
+<tr>
+<td><strong>Passed</strong></td>
+<td>81 (97.6%)</td>
+</tr>
+<tr>
+<td><strong>Failed</strong></td>
+<td>2 (2.4%)</td>
+</tr>
+<tr>
+<td><strong>Code Coverage</strong></td>
+<td>21.80%</td>
+</tr>
+<tr>
+<td><strong>Statements</strong></td>
+<td>9,329</td>
+</tr>
+<tr>
+<td><strong>Missing</strong></td>
+<td>7,023</td>
+</tr>
+<tr>
+<td><strong>Branches</strong></td>
+<td>1,982</td>
+</tr>
+</tbody>
+</table>
+<h3 id="test-status">Test Status<a class="headerlink" href="#test-status" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>97.6% test pass rate</strong> (81/83 tests passing)</p>
+<p><strong>Failed Tests:</strong>
+1. <code>test_discord_notification_with_config</code> - AttributeError: module 'notifications.manager' has no attribute 'requests'
+2. <code>test_telegram_notification_with_config</code> - AttributeError: module 'notifications.manager' has no attribute 'requests'</p>
+<hr />
+<h2 id="coverage-by-module">Coverage by Module<a class="headerlink" href="#coverage-by-module" title="Permanent link">&para;</a></h2>
+<h3 id="high-coverage-modules-70">High Coverage Modules (&gt;70%)<a class="headerlink" href="#high-coverage-modules-70" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Coverage</th>
+<th>Statements</th>
+<th>Missing</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>database/models.py</code></td>
+<td>100.00%</td>
+<td>512</td>
+<td>0</td>
+<td>✅ Excellent</td>
+</tr>
+<tr>
+<td><code>api/__init__.py</code></td>
+<td>100.00%</td>
+<td>2</td>
+<td>0</td>
+<td>✅ Excellent</td>
+</tr>
+<tr>
+<td><code>api/admin.py</code></td>
+<td>96.00%</td>
+<td>25</td>
+<td>1</td>
+<td>✅ Excellent</td>
+</tr>
+<tr>
+<td><code>brokers/base.py</code></td>
+<td>88.64%</td>
+<td>88</td>
+<td>10</td>
+<td>✅ Very Good</td>
+</tr>
+<tr>
+<td><code>strategies/ma_crossover.py</code></td>
+<td>81.91%</td>
+<td>68</td>
+<td>9</td>
+<td>✅ Very Good</td>
+</tr>
+<tr>
+<td><code>brokers/paper_trading.py</code></td>
+<td>74.60%</td>
+<td>104</td>
+<td>23</td>
+<td>✅ Good</td>
+</tr>
+<tr>
+<td><code>app.py</code></td>
+<td>74.84%</td>
+<td>147</td>
+<td>34</td>
+<td>✅ Good</td>
+</tr>
+<tr>
+<td><code>risk/manager.py</code></td>
+<td>72.86%</td>
+<td>156</td>
+<td>35</td>
+<td>✅ Good</td>
+</tr>
+</tbody>
+</table>
+<h3 id="medium-coverage-modules-40-70">Medium Coverage Modules (40-70%)<a class="headerlink" href="#medium-coverage-modules-40-70" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Coverage</th>
+<th>Statements</th>
+<th>Missing</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>strategies/manager.py</code></td>
+<td>67.62%</td>
+<td>81</td>
+<td>21</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>strategies/base.py</code></td>
+<td>65.66%</td>
+<td>91</td>
+<td>26</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>api/trading.py</code></td>
+<td>64.17%</td>
+<td>114</td>
+<td>38</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>config/config_manager.py</code></td>
+<td>62.61%</td>
+<td>279</td>
+<td>94</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>monetization/invoices.py</code></td>
+<td>60.09%</td>
+<td>196</td>
+<td>71</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>notifications/manager.py</code></td>
+<td>58.70%</td>
+<td>206</td>
+<td>81</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>monetization/pricing.py</code></td>
+<td>57.14%</td>
+<td>80</td>
+<td>32</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+<tr>
+<td><code>brokers/factory.py</code></td>
+<td>50.00%</td>
+<td>40</td>
+<td>18</td>
+<td>⚠️ Needs improvement</td>
+</tr>
+</tbody>
+</table>
+<h3 id="low-coverage-modules-40">Low Coverage Modules (&lt;40%)<a class="headerlink" href="#low-coverage-modules-40" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Coverage</th>
+<th>Statements</th>
+<th>Missing</th>
+<th>Critical?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cache/market_data_cache.py</code></td>
+<td>28.15%</td>
+<td>335</td>
+<td>234</td>
+<td>🔴 Yes</td>
+</tr>
+<tr>
+<td><code>monetization/payment_processor.py</code></td>
+<td>29.86%</td>
+<td>134</td>
+<td>91</td>
+<td>🔴 Yes</td>
+</tr>
+<tr>
+<td><code>monetization/access_codes.py</code></td>
+<td>24.05%</td>
+<td>136</td>
+<td>98</td>
+<td>🔴 Yes</td>
+</tr>
+<tr>
+<td><code>monetization/commission.py</code></td>
+<td>24.44%</td>
+<td>117</td>
+<td>84</td>
+<td>🔴 Yes</td>
+</tr>
+<tr>
+<td><code>monetization/subscription.py</code></td>
+<td>23.08%</td>
+<td>150</td>
+<td>108</td>
+<td>🔴 Yes</td>
+</tr>
+<tr>
+<td><code>monetization/license.py</code></td>
+<td>18.89%</td>
+<td>126</td>
+<td>92</td>
+<td>🔴 Yes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="zero-coverage-modules-0">Zero Coverage Modules (0%)<a class="headerlink" href="#zero-coverage-modules-0" title="Permanent link">&para;</a></h3>
+<p><strong>ML &amp; Analytics:</strong>
+- <code>ml/features/technical.py</code> (174 statements)
+- <code>ml/models/base.py</code> (75 statements)
+- <code>ml/models/lstm.py</code> (114 statements)
+- <code>ml/models/random_forest.py</code> (122 statements)
+- <code>analytics/options.py</code> (15 statements)
+- <code>analytics/portfolio.py</code> (15 statements)
+- <code>analytics/risk.py</code> (21 statements)
+- <code>analytics/simulations.py</code> (22 statements)</p>
+<p><strong>Payments &amp; Crypto:</strong>
+- <code>payments/payment_gateway.py</code> (139 statements)
+- <code>payments/transaction_manager.py</code> (152 statements)
+- <code>payments/wallet.py</code> (132 statements)
+- <code>payments/crypto/bitcoin.py</code> (104 statements)
+- <code>payments/crypto/ethereum.py</code> (48 statements)
+- <code>payments/crypto/usdt.py</code> (56 statements)
+- <code>payments/security.py</code> (146 statements)
+- <code>payments/compliance.py</code> (143 statements)</p>
+<p><strong>Social Trading:</strong>
+- <code>social/copy_trading.py</code> (43 statements)
+- <code>social/leaderboards.py</code> (33 statements)
+- <code>social/marketplace.py</code> (42 statements)
+- <code>social/performance.py</code> (32 statements)
+- <code>social/profiles.py</code> (50 statements)</p>
+<p><strong>News &amp; Charting:</strong>
+- <code>news/sentiment.py</code> (142 statements)
+- <code>news/economic_calendar.py</code> (119 statements)
+- <code>news/providers.py</code> (179 statements)
+- <code>charting/chart_engine.py</code> (30 statements)
+- <code>charting/indicators.py</code> (54 statements)
+- <code>charting/drawing_tools.py</code> (32 statements)</p>
+<p><strong>Backtesting:</strong>
+- <code>backtesting/engine.py</code> (102 statements)
+- <code>backtesting/metrics.py</code> (132 statements)
+- <code>backtesting/portfolio.py</code> (80 statements)
+- All other backtesting modules</p>
+<p><strong>Mobile:</strong>
+- <code>mobile/api.py</code> (9 statements)
+- <code>mobile/auth.py</code> (15 statements)
+- <code>mobile/trading.py</code> (9 statements)
+- <code>mobile/analytics.py</code> (10 statements)
+- <code>mobile/push_notifications.py</code> (12 statements)</p>
+<p><strong>Broker Integrations:</strong>
+- <code>brokers/alpaca.py</code> - 10.71% (158 missing)
+- <code>brokers/binance.py</code> - 9.82% (200 missing)
+- <code>brokers/oanda.py</code> - 11.21% (160 missing)
+- <code>brokers/interactive_brokers.py</code> - 8.40% (158 missing)
+- <code>brokers/mt5.py</code> - 7.96% (186 missing)</p>
+<p><strong>Strategy Implementations:</strong>
+- <code>strategies/its_8_os.py</code> - 5.00% (284 missing)
+- <code>strategies/smc_ict.py</code> - 7.06% (183 missing)
+- <code>strategies/strategy_brain.py</code> - 7.84% (134 missing)
+- <code>strategies/bollinger_bands.py</code> - 7.69% (72 missing)
+- <code>strategies/breakout.py</code> - 9.71% (71 missing)</p>
+<hr />
+<h2 id="test-categories">Test Categories<a class="headerlink" href="#test-categories" title="Permanent link">&para;</a></h2>
+<h3 id="unit-tests-73-tests">Unit Tests (73 tests)<a class="headerlink" href="#unit-tests-73-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Brokers (12 tests)</strong> - ✅ All Passing
+- test_broker_initialization
+- test_place_market_order_buy
+- test_place_market_order_sell
+- test_place_limit_order
+- test_cancel_order
+- test_get_positions
+- test_close_position
+- test_calculate_pnl_profit
+- test_calculate_pnl_loss
+- test_get_account_info
+- test_insufficient_balance
+- test_get_market_price</p>
+<p><strong>Risk Manager (14 tests)</strong> - ✅ All Passing
+- test_risk_manager_initialization
+- test_calculate_position_size (fixed, percent, risk-based)
+- test_validate_trade (within limits, exceeds limits)
+- test_check_daily_loss_limit
+- test_check_drawdown_limit
+- test_calculate_stop_loss
+- test_calculate_take_profit
+- test_update_daily_pnl
+- test_reset_daily_stats
+- test_get_risk_metrics</p>
+<p><strong>Strategies (17 tests)</strong> - ✅ All Passing
+- test_strategy_initialization
+- test_strategy_start_stop
+- test_strategy_pause_resume
+- test_update_performance
+- test_performance_win_rate_calculation
+- test_ma_crossover (initialization, bullish, bearish, insufficient data)
+- test_manager (initialization, register, unregister, start, stop, performance)</p>
+<p><strong>Invoices (16 tests)</strong> - ✅ All Passing
+- test_invoice_creation
+- test_mark_invoice (paid, cancelled, refunded)
+- test_invoice_overdue
+- test_get_invoice
+- test_get_user_invoices
+- test_generate_pdf
+- test_get_invoice_stats</p>
+<p><strong>Notifications (14 tests)</strong> - ⚠️ 2 Failing
+- test_manager_initialization ✅
+- test_console_notification ✅
+- test_discord_notification (without config ✅, with config ❌)
+- test_telegram_notification (without config ✅, with config ❌)
+- test_email_notification (without config ✅, with config ✅)
+- test_trade_notification ✅
+- test_signal_notification ✅
+- test_notification_levels ✅
+- test_notification_with_metadata ✅
+- test_multiple_channels ✅</p>
+<h3 id="integration-tests-10-tests">Integration Tests (10 tests)<a class="headerlink" href="#integration-tests-10-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Health Endpoints (2 tests)</strong> - ✅ All Passing
+- test_health_endpoint
+- test_status_endpoint</p>
+<p><strong>Trading Endpoints (4 tests)</strong> - ✅ All Passing
+- test_list_strategies
+- test_create_strategy
+- test_get_risk_metrics
+- test_calculate_position_size</p>
+<p><strong>Admin Endpoints (4 tests)</strong> - ✅ All Passing
+- test_admin_dashboard
+- test_admin_strategies_page
+- test_admin_settings_page
+- test_admin_monitoring_page</p>
+<hr />
+<h2 id="coverage-gaps-analysis">Coverage Gaps Analysis<a class="headerlink" href="#coverage-gaps-analysis" title="Permanent link">&para;</a></h2>
+<h3 id="critical-gaps-high-priority">Critical Gaps (High Priority)<a class="headerlink" href="#critical-gaps-high-priority" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Payment System (0% coverage)</strong> 🔴</li>
+<li>Payment gateway</li>
+<li>Transaction manager</li>
+<li>Wallet functionality</li>
+<li>Crypto integrations (Bitcoin, Ethereum, USDT)</li>
+<li>Payment security &amp; compliance</li>
+<li>
+<p><strong>Impact:</strong> High - Critical for monetization</p>
+</li>
+<li>
+<p><strong>ML/AI Models (0% coverage)</strong> 🔴</p>
+</li>
+<li>LSTM models</li>
+<li>Random Forest models</li>
+<li>Feature engineering</li>
+<li>Model training</li>
+<li>
+<p><strong>Impact:</strong> High - Core differentiator</p>
+</li>
+<li>
+<p><strong>Backtesting Engine (0% coverage)</strong> 🔴</p>
+</li>
+<li>Strategy backtesting</li>
+<li>Performance metrics</li>
+<li>Portfolio simulation</li>
+<li>Walk-forward analysis</li>
+<li>
+<p><strong>Impact:</strong> High - Essential for strategy validation</p>
+</li>
+<li>
+<p><strong>Social Trading (0% coverage)</strong> 🔴</p>
+</li>
+<li>Copy trading</li>
+<li>Leaderboards</li>
+<li>Marketplace</li>
+<li>User profiles</li>
+<li>
+<p><strong>Impact:</strong> Medium - Future feature</p>
+</li>
+<li>
+<p><strong>News &amp; Sentiment (0% coverage)</strong> 🔴</p>
+</li>
+<li>Sentiment analysis</li>
+<li>Economic calendar</li>
+<li>News providers</li>
+<li>Impact prediction</li>
+<li><strong>Impact:</strong> Medium - Market intelligence</li>
+</ol>
+<h3 id="medium-priority-gaps">Medium Priority Gaps<a class="headerlink" href="#medium-priority-gaps" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Broker Integrations (8-11% coverage)</strong> ⚠️</li>
+<li>Alpaca, Binance, Oanda, IB, MT5</li>
+<li>All real broker implementations need testing</li>
+<li>
+<p><strong>Impact:</strong> High - Production connectivity</p>
+</li>
+<li>
+<p><strong>Advanced Strategies (5-10% coverage)</strong> ⚠️</p>
+</li>
+<li>SMC/ICT strategy</li>
+<li>ITS 8 OS strategy</li>
+<li>Strategy brain</li>
+<li>Bollinger Bands, Breakout, etc.</li>
+<li>
+<p><strong>Impact:</strong> Medium - Advanced features</p>
+</li>
+<li>
+<p><strong>Cache System (28% coverage)</strong> ⚠️</p>
+</li>
+<li>Market data caching</li>
+<li>Redis integration</li>
+<li>Cache statistics</li>
+<li>
+<p><strong>Impact:</strong> Medium - Performance optimization</p>
+</li>
+<li>
+<p><strong>Mobile API (0% coverage)</strong> ⚠️</p>
+</li>
+<li>Mobile endpoints</li>
+<li>Authentication</li>
+<li>Push notifications</li>
+<li>
+<p><strong>Impact:</strong> Low - Future feature</p>
+</li>
+<li>
+<p><strong>Charting (0% coverage)</strong> ⚠️</p>
+<ul>
+<li>Chart rendering</li>
+<li>Technical indicators</li>
+<li>Drawing tools</li>
+<li><strong>Impact:</strong> Low - UI feature</li>
+</ul>
+</li>
+</ol>
+<hr />
+<h2 id="recommendations">Recommendations<a class="headerlink" href="#recommendations" title="Permanent link">&para;</a></h2>
+<h3 id="immediate-actions-this-week">Immediate Actions (This Week)<a class="headerlink" href="#immediate-actions-this-week" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Fix Failing Tests</strong> 🔴</li>
+<li>Fix notification test mocking issues</li>
+<li>Both tests fail with <code>AttributeError: module 'notifications.manager' has no attribute 'requests'</code></li>
+<li>
+<p>Need to update mock patch paths</p>
+</li>
+<li>
+<p><strong>Add Payment System Tests</strong> 🔴</p>
+</li>
+<li>Critical for monetization</li>
+<li>Test transaction flows</li>
+<li>Test wallet operations</li>
+<li>Test crypto integrations</li>
+<li>
+<p><strong>Target:</strong> 50%+ coverage</p>
+</li>
+<li>
+<p><strong>Add ML Model Tests</strong> 🔴</p>
+</li>
+<li>Test model training</li>
+<li>Test predictions</li>
+<li>Test feature engineering</li>
+<li><strong>Target:</strong> 40%+ coverage</li>
+</ol>
+<h3 id="short-term-next-2-weeks">Short Term (Next 2 Weeks)<a class="headerlink" href="#short-term-next-2-weeks" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Improve Broker Coverage</strong> ⚠️</li>
+<li>Add integration tests for each broker</li>
+<li>Test order placement, cancellation</li>
+<li>Test position management</li>
+<li>
+<p><strong>Target:</strong> 40%+ coverage for each broker</p>
+</li>
+<li>
+<p><strong>Add Backtesting Tests</strong> 🔴</p>
+</li>
+<li>Test backtesting engine</li>
+<li>Test performance metrics</li>
+<li>Test strategy optimization</li>
+<li>
+<p><strong>Target:</strong> 50%+ coverage</p>
+</li>
+<li>
+<p><strong>Expand Strategy Tests</strong> ⚠️</p>
+</li>
+<li>Test all strategy implementations</li>
+<li>Test signal generation</li>
+<li>Test position sizing</li>
+<li><strong>Target:</strong> 60%+ coverage for each strategy</li>
+</ol>
+<h3 id="medium-term-next-month">Medium Term (Next Month)<a class="headerlink" href="#medium-term-next-month" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Add Social Trading Tests</strong></li>
+<li>Test copy trading functionality</li>
+<li>Test leaderboards</li>
+<li>Test marketplace</li>
+<li>
+<p><strong>Target:</strong> 50%+ coverage</p>
+</li>
+<li>
+<p><strong>Add News &amp; Sentiment Tests</strong></p>
+</li>
+<li>Test sentiment analysis</li>
+<li>Test news providers</li>
+<li>Test economic calendar</li>
+<li>
+<p><strong>Target:</strong> 40%+ coverage</p>
+</li>
+<li>
+<p><strong>Add Mobile API Tests</strong></p>
+</li>
+<li>Test mobile endpoints</li>
+<li>Test authentication</li>
+<li>Test push notifications</li>
+<li>
+<p><strong>Target:</strong> 60%+ coverage</p>
+</li>
+<li>
+<p><strong>Improve Overall Coverage</strong></p>
+<ul>
+<li><strong>Current:</strong> 21.80%</li>
+<li><strong>Target:</strong> 60%+</li>
+<li>Focus on critical paths first</li>
+</ul>
+</li>
+</ol>
+<hr />
+<h2 id="test-infrastructure">Test Infrastructure<a class="headerlink" href="#test-infrastructure" title="Permanent link">&para;</a></h2>
+<h3 id="current-setup">Current Setup<a class="headerlink" href="#current-setup" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Testing Framework:</strong> pytest 7.4.3<br />
+✅ <strong>Coverage Tool:</strong> pytest-cov 4.1.0<br />
+✅ <strong>Async Support:</strong> pytest-asyncio 0.23.2<br />
+✅ <strong>HTTP Testing:</strong> httpx 0.25.2<br />
+✅ <strong>Configuration:</strong> pytest.ini properly configured  </p>
+<h3 id="test-organization">Test Organization<a class="headerlink" href="#test-organization" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tests/
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── integration/
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   └── test_api.py (10 tests)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└── unit/
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    ├── test_brokers.py (12 tests)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    ├── test_invoices.py (16 tests)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    ├── test_notifications.py (14 tests)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    ├── test_risk_manager.py (14 tests)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └── test_strategies.py (17 tests)
+</code></pre></div>
+<h3 id="missing-test-files">Missing Test Files<a class="headerlink" href="#missing-test-files" title="Permanent link">&para;</a></h3>
+<p>Need to create:
+- <code>tests/unit/test_payments.py</code>
+- <code>tests/unit/test_ml_models.py</code>
+- <code>tests/unit/test_backtesting.py</code>
+- <code>tests/unit/test_social.py</code>
+- <code>tests/unit/test_news.py</code>
+- <code>tests/unit/test_cache.py</code>
+- <code>tests/unit/test_mobile.py</code>
+- <code>tests/unit/test_charting.py</code>
+- <code>tests/integration/test_broker_integrations.py</code>
+- <code>tests/integration/test_strategy_execution.py</code></p>
+<hr />
+<h2 id="coverage-goals">Coverage Goals<a class="headerlink" href="#coverage-goals" title="Permanent link">&para;</a></h2>
+<h3 id="target-coverage-by-component">Target Coverage by Component<a class="headerlink" href="#target-coverage-by-component" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Current</th>
+<th>Target</th>
+<th>Timeline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Database Models</strong></td>
+<td>100%</td>
+<td>100%</td>
+<td>✅ Complete</td>
+</tr>
+<tr>
+<td><strong>API Endpoints</strong></td>
+<td>64-96%</td>
+<td>80%+</td>
+<td>2 weeks</td>
+</tr>
+<tr>
+<td><strong>Brokers (Paper)</strong></td>
+<td>75%</td>
+<td>80%+</td>
+<td>1 week</td>
+</tr>
+<tr>
+<td><strong>Brokers (Real)</strong></td>
+<td>8-11%</td>
+<td>50%+</td>
+<td>3 weeks</td>
+</tr>
+<tr>
+<td><strong>Risk Manager</strong></td>
+<td>73%</td>
+<td>85%+</td>
+<td>1 week</td>
+</tr>
+<tr>
+<td><strong>Strategies (Base)</strong></td>
+<td>66-82%</td>
+<td>75%+</td>
+<td>1 week</td>
+</tr>
+<tr>
+<td><strong>Strategies (Advanced)</strong></td>
+<td>5-12%</td>
+<td>50%+</td>
+<td>3 weeks</td>
+</tr>
+<tr>
+<td><strong>Payments</strong></td>
+<td>0-30%</td>
+<td>60%+</td>
+<td>2 weeks</td>
+</tr>
+<tr>
+<td><strong>ML/AI</strong></td>
+<td>0%</td>
+<td>50%+</td>
+<td>3 weeks</td>
+</tr>
+<tr>
+<td><strong>Backtesting</strong></td>
+<td>0%</td>
+<td>60%+</td>
+<td>3 weeks</td>
+</tr>
+<tr>
+<td><strong>Social</strong></td>
+<td>0%</td>
+<td>40%+</td>
+<td>4 weeks</td>
+</tr>
+<tr>
+<td><strong>News</strong></td>
+<td>0%</td>
+<td>40%+</td>
+<td>4 weeks</td>
+</tr>
+<tr>
+<td><strong>Cache</strong></td>
+<td>28%</td>
+<td>60%+</td>
+<td>2 weeks</td>
+</tr>
+<tr>
+<td><strong>Mobile</strong></td>
+<td>0%</td>
+<td>50%+</td>
+<td>4 weeks</td>
+</tr>
+<tr>
+<td><strong>Charting</strong></td>
+<td>0%</td>
+<td>30%+</td>
+<td>4 weeks</td>
+</tr>
+<tr>
+<td><strong>Overall</strong></td>
+<td>21.80%</td>
+<td><strong>60%+</strong></td>
+<td><strong>8 weeks</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="integration-testing-plan">Integration Testing Plan<a class="headerlink" href="#integration-testing-plan" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1-core-integration-tests-week-1-2">Phase 1: Core Integration Tests (Week 1-2)<a class="headerlink" href="#phase-1-core-integration-tests-week-1-2" title="Permanent link">&para;</a></h3>
+<p><strong>Module Interaction Testing:</strong></p>
+<ol>
+<li><strong>Trading Flow Integration</strong></li>
+<li>Strategy → Signal → Risk Manager → Broker → Position</li>
+<li>Test complete trade lifecycle</li>
+<li>
+<p>Verify data flow between modules</p>
+</li>
+<li>
+<p><strong>Data Pipeline Integration</strong></p>
+</li>
+<li>Market Data → Cache → Strategy → Signals</li>
+<li>Test data refresh and caching</li>
+<li>
+<p>Verify cache hit/miss rates</p>
+</li>
+<li>
+<p><strong>Monetization Integration</strong></p>
+</li>
+<li>User → Subscription → Payment → Access Code → License</li>
+<li>Test complete payment flow</li>
+<li>
+<p>Verify license validation</p>
+</li>
+<li>
+<p><strong>Notification Integration</strong></p>
+</li>
+<li>Trade Event → Notification Manager → Multiple Channels</li>
+<li>Test Discord, Telegram, Email</li>
+<li>Verify message delivery</li>
+</ol>
+<h3 id="phase-2-advanced-integration-tests-week-3-4">Phase 2: Advanced Integration Tests (Week 3-4)<a class="headerlink" href="#phase-2-advanced-integration-tests-week-3-4" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>ML Pipeline Integration</strong></li>
+<li>Data → Feature Engineering → Model Training → Predictions</li>
+<li>Test end-to-end ML workflow</li>
+<li>
+<p>Verify model performance</p>
+</li>
+<li>
+<p><strong>Backtesting Integration</strong></p>
+</li>
+<li>Strategy → Backtest Engine → Metrics → Reports</li>
+<li>Test historical data processing</li>
+<li>
+<p>Verify performance calculations</p>
+</li>
+<li>
+<p><strong>Social Trading Integration</strong></p>
+</li>
+<li>Leader Strategy → Copy Trade → Follower Execution</li>
+<li>Test signal propagation</li>
+<li>
+<p>Verify position mirroring</p>
+</li>
+<li>
+<p><strong>Mobile API Integration</strong></p>
+</li>
+<li>Mobile App → API → Trading Backend</li>
+<li>Test authentication flow</li>
+<li>Verify data synchronization</li>
+</ol>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<h3 id="immediate-today">Immediate (Today)<a class="headerlink" href="#immediate-today" title="Permanent link">&para;</a></h3>
+<ol>
+<li>✅ Generate coverage report (Complete)</li>
+<li>✅ Document coverage results (Complete)</li>
+<li>⏳ Fix failing notification tests</li>
+<li>⏳ Begin integration test planning</li>
+</ol>
+<h3 id="this-week">This Week<a class="headerlink" href="#this-week" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Fix all failing tests (2 remaining)</li>
+<li>Create payment system tests</li>
+<li>Create ML model tests</li>
+<li>Improve broker coverage</li>
+<li>Target: 30%+ overall coverage</li>
+</ol>
+<h3 id="next-2-weeks">Next 2 Weeks<a class="headerlink" href="#next-2-weeks" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Add backtesting tests</li>
+<li>Expand strategy tests</li>
+<li>Create integration test suite</li>
+<li>Target: 40%+ overall coverage</li>
+</ol>
+<h3 id="next-month">Next Month<a class="headerlink" href="#next-month" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Add social trading tests</li>
+<li>Add news &amp; sentiment tests</li>
+<li>Add mobile API tests</li>
+<li>Complete integration testing</li>
+<li>Target: 60%+ overall coverage</li>
+</ol>
+<hr />
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h2>
+<p><strong>Current State:</strong>
+- 81/83 tests passing (97.6%)
+- 21.80% code coverage
+- Good foundation with core modules</p>
+<p><strong>Next Priority:</strong>
+- Fix 2 failing notification tests
+- Add payment system tests (0% → 60%)
+- Add ML model tests (0% → 50%)
+- Add backtesting tests (0% → 60%)</p>
+<p><strong>Goal:</strong>
+- Achieve 60%+ overall coverage in 8 weeks
+- Focus on critical business logic first
+- Ensure all integrations are tested</p>
+<hr />
+<p><strong>Report Generated:</strong> February 14, 2026<br />
+<strong>Tool:</strong> pytest-cov 4.1.0<br />
+<strong>HTML Report:</strong> <code>htmlcov/index.html</code><br />
+<strong>XML Report:</strong> <code>coverage.xml</code></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

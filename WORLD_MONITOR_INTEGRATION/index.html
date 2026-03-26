@@ -1,0 +1,2224 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AI-powered gold and forex trading platform — guides, API reference, and tutorials.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.hopefx.io/WORLD_MONITOR_INTEGRATION/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/banner.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>World Monitor Integration for HOPEFX AI Trading - HOPEFX Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-XXXXXXXXXX"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-XXXXXXXXXX",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#world-monitor-integration-for-hopefx-ai-trading" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="HOPEFX Documentation" class="md-header__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../assets/banner.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HOPEFX Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              World Monitor Integration for HOPEFX AI Trading
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../INSTALLATION/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../API_GUIDE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../model_performance/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Model Performance
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../API_REFERENCE/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../ci_cd_pipeline/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CI/CD Pipeline
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../FAQ/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../CONTRIBUTING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../SECURITY/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Security
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DEBUGGING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Debugging
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../DEPLOYMENT/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Deployment
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="HOPEFX Documentation" class="md-nav__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../assets/banner.svg" alt="logo">
+
+    </a>
+    HOPEFX Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oanda_paper_trading_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OANDA Paper Trading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live_trading_gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Trading Gate (30-day)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ORDER_FLOW_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Order Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAMPLE_STRATEGIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOBILE_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mobile Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ASSET_DIVERSIFICATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset Diversification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MONETIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monetization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMMUNITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_cd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEBUGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#four-ways-to-use-world-monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Four Ways to Use World Monitor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Four Ways to Use World Monitor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-use-the-existing-integration-built-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Use the Existing Integration (Built-in)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-pull-data-directly-from-world-monitor-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Pull Data Directly from World Monitor API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Pull Data Directly from World Monitor API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#available-api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-self-host-world-monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Self-Host World Monitor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Self-Host World Monitor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#self-hosting-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Hosting Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-customize-data-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Customize Data Layers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Customize Data Layers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layer-weight-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer Weight Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-world-monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is World Monitor?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What is World Monitor?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-its-valuable-for-xauusd-trading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why It's Valuable for XAU/USD Trading
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#url-structure-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        URL Structure Analysis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="URL Structure Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameters-explained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters Explained:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#available-data-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available Data Layers:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#files-addedmodified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Added/Modified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gold-sensitive-regions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gold-Sensitive Regions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Gold-Sensitive Regions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#middle-east-mena" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Middle East (MENA)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eastern-europe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Eastern Europe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#asia-pacific" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asia-Pacific
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#major-economies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Major Economies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#event-types-and-trading-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Event Types and Trading Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-score-calculation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Score Calculation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trading-recommendations-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trading Recommendations Logic
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="world-monitor-integration-for-hopefx-ai-trading">World Monitor Integration for HOPEFX AI Trading<a class="headerlink" href="#world-monitor-integration-for-hopefx-ai-trading" title="Permanent link">&para;</a></h1>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This document describes the integration of <strong>World Monitor</strong> (https://worldmonitor.app/) geopolitical intelligence into the HOPEFX AI Trading platform, specifically for enhancing XAU/USD (Gold) trading decisions.</p>
+<h2 id="four-ways-to-use-world-monitor">Four Ways to Use World Monitor<a class="headerlink" href="#four-ways-to-use-world-monitor" title="Permanent link">&para;</a></h2>
+<h3 id="1-use-the-existing-integration-built-in">1. Use the Existing Integration (Built-in)<a class="headerlink" href="#1-use-the-existing-integration-built-in" title="Permanent link">&para;</a></h3>
+<p>The simplest approach - use the pre-built integration:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_gold_geopolitical_signal</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Get trading signal based on geopolitical events</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">signal</span> <span class="o">=</span> <span class="n">get_gold_geopolitical_signal</span><span class="p">()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Direction: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;direction&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># BUY, SELL, or NEUTRAL</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Confidence: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;confidence&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Risk Score: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;risk_score&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="2-pull-data-directly-from-world-monitor-api">2. Pull Data Directly from World Monitor API<a class="headerlink" href="#2-pull-data-directly-from-world-monitor-api" title="Permanent link">&para;</a></h3>
+<p>Connect directly to World Monitor's REST API endpoints:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorldMonitorAPIClient</span><span class="p">,</span> <span class="n">get_api_client</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Initialize API client</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">client</span> <span class="o">=</span> <span class="n">get_api_client</span><span class="p">({</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="s1">&#39;base_url&#39;</span><span class="p">:</span> <span class="s1">&#39;https://worldmonitor.app&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="s1">&#39;timeout&#39;</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="s1">&#39;enabled_layers&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;conflicts&#39;</span><span class="p">,</span> <span class="s1">&#39;country_intel&#39;</span><span class="p">,</span> <span class="s1">&#39;news&#39;</span><span class="p">,</span> <span class="s1">&#39;outages&#39;</span><span class="p">]</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">})</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Get specific data</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">conflicts</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_conflicts</span><span class="p">(</span><span class="n">region</span><span class="o">=</span><span class="s1">&#39;Middle East&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">country_risk</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_country_intel</span><span class="p">(</span><span class="n">country</span><span class="o">=</span><span class="s1">&#39;RU&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">news</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_news_intel</span><span class="p">(</span><span class="n">topic</span><span class="o">=</span><span class="s1">&#39;sanctions&#39;</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">outages</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_outages</span><span class="p">()</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Or get all enabled layers at once</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">all_data</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_all_layers</span><span class="p">()</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Calculate gold risk score from live data</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="n">risk_score</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">calculate_gold_risk_score</span><span class="p">()</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Global Risk: </span><span class="si">{</span><span class="n">risk_score</span><span class="p">[</span><span class="s1">&#39;global_risk_score&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gold Outlook: </span><span class="si">{</span><span class="n">risk_score</span><span class="p">[</span><span class="s1">&#39;gold_outlook&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="available-api-endpoints">Available API Endpoints<a class="headerlink" href="#available-api-endpoints" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Description</th>
+<th>Method</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/api/acled</code></td>
+<td>Armed conflict events</td>
+<td><code>get_conflicts()</code></td>
+</tr>
+<tr>
+<td><code>/api/country-intel</code></td>
+<td>Country risk &amp; sanctions</td>
+<td><code>get_country_intel()</code></td>
+</tr>
+<tr>
+<td><code>/api/firms-fires</code></td>
+<td>Satellite fire detection</td>
+<td><code>get_satellite_fires()</code></td>
+</tr>
+<tr>
+<td><code>/api/opensky</code></td>
+<td>Military flight tracking</td>
+<td><code>get_military_flights()</code></td>
+</tr>
+<tr>
+<td><code>/api/theater-posture</code></td>
+<td>Military force posture</td>
+<td><code>get_military_theater()</code></td>
+</tr>
+<tr>
+<td><code>/api/gdelt-doc</code></td>
+<td>Global news intelligence</td>
+<td><code>get_news_intel()</code></td>
+</tr>
+<tr>
+<td><code>/api/cloudflare-outages</code></td>
+<td>Internet outages</td>
+<td><code>get_outages()</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-self-host-world-monitor">3. Self-Host World Monitor<a class="headerlink" href="#3-self-host-world-monitor" title="Permanent link">&para;</a></h3>
+<p>Run your own World Monitor instance for full control:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_self_hosted_setup</span><span class="p">,</span> <span class="n">WorldMonitorSelfHostConfig</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Generate setup script</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">setup_script</span> <span class="o">=</span> <span class="n">create_self_hosted_setup</span><span class="p">()</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;setup_worldmonitor.sh&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">setup_script</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Run: bash setup_worldmonitor.sh</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Generate HOPEFX config for self-hosted instance</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">config</span> <span class="o">=</span> <span class="n">WorldMonitorSelfHostConfig</span><span class="o">.</span><span class="n">generate_hopefx_config</span><span class="p">(</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">self_hosted_url</span><span class="o">=</span><span class="s1">&#39;http://localhost:5173&#39;</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Use with API client</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_api_client</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">client</span> <span class="o">=</span> <span class="n">get_api_client</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div>
+<h4 id="self-hosting-requirements">Self-Hosting Requirements<a class="headerlink" href="#self-hosting-requirements" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Node.js 18+</li>
+<li>Git</li>
+<li>Optional: Redis (Upstash) for caching</li>
+<li>Optional: API keys for enhanced data</li>
+</ul>
+<h4 id="docker-deployment">Docker Deployment<a class="headerlink" href="#docker-deployment" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;3.8&#39;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">services</span><span class="p">:</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">worldmonitor</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node:18-alpine</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">working_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/app</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;5173:5173&quot;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GROQ_API_KEY=${GROQ_API_KEY:-}</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NASA_FIRMS_API_KEY=${NASA_FIRMS_API_KEY:-}</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./worldmonitor:/app</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sh -c &quot;npm install &amp;&amp; npm run dev&quot;</span>
+</code></pre></div>
+<h3 id="4-customize-data-layers">4. Customize Data Layers<a class="headerlink" href="#4-customize-data-layers" title="Permanent link">&para;</a></h3>
+<p>Configure exactly which data layers to monitor and their weights:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_custom_layer_config</span><span class="p">,</span> <span class="n">CustomDataLayerConfig</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Get gold-optimized configuration</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">get_custom_layer_config</span><span class="p">(</span><span class="n">gold_optimized</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Enabled: </span><span class="si">{</span><span class="n">config</span><span class="o">.</span><span class="n">get_enabled_layers</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Weights: </span><span class="si">{</span><span class="n">config</span><span class="o">.</span><span class="n">get_layer_weights</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Or create custom configuration</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">custom</span> <span class="o">=</span> <span class="n">CustomDataLayerConfig</span><span class="p">({</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="s1">&#39;conflicts&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">},</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="s1">&#39;sanctions&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">},</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="s1">&#39;military&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">},</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="s1">&#39;nuclear&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.8</span><span class="p">},</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="s1">&#39;hotspots&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.7</span><span class="p">},</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="s1">&#39;pipelines&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.6</span><span class="p">},</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="s1">&#39;outages&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">},</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="s1">&#39;weather&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">},</span>  <span class="c1"># Disabled</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="s1">&#39;protests&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;weight&#39;</span><span class="p">:</span> <span class="mf">0.4</span><span class="p">},</span>  <span class="c1"># Disabled</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="p">})</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="c1"># Enable/disable layers dynamically</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">custom</span><span class="o">.</span><span class="n">enable_layer</span><span class="p">(</span><span class="s1">&#39;weather&#39;</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="mf">0.4</span><span class="p">)</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="n">custom</span><span class="o">.</span><span class="n">disable_layer</span><span class="p">(</span><span class="s1">&#39;protests&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">custom</span><span class="o">.</span><span class="n">set_weight</span><span class="p">(</span><span class="s1">&#39;conflicts&#39;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">custom</span><span class="o">.</span><span class="n">set_alert_threshold</span><span class="p">(</span><span class="s1">&#39;conflicts&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="c1"># Convert to provider config</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="n">provider_config</span> <span class="o">=</span> <span class="n">custom</span><span class="o">.</span><span class="n">to_provider_config</span><span class="p">()</span>
+</code></pre></div>
+<h4 id="layer-weight-reference">Layer Weight Reference<a class="headerlink" href="#layer-weight-reference" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Default Weight</th>
+<th>Gold Correlation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>conflicts</td>
+<td>1.0</td>
+<td>Strong Positive</td>
+</tr>
+<tr>
+<td>sanctions</td>
+<td>0.9</td>
+<td>Positive</td>
+</tr>
+<tr>
+<td>military</td>
+<td>0.8</td>
+<td>Strong Positive</td>
+</tr>
+<tr>
+<td>nuclear</td>
+<td>0.8</td>
+<td>Strong Positive</td>
+</tr>
+<tr>
+<td>hotspots</td>
+<td>0.7</td>
+<td>Positive</td>
+</tr>
+<tr>
+<td>pipelines</td>
+<td>0.6</td>
+<td>Positive</td>
+</tr>
+<tr>
+<td>outages</td>
+<td>0.5</td>
+<td>Moderate Positive</td>
+</tr>
+<tr>
+<td>natural</td>
+<td>0.5</td>
+<td>Moderate Positive</td>
+</tr>
+<tr>
+<td>weather</td>
+<td>0.3</td>
+<td>Weak Positive</td>
+</tr>
+<tr>
+<td>protests</td>
+<td>0.4</td>
+<td>Moderate Positive</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-is-world-monitor">What is World Monitor?<a class="headerlink" href="#what-is-world-monitor" title="Permanent link">&para;</a></h2>
+<p>World Monitor is a <strong>real-time global intelligence dashboard</strong> that provides:</p>
+<ul>
+<li><strong>Active Conflict Monitoring</strong>: Wars, military operations, escalation tracking</li>
+<li><strong>Sanctions Tracking</strong>: Economic sanctions, trade restrictions, embargoes</li>
+<li><strong>Intelligence Hotspots</strong>: Areas of heightened geopolitical activity</li>
+<li><strong>Natural Disasters</strong>: Weather alerts, earthquakes, environmental events</li>
+<li><strong>Infrastructure Outages</strong>: Internet outages, pipeline disruptions, cable damage</li>
+<li><strong>Country Instability Index</strong>: Real-time stability scores for 20+ nations</li>
+</ul>
+<h3 id="why-its-valuable-for-xauusd-trading">Why It's Valuable for XAU/USD Trading<a class="headerlink" href="#why-its-valuable-for-xauusd-trading" title="Permanent link">&para;</a></h3>
+<p>Gold is the ultimate <strong>safe-haven asset</strong>. When geopolitical risks increase, investors flee to gold, driving prices up. World Monitor provides real-time data on exactly these risk factors:</p>
+<table>
+<thead>
+<tr>
+<th>Geopolitical Event</th>
+<th>Gold Impact</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Military Conflict</td>
+<td><strong>BULLISH</strong></td>
+<td>Flight to safety, currency uncertainty</td>
+</tr>
+<tr>
+<td>Sanctions</td>
+<td><strong>BULLISH</strong></td>
+<td>Trade disruption, economic instability</td>
+</tr>
+<tr>
+<td>Natural Disasters</td>
+<td><strong>BULLISH</strong> (if severe)</td>
+<td>Supply chain disruption, reconstruction costs</td>
+</tr>
+<tr>
+<td>Political Unrest</td>
+<td><strong>BULLISH</strong></td>
+<td>Currency weakness, economic uncertainty</td>
+</tr>
+<tr>
+<td>Infrastructure Outages</td>
+<td><strong>BULLISH</strong></td>
+<td>Systemic risk concerns</td>
+</tr>
+</tbody>
+</table>
+<h2 id="url-structure-analysis">URL Structure Analysis<a class="headerlink" href="#url-structure-analysis" title="Permanent link">&para;</a></h2>
+<p>The provided World Monitor URL:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>https://worldmonitor.app/?lat=46.4000&amp;lon=-163.8957&amp;zoom=2.50&amp;view=mena&amp;timeRange=7d&amp;layers=conflicts,hotspots,sanctions,weather,outages,natural
+</code></pre></div></p>
+<h3 id="parameters-explained">Parameters Explained:<a class="headerlink" href="#parameters-explained" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lat</code></td>
+<td>46.4000</td>
+<td>Latitude for map center</td>
+</tr>
+<tr>
+<td><code>lon</code></td>
+<td>-163.8957</td>
+<td>Longitude for map center</td>
+</tr>
+<tr>
+<td><code>zoom</code></td>
+<td>2.50</td>
+<td>Map zoom level</td>
+</tr>
+<tr>
+<td><code>view</code></td>
+<td>mena</td>
+<td>Regional preset (Middle East &amp; North Africa)</td>
+</tr>
+<tr>
+<td><code>timeRange</code></td>
+<td>7d</td>
+<td>Show events from last 7 days</td>
+</tr>
+<tr>
+<td><code>layers</code></td>
+<td>conflicts,hotspots,sanctions,weather,outages,natural</td>
+<td>Active data layers</td>
+</tr>
+</tbody>
+</table>
+<h3 id="available-data-layers">Available Data Layers:<a class="headerlink" href="#available-data-layers" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>conflicts</strong> - Active conflict zones with escalation tracking</li>
+<li><strong>hotspots</strong> - Intelligence hotspots with news correlation</li>
+<li><strong>sanctions</strong> - Economic sanctions regimes</li>
+<li><strong>weather</strong> - Severe weather alerts</li>
+<li><strong>outages</strong> - Internet/infrastructure outages</li>
+<li><strong>natural</strong> - Natural disasters (earthquakes, fires, floods)</li>
+<li><strong>military</strong> - Military bases, flight tracking, naval vessels</li>
+<li><strong>protests</strong> - Social unrest events</li>
+<li><strong>nuclear</strong> - Nuclear facilities</li>
+<li><strong>pipelines</strong> - Oil &amp; gas infrastructure</li>
+<li><strong>cables</strong> - Undersea communication cables</li>
+<li><strong>datacenters</strong> - Major data center clusters</li>
+</ol>
+<h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
+<h3 id="files-addedmodified">Files Added/Modified<a class="headerlink" href="#files-addedmodified" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>news/geopolitical_risk.py</code></strong> (NEW)</li>
+<li><code>GeopoliticalRiskProvider</code>: Main provider class for geopolitical data</li>
+<li><code>GeopoliticalEvent</code>: Data class for individual events</li>
+<li><code>GeopoliticalRiskAssessment</code>: Comprehensive risk assessment</li>
+<li><code>WorldMonitorIntegration</code>: Helper for building World Monitor URLs</li>
+<li>
+<p><code>get_gold_geopolitical_signal()</code>: Convenience function for trading signals</p>
+</li>
+<li>
+<p><strong><code>news/__init__.py</code></strong> (UPDATED)</p>
+</li>
+<li>Added exports for new geopolitical risk classes</li>
+<li>
+<p>Updated version to 1.1.0</p>
+</li>
+<li>
+<p><strong><code>news/impact_predictor.py</code></strong> (UPDATED)</p>
+</li>
+<li>Extended geopolitical keywords for better event categorization</li>
+</ol>
+<h3 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">news.geopolitical_risk</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">get_geopolitical_provider</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">get_gold_geopolitical_signal</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">WorldMonitorIntegration</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Get geopolitical risk provider</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">provider</span> <span class="o">=</span> <span class="n">get_geopolitical_provider</span><span class="p">()</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Get current geopolitical events</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">events</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">get_current_events</span><span class="p">()</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Get comprehensive risk assessment</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">assessment</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">get_risk_assessment</span><span class="p">()</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Global Risk Score: </span><span class="si">{</span><span class="n">assessment</span><span class="o">.</span><span class="n">global_risk_score</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Gold Outlook: </span><span class="si">{</span><span class="n">assessment</span><span class="o">.</span><span class="n">gold_outlook</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Active Conflicts: </span><span class="si">{</span><span class="n">assessment</span><span class="o">.</span><span class="n">active_conflicts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Get trading signal for gold</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="n">signal</span> <span class="o">=</span> <span class="n">get_gold_geopolitical_signal</span><span class="p">()</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Direction: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;direction&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Confidence: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;confidence&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Recommendations: </span><span class="si">{</span><span class="n">signal</span><span class="p">[</span><span class="s1">&#39;recommendations&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="c1"># Build World Monitor URLs for gold-relevant regions</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="n">integration</span> <span class="o">=</span> <span class="n">WorldMonitorIntegration</span><span class="p">()</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="n">urls</span> <span class="o">=</span> <span class="n">integration</span><span class="o">.</span><span class="n">get_gold_relevant_views</span><span class="p">()</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Middle East Monitor: </span><span class="si">{</span><span class="n">urls</span><span class="p">[</span><span class="s1">&#39;middle_east&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Eastern Europe Monitor: </span><span class="si">{</span><span class="n">urls</span><span class="p">[</span><span class="s1">&#39;eastern_europe&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">&para;</a></h3>
+<p>Add to your <code>.env</code> or config:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Geopolitical Risk Configuration</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">GEOPOLITICAL_CONFIG</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s1">&#39;time_range&#39;</span><span class="p">:</span> <span class="s1">&#39;7d&#39;</span><span class="p">,</span>       <span class="c1"># Event time window</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s1">&#39;cache_ttl&#39;</span><span class="p">:</span> <span class="mi">300</span><span class="p">,</span>         <span class="c1"># Cache TTL in seconds</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s1">&#39;data_layers&#39;</span><span class="p">:</span> <span class="p">[</span>          <span class="c1"># Layers to monitor</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="s1">&#39;conflicts&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        <span class="s1">&#39;hotspots&#39;</span><span class="p">,</span> 
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="s1">&#39;sanctions&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="s1">&#39;weather&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="s1">&#39;outages&#39;</span><span class="p">,</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="s1">&#39;natural&#39;</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="p">]</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">}</span>
+</code></pre></div>
+<h2 id="gold-sensitive-regions">Gold-Sensitive Regions<a class="headerlink" href="#gold-sensitive-regions" title="Permanent link">&para;</a></h2>
+<p>The system monitors these regions with extra weight for gold trading:</p>
+<h3 id="middle-east-mena">Middle East (MENA)<a class="headerlink" href="#middle-east-mena" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Iran, Iraq, Syria, Israel, Saudi Arabia, Yemen, Lebanon, Qatar, UAE</li>
+<li><strong>Impact</strong>: Oil flows, regional stability, US dollar strength</li>
+</ul>
+<h3 id="eastern-europe">Eastern Europe<a class="headerlink" href="#eastern-europe" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Russia, Ukraine, Belarus, Poland</li>
+<li><strong>Impact</strong>: Energy supplies, sanctions, safe-haven demand</li>
+</ul>
+<h3 id="asia-pacific">Asia-Pacific<a class="headerlink" href="#asia-pacific" title="Permanent link">&para;</a></h3>
+<ul>
+<li>China, Taiwan, North Korea, South Korea, Japan</li>
+<li><strong>Impact</strong>: Trade flows, currency stability, regional tensions</li>
+</ul>
+<h3 id="major-economies">Major Economies<a class="headerlink" href="#major-economies" title="Permanent link">&para;</a></h3>
+<ul>
+<li>United States, China, Germany, Japan, UK, France, Italy</li>
+<li><strong>Impact</strong>: Global economic health, policy decisions</li>
+</ul>
+<h2 id="event-types-and-trading-impact">Event Types and Trading Impact<a class="headerlink" href="#event-types-and-trading-impact" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Event Type</th>
+<th>Severity Impact</th>
+<th>Gold Correlation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conflict</td>
+<td>+15 risk score</td>
+<td>Strong Bullish</td>
+</tr>
+<tr>
+<td>Military Activity</td>
+<td>+15 risk score</td>
+<td>Strong Bullish</td>
+</tr>
+<tr>
+<td>Sanctions</td>
+<td>+10 risk score</td>
+<td>Bullish</td>
+</tr>
+<tr>
+<td>Natural Disaster</td>
+<td>+5 risk score</td>
+<td>Moderate Bullish</td>
+</tr>
+<tr>
+<td>Infrastructure Outage</td>
+<td>+5 risk score</td>
+<td>Moderate Bullish</td>
+</tr>
+<tr>
+<td>Political Unrest</td>
+<td>+10 risk score</td>
+<td>Bullish</td>
+</tr>
+<tr>
+<td>Cyber Attack</td>
+<td>+5 risk score</td>
+<td>Moderate Bullish</td>
+</tr>
+<tr>
+<td>Economic Crisis</td>
+<td>+15 risk score</td>
+<td>Strong Bullish</td>
+</tr>
+</tbody>
+</table>
+<h2 id="risk-score-calculation">Risk Score Calculation<a class="headerlink" href="#risk-score-calculation" title="Permanent link">&para;</a></h2>
+<p>The global risk score (0-100) is calculated as:</p>
+<ol>
+<li><strong>Base Score</strong>: Sum of individual event risk scores</li>
+<li><strong>Event Type Weight</strong>: Conflicts and military +15, sanctions +10, etc.</li>
+<li><strong>Severity Weight</strong>: Critical +80, High +60, Medium +40, Low +20</li>
+<li><strong>Region Weight</strong>: +10 for gold-sensitive regions</li>
+<li><strong>Confidence Adjustment</strong>: Score × event confidence</li>
+</ol>
+<h2 id="trading-recommendations-logic">Trading Recommendations Logic<a class="headerlink" href="#trading-recommendations-logic" title="Permanent link">&para;</a></h2>
+<p>Based on risk assessment:</p>
+<table>
+<thead>
+<tr>
+<th>Global Risk</th>
+<th>Gold Outlook</th>
+<th>Trading Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>≥70</td>
+<td>Strongly Bullish</td>
+<td>Increase gold allocation, long XAU/USD</td>
+</tr>
+<tr>
+<td>50-69</td>
+<td>Bullish</td>
+<td>Favor gold on dips, moderate exposure</td>
+</tr>
+<tr>
+<td>30-49</td>
+<td>Neutral</td>
+<td>Maintain balanced position</td>
+</tr>
+<tr>
+<td>&lt;30</td>
+<td>Bearish</td>
+<td>Reduce gold exposure, risk-on favored</td>
+</tr>
+</tbody>
+</table>
+<h2 id="data-sources">Data Sources<a class="headerlink" href="#data-sources" title="Permanent link">&para;</a></h2>
+<p>World Monitor aggregates data from:</p>
+<ul>
+<li><strong>GDELT</strong>: Global Database of Events, Language, and Tone</li>
+<li><strong>ACLED</strong>: Armed Conflict Location &amp; Event Data</li>
+<li><strong>OpenSky</strong>: Real-time aircraft tracking (military flights)</li>
+<li><strong>AIS</strong>: Automatic Identification System (naval vessels)</li>
+<li><strong>NASA FIRMS</strong>: Fire Information for Resource Management</li>
+<li><strong>Cloudflare Radar</strong>: Internet outage detection</li>
+<li><strong>USGS</strong>: Earthquake monitoring</li>
+<li><strong>100+ RSS Feeds</strong>: Global news sources</li>
+</ul>
+<h2 id="open-source">Open Source<a class="headerlink" href="#open-source" title="Permanent link">&para;</a></h2>
+<p>World Monitor is <strong>open source</strong> and free to use:</p>
+<ul>
+<li><strong>Live App</strong>: https://worldmonitor.app/</li>
+<li><strong>GitHub</strong>: https://github.com/koala73/worldmonitor</li>
+<li><strong>Documentation</strong>: https://github.com/koala73/worldmonitor/blob/main/docs/DOCUMENTATION.md</li>
+</ul>
+<h2 id="future-enhancements">Future Enhancements<a class="headerlink" href="#future-enhancements" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Real-time WebSocket Integration</strong>: Direct feed from World Monitor</li>
+<li><strong>Historical Analysis</strong>: Correlation between past events and gold moves</li>
+<li><strong>Alert System</strong>: Push notifications for critical geopolitical events</li>
+<li><strong>Machine Learning</strong>: Predictive models for event-to-price correlation</li>
+<li><strong>Multi-Asset Support</strong>: Extend to oil, currencies, and other safe-havens</li>
+</ol>
+<h2 id="related-files">Related Files<a class="headerlink" href="#related-files" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>news/providers.py</code> - News data providers</li>
+<li><code>news/sentiment.py</code> - Sentiment analysis</li>
+<li><code>news/impact_predictor.py</code> - Market impact prediction</li>
+<li><code>news/economic_calendar.py</code> - Economic events</li>
+<li><code>risk/manager.py</code> - Risk management</li>
+<li><code>analysis/market_analysis.py</code> - Market regime detection</li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
