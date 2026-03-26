@@ -2,7 +2,7 @@
 
 > Produced by a full static + dynamic audit of commit `b1c3e71`.
 > See [DIAGNOSTIC_REPORT.md](./DIAGNOSTIC_REPORT.md) for the complete analysis.
-> Last updated: 2026-03-26 — V13 multi-timeframe + VaR enforcement + results refresh.
+> Last updated: 2026-05-30 — V14 test suite clean + watchlists table + Sentry wired.
 
 ## Summary
 
@@ -10,6 +10,22 @@ The architecture is sound and the infrastructure is production-grade. The
 enhanced feature set (122 stationary features, COT proxy, regime features,
 macro cross-asset) achieves **68.0% accuracy on a 3-year held-out OOS period
 (p=0.0000)**, meeting the p<0.05 requirement for live capital deployment.
+
+**V14 (2026-05-30) — newly fixed:**
+- ✅ Test suite: 2560 passed, 0 failed (was 20 failed + 154 silent import skips)
+  - Installed missing deps: passlib, pyjwt, hypothesis, pydantic-settings, aiohttp,
+    bcrypt, keyring, lz4, msgpack, redis, structlog, xgboost, hmmlearn
+  - Fixed TestWatchlistFlow cross-test JWT secret mutation (monkeypatch autouse fixture)
+  - Fixed module-scope fixture state leakage → function-scope + _reset_watchlists()
+- ✅ Dedicated `watchlists` table: Alembic migration f1a2b3c4d5e6 verified end-to-end
+  - WatchlistEntry SQLAlchemy model added to database/models.py
+  - api/watchlist.py rewritten: DB-first (watchlists table), memory fallback
+  - Unique constraint enforced at DB level (uq_watchlist_user_symbol)
+- ✅ Sentry DSN wired for production:
+  - sentry-sdk[fastapi]>=1.40.0 added to requirements.txt (was missing)
+  - .env.example expanded with full production setup guide
+  - 23 unit tests covering init, PII scrubbing, health-check filtering, ML fallback alert
+- ✅ sentry-sdk[fastapi] in requirements.txt (was referenced but not listed)
 
 **V13 (2026-03-26) — newly fixed:**
 - ✅ Multi-timeframe scheduler: M1, M5, M15, M30, H1, H4, D, W, M all supported
@@ -33,9 +49,9 @@ macro cross-asset) achieves **68.0% accuracy on a 3-year held-out OOS period
 - ✅ 148 source files reformatted with ruff
 
 **Still required before live deployment:**
-- ⚠️ Run OANDA paper trading with real API key for 30 days
-- ⚠️ Add Alembic migration for dedicated watchlists table
-- ⚠️ Wire Sentry DSN in production .env
+- ⚠️ Run OANDA paper trading with real API key for 30 days (clock starts when OANDA_API_KEY is set)
+- ⚠️ Set SENTRY_DSN in production .env (template and instructions in .env.example)
+- ⚠️ Wire research/pipeline LSTM as optional signal layer (Phase 3–4 integration path)
 
 Proceed to paper trading before committing real capital.
 
@@ -456,6 +472,8 @@ Equity curve annotation shows Sharpe ±SE, N, and OOS accuracy.
 |----------|------|--------|
 | P1 | Start 30-day OANDA paper trading run | ❌ Not started — clock does not start until OANDA_API_KEY is set |
 | P2 | Accumulate trade count (need ~202 more for Sharpe SE ≤ ±0.3 at N=250) | ❌ Ongoing — N=48 |
-| P3 | Wire research/pipeline LSTM as optional signal layer | ❌ Research only |
+| P3 | Wire research/pipeline LSTM as optional signal layer | ⚠️ Research module exists; integration path defined (Phases 1–4) |
 | P4 | VaR sqrt(t) enforcement | ✅ Enforced — ENFORCE_MULTIDAY_VAR=True blocks historical/parametric for t>1 |
-| P5 | Alembic migration for dedicated watchlists table | ⚠️ Using JSON column |
+| P5 | Alembic migration for dedicated watchlists table | ✅ Done — migration f1a2b3c4d5e6, WatchlistEntry model, api/watchlist.py wired |
+| P6 | Wire Sentry DSN in production .env | ✅ Done — sentry-sdk[fastapi] in requirements.txt, .env.example documented, 23 tests |
+| P7 | Test suite: 0 failures, 0 import skips | ✅ Done — 2560 passed, 0 failed (V14) |
