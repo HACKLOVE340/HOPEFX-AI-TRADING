@@ -107,6 +107,16 @@ def _load_models() -> None:
         "--years 50 --oos-years 3",
         _SAVED,
     )
+    # Fire a Sentry fatal-level issue so operators get paged immediately
+    try:
+        from monitoring.sentry_config import capture_ml_fallback_event
+        capture_ml_fallback_event(
+            reason=f"advanced_oos.pkl not loadable from {_SAVED}",
+            fallback_model="xgb_macro.pkl",
+            fallback_accuracy=0.503,
+        )
+    except Exception:
+        pass  # Sentry unavailable — CRITICAL log above is the fallback alert
 
     # ── Priority 2: basic macro XGBoost (65 stationary features, ~50% OOS) ──
     _macro_xgb = _try_load(_SAVED / "xgb_macro.pkl")
