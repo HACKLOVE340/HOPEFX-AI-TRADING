@@ -401,8 +401,10 @@ class MT5LiveFeed:
         if _SENTRY_AVAILABLE:
             try:
                 sentry_sdk.capture_exception(exc)
-            except Exception:
-                pass  # Sentry must never crash the feed
+            except Exception as sentry_exc:
+                # Sentry must never crash the feed, but log so the failure
+                # is visible in local logs / log aggregators.
+                logger.debug("Sentry capture failed (non-fatal): %s", sentry_exc)
 
 
 if __name__ == "__main__":
