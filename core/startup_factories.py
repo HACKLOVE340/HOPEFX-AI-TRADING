@@ -390,6 +390,75 @@ async def init_regime_router(s: Any) -> Any:
     return RegimeRouter(sm)
 
 
+async def init_macro_store(s: Any) -> Any:
+    """
+    Bootstrap the MacroStore at startup and wire a daily refresh job.
+
+    Loads historical DXY/VIX/yield/SPX data from data/macro/ CSVs (fetched
+    via yfinance if not already present).  The store is attached to app_state
+    so the signal engine can call macro_store.align_to_hourly(ohlcv_df) at
+    inference time.
+
+    The daily refresh job runs at 18:00 UTC (after US market close) so the
+    store always has yesterday's closing values before the London session.
+    """
+    from api.admin import log_activity
+    from ml.macro_bootstrap import bootstrap, daily_refresh, load_into_store
+    from ml.macro_store import macro_store
+
+    # Bootstrap: fetch CSVs if missing or stale (best-effort, non-blocking)
+    try:
+        n_written = await asyncio.get_event_loop().run_in_executor(
+            None, bootstrap, False
+        )
+        logger.info("MacroStore bootstrap: %d series available", n_written)
+    except Exception as exc:
+        logger.warning("MacroStore bootstrap failed (non-fatal): %s", exc)
+
+    # Load CSVs into the in-memory store
+    try:
+        n_loaded = load_into_store(macro_store)
+        logger.info("MacroStore loaded: %d series in memory", n_loaded)
+    except Exception as exc:
+        logger.warning("MacroStore load failed (non-fatal): %s", exc)
+        n_loaded = 0
+
+    # Attach to app_state so signal_engine can access it
+    s.macro_store = macro_store
+
+    # Daily refresh background task (runs every 24 h)
+    async def _daily_refresh_loop() -> None:
+        import asyncio as _asyncio
+
+        while True:
+            # Wait until next 18:00 UTC
+            now = __import__("datetime").datetime.now(
+                __import__("datetime").timezone.utc
+            )
+            target = now.replace(hour=18, minute=0, second=0, microsecond=0)
+            if target <= now:
+                target = target + __import__("datetime").timedelta(days=1)
+            wait_secs = (target - now).total_seconds()
+            logger.debug("MacroStore daily refresh in %.0f s", wait_secs)
+            await _asyncio.sleep(wait_secs)
+            try:
+                await _asyncio.get_event_loop().run_in_executor(
+                    None, daily_refresh
+                )
+                load_into_store(macro_store)
+                logger.info("MacroStore daily refresh complete")
+            except Exception as exc:
+                logger.warning("MacroStore daily refresh failed: %s", exc)
+
+    t = asyncio.create_task(_daily_refresh_loop())
+    s.background_tasks.append(t)
+
+    log_activity(
+        f"MacroStore initialised — {n_loaded} series loaded, daily refresh scheduled"
+    )
+    return macro_store
+
+
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
     from core.signal_engine import run_signal_engine

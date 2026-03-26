@@ -597,8 +597,10 @@ async def startup_event():
         .register("wallet_manager",       F.init_wallet,                 required=False, deps=["database"])
         .register("social",               F.init_social,                 required=False, deps=["config"])
         .register("regime_router",        F.init_regime_router,          required=False, deps=["strategy_brain"])
+        # ── Macro feature store (must start before signal engine) ────────────
+        .register("macro_store",          F.init_macro_store,            required=False, deps=["config"])
         # ── Engines ───────────────────────────────────────────────────────────
-        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker"])
+        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker", "macro_store"])
         .register("reconciler",           F.init_reconciler,             required=False, deps=["database", "broker"])
         .register("telegram_bot",         F.init_telegram_bot,           required=False, deps=["alert_engine"])
         .register("mobile",               _app(F.init_mobile),           required=False, deps=["config"])
