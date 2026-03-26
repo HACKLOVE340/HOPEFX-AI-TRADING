@@ -2,9 +2,21 @@
 config/startup_validator.py
 Startup environment validation — fail loud on missing or weak secrets.
 
-Called once at process start before any broker/DB connections are opened.
+Called once at process start before any broker/DB/Redis connections open.
 Any validation failure raises SystemExit(1) so the container/pod restarts
 rather than running with a broken configuration.
+
+Dev-mode bypass
+---------------
+Set APP_ENV=development (the default) to skip the DB_HOST / DB_PASSWORD /
+REDIS_URL checks so the app starts with SQLite + no Redis out of the box.
+All checks are enforced when APP_ENV=production.
+
+Env-var name alignment (canonical names used throughout the codebase):
+  SECURITY_JWT_SECRET  — JWT signing key  (also accepted: JWT_SECRET_KEY)
+  DATABASE_URL         — full DB URL      (SQLite OK in dev)
+  REDIS_URL            — full Redis URL   (optional in dev)
+  DB_HOST / DB_PASSWORD — only required when DATABASE_URL is not set in prod
 """
 
 from __future__ import annotations
@@ -12,98 +24,38 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
-# Required variable definitions
+# Helpers
 # ---------------------------------------------------------------------------
 
-@dataclass
-class EnvVar:
-    """Specification for a required environment variable."""
-    name: str
-    description: str
-    min_length: int = 1
-    validator: Optional[Callable[[str], bool]] = None
-    validator_msg: str = ""
-    secret: bool = False  # if True, value is redacted in logs
+def _is_dev() -> bool:
+    return os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test")
 
 
-_REQUIRED: List[EnvVar] = [
-    EnvVar(
-        name="SECRET_KEY",
-        description="Application master secret (JWT signing, CSRF)",
-        min_length=32,
-        validator=lambda v: len(v) >= 32,
-        validator_msg="must be ≥32 characters — generate with: python -c \"import secrets; print(secrets.token_hex(32))\"",
-        secret=True,
-    ),
-    EnvVar(
-        name="DB_PASSWORD",
-        description="PostgreSQL database password",
-        min_length=12,
-        validator=lambda v: len(v) >= 12,
-        validator_msg="must be ≥12 characters",
-        secret=True,
-    ),
-    EnvVar(
-        name="DB_HOST",
-        description="PostgreSQL host",
-        min_length=1,
-    ),
-    EnvVar(
-        name="REDIS_URL",
-        description="Redis connection URL (redis://host:port/db)",
-        min_length=8,
-        validator=lambda v: v.startswith(("redis://", "rediss://")),
-        validator_msg="must start with redis:// or rediss://",
-    ),
-]
-
-# Optional but validated if present
-_OPTIONAL_VALIDATED: List[EnvVar] = [
-    EnvVar(
-        name="IBKR_HOST",
-        description="IBKR TWS/Gateway host",
-        min_length=7,
-    ),
-    EnvVar(
-        name="IBKR_PORT",
-        description="IBKR TWS/Gateway port (7496=live, 7497=paper, 4001=gateway-live, 4002=gateway-paper)",
-        min_length=4,
-        validator=lambda v: v.isdigit() and int(v) in (4001, 4002, 7496, 7497),
-        validator_msg="must be one of: 4001 (gateway-live), 4002 (gateway-paper), 7496 (tws-live), 7497 (tws-paper)",
-    ),
-    EnvVar(
-        name="SENTRY_DSN",
-        description="Sentry DSN for error alerting",
-        min_length=20,
-        validator=lambda v: v.startswith("https://"),
-        validator_msg="must be a valid https:// Sentry DSN",
-    ),
-    EnvVar(
-        name="MOBILE_CORS_ORIGINS",
-        description="Comma-separated list of allowed CORS origins for mobile API",
-        min_length=1,
-        validator=lambda v: all(
-            o.strip().startswith(("https://", "http://localhost", "http://127."))
-            for o in v.split(",") if o.strip()
-        ),
-        validator_msg="all origins must start with https:// (or http://localhost for dev)",
-    ),
-]
+def _jwt_secret_value() -> str:
+    """Accept either canonical name (SECURITY_JWT_SECRET preferred)."""
+    return (
+        os.getenv("SECURITY_JWT_SECRET", "").strip()
+        or os.getenv("JWT_SECRET_KEY", "").strip()
+    )
 
 
 # ---------------------------------------------------------------------------
-# Validator
+# Public exception
 # ---------------------------------------------------------------------------
 
 class StartupValidationError(RuntimeError):
     """Raised when one or more required env vars are missing or invalid."""
 
+
+# ---------------------------------------------------------------------------
+# Validator
+# ---------------------------------------------------------------------------
 
 def validate_environment(*, strict: bool = True) -> None:
     """
@@ -117,50 +69,105 @@ def validate_environment(*, strict: bool = True) -> None:
         StartupValidationError: when strict=False and validation fails.
     """
     errors: List[str] = []
+    dev_mode = _is_dev()
 
-    # --- Required vars ---
-    for spec in _REQUIRED:
-        value = os.environ.get(spec.name, "").strip()
-        display = "[REDACTED]" if spec.secret else repr(value[:40])
+    # ── JWT secret ────────────────────────────────────────────────────────────
+    jwt_val = _jwt_secret_value()
+    if not jwt_val:
+        errors.append(
+            "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
+            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    elif len(jwt_val) < 32:
+        errors.append(
+            f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)"
+        )
+    elif jwt_val.startswith("CHANGE_ME"):
+        errors.append(
+            "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
+            "replace with a real random secret before deploying"
+        )
 
-        if not value:
+    # ── Database ──────────────────────────────────────────────────────────────
+    if not dev_mode:
+        db_url = os.getenv("DATABASE_URL", "").strip()
+        db_host = os.getenv("DB_HOST", "").strip()
+        db_pass = os.getenv("DB_PASSWORD", "").strip()
+
+        if not db_url and not db_host:
             errors.append(
-                f"MISSING  {spec.name}: {spec.description}"
+                "MISSING  DATABASE_URL or DB_HOST: "
+                "set DATABASE_URL=postgresql://user:pass@host:5432/db"
             )
-            continue
-
-        if len(value) < spec.min_length:
+        if not db_url and db_host and not db_pass:
             errors.append(
-                f"TOO_SHORT {spec.name} (got {len(value)} chars, need ≥{spec.min_length}): "
-                f"{spec.description}"
+                "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL"
             )
-            continue
-
-        if spec.validator and not spec.validator(value):
+        if db_pass and len(db_pass) < 12:
             errors.append(
-                f"INVALID  {spec.name}={display}: {spec.validator_msg}"
+                f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)"
             )
 
-    # --- Optional vars — only validate if set ---
-    for spec in _OPTIONAL_VALIDATED:
-        value = os.environ.get(spec.name, "").strip()
-        if not value:
-            continue  # optional — skip
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    if not dev_mode:
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        redis_host = os.getenv("REDIS_HOST", "").strip()
 
-        display = "[REDACTED]" if spec.secret else repr(value[:40])
-
-        if spec.validator and not spec.validator(value):
+        if not redis_url:
+            if redis_host:
+                redis_port = os.getenv("REDIS_PORT", "6379")
+                errors.append(
+                    f"MISSING  REDIS_URL: found REDIS_HOST={redis_host} — "
+                    f"set REDIS_URL=redis://{redis_host}:{redis_port}/0"
+                )
+            else:
+                errors.append(
+                    "MISSING  REDIS_URL: Redis connection URL — "
+                    "set REDIS_URL=redis://localhost:6379/0"
+                )
+        elif not redis_url.startswith(("redis://", "rediss://")):
             errors.append(
-                f"INVALID  {spec.name}={display}: {spec.validator_msg}"
+                f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://"
+            )
+
+    # ── Optional validated vars ───────────────────────────────────────────────
+    sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+    if sentry_dsn and not sentry_dsn.startswith("https://"):
+        errors.append(
+            f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN"
+        )
+
+    mobile_cors = os.getenv("MOBILE_CORS_ORIGINS", "").strip()
+    if mobile_cors:
+        bad = [
+            o.strip()
+            for o in mobile_cors.split(",")
+            if o.strip()
+            and not o.strip().startswith(("https://", "http://localhost", "http://127."))
+        ]
+        if bad:
+            errors.append(
+                f"INVALID  MOBILE_CORS_ORIGINS: non-https origins: {bad} — "
+                "all origins must start with https:// (or http://localhost for dev)"
+            )
+
+    ibkr_port = os.getenv("IBKR_PORT", "").strip()
+    if ibkr_port:
+        if not ibkr_port.isdigit() or int(ibkr_port) not in (4001, 4002, 7496, 7497):
+            errors.append(
+                f"INVALID  IBKR_PORT={ibkr_port!r}: "
+                "must be one of 4001 (gateway-live), 4002 (gateway-paper), "
+                "7496 (tws-live), 7497 (tws-paper)"
             )
 
     if errors:
+        env_label = "PRODUCTION" if not dev_mode else "DEVELOPMENT"
         msg = (
             "\n\n"
-            "╔══════════════════════════════════════════════════════════════╗\n"
-            "║  STARTUP VALIDATION FAILED — refusing to start              ║\n"
-            "╚══════════════════════════════════════════════════════════════╝\n\n"
-            + "\n".join(f"  ✗ {e}" for e in errors)
+            f"╔══════════════════════════════════════════════════════════════╗\n"
+            f"║  STARTUP VALIDATION FAILED [{env_label}]                     ║\n"
+            f"╚══════════════════════════════════════════════════════════════╝\n\n"
+            + "\n".join(f"  x {e}" for e in errors)
             + "\n\nFix the above environment variables and restart.\n"
         )
         logger.critical(msg)
@@ -168,10 +175,15 @@ def validate_environment(*, strict: bool = True) -> None:
             sys.exit(1)
         raise StartupValidationError(msg)
 
+    n_optional = sum(
+        1
+        for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT")
+        if os.getenv(v)
+    )
     logger.info(
-        "Startup validation passed (%d required vars, %d optional vars checked).",
-        len(_REQUIRED),
-        sum(1 for s in _OPTIONAL_VALIDATED if os.environ.get(s.name)),
+        "Startup validation passed (mode=%s, %d optional vars checked).",
+        "production" if not dev_mode else "development",
+        n_optional,
     )
 
 
