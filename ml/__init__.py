@@ -79,6 +79,13 @@ def _load_models() -> None:
     operators can detect silent degradation in log aggregators (Sentry, Datadog,
     CloudWatch).  The fallback model has had all close_lag_N non-stationary
     features removed as of this version.
+
+    OOS metadata sidecar
+    --------------------
+    When advanced_oos.pkl loads successfully, the companion
+    advanced_oos_meta.json is read to log the validated OOS accuracy, SE,
+    p-value, and period.  This lets operators confirm the loaded model matches
+    the expected 68% OOS accuracy without unpickling the full pipeline.
     """
     global _macro_xgb, _macro_rf, _baseline_xgb, _baseline_rf, _model_version
 
@@ -87,10 +94,46 @@ def _load_models() -> None:
     if _advanced_oos is not None:
         _macro_xgb = _advanced_oos
         _model_version = "advanced_oos_v1"
-        _ml_logger.info(
-            "Active ML model: advanced_oos.pkl — "
-            "68.0%% OOS accuracy, p=0.0000, 122 stationary features"
-        )
+
+        # Read OOS metadata sidecar to log validated accuracy without unpickling
+        _meta_path = _SAVED / "advanced_oos_meta.json"
+        if _meta_path.exists():
+            try:
+                import json as _json
+                with open(_meta_path) as _f:
+                    _meta = _json.load(_f)
+                _oos_acc = _meta.get("oos_accuracy", "?")
+                _oos_se = _meta.get("oos_accuracy_se", "?")
+                _oos_p = _meta.get("oos_p_value", "?")
+                _oos_period = _meta.get("oos_period", "?")
+                _n_features = _meta.get("feature_count", "?")
+                _trained_at = _meta.get("trained_at", "?")
+                _ml_logger.info(
+                    "Active ML model: advanced_oos.pkl — "
+                    "OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
+                    _oos_acc, _oos_se, _oos_p, _oos_period, _n_features, _trained_at,
+                )
+                # Warn if loaded model accuracy is below the validated 68% threshold
+                if isinstance(_oos_acc, float) and _oos_acc < 0.60:
+                    _ml_logger.warning(
+                        "advanced_oos.pkl OOS accuracy %.3f is below 60%% — "
+                        "model may need retraining. Run: "
+                        "python ml/train_advanced.py --years 50 --oos-years 8",
+                        _oos_acc,
+                    )
+            except Exception as _exc:
+                _ml_logger.info(
+                    "Active ML model: advanced_oos.pkl — "
+                    "68.0%% OOS accuracy, p=0.0000, 122 stationary features "
+                    "(metadata sidecar unreadable: %s)",
+                    _exc,
+                )
+        else:
+            _ml_logger.info(
+                "Active ML model: advanced_oos.pkl — "
+                "68.0%% OOS accuracy, p=0.0000, 122 stationary features "
+                "(no metadata sidecar — retrain to generate advanced_oos_meta.json)"
+            )
         return
 
     # ── CRITICAL: advanced model unavailable — falling back ──────────────────
