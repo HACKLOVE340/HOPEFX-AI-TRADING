@@ -41,6 +41,37 @@ _anomaly_store: Optional[Any] = None
 # ── Online learner store (Phase 3 — incremental XGBoost + drift detection) ───
 _online_learner_store: Optional[Any] = None
 
+# ── Deep ensemble store (Phase 4 — LSTM/Transformer/TCN stacking) ────────────
+_deep_ensemble_store: Optional[Any] = None
+
+def _get_deep_ensemble_store() -> Optional[Any]:
+    """Return the module-level DeepEnsembleStore singleton, loading on first call."""
+    global _deep_ensemble_store
+    try:
+        from config.feature_flags import flags
+        if not flags.DEEP_ENSEMBLE:
+            return None
+    except Exception:
+        return None
+    if _deep_ensemble_store is None:
+        try:
+            from research.pipeline.models_ensemble import DeepEnsembleStore
+            store = DeepEnsembleStore()
+            if store.load():
+                _deep_ensemble_store = store
+                logger.info(
+                    "DeepEnsembleStore active (OOS=%.1f%%, p=%.4f)",
+                    store.oos_accuracy * 100, store.p_value,
+                )
+            else:
+                # Store a sentinel so we don't retry on every tick
+                _deep_ensemble_store = False  # type: ignore[assignment]
+        except Exception as exc:
+            logger.debug("DeepEnsembleStore init failed: %s", exc)
+            _deep_ensemble_store = False  # type: ignore[assignment]
+    # Return None for the sentinel (False) so callers get a clean None
+    return _deep_ensemble_store if _deep_ensemble_store else None
+
 def _get_online_learner_store() -> Optional[Any]:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
@@ -393,6 +424,14 @@ def _compute_ml_probability(
                     prob = online_store.blend(prob, ohlcv_df)
                 except Exception as ol_exc:
                     logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
+
+            # Phase 4: deep ensemble blend — (1-w) * prob + w * deep_prob
+            deep_store = _get_deep_ensemble_store()
+            if deep_store is not None and deep_store.is_active:
+                try:
+                    prob = deep_store.blend(prob, ohlcv_df)
+                except Exception as de_exc:
+                    logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
 
             logger.debug(
                 "Advanced ML (%s) prob for %s: %.4f (macro=%s, mtf=%s, anomaly_w=%.2f)",
