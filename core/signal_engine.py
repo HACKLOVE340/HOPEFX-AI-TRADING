@@ -17,6 +17,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# ── MacroStore (populated at startup by init_macro_store) ─────────────────────
+# Imported lazily so the signal engine can start even if ml is unavailable.
+def _get_macro_store() -> Optional[Any]:
+    """Return the module-level MacroStore singleton, or None if unavailable."""
+    try:
+        from ml.macro_store import macro_store
+        return macro_store
+    except Exception:
+        return None
+
 # ── Advanced ML predictor (122-feature, 68% OOS accuracy) ────────────────────
 try:
     from ml import get_active_model, get_advanced_predictor, get_model_version
@@ -165,8 +175,12 @@ async def _tick(app_state: Any) -> None:
         # Uses the advanced OOS model (122 stationary features, 68% OOS acc)
         # when available. Falls back to the basic active model for backward
         # compatibility. The advanced predictor requires a rolling OHLCV
-        # DataFrame; the signal engine passes the full bar history from the
-        # broker feed so the feature pipeline can compute rolling windows.
+        # DataFrame AND a macro_df aligned to the same hourly index.
+        #
+        # CRITICAL FIX (P1): macro_df is now fetched from the MacroStore and
+        # passed to predict_proba(). Without macro features the live model runs
+        # on a degraded feature set — the 68% OOS accuracy was achieved WITH
+        # macro features (DXY, VIX, yields, SPX, COT proxies).
         ml_probability: float = base_confidence
         model_ver: str = "none"
 
@@ -188,7 +202,8 @@ async def _tick(app_state: Any) -> None:
                     n = len(prices)
                     ohlcv_df = pd.DataFrame(
                         {
-                            "open": prices,  # open not tracked per-bar; use close as proxy
+                            # open not tracked per-bar; use close as proxy
+                            "open": prices,
                             "high": highs if len(highs) == n else prices,
                             "low": lows if len(lows) == n else prices,
                             "close": prices,
@@ -204,13 +219,72 @@ async def _tick(app_state: Any) -> None:
                         data.get("volume", 0),
                     ]
 
-                    ml_probability = adv_predictor.predict_proba(ohlcv_df)
+                    # ── Fetch macro features from MacroStore ──────────────
+                    # The advanced model was trained on 122 features including
+                    # DXY, VIX, yields, SPX, and COT proxies. Passing macro_df
+                    # restores the full feature set the model was trained on.
+                    # If the store is empty (no CSVs yet), macro_df is None and
+                    # the predictor falls back to OHLCV-only features with a
+                    # logged warning — this is safe but degrades accuracy.
+                    macro_df: Optional[Any] = None
+                    _store = _get_macro_store()
+                    if _store is not None and len(_store) > 0:
+                        try:
+                            # Give the OHLCV DataFrame a UTC DatetimeIndex so
+                            # MacroStore.align_to_hourly() can forward-fill.
+                            ohlcv_indexed = ohlcv_df.copy()
+                            if not isinstance(ohlcv_indexed.index, pd.DatetimeIndex):
+                                # Build an hourly index ending at now
+                                end_ts = datetime.now(timezone.utc)
+                                freq = pd.tseries.frequencies.to_offset("1h")
+                                idx = pd.date_range(
+                                    end=end_ts,
+                                    periods=len(ohlcv_indexed),
+                                    freq=freq,
+                                    tz="UTC",
+                                )
+                                ohlcv_indexed.index = idx
+                            macro_df = _store.align_to_hourly(ohlcv_indexed)
+                            if macro_df.empty or macro_df.shape[1] == 0:
+                                macro_df = None
+                                logger.debug(
+                                    "MacroStore returned empty alignment for %s — "
+                                    "running advanced model without macro features",
+                                    symbol,
+                                )
+                            else:
+                                logger.debug(
+                                    "MacroStore aligned %d series for %s",
+                                    macro_df.shape[1],
+                                    symbol,
+                                )
+                        except Exception as macro_exc:
+                            logger.warning(
+                                "MacroStore alignment failed for %s: %s — "
+                                "running advanced model without macro features",
+                                symbol,
+                                macro_exc,
+                            )
+                            macro_df = None
+                    else:
+                        logger.debug(
+                            "MacroStore empty for %s — advanced model running on "
+                            "OHLCV features only (accuracy may be lower than 68%%)",
+                            symbol,
+                        )
+
+                    # Pass both ohlcv_df and macro_df — this is the fix for the
+                    # P1 gap where macro features were never passed at inference.
+                    ml_probability = adv_predictor.predict_proba(
+                        ohlcv_df, macro_df=macro_df, symbol=symbol
+                    )
                     model_ver = adv_predictor.version
                     logger.debug(
-                        "Advanced ML (%s) prob for %s: %.4f",
+                        "Advanced ML (%s) prob for %s: %.4f (macro=%s)",
                         model_ver,
                         symbol,
                         ml_probability,
+                        "yes" if macro_df is not None else "no",
                     )
 
                 else:
