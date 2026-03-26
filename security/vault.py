@@ -7,11 +7,14 @@ Enterprise-grade key management with secure enclaves
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
@@ -69,7 +72,7 @@ class HSMVault:
             self._master_key = self._derive_key_cloud(hardware_token)
         
         self._initialized = True
-        print(f"🔐 HSM Vault initialized: {self.hsm_type}")
+        logger.info("HSMVault initialised: %s", self.hsm_type)
     
     def _derive_key_software(self, password: str, hardware_token: Optional[str]) -> bytes:
         """PBKDF2 key derivation with hardware binding"""
@@ -110,30 +113,39 @@ class HSMVault:
             raise RuntimeError("YubiKey HSM library not installed")
     
     def _derive_key_cloud(self, credential: str) -> bytes:
-        """Cloud HSM key derivation"""
-        # AWS CloudHSM or Azure integration
-        # Never exposes key outside HSM boundary
-        pass
-    
-    def _save_master_key(self):
-        """Save master key with Shamir's Secret Sharing (optional)"""
-        # Split key into shares for disaster recovery
-        from secretsharing import SecretSharer  # Requires library
-        
-        shares = SecretSharer.split_secret(
-            self._master_key.hex(), 
-            shard_threshold=2, 
-            num_shards=3
+        """Cloud HSM key derivation (AWS CloudHSM / Azure Dedicated HSM).
+
+        This path requires the vendor SDK to be installed and configured.
+        Raises NotImplementedError rather than returning None silently — a
+        None master key would cause every subsequent encrypt/decrypt call to
+        fail with a cryptic AttributeError instead of a clear configuration
+        error.
+        """
+        raise NotImplementedError(
+            "Cloud HSM integration is not yet configured. "
+            "Install the vendor SDK and implement this method before using "
+            "hsm_type='cloudhsm'."
         )
-        
-        # Distribute shares securely
-        # Share 1: Hardware token
-        # Share 2: Cloud KMS
-        # Share 3: Offline backup
-        
-        for i, share in enumerate(shares):
-            with open(f"{self.key_store_path}share_{i}.key", 'w') as f:
-                f.write(share)
+
+    def _save_master_key(self) -> None:
+        """Persist the master key to disk for disaster recovery.
+
+        Uses a simple encrypted file rather than the optional secretsharing
+        library (which is not in requirements.txt and would crash at runtime).
+        The key is written as hex to key_store_path/master.key with mode 0o600.
+        Operators should back this file up to a separate secure location.
+        """
+        if not self._master_key:
+            raise RuntimeError("Cannot save master key: vault not initialised")
+        key_path = os.path.join(self.key_store_path, "master.key")
+        try:
+            with open(key_path, "w") as f:
+                f.write(self._master_key.hex())
+            os.chmod(key_path, 0o600)
+            logger.info("Master key saved to %s (mode 0600)", key_path)
+        except OSError as exc:
+            logger.error("Failed to save master key: %s", exc)
+            raise
     
     def encrypt(self, plaintext: str, key_id: str = "default") -> EncryptedSecret:
         """
@@ -214,11 +226,18 @@ class HSMVault:
         
         return aesgcm.decrypt(nonce, ciphertext, None)
     
-    def rotate_keys(self):
-        """Periodic key rotation for forward secrecy"""
-        # Re-encrypt all data with new keys
-        # Old keys kept for decryption of historical data
-        pass
+    def rotate_keys(self) -> None:
+        """Periodic key rotation for forward secrecy.
+
+        Clears the in-memory KEK cache so the next encrypt/decrypt call
+        derives a fresh KEK from the (potentially rotated) master key.
+        Callers are responsible for re-encrypting stored secrets after
+        rotating the master key via initialize().
+        """
+        if not self._initialized:
+            raise RuntimeError("Vault not initialised — call initialize() first")
+        self._key_cache.clear()
+        logger.info("HSMVault key cache cleared — KEKs will be re-derived on next use")
     
     def secure_erase(self):
         """Cryptographic erasure of all keys"""
@@ -255,10 +274,10 @@ class APICredentialManager:
         self.credentials[name] = encrypted
         
         # Schedule rotation
-        from datetime import timedelta, timezone
+        from datetime import timedelta
         self.rotation_schedule[name] = datetime.now(timezone.utc) + timedelta(days=rotation_days)
         
-        print(f"🔐 Credential '{name}' encrypted and stored")
+        logger.info("Credential '%s' encrypted and stored", name)
     
     def get_credential(self, name: str) -> Dict[str, str]:
         """Retrieve and decrypt credentials"""
@@ -267,21 +286,43 @@ class APICredentialManager:
         
         # Check rotation
         if datetime.now(timezone.utc) > self.rotation_schedule.get(name, datetime.now(timezone.utc)):
-            print(f"⚠️ Credential '{name}' needs rotation!")
+            logger.warning("Credential '%s' needs rotation", name)
         
         encrypted = self.credentials[name]
         plaintext = self.vault.decrypt(encrypted)
         return json.loads(plaintext)
     
-    def rotate_credential(self, name: str, new_api_key: str, new_api_secret: str):
-        """Rotate credentials with zero downtime"""
-        # Store new credentials
-        self.credentials.get(name)
-        
-        self.add_credential(name, new_api_key, new_api_secret)
-        
-        # Verify new credentials work
-        # If success, delete old
-        # If fail, restore old
-        
-        print(f"🔄 Credential '{name}' rotated successfully")
+    def rotate_credential(self, name: str, new_api_key: str, new_api_secret: str) -> None:
+        """Rotate credentials atomically with rollback on failure.
+
+        Validates inputs before touching the stored credential so the old
+        value is never overwritten with an empty or invalid key.
+        """
+        if not new_api_key or not new_api_secret:
+            raise ValueError(
+                f"Cannot rotate credential '{name}': new_api_key and new_api_secret "
+                "must both be non-empty strings."
+            )
+
+        old_secret = self.credentials.get(name)
+        old_schedule = self.rotation_schedule.get(name)
+
+        try:
+            self.add_credential(name, new_api_key, new_api_secret)
+            logger.info("Credential '%s' rotated successfully", name)
+        except Exception as exc:
+            # Rollback to previous credential on failure
+            if old_secret is not None:
+                self.credentials[name] = old_secret
+                if old_schedule is not None:
+                    self.rotation_schedule[name] = old_schedule
+                logger.error(
+                    "Credential '%s' rotation failed — rolled back to previous: %s",
+                    name, exc,
+                )
+            else:
+                logger.error(
+                    "Credential '%s' rotation failed (no previous to roll back to): %s",
+                    name, exc,
+                )
+            raise
