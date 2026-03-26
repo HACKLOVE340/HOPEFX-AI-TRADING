@@ -51,12 +51,20 @@ class BrokerFactory:
         except Exception as exc:
             logger.debug("mt5 broker unavailable: %s", exc)
         try:
-            from brokers.interactive_brokers import InteractiveBrokersConnector
+            from brokers.ibkr_connector import IBKRConnector
 
-            cls._brokers["ib"] = InteractiveBrokersConnector
-            cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
+            cls._brokers["ibkr"] = IBKRConnector
+            cls._brokers["ib"] = IBKRConnector
+            cls._brokers["interactive_brokers"] = IBKRConnector
         except Exception as exc:
-            logger.debug("interactive_brokers broker unavailable: %s", exc)
+            logger.debug("IBKRConnector unavailable: %s", exc)
+            # Legacy fallback
+            try:
+                from brokers.interactive_brokers import InteractiveBrokersConnector
+                cls._brokers["ib"] = InteractiveBrokersConnector
+                cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
+            except Exception as exc2:
+                logger.debug("interactive_brokers legacy connector unavailable: %s", exc2)
         try:
             from brokers.prop_firms.ftmo import FTMOConnector
 
