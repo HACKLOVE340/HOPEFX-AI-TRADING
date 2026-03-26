@@ -141,13 +141,34 @@ class TradeExecutor:
             )
 
     async def _execute_open(self, signal: Dict) -> ExecutionResult:
-        """Execute opening order"""
+        """Execute opening order — mandatory pre-trade gate, no fallback."""
         symbol = signal["symbol"]
         side = signal["action"]
         size = signal["size"]
 
-        # Check risk limits one more time
-        if not self.risk_manager.can_trade:
+        # ── Mandatory pre-trade gate ──────────────────────────────────────────
+        # Any exception (TradeBlocked OR RiskManagerError) blocks the order.
+        # There is NO "allow anyway" path — a broken risk check is a hard stop.
+        from risk.pre_trade_gate import GateOrder, PreTradeGate, RiskManagerError, TradeBlocked
+
+        gate = PreTradeGate(self.risk_manager)
+        gate_order = GateOrder(
+            symbol=symbol,
+            side=side.upper(),
+            quantity=float(size),
+            price=signal.get("price"),
+            stop_loss=signal.get("stop_loss"),
+            take_profit=signal.get("take_profit"),
+            strategy_id=signal.get("strategy_id", "unknown"),
+        )
+        try:
+            gate.check(gate_order)
+        except TradeBlocked as exc:
+            logger.warning(
+                "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%s "
+                "reason_code=%s detail=%s",
+                symbol, side, size, exc.reason_code, exc.detail,
+            )
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -155,7 +176,30 @@ class TradeExecutor:
                 average_price=0,
                 commission=0,
                 status=OrderStatus.REJECTED,
-                message="Trading halted by risk manager",
+                message=f"[{exc.reason_code}] {exc.detail}",
+                latency_ms=0,
+            )
+        except RiskManagerError as exc:
+            # Risk manager itself is broken — hard block, alert ops
+            logger.critical(
+                "RISK MANAGER ERROR — order blocked as safety measure | "
+                "symbol=%s side=%s qty=%s error=%s",
+                symbol, side, size, exc,
+            )
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(exc)
+            except Exception:
+                pass
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message=f"[RISK_MANAGER_ERROR] {exc}",
+                latency_ms=0,
             )
 
         # Place order through broker

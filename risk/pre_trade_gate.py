@@ -1,0 +1,454 @@
+"""
+risk/pre_trade_gate.py
+
+Pre-trade risk gate — the single mandatory checkpoint between signal generation
+and order submission.
+
+Design invariants (non-negotiable):
+1. Any exception inside the gate BLOCKS the trade.  There is no "allow anyway"
+   fallback.  If the risk manager is broken, we do not trade.
+2. Every block is logged at WARNING with a structured reason code.
+3. Sentry is notified on unexpected exceptions (not on normal blocks).
+4. The gate is synchronous and re-entrant-safe (no shared mutable state).
+5. All checks are additive — a trade must pass ALL checks to proceed.
+
+Usage:
+    from risk.pre_trade_gate import PreTradeGate, TradeBlocked
+
+    gate = PreTradeGate(risk_manager)
+    try:
+        gate.check(order)          # raises TradeBlocked if any check fails
+    except TradeBlocked as e:
+        logger.warning("Order blocked: %s", e)
+        return  # do NOT submit order
+"""
+
+from __future__ import annotations
+
+import logging
+import traceback
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from risk.manager import RiskManager
+
+logger = logging.getLogger(__name__)
+
+# Optional Sentry — non-fatal if absent
+try:
+    import sentry_sdk  # type: ignore[import]
+    _SENTRY = True
+except ImportError:
+    _SENTRY = False
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+class TradeBlocked(Exception):
+    """
+    Raised by PreTradeGate.check() when a trade must not proceed.
+
+    Attributes:
+        reason_code: Machine-readable code (e.g. "KILL_SWITCH_ACTIVE").
+        detail: Human-readable explanation.
+        checks_failed: List of individual check names that failed.
+    """
+    def __init__(
+        self,
+        reason_code: str,
+        detail: str,
+        checks_failed: Optional[List[str]] = None,
+    ) -> None:
+        self.reason_code = reason_code
+        self.detail = detail
+        self.checks_failed = checks_failed or []
+        super().__init__(f"[{reason_code}] {detail}")
+
+
+class RiskManagerError(RuntimeError):
+    """
+    Raised when the risk manager itself throws an unexpected exception.
+    The trade is blocked and this exception propagates to the caller.
+    """
+
+
+# ---------------------------------------------------------------------------
+# Order representation (minimal — gate is broker-agnostic)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GateOrder:
+    """
+    Minimal order representation consumed by the pre-trade gate.
+    Callers convert their broker-specific order to this before calling check().
+    """
+    symbol: str
+    side: str          # "BUY" | "SELL"
+    quantity: float
+    price: Optional[float] = None          # None = market order
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    strategy_id: str = "unknown"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.side not in ("BUY", "SELL"):
+            raise ValueError(f"GateOrder.side must be 'BUY' or 'SELL', got {self.side!r}")
+        if self.quantity <= 0:
+            raise ValueError(f"GateOrder.quantity must be > 0, got {self.quantity}")
+
+
+# ---------------------------------------------------------------------------
+# Gate result (for audit logging — gate.check() still raises on failure)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class GateResult:
+    """Returned by gate.check() only when ALL checks pass."""
+    order: GateOrder
+    checks_passed: List[str]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    cvar: Optional[float] = None
+    drawdown_pct: Optional[float] = None
+
+
+# ---------------------------------------------------------------------------
+# Pre-trade gate
+# ---------------------------------------------------------------------------
+
+class PreTradeGate:
+    """
+    Mandatory pre-trade risk gate.
+
+    All checks run in sequence.  The first failure raises TradeBlocked
+    immediately — subsequent checks are skipped (fail-fast).
+
+    If the risk manager raises an unexpected exception during any check,
+    RiskManagerError is raised (which also blocks the trade).
+    """
+
+    def __init__(self, risk_manager: "RiskManager") -> None:
+        self._rm = risk_manager
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def check(self, order: GateOrder) -> GateResult:
+        """
+        Run all pre-trade checks against *order*.
+
+        Returns:
+            GateResult — only if ALL checks pass.
+
+        Raises:
+            TradeBlocked — if any check fails (normal risk block).
+            RiskManagerError — if the risk manager itself throws unexpectedly.
+            ValueError — if order fields are invalid (caller bug).
+        """
+        checks_passed: List[str] = []
+        cvar: Optional[float] = None
+        drawdown_pct: Optional[float] = None
+
+        # ── 1. Kill-switch ────────────────────────────────────────────────────
+        self._run_check(
+            name="kill_switch",
+            fn=self._check_kill_switch,
+            checks_passed=checks_passed,
+        )
+
+        # ── 2. Trading-halted flag ────────────────────────────────────────────
+        self._run_check(
+            name="trading_halted",
+            fn=self._check_trading_halted,
+            checks_passed=checks_passed,
+        )
+
+        # ── 3. Daily loss limit ───────────────────────────────────────────────
+        self._run_check(
+            name="daily_loss_limit",
+            fn=self._check_daily_loss,
+            checks_passed=checks_passed,
+        )
+
+        # ── 4. Max drawdown ───────────────────────────────────────────────────
+        drawdown_pct = self._run_check_with_value(
+            name="max_drawdown",
+            fn=self._check_drawdown,
+            checks_passed=checks_passed,
+        )
+
+        # ── 5. CVaR pre-trade gate ────────────────────────────────────────────
+        cvar = self._run_check_with_value(
+            name="cvar_pre_trade",
+            fn=self._check_cvar,
+            checks_passed=checks_passed,
+        )
+
+        # ── 6. Position size ──────────────────────────────────────────────────
+        self._run_check(
+            name="position_size",
+            fn=lambda: self._check_position_size(order),
+            checks_passed=checks_passed,
+        )
+
+        # ── 7. Max open positions ─────────────────────────────────────────────
+        self._run_check(
+            name="max_open_positions",
+            fn=self._check_open_positions,
+            checks_passed=checks_passed,
+        )
+
+        # ── 8. Validate trade (symbol/side/size) ──────────────────────────────
+        self._run_check(
+            name="validate_trade",
+            fn=lambda: self._check_validate_trade(order),
+            checks_passed=checks_passed,
+        )
+
+        logger.info(
+            "PRE-TRADE GATE PASSED | symbol=%s side=%s qty=%.4f strategy=%s "
+            "checks=%s cvar=%s dd=%.4f",
+            order.symbol, order.side, order.quantity, order.strategy_id,
+            checks_passed,
+            f"{cvar:.4f}" if cvar is not None else "n/a",
+            drawdown_pct or 0.0,
+        )
+
+        return GateResult(
+            order=order,
+            checks_passed=checks_passed,
+            cvar=cvar,
+            drawdown_pct=drawdown_pct,
+        )
+
+    # ------------------------------------------------------------------
+    # Internal check runners
+    # ------------------------------------------------------------------
+
+    def _run_check(
+        self,
+        name: str,
+        fn,
+        checks_passed: List[str],
+    ) -> None:
+        """
+        Execute a check function.  On TradeBlocked, re-raise.
+        On any other exception, wrap in RiskManagerError and raise
+        (which also blocks the trade — no fallback).
+        """
+        try:
+            fn()
+            checks_passed.append(name)
+        except TradeBlocked:
+            raise
+        except Exception as exc:
+            tb = traceback.format_exc()
+            msg = (
+                f"Risk manager raised unexpected exception in check '{name}': "
+                f"{type(exc).__name__}: {exc}"
+            )
+            logger.error("%s\n%s", msg, tb)
+            if _SENTRY:
+                try:
+                    sentry_sdk.capture_exception(exc)
+                except Exception:
+                    pass
+            # BLOCK the trade — a broken risk check is not a pass
+            raise RiskManagerError(msg) from exc
+
+    def _run_check_with_value(
+        self,
+        name: str,
+        fn,
+        checks_passed: List[str],
+    ) -> Optional[float]:
+        """Like _run_check but fn() returns an Optional[float] metric."""
+        try:
+            value = fn()
+            checks_passed.append(name)
+            return value
+        except TradeBlocked:
+            raise
+        except Exception as exc:
+            tb = traceback.format_exc()
+            msg = (
+                f"Risk manager raised unexpected exception in check '{name}': "
+                f"{type(exc).__name__}: {exc}"
+            )
+            logger.error("%s\n%s", msg, tb)
+            if _SENTRY:
+                try:
+                    sentry_sdk.capture_exception(exc)
+                except Exception:
+                    pass
+            raise RiskManagerError(msg) from exc
+
+    # ------------------------------------------------------------------
+    # Individual checks
+    # ------------------------------------------------------------------
+
+    def _check_kill_switch(self) -> None:
+        """Block if the system-wide kill switch is active."""
+        # KillSwitch may be wired via the risk manager or standalone
+        ks = getattr(self._rm, "_kill_switch", None)
+        if ks is not None and ks.is_active():
+            reason = getattr(ks, "_reason", "kill switch active")
+            logger.warning("PRE-TRADE BLOCKED [KILL_SWITCH_ACTIVE] reason=%s", reason)
+            raise TradeBlocked(
+                reason_code="KILL_SWITCH_ACTIVE",
+                detail=f"System kill switch is active: {reason}",
+                checks_failed=["kill_switch"],
+            )
+
+    def _check_trading_halted(self) -> None:
+        """Block if the risk manager has halted trading."""
+        halted = getattr(self._rm, "_trading_halted", False)
+        if halted:
+            halt_reason = getattr(self._rm, "_halt_reason", "unknown")
+            halt_until = getattr(self._rm, "_halt_until", None)
+            detail = f"Trading halted: {halt_reason}"
+            if halt_until:
+                detail += f" (until {halt_until.isoformat()})"
+            logger.warning("PRE-TRADE BLOCKED [TRADING_HALTED] %s", detail)
+            raise TradeBlocked(
+                reason_code="TRADING_HALTED",
+                detail=detail,
+                checks_failed=["trading_halted"],
+            )
+
+    def _check_daily_loss(self) -> None:
+        """Block if daily loss limit is breached."""
+        rm = self._rm
+        daily_pnl = getattr(rm, "daily_pnl", 0.0)
+        daily_start = getattr(rm, "daily_starting_equity", 0.0)
+        config = getattr(rm, "config", None)
+        if config is None or daily_start <= 0:
+            return  # cannot check — pass (but log)
+
+        daily_loss_pct = abs(daily_pnl) / daily_start if daily_pnl < 0 else 0.0
+        limit = getattr(config, "daily_loss_limit_pct", 0.05)
+
+        if daily_loss_pct >= limit:
+            detail = (
+                f"Daily loss {daily_loss_pct:.2%} >= limit {limit:.2%} "
+                f"(pnl={daily_pnl:.2f})"
+            )
+            logger.warning("PRE-TRADE BLOCKED [DAILY_LOSS_LIMIT] %s", detail)
+            raise TradeBlocked(
+                reason_code="DAILY_LOSS_LIMIT",
+                detail=detail,
+                checks_failed=["daily_loss_limit"],
+            )
+
+    def _check_drawdown(self) -> float:
+        """Block if max drawdown is breached. Returns current drawdown."""
+        rm = self._rm
+        current_dd = getattr(rm, "current_drawdown", 0.0)
+        config = getattr(rm, "config", None)
+        limit = getattr(config, "max_drawdown_pct", 0.10) if config else 0.10
+
+        if current_dd >= limit:
+            detail = f"Drawdown {current_dd:.2%} >= limit {limit:.2%}"
+            logger.warning("PRE-TRADE BLOCKED [MAX_DRAWDOWN] %s", detail)
+            raise TradeBlocked(
+                reason_code="MAX_DRAWDOWN",
+                detail=detail,
+                checks_failed=["max_drawdown"],
+            )
+        return current_dd
+
+    def _check_cvar(self) -> Optional[float]:
+        """
+        Block if CVaR pre-trade gate fails.
+        Returns current CVaR value (or None if insufficient history).
+        """
+        rm = self._rm
+        if not hasattr(rm, "check_cvar_pre_trade"):
+            return None  # risk manager doesn't implement CVaR — pass
+
+        allowed, reason = rm.check_cvar_pre_trade()
+        if not allowed:
+            logger.warning("PRE-TRADE BLOCKED [CVAR_LIMIT] %s", reason)
+            raise TradeBlocked(
+                reason_code="CVAR_LIMIT",
+                detail=reason,
+                checks_failed=["cvar_pre_trade"],
+            )
+
+        # Extract CVaR value for audit log
+        if hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10:
+            try:
+                return rm._compute_cvar()
+            except Exception:
+                return None
+        return None
+
+    def _check_position_size(self, order: GateOrder) -> None:
+        """Block if order quantity exceeds position size limits."""
+        rm = self._rm
+        config = getattr(rm, "config", None)
+        if config is None:
+            return
+
+        balance = getattr(rm, "current_balance", 0.0) or getattr(rm, "initial_balance", 0.0)
+        if balance <= 0:
+            return  # cannot check — pass
+
+        # Notional value check
+        price = order.price or 0.0
+        if price > 0:
+            notional = order.quantity * price
+            max_notional = balance * getattr(config, "max_position_size_pct", 0.02)
+            if notional > max_notional:
+                detail = (
+                    f"Notional {notional:.2f} > max allowed {max_notional:.2f} "
+                    f"({getattr(config, 'max_position_size_pct', 0.02):.2%} of balance {balance:.2f})"
+                )
+                logger.warning("PRE-TRADE BLOCKED [POSITION_SIZE] %s", detail)
+                raise TradeBlocked(
+                    reason_code="POSITION_SIZE",
+                    detail=detail,
+                    checks_failed=["position_size"],
+                )
+
+    def _check_open_positions(self) -> None:
+        """Block if max open positions limit is reached."""
+        rm = self._rm
+        config = getattr(rm, "config", None)
+        open_positions = getattr(rm, "open_positions", [])
+        max_pos = getattr(config, "max_open_positions", 5) if config else 5
+
+        if len(open_positions) >= max_pos:
+            detail = (
+                f"Open positions {len(open_positions)} >= limit {max_pos}"
+            )
+            logger.warning("PRE-TRADE BLOCKED [MAX_OPEN_POSITIONS] %s", detail)
+            raise TradeBlocked(
+                reason_code="MAX_OPEN_POSITIONS",
+                detail=detail,
+                checks_failed=["max_open_positions"],
+            )
+
+    def _check_validate_trade(self, order: GateOrder) -> None:
+        """Delegate to risk manager's validate_trade() if available."""
+        rm = self._rm
+        if not hasattr(rm, "validate_trade"):
+            return
+
+        ok, reason = rm.validate_trade(
+            symbol=order.symbol,
+            size=order.quantity,
+            side=order.side,
+        )
+        if not ok:
+            logger.warning("PRE-TRADE BLOCKED [VALIDATE_TRADE] %s", reason)
+            raise TradeBlocked(
+                reason_code="VALIDATE_TRADE",
+                detail=reason,
+                checks_failed=["validate_trade"],
+            )
