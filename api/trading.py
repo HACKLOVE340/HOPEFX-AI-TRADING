@@ -138,6 +138,221 @@ def set_state(state) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# place_order sub-functions
+# Each function has a single responsibility and is ≤50 lines.
+# Decomposed from the original 201-line monolith to reduce bug surface on
+# the highest-risk code path (real order placement).
+# ---------------------------------------------------------------------------
+
+
+async def _validate_order(order: "OrderRequest") -> None:
+    """
+    Validate broker availability and prop-firm rules before touching risk.
+
+    Raises HTTP 503 if the broker is not ready.
+    Raises HTTP 403 if prop-firm rules are violated.
+    """
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not available",
+        )
+    try:
+        from brokers.prop_firms.guard import check_prop_firm_rules
+
+        account_info = await app_state.broker.get_account_info()
+        check_prop_firm_rules(account_info)
+    except HTTPException:
+        raise
+    except Exception as pf_exc:
+        logger.warning("Prop-firm guard error (allowing trade): %s", pf_exc)
+
+
+async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
+    """
+    Run RiskManager.assess_risk() and CVaR pre-trade gate.
+
+    Raises HTTP 403 if risk limits are breached.
+    Raises HTTP 503 if the CVaR check itself errors (fail-safe: block the order).
+    """
+    if not (hasattr(app_state, "risk_manager") and app_state.risk_manager is not None):
+        return
+
+    # Standard risk assessment
+    try:
+        account_info = await app_state.broker.get_account_info()
+        positions = await app_state.broker.get_positions()
+        positions_dicts = [
+            {
+                "symbol": p.symbol,
+                "quantity": p.quantity,
+                "current_price": getattr(p, "current_price", 0),
+            }
+            for p in positions
+        ]
+        assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
+        if not assessment.can_trade:
+            logger.warning(
+                "Order blocked by risk manager: user=%s reason=%s",
+                user_id,
+                assessment.messages,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Risk check failed: {'; '.join(assessment.messages)}",
+            )
+    except HTTPException:
+        raise
+    except Exception as risk_exc:
+        logger.error("Risk check error (allowing trade): %s", risk_exc)
+
+    # CVaR pre-trade gate — runs independently so a CVaR breach always blocks
+    try:
+        cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
+        if not cvar_allowed:
+            logger.warning(
+                "Order blocked by CVaR gate: user=%s reason=%s", user_id, cvar_reason
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"CVaR limit breached: {cvar_reason}",
+            )
+        logger.debug("CVaR pre-trade gate passed: user=%s %s", user_id, cvar_reason)
+    except HTTPException:
+        raise
+    except Exception as cvar_exc:
+        logger.error(
+            "CVaR pre-trade check error (blocking order for safety): user=%s %s",
+            user_id,
+            cvar_exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="CVaR risk check unavailable — order rejected for safety",
+        )
+
+
+def _log_compliance(order: "OrderRequest", user_id: str) -> None:
+    """Write the pre-execution compliance audit record. Non-blocking on error."""
+    if not (
+        hasattr(app_state, "compliance_manager")
+        and app_state.compliance_manager is not None
+    ):
+        return
+    try:
+        app_state.compliance_manager.log_trade(
+            user_id=user_id,
+            trade_data={
+                "symbol": order.symbol,
+                "side": order.side,
+                "quantity": order.quantity,
+                "order_type": order.order_type,
+            },
+        )
+    except Exception as comp_exc:
+        logger.error("Compliance log error: %s", comp_exc)
+
+
+async def _route_to_broker(order: "OrderRequest") -> Any:
+    """
+    Submit the order to the broker and return the fill result.
+
+    Raises HTTP 400 on broker rejection or unexpected error.
+    """
+    try:
+        result = await app_state.broker.place_market_order(
+            symbol=order.symbol,
+            side=order.side,
+            quantity=order.quantity,
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Broker order submission failed: %s", exc, exc_info=True)
+        try:
+            from core.metrics import ORDERS_TOTAL
+            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+async def _record_fill(
+    order: "OrderRequest", result: Any, user_id: str
+) -> Dict[str, Any]:
+    """
+    Broadcast the fill over WebSocket, send FCM push, send email, update
+    Prometheus, and return the API response dict.
+
+    All notification steps are best-effort — failures are logged but do not
+    affect the response.
+    """
+    logger.info(
+        "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
+        user_id,
+        order.symbol,
+        order.side,
+        order.quantity,
+        result.id,
+    )
+
+    # WebSocket broadcast
+    if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
+        try:
+            await app_state.ws_manager.broadcast_trade(
+                symbol=order.symbol,
+                price=result.average_fill_price or 0.0,
+                quantity=order.quantity,
+                side=order.side,
+                trade_id=result.id,
+            )
+        except Exception as ws_exc:
+            logger.warning("WebSocket broadcast failed: %s", ws_exc)
+
+    # FCM push notification
+    try:
+        from mobile.push_notifications import push_manager
+        push_manager.send_trade_filled(
+            user_id=user_id,
+            symbol=order.symbol,
+            direction=order.side,
+            price=result.average_fill_price or 0.0,
+            lots=order.quantity,
+        )
+    except Exception as fcm_exc:
+        logger.debug("FCM trade push skipped: %s", fcm_exc)
+
+    # Email notification
+    try:
+        from notifications.email_triggers import send_trade_fill_email
+        send_trade_fill_email(
+            symbol=order.symbol,
+            direction=order.side,
+            quantity=order.quantity,
+            fill_price=result.average_fill_price or 0.0,
+            commission=getattr(result, "commission", 0.0),
+        )
+    except Exception as email_exc:
+        logger.debug("Trade fill email skipped: %s", email_exc)
+
+    # Prometheus metric
+    try:
+        from core.metrics import ORDERS_TOTAL
+        ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "order_id": result.id,
+        "filled_price": result.average_fill_price,
+        "filled_quantity": result.filled_quantity,
+    }
+
+
 @router.post("/order", status_code=status.HTTP_201_CREATED)
 async def place_order(
     order: OrderRequest,
@@ -149,198 +364,22 @@ async def place_order(
 
     Requires: Bearer token with role >= 'trader'.
     Rate-limited to ORDER_RATE_LIMIT orders per ORDER_RATE_WINDOW seconds per user.
-    Passes through RiskManager.assess_risk() before broker execution.
+    Passes through RiskManager.assess_risk() and CVaR gate before broker execution.
     Symbol and quantity are validated against server-side allowlists.
+
+    Decomposed into focused sub-functions for testability and safety:
+      _validate_order()   — broker availability + prop-firm rules
+      _apply_risk_checks() — RiskManager + CVaR gate
+      _log_compliance()   — pre-execution audit record
+      _route_to_broker()  — broker submission
+      _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
-    # ── Per-user order rate limit ────────────────────────────────────────────
     _check_order_rate_limit(user.sub)
-
-    if not app_state or not app_state.broker:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
-        )
-
-    # ── Prop-firm rule enforcement ───────────────────────────────────────────
-    try:
-        from brokers.prop_firms.guard import check_prop_firm_rules
-
-        account_info = await app_state.broker.get_account_info()
-        check_prop_firm_rules(account_info)
-    except Exception as pf_exc:
-        from fastapi import HTTPException as _HTTPException
-
-        if isinstance(pf_exc, _HTTPException):
-            raise
-        logger.warning("Prop-firm guard error (allowing trade): %s", pf_exc)
-
-    # ── Risk gate ────────────────────────────────────────────────────────────
-    if hasattr(app_state, "risk_manager") and app_state.risk_manager is not None:
-        try:
-            account_info = await app_state.broker.get_account_info()
-            positions = await app_state.broker.get_positions()
-            positions_dicts = [
-                {
-                    "symbol": p.symbol,
-                    "quantity": p.quantity,
-                    "current_price": getattr(p, "current_price", 0),
-                }
-                for p in positions
-            ]
-            assessment = app_state.risk_manager.assess_risk(
-                account_info, positions_dicts
-            )
-            if not assessment.can_trade:
-                logger.warning(
-                    "Order blocked by risk manager: user=%s reason=%s",
-                    user.sub,
-                    assessment.messages,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Risk check failed: {'; '.join(assessment.messages)}",
-                )
-        except HTTPException:
-            raise
-        except Exception as risk_exc:
-            logger.error("Risk check error (allowing trade): %s", risk_exc)
-
-        # ── Explicit CVaR pre-trade gate ─────────────────────────────────────
-        # Runs independently of assess_risk() so a CVaR breach always blocks
-        # order submission, even if assess_risk() was skipped or errored.
-        try:
-            cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
-            if not cvar_allowed:
-                logger.warning(
-                    "Order blocked by CVaR gate: user=%s reason=%s",
-                    user.sub,
-                    cvar_reason,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"CVaR limit breached: {cvar_reason}",
-                )
-            logger.debug(
-                "CVaR pre-trade gate passed: user=%s %s", user.sub, cvar_reason
-            )
-        except HTTPException:
-            raise
-        except Exception as cvar_exc:
-            logger.error(
-                "CVaR pre-trade check error (blocking order for safety): user=%s %s",
-                user.sub,
-                cvar_exc,
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="CVaR risk check unavailable — order rejected for safety",
-            )
-
-    # ── Compliance / audit log ───────────────────────────────────────────────
-    if (
-        hasattr(app_state, "compliance_manager")
-        and app_state.compliance_manager is not None
-    ):
-        try:
-            app_state.compliance_manager.log_trade(
-                user_id=user.sub,
-                trade_data={
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                    "order_type": order.order_type,
-                },
-            )
-        except Exception as comp_exc:
-            logger.error("Compliance log error: %s", comp_exc)
-
-    # ── Execute ──────────────────────────────────────────────────────────────
-    try:
-        result = await app_state.broker.place_market_order(
-            symbol=order.symbol,
-            side=order.side,
-            quantity=order.quantity,
-        )
-        logger.info(
-            "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
-            user.sub,
-            order.symbol,
-            order.side,
-            order.quantity,
-            result.id,
-        )
-
-        # ── Broadcast to WebSocket subscribers ──────────────────────────────
-        if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
-            try:
-                await app_state.ws_manager.broadcast_trade(
-                    symbol=order.symbol,
-                    price=result.average_fill_price or 0.0,
-                    quantity=order.quantity,
-                    side=order.side,
-                    trade_id=result.id,
-                )
-            except Exception as ws_exc:
-                logger.warning("WebSocket broadcast failed: %s", ws_exc)
-
-        # ── FCM push: trade filled ───────────────────────────────────────────
-        try:
-            from mobile.push_notifications import push_manager
-
-            push_manager.send_trade_filled(
-                user_id=user.sub,
-                symbol=order.symbol,
-                direction=order.side,
-                price=result.average_fill_price or 0.0,
-                lots=order.quantity,
-            )
-        except Exception as fcm_exc:
-            logger.debug("FCM trade push skipped: %s", fcm_exc)
-
-        # ── Email: trade filled ──────────────────────────────────────────────
-        try:
-            from notifications.email_triggers import send_trade_fill_email
-
-            send_trade_fill_email(
-                symbol=order.symbol,
-                direction=order.side,
-                quantity=order.quantity,
-                fill_price=result.average_fill_price or 0.0,
-                commission=getattr(result, "commission", 0.0),
-            )
-        except Exception as email_exc:
-            logger.debug("Trade fill email skipped: %s", email_exc)
-
-        # Prometheus order metric
-        try:
-            from core.metrics import ORDERS_TOTAL
-
-            ORDERS_TOTAL.labels(
-                symbol=order.symbol, side=order.side, status="filled"
-            ).inc()
-        except Exception as metric_exc:
-            logger.debug("Prometheus metric update skipped: %s", metric_exc)
-
-        return {
-            "status": "success",
-            "order_id": result.id,
-            "filled_price": result.average_fill_price,
-            "filled_quantity": result.filled_quantity,
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Order error for user=%s: %s", user.sub, exc, exc_info=True)
-        try:
-            from core.metrics import ORDERS_TOTAL
-
-            ORDERS_TOTAL.labels(
-                symbol=order.symbol, side=order.side, status="error"
-            ).inc()
-        except Exception as metric_exc:
-            logger.debug("Prometheus metric update skipped: %s", metric_exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    await _validate_order(order)
+    await _apply_risk_checks(order, user.sub)
+    _log_compliance(order, user.sub)
+    result = await _route_to_broker(order)
+    return await _record_fill(order, result, user.sub)
 
 
 @router.get("/positions", response_model=List[PositionResponse])
