@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ class PropFirmStatus(BaseModel):
     response_model=PropFirmStatus,
     summary="Prop firm challenge status",
 )
-async def prop_firm_status():
+async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current prop firm challenge metrics.
 
