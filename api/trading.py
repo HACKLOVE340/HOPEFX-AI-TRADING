@@ -121,6 +121,40 @@ class PositionResponse(BaseModel):
     unrealized_pnl: float
 
 
+class OrderResponse(BaseModel):
+    """Response returned after a successful order fill."""
+    status: str
+    order_id: str
+    filled_price: Optional[float] = None
+    filled_quantity: Optional[float] = None
+
+
+class ClosePositionResponse(BaseModel):
+    status: str
+    position_id: str
+
+
+class CloseAllResponse(BaseModel):
+    status: str
+    closed_positions: int
+
+
+class PriceQuote(BaseModel):
+    bid: float
+    ask: float
+    last: Optional[float] = None
+    timestamp: Optional[float] = None
+
+
+class OHLCVBar(BaseModel):
+    timestamp: float
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
 # ---------------------------------------------------------------------------
 # Module-level state (injected from app.py startup)
 # ---------------------------------------------------------------------------
@@ -372,7 +406,12 @@ async def _record_fill(
     }
 
 
-@router.post("/order", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/order",
+    status_code=status.HTTP_201_CREATED,
+    response_model=OrderResponse,
+    summary="Place a market/limit/stop order",
+)
 async def place_order(
     order: OrderRequest,
     user: TokenPayload = Depends(require_kyc),
@@ -427,7 +466,11 @@ async def get_positions(
     ]
 
 
-@router.delete("/positions/{position_id}")
+@router.delete(
+    "/positions/{position_id}",
+    response_model=ClosePositionResponse,
+    summary="Close a specific open position",
+)
 async def close_position(
     position_id: str,
     user: TokenPayload = Depends(require_role("trader")),
@@ -463,7 +506,11 @@ async def close_position(
     return {"status": "success", "position_id": position_id}
 
 
-@router.delete("/positions")
+@router.delete(
+    "/positions",
+    response_model=CloseAllResponse,
+    summary="Close all open positions",
+)
 async def close_all_positions(
     user: TokenPayload = Depends(require_role("trader")),
 ):
@@ -493,7 +540,11 @@ async def get_account(
     return await app_state.broker.get_account_info()
 
 
-@router.get("/prices")
+@router.get(
+    "/prices",
+    response_model=Dict[str, PriceQuote],
+    summary="Get current bid/ask prices for all tracked symbols",
+)
 async def get_prices(
     user: TokenPayload = Depends(get_current_user),
 ):
@@ -517,7 +568,11 @@ async def get_prices(
     return prices
 
 
-@router.get("/ohlcv/{symbol}")
+@router.get(
+    "/ohlcv/{symbol}",
+    response_model=List[OHLCVBar],
+    summary="Get OHLCV candlestick data for a symbol",
+)
 async def get_ohlcv(
     symbol: str,
     timeframe: str = "1h",
