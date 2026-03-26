@@ -73,13 +73,19 @@ def _get_predictor():
     """Return the active ML predictor.
 
     Priority:
-    1. AdvancedModelPredictor (advanced_oos.pkl — 122-feature OOS model)
-    2. EnsemblePredictor (ml/models/ensemble.py)
-    3. Raw joblib-loaded xgb_macro.pkl
+    1. InferenceEngine (full pipeline: MacroStore + MTF + 200 features + calibration)
+    2. AdvancedModelPredictor (advanced_oos.pkl — direct)
+    3. EnsemblePredictor (ml/models/ensemble.py)
+    4. Raw joblib-loaded xgb_macro.pkl
     """
     try:
-        from ml.live_inference import get_advanced_predictor
+        from ml.inference_engine import get_inference_engine
+        return get_inference_engine()
+    except Exception as exc:
+        logger.debug("InferenceEngine unavailable: %s", exc)
 
+    try:
+        from ml.live_inference import get_advanced_predictor
         p = get_advanced_predictor()
         if p.is_available:
             return p
@@ -88,21 +94,16 @@ def _get_predictor():
 
     try:
         from ml.models.ensemble import EnsemblePredictor
-
         return EnsemblePredictor()
     except Exception as exc:
         logger.debug("EnsemblePredictor unavailable: %s", exc)
 
     try:
         import pathlib
-
         import joblib
-
         path = (
             pathlib.Path(__file__).parent.parent
-            / "ml"
-            / "saved_models"
-            / "xgb_macro.pkl"
+            / "ml" / "saved_models" / "xgb_macro.pkl"
         )
         if path.exists():
             return joblib.load(str(path))
@@ -276,35 +277,46 @@ async def predict(symbol: str, body: PredictRequest):
 
     if predictor is not None:
         try:
-            # AdvancedModelPredictor path — uses MacroStore for macro context
-            if hasattr(predictor, "predict_signal"):
-                import pandas as pd
+            import pandas as pd
 
-                # Build a minimal OHLCV stub so predict_signal can run even
-                # without a live data feed.  Real deployments replace this with
-                # the actual rolling OHLCV window from the data scheduler.
-                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
-                try:
-                    from data.feeds.oanda import get_ohlcv_stub
-
-                    ohlcv = get_ohlcv_stub(symbol_upper, body.lookback)
-                except Exception:
-                    idx = pd.date_range(
-                        end=pd.Timestamp.utcnow().floor("h"),
-                        periods=body.lookback,
-                        freq="h",
-                        tz="UTC",
-                    )
-                    ohlcv = pd.DataFrame(
-                        {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 0.0},
-                        index=idx,
-                    )
-
-                result = predictor.predict_signal(
-                    ohlcv,
-                    macro_df=macro_df,
-                    symbol=symbol_upper,
+            # Build OHLCV stub (real deployments replace with live feed)
+            try:
+                from data.feeds.oanda import get_ohlcv_stub
+                ohlcv = get_ohlcv_stub(symbol_upper, body.lookback)
+            except Exception:
+                idx = pd.date_range(
+                    end=pd.Timestamp.utcnow().floor("h"),
+                    periods=body.lookback,
+                    freq="h",
+                    tz="UTC",
                 )
+                ohlcv = pd.DataFrame(
+                    {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 0.0},
+                    index=idx,
+                )
+
+            # InferenceEngine path (full pipeline)
+            if hasattr(predictor, "predict") and hasattr(predictor, "health"):
+                result = predictor.predict(ohlcv, symbol=symbol_upper)
+                direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                return PredictResponse(
+                    symbol=symbol_upper,
+                    direction=direction,
+                    confidence=confidence,
+                    entry_price=result.get("last_close"),
+                    stop_loss=None,
+                    take_profit=None,
+                    features_used=result.get("bars_used", 0),
+                    model_id=result.get("model_version", "inference_engine"),
+                    generated_at=now_iso,
+                )
+
+            # AdvancedModelPredictor path
+            if hasattr(predictor, "predict_signal"):
+                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
+                result = predictor.predict_signal(ohlcv, macro_df=macro_df, symbol=symbol_upper)
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
                 direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
@@ -322,9 +334,7 @@ async def predict(symbol: str, body: PredictRequest):
 
             # EnsemblePredictor / legacy path
             if hasattr(predictor, "predict_symbol"):
-                result = predictor.predict_symbol(
-                    symbol_upper, timeframe=body.timeframe
-                )
+                result = predictor.predict_symbol(symbol_upper, timeframe=body.timeframe)
                 return PredictResponse(
                     symbol=symbol_upper,
                     direction=result.get("direction", "HOLD"),
