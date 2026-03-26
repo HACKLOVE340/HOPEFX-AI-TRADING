@@ -257,14 +257,123 @@ async def init_risk_manager(s: Any) -> Any:
 
 
 async def init_broker(s: Any) -> Any:
+    """
+    Broker factory — selects the active broker based on environment variables.
+
+    Priority order:
+      1. BROKER_TYPE=oanda  AND  BROKER_OANDA_TOKEN set
+         → AsyncOANDAConnector (practice or live per OANDA_ENVIRONMENT)
+         → 30-day paper trading clock starts on first successful connection
+      2. BROKER_TYPE=paper  (default)
+         → PaperTradingBroker (in-memory simulation)
+
+    The 30-day OANDA paper trading run clock is tracked in
+    ``data/oanda_paper_start.json``.  The file is created on first
+    successful OANDA connection and read by the /api/status endpoint.
+    """
+    import json
+    import pathlib
     from api.admin import log_activity
+
+    broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+    oanda_token = os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
+    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
+    oanda_env = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice"))
+    oanda_practice = oanda_env != "live"
+
+    # ── OANDA path ────────────────────────────────────────────────────────────
+    if broker_type == "oanda" and oanda_token and oanda_account:
+        try:
+            from brokers.oanda import AsyncOANDAConnector
+            b = AsyncOANDAConnector(
+                api_key=oanda_token,
+                account_id=oanda_account,
+                practice=oanda_practice,
+            )
+            connected = await b.connect()
+            if connected:
+                env_label = "practice" if oanda_practice else "LIVE"
+                log_activity(f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)")
+                logger.info(
+                    "OANDA %s broker connected — account=%s…",
+                    env_label, oanda_account[:8],
+                )
+                # ── 30-day paper trading clock ────────────────────────────────
+                _stamp_oanda_paper_start(oanda_account, oanda_practice)
+                return b
+            else:
+                logger.warning(
+                    "OANDA connection failed — falling back to paper broker. "
+                    "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT."
+                )
+        except Exception as exc:
+            logger.warning(
+                "OANDA broker init failed (%s) — falling back to paper broker.", exc
+            )
+
+    # ── Paper broker fallback ─────────────────────────────────────────────────
     from brokers.paper_trading import PaperTradingBroker
 
-    bal = float(os.getenv("PAPER_TRADING_BALANCE", "10000"))
+    bal = float(os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000")))
     b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
     await b.connect()
+
+    if broker_type == "oanda" and (not oanda_token or not oanda_account):
+        logger.warning(
+            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN / BROKER_OANDA_ACCOUNT not set. "
+            "Running paper broker. Set both env vars to start the 30-day OANDA run."
+        )
+    else:
+        logger.info("Paper trading broker connected (balance=%.2f)", bal)
+
     log_activity("Paper Trading Broker connected")
     return b
+
+
+def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
+    """
+    Write data/oanda_paper_start.json on first OANDA connection.
+
+    The file records the UTC timestamp when the 30-day paper trading clock
+    started.  Subsequent restarts do NOT overwrite it — the clock keeps
+    running from the original start time.
+    """
+    import json
+    import pathlib
+    from datetime import datetime, timezone
+
+    stamp_path = pathlib.Path("data/oanda_paper_start.json")
+    stamp_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if stamp_path.exists():
+        # Clock already started — do not reset
+        try:
+            existing = json.loads(stamp_path.read_text())
+            started = existing.get("started_utc", "unknown")
+            logger.info(
+                "OANDA paper trading clock already running since %s", started
+            )
+        except Exception:
+            pass
+        return
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "account_id": account_id[:8] + "…",
+        "environment": "practice" if practice else "live",
+        "started_utc": now.isoformat(),
+        "target_days": 30,
+        "note": (
+            "30-day paper trading run started. "
+            "Clock runs from started_utc. "
+            "Do not delete this file — it tracks the run start time."
+        ),
+    }
+    stamp_path.write_text(json.dumps(payload, indent=2))
+    logger.info(
+        "OANDA paper trading clock started — target: 30 days from %s",
+        now.strftime("%Y-%m-%d %H:%M UTC"),
+    )
 
 
 async def init_price_engine(s: Any) -> Any:
