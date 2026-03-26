@@ -199,3 +199,156 @@ class AnomalyWeighter:
         report = X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
         report["anomaly_score"] = scores[idx]
         return report
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AnomalyWeightStore — live inference store for signal engine
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AnomalyWeightStore:
+    """
+    Production anomaly weighting store for the signal engine (Phase 2).
+
+    Maintains a rolling window of recent OHLCV bars, fits an IsolationForest
+    on that window, and scores each new bar.  When the anomaly score exceeds
+    `anomaly_threshold` (default 0.7 on a 0–1 normalised scale), the ML
+    probability is down-weighted by `down_weight_factor` (default 0.5).
+
+    The IF score from sklearn's decision_function() is in (-inf, +inf) with
+    positive = inlier.  We normalise to [0, 1] where 1 = most anomalous.
+
+    Parameters
+    ----------
+    window_size       : Number of recent bars used to fit the IF model.
+    refit_every       : Refit the IF every N new bars (amortises cost).
+    contamination     : Expected anomaly fraction (passed to IsolationForest).
+    anomaly_threshold : Normalised score above which a bar is considered anomalous.
+    down_weight_factor: Multiplier applied to ML probability on anomalous bars.
+    """
+
+    def __init__(
+        self,
+        window_size: int = 500,
+        refit_every: int = 50,
+        contamination: float = 0.02,
+        anomaly_threshold: float = 0.7,
+        down_weight_factor: float = 0.5,
+    ) -> None:
+        self.window_size = window_size
+        self.refit_every = refit_every
+        self.anomaly_threshold = anomaly_threshold
+        self.down_weight_factor = down_weight_factor
+        self._weighter: Optional[AnomalyWeighter] = None
+        self._buffer: list = []
+        self._bars_since_refit: int = 0
+        self._contamination = contamination
+        self._fitted = False
+
+    # ── Feature extraction ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _extract_features(ohlcv_df: pd.DataFrame) -> Optional[np.ndarray]:
+        """
+        Extract a compact anomaly-detection feature vector from OHLCV.
+
+        Features (all stationary):
+          - log return
+          - high-low range / close (normalised range)
+          - volume z-score (rolling 20)
+          - ATR(14) / close
+          - close vs SMA20 distance
+        """
+        try:
+            c = ohlcv_df["close"]
+            h = ohlcv_df["high"]
+            lo = ohlcv_df["low"]
+            v = ohlcv_df.get("volume", pd.Series(np.ones(len(c)), index=c.index))
+
+            log_ret   = np.log(c / c.shift(1)).fillna(0)
+            hl_range  = ((h - lo) / c.replace(0, np.nan)).fillna(0)
+            vol_z     = ((v - v.rolling(20).mean()) / v.rolling(20).std().replace(0, np.nan)).fillna(0)
+            atr14     = (h - lo).rolling(14).mean() / c.replace(0, np.nan)
+            atr14     = atr14.fillna(0)
+            sma20_dist = (c - c.rolling(20).mean()) / c.replace(0, np.nan)
+            sma20_dist = sma20_dist.fillna(0)
+
+            feat = np.column_stack([
+                log_ret.values,
+                hl_range.values,
+                vol_z.values,
+                atr14.values,
+                sma20_dist.values,
+            ])
+            return feat
+        except Exception:
+            return None
+
+    # ── Update + score ────────────────────────────────────────────────────────
+
+    def update_and_score(self, ohlcv_df: pd.DataFrame) -> float:
+        """
+        Ingest new OHLCV bars, refit if due, and return the anomaly weight
+        for the most recent bar.
+
+        Returns
+        -------
+        weight : float in [down_weight_factor, 1.0]
+            1.0  = normal bar (no down-weighting)
+            0.5  = anomalous bar (default down_weight_factor)
+        """
+        feat = self._extract_features(ohlcv_df)
+        if feat is None or len(feat) == 0:
+            return 1.0
+
+        # Add latest row to buffer
+        self._buffer.append(feat[-1])
+        if len(self._buffer) > self.window_size:
+            self._buffer = self._buffer[-self.window_size:]
+
+        self._bars_since_refit += 1
+
+        # Refit when due or on first call
+        if not self._fitted or self._bars_since_refit >= self.refit_every:
+            self._refit()
+
+        if self._weighter is None or not self._weighter._fitted:
+            return 1.0
+
+        # Score the latest bar
+        try:
+            latest = feat[-1:].reshape(1, -1)
+            scores = self._weighter.decision_scores(latest)
+            # Normalise: decision_function returns positive for inliers.
+            # We invert and normalise to [0, 1] where 1 = most anomalous.
+            raw = float(scores[0])
+            # Typical range is roughly [-0.5, 0.5]; clip and normalise
+            normalised = float(np.clip((-raw + 0.5) / 1.0, 0.0, 1.0))
+
+            if normalised >= self.anomaly_threshold:
+                logger.debug(
+                    "Anomaly detected: score=%.3f (normalised=%.3f) → down-weight %.0f%%",
+                    raw, normalised, (1 - self.down_weight_factor) * 100,
+                )
+                return self.down_weight_factor
+            return 1.0
+        except Exception as exc:
+            logger.debug("AnomalyWeightStore.score failed: %s", exc)
+            return 1.0
+
+    def _refit(self) -> None:
+        """Refit the IsolationForest on the current buffer."""
+        if len(self._buffer) < 50:
+            return
+        try:
+            X = np.array(self._buffer)
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            self._weighter = AnomalyWeighter(
+                contamination=self._contamination,
+                n_estimators=100,
+            )
+            self._weighter.fit(X)
+            self._fitted = True
+            self._bars_since_refit = 0
+            logger.debug("AnomalyWeightStore: refitted on %d bars", len(X))
+        except Exception as exc:
+            logger.warning("AnomalyWeightStore refit failed: %s", exc)
