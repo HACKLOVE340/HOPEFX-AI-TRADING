@@ -198,6 +198,16 @@ class AdvancedModelPredictor:
             return True
         except Exception as exc:
             logger.warning("Could not load %s: %s", self.model_path, exc)
+            # Fire Sentry alert — ML fallback will activate
+            try:
+                from monitoring.sentry_config import capture_ml_fallback_event
+                capture_ml_fallback_event(
+                    reason=str(exc),
+                    fallback_model="xgb_macro.pkl",
+                    fallback_accuracy=0.503,
+                )
+            except Exception:
+                pass
             return False
 
     @property

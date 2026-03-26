@@ -264,6 +264,13 @@ class KillSwitch:
         # Persist state to JSON so the next process restart can restore it.
         self._persist_state()
 
+        # Send Sentry critical alert (fire-and-forget)
+        try:
+            from monitoring.sentry_config import capture_kill_switch_alert
+            capture_kill_switch_alert(reason=reason, triggered_by="system")
+        except Exception as _sentry_exc:
+            logger.debug("Sentry kill-switch alert failed: %s", _sentry_exc)
+
         # Send risk-halt email alert (fire-and-forget, never blocks trading halt)
         try:
             from notifications.email_triggers import send_risk_halt_email
