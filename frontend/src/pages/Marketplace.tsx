@@ -342,7 +342,7 @@ const Marketplace: React.FC = () => {
 
   const handleSubscribe = async (s: Strategy) => {
     try {
-      await api.post('/api/monetization/marketplace/purchase', {
+      await api.post('/monetization/marketplace/purchase', {
         buyer_id: 'demo_user',
         strategy_id: s.strategy_id,
       });

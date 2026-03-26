@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ const UsersTab: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authApi.get('/api/admin/users');
+      const res = await api.get('/admin/users');
       setUsers(res.data.users || []);
     } catch {
       setUsers([
@@ -93,11 +93,11 @@ const UsersTab: React.FC = () => {
 
   const action = async (userId: string, act: string) => {
     try {
-      if (act === 'ban')   await authApi.post(`/api/admin/users/${userId}/ban`);
-      if (act === 'unban') await authApi.post(`/api/admin/users/${userId}/unban`);
-      if (act === 'reset') { await authApi.post(`/api/admin/users/${userId}/reset-password`); setMsg('Password reset email queued.'); }
+      if (act === 'ban')   await api.post(`/admin/users/${userId}/ban`);
+      if (act === 'unban') await api.post(`/admin/users/${userId}/unban`);
+      if (act === 'reset') { await api.post(`/admin/users/${userId}/reset-password`); setMsg('Password reset email queued.'); }
       if (act === 'impersonate') {
-        const res = await authApi.post(`/api/admin/users/${userId}/impersonate`);
+        const res = await api.post(`/admin/users/${userId}/impersonate`);
         setMsg(`Impersonation token: ${res.data.impersonation_token} (expires in 5 min)`);
       }
       await load();
@@ -173,7 +173,7 @@ const AuditTab: React.FC = () => {
     try {
       const params: Record<string, string | number> = { page: p, limit: 20 };
       if (f) params.event_type = f;
-      const res = await authApi.get('/api/admin/audit-log', { params });
+      const res = await api.get('/admin/audit-log', { params });
       setEvents(res.data.events || []);
       setTotal(res.data.total || 0);
       setPage(p);
@@ -195,7 +195,7 @@ const AuditTab: React.FC = () => {
 
   const exportCsv = async () => {
     try {
-      const res = await authApi.get('/api/admin/audit-log/export', { responseType: 'blob' });
+      const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url; a.download = 'audit_log.csv'; a.click();
@@ -262,7 +262,7 @@ const FlagsTab: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authApi.get('/api/admin/feature-flags');
+      const res = await api.get('/admin/feature-flags');
       setFlags(res.data.flags || []);
     } catch {
       // Demo fallback
@@ -286,7 +286,7 @@ const FlagsTab: React.FC = () => {
   const toggle = async (flag: FeatureFlag) => {
     try {
       const action = flag.enabled ? 'disable' : 'enable';
-      await authApi.post(`/api/admin/feature-flags/${flag.name}/${action}`);
+      await api.post(`/admin/feature-flags/${flag.name}/${action}`);
       setFlags((prev) => prev.map((f) => f.name === flag.name ? { ...f, enabled: !f.enabled } : f));
     } catch { /* ignore */ }
   };
