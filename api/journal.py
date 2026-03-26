@@ -23,9 +23,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from api.auth import TokenPayload, get_current_user
 from api.db_store import db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
@@ -251,7 +252,10 @@ async def list_trades(
 @router.post(
     "/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED
 )
-async def create_entry(entry: JournalEntry) -> JournalEntry:
+async def create_entry(
+    entry: JournalEntry,
+    user: TokenPayload = Depends(get_current_user),
+) -> JournalEntry:
     _load_all_entries()
     if not entry.trade_id:
         entry.trade_id = str(uuid.uuid4())
@@ -271,7 +275,11 @@ async def get_entry(trade_id: str) -> JournalEntry:
 
 
 @router.patch("/trades/{trade_id}", response_model=JournalEntry)
-async def update_entry(trade_id: str, update: JournalUpdate) -> JournalEntry:
+async def update_entry(
+    trade_id: str,
+    update: JournalUpdate,
+    user: TokenPayload = Depends(get_current_user),
+) -> JournalEntry:
     entries = _load_all_entries()
     if trade_id not in entries:
         raise HTTPException(status_code=404, detail="Trade not found")
