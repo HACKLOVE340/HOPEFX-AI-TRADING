@@ -53,9 +53,12 @@ try:
         ["broker"],
     )
     _PROM_AVAILABLE = True
-except Exception:
+except Exception as _prom_exc:
     _CB_STATE_GAUGE = None
     _PROM_AVAILABLE = False
+    # prometheus_client is optional — circuit breaker works without it
+    import logging as _log
+    _log.getLogger(__name__).debug("prometheus_client unavailable — CB metrics disabled: %s", _prom_exc)
 
 
 class CBState(IntEnum):
@@ -202,15 +205,15 @@ class CircuitBreaker:
                     ),
                 )
             )
-        except Exception:
-            pass
+        except Exception as _bus_exc:
+            logger.debug("CB event bus publish failed (non-fatal): %s", _bus_exc)
 
         # Update Prometheus gauge
         if _PROM_AVAILABLE and _CB_STATE_GAUGE is not None:
             try:
                 _CB_STATE_GAUGE.labels(broker=self.name).set(int(new_state))
-            except Exception:
-                pass
+            except Exception as _gauge_exc:
+                logger.debug("CB Prometheus gauge update failed (non-fatal): %s", _gauge_exc)
 
         logger.debug("CB '%s': %s → %s", self.name, old.name, new_state.name)
 
