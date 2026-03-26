@@ -50,8 +50,6 @@ def SECRET_KEY() -> str:  # noqa: N802
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 
 # Password hashing — bcrypt with SHA-256 pre-hash to handle passwords >72 bytes.
 #
