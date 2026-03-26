@@ -130,6 +130,23 @@ def validate_environment(*, strict: bool = True) -> None:
                 f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://"
             )
 
+    # ── Config encryption key ─────────────────────────────────────────────────
+    enc_key = os.getenv("CONFIG_ENCRYPTION_KEY", "").strip()
+    if not dev_mode:
+        if not enc_key:
+            errors.append(
+                "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
+                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        elif len(enc_key) < 32:
+            errors.append(
+                f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)"
+            )
+        elif enc_key.startswith("CHANGE_ME"):
+            errors.append(
+                "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying"
+            )
+
     # ── Broker type + live trading guard ─────────────────────────────────────
     broker_type = os.getenv("BROKER_TYPE", "paper").strip().lower()
     valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}

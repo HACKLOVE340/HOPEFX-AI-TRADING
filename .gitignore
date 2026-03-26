@@ -83,6 +83,8 @@ yarn-error.log*
 # ML trained model artifacts (not source code)
 /models/
 # *.pkl  — tracked for ml/saved_models/ example artifacts
+# model_checksums.json is machine-generated at deploy time — do not commit
+ml/saved_models/model_checksums.json
 *.joblib
 *.h5
 *.pt
