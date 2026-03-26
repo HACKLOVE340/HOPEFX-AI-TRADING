@@ -25,7 +25,8 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/ml", tags=["ML Models"])
+# Prefix must match the frontend useApi.ts mlApi calls (/api/ml/*)
+router = APIRouter(prefix="/api/ml", tags=["ML Models"])
 
 
 # ── Lazy model loader ─────────────────────────────────────────────────────────
@@ -69,13 +70,29 @@ def _load_model_registry() -> Dict[str, Any]:
 
 
 def _get_predictor():
-    """Return the active ML predictor (XGBoost macro model preferred)."""
+    """Return the active ML predictor.
+
+    Priority:
+    1. AdvancedModelPredictor (advanced_oos.pkl — 122-feature OOS model)
+    2. EnsemblePredictor (ml/models/ensemble.py)
+    3. Raw joblib-loaded xgb_macro.pkl
+    """
+    try:
+        from ml.live_inference import get_advanced_predictor
+
+        p = get_advanced_predictor()
+        if p.is_available:
+            return p
+    except Exception as exc:
+        logger.debug("AdvancedModelPredictor unavailable: %s", exc)
+
     try:
         from ml.models.ensemble import EnsemblePredictor
 
         return EnsemblePredictor()
     except Exception as exc:
-        logger.debug("EnsemblePredictor unavailable, trying saved model: %s", exc)
+        logger.debug("EnsemblePredictor unavailable: %s", exc)
+
     try:
         import pathlib
 
@@ -92,6 +109,35 @@ def _get_predictor():
     except Exception as exc:
         logger.warning("Saved ML model load failed: %s", exc)
     return None
+
+
+def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
+    """
+    Fetch aligned macro features from MacroStore for the given symbol.
+
+    Returns a DataFrame with macro columns aligned to hourly bars, or None
+    if MacroStore is empty / unavailable.  This is the MacroStore → live
+    inference bridge: every predict call gets fresh macro context.
+    """
+    try:
+        from ml.macro_store import macro_store
+
+        if len(macro_store) == 0:
+            return None
+
+        import pandas as pd
+
+        idx = pd.date_range(
+            end=pd.Timestamp.utcnow().floor("h"),
+            periods=lookback,
+            freq="h",
+            tz="UTC",
+        )
+        dummy_ohlcv = pd.DataFrame({"close": 1.0}, index=idx)
+        return macro_store.align_to_hourly(dummy_ohlcv)
+    except Exception as exc:
+        logger.debug("MacroStore alignment failed (non-fatal): %s", exc)
+        return None
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -230,7 +276,51 @@ async def predict(symbol: str, body: PredictRequest):
 
     if predictor is not None:
         try:
-            # Try ensemble predict
+            # AdvancedModelPredictor path — uses MacroStore for macro context
+            if hasattr(predictor, "predict_signal"):
+                import pandas as pd
+
+                # Build a minimal OHLCV stub so predict_signal can run even
+                # without a live data feed.  Real deployments replace this with
+                # the actual rolling OHLCV window from the data scheduler.
+                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
+                try:
+                    from data.feeds.oanda import get_ohlcv_stub
+
+                    ohlcv = get_ohlcv_stub(symbol_upper, body.lookback)
+                except Exception:
+                    idx = pd.date_range(
+                        end=pd.Timestamp.utcnow().floor("h"),
+                        periods=body.lookback,
+                        freq="h",
+                        tz="UTC",
+                    )
+                    ohlcv = pd.DataFrame(
+                        {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 0.0},
+                        index=idx,
+                    )
+
+                result = predictor.predict_signal(
+                    ohlcv,
+                    macro_df=macro_df,
+                    symbol=symbol_upper,
+                )
+                direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                return PredictResponse(
+                    symbol=symbol_upper,
+                    direction=direction,
+                    confidence=confidence,
+                    entry_price=result.get("last_close"),
+                    stop_loss=None,
+                    take_profit=None,
+                    features_used=result.get("bars_used", 0),
+                    model_id=result.get("model_version", "advanced_oos"),
+                    generated_at=now_iso,
+                )
+
+            # EnsemblePredictor / legacy path
             if hasattr(predictor, "predict_symbol"):
                 result = predictor.predict_symbol(
                     symbol_upper, timeframe=body.timeframe
