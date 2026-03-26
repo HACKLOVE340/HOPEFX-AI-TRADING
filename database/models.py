@@ -10,8 +10,10 @@ import enum
 try:
     from sqlalchemy import (
         Column, Integer, BigInteger, String, Float, Boolean,
-        DateTime, ForeignKey, Enum, Text, Index, create_engine
+        DateTime, ForeignKey, Enum, Text, Index, UniqueConstraint,
+        create_engine,
     )
+    from sqlalchemy.sql import func
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.orm import relationship, sessionmaker
     SQLALCHEMY_AVAILABLE = True
@@ -23,8 +25,9 @@ except ImportError:
         def __call__(self, *a, **kw): return self
         def __getattr__(self, name): return self
     Column = BigInteger = Integer = String = Float = Boolean = _Stub()
-    DateTime = ForeignKey = Enum = Text = Index = create_engine = _Stub()
+    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = create_engine = _Stub()
     relationship = sessionmaker = _Stub()
+    func = _Stub()
     class _DummyBase:
         pass
     def declarative_base():
@@ -676,6 +679,33 @@ if SQLALCHEMY_AVAILABLE:
 else:
     class EmailSuppression:  # type: ignore[no-redef]
         __tablename__ = "email_suppressions"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── Dedicated watchlists table ────────────────────────────────────────────────
+# Each row is one symbol in one user's watchlist.
+# Replaces the JSON-column approach (configurations table keyed by
+# "watchlist:{user_id}") with a proper relational table.
+# Alembic migration: alembic/versions/f1a2b3c4d5e6_add_watchlists_table.py
+
+if SQLALCHEMY_AVAILABLE:
+    class WatchlistEntry(Base):
+        __tablename__ = "watchlists"
+        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        user_id = Column(String(128), nullable=False, index=True)
+        symbol = Column(String(20), nullable=False)
+        added_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+        sort_order = Column(Integer, nullable=False, server_default="0")
+
+        __table_args__ = (
+            UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
+        )
+
+        def __repr__(self) -> str:
+            return f"<WatchlistEntry user={self.user_id!r} symbol={self.symbol!r}>"
+else:
+    class WatchlistEntry:  # type: ignore[no-redef]
+        __tablename__ = "watchlists"
         __table__ = type("T", (), {"columns": []})()
 
 
