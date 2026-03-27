@@ -35,7 +35,7 @@ jobs:
         # Vulnerabilities are reported but do not fail the build.
         run: pip-audit --requirement=requirements.txt --desc || true
       - name: Scan with Trivy (supply-chain)
-        uses: aquasecurity/trivy-action@v0.29.2
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: fs
           scan-ref: .
