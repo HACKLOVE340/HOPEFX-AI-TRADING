@@ -267,7 +267,16 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
     except HTTPException:
         raise
     except Exception as risk_exc:
-        logger.error("Risk check error (allowing trade): %s", risk_exc)
+        logger.error(
+            "Risk check error (blocking order for safety): user=%s %s",
+            user_id,
+            risk_exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Risk check unavailable — order rejected for safety",
+        )
 
     # CVaR pre-trade gate — runs independently so a CVaR breach always blocks
     try:
