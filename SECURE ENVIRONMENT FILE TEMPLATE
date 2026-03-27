@@ -29,17 +29,14 @@ REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password-here
 
 # =============================================================================
-# Broker Credentials (Paper Trading)
+# Broker Credentials
 # =============================================================================
-# OANDA
-BROKER_OANDA_API_KEY=your-oanda-api-key
-BROKER_OANDA_ACCOUNT_ID=your-account-id
-BROKER_OANDA_ENVIRONMENT=practice
-
-# MetaTrader 5
-BROKER_MT5_SERVER=your-mt5-server
-BROKER_MT5_LOGIN=your-login
-BROKER_MT5_PASSWORD=your-mt5-password
+# Default broker: Interactive Brokers (IBKR) via ib_insync
+# Set BROKER_TYPE=ibkr (default) or BROKER_TYPE=paper for paper trading.
+BROKER_TYPE=paper
+IBKR_HOST=127.0.0.1
+IBKR_PORT=7497
+IBKR_CLIENT_ID=1
 
 # =============================================================================
 # Optional: HashiCorp Vault (Production Recommended)
