@@ -163,12 +163,12 @@ class FeatureFlags:
     )
     ADVANCED_TRADING = _FeatureDef(
         "FEATURE_ADVANCED_TRADING",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="Advanced order types and execution features (OCO, trailing stops, "
         "iceberg orders). Mounts api/advanced_trading.py router. "
-        "Enable with FEATURE_ADVANCED_TRADING=true once order-type coverage "
-        "is verified against the connected broker.",
+        "Disable with FEATURE_ADVANCED_TRADING=false if broker does not support "
+        "these order types.",
     )
 
     # ── Strategies ────────────────────────────────────────────────────────
@@ -238,11 +238,10 @@ class FeatureFlags:
 
     WATCHLIST = _FeatureDef(
         "FEATURE_WATCHLIST",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="Per-user symbol watchlists with price-change tracking. "
-        "Mounts api/watchlist.py router. "
-        "Enable with FEATURE_WATCHLIST=true once persistence layer is validated.",
+        "Mounts api/watchlist.py router. DB-backed with in-memory fallback.",
     )
     ORDER_FLOW_ANALYSIS = _FeatureDef(
         "FEATURE_ORDER_FLOW_ANALYSIS",
@@ -424,11 +423,10 @@ class FeatureFlags:
 
     TRADE_JOURNAL = _FeatureDef(
         "FEATURE_TRADE_JOURNAL",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="Per-user trade journal with notes, tags, and P&L annotations. "
-        "Mounts api/journal.py router. "
-        "Enable with FEATURE_TRADE_JOURNAL=true once journal storage is validated.",
+        "Mounts api/journal.py router. DB-backed via db_store with in-memory fallback.",
     )
     SOCIAL_TRADING = _FeatureDef(
         "FEATURE_SOCIAL_TRADING",
@@ -447,12 +445,11 @@ class FeatureFlags:
 
     BILLING_SUBSCRIPTION = _FeatureDef(
         "FEATURE_BILLING_SUBSCRIPTION",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="GET /api/billing/subscription endpoint returning the authenticated "
         "user's tier, status, renewal date, and feature list. "
-        "Enable with FEATURE_BILLING_SUBSCRIPTION=true once subscription_manager "
-        "persistence is confirmed in the target environment.",
+        "Falls back to FREE tier defaults when subscription_manager is unavailable.",
     )
     SUBSCRIPTIONS = _FeatureDef(
         "FEATURE_SUBSCRIPTIONS",
@@ -498,24 +495,23 @@ class FeatureFlags:
 
     TWO_FACTOR_AUTH = _FeatureDef(
         "FEATURE_TWO_FACTOR_AUTH",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="TOTP-based two-factor authentication (RFC 6238). "
-        "Mounts api/two_factor.py router (enroll, verify, disable endpoints). "
-        "Enable with FEATURE_TWO_FACTOR_AUTH=true once TOTP secret storage "
-        "and recovery-code flow are validated end-to-end.",
+        "Mounts api/two_factor.py router (setup, verify, disable, backup-codes). "
+        "Secrets persisted via db_store with in-memory fallback.",
     )
 
     # ── Admin & Monitoring ────────────────────────────────────────────────
 
     PRICE_ALERTS = _FeatureDef(
         "FEATURE_PRICE_ALERTS",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="User-defined price alerts with Discord/Telegram delivery. "
-        "Mounts api/alerts.py router. Requires AlertEngine to be initialised "
-        "at startup (FEATURE_PRICE_ALERTS=true) and at least one notification "
-        "channel configured (DISCORD_WEBHOOK_URL or TELEGRAM_BOT_TOKEN).",
+        "Mounts api/alerts.py router. AlertEngine lazy-initialised if not started "
+        "by the startup factory. Requires DISCORD_WEBHOOK_URL or TELEGRAM_BOT_TOKEN "
+        "for delivery; alerts are stored regardless.",
     )
     ADMIN_DASHBOARD = _FeatureDef(
         "FEATURE_ADMIN_DASHBOARD",
@@ -624,12 +620,11 @@ class FeatureFlags:
     )
     GRAPHQL_API = _FeatureDef(
         "FEATURE_GRAPHQL_API",
-        default=False,
+        default=True,
         status=FeatureStatus.EXPERIMENTAL,
         description="GraphQL endpoint at /graphql (Strawberry schema). "
-        "Requires strawberry-graphql to be installed. "
-        "Enable with FEATURE_GRAPHQL_API=true; the GraphiQL playground "
-        "is available at GET /graphql when enabled.",
+        "Requires strawberry-graphql to be installed; silently skipped if absent. "
+        "GraphiQL playground available at GET /graphql when enabled.",
     )
 
     # ── Internal helpers ──────────────────────────────────────────────────
