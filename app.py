@@ -154,6 +154,9 @@ app = FastAPI(
     version="11.0.0",
     docs_url=None if os.getenv("APP_ENV") == "production" else "/docs",
     redoc_url=None if os.getenv("APP_ENV") == "production" else "/redoc",
+    # Disable /openapi.json in production — prevents endpoint enumeration
+    # even when /docs and /redoc are already gated.
+    openapi_url=None if os.getenv("APP_ENV") == "production" else "/openapi.json",
     openapi_tags=[
         {"name": "Auth", "description": "Login, logout, token refresh, 2FA"},
         {"name": "Trading", "description": "Orders, positions, account, prices"},
