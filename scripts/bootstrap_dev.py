@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026
 # HOPEFX-AI-TRADING
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """
