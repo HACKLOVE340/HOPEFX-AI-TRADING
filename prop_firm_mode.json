@@ -1,9 +1,32 @@
 {
   "_comment": "Prop-firm trading mode configuration for HOPEFX AI Trading.",
-  "_description": "Defines drawdown, daily-loss, and position-sizing rules for FTMO and Goat Funded (and compatible) prop-firm evaluation and funded accounts. Set 'enabled: true' and choose an 'active_firm' to enforce these rules at runtime.",
+  "_description": "Defines drawdown, daily-loss, and position-sizing rules for FTMO and Goat Funded (and compatible) prop-firm evaluation and funded accounts.",
 
-  "enabled": false,
+  "enabled": true,
   "active_firm": "ftmo_standard",
+
+  "_flat_fields_note": "Top-level flat fields are read directly by PropFirmConfig, PropEnforcer, and Gatekeeper. Nested 'firms' block is the canonical reference.",
+
+  "daily_dd": 0.05,
+  "max_dd": 0.10,
+  "news_blackout": 5,
+  "weekend_close": true,
+  "breach_action": "pause",
+  "max_daily_trades": 20,
+  "risk_per_trade_pct": 1.0,
+  "min_confidence": 0.58,
+
+  "telegram_token": "",
+  "telegram_chat_id": "",
+
+  "enforcement": {
+    "halt_on_daily_drawdown_breach": true,
+    "halt_on_total_drawdown_breach": true,
+    "close_all_on_breach": true,
+    "alert_at_pct_of_daily_limit": 80,
+    "alert_at_pct_of_total_limit": 80,
+    "log_breaches": true
+  },
 
   "firms": {
     "ftmo_standard": {
@@ -13,38 +36,30 @@
 
       "drawdown": {
         "max_total_drawdown_pct": 10.0,
-        "_total_note": "Account equity must never fall more than 10 % below the INITIAL balance (hard breach = immediate disqualification).",
         "max_daily_drawdown_pct": 5.0,
-        "_daily_note": "Equity (or balance, whichever is lower) must not fall more than 5 % below the START-OF-DAY equity in a single trading day.",
-        "drawdown_mode": "equity",
-        "_mode_note": "FTMO measures drawdown on floating equity, not closed balance alone."
+        "drawdown_mode": "equity"
       },
 
       "profit_target": {
         "phase1_pct": 10.0,
         "phase2_pct": 5.0,
-        "funded_pct": null,
-        "_note": "Profit targets apply only during evaluation phases; no profit target on funded accounts."
+        "funded_pct": null
       },
 
       "trading_days": {
         "min_trading_days_phase1": 4,
-        "min_trading_days_phase2": 4,
-        "_note": "Minimum number of calendar days with at least one executed trade."
+        "min_trading_days_phase2": 4
       },
 
       "position_limits": {
         "max_lot_size": null,
-        "max_open_positions": null,
-        "_note": "FTMO does not impose explicit lot or position-count limits; normal margin rules apply."
+        "max_open_positions": null
       },
 
       "risk_per_trade_pct": 1.0,
-      "_risk_note": "Recommended internal rule: risk no more than 1 % of account per trade.",
 
       "news_trading": {
-        "allowed": true,
-        "_note": "FTMO allows news trading on Standard accounts unless individual instrument is restricted."
+        "allowed": true
       },
 
       "overnight_holding": {
@@ -93,24 +108,20 @@
     },
 
     "goat_funded_standard": {
-      "_name": "Goat Funded Trader – Standard / One-Step",
+      "_name": "Goat Funded Trader - Standard / One-Step",
       "_ref": "https://goatfundedtrader.com/",
       "account_currency": "USD",
 
       "drawdown": {
         "max_total_drawdown_pct": 8.0,
-        "_total_note": "Overall maximum drawdown from initial balance; breach = account termination.",
         "max_daily_drawdown_pct": 4.0,
-        "_daily_note": "Maximum allowable daily loss from the equity high-water mark at midnight server time.",
-        "drawdown_mode": "balance",
-        "_mode_note": "Goat Funded measures daily drawdown from the BALANCE (closed P&L) at the start of each day."
+        "drawdown_mode": "balance"
       },
 
       "profit_target": {
         "phase1_pct": 10.0,
         "phase2_pct": null,
-        "funded_pct": null,
-        "_note": "One-step challenge: single 10 % profit target."
+        "funded_pct": null
       },
 
       "trading_days": {
@@ -128,19 +139,17 @@
       "news_trading": {
         "allowed": false,
         "blackout_minutes_before_news": 5,
-        "blackout_minutes_after_news": 5,
-        "_note": "Goat Funded prohibits holding positions through high-impact news events."
+        "blackout_minutes_after_news": 5
       },
 
       "overnight_holding": {
         "allowed": true,
-        "weekend_holding_allowed": false,
-        "_note": "Positions must be closed before Friday 21:00 UTC on funded accounts."
+        "weekend_holding_allowed": false
       }
     },
 
     "goat_funded_swing": {
-      "_name": "Goat Funded Trader – Swing / Two-Step",
+      "_name": "Goat Funded Trader - Swing / Two-Step",
       "_ref": "https://goatfundedtrader.com/",
       "account_currency": "USD",
 
@@ -179,15 +188,5 @@
         "weekend_holding_allowed": true
       }
     }
-  },
-
-  "enforcement": {
-    "halt_on_daily_drawdown_breach": true,
-    "halt_on_total_drawdown_breach": true,
-    "alert_at_pct_of_daily_limit": 80,
-    "_alert_note": "Emit a warning when daily drawdown reaches this percentage of the daily limit (e.g. 80 % of 5 % = 4 %).",
-    "alert_at_pct_of_total_limit": 80,
-    "close_all_on_breach": true,
-    "log_breaches": true
   }
 }
