@@ -58,7 +58,7 @@ Each feature maps to an env-var that can enable or disable it at runtime
 | Market Analysis (regime / MTF / sessions) | `FEATURE_MARKET_ANALYSIS` | ✅ on | STABLE |
 | Market Scanner | `FEATURE_MARKET_SCANNER` | ✅ on | STABLE |
 | Candlestick Patterns | `FEATURE_CANDLESTICK_PATTERNS` | ✅ on | STABLE |
-| Dark Pool Detection | `FEATURE_DARK_POOL_DETECTION` | ✅ on | BETA |
+| Volume Anomaly Detection | `FEATURE_DARK_POOL_DETECTION` | ✅ on | BETA |
 
 ## Data Feeds
 
@@ -80,8 +80,13 @@ Each feature maps to an env-var that can enable or disable it at runtime
 
 | Feature | Env Var | Default | Status |
 |---------|---------|---------|--------|
-| ML Predictions (LSTM / Transformer) | `FEATURE_ML_PREDICTIONS` | ❌ off | EXPERIMENTAL |
+| ML Predictions (XGBoost/LightGBM/RF ensemble) | `FEATURE_ML_PREDICTIONS` | ✅ on | STABLE |
 | ML Feature Engineering | `FEATURE_ML_FEATURE_ENGINEERING` | ✅ on | STABLE |
+
+> **ML Predictions** uses `ml/saved_models/advanced_oos.pkl` — 122 stationary features,
+> 68.0% OOS accuracy (p=0.0000), 3-year held-out test period. Falls back to rule-based
+> signal when the model file is absent. LSTM/Transformer integration is a future research
+> path (Phase 3–4), not part of the current production model.
 
 ## Charting
 
@@ -151,7 +156,7 @@ FastAPI router at startup — no code changes required.
 | Teams Module | `FEATURE_TEAMS` | EXPERIMENTAL | `POST /api/teams`, `GET /api/teams/{id}`, `/api/teams/{id}/invite` |
 | No-Code Builder | `FEATURE_NOCODE` | EXPERIMENTAL | `GET/POST /api/nocode/strategies`, `GET /api/nocode/indicators` |
 | Replay Engine | `FEATURE_REPLAY` | EXPERIMENTAL | `POST /api/replay/sessions`, `/api/replay/sessions/{id}/play` |
-| ML Predictions | `FEATURE_ML_PREDICTIONS` | EXPERIMENTAL | `GET /api/ml/status`, `POST /api/ml/features/compute` |
+| ML Predictions | `FEATURE_ML_PREDICTIONS` | STABLE | `GET /api/ml/accuracy`, `GET /api/ml/models`, `POST /api/ml/predict/{symbol}`, `GET /api/ml/features` |
 
 ---
 
@@ -165,7 +170,9 @@ FEATURE_LIVE_TRADING=false
 
 # Enable an experimental feature for local development
 FEATURE_RESEARCH=true
-FEATURE_ML_PREDICTIONS=true
+
+# ML predictions are on by default (STABLE); explicitly disable if needed
+# FEATURE_ML_PREDICTIONS=false
 
 # Disable a feature entirely for a lightweight deployment
 FEATURE_SOCIAL_TRADING=false
