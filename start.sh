@@ -11,31 +11,36 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── Encryption key (development fallback) ───────────────────────────────────
-if [ -z "${CONFIG_ENCRYPTION_KEY:-}" ]; then
-    echo "[WARN] CONFIG_ENCRYPTION_KEY not set – using built-in dev key."
-    echo "       For production, export a real 32-char key:"
-    echo "         export CONFIG_ENCRYPTION_KEY=\$(python -c \"import secrets; print(secrets.token_hex(32))\")"
-    export CONFIG_ENCRYPTION_KEY="dev-key-minimum-32-characters-long-for-testing"
+# ── Dev bootstrap: generate .env + seed admin if not present ─────────────────
+if [ ! -f ".env" ]; then
+    echo "[INFO] .env not found — running dev bootstrap..."
+    python scripts/bootstrap_dev.py
 fi
 
+# Load .env into the shell environment
+set -a
+# shellcheck disable=SC1091
+[ -f .env ] && source .env
+set +a
+
 # ── Environment defaults ─────────────────────────────────────────────────────
-export ENVIRONMENT="${ENVIRONMENT:-development}"
-export API_HOST="${API_HOST:-127.0.0.1}"
-export API_PORT="${API_PORT:-5000}"
+export APP_ENV="${APP_ENV:-development}"
+export API_HOST="${API_HOST:-0.0.0.0}"
+export API_PORT="${API_PORT:-8000}"
 
 echo ""
 echo "  HOPEFX AI Trading Framework"
 echo "  ─────────────────────────────────────────────────"
-echo "  API:          http://${API_HOST}:${API_PORT}/"
-echo "  Docs:         http://${API_HOST}:${API_PORT}/docs"
-echo "  Paper Trade:  http://${API_HOST}:${API_PORT}/paper-trading"
-echo "  Pricing:      http://${API_HOST}:${API_PORT}/pricing"
+echo "  Login:        http://localhost:${API_PORT}/login"
+echo "  Dashboard:    http://localhost:${API_PORT}/paper-trading"
+echo "  API Docs:     http://localhost:${API_PORT}/docs"
+echo "  Health:       http://localhost:${API_PORT}/health"
 echo "  ─────────────────────────────────────────────────"
 echo ""
 
 # ── Start server ─────────────────────────────────────────────────────────────
-exec python cli.py start \
+exec uvicorn app:app \
     --host "$API_HOST" \
     --port "$API_PORT" \
+    --reload \
     "$@"

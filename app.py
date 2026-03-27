@@ -53,6 +53,26 @@ import uvicorn  # noqa: E402
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# ── Dev bootstrap — auto-generate .env + seed admin when missing ──────────────
+# Runs only when APP_ENV=development (the default) and .env does not exist.
+# In production this block is skipped entirely.
+_is_dev_env = os.getenv("APP_ENV", "development").lower() in ("development", "dev")
+_env_file = project_root / ".env"
+if _is_dev_env and not _env_file.exists():
+    try:
+        from scripts.bootstrap_dev import bootstrap as _bootstrap  # noqa: E402
+
+        _bootstrap(verbose=True)
+        # Reload env vars from the newly created .env
+        try:
+            from dotenv import load_dotenv as _ld
+
+            _ld(_env_file, override=False)
+        except ImportError:
+            pass
+    except Exception as _be:
+        logger.warning("Dev bootstrap failed (non-fatal): %s", _be)
+
 # ── Startup validation — fail loud before any connections are opened ──────────
 # Import here so the check runs before broker/DB/Redis init.
 from config.startup_validator import validate_environment  # noqa: E402
