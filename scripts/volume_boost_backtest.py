@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025-2026 Opeyemi. AGPLv3 — all mods must share source. No commercial use without permission.
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
 """
 scripts/volume_boost_backtest.py
 =================================

@@ -1,3 +1,8 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
 """add missing position columns
 
 Revision ID: a1b2c3d4e5f6
