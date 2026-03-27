@@ -294,7 +294,9 @@ class MarketVectorStore:
             ts = str(window.iloc[-1]["timestamp"])
 
             # deterministic ID based on content
-            uid = hashlib.md5(f"{symbol}:{timeframe}:{ts}".encode()).hexdigest()
+            uid = hashlib.md5(
+                f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False
+            ).hexdigest()  # noqa: S324
 
             ids.append(uid)
             embeddings.append(vec.tolist())
@@ -420,8 +422,8 @@ class MarketVectorStore:
             lines.append(
                 f"{i}. {w.timestamp[:10]} {w.symbol} {w.timeframe} | "
                 f"regime={w.regime} | "
-                f"next_bar_return={sign}{w.next_return*100:.2f}% | "
-                f"similarity={1-w.distance:.3f}"
+                f"next_bar_return={sign}{w.next_return * 100:.2f}% | "
+                f"similarity={1 - w.distance:.3f}"
             )
             returns.append(w.next_return)
 
@@ -429,7 +431,7 @@ class MarketVectorStore:
         sign = "+" if avg >= 0 else ""
         lines.append(
             f"\nAverage next-bar return across {len(windows)} similar regimes: "
-            f"{sign}{avg*100:.2f}%"
+            f"{sign}{avg * 100:.2f}%"
         )
         return "\n".join(lines)
 

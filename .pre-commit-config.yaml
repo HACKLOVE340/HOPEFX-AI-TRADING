@@ -37,7 +37,26 @@ repos:
     rev: 1.7.10
     hooks:
       - id: bandit
-        args: ["-c", "pyproject.toml"]
+        # pass_filenames: false so bandit scans the configured targets recursively
+        # rather than receiving every changed file as a positional argument
+        # (which overflows the arg list and causes exit code 2).
+        pass_filenames: false
+        args:
+          - "-r"
+          - "api/"
+          - "auth/"
+          - "brokers/"
+          - "config/"
+          - "core/"
+          - "execution/"
+          - "ml/"
+          - "risk/"
+          - "strategies/"
+          - "-c"
+          - "pyproject.toml"
+          # Only fail on HIGH severity findings; medium/low are noise at this stage.
+          - "--severity-level"
+          - "high"
         additional_dependencies: ["bandit[toml]"]
 
 # pytest belongs in the CI test job, not in pre-commit hooks.

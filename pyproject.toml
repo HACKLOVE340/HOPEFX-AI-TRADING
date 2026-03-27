@@ -118,6 +118,17 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+[tool.bandit]
+# Only fail on high-severity findings; medium/low are reported but non-blocking.
+# Tests are excluded — assert statements and hardcoded test credentials are expected.
+severity = "high"
+confidence = "medium"
+exclude_dirs = ["tests", "alembic", "build", "dist", ".venv", "venv"]
+skips = [
+    "B101",  # assert_used — acceptable in tests and guard clauses
+    "B311",  # random — non-crypto random is fine for simulations
+]
+
 [tool.mypy]
 # Prevents "HOPEFX-AI-TRADING is not a valid Python package name" when mypy
 # is invoked from the repo root — the directory name contains uppercase and

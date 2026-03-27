@@ -108,7 +108,9 @@ _RSS_FEEDS: Dict[str, str] = {
 
 
 def _cache_key(ticker: str, interval: str, start: str, end: str) -> Path:
-    tag = hashlib.md5(f"{ticker}{interval}{start}{end}".encode()).hexdigest()[:10]
+    tag = hashlib.md5(
+        f"{ticker}{interval}{start}{end}".encode(), usedforsecurity=False
+    ).hexdigest()[:10]  # noqa: S324
     return CACHE_DIR / f"{ticker.replace('/', '_')}_{interval}_{tag}.parquet"
 
 
