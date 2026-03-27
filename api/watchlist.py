@@ -38,6 +38,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 
+# ── App state (injected at startup) ──────────────────────────────────────────
+app_state = None
+
+
+def set_state(state) -> None:
+    global app_state
+    app_state = state
+
+
 # ── In-memory fallback ────────────────────────────────────────────────────────
 _watchlists: Dict[str, List[str]] = {}
 
@@ -201,6 +210,56 @@ def _mem_remove(user_id: str, symbol: str) -> None:
 
 
 def _get_price(symbol: str) -> dict:
+    """
+    Return a price dict for *symbol*.
+
+    Priority:
+    1. Live price from app_state.price_engine (real-time feed)
+    2. Live price from app_state.broker.market_prices (paper broker cache)
+    3. Seeded random walk from _BASE_PRICES (dev / offline fallback)
+    """
+    # 1. Price engine
+    try:
+        pe = getattr(app_state, "price_engine", None) if app_state else None
+        if pe is not None:
+            tick = pe.get_last_price(symbol)
+            if tick is not None:
+                bid = float(getattr(tick, "bid", 0) or getattr(tick, "last_price", 0))
+                ask = float(getattr(tick, "ask", 0) or bid)
+                mid = (bid + ask) / 2 if bid and ask else bid or ask
+                return {
+                    "symbol": symbol,
+                    "bid": round(bid, 5),
+                    "ask": round(ask, 5),
+                    "mid": round(mid, 5),
+                    "change_pct": round(float(getattr(tick, "change_pct", 0) or 0), 2),
+                    "timestamp": int(time.time() * 1000),
+                }
+    except Exception as exc:
+        logger.debug("watchlist price_engine miss for %s: %s", symbol, exc)
+
+    # 2. Broker market_prices cache
+    try:
+        broker = getattr(app_state, "broker", None) if app_state else None
+        if broker is not None:
+            prices = getattr(broker, "market_prices", {})
+            if symbol in prices:
+                p = prices[symbol]
+                bid = float(getattr(p, "bid", p) if hasattr(p, "bid") else p)
+                ask = float(getattr(p, "ask", bid) if hasattr(p, "ask") else bid)
+                mid = (bid + ask) / 2
+                return {
+                    "symbol": symbol,
+                    "bid": round(bid, 5),
+                    "ask": round(ask, 5),
+                    "mid": round(mid, 5),
+                    "change_pct": 0.0,
+                    "timestamp": int(time.time() * 1000),
+                }
+    except Exception as exc:
+        logger.debug("watchlist broker price miss for %s: %s", symbol, exc)
+
+    # 3. Seeded random walk fallback
     base = _BASE_PRICES.get(symbol, 1.0)
     noise = random.uniform(-0.002, 0.002)
     mid = base * (1 + noise)
