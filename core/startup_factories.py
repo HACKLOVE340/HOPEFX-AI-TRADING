@@ -105,8 +105,27 @@ async def init_database(s: Any) -> Any:
     is_sqlite = conn_str.startswith("sqlite")
     engine_kwargs: dict = {}
     if not is_sqlite:
-        engine_kwargs["pool_size"] = s.config.database.connection_pool_size
-        engine_kwargs["max_overflow"] = s.config.database.max_overflow
+        engine_kwargs["pool_size"] = int(
+            os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size))
+        )
+        engine_kwargs["max_overflow"] = int(
+            os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow))
+        )
+        # Raise after 30 s waiting for a connection rather than blocking forever.
+        engine_kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "30"))
+        # Recycle connections after 1 hour to avoid stale TCP connections.
+        engine_kwargs["pool_recycle"] = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+        # Ping before checkout so dead connections are replaced transparently.
+        engine_kwargs["pool_pre_ping"] = True
+
+    # PostgreSQL: enforce a per-statement timeout so a runaway query cannot
+    # hold a connection indefinitely. 30 s is generous for OLTP workloads.
+    if "postgresql" in conn_str:
+        stmt_timeout_ms = int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "30000"))
+        engine_kwargs["connect_args"] = {
+            "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
+            "options": f"-c statement_timeout={stmt_timeout_ms}",
+        }
 
     engine = create_engine(conn_str, **engine_kwargs)
     try:
