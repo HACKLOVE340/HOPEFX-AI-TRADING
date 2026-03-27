@@ -75,6 +75,13 @@ sys.path.insert(0, str(ROOT))
 MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
+import os as _os
+# When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
+# every test that trains a model finishes well within the 20 s timeout.
+_CI = _os.environ.get("HOPEFX_CI", "0") == "1"
+_N_EST = 20 if _CI else None   # None → use per-call default
+_CV    = 2  if _CI else 3
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data fetching
@@ -181,13 +188,17 @@ def _build_base_models():
         RandomForestClassifier,
     )
 
+    _ne = _N_EST or 600   # CI: 20, prod: 600
+    _rf = _N_EST or 500
+    _gb = _N_EST or 300
+
     models = [
         (
             "xgb",
             xgb.XGBClassifier(
-                n_estimators=600,
-                max_depth=5,
-                learning_rate=0.03,
+                n_estimators=_ne,
+                max_depth=3 if _CI else 5,
+                learning_rate=0.1 if _CI else 0.03,
                 subsample=0.75,
                 colsample_bytree=0.75,
                 min_child_weight=3,
@@ -196,37 +207,37 @@ def _build_base_models():
                 reg_lambda=1.5,
                 eval_metric="logloss",
                 random_state=42,
-                n_jobs=-1,
+                n_jobs=1,
             ),
         ),
         (
             "rf",
             RandomForestClassifier(
-                n_estimators=500,
+                n_estimators=_rf,
                 max_depth=10,
                 min_samples_leaf=5,
                 max_features="sqrt",
                 class_weight="balanced",
                 random_state=42,
-                n_jobs=-1,
+                n_jobs=1,
             ),
         ),
         (
             "et",
             ExtraTreesClassifier(
-                n_estimators=500,
+                n_estimators=_rf,
                 max_depth=10,
                 min_samples_leaf=5,
                 max_features="sqrt",
                 class_weight="balanced",
                 random_state=42,
-                n_jobs=-1,
+                n_jobs=1,
             ),
         ),
         (
             "gbm",
             GradientBoostingClassifier(
-                n_estimators=300,
+                n_estimators=_gb,
                 max_depth=4,
                 learning_rate=0.05,
                 subsample=0.8,
@@ -244,9 +255,9 @@ def _build_base_models():
             (
                 "lgbm",
                 lgb.LGBMClassifier(
-                    n_estimators=600,
-                    max_depth=5,
-                    learning_rate=0.03,
+                    n_estimators=_ne,
+                    max_depth=3 if _CI else 5,
+                    learning_rate=0.1 if _CI else 0.03,
                     subsample=0.75,
                     colsample_bytree=0.75,
                     min_child_samples=10,
@@ -254,7 +265,7 @@ def _build_base_models():
                     reg_lambda=1.5,
                     class_weight="balanced",
                     random_state=42,
-                    n_jobs=-1,
+                    n_jobs=1,
                     verbose=-1,
                 ),
             ),
@@ -290,14 +301,14 @@ def build_stacking_ensemble():
     stacker = StackingClassifier(
         estimators=base_models,
         final_estimator=meta,
-        cv=5,
+        cv=2 if _CI else 5,
         stack_method="predict_proba",
         passthrough=True,  # also pass original features to meta-learner
-        n_jobs=-1,
+        n_jobs=1,
     )
 
     # Wrap in calibration for reliable probability estimates
-    calibrated = CalibratedClassifierCV(stacker, method="isotonic", cv=3)
+    calibrated = CalibratedClassifierCV(stacker, method="isotonic", cv=_CV)
 
     # Full pipeline with scaling
     pipeline = Pipeline(
@@ -339,15 +350,15 @@ def walk_forward_eval(
     # CV ~3× faster on large datasets (50-year, 4000+ bars × 120+ features).
     def _cv_model():
         base = xgb.XGBClassifier(
-            n_estimators=300,
-            max_depth=5,
-            learning_rate=0.05,
+            n_estimators=_N_EST or 300,
+            max_depth=3 if _CI else 5,
+            learning_rate=0.1 if _CI else 0.05,
             subsample=0.75,
             colsample_bytree=0.75,
             min_child_weight=3,
             eval_metric="logloss",
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
         )
         return Pipeline([("scaler", StandardScaler()), ("model", base)])
 
@@ -400,7 +411,14 @@ def walk_forward_eval(
     f1s = [r["f1"] for r in fold_results]
     aucs = [r["auc"] for r in fold_results]
 
-    t_stat, p_value = stats.ttest_1samp(accs, 0.5)
+    # ttest_1samp returns NaN when there is only one fold (std=0); fall back
+    # to a neutral p_value of 1.0 so callers always get a valid float in [0,1].
+    if len(accs) >= 2:
+        t_stat, p_value = stats.ttest_1samp(accs, 0.5)
+        if np.isnan(p_value):
+            t_stat, p_value = 0.0, 1.0
+    else:
+        t_stat, p_value = 0.0, 1.0
 
     return {
         "folds": fold_results,
@@ -455,9 +473,9 @@ def train_final_model(
     else:
         logger.info("Training calibrated XGBoost on %d samples...", len(X_train))
         base = xgb.XGBClassifier(
-            n_estimators=500,
-            max_depth=6,
-            learning_rate=0.03,
+            n_estimators=_N_EST or 500,
+            max_depth=3 if _CI else 6,
+            learning_rate=0.1 if _CI else 0.03,
             subsample=0.80,
             colsample_bytree=0.80,
             min_child_weight=3,
@@ -467,9 +485,9 @@ def train_final_model(
             scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
             eval_metric="logloss",
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,
         )
-        cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
+        cal = CalibratedClassifierCV(base, method="isotonic", cv=_CV)
         model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
 
     model.fit(X_train, y_train)
@@ -646,9 +664,9 @@ def oos_eval_advanced(
     from sklearn.preprocessing import StandardScaler
 
     base = xgb.XGBClassifier(
-        n_estimators=600,
-        max_depth=5,
-        learning_rate=0.025,
+        n_estimators=_N_EST or 600,
+        max_depth=3 if _CI else 5,
+        learning_rate=0.1 if _CI else 0.025,
         subsample=0.75,
         colsample_bytree=0.75,
         min_child_weight=3,
@@ -658,9 +676,9 @@ def oos_eval_advanced(
         scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
         eval_metric="logloss",
         random_state=42,
-        n_jobs=-1,
+        n_jobs=1,
     )
-    cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
+    cal = CalibratedClassifierCV(base, method="isotonic", cv=_CV)
     model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
     model.fit(X_train, y_train)
 
