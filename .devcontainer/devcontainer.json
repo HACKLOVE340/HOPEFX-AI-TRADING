@@ -1,4 +1,5 @@
 {
 	"name": "Ona",
-	"image": "mcr.microsoft.com/devcontainers/universal:4.0.1-noble"
+	"image": "mcr.microsoft.com/devcontainers/universal:4.0.1-noble",
+	"postCreateCommand": "pip install -r requirements-ci.txt -q"
 }

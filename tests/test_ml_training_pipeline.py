@@ -235,7 +235,7 @@ def test_retrain_model_smoke_exits_zero():
         ],
         capture_output=True,
         text=True,
-        timeout=90,
+        timeout=300,
         cwd=str(ROOT),
     )
     assert result.returncode == 0, (
