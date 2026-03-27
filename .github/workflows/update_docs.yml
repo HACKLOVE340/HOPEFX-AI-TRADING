@@ -1,0 +1,374 @@
+# HOPEFX-AI-TRADING
+# Auto-generate and commit documentation updates from source changes.
+#
+# What this does (distinct from docs.yml / static.yml which only deploy):
+#   1. Exports the live OpenAPI JSON from the FastAPI app.
+#   2. Regenerates docs/API_REFERENCE.md from that spec.
+#   3. Regenerates docs/model_performance.md from ml/saved_models/advanced_oos_meta.json.
+#   4. Regenerates docs/feature_flags.md from config/feature_flags.py.
+#   5. Commits any changed files back to the branch that triggered the run.
+#
+# Triggers:
+#   - Push to main/develop when Python source, docs source, or key data files change.
+#   - Manual dispatch (workflow_dispatch) for on-demand regeneration.
+#
+# The commit is skipped when nothing changed (idempotent).
+
+name: Update Docs
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "api/**/*.py"
+      - "config/feature_flags.py"
+      - "ml/saved_models/advanced_oos_meta.json"
+      - "CHANGELOG.md"
+      - "docs/**/*.md"
+      - ".github/workflows/update_docs.yml"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Regenerate all docs even if source unchanged"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  # One run per branch at a time; cancel any in-progress run on new push.
+  group: update-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          # Use a PAT or the default GITHUB_TOKEN.
+          # GITHUB_TOKEN can push to the same branch; no extra secret needed
+          # for public repos.  For protected branches, set DOCS_PUSH_TOKEN.
+          token: ${{ secrets.DOCS_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # ── Python ──────────────────────────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            fastapi uvicorn pydantic pydantic-settings \
+            sqlalchemy alembic \
+            python-jose[cryptography] passlib[bcrypt] \
+            python-dotenv httpx \
+            "mkdocs>=1.6.0,<2.0.0" "mkdocs-material>=9.6.0,<10.0.0"
+
+      # ── Generate OpenAPI JSON ────────────────────────────────────────────────
+      # Imports the FastAPI app in a minimal mode (APP_ENV=docs) that skips
+      # broker/DB/Redis connections so the spec can be exported without secrets.
+      - name: Export OpenAPI spec
+        env:
+          APP_ENV: docs
+          # Provide a dummy JWT secret so startup_validator passes.
+          SECURITY_JWT_SECRET: "docs-generation-dummy-secret-not-used-in-production"
+        run: |
+          python - <<'EOF'
+          import json, sys, os
+          os.environ.setdefault("APP_ENV", "docs")
+          os.environ.setdefault("SECURITY_JWT_SECRET", "docs-generation-dummy-secret-not-used-in-production")
+          try:
+              from app import app
+              spec = app.openapi()
+              with open("docs/openapi.json", "w") as f:
+                  json.dump(spec, f, indent=2)
+              print(f"OpenAPI spec written: {len(spec.get('paths', {}))} paths")
+          except Exception as e:
+              print(f"WARNING: could not export OpenAPI spec: {e}", file=sys.stderr)
+              # Write a minimal placeholder so downstream steps don't fail.
+              with open("docs/openapi.json", "w") as f:
+                  json.dump({"openapi": "3.1.0", "info": {"title": "HOPEFX", "version": "unknown"}, "paths": {}}, f)
+          EOF
+
+      # ── Regenerate API_REFERENCE.md ─────────────────────────────────────────
+      - name: Regenerate docs/API_REFERENCE.md
+        run: |
+          python - <<'EOF'
+          import json, textwrap
+          from pathlib import Path
+
+          spec = json.loads(Path("docs/openapi.json").read_text())
+          paths = spec.get("paths", {})
+          info  = spec.get("info", {})
+
+          lines = [
+              f"# API Reference",
+              f"",
+              f"> Auto-generated from OpenAPI spec — do not edit manually.",
+              f"> Source: `app.py` · Version: `{info.get('version', 'unknown')}`",
+              f"",
+              f"## Base URL",
+              f"",
+              f"```",
+              f"https://api.hopefx.io   (production)",
+              f"http://localhost:8000   (local dev)",
+              f"```",
+              f"",
+              f"All authenticated endpoints require:",
+              f"```",
+              f"Authorization: Bearer <access_token>",
+              f"```",
+              f"",
+          ]
+
+          # Group by tag
+          from collections import defaultdict
+          by_tag: dict = defaultdict(list)
+          for path, methods in sorted(paths.items()):
+              for method, op in methods.items():
+                  if method in ("get", "post", "put", "patch", "delete"):
+                      tag = (op.get("tags") or ["Other"])[0]
+                      by_tag[tag].append((method.upper(), path, op))
+
+          for tag in sorted(by_tag):
+              lines += [f"---", f"", f"## {tag}", f""]
+              for method, path, op in by_tag[tag]:
+                  summary = op.get("summary", "")
+                  desc    = op.get("description", "").strip().split("\n")[0]
+                  lines += [
+                      f"### `{method} {path}`",
+                      f"",
+                  ]
+                  if summary:
+                      lines.append(f"{summary}")
+                      lines.append("")
+                  if desc and desc != summary:
+                      lines.append(f"{desc}")
+                      lines.append("")
+
+                  # Parameters
+                  params = op.get("parameters", [])
+                  if params:
+                      lines += ["**Parameters:**", ""]
+                      lines += ["| Name | In | Required | Description |", "|------|----|----------|-------------|"]
+                      for p in params:
+                          req  = "✅" if p.get("required") else "—"
+                          pdesc = (p.get("description") or "").replace("\n", " ")
+                          lines.append(f"| `{p['name']}` | {p.get('in','')} | {req} | {pdesc} |")
+                      lines.append("")
+
+                  # Request body summary
+                  body = op.get("requestBody", {})
+                  if body:
+                      lines += ["**Request body:** `application/json`", ""]
+
+                  # Response codes
+                  responses = op.get("responses", {})
+                  if responses:
+                      lines += ["**Responses:**", ""]
+                      lines += ["| Code | Description |", "|------|-------------|"]
+                      for code, resp in sorted(responses.items()):
+                          rdesc = (resp.get("description") or "").replace("\n", " ")
+                          lines.append(f"| `{code}` | {rdesc} |")
+                      lines.append("")
+
+          out = Path("docs/API_REFERENCE.md")
+          out.write_text("\n".join(lines))
+          print(f"API_REFERENCE.md written: {len(paths)} endpoints across {len(by_tag)} tags")
+          EOF
+
+      # ── Regenerate model_performance.md ─────────────────────────────────────
+      - name: Regenerate docs/model_performance.md
+        run: |
+          python - <<'EOF'
+          import json
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          meta_path = Path("ml/saved_models/advanced_oos_meta.json")
+          if not meta_path.exists():
+              print("advanced_oos_meta.json not found — skipping model_performance.md update")
+              exit(0)
+
+          meta = json.loads(meta_path.read_text())
+          now  = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+          lines = [
+              "# Model Performance",
+              "",
+              f"> Auto-generated {now} from `ml/saved_models/advanced_oos_meta.json`.",
+              "> Do not edit manually — re-run `python ml/train_advanced.py --oos-years 3` to update.",
+              "",
+              "## Out-of-Sample Results",
+              "",
+              "| Metric | Value |",
+              "|--------|-------|",
+          ]
+
+          field_labels = {
+              "oos_accuracy":      "OOS Accuracy",
+              "p_value":           "p-value (one-sided binomial)",
+              "n_bars":            "OOS Bars (N)",
+              "oos_years":         "OOS Period (years)",
+              "n_features":        "Feature Count",
+              "sharpe":            "Trade-Level Sharpe",
+              "sharpe_se":         "Sharpe SE (±)",
+              "n_trades":          "Trade Count",
+              "avg_hold_days":     "Avg Hold (days)",
+              "abstain_rate":      "Abstain Rate",
+              "trained_at":        "Trained At",
+              "model_version":     "Model Version",
+          }
+
+          for key, label in field_labels.items():
+              val = meta.get(key)
+              if val is None:
+                  continue
+              if isinstance(val, float):
+                  if key in ("oos_accuracy", "abstain_rate"):
+                      val = f"{val:.1f}%"
+                  elif key == "p_value":
+                      val = f"{val:.4f}"
+                  else:
+                      val = f"{val:.3f}"
+              lines.append(f"| {label} | `{val}` |")
+
+          lines += [
+              "",
+              "## Interpretation",
+              "",
+              "- **OOS Accuracy ≥ 65% with p < 0.05** is the minimum bar for live deployment.",
+              "- **Sharpe SE** = 1/√(2(N−1)). At N=48, SE=±0.21 — treat Sharpe as indicative until N≥200.",
+              "- **Abstain rate** reflects bars filtered as low-confidence by the model.",
+              "  Higher abstain = fewer but higher-quality signals.",
+              "",
+              "## Feature Pipeline",
+              "",
+              "- 122 stationary features: returns (not prices), z-scores, ATR normalisation",
+              "- Regime-conditional training: separate models for trending vs mean-reverting",
+              "- COT proxy features: central bank demand signature (gold + DXY + yields)",
+              "- Look-ahead bias prevention: only `ffill()` used on macro data (no `bfill()`)",
+              "",
+              "## Disclaimer",
+              "",
+              "> Past OOS accuracy does not guarantee future performance.",
+              "> This model has not yet been validated on live fills.",
+              "> Complete the 30-day OANDA paper trading run before deploying live capital.",
+          ]
+
+          Path("docs/model_performance.md").write_text("\n".join(lines))
+          print("model_performance.md updated")
+          EOF
+
+      # ── Regenerate feature_flags.md ─────────────────────────────────────────
+      - name: Regenerate docs/feature_flags.md
+        run: |
+          python - <<'EOF'
+          import os, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+
+          os.environ.setdefault("APP_ENV", "docs")
+          os.environ.setdefault("SECURITY_JWT_SECRET", "docs-generation-dummy-secret-not-used-in-production")
+
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+          try:
+              from config.feature_flags import flags, FeatureStatus
+
+              registry = flags.registry()
+
+              lines = [
+                  "# Feature Flags",
+                  "",
+                  f"> Auto-generated {now} from `config/feature_flags.py`.",
+                  "> Do not edit manually.",
+                  "",
+                  "Each flag can be overridden at runtime via its environment variable.",
+                  "Flags default to their hard-coded value when the env var is absent.",
+                  "",
+                  "| Flag | Env Var | Status | Default | Description |",
+                  "|------|---------|--------|---------|-------------|",
+              ]
+
+              status_order = {"stable": 0, "beta": 1, "experimental": 2, "disabled": 3}
+              for name, info in sorted(registry.items(), key=lambda x: (status_order.get(x[1]["status"], 9), x[0])):
+                  status  = info["status"].upper()
+                  default = "✅ on" if info["default"] else "❌ off"
+                  desc    = (info["description"] or "").replace("\n", " ").replace("|", "\\|")[:120]
+                  lines.append(f"| `{name}` | `{info['env_var']}` | {status} | {default} | {desc} |")
+
+              lines += [
+                  "",
+                  "## Status Levels",
+                  "",
+                  "| Level | Meaning |",
+                  "|-------|---------|",
+                  "| STABLE | Production-ready, on by default |",
+                  "| BETA | Functional but under active development, on by default |",
+                  "| EXPERIMENTAL | Exists but not yet reliable, off by default |",
+                  "| DISABLED | Intentionally turned off |",
+              ]
+
+              Path("docs/feature_flags.md").write_text("\n".join(lines))
+              print(f"feature_flags.md written: {len(registry)} flags")
+
+          except Exception as e:
+              print(f"WARNING: could not generate feature_flags.md: {e}", file=sys.stderr)
+          EOF
+
+      # ── Update mkdocs.yml nav if new doc files were added ───────────────────
+      - name: Ensure new doc files appear in mkdocs nav
+        run: |
+          python - <<'EOF'
+          import re
+          from pathlib import Path
+
+          nav_additions = {
+              "docs/feature_flags.md": "  - Feature Flags: feature_flags.md\n",
+              "docs/openapi.json":     None,   # JSON — not a nav page
+          }
+
+          mkdocs = Path("mkdocs.yml").read_text()
+
+          for doc_path, nav_entry in nav_additions.items():
+              if nav_entry and Path(doc_path).exists():
+                  filename = Path(doc_path).name
+                  if filename not in mkdocs:
+                      # Append after the last nav entry before the end of nav block
+                      mkdocs = mkdocs.rstrip() + f"\n  - Feature Flags: feature_flags.md\n"
+                      Path("mkdocs.yml").write_text(mkdocs)
+                      print(f"Added {filename} to mkdocs.yml nav")
+                  else:
+                      print(f"{filename} already in mkdocs.yml nav")
+          EOF
+
+      # ── Commit changes ───────────────────────────────────────────────────────
+      - name: Commit updated docs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            docs/API_REFERENCE.md \
+            docs/model_performance.md \
+            docs/feature_flags.md \
+            docs/openapi.json \
+            mkdocs.yml \
+            || true
+
+          # Only commit when something actually changed.
+          if git diff --cached --quiet; then
+            echo "No doc changes — skipping commit."
+          else
+            git commit -m "docs: auto-update API reference, model performance, feature flags [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+            echo "Docs committed and pushed."
+          fi
