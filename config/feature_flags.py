@@ -65,7 +65,13 @@ class _FeatureDef:
 
     Reads its value from *env_var* at runtime so the flag can be overridden
     without redeploying code.
+
+    The ``_is_feature_def = True`` sentinel lets ``registry()`` identify
+    descriptors by attribute name rather than class identity, so it survives
+    ``importlib.reload()`` (which creates a new class object).
     """
+
+    _is_feature_def: bool = True
 
     def __init__(
         self,
@@ -639,9 +645,12 @@ class FeatureFlags:
         """
         result: Dict[str, Dict[str, Any]] = {}
         # Use vars() on the class so we get the raw descriptor objects
-        # (getattr would invoke __get__ and return bools)
+        # (getattr would invoke __get__ and return bools).
+        # Check by sentinel attribute rather than isinstance() so the registry
+        # survives importlib.reload() — reload creates a new _FeatureDef class
+        # object, breaking isinstance checks on descriptors from the old class.
         for attr_name, descriptor in vars(type(self)).items():
-            if isinstance(descriptor, _FeatureDef):
+            if getattr(descriptor, "_is_feature_def", False):
                 result[attr_name] = descriptor.meta()
         return result
 
