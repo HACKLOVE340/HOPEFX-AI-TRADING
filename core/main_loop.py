@@ -47,6 +47,7 @@ from dotenv import load_dotenv
 
 from core.event_bus import bus, CH_BREACH
 from data.market_ingest import MarketIngest
+from data.news_calendar_feed import NewsCalendarFeed
 from execution.fix_router import FIXRouter
 from risk.gatekeeper import Gatekeeper
 from strategy.engine import StrategyEngine
@@ -69,6 +70,7 @@ class MainLoop:
 
     def __init__(self) -> None:
         self._ingest    = MarketIngest()
+        self._news      = NewsCalendarFeed()
         self._strategy  = StrategyEngine()
         self._gatekeeper = Gatekeeper()
         self._router    = FIXRouter()
@@ -104,6 +106,7 @@ class MainLoop:
         # Launch each sub-system as an independent task
         self._tasks = [
             asyncio.create_task(self._fault.run(),            name="fault_guard"),
+            asyncio.create_task(self._news.run(),             name="news_calendar"),
             asyncio.create_task(self._ingest.start(),         name="market_ingest"),
             asyncio.create_task(self._strategy.start(),       name="strategy_engine"),
             asyncio.create_task(self._gatekeeper.start(),     name="gatekeeper"),
@@ -145,6 +148,7 @@ class MainLoop:
             ("gatekeeper",      self._gatekeeper.stop()),
             ("strategy_engine", self._strategy.stop()),
             ("market_ingest",   self._ingest.stop()),
+            ("news_calendar",   self._news.stop()),
             ("fault_guard",     self._fault.stop()),
             ("event_bus",       bus.close()),
         ]:
