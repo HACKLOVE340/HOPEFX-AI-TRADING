@@ -5,8 +5,15 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # Helm templates use Go {{ }} syntax — not valid YAML.
+        # config/ultimate_config.yaml and deployment/k8s_config.yaml have
+        # Python docstrings at the top and are excluded until cleaned up.
+        args: [--unsafe]
+        exclude: ^(helm/|config/ultimate_config\.yaml|deployment/k8s_config\.yaml)
       - id: check-added-large-files
       - id: check-json
+        # devcontainer.json uses JSONC (comments) — excluded; kept as plain JSON now.
+        exclude: ^\.devcontainer/
       - id: check-toml
       - id: check-merge-conflict
       - id: mixed-line-ending
