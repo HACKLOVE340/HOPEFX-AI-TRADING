@@ -335,12 +335,14 @@ def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
     }
 
 
+@router.get("/settings")
 @router.get("/settings-data")
 def get_settings(user: TokenPayload = Depends(require_role("admin"))):
     """Read current risk settings. Requires: role >= 'admin'."""
     return dict(_risk_settings)
 
 
+@router.post("/settings")
 @router.post("/settings-data")
 def save_settings(
     payload: Dict[str, Any],
