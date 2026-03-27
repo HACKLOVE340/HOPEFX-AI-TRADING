@@ -62,7 +62,7 @@ logging.basicConfig(
 logger = logging.getLogger("run")
 
 # ── supported values ──────────────────────────────────────────────────────────
-BROKERS = ("oanda", "ibkr", "binance", "alpaca", "paper")
+BROKERS = ("oanda", "mt5", "ibkr", "binance", "alpaca", "paper")
 MODES   = ("paper", "live", "api", "backtest")
 
 
@@ -98,6 +98,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Validate env + config, print startup plan, exit without trading",
+    )
+    p.add_argument(
+        "--symbol",
+        default=None,
+        help="Primary trading symbol (e.g. XAU_USD, EUR_USD). Overrides OANDA_INSTRUMENTS.",
+    )
+    p.add_argument(
+        "--prop",
+        action="store_true",
+        default=False,
+        help="Enable prop-firm enforcement (sets enabled=true in prop_firm_mode.json)",
     )
     p.add_argument(
         "--log",
@@ -136,6 +147,7 @@ def _setup_env(args: argparse.Namespace) -> None:
     # Map broker flag to exchange identifier used by MarketIngest
     broker_exchange_map = {
         "oanda":   "oanda",
+        "mt5":     "mt5",
         "ibkr":    "ibkr",
         "binance": "binance",
         "alpaca":  "alpaca",
@@ -143,6 +155,29 @@ def _setup_env(args: argparse.Namespace) -> None:
     }
     os.environ["INGEST_EXCHANGE"] = broker_exchange_map.get(args.broker, "oanda")
     os.environ["DEFAULT_BROKER"]  = args.broker
+    os.environ["BROKER"]          = args.broker
+    os.environ["TRADING_MODE"]    = args.mode
+
+    # Symbol override
+    if getattr(args, "symbol", None):
+        os.environ["OANDA_INSTRUMENTS"] = args.symbol
+
+    # Prop-firm enforcement
+    if getattr(args, "prop", False):
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            cfg_path = _Path(args.config)
+            cfg = {}
+            if cfg_path.exists():
+                with open(cfg_path) as f:
+                    cfg = _json.load(f)
+            cfg["enabled"] = True
+            with open(cfg_path, "w") as f:
+                _json.dump(cfg, f, indent=2)
+            logger.info("Prop-firm enforcement ENABLED in %s", cfg_path)
+        except Exception as exc:
+            logger.warning("Could not enable prop-firm mode: %s", exc)
 
     # Point prop engine at the config file
     os.environ["PROP_FIRM_CONFIG"] = args.config
@@ -243,15 +278,39 @@ def _get_pipeline(mode: str) -> list[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _run_trading(args: argparse.Namespace) -> None:
-    """Start the full event-driven trading pipeline via core/main_loop.py."""
-    from core.main_loop import MainLoop
+    """
+    Start the full trading pipeline via HopeFXEngine.
 
+    HopeFXEngine wires:
+      HOPEFXBrain (ML + regime + strategy) → RiskManager → Broker
+      TradeLogger (CSV + Prometheus) → HeartbeatService (Telegram)
+
+    Falls back to core.main_loop.MainLoop if HopeFXEngine is unavailable.
+    """
     logger.info(
         "Starting trading pipeline — broker=%s mode=%s config=%s",
         args.broker, args.mode, args.config,
     )
-    loop = MainLoop()
-    await loop.run()
+
+    try:
+        from hopefx_engine import HopeFXEngine
+        import signal as _signal
+
+        engine = HopeFXEngine()
+        loop = asyncio.get_running_loop()
+        for sig in (_signal.SIGINT, _signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, lambda: asyncio.create_task(engine.stop()))
+            except NotImplementedError:
+                pass  # Windows doesn't support add_signal_handler
+        await engine.start()
+
+    except ImportError:
+        # Fallback to legacy MainLoop
+        logger.warning("HopeFXEngine not available — falling back to core.main_loop")
+        from core.main_loop import MainLoop
+        ml = MainLoop()
+        await ml.run()
 
 
 async def _run_api() -> None:
