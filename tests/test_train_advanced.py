@@ -37,7 +37,7 @@ ROOT = Path(__file__).parent.parent
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-def _make_ohlcv(n: int = 400, seed: int = 42) -> pd.DataFrame:
+def _make_ohlcv(n: int = 200, seed: int = 42) -> pd.DataFrame:
     """Synthetic daily OHLCV with realistic structure."""
     rng = np.random.default_rng(seed)
     dates = pd.date_range("2014-01-01", periods=n, freq="B")
@@ -138,7 +138,7 @@ class TestWalkForwardEval:
     def xy(self):
         from ml.advanced_features import build_advanced_features
 
-        df = _make_ohlcv(n=400)
+        df = _make_ohlcv(n=200)
         return build_advanced_features(df, macro_df=None)
 
     def test_returns_mean_accuracy(self, xy):
@@ -213,7 +213,7 @@ class TestOosEvalAdvanced:
 def _make_cv_oos_split():
     from ml.advanced_features import build_advanced_features
 
-    df = _make_ohlcv(n=400)
+    df = _make_ohlcv(n=200)
     X, y = build_advanced_features(df, macro_df=None)
     split = int(len(X) * 0.80)
     return X.iloc[:split], y.iloc[:split], X.iloc[split:], y.iloc[split:]
@@ -233,7 +233,7 @@ class TestTrainFinalModel:
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp
 
-        df = _make_ohlcv(n=400)
+        df = _make_ohlcv(n=200)
         X, y = build_advanced_features(df, macro_df=None)
         model, metrics = train_final_model(X, y, use_stacking=False)
 
@@ -269,7 +269,7 @@ class TestExtractFeatureImportance:
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
         try:
-            df = _make_ohlcv(n=400)
+            df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
@@ -286,7 +286,7 @@ class TestExtractFeatureImportance:
         original = ta.MODEL_DIR
         ta.MODEL_DIR = tmp_path
         try:
-            df = _make_ohlcv(n=400)
+            df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))

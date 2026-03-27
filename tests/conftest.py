@@ -151,6 +151,12 @@ def generate_ohlcv_from_close(closes: list) -> list:
     return ohlcv
 
 
+# ── CI speed flag ────────────────────────────────────────────────────────────
+# Set HOPEFX_CI=1 so ml/train_advanced.py uses minimal estimators in tests.
+
+os.environ.setdefault("HOPEFX_CI", "1")
+
+
 # ── Additional fixtures required by root-level tests ─────────────────────────
 
 
