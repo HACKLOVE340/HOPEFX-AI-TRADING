@@ -118,4 +118,24 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+[tool.mypy]
+# Prevents "HOPEFX-AI-TRADING is not a valid Python package name" when mypy
+# is invoked from the repo root — the directory name contains uppercase and
+# hyphens which are not valid Python identifiers.
+explicit_package_bases = true
+ignore_missing_imports = true
+# Exclude generated, vendored, test-fixture directories, and root-level
+# legacy files that shadow canonical packages (e.g. execution.py vs execution/).
+exclude = [
+    "alembic/",
+    "build/",
+    "dist/",
+    "site/",
+    "\\.venv/",
+    "venv/",
+    "^execution\\.py$",
+    "^ml/features\\.py$",
+    "^ml/training\\.py$",
+]
+
 # duplicate [build-system] removed — kept setuptools declaration at top of file

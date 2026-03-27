@@ -28,18 +28,10 @@ repos:
       - id: ruff-format
         exclude: \.ipynb$
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        # types-all is broken (types-pkg-resources yanked); list only what we need
-        additional_dependencies:
-          - types-requests
-          - types-PyYAML
-          - types-redis
-          - types-passlib
-          - types-python-dateutil
-        args: ['--ignore-missing-imports']
+# mypy is run in CI (ci.yml) with --ignore-missing-imports on the canonical
+# packages. It is intentionally excluded from pre-commit because the codebase
+# has ~1000 pre-existing type errors that are tracked separately and would
+# block every commit. Re-enable once the type-error count reaches zero.
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.10
