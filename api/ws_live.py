@@ -121,31 +121,116 @@ def get_live_manager() -> LiveConnectionManager:
     return _manager
 
 
-# ─── Price simulator (server-side GBM) ───────────────────────────────────────
+# ─── Price source (live broker → price engine → GBM fallback) ────────────────
 
+# Symbol config: vol and spread used only when no live price is available.
+# Keys use the slash format the frontend expects (XAU/USD etc.).
 _SYMBOLS: Dict[str, Dict[str, float]] = {
-    "XAU/USD": {"price": 2340.0, "vol": 0.012, "spread": 0.30},
-    "EUR/USD": {"price": 1.0850, "vol": 0.006, "spread": 0.0001},
-    "GBP/USD": {"price": 1.2700, "vol": 0.007, "spread": 0.0002},
+    "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
+    "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
+    "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
     "USD/JPY": {"price": 149.50, "vol": 0.006, "spread": 0.02},
-    "BTC/USD": {"price": 67000.0, "vol": 0.025, "spread": 10.0},
+    "BTC/USD": {"price": 85000.0, "vol": 0.025, "spread": 10.0},
+}
+
+# Slash → no-slash lookup for broker.market_prices keys
+_BROKER_KEY: Dict[str, str] = {
+    "XAU/USD": "XAUUSD",
+    "EUR/USD": "EURUSD",
+    "GBP/USD": "GBPUSD",
+    "USD/JPY": "USDJPY",
+    "BTC/USD": "BTC/USD",
 }
 
 _open_prices: Dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
+_prices_seeded = False
+
+
+def _seed_from_broker() -> None:
+    """Seed _SYMBOLS and _open_prices from paper broker on first call."""
+    global _prices_seeded
+    if _prices_seeded:
+        return
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        broker = getattr(app_state, "broker", None)
+        market_prices = getattr(broker, "market_prices", {}) if broker else {}
+        for sym, cfg in _SYMBOLS.items():
+            broker_key = _BROKER_KEY.get(sym, sym.replace("/", ""))
+            live = market_prices.get(broker_key)
+            if live and live > 0:
+                cfg["price"] = float(live)
+                _open_prices[sym] = float(live)
+        _prices_seeded = True
+    except Exception:
+        pass  # app_state not ready yet — will retry next tick
+
+
+def _get_live_price(symbol: str) -> Optional[float]:
+    """
+    Return the current mid price from the live stack:
+    1. price_engine.get_last_price() — real ticks when a feed is connected
+    2. broker.market_prices          — paper broker static prices
+    Returns None if neither is available.
+    """
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        # 1. Price engine (real ticks)
+        pe = getattr(app_state, "price_engine", None)
+        if pe is not None:
+            broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+            tick = pe.get_last_price(broker_key)
+            if tick is not None:
+                mid = getattr(tick, "mid", None) or (
+                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
+                )
+                if mid and mid > 0:
+                    return float(mid)
+
+        # 2. Paper broker static prices
+        broker = getattr(app_state, "broker", None)
+        market_prices = getattr(broker, "market_prices", {}) if broker else {}
+        broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+        live = market_prices.get(broker_key)
+        if live and live > 0:
+            return float(live)
+    except Exception:
+        pass
+    return None
 
 
 def _gbm_step(price: float, vol: float, dt: float) -> float:
-    """One GBM step using Box-Muller normal sample."""
+    """One GBM step using Box-Muller normal sample (fallback only)."""
     u1, u2 = random.random(), random.random()
     z = math.sqrt(-2 * math.log(max(u1, 1e-10))) * math.cos(2 * math.pi * u2)
     return price * math.exp(-0.5 * vol * vol * dt + vol * math.sqrt(dt) * z)
 
 
 def _make_tick(symbol: str) -> dict:
+    """
+    Build a price_tick message for the given symbol.
+
+    Uses live broker/price-engine prices when available; falls back to
+    GBM simulation only when no live source is connected.
+    """
+    _seed_from_broker()
     cfg = _SYMBOLS[symbol]
-    dt = 1.0 / (24 * 60 * 60)  # 1-second step as fraction of day
-    cfg["price"] = _gbm_step(cfg["price"], cfg["vol"], dt)
-    mid = cfg["price"]
+
+    live = _get_live_price(symbol)
+    if live is not None:
+        # Live price available — add a tiny realistic jitter (0.5 pip) so
+        # the WebSocket stream looks like a real tick feed, not a static value.
+        jitter = cfg["spread"] * 0.1 * (random.random() - 0.5)
+        mid = live + jitter
+        cfg["price"] = mid  # keep GBM anchored to live price
+    else:
+        # No live feed — advance GBM from last known price
+        dt = 1.0 / (24 * 60 * 60)
+        cfg["price"] = _gbm_step(cfg["price"], cfg["vol"], dt)
+        mid = cfg["price"]
+
     half = cfg["spread"] / 2
     change = (mid - _open_prices[symbol]) / _open_prices[symbol] * 100
     return {
