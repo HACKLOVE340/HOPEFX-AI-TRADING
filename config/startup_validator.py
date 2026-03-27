@@ -226,6 +226,19 @@ def validate_environment(*, strict: bool = True) -> None:
                 "7496 (tws-live), 7497 (tws-paper)"
             )
 
+    # ── CORS wildcard guard ───────────────────────────────────────────────────
+    # A wildcard ALLOWED_ORIGINS in production means any origin can call the
+    # API — this is a security misconfiguration. Deployers who forget to set
+    # this often fall back to "*" as a workaround for CORS errors.
+    if not dev_mode:
+        allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+        if "*" in [o.strip() for o in allowed_origins.split(",") if o.strip()]:
+            errors.append(
+                "INSECURE ALLOWED_ORIGINS contains '*' in production — "
+                "set ALLOWED_ORIGINS to a comma-separated list of explicit "
+                "https:// origins (e.g. https://app.example.com)"
+            )
+
     if errors:
         env_label = "PRODUCTION" if not dev_mode else "DEVELOPMENT"
         msg = (
