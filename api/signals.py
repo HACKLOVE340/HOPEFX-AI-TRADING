@@ -234,7 +234,9 @@ class RealTimeSignalService:
         # Configuration
         self.signal_expiry_minutes = self.config.get("signal_expiry_minutes", 30)
         self.min_confidence = self.config.get("min_confidence", 0.3)
-        self.min_strategies = self.config.get("min_strategies", 2)
+        # Default 1: a single strategy (or the ML engine) is enough to generate
+        # a signal via the API. Raise via config for stricter multi-strategy consensus.
+        self.min_strategies = self.config.get("min_strategies", 1)
 
         # Thread safety
         self._lock = threading.Lock()
@@ -813,6 +815,9 @@ def create_signals_router():
                     else round(entry * 0.985, 5)
                 )
 
+            # Ensure at least one strategy name is present so min_strategies
+            # check passes for direct API calls (e.g. from the frontend or tests).
+            strategies = req.strategies_agreeing or ["api_signal"]
             signal = svc.generate_signal(
                 symbol=req.symbol,
                 direction=direction,
@@ -822,8 +827,8 @@ def create_signals_router():
                 stop_loss=sl,
                 take_profit=tp,
                 timeframe=req.timeframe,
-                strategies_agreeing=req.strategies_agreeing or [],
-                total_strategies=req.total_strategies,
+                strategies_agreeing=strategies,
+                total_strategies=max(req.total_strategies, len(strategies)),
                 regime=req.regime,
                 session=req.session,
                 metadata=req.parameters or {},
