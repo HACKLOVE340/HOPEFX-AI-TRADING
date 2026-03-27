@@ -270,7 +270,7 @@ class MobileAPIServer:
                 access_token = self._generate_token(user_id, expires_hours=24)
                 refresh_token = self._generate_token(user_id, expires_hours=7 * 24)
 
-                logger.info(f"User registered: {user.email}")
+                logger.info("User registered: user_id=%s", user_id)
 
                 return AuthToken(
                     access_token=access_token,
@@ -309,7 +309,7 @@ class MobileAPIServer:
                     user["user_id"], expires_hours=7 * 24
                 )
 
-                logger.info(f"User logged in: {email}")
+                logger.info("User logged in: user_id=%s", user["user_id"])
 
                 return AuthToken(
                     access_token=access_token,
