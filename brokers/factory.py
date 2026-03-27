@@ -5,12 +5,25 @@
 # No commercial use without explicit permission.
 """
 Broker Factory — creates and registers broker instances by name.
+
+Broker selection priority
+-------------------------
+1. Explicit name passed to create_broker(name)
+2. BROKER env var (e.g. BROKER=mt5, BROKER=oanda, BROKER=paper)
+3. Default: "paper" (safe fallback)
+
+MT5 is a first-class broker. Set BROKER=mt5 to route the entire
+tick → signal → risk → execute pipeline through MT5Bridge.
 """
 
 import logging
+import os
 from typing import Dict
 
 logger = logging.getLogger(__name__)
+
+# Default broker from environment — allows `python run.py` to pick up BROKER=mt5
+_DEFAULT_BROKER = os.getenv("BROKER", "paper").lower()
 
 
 class BrokerFactory:
@@ -120,14 +133,23 @@ class BrokerFactory:
         logger.info(f"Broker registered: {name}")
 
     @classmethod
-    def create_broker(cls, name: str, config: Dict = None):
-        """Create a broker instance by name (case-insensitive). Returns None for unknown brokers."""
+    def create_broker(cls, name: str = None, config: Dict = None):
+        """
+        Create a broker instance by name (case-insensitive).
+
+        If name is None, uses the BROKER env var (default: "paper").
+        Returns None for unknown brokers.
+
+        MT5 special handling: when name="mt5", creates an MT5Bridge-backed
+        connector that supports the full hot path including modify/cancel.
+        """
         cls._ensure_registered()
-        key = name.lower()
-        broker_class = cls._brokers.get(key)
+        resolved = (name or _DEFAULT_BROKER).lower()
+        broker_class = cls._brokers.get(resolved)
         if broker_class is None:
-            logger.warning(f"Unknown broker: {name}")
+            logger.warning("Unknown broker: %s (available: %s)", resolved, list(cls._brokers.keys()))
             return None
+        logger.info("Creating broker: %s (%s)", resolved, broker_class.__name__)
         return broker_class(config or {})
 
     @classmethod

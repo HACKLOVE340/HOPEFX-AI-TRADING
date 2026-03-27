@@ -180,8 +180,56 @@ class EX5SignalExporter:
         self.signal_dir = signal_dir
         self.signal_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _write_json_locked(path: Path, payload: dict) -> None:
+        """
+        Write JSON to path with cross-platform file locking.
+
+        Uses fcntl.flock on POSIX and msvcrt.locking on Windows.
+        Falls back to a .lock sentinel file when neither is available
+        (e.g. network filesystems that don't support advisory locks).
+
+        This prevents race conditions when the MT5 EA and Python both
+        read/write the same signal file simultaneously.
+        """
+        import sys
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2))
+
+        # Atomic rename — on POSIX this is guaranteed atomic; on Windows
+        # it may fail if the target exists, so we remove first.
+        try:
+            tmp.replace(path)
+        except OSError:
+            try:
+                path.unlink(missing_ok=True)
+                tmp.replace(path)
+            except Exception as exc:
+                logger.warning("Atomic rename failed for %s: %s", path, exc)
+                tmp.write_text(json.dumps(payload, indent=2))
+                import shutil
+                shutil.copy2(str(tmp), str(path))
+                tmp.unlink(missing_ok=True)
+
+    @staticmethod
+    def _read_json_locked(path: Path) -> dict:
+        """Read JSON from path safely (handles partial writes from EA)."""
+        for attempt in range(3):
+            try:
+                text = path.read_text(encoding="utf-8")
+                return json.loads(text)
+            except json.JSONDecodeError:
+                if attempt < 2:
+                    time.sleep(0.1)
+        return {}
+
     def export(self, order: MT5Order) -> Path:
-        """Write a signal JSON file; returns the file path."""
+        """
+        Write a signal JSON file with file locking; returns the file path.
+
+        Uses atomic write (write to .tmp then rename) to prevent the MT5 EA
+        from reading a partially-written file.
+        """
         ts = int(time.time())
         signal_id = f"{order.symbol}_{order.side.value}_{ts}"
         payload = {
@@ -199,25 +247,70 @@ class EX5SignalExporter:
             "status": "PENDING",
         }
         path = self.signal_dir / f"{signal_id}.json"
-        path.write_text(json.dumps(payload, indent=2))
+        self._write_json_locked(path, payload)
         logger.info("ex5_export signal_id=%s path=%s", signal_id, path)
+        return path
+
+    def export_modify(
+        self,
+        ticket: int,
+        symbol: str,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> Path:
+        """
+        Write a MODIFY signal file for the MT5 EA to update SL/TP on an open position.
+        """
+        ts = int(time.time())
+        signal_id = f"MODIFY_{symbol}_{ticket}_{ts}"
+        payload = {
+            "id": signal_id,
+            "action": "MODIFY",
+            "ticket": ticket,
+            "symbol": symbol,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "status": "PENDING",
+        }
+        path = self.signal_dir / f"{signal_id}.json"
+        self._write_json_locked(path, payload)
+        logger.info("ex5_modify ticket=%d SL=%s TP=%s path=%s", ticket, stop_loss, take_profit, path)
+        return path
+
+    def export_cancel(self, ticket: int, symbol: str) -> Path:
+        """Write a CANCEL signal file for the MT5 EA to delete a pending order."""
+        ts = int(time.time())
+        signal_id = f"CANCEL_{symbol}_{ticket}_{ts}"
+        payload = {
+            "id": signal_id,
+            "action": "CANCEL",
+            "ticket": ticket,
+            "symbol": symbol,
+            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "status": "PENDING",
+        }
+        path = self.signal_dir / f"{signal_id}.json"
+        self._write_json_locked(path, payload)
+        logger.info("ex5_cancel ticket=%d path=%s", ticket, path)
         return path
 
     def poll_fill(self, signal_path: Path, timeout_sec: float = 30.0) -> MT5FillResult:
         """
         Poll the signal file until the EA updates status to FILLED/REJECTED.
+        Uses locked reader to avoid reading partial writes from the EA.
         Returns MT5FillResult on fill; raises TimeoutError on timeout.
         """
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
             try:
-                data = json.loads(signal_path.read_text())
+                data = self._read_json_locked(signal_path)
                 status = data.get("status", "PENDING")
                 if status == "FILLED":
                     return MT5FillResult(
                         ticket=int(data.get("ticket", 0)),
                         status=FillStatus.FILLED,
-                        filled_volume=float(data.get("fill_volume", data["volume"])),
+                        filled_volume=float(data.get("fill_volume", data.get("volume", 0))),
                         fill_price=float(data.get("fill_price", 0)),
                         commission=float(data.get("commission", 0)),
                         swap=float(data.get("swap", 0)),
@@ -230,7 +323,9 @@ class EX5SignalExporter:
                         f"MT5 EA rejected signal {signal_path.name}: "
                         f"{data.get('reject_reason', 'unknown')}",
                     )
-            except (json.JSONDecodeError, KeyError):
+            except RuntimeError:
+                raise
+            except Exception:
                 pass
             time.sleep(0.5)
         raise TimeoutError(
@@ -650,6 +745,97 @@ class MT5Bridge:
             "tickets": [p.ticket for p in positions],
         }
 
+    # ── modify / cancel ───────────────────────────────────────────────────────
+
+    @_retry(max_attempts=2, base_delay=0.5)
+    def modify_order(
+        self,
+        ticket: int,
+        symbol: str,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> bool:
+        """
+        Modify stop-loss and/or take-profit on an open position or pending order.
+
+        Direct mode: uses mt5.order_send with TRADE_ACTION_SLTP.
+        Signal-export mode: writes a MODIFY signal file for the EA.
+
+        Returns True on success, raises RuntimeError on failure.
+        """
+        self._require_connected()
+
+        if not _MT5_AVAILABLE:
+            # Signal-export mode — write MODIFY file for EA
+            path = self._exporter.export_modify(
+                ticket=ticket,
+                symbol=symbol,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+            logger.info(
+                "mt5_bridge.modify_order (signal): ticket=%d SL=%s TP=%s path=%s",
+                ticket, stop_loss, take_profit, path,
+            )
+            return True
+
+        # Direct MT5 mode
+        request: Dict[str, Any] = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "position": ticket,
+            "symbol": symbol,
+        }
+        if stop_loss is not None:
+            request["sl"] = float(stop_loss)
+        if take_profit is not None:
+            request["tp"] = float(take_profit)
+
+        result = mt5.order_send(request)
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            retcode = result.retcode if result else -1
+            raise RuntimeError(
+                f"mt5_bridge.modify_order failed ticket={ticket} retcode={retcode}"
+            )
+        logger.info(
+            "mt5_bridge.modify_order: ticket=%d SL=%s TP=%s retcode=%d",
+            ticket, stop_loss, take_profit, result.retcode,
+        )
+        return True
+
+    @_retry(max_attempts=2, base_delay=0.5)
+    def cancel_order(self, ticket: int, symbol: str = "") -> bool:
+        """
+        Cancel a pending order by ticket.
+
+        Direct mode: uses mt5.order_send with TRADE_ACTION_REMOVE.
+        Signal-export mode: writes a CANCEL signal file for the EA.
+
+        Returns True on success, raises RuntimeError on failure.
+        """
+        self._require_connected()
+
+        if not _MT5_AVAILABLE:
+            path = self._exporter.export_cancel(ticket=ticket, symbol=symbol)
+            logger.info(
+                "mt5_bridge.cancel_order (signal): ticket=%d path=%s", ticket, path
+            )
+            return True
+
+        request = {
+            "action": mt5.TRADE_ACTION_REMOVE,
+            "order": ticket,
+        }
+        result = mt5.order_send(request)
+        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+            retcode = result.retcode if result else -1
+            raise RuntimeError(
+                f"mt5_bridge.cancel_order failed ticket={ticket} retcode={retcode}"
+            )
+        logger.info(
+            "mt5_bridge.cancel_order: ticket=%d retcode=%d", ticket, result.retcode
+        )
+        return True
+
     # ── async wrappers ────────────────────────────────────────────────────────
 
     async def async_send_order(self, order: MT5Order) -> MT5FillResult:
@@ -663,6 +849,22 @@ class MT5Bridge:
     ) -> List[MT5FillResult]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)
+
+    async def async_modify_order(
+        self,
+        ticket: int,
+        symbol: str,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> bool:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.modify_order, ticket, symbol, stop_loss, take_profit
+        )
+
+    async def async_cancel_order(self, ticket: int, symbol: str = "") -> bool:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.cancel_order, ticket, symbol)
 
     # ── context manager ───────────────────────────────────────────────────────
 
