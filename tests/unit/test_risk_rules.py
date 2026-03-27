@@ -215,19 +215,19 @@ class TestMlRouter:
             pytest.skip("ML router not importable")
 
     def test_accuracy_returns_200(self, client):
-        res = client.get("/ml/accuracy")
+        res = client.get("/api/ml/accuracy")
         assert res.status_code == 200
         data = res.json()
         assert "accuracy" in data
         assert "model_id" in data
 
     def test_models_returns_list(self, client):
-        res = client.get("/ml/models")
+        res = client.get("/api/ml/models")
         assert res.status_code == 200
         assert isinstance(res.json(), list)
 
     def test_predict_returns_direction(self, client):
-        res = client.post("/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50})
+        res = client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50})
         assert res.status_code == 200
         data = res.json()
         assert data["direction"] in ("BUY", "SELL", "HOLD")
@@ -235,5 +235,5 @@ class TestMlRouter:
 
     def test_predict_invalid_symbol_still_returns(self, client):
         """Even unknown symbols must return a valid response (fallback)."""
-        res = client.post("/ml/predict/UNKNOWN", json={})
+        res = client.post("/api/ml/predict/UNKNOWN", json={})
         assert res.status_code == 200

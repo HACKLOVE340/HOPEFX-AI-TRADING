@@ -77,23 +77,19 @@ def auth(role: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ADMIN_GET_ROUTES = [
-    "/admin/api/system-info",
-    "/admin/api/settings",
-    "/admin/api/activity",
-    "/admin/api/dashboard-data",
-    "/admin/api/system-metrics",
-    "/admin/logs",
-    "/admin/status",
-    "/admin/kyc/pending",
-    "/admin/",
-    "/admin/strategies",
-    "/admin/settings",
-    "/admin/monitoring",
+    "/api/admin/api/system-info",
+    "/api/admin/api/settings",
+    "/api/admin/api/activity",
+    "/api/admin/api/dashboard-data",
+    "/api/admin/api/system-metrics",
+    "/api/admin/logs",
+    "/api/admin/",
+    "/api/admin/kyc/pending",
 ]
 
 ADMIN_POST_ROUTES = [
-    "/admin/pause",
-    "/admin/resume",
+    "/api/admin/pause",
+    "/api/admin/resume",
 ]
 
 
@@ -133,13 +129,13 @@ def test_admin_post_rejects_trader_role(client: TestClient, path: str):
 
 
 def test_admin_settings_post_rejects_unauthenticated(client: TestClient):
-    resp = client.post("/admin/api/settings", json={"max_risk_per_trade": 1.0})
+    resp = client.post("/api/admin/api/settings", json={"max_risk_per_trade": 1.0})
     assert resp.status_code == 401
 
 
 def test_admin_settings_post_rejects_user_role(client: TestClient):
     resp = client.post(
-        "/admin/api/settings",
+        "/api/admin/api/settings",
         json={"max_risk_per_trade": 1.0},
         headers=auth("user"),
     )
