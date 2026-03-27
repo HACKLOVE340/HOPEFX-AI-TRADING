@@ -135,10 +135,9 @@ class TestStartupValidator:
     def test_passes_with_valid_env(self):
         from config.startup_validator import validate_environment
         env = {
-            "SECRET_KEY": "a" * 32,
-            "DB_PASSWORD": "strongpassword123",
-            "DB_HOST": "localhost",
-            "REDIS_URL": "redis://localhost:6379/0",
+            # Canonical JWT secret key name used by startup_validator
+            "SECURITY_JWT_SECRET": "a" * 32,
+            "APP_ENV": "development",  # skip production-only checks
         }
         with patch.dict(os.environ, env, clear=True):
             # Should not raise

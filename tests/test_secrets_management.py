@@ -128,6 +128,10 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
     lines = [f"{var}={_generate('token48')}" for var, _, _ in REQUIRED_SECRETS]
     env_file.write_text("\n".join(lines) + "\n")
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
+    # Remove all required secrets from the process env so cmd_validate reads
+    # only from the temp file (conftest.py sets SECURITY_JWT_SECRET globally).
+    for var, _, _ in REQUIRED_SECRETS:
+        monkeypatch.delenv(var, raising=False)
 
     rc = cmd_validate(_FakeArgs())
     assert rc == 0

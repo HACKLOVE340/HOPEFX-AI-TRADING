@@ -219,9 +219,10 @@ class TestScrubDict:
         assert result["model"] == "gpt-4"
 
     def test_scrubs_token(self):
-        result = self.scrub({"token": "Bearer xyz", "user_id": 42})
+        # user_id is in _SCRUB_FIELDS (account IDs are PII); use a safe field instead
+        result = self.scrub({"token": "Bearer xyz", "request_id": 42})
         assert result["token"] == "[Filtered]"
-        assert result["user_id"] == 42
+        assert result["request_id"] == 42
 
     def test_scrubs_nested_dict(self):
         result = self.scrub({"outer": {"api_key": "secret", "safe": "value"}})

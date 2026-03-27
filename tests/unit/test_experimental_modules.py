@@ -433,11 +433,17 @@ class TestFeatureFlagIntegration:
     def test_experimental_flags_off_by_default(self):
         from config.feature_flags import FeatureFlags
         ff = FeatureFlags()
-        for name in ("RESEARCH_MODULE", "EXPLAINABILITY", "TRANSPARENCY_REPORTS",
-                     "TEAMS_MODULE", "NOCODE_BUILDER", "REPLAY_ENGINE", "ML_PREDICTIONS"):
+        # ML_PREDICTIONS was promoted to STABLE/on in V15 — excluded from this check.
+        experimental_off = (
+            "RESEARCH_MODULE", "EXPLAINABILITY", "TRANSPARENCY_REPORTS",
+            "TEAMS_MODULE", "NOCODE_BUILDER", "REPLAY_ENGINE",
+        )
+        for name in experimental_off:
             assert getattr(ff, name) is False, (
                 f"Experimental flag {name} should be off by default"
             )
+        # ML_PREDICTIONS is now STABLE and on by default
+        assert ff.ML_PREDICTIONS is True, "ML_PREDICTIONS should be on (STABLE)"
 
     def test_env_var_enables_research(self):
         from config.feature_flags import FeatureFlags

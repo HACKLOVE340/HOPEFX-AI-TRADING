@@ -341,8 +341,11 @@ class SimulatedBroker:
             base_slippage = 0.00015
             if price > 0 and bar_high > bar_low:
                 bar_range_pct = (bar_high - bar_low) / price
-                # Normalise: a 0.015% range gives multiplier=1.0
-                multiplier = bar_range_pct / base_slippage
+                # Normalise against a 1% reference range so the [0.5, 3.0] clamp
+                # spans the realistic distribution of bar widths.
+                # A 0.1% bar → multiplier≈0.5 (min); a 2%+ bar → multiplier≈3.0 (max).
+                ref_range_pct = 0.01  # 1% reference bar range
+                multiplier = bar_range_pct / ref_range_pct
                 multiplier = max(0.5, min(3.0, multiplier))
             else:
                 multiplier = 1.0
