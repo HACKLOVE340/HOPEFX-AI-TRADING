@@ -93,7 +93,13 @@ async def macro_snapshot():
     yield spread, CPI, and a 0-100 regime score for gold.
 
     Data is cached for 1 hour to avoid hammering FRED.
+
+    Fallback chain (never returns 503):
+    1. FRED live fetch (requires FRED_API_KEY for best rate limits)
+    2. MacroStore cached values from a previous successful fetch
+    3. Hardcoded neutral baseline with source='static_fallback'
     """
+    # 1. Try FRED live fetch
     try:
         from data.feeds.macro import get_macro_feed
 
@@ -101,13 +107,64 @@ async def macro_snapshot():
         snap = await feed.refresh_async()
         n = _push_snapshot_to_store(snap)
         snap["macro_store_series_updated"] = n
+        snap["source"] = "fred_live"
         return snap
-    except Exception as exc:
-        logger.warning("macro snapshot failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro data unavailable: {exc}",
-        )
+    except Exception as fred_exc:
+        logger.warning("FRED fetch failed, trying MacroStore cache: %s", fred_exc)
+
+    # 2. MacroStore cached values
+    store = _get_macro_store()
+    if store is not None and len(store) > 0:
+        try:
+            snap_store = store.snapshot()
+            snap: Dict[str, Any] = {
+                "dxy": None,
+                "yield_10y": None,
+                "yield_2y": None,
+                "yield_spread": None,
+                "cpi_latest": None,
+                "cpi_yoy_pct": None,
+                "macro_regime_score": 50,
+                "macro_stance": "neutral",
+                "refreshed_at": datetime.now(timezone.utc).isoformat(),
+                "source": "macro_store_cache",
+            }
+            key_map = {
+                "dxy": "dxy",
+                "us10y": "yield_10y",
+                "us2y": "yield_2y",
+                "yield_spread": "yield_spread",
+                "cpi_surprise": "cpi_latest",
+            }
+            for store_key, snap_key in key_map.items():
+                entry = snap_store.get(store_key)
+                if entry and entry.get("value") is not None:
+                    snap[snap_key] = entry["value"]
+            y10 = snap.get("yield_10y")
+            y2 = snap.get("yield_2y")
+            if y10 is not None and y2 is not None:
+                snap["yield_spread"] = round(y10 - y2, 4)
+            return snap
+        except Exception as store_exc:
+            logger.warning("MacroStore fallback failed: %s", store_exc)
+
+    # 3. Static neutral baseline — always succeeds, clearly labelled
+    logger.info(
+        "Returning static macro fallback. Set FRED_API_KEY in .env for live data."
+    )
+    return {
+        "dxy": 104.2,
+        "yield_10y": 4.35,
+        "yield_2y": 4.82,
+        "yield_spread": -0.47,
+        "cpi_latest": 314.2,
+        "cpi_yoy_pct": 2.8,
+        "macro_regime_score": 52,
+        "macro_stance": "neutral",
+        "refreshed_at": datetime.now(timezone.utc).isoformat(),
+        "source": "static_fallback",
+        "note": "Live FRED data unavailable. Set FRED_API_KEY in .env for real values.",
+    }
 
 
 @router.get(
@@ -127,11 +184,12 @@ async def macro_refresh():
         n = _push_snapshot_to_store(snapshot)
         return {"status": "refreshed", "macro_store_series_updated": n, **snapshot}
     except Exception as exc:
-        logger.warning("macro refresh failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro refresh failed: {exc}",
-        )
+        logger.warning("macro refresh failed (FRED unavailable): %s", exc)
+        return {
+            "status": "unavailable",
+            "error": str(exc),
+            "note": "FRED fetch failed. Set FRED_API_KEY in .env for live data.",
+        }
 
 
 @router.get("/features", summary="Macro features for ML inference")
