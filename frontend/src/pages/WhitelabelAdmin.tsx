@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ const CreateModal: React.FC<{
     if (!name.trim() || !email.trim()) { setError('Name and email are required.'); return; }
     setSaving(true);
     try {
-      const res = await authApi.post('/api/whitelabel/tenants', {
+      const res = await api.post('/api/whitelabel/tenants', {
         name, owner_email: email,
         trial_days: parseInt(trialDays) || 0,
         features, primary_color: color, logo_url: logoUrl,
@@ -249,7 +249,7 @@ const WhitelabelAdmin: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authApi.get('/api/whitelabel/tenants');
+      const res = await api.get('/api/whitelabel/tenants');
       setTenants(res.data.tenants || []);
     } catch {
       // Demo fallback
@@ -277,16 +277,16 @@ const WhitelabelAdmin: React.FC = () => {
   const handleAction = async (id: string, action: string) => {
     if (action === 'delete' && !window.confirm('Delete this tenant? This cannot be undone.')) return;
     try {
-      if (action === 'activate') await authApi.post(`/api/whitelabel/tenants/${id}/activate`);
-      else if (action === 'suspend') await authApi.post(`/api/whitelabel/tenants/${id}/suspend`);
-      else if (action === 'delete') await authApi.delete(`/api/whitelabel/tenants/${id}`);
+      if (action === 'activate') await api.post(`/api/whitelabel/tenants/${id}/activate`);
+      else if (action === 'suspend') await api.post(`/api/whitelabel/tenants/${id}/suspend`);
+      else if (action === 'delete') await api.delete(`/api/whitelabel/tenants/${id}`);
       await load();
     } catch { /* ignore */ }
   };
 
   const handleApiKey = async (id: string) => {
     try {
-      const res = await authApi.post(`/api/whitelabel/tenants/${id}/api-key`);
+      const res = await api.post(`/api/whitelabel/tenants/${id}/api-key`);
       setApiKeyMsg(`API Key (copy now — shown once): ${res.data.api_key}`);
       await load();
     } catch {

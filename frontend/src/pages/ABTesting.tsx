@@ -3,7 +3,7 @@
  * Run two strategies in parallel on paper, auto-select winner.
  */
 import React, { useEffect, useState, useCallback } from 'react';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 interface ABResult {
   test_id: string;
@@ -57,7 +57,7 @@ const ABTesting: React.FC = () => {
 
   const load = useCallback(async () => {
     try {
-      const res = await authApi.get('/api/ab-test');
+      const res = await api.get('/api/ab-test');
       setTests(res.data.tests || []);
     } catch { setTests([]); }
   }, []);
@@ -67,7 +67,7 @@ const ABTesting: React.FC = () => {
   const run = async () => {
     setRunning(true);
     try {
-      const res = await authApi.post('/api/ab-test/start', {
+      const res = await api.post('/api/ab-test/start', {
         strategy_a: stratA, strategy_b: stratB,
         symbol, duration_days: parseInt(days) || 30,
       });

@@ -214,9 +214,9 @@ const s: Record<string, React.CSSProperties> = {
   logo:    { fontSize: 28, fontWeight: 800, color: '#f8fafc', textAlign: 'center', letterSpacing: -0.5 },
   tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
-    textAlign: 'center', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+    fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
     border: '1px solid', borderRadius: 20, padding: '4px 14px',
-    display: 'inline-block', width: 'fit-content', margin: '0 auto 24px',
+    width: 'fit-content', margin: '0 auto 24px',
     display: 'flex', justifyContent: 'center',
   } as React.CSSProperties,
   form:       { display: 'flex', flexDirection: 'column', gap: 14 },
