@@ -303,7 +303,7 @@ class MobileAPIServer:
                         }
                     )
 
-                logger.info("Mobile user registered: %s", user.email)
+                logger.info("Mobile user registered: user_id=%s", user_id)
                 return AuthToken(
                     access_token=self._generate_access_token(user_id),
                     refresh_token=self._generate_refresh_token(user_id),
@@ -327,7 +327,7 @@ class MobileAPIServer:
                 ):
                     raise HTTPException(status_code=401, detail="Invalid credentials")
 
-                logger.info("Mobile user logged in: %s", email)
+                logger.info("Mobile user logged in: user_id=%s", user["user_id"])
                 return AuthToken(
                     access_token=self._generate_access_token(user["user_id"]),
                     refresh_token=self._generate_refresh_token(user["user_id"]),
