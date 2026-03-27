@@ -53,15 +53,48 @@ class CreateAlertIn(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+_fallback_engine = None  # lazy-init when startup factory hasn't run
+
+
 def _get_engine(request: Request):
-    """Retrieve the AlertEngine from app state, or raise 503."""
+    """
+    Retrieve the AlertEngine.
+
+    Check order:
+    1. app_state.alert_engine  — set by the startup factory (primary)
+    2. request.app.state.alert_engine — legacy location
+    3. Lazy-init a minimal AlertEngine so the endpoint never 503s
+    """
+    global _fallback_engine
+
+    # 1. app_state (primary — set by startup_factories.init_alert_engine)
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        engine = getattr(app_state, "alert_engine", None)
+        if engine is not None:
+            return engine
+    except Exception:
+        pass
+
+    # 2. request.app.state (legacy)
     engine = getattr(request.app.state, "alert_engine", None)
-    if engine is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Alert engine not initialised. Check server logs.",
-        )
-    return engine
+    if engine is not None:
+        return engine
+
+    # 3. Lazy-init a minimal AlertEngine so the endpoint is always usable
+    if _fallback_engine is None:
+        try:
+            from notifications.alert_engine import AlertEngine  # noqa: PLC0415
+
+            _fallback_engine = AlertEngine(config={})
+            logger.info("AlertEngine: lazy-initialised fallback instance")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Alert engine unavailable: {exc}",
+            )
+    return _fallback_engine
 
 
 def _serialise(alert) -> Dict[str, Any]:
