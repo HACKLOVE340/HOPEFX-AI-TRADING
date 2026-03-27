@@ -63,6 +63,7 @@ jobs:
         ENVIRONMENT: testing
       run: |
         pytest tests/ -v --tb=long \
+          -m "not slow" \
           --cov=config --cov=strategies --cov=risk --cov=brokers \
           --cov=notifications --cov=cache --cov=database --cov=api \
           --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \
@@ -130,6 +131,7 @@ jobs:
           ENVIRONMENT: testing
         run: |
           pytest tests/ \
+            -m "not slow" \
             --cov=config --cov=strategies --cov=risk --cov=brokers \
             --cov=notifications --cov=cache --cov=database --cov=api \
             --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \

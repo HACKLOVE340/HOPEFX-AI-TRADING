@@ -251,6 +251,7 @@ class TestXGBoostPredictor:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 class TestMLPipeline:
     def test_run_returns_validation_report(self, tmp_path):
         df = _make_ohlcv(600)

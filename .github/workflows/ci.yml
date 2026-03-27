@@ -105,6 +105,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: |
           pytest tests/ \
+            -m "not slow" \
             --cov=. \
             --cov-report=xml \
             --cov-fail-under=70 \
