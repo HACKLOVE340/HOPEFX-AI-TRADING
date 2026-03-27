@@ -55,7 +55,14 @@ def SECRET_KEY() -> str:  # noqa: N802
 
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
+# Read ACCESS_TOKEN_EXPIRE_MINUTES (same var as auth/service.py) so both
+# code paths produce tokens with identical expiry. JWT_EXPIRE_MINUTES is
+# accepted as a legacy alias; ACCESS_TOKEN_EXPIRE_MINUTES takes precedence.
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES")
+    or os.environ.get("JWT_EXPIRE_MINUTES")
+    or "15"
+)
 
 # Password hashing — bcrypt with SHA-256 pre-hash to handle passwords >72 bytes.
 #
