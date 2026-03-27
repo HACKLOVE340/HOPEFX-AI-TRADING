@@ -20,7 +20,7 @@ groups:
           description: "Error rate is {{ $value }} errors per second"
 
       - alert: HopeFXCircuitBreakerOpen
-        expr: hopefx_circuit_breaker_state == 1
+        expr: hopefx_broker_circuit_state == 2
         for: 0m
         labels:
           severity: critical
