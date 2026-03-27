@@ -3,7 +3,19 @@ HOPEFX Test Configuration
 Pytest fixtures and test utilities
 """
 
+import os
 import tempfile
+
+# Set test environment before any app module is imported.
+# APP_ENV=test makes startup_validator skip production-only checks
+# (DB_HOST, REDIS_URL, CONFIG_ENCRYPTION_KEY, etc.) so the app can
+# be imported in CI without a full infrastructure stack.
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault(
+    "SECURITY_JWT_SECRET",
+    "test-only-jwt-secret-key-minimum-32-chars!!",
+)
+
 import pytest
 import asyncio
 import numpy as np
