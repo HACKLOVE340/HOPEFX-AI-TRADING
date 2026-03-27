@@ -228,7 +228,15 @@ async def _validate_order(order: "OrderRequest") -> None:
     except HTTPException:
         raise
     except Exception as pf_exc:
-        logger.warning("Prop-firm guard error (allowing trade): %s", pf_exc)
+        logger.error(
+            "Prop-firm guard error (blocking order for safety): %s",
+            pf_exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Prop-firm rule check unavailable — order rejected for safety",
+        )
 
 
 async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
