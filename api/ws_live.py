@@ -15,11 +15,35 @@ Message format (server → client):
   { "type": "signal",          "data": Signal    }
   { "type": "account_update",  "data": AccountMetrics }
   { "type": "heartbeat" }
+  { "type": "error",           "code": str, "message": str }
 
 Message format (client → server):
+  { "type": "auth",        "token": "Bearer <jwt>" }
   { "type": "subscribe",   "channels": ["prices", "signals", ...] }
   { "type": "ping" }
   { "type": "unsubscribe", "channels": [...] }
+
+Authentication
+--------------
+Clients MUST send an auth message within AUTH_TIMEOUT_SECONDS of connecting,
+or the connection is closed with code 4001.
+
+  { "type": "auth", "token": "Bearer eyJ..." }
+
+After successful auth, the connection is associated with a user_id so
+per-user channels (e.g. "account", "positions") only deliver that user's data.
+
+Heartbeat
+---------
+Server sends { "type": "heartbeat" } every HEARTBEAT_INTERVAL_SECONDS.
+Clients should respond with { "type": "ping" } to confirm liveness.
+Connections that miss HEARTBEAT_MISS_LIMIT consecutive heartbeats are closed.
+
+Reconnection
+------------
+On disconnect the client should reconnect with exponential back-off.
+The server assigns a new connection_id on each reconnect — no session state
+is preserved server-side (stateless design).
 """
 
 from __future__ import annotations
@@ -28,6 +52,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import random
 from datetime import datetime, timezone
 from typing import Dict, Optional, Set
@@ -41,17 +66,47 @@ router = APIRouter(tags=["WebSocket Live"])
 # Tracks last mid price per symbol for change_pct calculation
 _last_mid: dict[str, float] = {}
 
+# ── Auth / heartbeat config ───────────────────────────────────────────────────
+AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
+HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
+HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
+# Set to "false" to allow unauthenticated connections (dev/demo mode)
+WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+
+def _validate_ws_token(token: str) -> Optional[dict]:
+    """Validate a Bearer token from a WS auth message. Returns payload or None."""
+    if token.startswith("Bearer "):
+        token = token[7:]
+    try:
+        from auth.jwt import decode_access_token
+        return decode_access_token(token)
+    except Exception as exc:
+        logger.debug("WS token validation failed: %s", exc)
+        return None
+
+
 # ─── Connection registry ──────────────────────────────────────────────────────
 
 
 class LiveConnectionManager:
-    """Manages all active /ws/live connections."""
+    """
+    Manages all active /ws/live connections.
+
+    Per-connection state:
+      - WebSocket object
+      - Subscribed channels (set of strings)
+      - Authenticated user_id (None = unauthenticated)
+      - Heartbeat miss counter
+    """
 
     def __init__(self) -> None:
-        # connection_id → WebSocket
         self._connections: Dict[str, WebSocket] = {}
-        # connection_id → subscribed channels
         self._subscriptions: Dict[str, Set[str]] = {}
+        # connection_id → user_id (None until auth message received)
+        self._user_ids: Dict[str, Optional[str]] = {}
+        # connection_id → heartbeat miss count
+        self._hb_misses: Dict[str, int] = {}
         self._counter = 0
 
     def _new_id(self) -> str:
@@ -63,12 +118,27 @@ class LiveConnectionManager:
         cid = self._new_id()
         self._connections[cid] = ws
         self._subscriptions[cid] = set()
+        self._user_ids[cid] = None
+        self._hb_misses[cid] = 0
         logger.info("WS connected: %s  total=%d", cid, len(self._connections))
         return cid
+
+    def authenticate(self, cid: str, user_id: str) -> None:
+        """Associate a connection with an authenticated user."""
+        self._user_ids[cid] = user_id
+        logger.info("WS authenticated: %s  user=%s", cid, user_id)
+
+    def is_authenticated(self, cid: str) -> bool:
+        return self._user_ids.get(cid) is not None
+
+    def get_user_id(self, cid: str) -> Optional[str]:
+        return self._user_ids.get(cid)
 
     def disconnect(self, cid: str) -> None:
         self._connections.pop(cid, None)
         self._subscriptions.pop(cid, None)
+        self._user_ids.pop(cid, None)
+        self._hb_misses.pop(cid, None)
         logger.info("WS disconnected: %s  total=%d", cid, len(self._connections))
 
     def subscribe(self, cid: str, channels: list[str]) -> None:
@@ -79,34 +149,59 @@ class LiveConnectionManager:
         if cid in self._subscriptions:
             self._subscriptions[cid].difference_update(channels)
 
+    def record_pong(self, cid: str) -> None:
+        """Reset heartbeat miss counter when client responds."""
+        self._hb_misses[cid] = 0
+
+    def record_hb_miss(self, cid: str) -> int:
+        """Increment miss counter. Returns new count."""
+        self._hb_misses[cid] = self._hb_misses.get(cid, 0) + 1
+        return self._hb_misses[cid]
+
     async def send(self, cid: str, msg: dict) -> None:
         ws = self._connections.get(cid)
         if ws:
             try:
                 await ws.send_text(json.dumps(msg))
             except Exception as exc:
-                logger.debug(
-                    "WebSocket send failed for %s, disconnecting: %s",
-                    cid,
-                    exc,
-                )
+                logger.debug("WS send failed for %s: %s", cid, exc)
                 self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
-        """Send to all connections subscribed to channel."""
+        """
+        Send to all connections subscribed to channel.
+        Empty subscription set = subscribed to all channels.
+        """
         dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
-            if channel in subs or not subs:  # empty subs = subscribed to all
+            if channel in subs or not subs:
                 ws = self._connections.get(cid)
                 if ws:
                     try:
                         await ws.send_text(json.dumps(msg))
                     except Exception as exc:
-                        logger.debug(
-                            "WebSocket broadcast failed for %s, marking dead: %s",
-                            cid,
-                            exc,
-                        )
+                        logger.debug("WS broadcast failed for %s: %s", cid, exc)
+                        dead.append(cid)
+        for cid in dead:
+            self.disconnect(cid)
+
+    async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
+        """
+        Send a message only to connections belonging to a specific user.
+        Used for per-user channels: account updates, position fills, alerts.
+        """
+        dead: list[str] = []
+        for cid, uid in list(self._user_ids.items()):
+            if uid != user_id:
+                continue
+            subs = self._subscriptions.get(cid, set())
+            if channel in subs or not subs:
+                ws = self._connections.get(cid)
+                if ws:
+                    try:
+                        await ws.send_text(json.dumps(msg))
+                    except Exception as exc:
+                        logger.debug("WS user-send failed for %s: %s", cid, exc)
                         dead.append(cid)
         for cid in dead:
             self.disconnect(cid)
@@ -358,11 +453,32 @@ async def _price_broadcaster() -> None:
 
 
 async def _heartbeat_broadcaster() -> None:
-    """Send heartbeat every 30 seconds."""
+    """
+    Send heartbeat every HEARTBEAT_INTERVAL_SECONDS to all connections.
+    Connections that miss HEARTBEAT_MISS_LIMIT consecutive heartbeats are closed.
+    """
     while True:
-        await asyncio.sleep(30)
-        if _manager.connection_count > 0:
-            await _manager.broadcast("", {"type": "heartbeat"})
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+        if _manager.connection_count == 0:
+            continue
+        dead: list[str] = []
+        for cid in list(_manager._connections.keys()):
+            misses = _manager.record_hb_miss(cid)
+            if misses > HEARTBEAT_MISS_LIMIT:
+                logger.info(
+                    "WS closing stale connection %s (missed %d heartbeats)", cid, misses
+                )
+                dead.append(cid)
+            else:
+                await _manager.send(cid, {"type": "heartbeat"})
+        for cid in dead:
+            ws = _manager._connections.get(cid)
+            if ws:
+                try:
+                    await ws.close(code=1001, reason="heartbeat timeout")
+                except Exception:
+                    pass
+            _manager.disconnect(cid)
 
 
 def start_broadcasters() -> None:
@@ -382,26 +498,90 @@ def start_broadcasters() -> None:
 async def ws_live(websocket: WebSocket) -> None:
     """
     Main live WebSocket endpoint.
-    Streams price ticks, positions, signals, account updates.
+
+    Auth flow:
+      1. Server accepts connection and sends { "type": "connected" }
+      2. Client sends { "type": "auth", "token": "Bearer <jwt>" }
+         within AUTH_TIMEOUT_SECONDS, or connection is closed (4001).
+      3. Server sends { "type": "auth_ok", "user_id": "..." }
+      4. Client subscribes to channels and receives live data.
+
+    Heartbeat:
+      Server sends { "type": "heartbeat" } every HEARTBEAT_INTERVAL_SECONDS.
+      Client should respond with { "type": "ping" } to reset the miss counter.
+      After HEARTBEAT_MISS_LIMIT missed heartbeats the connection is closed (1001).
     """
     cid = await _manager.connect(websocket)
 
-    # Send connection ack
-    await _manager.send(
-        cid,
-        {
-            "type": "connected",
-            "connection_id": cid,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        },
-    )
+    await _manager.send(cid, {
+        "type": "connected",
+        "connection_id": cid,
+        "auth_required": WS_AUTH_REQUIRED,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
 
+    # ── Auth gate ─────────────────────────────────────────────────────────────
+    if WS_AUTH_REQUIRED:
+        try:
+            raw = await asyncio.wait_for(
+                websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS
+            )
+            msg = json.loads(raw)
+            if msg.get("type") != "auth":
+                await _manager.send(cid, {
+                    "type": "error",
+                    "code": "AUTH_REQUIRED",
+                    "message": "First message must be {type: auth, token: ...}",
+                })
+                await websocket.close(code=4001)
+                _manager.disconnect(cid)
+                return
+
+            payload = _validate_ws_token(msg.get("token", ""))
+            if payload is None:
+                await _manager.send(cid, {
+                    "type": "error",
+                    "code": "AUTH_FAILED",
+                    "message": "Invalid or expired token",
+                })
+                await websocket.close(code=4001)
+                _manager.disconnect(cid)
+                return
+
+            user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
+            _manager.authenticate(cid, user_id)
+            await _manager.send(cid, {
+                "type": "auth_ok",
+                "user_id": user_id,
+                "role": payload.get("role", "trader"),
+            })
+
+        except asyncio.TimeoutError:
+            await _manager.send(cid, {
+                "type": "error",
+                "code": "AUTH_TIMEOUT",
+                "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
+            })
+            await websocket.close(code=4001)
+            _manager.disconnect(cid)
+            return
+        except (WebSocketDisconnect, Exception) as exc:
+            logger.debug("WS auth phase error [%s]: %s", cid, exc)
+            _manager.disconnect(cid)
+            return
+
+    # ── Main message loop ─────────────────────────────────────────────────────
     try:
         while True:
             raw = await websocket.receive_text()
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
+                await _manager.send(cid, {
+                    "type": "error",
+                    "code": "INVALID_JSON",
+                    "message": "Message must be valid JSON",
+                })
                 continue
 
             msg_type = msg.get("type", "")
@@ -409,20 +589,47 @@ async def ws_live(websocket: WebSocket) -> None:
             if msg_type == "subscribe":
                 channels = msg.get("channels", [])
                 _manager.subscribe(cid, channels)
-                await _manager.send(
-                    cid,
-                    {
-                        "type": "subscribed",
-                        "channels": channels,
-                    },
-                )
+                await _manager.send(cid, {
+                    "type": "subscribed",
+                    "channels": channels,
+                })
 
             elif msg_type == "unsubscribe":
                 channels = msg.get("channels", [])
                 _manager.unsubscribe(cid, channels)
+                await _manager.send(cid, {
+                    "type": "unsubscribed",
+                    "channels": channels,
+                })
 
             elif msg_type == "ping":
+                # Client responding to heartbeat — reset miss counter
+                _manager.record_pong(cid)
                 await _manager.send(cid, {"type": "pong"})
+
+            elif msg_type == "auth":
+                # Re-auth (token refresh) — validate new token
+                payload = _validate_ws_token(msg.get("token", ""))
+                if payload:
+                    user_id = str(payload.get("sub", "unknown"))
+                    _manager.authenticate(cid, user_id)
+                    await _manager.send(cid, {
+                        "type": "auth_ok",
+                        "user_id": user_id,
+                    })
+                else:
+                    await _manager.send(cid, {
+                        "type": "error",
+                        "code": "AUTH_FAILED",
+                        "message": "Invalid or expired token",
+                    })
+
+            else:
+                await _manager.send(cid, {
+                    "type": "error",
+                    "code": "UNKNOWN_MESSAGE_TYPE",
+                    "message": f"Unknown message type: {msg_type}",
+                })
 
     except WebSocketDisconnect:
         _manager.disconnect(cid)
@@ -447,20 +654,39 @@ async def ws_live_stats() -> dict:
 # ─── Push helpers (called from trading/signal routers) ───────────────────────
 
 
-async def push_position_update(position: dict) -> None:
-    await _manager.broadcast("positions", {"type": "position_update", "data": position})
+async def push_position_update(position: dict, user_id: Optional[str] = None) -> None:
+    """Push a position update. If user_id is given, only that user receives it."""
+    msg = {"type": "position_update", "data": position}
+    if user_id:
+        await _manager.send_to_user(user_id, "positions", msg)
+    else:
+        await _manager.broadcast("positions", msg)
 
 
-async def push_position_close(position_id: str) -> None:
-    await _manager.broadcast(
-        "positions",
-        {"type": "position_close", "data": {"id": position_id}},
-    )
+async def push_position_close(position_id: str, user_id: Optional[str] = None) -> None:
+    msg = {"type": "position_close", "data": {"id": position_id}}
+    if user_id:
+        await _manager.send_to_user(user_id, "positions", msg)
+    else:
+        await _manager.broadcast("positions", msg)
 
 
 async def push_signal(signal: dict) -> None:
+    """Signals are broadcast to all subscribers (not user-specific)."""
     await _manager.broadcast("signals", {"type": "signal", "data": signal})
 
 
-async def push_account_update(account: dict) -> None:
-    await _manager.broadcast("account", {"type": "account_update", "data": account})
+async def push_account_update(account: dict, user_id: Optional[str] = None) -> None:
+    """Account updates are per-user — equity/balance is private."""
+    msg = {"type": "account_update", "data": account}
+    if user_id:
+        await _manager.send_to_user(user_id, "account", msg)
+    else:
+        await _manager.broadcast("account", msg)
+
+
+async def push_alert(alert: dict, user_id: str) -> None:
+    """Price alerts are always per-user."""
+    await _manager.send_to_user(user_id, "alerts", {
+        "type": "alert_triggered", "data": alert,
+    })
