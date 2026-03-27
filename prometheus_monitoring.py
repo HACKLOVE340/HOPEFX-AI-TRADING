@@ -110,7 +110,83 @@ async def _sync_loop(interval: float) -> None:
         except Exception as exc:
             logger.warning("prometheus_monitoring sync error: %s", exc)
 
+        # Sync trading-specific gauges (kill switch, broker, drawdown)
+        _sync_trading_gauges()
+
         await asyncio.sleep(interval)
+
+
+def _sync_trading_gauges() -> None:
+    """
+    Sync kill switch, broker, and risk-manager state into Prometheus gauges.
+
+    Called from _sync_loop() on every scrape cycle so alerting rules have
+    up-to-date values. Failures are logged but never propagate — a metrics
+    sync error must never affect trading.
+    """
+    if not _PROM_AVAILABLE:
+        return
+    try:
+        # ── Kill switch ───────────────────────────────────────────────────────
+        from app import kill_switch as _ks  # noqa: PLC0415
+
+        ks_gauge = _get_or_create_gauge(
+            "hopefx_kill_switch_active",
+            "1 when the system kill switch is active (all trading halted), 0 otherwise",
+        )
+        if ks_gauge is not None:
+            ks_gauge.set(1 if _ks.is_active() else 0)
+    except Exception as _exc:
+        logger.debug("kill_switch gauge sync failed: %s", _exc)
+
+    try:
+        # ── Broker connectivity ───────────────────────────────────────────────
+        from app import app_state as _app_state  # noqa: PLC0415
+
+        broker = getattr(_app_state, "broker", None)
+        broker_gauge = _get_or_create_gauge(
+            "hopefx_broker_connected",
+            "1 when the broker connection is active, 0 otherwise",
+        )
+        if broker_gauge is not None and broker is not None:
+            connected = getattr(broker, "connected", True)
+            broker_gauge.set(1 if connected else 0)
+    except Exception as _exc:
+        logger.debug("broker_connected gauge sync failed: %s", _exc)
+
+    try:
+        # ── Risk manager drawdown ─────────────────────────────────────────────
+        from app import app_state as _app_state  # noqa: PLC0415
+
+        rm = getattr(_app_state, "risk_manager", None)
+        if rm is not None:
+            dd_gauge = _get_or_create_gauge(
+                "hopefx_current_drawdown_pct",
+                "Current portfolio drawdown as a fraction (0.10 = 10%)",
+            )
+            max_dd_gauge = _get_or_create_gauge(
+                "hopefx_max_drawdown_pct",
+                "Configured maximum drawdown limit as a fraction",
+            )
+            daily_loss_gauge = _get_or_create_gauge(
+                "hopefx_daily_loss_pct",
+                "Current daily loss as a fraction of daily starting equity",
+            )
+            daily_limit_gauge = _get_or_create_gauge(
+                "hopefx_daily_loss_limit_pct",
+                "Configured daily loss limit as a fraction",
+            )
+            if dd_gauge is not None:
+                dd_gauge.set(getattr(rm, "current_drawdown", 0.0))
+            if max_dd_gauge is not None:
+                max_dd_gauge.set(getattr(rm.config, "max_drawdown_pct", 0.10))
+            if daily_loss_gauge is not None and getattr(rm, "daily_starting_equity", 0) > 0:
+                daily_loss_pct = abs(rm.daily_pnl) / rm.daily_starting_equity
+                daily_loss_gauge.set(daily_loss_pct)
+            if daily_limit_gauge is not None:
+                daily_limit_gauge.set(getattr(rm.config, "daily_loss_limit_pct", 0.05))
+    except Exception as _exc:
+        logger.debug("risk_manager gauge sync failed: %s", _exc)
 
 
 def setup_prometheus_monitoring(app: "FastAPI") -> None:

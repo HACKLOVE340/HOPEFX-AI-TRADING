@@ -1,0 +1,188 @@
+groups:
+  - name: hopefx_critical
+    rules:
+
+      # ── System availability ────────────────────────────────────────────────
+
+      - alert: HopeFXDown
+        expr: up{job="hopefx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX API is down"
+          description: >
+            The HOPEFX trading API has been unreachable for more than 1 minute.
+            No orders can be placed or monitored. Immediate investigation required.
+
+      - alert: HopeFXHighErrorRate
+        expr: >
+          rate(http_requests_total{job="hopefx", status=~"5.."}[5m])
+          /
+          rate(http_requests_total{job="hopefx"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX error rate > 5%"
+          description: >
+            More than 5% of HTTP requests are returning 5xx errors over the
+            last 5 minutes. Current rate: {{ $value | humanizePercentage }}.
+
+      # ── Kill switch ────────────────────────────────────────────────────────
+
+      - alert: KillSwitchActive
+        expr: hopefx_kill_switch_active == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX kill switch is ACTIVE — all trading halted"
+          description: >
+            The system-wide kill switch has been activated. All new order
+            submissions are blocked. Reason recorded in application logs.
+            Deactivate via POST /api/kill-switch/deactivate with the
+            HOPEFX_KILL_SWITCH_TOKEN once the underlying issue is resolved.
+
+      - alert: KillSwitchActiveExtended
+        expr: hopefx_kill_switch_active == 1
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HOPEFX kill switch active for >30 minutes"
+          description: >
+            The kill switch has been active for more than 30 minutes.
+            Trading remains fully halted. Escalate immediately if this
+            was not a planned maintenance window.
+
+      # ── Drawdown / risk ────────────────────────────────────────────────────
+
+      - alert: DrawdownAmberAlert
+        expr: hopefx_current_drawdown_pct >= (hopefx_max_drawdown_pct * 0.60)
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drawdown at 60% of limit (amber alert)"
+          description: >
+            Current drawdown {{ $value | humanizePercentage }} has reached
+            60% of the configured maximum. Monitor closely — the kill switch
+            will activate automatically at 100% of the limit.
+
+      - alert: DrawdownRedAlert
+        expr: hopefx_current_drawdown_pct >= hopefx_max_drawdown_pct
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Max drawdown breached — kill switch should be active"
+          description: >
+            Current drawdown {{ $value | humanizePercentage }} has reached
+            or exceeded the configured maximum. The kill switch should have
+            activated automatically. Verify kill_switch_active=1.
+
+      - alert: DailyLossLimitBreached
+        expr: hopefx_daily_loss_pct >= hopefx_daily_loss_limit_pct
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily loss limit breached"
+          description: >
+            Daily loss {{ $value | humanizePercentage }} has reached the
+            configured daily limit. Trading should be halted automatically.
+
+      # ── Broker connectivity ────────────────────────────────────────────────
+
+      - alert: BrokerDisconnected
+        expr: hopefx_broker_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IBKR broker connection lost"
+          description: >
+            The IBKR broker connection has been down for more than 2 minutes.
+            Open positions cannot be managed and no new orders can be routed.
+            Check TWS/Gateway status and network connectivity.
+
+      - alert: BrokerReconnectExhausted
+        expr: hopefx_broker_reconnect_attempts >= 5
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IBKR broker reconnect attempts exhausted"
+          description: >
+            The broker has failed to reconnect after {{ $value }} attempts.
+            Manual intervention required — restart TWS/Gateway or check
+            API credentials.
+
+      # ── Order flow ─────────────────────────────────────────────────────────
+
+      - alert: OrderRateLimitExceeded
+        expr: rate(hopefx_order_rate_limit_hits_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Order rate limit being hit"
+          description: >
+            Users are hitting the order rate limit. This may indicate a
+            runaway strategy or a misconfigured client. Review ORDER_RATE_LIMIT.
+
+      - alert: NoOrdersPlaced
+        expr: >
+          rate(hopefx_orders_placed_total[1h]) == 0
+          and hopefx_kill_switch_active == 0
+          and hopefx_broker_connected == 1
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No orders placed in 2 hours (system healthy)"
+          description: >
+            No orders have been placed in the last 2 hours despite the broker
+            being connected and the kill switch being inactive. This may be
+            expected outside market hours but warrants review during sessions.
+
+      # ── Infrastructure ─────────────────────────────────────────────────────
+
+      - alert: HighMemoryUsage
+        expr: >
+          process_resident_memory_bytes{job="hopefx"}
+          / (1024 * 1024 * 1024) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HOPEFX memory usage > 2 GB"
+          description: >
+            Process memory has exceeded 2 GB for 5 minutes.
+            Current: {{ $value | humanize }}B. Check for memory leaks.
+
+      - alert: SlowAPIResponse
+        expr: >
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job="hopefx"}[5m])
+          ) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HOPEFX p95 API latency > 2s"
+          description: >
+            95th percentile API response time is {{ $value | humanizeDuration }}.
+            Order placement latency above 2s is unacceptable for live trading.
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: hopefx_db_pool_checked_out >= hopefx_db_pool_size
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool exhausted"
+          description: >
+            All {{ $value }} database connections are checked out. New requests
+            will queue or fail. Increase DB_POOL_SIZE or investigate slow queries.
