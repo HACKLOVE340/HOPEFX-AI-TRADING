@@ -692,6 +692,7 @@ async def _execute_if_approved(
     app_state: Any,
     symbol: str,
     signal_payload: Dict[str, Any],
+    data: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Apply risk filter and execute an auto-trade if approved.
@@ -734,7 +735,17 @@ async def _execute_if_approved(
         return
 
     # Risk gate + position sizing
-    quantity: float = 1000.0  # minimal fallback lot
+    # No fallback lot — if the risk manager is absent we cannot size the
+    # trade safely, so we block it entirely.
+    if risk_manager is None:
+        logger.error(
+            "Auto-trade blocked for %s: risk_manager is not initialised. "
+            "Cannot size position without risk controls.",
+            symbol,
+        )
+        return
+
+    quantity: float = 0.0
     if risk_manager is not None:
         try:
             account_info: Dict[str, Any] = await broker.get_account_info()
@@ -786,9 +797,10 @@ async def _execute_if_approved(
             if sl_price is None or tp_price is None:
                 # Compute ATR from recent highs/lows if available in data
                 try:
-                    highs = data.get("highs", [])  # noqa: F821
-                    lows = data.get("lows", [])  # noqa: F821
-                    closes_list = data.get("prices", [entry])  # noqa: F821
+                    _data = data or {}
+                    highs = _data.get("highs", [])
+                    lows = _data.get("lows", [])
+                    closes_list = _data.get("prices", [entry])
                     if len(highs) >= 14 and len(lows) >= 14:
                         import numpy as _np
 
@@ -838,7 +850,7 @@ async def _execute_if_approved(
             try:
                 import numpy as _np2
 
-                _prices = data.get("prices", [entry])  # noqa: F821
+                _prices = (data or {}).get("prices", [entry])
                 if len(_prices) >= 20:
                     _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
                     _vol = float(_np2.std(_rets)) * (252**0.5)
@@ -972,4 +984,4 @@ async def _tick(app_state: Any) -> None:
         await _publish_and_broadcast(app_state, symbol, signal_payload)
 
         # 6. Auto-trade if enabled and risk approved
-        await _execute_if_approved(app_state, symbol, signal_payload)
+        await _execute_if_approved(app_state, symbol, signal_payload, data=data)
