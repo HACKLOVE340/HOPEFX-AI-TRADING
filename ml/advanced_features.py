@@ -281,7 +281,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_trend_features(df: pd.DataFrame, smoke: bool = False) -> pd.DataFrame:
     """ADX, DI+/DI-, z-score mean reversion, multiple MA distances."""
     d = df.copy()
     h, l, c = d["high"], d["low"], d["close"]  # noqa: E741
@@ -311,8 +311,11 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
         sig = c.rolling(w).std().replace(0, np.nan)
         d[f"zscore_{w}"] = ((c - mu) / sig).fillna(0.0)
 
-    # Hurst exponent proxy
-    d["hurst_proxy"] = _rolling_hurst(c, 40)
+    # Hurst exponent proxy — skipped in smoke mode (expensive rolling apply)
+    if smoke:
+        d["hurst_proxy"] = 0.5
+    else:
+        d["hurst_proxy"] = _rolling_hurst(c, 40)
 
     # Stochastic oscillator
     for w in [14]:
@@ -583,6 +586,7 @@ def build_advanced_features(
     horizon: int = 1,
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
+    smoke: bool = False,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build the full advanced feature matrix and target.
@@ -594,6 +598,7 @@ def build_advanced_features(
     horizon            : Prediction horizon in bars
     use_filtered_target: If True, drop low-conviction bars from training
     min_move_atr       : Minimum move (ATR units) to include a bar
+    smoke              : Skip expensive computations (e.g. rolling Hurst) for CI speed
 
     Returns
     -------
@@ -616,7 +621,7 @@ def build_advanced_features(
     d = add_volatility_regime(d)
     d = add_microstructure_features(d)
     d = add_calendar_features(d)
-    d = add_trend_features(d)
+    d = add_trend_features(d, smoke=smoke)
     d = add_intermarket_features(d, macro_df=macro_df)
     d = add_cot_proxy_features(d, macro_df=macro_df)
 
