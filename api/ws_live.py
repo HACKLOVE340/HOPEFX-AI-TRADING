@@ -252,8 +252,66 @@ def _make_tick(symbol: str) -> dict:
 _broadcast_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
 
 
-async def _price_broadcaster() -> None:
-    """Broadcast price ticks every second while connections exist."""
+async def _eventbus_tick_broadcaster() -> None:
+    """
+    Subscribe to hopefx:tick on the EventBus and forward every validated
+    tick to all WebSocket clients subscribed to the 'prices' channel.
+
+    Falls back to the GBM simulator when the EventBus is in degraded mode
+    (Redis unavailable) so the dashboard always shows something.
+    """
+    try:
+        from core.event_bus import bus, CH_TICK
+        await bus.connect()
+        logger.info("WS live: connected to EventBus — streaming real ticks.")
+        async for msg in bus.subscribe(CH_TICK):
+            if _manager.connection_count == 0:
+                continue
+            tick = {
+                "type":      "price_tick",
+                "symbol":    msg.get("symbol", "XAU/USD"),
+                "bid":       msg.get("bid"),
+                "ask":       msg.get("ask"),
+                "mid":       msg.get("mid"),
+                "spread":    msg.get("spread"),
+                "timestamp": msg.get("timestamp"),
+            }
+            await _manager.broadcast("prices", tick)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "WS live: EventBus tick stream failed (%s) — falling back to GBM simulator.", exc
+        )
+        await _price_broadcaster_sim()
+
+
+async def _eventbus_signal_broadcaster() -> None:
+    """
+    Subscribe to hopefx:signal and forward signal_events to clients
+    subscribed to the 'signals' channel.
+    """
+    try:
+        from core.event_bus import bus, CH_SIGNAL
+        await bus.connect()
+        async for msg in bus.subscribe(CH_SIGNAL):
+            if msg.get("type") != "signal_event":
+                continue
+            if _manager.connection_count == 0:
+                continue
+            signal = {
+                "type":       "signal",
+                "symbol":     msg.get("symbol"),
+                "direction":  msg.get("direction"),
+                "confidence": msg.get("confidence"),
+                "mid":        msg.get("mid"),
+                "timestamp":  msg.get("timestamp"),
+            }
+            await _manager.broadcast("signals", signal)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("WS live: EventBus signal stream failed: %s", exc)
+
+
+async def _price_broadcaster_sim() -> None:
+    """GBM simulator fallback — used when EventBus is unavailable."""
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -261,6 +319,11 @@ async def _price_broadcaster() -> None:
         for symbol in _SYMBOLS:
             tick = _make_tick(symbol)
             await _manager.broadcast("prices", tick)
+
+
+async def _price_broadcaster() -> None:
+    """Broadcast price ticks — tries EventBus first, falls back to GBM."""
+    await _eventbus_tick_broadcaster()
 
 
 async def _heartbeat_broadcaster() -> None:
@@ -277,7 +340,8 @@ def start_broadcasters() -> None:
     loop = asyncio.get_event_loop()
     loop.create_task(_price_broadcaster())
     loop.create_task(_heartbeat_broadcaster())
-    logger.info("WS live broadcasters started")
+    loop.create_task(_eventbus_signal_broadcaster())
+    logger.info("WS live broadcasters started (EventBus + GBM fallback)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
