@@ -3,70 +3,114 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import requests
-import psutil
+"""
+health/health_check_service.py
+==============================
+Lightweight health-check service used by /health endpoints and the
+aggregate_health_status() utility.
+
+Dependencies (db_connection, cache_service, broker) are injected via the
+constructor so aggregate_health_status() never calls methods on None.
+When a dependency is not provided its check reports "unconfigured" rather
+than False, which is distinct from a genuine failure.
+"""
+
 import json
+import logging
+from typing import Any, Optional, Union
+
+import psutil
+import requests
+
+logger = logging.getLogger(__name__)
 
 
 class HealthCheckService:
-    def __init__(self):
-        self.alerts = []
+    def __init__(
+        self,
+        db_connection: Optional[Any] = None,
+        cache_service: Optional[Any] = None,
+        broker: Optional[Any] = None,
+        api_url: str = "http://localhost:8000",
+    ):
+        self.db_connection = db_connection
+        self.cache_service = cache_service
+        self.broker = broker
+        self.api_url = api_url
+        self.alerts: list = []
 
-    def check_api(self, url):
+    # ── individual checks ────────────────────────────────────────────────────
+
+    def check_api(self, url: str) -> bool:
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=5)
             return response.status_code == 200
-        except Exception as e:
-            self.alerts.append(f"API check failed: {str(e)}")
+        except Exception as exc:
+            self.alerts.append(f"API check failed: {exc}")
             return False
 
-    def check_database(self, db_connection):
-        # Dummy check for database connection
+    def check_database(self, db_connection: Optional[Any] = None) -> Union[bool, str]:
+        conn = db_connection or self.db_connection
+        if conn is None:
+            return "unconfigured"
         try:
-            db_connection.ping()
+            conn.ping()
             return True
-        except Exception as e:
-            self.alerts.append(f"Database check failed: {str(e)}")
+        except Exception as exc:
+            self.alerts.append(f"Database check failed: {exc}")
             return False
 
-    def check_cache(self, cache_service):
-        # Dummy check for cache service
+    def check_cache(self, cache_service: Optional[Any] = None) -> Union[bool, str]:
+        svc = cache_service or self.cache_service
+        if svc is None:
+            return "unconfigured"
         try:
-            cache_service.ping()
+            svc.ping()
             return True
-        except Exception as e:
-            self.alerts.append(f"Cache check failed: {str(e)}")
+        except Exception as exc:
+            self.alerts.append(f"Cache check failed: {exc}")
             return False
 
-    def check_broker_connections(self, broker):
-        # Check broker connection
+    def check_broker_connections(self, broker: Optional[Any] = None) -> Union[bool, str]:
+        b = broker or self.broker
+        if b is None:
+            return "unconfigured"
         try:
-            broker.check_connection()
+            b.check_connection()
             return True
-        except Exception as e:
-            self.alerts.append(f"Broker connection check failed: {str(e)}")
+        except Exception as exc:
+            self.alerts.append(f"Broker connection check failed: {exc}")
             return False
 
-    def check_market_data_feed(self, market_data_url):
-        return self.check_api(market_data_url)
+    def check_market_data_feed(self, market_data_url: Optional[str] = None) -> bool:
+        return self.check_api(market_data_url or self.api_url)
 
-    def monitor_system_resources(self):
-        cpu = psutil.cpu_percent()
-        memory = psutil.virtual_memory().percent
-        disk = psutil.disk_usage("/").percent
-        return {"cpu": cpu, "memory": memory, "disk": disk}
-
-    def aggregate_health_status(self):
-        # Connections are injected at runtime; use None as safe default
-        status = {
-            "api": self.check_api("http://localhost:8000"),
-            "db": self.check_database(None),
-            "cache": self.check_cache(None),
-            "broker": self.check_broker_connections(None),
-            "market_data": self.check_market_data_feed("http://localhost:8000"),
-            "system_resources": self.monitor_system_resources(),
+    def monitor_system_resources(self) -> dict:
+        return {
+            "cpu": psutil.cpu_percent(),
+            "memory": psutil.virtual_memory().percent,
+            "disk": psutil.disk_usage("/").percent,
         }
-        status["alerts"] = self.alerts
+
+    # ── aggregate ────────────────────────────────────────────────────────────
+
+    def aggregate_health_status(self) -> dict:
+        """
+        Return a status dict for all subsystems.
+
+        Values are True (healthy), False (failed), or "unconfigured"
+        (dependency not injected — not a failure, just not checked).
+        """
+        self.alerts = []  # reset per call
+        status = {
+            "api": self.check_api(self.api_url),
+            "db": self.check_database(),
+            "cache": self.check_cache(),
+            "broker": self.check_broker_connections(),
+            "market_data": self.check_market_data_feed(),
+            "system_resources": self.monitor_system_resources(),
+            "alerts": self.alerts,
+        }
         return status
 
 
