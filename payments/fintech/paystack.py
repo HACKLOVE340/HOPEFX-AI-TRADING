@@ -9,6 +9,7 @@ Paystack Payment Integration
 Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Optional
@@ -25,7 +26,12 @@ class PaystackClient:
     FEE_CAP_NGN = Decimal("100.00")  # ₦100 cap
 
     def __init__(self, secret_key: Optional[str] = None):
-        self.secret_key = secret_key or "sk_test_placeholder"
+        if not secret_key:
+            raise ValueError(
+                "PaystackClient requires a secret key. "
+                "Set the PAYSTACK_SECRET_KEY environment variable."
+            )
+        self.secret_key = secret_key
         self.payments = {}
 
     def initialize_payment(
@@ -88,4 +94,10 @@ class PaystackClient:
             raise
 
 
-paystack_client = PaystackClient()
+# Module-level singleton — only created when the env var is present so that
+# importing this module in environments without payment credentials does not
+# raise at import time. Callers must check for None before using.
+_paystack_secret = os.getenv("PAYSTACK_SECRET_KEY")
+paystack_client: Optional[PaystackClient] = (
+    PaystackClient(_paystack_secret) if _paystack_secret else None
+)
