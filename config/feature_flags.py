@@ -311,10 +311,12 @@ class FeatureFlags:
 
     ML_PREDICTIONS = _FeatureDef(
         "FEATURE_ML_PREDICTIONS",
-        default=False,
-        status=FeatureStatus.BETA,
+        default=True,
+        status=FeatureStatus.STABLE,
         description="ML ensemble price-direction predictions (XGBoost/LightGBM/RF). "
-        "Off by default until models reach production accuracy threshold.",
+        "Requires ml/saved_models/advanced_oos.pkl (68% OOS accuracy, p=0.0000, "
+        "122 stationary features). Falls back to rule-based signal when model file "
+        "is absent.",
     )
     ML_FEATURE_ENGINEERING = _FeatureDef(
         "FEATURE_ML_FEATURE_ENGINEERING",
