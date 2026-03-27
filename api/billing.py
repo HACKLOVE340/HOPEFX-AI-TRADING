@@ -6,12 +6,13 @@
 """
 Billing & Growth API
 
-Wires together Tasks 25–28:
-  Task 25 — POST /api/webhook/stripe          (Stripe billing webhook)
-  Task 26 — POST /api/affiliate/generate-link (referral link generation)
-  Task 27 — POST /api/auth/activate-free-tier (auto-assign FREE on signup)
-  Task 28 — POST /api/payments/flutterwave/init   (Flutterwave checkout)
-             POST /api/payments/flutterwave/verify (verify transaction)
+Wires together Tasks 25–29:
+  Task 25 — POST /api/billing/webhook/stripe           (Stripe billing webhook)
+  Task 26 — POST /api/billing/affiliate/generate-link  (referral link generation)
+  Task 27 — POST /api/billing/auth/activate-free-tier  (auto-assign FREE on signup)
+  Task 28 — POST /api/billing/payments/flutterwave/init    (Flutterwave checkout)
+             POST /api/billing/payments/flutterwave/verify  (verify transaction)
+  Task 29 — GET  /api/billing/subscription             (current user subscription)
 """
 
 from __future__ import annotations
@@ -27,7 +28,9 @@ from pydantic import BaseModel, Field
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["Billing"])
+
+# All routes are mounted under /api/billing — no /api/ prefix in path strings.
+router = APIRouter(prefix="/api/billing", tags=["Billing"])
 
 # ── Lazy imports (graceful if packages missing) ───────────────────────────────
 
@@ -51,11 +54,75 @@ def _get_flutterwave():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Task 29 — GET /api/billing/subscription
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/subscription")
+async def get_subscription(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the authenticated user's active subscription.
+
+    Returns tier, status, renewal date, and feature flags.
+    Falls back to FREE tier defaults when no subscription record exists.
+    """
+    try:
+        mgr = _get_subscription_manager()
+        sub = mgr.get_user_subscription(user.sub)
+    except Exception as exc:
+        logger.warning("subscription_manager unavailable: %s", exc)
+        sub = None
+
+    if sub is None:
+        return {
+            "tier": "free",
+            "status": "active",
+            "subscription_id": None,
+            "start_date": None,
+            "end_date": None,
+            "auto_renew": False,
+            "features": ["paper_trading"],
+            "upgrade_url": "/subscription",
+        }
+
+    tier_val = sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier)
+    status_val = sub.status.value if hasattr(sub.status, "value") else str(sub.status)
+
+    return {
+        "tier": tier_val,
+        "status": status_val,
+        "subscription_id": sub.subscription_id,
+        "start_date": sub.start_date.isoformat() if sub.start_date else None,
+        "end_date": sub.end_date.isoformat() if sub.end_date else None,
+        "auto_renew": sub.auto_renew,
+        "features": _tier_features(tier_val),
+        "upgrade_url": "/subscription" if tier_val == "free" else None,
+    }
+
+
+def _tier_features(tier: str) -> list:
+    """Map tier name to its feature list."""
+    _map = {
+        "free": ["paper_trading"],
+        "professional": ["paper_trading", "live_trading", "ai_signals", "backtesting"],
+        "enterprise": [
+            "paper_trading",
+            "live_trading",
+            "ai_signals",
+            "backtesting",
+            "api_access",
+            "white_label",
+        ],
+    }
+    return _map.get(tier.lower(), ["paper_trading"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Task 25 — Stripe Webhook
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/api/webhook/stripe", include_in_schema=True)
+@router.post("/webhook/stripe", include_in_schema=True)
 async def stripe_webhook(request: Request):
     """
     Stripe webhook receiver.
@@ -64,7 +131,7 @@ async def stripe_webhook(request: Request):
     invoice.payment_failed.
 
     Configure in Stripe Dashboard → Webhooks → Add endpoint:
-      URL: https://app.hopefx.io/api/webhook/stripe
+      URL: https://app.hopefx.io/api/billing/webhook/stripe
     """
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
@@ -74,10 +141,8 @@ async def stripe_webhook(request: Request):
         result = mgr.handle_stripe_webhook(payload, sig)
         return {"received": True, "result": result}
     except ValueError as exc:
-        # Invalid signature
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
-        # stripe package not installed — log and ack to avoid Stripe retries
         logger.warning(
             "Stripe webhook received but stripe package unavailable: %s",
             exc,
@@ -93,7 +158,7 @@ async def stripe_webhook(request: Request):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/api/affiliate/generate-link")
+@router.post("/affiliate/generate-link")
 async def generate_referral_link(user: TokenPayload = Depends(get_current_user)):
     """
     Get or create the authenticated user's unique referral link.
@@ -103,7 +168,6 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
     """
     mgr = _get_affiliate_manager()
 
-    # get_or_create affiliate account
     affiliate = mgr.get_user_affiliate(user.sub)
     if not affiliate:
         affiliate = mgr.create_affiliate(user_id=user.sub)
@@ -131,7 +195,7 @@ class FreeTierBody(BaseModel):
     ref_code: Optional[str] = None  # optional referral code from signup URL
 
 
-@router.post("/api/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
+@router.post("/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
 async def activate_free_tier(body: FreeTierBody):
     """
     Called immediately after successful registration to assign the FREE tier.
@@ -144,7 +208,6 @@ async def activate_free_tier(body: FreeTierBody):
 
     mgr = _get_subscription_manager()
 
-    # Idempotent — if subscription already exists, return it
     existing = mgr.get_user_subscription(body.user_id)
     if existing:
         return {
@@ -157,7 +220,6 @@ async def activate_free_tier(body: FreeTierBody):
 
     sub = mgr.create_subscription(body.user_id, SubscriptionTier.FREE)
 
-    # Track referral if provided
     if body.ref_code:
         try:
             aff_mgr = _get_affiliate_manager()
@@ -192,7 +254,7 @@ class FlutterwaveVerifyBody(BaseModel):
     tx_ref: str
 
 
-@router.post("/api/payments/flutterwave/init")
+@router.post("/payments/flutterwave/init")
 async def flutterwave_init(
     body: FlutterwaveInitBody,
     user: TokenPayload = Depends(get_current_user),
@@ -223,7 +285,7 @@ async def flutterwave_init(
         raise HTTPException(status_code=500, detail=f"Payment init failed: {exc}")
 
 
-@router.post("/api/payments/flutterwave/verify")
+@router.post("/payments/flutterwave/verify")
 async def flutterwave_verify(
     body: FlutterwaveVerifyBody,
     user: TokenPayload = Depends(get_current_user),
@@ -233,8 +295,6 @@ async def flutterwave_verify(
         flw = _get_flutterwave()
         result = flw.verify_transaction(body.tx_ref)
         if result.get("status") == "verified":
-            # Activate subscription based on amount paid
-            # (full activation logic would map amount → tier)
             return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
         return {
             "verified": False,
@@ -246,7 +306,7 @@ async def flutterwave_verify(
         raise HTTPException(status_code=500, detail=f"Verification failed: {exc}")
 
 
-@router.get("/api/payments/flutterwave/status")
+@router.get("/payments/flutterwave/status")
 async def flutterwave_status():
     """Return whether Flutterwave is configured."""
     key = os.getenv("FLUTTERWAVE_SECRET_KEY", "")
