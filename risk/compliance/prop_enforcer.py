@@ -300,7 +300,7 @@ class PropEnforcer:
                 daily_dd = (self._sod_equity - self._current_equity) / self._sod_equity
                 if daily_dd >= self.cfg.daily_dd:
                     reason = (
-                        f"DAILY_DD breach: {daily_dd*100:.2f}% >= {self.cfg.daily_dd*100:.1f}% limit "
+                        f"DAILY_DD breach: {daily_dd * 100:.2f}% >= {self.cfg.daily_dd * 100:.1f}% limit "
                         f"(SOD={self._sod_equity:.2f} current={self._current_equity:.2f})"
                     )
                     self._trigger_breach(BreachType.DAILY_DD, reason, halt=True)
@@ -313,7 +313,7 @@ class PropEnforcer:
                 ) / self._high_water_mark
                 if total_dd >= self.cfg.max_dd:
                     reason = (
-                        f"TOTAL_DD breach: {total_dd*100:.2f}% >= {self.cfg.max_dd*100:.1f}% limit "
+                        f"TOTAL_DD breach: {total_dd * 100:.2f}% >= {self.cfg.max_dd * 100:.1f}% limit "
                         f"(HWM={self._high_water_mark:.2f} current={self._current_equity:.2f})"
                     )
                     self._trigger_breach(BreachType.TOTAL_DD, reason, halt=True)

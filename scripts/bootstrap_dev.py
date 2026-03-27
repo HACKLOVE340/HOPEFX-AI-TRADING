@@ -35,10 +35,10 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 ENV_PATH = ROOT / ".env"
-DB_PATH  = ROOT / "hopefx.db"
+DB_PATH = ROOT / "hopefx.db"
 
 # ── Default dev credentials (printed to console on first run) ─────────────────
-DEFAULT_ADMIN_EMAIL    = "admin@hopefx.io"
+DEFAULT_ADMIN_EMAIL = "admin@hopefx.io"
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "HopeFX-Admin-2025!"
 
@@ -48,8 +48,8 @@ def _generate_env() -> bool:
     if ENV_PATH.exists():
         return False
 
-    jwt_secret  = secrets.token_urlsafe(48)
-    enc_key     = secrets.token_urlsafe(48)
+    jwt_secret = secrets.token_urlsafe(48)
+    enc_key = secrets.token_urlsafe(48)
     config_salt = secrets.token_hex(16)
 
     content = f"""\
@@ -90,6 +90,7 @@ def _seed_admin() -> None:
     # Load the generated .env so SECURITY_JWT_SECRET is available
     try:
         from dotenv import load_dotenv
+
         load_dotenv(ENV_PATH, override=False)
     except ImportError:
         # Manually load key=value pairs
@@ -149,7 +150,7 @@ def bootstrap(verbose: bool = True) -> None:
         _seed_admin()
         if verbose:
             if created:
-                print(f"  ✅  Admin user seeded")
+                print("  ✅  Admin user seeded")
                 print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
                 print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
                 print(f"      Password : {DEFAULT_ADMIN_PASSWORD}")

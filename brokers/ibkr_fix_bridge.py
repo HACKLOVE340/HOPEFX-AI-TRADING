@@ -144,9 +144,9 @@ class IBKRFIXConfig:
             DataDictionary=FIX44.xml
             ValidateUserDefinedFields=N
             ValidateIncomingMessage=N
-            ResetOnLogon={'Y' if self.reset_on_logon else 'N'}
-            ResetOnLogout={'Y' if self.reset_on_logout else 'N'}
-            ResetOnDisconnect={'Y' if self.reset_on_disconnect else 'N'}
+            ResetOnLogon={"Y" if self.reset_on_logon else "N"}
+            ResetOnLogout={"Y" if self.reset_on_logout else "N"}
+            ResetOnDisconnect={"Y" if self.reset_on_disconnect else "N"}
 
             [SESSION]
             BeginString=FIX.4.4

@@ -697,7 +697,7 @@ def check_phase3_gate() -> Tuple[bool, str]:
                 f"{remaining.days} days remaining (need 90)."
             )
         return True, (
-            f"Phase 3 gate passed: {elapsed.days} days elapsed, " f"{fill_count} fills."
+            f"Phase 3 gate passed: {elapsed.days} days elapsed, {fill_count} fills."
         )
     except ValueError as exc:
         return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"

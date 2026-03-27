@@ -1052,10 +1052,10 @@ def main():
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
         print("  ─── Sharpe SE Gate ────────────────────────────────────────")
         print(
-            f"  N={sg.get('n_trades','?')} OOS trades | SE={sg.get('se','?')} | Gate: {gate_status}"
+            f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}"
         )
-        print(f"  Need N>={sg.get('target_n',600)} for SE<=0.10 (credible Sharpe).")
-        print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010','?')}")
+        print(f"  Need N>={sg.get('target_n', 600)} for SE<=0.10 (credible Sharpe).")
+        print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010', '?')}")
         print("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
         print("  Credible metric: OOS accuracy (binomial p-value above).")
         print("  Do NOT commit live capital until 30+ days paper trading done.")
