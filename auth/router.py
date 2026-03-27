@@ -43,15 +43,26 @@ _auth_service = None
 _AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))  # max attempts
 _AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # per minute
 
+# Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
+# Comma-separated list; defaults to loopback only.
+_TRUSTED_PROXIES: frozenset[str] = frozenset(
+    ip.strip()
+    for ip in os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1").split(",")
+    if ip.strip()
+)
+
 # In-memory fallback: {ip: [timestamp, ...]}
 _ip_windows: dict = defaultdict(list)
 
 
 def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Return the real client IP, honouring X-Forwarded-For only from trusted proxies."""
+    direct_ip = request.client.host if request.client else "unknown"
+    if direct_ip in _TRUSTED_PROXIES:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return direct_ip
 
 
 def _check_ip_rate_limit(ip: str) -> None:
@@ -115,10 +126,8 @@ def _svc():
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Alias for _get_client_ip — used in endpoint handlers."""
+    return _get_client_ip(request)
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
