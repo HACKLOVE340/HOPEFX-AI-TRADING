@@ -124,6 +124,18 @@ class RiskManager:
         self.current_balance: float = initial_balance
         self.peak_balance: float = initial_balance
 
+        # Precise drawdown tracker with trailing HWM and partial fill support
+        try:
+            from risk.drawdown_tracker import DrawdownTracker
+            self._dd_tracker = DrawdownTracker(
+                initial_balance=initial_balance,
+                max_total_dd_pct=self.config.max_drawdown_pct,
+                max_daily_dd_pct=self.config.daily_loss_limit_pct,
+            )
+        except Exception as _dd_err:
+            logger.warning("DrawdownTracker init failed (non-fatal): %s", _dd_err)
+            self._dd_tracker = None
+
         # Position tracking
         self.open_positions: List[Dict] = []
         self.position_history: List[Dict] = []
@@ -162,8 +174,19 @@ class RiskManager:
         # after a drawdown-triggered halt.
         self._restore_halt_state()
 
-    def update_equity(self, equity: float) -> None:
-        """Update equity, drawdown, and rolling returns history."""
+    def update_equity(self, equity: float, balance: Optional[float] = None) -> None:
+        """
+        Update equity, drawdown, and rolling returns history.
+
+        Parameters
+        ----------
+        equity  : Floating equity (open P&L included)
+        balance : Closed balance (no open P&L). Defaults to equity if not given.
+                  Used by DrawdownTracker for "balance" mode (Goat Funded).
+        """
+        if balance is None:
+            balance = equity
+
         # Check for new day
         today = datetime.now(timezone.utc).date()
         if today != self.last_reset_date:
@@ -179,15 +202,108 @@ class RiskManager:
             daily_return = self.daily_pnl / self.daily_starting_equity
             self._returns_history.append(daily_return)
 
-        # Update peak and drawdown
+        # Update peak and drawdown (legacy — kept for backward compat)
         if equity > self.peak_equity:
             self.peak_equity = equity
 
         if self.peak_equity > 0:
             self.current_drawdown = (self.peak_equity - equity) / self.peak_equity
 
-        # Check circuit breakers
+        # Update precise DrawdownTracker (trailing HWM, equity vs balance mode)
+        if self._dd_tracker is not None:
+            try:
+                result = self._dd_tracker.update(equity=equity, balance=balance)
+                # Sync current_drawdown with the precise tracker
+                self.current_drawdown = result.total_drawdown_pct
+                if result.total_breach or result.daily_breach:
+                    reason = (
+                        f"Total drawdown {result.total_drawdown_pct:.2%}"
+                        if result.total_breach
+                        else f"Daily drawdown {result.daily_drawdown_pct:.2%}"
+                    )
+                    self._halt_trading(reason, duration_hours=24)
+                    return
+            except Exception as _exc:
+                logger.debug("DrawdownTracker update failed (non-fatal): %s", _exc)
+
+        # Check circuit breakers (legacy path)
         self._check_circuit_breakers(equity)
+
+    def record_partial_fill(self, pnl: float, balance_after: Optional[float] = None) -> None:
+        """
+        Record a partial fill with its realised P&L.
+
+        Updates the DrawdownTracker so daily drawdown stays accurate across
+        multiple partial fills. Also updates daily_pnl.
+
+        Parameters
+        ----------
+        pnl           : Realised P&L of this fill (negative = loss)
+        balance_after : New closed balance after the fill (optional)
+        """
+        self.daily_pnl += pnl
+        if self._dd_tracker is not None:
+            try:
+                self._dd_tracker.record_fill(pnl=pnl, balance_after=balance_after)
+            except Exception as _exc:
+                logger.debug("DrawdownTracker record_fill failed: %s", _exc)
+        logger.debug(
+            "Partial fill recorded: pnl=%.2f  daily_pnl=%.2f", pnl, self.daily_pnl
+        )
+
+    def check_modify_order(
+        self,
+        current_equity: float,
+        new_stop_loss_distance: float,
+        lots: float,
+        account_balance: Optional[float] = None,
+        pip_value: float = 1.0,
+    ) -> Tuple[bool, str]:
+        """
+        Risk re-check before modifying an order's stop-loss.
+
+        Ensures the new SL does not increase risk beyond the per-trade limit
+        and that we are not already in a drawdown breach.
+
+        Returns (allowed: bool, reason: str)
+        """
+        if account_balance is None:
+            account_balance = current_equity
+
+        if self._dd_tracker is not None:
+            try:
+                return self._dd_tracker.check_modify(
+                    current_equity=current_equity,
+                    new_stop_loss_distance=new_stop_loss_distance,
+                    lots=lots,
+                    account_balance=account_balance,
+                    pip_value=pip_value,
+                )
+            except Exception as _exc:
+                logger.warning("check_modify_order tracker failed: %s", _exc)
+
+        # Fallback: simple risk % check
+        risk_amount = new_stop_loss_distance * lots * pip_value
+        risk_pct = risk_amount / account_balance if account_balance > 0 else 1.0
+        max_risk = self.config.max_position_size_pct
+        if risk_pct > max_risk:
+            return False, f"Modified SL risk {risk_pct:.2%} > max {max_risk:.2%}"
+        return True, "OK"
+
+    def get_drawdown_status(self) -> Dict[str, Any]:
+        """Return current drawdown status from the precise tracker."""
+        if self._dd_tracker is not None:
+            return self._dd_tracker.status()
+        return {
+            "total_hwm": self.peak_equity,
+            "total_drawdown_pct": round(self.current_drawdown * 100, 4),
+            "daily_open": self.daily_starting_equity,
+            "daily_drawdown_pct": round(
+                abs(self.daily_pnl / self.daily_starting_equity * 100)
+                if self.daily_starting_equity > 0 else 0.0, 4
+            ),
+            "drawdown_mode": "equity",
+        }
 
     def _check_circuit_breakers(self, equity: float) -> None:
         """Check and trigger circuit breakers with two-tier drawdown alerts."""
