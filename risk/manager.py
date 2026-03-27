@@ -261,6 +261,10 @@ class RiskManager:
         resume trading after a drawdown-triggered halt.  The halt remains
         active until either the duration expires or _resume_trading() is
         called explicitly.
+
+        Also fires the system-wide KillSwitch so that the trading API
+        immediately blocks new orders — the risk manager's internal halt
+        flag alone is not checked by the order router.
         """
         self._trading_halted = True
         self._halt_reason = reason
@@ -275,6 +279,19 @@ class RiskManager:
             self._halt_until.isoformat() if self._halt_until else "manual resume only",
         )
         self._persist_halt_state()
+
+        # Fire the system-wide kill switch so the order router blocks immediately.
+        # Imported lazily to avoid a circular dependency at module load time.
+        try:
+            from app import kill_switch as _ks  # noqa: PLC0415
+
+            if not _ks.is_active():
+                _ks.activate(f"[risk_manager] {reason}")
+        except Exception as _ks_exc:
+            # Never let kill-switch wiring failure suppress the local halt.
+            logger.error(
+                "Could not fire system kill switch from risk manager: %s", _ks_exc
+            )
 
     def _resume_trading(self):
         """Resume trading and remove the persisted halt state."""
