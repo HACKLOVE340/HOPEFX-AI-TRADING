@@ -3,6 +3,13 @@
 # Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
+
+# Load .env first so all env vars are available before any module imports
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(override=False)
+except ImportError:
+    pass
 # No commercial use without explicit permission.
 """
 HOPEFX AI Trading Framework - Command Line Interface
