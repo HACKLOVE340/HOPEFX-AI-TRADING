@@ -1,7 +1,4 @@
-
-# 10. HTML TEMPLATES - Paper Trading Dashboard and Pricing
-
-paper_trading_html = '''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -272,9 +269,26 @@ paper_trading_html = '''<!DOCTYPE html>
         // API client
         const API_BASE = window.location.origin;
 
+        // ── Auth helpers ──────────────────────────────────────────────────
+        function getToken() {
+            return localStorage.getItem('hopefx_access_token') || '';
+        }
+
+        function authHeaders(extra) {
+            const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+            const tok = getToken();
+            if (tok) h['Authorization'] = 'Bearer ' + tok;
+            return h;
+        }
+
+        // Redirect to login if no token present
+        if (!getToken()) {
+            window.location.replace('/login?next=' + encodeURIComponent(window.location.pathname));
+        }
+
         async function fetchPrices() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/prices`);
+                const res = await fetch(`${API_BASE}/api/trading/prices`, { headers: authHeaders() });
                 const prices = await res.json();
                 updatePrices(prices);
             } catch (e) {
@@ -284,7 +298,7 @@ paper_trading_html = '''<!DOCTYPE html>
 
         async function fetchAccount() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/account`);
+                const res = await fetch(`${API_BASE}/api/trading/account`, { headers: authHeaders() });
                 const account = await res.json();
                 updateAccount(account);
             } catch (e) {
@@ -294,7 +308,7 @@ paper_trading_html = '''<!DOCTYPE html>
 
         async function fetchPositions() {
             try {
-                const res = await fetch(`${API_BASE}/api/trading/positions`);
+                const res = await fetch(`${API_BASE}/api/trading/positions`, { headers: authHeaders() });
                 const positions = await res.json();
                 updatePositions(positions);
             } catch (e) {
@@ -365,7 +379,7 @@ paper_trading_html = '''<!DOCTYPE html>
             try {
                 const res = await fetch(`${API_BASE}/api/trading/order`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: authHeaders(),
                     body: JSON.stringify({
                         symbol: symbol,
                         side: side,
@@ -390,7 +404,8 @@ paper_trading_html = '''<!DOCTYPE html>
         async function closePosition(positionId) {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/positions/${positionId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: authHeaders(),
                 });
                 if (res.ok) {
                     logActivity(`Position closed: ${positionId}`);
@@ -406,7 +421,10 @@ paper_trading_html = '''<!DOCTYPE html>
             if (!confirm('Are you sure? This will close ALL positions immediately!')) return;
 
             try {
-                const res = await fetch(`${API_BASE}/api/trading/emergency-stop`, {method: 'POST'});
+                const res = await fetch(`${API_BASE}/api/trading/emergency-stop`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                });
                 if (res.ok) {
                     alert('Emergency stop triggered!');
                     fetchPositions();
@@ -432,9 +450,3 @@ paper_trading_html = '''<!DOCTYPE html>
     </script>
 </body>
 </html>
-'''
-
-with open(project_root / "templates" / "paper_trading.html", "w") as f:
-    f.write(paper_trading_html)
-
-print("✓ Created templates/paper_trading.html")
