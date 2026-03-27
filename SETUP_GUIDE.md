@@ -1,56 +1,223 @@
-# SETUP GUIDE for HOPEFX-AI-TRADING
+# Setup Guide
 
-## 1. Python Environment Setup  
-### 1.1 Install Python  
-- Download and install the latest version of Python from the [official website](https://www.python.org/downloads/).  
-- Ensure that you select the option to add Python to your system PATH during installation.
+## Requirements
 
-### 1.2 Create a Virtual Environment  
+- Python 3.10, 3.11, or 3.12
+- Git
+- PostgreSQL 16 (production) or SQLite (development — zero config)
+- Redis 7 (optional — rate limiting and caching fall back to in-memory without it)
+
+---
+
+## 1. Clone and install
+
 ```bash
-python -m venv venv
-```  
-- Activate the virtual environment:  
-  - On Windows: `venv\Scripts\activate`  
-  - On macOS/Linux: `source venv/bin/activate`
+git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
+cd HOPEFX-AI-TRADING
 
-### 1.3 Install Required Packages  
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+For CI or lightweight environments (no C extensions, no GPU deps):
+
+```bash
+pip install -r requirements-ci.txt
+```
+
+---
+
+## 2. Environment configuration
+
+```bash
+cp .env.example .env
+```
+
+Minimum required variables (app will not start without these):
+
+```env
+# JWT signing key — generate with:
+# python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECURITY_JWT_SECRET=<48-char random string>
+
+# Application mode: development | production | test
+APP_ENV=development
+```
+
+Additional variables for full functionality:
+
+```env
+# Broker (default: paper trading — no credentials needed)
+BROKER_TYPE=paper                  # paper | oanda | ibkr | ccxt | fix
+
+# OANDA paper trading (free practice account at oanda.com)
+OANDA_API_KEY=your_practice_token
+OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
+OANDA_ENVIRONMENT=practice
+
+# Database (SQLite used automatically in development if unset)
+DATABASE_URL=postgresql://user:pass@localhost:5432/hopefx
+
+# Redis (in-memory fallback used if unset)
+REDIS_URL=redis://localhost:6379/0
+
+# Monitoring (optional but recommended in production)
+SENTRY_DSN=https://...@sentry.io/...
+```
+
+Generate and validate all production secrets at once:
+
+```bash
+python scripts/manage_secrets.py generate
+python scripts/manage_secrets.py validate
+```
+
+---
+
+## 3. Database setup
+
+**Development (SQLite — zero config):**
+
+The app creates `hopefx.db` automatically on first start. No setup needed.
+
+**Production (PostgreSQL):**
+
+```bash
+# Run Alembic migrations
+alembic upgrade head
+```
+
+This applies all 6 migrations (initial schema through watchlists table).
+
+---
+
+## 4. Start the application
+
+```bash
+# Development (auto-reload on file changes)
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+# Or via the CLI
+python cli.py serve
+```
+
+Verify it started:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"healthy","version":"2.0.0","environment":"development",...}
+```
+
+- **Dashboard**: http://localhost:8000/
+- **API explorer**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Metrics**: http://localhost:8000/metrics (Prometheus format)
+
+---
+
+## 5. Run the test suite
+
+```bash
+# Smoke tests (fast, no external deps)
+python -m pytest tests/test_smoke_critical.py -q
+
+# Unit tests
+python -m pytest tests/unit/ -q
+
+# Integration tests (needs app importable)
+python -m pytest tests/integration/ -q
+
+# Full suite
+python -m pytest tests/ -q
+```
+
+---
+
+## 6. Docker Compose (full stack)
+
+Starts app + PostgreSQL 16 + Redis 7 + Prometheus + Grafana:
+
+```bash
+# Copy and fill in required secrets first
+cp .env.example .env
+# Edit .env — set SECURITY_JWT_SECRET, DB_PASSWORD, etc.
+
+docker compose up -d
+```
+
+Services:
+| Service | URL |
+|---------|-----|
+| API + Dashboard | http://localhost:8000 |
+| Grafana | http://localhost:3000 (admin / see GRAFANA_ADMIN_PASSWORD) |
+| Prometheus | http://localhost:9090 |
+
+---
+
+## 7. Kubernetes (Helm)
+
+```bash
+helm install hopefx helm/hopefx/ \
+  --set secrets.jwtSecret="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+  --set secrets.dbPassword="your-db-password"
+```
+
+See `helm/hopefx/values.yaml` for all configurable parameters.
+
+---
+
+## 8. ML model
+
+The production model (`ml/saved_models/advanced_oos.pkl`) is included in the repository.
+
+To retrain from scratch (requires 50 years of XAUUSD data):
+
+```bash
+python ml/train_advanced.py --years 50 --oos-years 3
+```
+
+To verify the model is loaded correctly:
+
+```bash
+curl http://localhost:8000/api/ml/accuracy
+# {"model_id":"advanced_oos","accuracy":0.68,"..."}
+```
+
+---
+
+## Troubleshooting
+
+**App exits immediately with validation errors:**
+
+The startup validator prints exactly what is missing. Common causes:
+- `SECURITY_JWT_SECRET` not set or shorter than 32 characters
+- `SECURITY_JWT_SECRET` still contains `CHANGE_ME`
+
+**`ModuleNotFoundError` on startup:**
+
 ```bash
 pip install -r requirements.txt
 ```
 
-## 2. Credential Configuration  
-### 2.1 API Keys  
-- Obtain API keys from the respective services you will be using (e.g., trading platform).
-- Create a file named `config.py` in the root directory and add your keys:
-```python
-API_KEY = 'your_api_key'
-API_SECRET = 'your_api_secret'
-```
+If using CI requirements: `pip install -r requirements-ci.txt` — this excludes heavy deps (ta-lib, TensorFlow, MetaTrader5).
 
-## 3. Database Initialization  
-### 3.1 Set Up Database  
-- Install your preferred database (e.g., PostgreSQL, MySQL).
-- Create a database named `trading_db`.
-- Run the following SQL commands to create necessary tables:
-```sql
-CREATE TABLE users (id SERIAL PRIMARY KEY, username VARCHAR(50), password VARCHAR(50));
-CREATE TABLE trades (id SERIAL PRIMARY KEY, user_id INT, amount DECIMAL, timestamp TIMESTAMP);
-```
+**Database migration errors:**
 
-## 4. Component Validation Procedures  
-### 4.1 Validate API Connection  
-- Run the following command to test the API connection:
 ```bash
-python validate_api.py
+alembic current    # show current revision
+alembic upgrade head  # apply all pending migrations
 ```
 
-### 4.2 Validate Database Connection  
-- Run the following command to test the database connection:
+**Redis connection refused:**
+
+Redis is optional. The app falls back to in-memory rate limiting and caching automatically. Set `REDIS_URL` only if you have Redis running.
+
+**OANDA connection errors:**
+
 ```bash
-python validate_db.py
+python scripts/validate_oanda.py
 ```
-```
-- Commit message: "Added SETUP_GUIDE.md documentation with setup instructions."  
-- Repository owner: "HACKLOVE340"  
-- Path: "SETUP_GUIDE.md"  
-- Repository name: "HOPEFX-AI-TRADING"
+
+This tests API key validity, account reachability, and XAU_USD pricing availability.
