@@ -854,6 +854,10 @@ async def startup_event():
             except Exception as _e:
                 logger.warning("Failed to push state to %s: %s", _mod_name, _e)
 
+        # Mirror alert_engine onto request.app.state so both lookup paths work
+        if getattr(app_state, "alert_engine", None) is not None:
+            app.state.alert_engine = app_state.alert_engine
+
         apply_persisted_risk_settings()
         app_state.initialized = True
         log_activity("API server ready")
