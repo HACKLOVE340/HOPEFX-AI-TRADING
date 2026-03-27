@@ -116,11 +116,11 @@ class TradeExecutor:
 
             if result.success:
                 self.metrics.get_collector("orders_filled_total").inc(
-                    1, {"symbol": symbol, "type": "market"}
+                    1, {"symbol": symbol, "type": "market"},
                 )
             else:
                 self.metrics.get_collector("orders_rejected_total").inc(
-                    1, {"symbol": symbol, "reason": result.status.value}
+                    1, {"symbol": symbol, "reason": result.status.value},
                 )
 
             # Notify callbacks
@@ -209,7 +209,7 @@ class TradeExecutor:
 
         # Place order through broker
         order = await self.broker.place_market_order(
-            symbol=symbol, side=side, quantity=size
+            symbol=symbol, side=side, quantity=size,
         )
 
         # Update position tracker
@@ -274,7 +274,7 @@ class TradeExecutor:
         if success:
             # Update position tracker
             closed_position = await self.position_tracker.close_position(
-                position_id, position.current_price, commission=position.commission
+                position_id, position.current_price, commission=position.commission,
             )
 
             # Record trade result for strategy performance
@@ -282,7 +282,7 @@ class TradeExecutor:
                 # Notify risk manager of realized P&L
                 self.risk_manager.update_equity(
                     self.risk_manager.daily_starting_equity
-                    + closed_position.realized_pnl
+                    + closed_position.realized_pnl,
                 )
 
         return ExecutionResult(

@@ -184,7 +184,7 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     # Parkinson volatility estimator (uses high-low range, more efficient)
     hl_ratio = (d["high"] / d["low"].replace(0, np.nan)).apply(np.log)
     d["parkinson_vol"] = ((1.0 / (4.0 * np.log(2))) * (hl_ratio**2)).rolling(
-        20
+        20,
     ).mean().apply(np.sqrt).fillna(0.0) * np.sqrt(252)
 
     return d
@@ -208,7 +208,7 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # High-low spread proxy (normalised by close)
     d["hl_spread"] = ((d["high"] - d["low"]) / d["close"].replace(0, np.nan)).fillna(
-        0.0
+        0.0,
     )
 
     # Amihud illiquidity proxy
@@ -345,7 +345,7 @@ def add_trend_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_intermarket_features(
-    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None
+    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     Gold vs DXY, SPX, oil divergence signals.
@@ -401,7 +401,7 @@ def add_intermarket_features(
     if "vix" in macro.columns:
         vix_ret = macro["vix"].pct_change().fillna(0.0)
         d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(
-            float
+            float,
         )
     else:
         d["im_forced_liquidation"] = 0.0
@@ -415,7 +415,7 @@ def add_intermarket_features(
 
 
 def add_cot_proxy_features(
-    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None
+    df: pd.DataFrame, macro_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     Proxy features for speculative positioning and central bank demand.
@@ -459,7 +459,7 @@ def add_cot_proxy_features(
         oi_mom_std = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
         oi_z = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
         d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change() > 0)).astype(
-            float
+            float,
         )
     else:
         for col in [

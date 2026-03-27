@@ -98,7 +98,7 @@ async def status_history():
             {
                 "date": day,
                 "uptime_pct": _uptime_history.get(day, 100.0),
-            }
+            },
         )
     return {"history": history}
 

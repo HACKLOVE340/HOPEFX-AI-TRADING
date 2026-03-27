@@ -187,7 +187,7 @@ class TechnicalFeatureEngineer:
             high_close = np.abs(high - close.shift())
             low_close = np.abs(low - close.shift())
             true_range = pd.concat([high_low, high_close, low_close], axis=1).max(
-                axis=1
+                axis=1,
             )
             df[f"atr_{period}"] = true_range.rolling(window=period).mean()
 
@@ -195,7 +195,7 @@ class TechnicalFeatureEngineer:
         for period in [10, 20, 30]:
             returns = np.log(close / close.shift())
             df[f"volatility_{period}"] = returns.rolling(window=period).std() * np.sqrt(
-                252
+                252,
             )
 
         return df
@@ -301,19 +301,19 @@ class TechnicalFeatureEngineer:
             mean = close.rolling(window=period).mean()
             std = close.rolling(window=period).std()
             df[f"zscore_{period}"] = np.where(
-                std == 0, 0.0, (close - mean) / std.replace(0, np.nan)
+                std == 0, 0.0, (close - mean) / std.replace(0, np.nan),
             )
 
         # Percentile rank
         for period in [20, 50]:
             df[f"percentile_{period}"] = close.rolling(window=period).apply(
-                lambda x: pd.Series(x).rank(pct=True).iloc[-1]
+                lambda x: pd.Series(x).rank(pct=True).iloc[-1],
             )
 
         return df
 
     def create_labels(
-        self, df: pd.DataFrame, method: str = "forward_return", **kwargs
+        self, df: pd.DataFrame, method: str = "forward_return", **kwargs,
     ) -> pd.Series:
         """
         Create labels for supervised learning.

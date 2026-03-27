@@ -35,18 +35,18 @@ logger = logging.getLogger(__name__)
 async def init_env(s: Any) -> bool:
     if not os.getenv("OPENAI_API_KEY"):
         logger.warning(
-            "OPENAI_API_KEY not set — /api/chat will return 503 until configured"
+            "OPENAI_API_KEY not set — /api/chat will return 503 until configured",
         )
     if not os.getenv("CONFIG_ENCRYPTION_KEY"):
         logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)"
+            "CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)",
         )
         os.environ["CONFIG_ENCRYPTION_KEY"] = (
             "dev-key-minimum-32-characters-long-for-testing"
         )
     if not os.getenv("SECURITY_JWT_SECRET"):
         logger.warning(
-            "SECURITY_JWT_SECRET not set — using dev default (not for production)"
+            "SECURITY_JWT_SECRET not set — using dev default (not for production)",
         )
         os.environ["SECURITY_JWT_SECRET"] = (
             "dev-jwt-secret-minimum-32-characters-long!!"
@@ -175,12 +175,12 @@ async def init_hourly_trainer(s: Any) -> Any:
         log_activity(
             f"Hourly ML trainer started — symbols={trainer.symbols} "
             f"interval={trainer.interval_secs}s "
-            f"full_retrain_every={trainer.full_retrain_hrs}h"
+            f"full_retrain_every={trainer.full_retrain_hrs}h",
         )
     else:
         log_activity(
             "Hourly ML trainer disabled (ML_HOURLY_ENABLED not set). "
-            "Set ML_HOURLY_ENABLED=true to enable incremental retraining."
+            "Set ML_HOURLY_ENABLED=true to enable incremental retraining.",
         )
 
     return trainer
@@ -345,11 +345,11 @@ async def init_broker(s: Any) -> Any:
             else:
                 logger.warning(
                     "OANDA connection failed — falling back to paper broker. "
-                    "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT."
+                    "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT.",
                 )
         except Exception as exc:
             logger.warning(
-                "OANDA broker init failed (%s) — falling back to paper broker.", exc
+                "OANDA broker init failed (%s) — falling back to paper broker.", exc,
             )
 
     # ── Paper broker fallback ─────────────────────────────────────────────────
@@ -362,7 +362,7 @@ async def init_broker(s: Any) -> Any:
     if broker_type == "oanda" and (not oanda_token or not oanda_account):
         logger.warning(
             "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN / BROKER_OANDA_ACCOUNT not set. "
-            "Running paper broker. Set both env vars to start the 30-day OANDA run."
+            "Running paper broker. Set both env vars to start the 30-day OANDA run.",
         )
     else:
         logger.info("Paper trading broker connected (balance=%.2f)", bal)
@@ -392,7 +392,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             existing = json.loads(stamp_path.read_text())
             started = existing.get("started_utc", "unknown")
             logger.info(
-                "OANDA paper trading clock already running since %s", started
+                "OANDA paper trading clock already running since %s", started,
             )
         except Exception:
             pass
@@ -431,7 +431,7 @@ async def init_price_engine(s: Any) -> Any:
             "symbols": syms,
             "websocket_url": os.getenv("WS_PRICE_FEED_URL", ""),
             "rest_url": os.getenv("REST_PRICE_FEED_URL", ""),
-        }
+        },
     )
     await pe.start()
     if isinstance(s.broker, _PTB):
@@ -524,7 +524,7 @@ async def init_hopefx_brain(s: Any) -> Any:
             "max_decision_history": 1000,
             "regime_check_interval": 60,
             "circuit_breaker_threshold": 5,
-        }
+        },
     )
     b.inject_components(
         price_engine=s.price_engine,
@@ -580,7 +580,7 @@ async def init_macro_store(s: Any) -> Any:
     # Bootstrap: fetch CSVs if missing or stale (best-effort, non-blocking)
     try:
         n_written = await asyncio.get_event_loop().run_in_executor(
-            None, bootstrap, False
+            None, bootstrap, False,
         )
         logger.info("MacroStore bootstrap: %d series available", n_written)
     except Exception as exc:
@@ -604,7 +604,7 @@ async def init_macro_store(s: Any) -> Any:
         while True:
             # Wait until next 18:00 UTC
             now = __import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
+                __import__("datetime").timezone.utc,
             )
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
             if target <= now:
@@ -614,7 +614,7 @@ async def init_macro_store(s: Any) -> Any:
             await _asyncio.sleep(wait_secs)
             try:
                 await _asyncio.get_event_loop().run_in_executor(
-                    None, daily_refresh
+                    None, daily_refresh,
                 )
                 load_into_store(macro_store)
                 logger.info("MacroStore daily refresh complete")
@@ -625,7 +625,7 @@ async def init_macro_store(s: Any) -> Any:
     s.background_tasks.append(t)
 
     log_activity(
-        f"MacroStore initialised — {n_loaded} series loaded, daily refresh scheduled"
+        f"MacroStore initialised — {n_loaded} series loaded, daily refresh scheduled",
     )
     return macro_store
 
@@ -657,7 +657,7 @@ async def init_mtf_store(s: Any) -> Any:
         await store.bootstrap()
         s.mtf_store = store
         log_activity(
-            f"MTFFusionStore bootstrapped — ready={store.is_ready}"
+            f"MTFFusionStore bootstrapped — ready={store.is_ready}",
         )
         return store
     except Exception as exc:
@@ -712,7 +712,7 @@ async def init_anomaly_store(s: Any) -> Any:
         log_activity(
             f"AnomalyWeightStore initialised (Phase 2) — "
             f"window={store.window_size} refit_every={store.refit_every} "
-            f"warm_start={store._fitted}"
+            f"warm_start={store._fitted}",
         )
         return store
     except Exception as exc:
@@ -770,7 +770,7 @@ async def init_online_learner_store(s: Any) -> Any:
         log_activity(
             f"OnlineLearnerStore initialised (Phase 3) — "
             f"blend=[{primary_w:.1f}/{online_w:.1f}] "
-            f"min_fills={store.min_fills} warm_start={store._ready}"
+            f"min_fills={store.min_fills} warm_start={store._ready}",
         )
         return store
     except Exception as exc:
@@ -830,12 +830,12 @@ async def init_deep_ensemble_store(s: Any) -> Any:
             log_activity(
                 f"DeepEnsembleStore active (Phase 4) — "
                 f"OOS={store.oos_accuracy:.1%} p={store.p_value:.4f} "
-                f"weight={store.deep_weight:.2f}"
+                f"weight={store.deep_weight:.2f}",
             )
         else:
             log_activity(
                 f"DeepEnsembleStore inactive (Phase 4) — "
-                f"{store._gate_failure_reason}"
+                f"{store._gate_failure_reason}",
             )
         return store if activated else None
     except Exception as exc:
@@ -870,7 +870,7 @@ async def init_signal_engine(s: Any) -> Any:
                     "Interval":   f"{os.getenv('SIGNAL_ENGINE_INTERVAL', '300')}s",
                     "Model":      "advanced_oos.pkl (68% OOS accuracy)",
                 },
-            )
+            ),
         )
     except Exception as _disc_exc:
         logger.debug("Discord startup alert skipped: %s", _disc_exc)

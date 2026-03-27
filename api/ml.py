@@ -61,7 +61,7 @@ def _load_model_registry() -> Dict[str, Any]:
                     "file": fname,
                     "size_kb": round(stat.st_size / 1024, 1),
                     "trained_at": datetime.fromtimestamp(
-                        stat.st_mtime, tz=timezone.utc
+                        stat.st_mtime, tz=timezone.utc,
                     ).isoformat(),
                     "available": True,
                 }
@@ -236,7 +236,7 @@ async def get_accuracy():
                     win_rate=float(data.get("win_rate", 0.49)),
                     total_signals=int(data.get("total_signals", 0)),
                     evaluated_at=data.get(
-                        "evaluated_at", datetime.now(timezone.utc).isoformat()
+                        "evaluated_at", datetime.now(timezone.utc).isoformat(),
                     ),
                     note=data.get("note", ""),
                 )
@@ -443,7 +443,7 @@ async def trigger_retrain(
             import sys
 
             script = os.path.join(
-                os.path.dirname(__file__), "..", "ml", "train_with_macro.py"
+                os.path.dirname(__file__), "..", "ml", "train_with_macro.py",
             )
             if os.path.exists(script):
                 subprocess.run(

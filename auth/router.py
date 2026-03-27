@@ -207,7 +207,7 @@ def _get_current_user_id(
         # Misconfigured secret — do not mask as 401
         logger.critical("JWT secret misconfiguration in auth router: %s", exc)
         raise HTTPException(
-            status_code=503, detail="Authentication service misconfigured"
+            status_code=503, detail="Authentication service misconfigured",
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -253,7 +253,7 @@ async def register(body: RegisterRequest, request: Request):
         existing = subscription_manager.get_user_subscription(body.username)
         if not existing:
             subscription_manager.create_subscription(
-                body.username, SubscriptionTier.FREE
+                body.username, SubscriptionTier.FREE,
             )
             logger.info("FREE tier assigned to new user %s", body.username)
     except Exception as _tier_err:
@@ -335,7 +335,7 @@ async def refresh(body: RefreshRequest, request: Request):
 
 @router.post("/logout")
 async def logout(
-    body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Depends(_bearer)
+    body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ):
     """Revoke the current session and blacklist the access token."""
     # Use the bearer token from the Authorization header if not explicitly provided
@@ -399,7 +399,7 @@ async def setup_2fa(user_id: str = Depends(_get_current_user_id)):
 
 @router.post("/2fa/confirm")
 async def confirm_2fa(
-    body: TOTPConfirmRequest, user_id: str = Depends(_get_current_user_id)
+    body: TOTPConfirmRequest, user_id: str = Depends(_get_current_user_id),
 ):
     """Confirm 2FA setup with a valid TOTP code to activate it."""
     ok, msg = _svc().confirm_2fa(user_id, body.code)
@@ -410,7 +410,7 @@ async def confirm_2fa(
 
 @router.post("/2fa/disable")
 async def disable_2fa(
-    body: TOTPDisableRequest, user_id: str = Depends(_get_current_user_id)
+    body: TOTPDisableRequest, user_id: str = Depends(_get_current_user_id),
 ):
     """Disable 2FA. Requires a valid TOTP code to confirm."""
     ok, msg = _svc().disable_2fa(user_id, body.code)

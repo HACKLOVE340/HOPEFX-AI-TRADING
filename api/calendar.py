@@ -221,7 +221,7 @@ def _event_to_out(event: Any) -> EventOut:
 async def get_upcoming(
     hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
     importance: Optional[str] = Query(
-        None, description="Filter: low|medium|high|critical"
+        None, description="Filter: low|medium|high|critical",
     ),
 ) -> List[EventOut]:
     """Return upcoming economic events within the specified window."""
@@ -356,7 +356,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> List[FomcEvent]:
                 minutes_until=max(0, delta_min),
                 is_next=False,
                 is_within_2h=abs(delta_min) <= 120,
-            )
+            ),
         )
 
     # Mark the soonest upcoming as is_next
@@ -385,7 +385,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
         from fastapi import HTTPException
 
         raise HTTPException(
-            status_code=400, detail="outcome must be hawkish | dovish | neutral"
+            status_code=400, detail="outcome must be hawkish | dovish | neutral",
         )
 
     now = datetime.now(timezone.utc)
@@ -401,7 +401,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
             "expires_at": expires.isoformat(),
             "position_size_multiplier": multiplier,
             "notes": body.notes,
-        }
+        },
     )
 
     logger.info(
@@ -450,7 +450,7 @@ async def get_fomc_regime() -> FomcRegimeStatus:
                     "active": False,
                     "outcome": None,
                     "position_size_multiplier": 1.0,
-                }
+                },
             )
 
     return FomcRegimeStatus(**_fomc_regime_override)
@@ -467,7 +467,7 @@ async def clear_fomc_regime() -> dict:
             "expires_at": None,
             "position_size_multiplier": 1.0,
             "notes": "",
-        }
+        },
     )
     try:
         from api.db_store import db_delete

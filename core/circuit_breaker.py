@@ -79,7 +79,7 @@ class CircuitBreakerOpen(Exception):
         self.broker = broker
         self.retry_after = retry_after
         super().__init__(
-            f"Circuit breaker OPEN for '{broker}' — retry after {retry_after:.1f}s"
+            f"Circuit breaker OPEN for '{broker}' — retry after {retry_after:.1f}s",
         )
 
 
@@ -166,7 +166,7 @@ class CircuitBreaker:
                 # Probe failed — reopen immediately
                 self._transition(CBState.OPEN)
                 logger.warning(
-                    "Circuit breaker '%s' → OPEN (probe failed: %s)", self.name, error
+                    "Circuit breaker '%s' → OPEN (probe failed: %s)", self.name, error,
                 )
             elif (
                 self._state == CBState.CLOSED
@@ -208,7 +208,7 @@ class CircuitBreaker:
                         failure_count=self._failure_count,
                         last_error=self._last_error,
                     ),
-                )
+                ),
             )
         except Exception as _bus_exc:
             logger.debug("CB event bus publish failed (non-fatal): %s", _bus_exc)
@@ -286,7 +286,7 @@ def circuit_breaker(
             return await session.get(...)
     """
     cb = CircuitBreaker.get(
-        name, failure_threshold=failure_threshold, reset_timeout=reset_timeout
+        name, failure_threshold=failure_threshold, reset_timeout=reset_timeout,
     )
 
     def decorator(fn: Callable) -> Callable:

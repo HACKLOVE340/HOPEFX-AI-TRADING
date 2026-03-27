@@ -29,7 +29,7 @@ class BollingerBandsStrategy(BaseStrategy):
     """
 
     def __init__(
-        self, config: StrategyConfig, *_args, period: int = 20, std_dev: float = 2.0
+        self, config: StrategyConfig, *_args, period: int = 20, std_dev: float = 2.0,
     ):
         """
         Initialize Bollinger Bands strategy.
@@ -43,7 +43,7 @@ class BollingerBandsStrategy(BaseStrategy):
         self.period = period
         self.std_dev = std_dev
         logger.info(
-            f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}"
+            f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}",
         )
 
     def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:

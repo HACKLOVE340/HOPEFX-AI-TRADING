@@ -142,7 +142,7 @@ async def list_tenants(
             status_enum = TenantStatus(status_filter)
         except ValueError:
             raise HTTPException(
-                status_code=400, detail=f"Invalid status: {status_filter}"
+                status_code=400, detail=f"Invalid status: {status_filter}",
             )
     tenants = _manager.list_tenants(status=status_enum)
     return {"tenants": [_tenant_to_dict(t) for t in tenants], "total": len(tenants)}
@@ -219,7 +219,7 @@ async def update_tenant(
 
 @router.post("/tenants/{tenant_id}/activate")
 async def activate_tenant(
-    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, user: TokenPayload = Depends(get_current_user),
 ):
     if not _manager.activate_tenant(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -228,7 +228,7 @@ async def activate_tenant(
 
 @router.post("/tenants/{tenant_id}/suspend")
 async def suspend_tenant(
-    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, user: TokenPayload = Depends(get_current_user),
 ):
     if not _manager.suspend_tenant(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -275,7 +275,7 @@ async def disable_feature(
 
 @router.post("/tenants/{tenant_id}/api-key")
 async def generate_api_key(
-    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, user: TokenPayload = Depends(get_current_user),
 ):
     """Generate a new API key for a tenant. Shown once — stored as hash."""
     t = _manager.get_tenant(tenant_id)
@@ -292,7 +292,7 @@ async def generate_api_key(
 
 @router.get("/tenants/{tenant_id}/preview")
 async def preview_tenant(
-    tenant_id: str, user: TokenPayload = Depends(get_current_user)
+    tenant_id: str, user: TokenPayload = Depends(get_current_user),
 ):
     """Return branded theme data for dashboard preview."""
     t = _manager.get_tenant(tenant_id)

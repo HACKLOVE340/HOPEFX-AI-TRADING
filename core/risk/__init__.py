@@ -58,7 +58,7 @@ class GARCHModel:
 
             # Student-t log-likelihood
             log_likelihood = -np.sum(
-                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance))
+                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)),
             )
             return log_likelihood
 
@@ -130,7 +130,7 @@ class CopulaRiskModel:
         """Simulate correlated returns"""
         # Generate correlated uniforms
         normal = np.random.multivariate_normal(
-            np.zeros(len(self.marginals)), self.correlation, n_sims
+            np.zeros(len(self.marginals)), self.correlation, n_sims,
         )
         uniform = stats.norm.cdf(normal)
 
@@ -231,7 +231,7 @@ class RealTimeRiskMonitor:
         self.kill_switch_triggered = False
 
     def update_portfolio(
-        self, positions: Dict[str, Decimal], prices: Dict[str, Decimal]
+        self, positions: Dict[str, Decimal], prices: Dict[str, Decimal],
     ):
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)

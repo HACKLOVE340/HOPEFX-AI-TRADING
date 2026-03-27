@@ -81,7 +81,7 @@ class FIAComplianceManager:
     # FIA 1.2: Maximum Intraday Position
     # =========================================================================
     def check_intraday_position(
-        self, symbol: str, new_position: float
+        self, symbol: str, new_position: float,
     ) -> RiskCheckResult:
         """Validate against maximum intraday position limits"""
         max_position = self.config.get("max_intraday_position", 500)  # lots
@@ -114,7 +114,7 @@ class FIAComplianceManager:
     # FIA 1.3: Price Tolerance (Price Collars)
     # =========================================================================
     def check_price_tolerance(
-        self, order_price: float, reference_price: float, tolerance_pct: float = 0.02
+        self, order_price: float, reference_price: float, tolerance_pct: float = 0.02,
     ) -> RiskCheckResult:
         """Validate order price is within tolerance of reference price"""
         if reference_price <= 0:
@@ -147,7 +147,7 @@ class FIAComplianceManager:
     # FIA 1.5: Kill Switch (Loss Limits)
     # =========================================================================
     def check_kill_switch(
-        self, daily_pnl: float, capital: float, threshold_pct: float = 0.03
+        self, daily_pnl: float, capital: float, threshold_pct: float = 0.03,
     ) -> RiskCheckResult:
         """Activate kill switch if daily loss exceeds threshold"""
         self.daily_pnl = daily_pnl
@@ -262,7 +262,7 @@ class FIAComplianceManager:
     # FIA 3.5: Self-Trade Prevention
     # =========================================================================
     def check_self_trade(
-        self, order: Dict, resting_orders: List[Dict], prevention_level: str = "account"
+        self, order: Dict, resting_orders: List[Dict], prevention_level: str = "account",
     ) -> RiskCheckResult:
         """Prevent wash trades and self-matching"""
         order_side = order.get("side")
@@ -303,7 +303,7 @@ class FIAComplianceManager:
     # Master Validation
     # =========================================================================
     async def validate_order(
-        self, order: Dict, market_data: Dict, portfolio_state: Dict
+        self, order: Dict, market_data: Dict, portfolio_state: Dict,
     ) -> List[RiskCheckResult]:
         """Run all FIA compliance checks on an order"""
         results = []
@@ -341,7 +341,7 @@ class FIAComplianceManager:
                 RiskControlStatus.KILL_SWITCH,
             ]:
                 logger.warning(
-                    f"Risk control blocked: {result.rule} - {result.message}"
+                    f"Risk control blocked: {result.rule} - {result.message}",
                 )
 
         return results

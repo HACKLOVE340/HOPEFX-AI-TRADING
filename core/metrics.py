@@ -145,7 +145,7 @@ def make_metrics_middleware():
         method = request.method
 
         HTTP_REQUESTS.labels(
-            method=method, path=path, status=str(response.status_code)
+            method=method, path=path, status=str(response.status_code),
         ).inc()
         HTTP_LATENCY.labels(method=method, path=path).observe(duration)
         return response

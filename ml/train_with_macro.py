@@ -128,7 +128,7 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
             logger.warning("Macro data fetch returned empty DataFrame")
             return None
         logger.info(
-            "Fetched macro data: %d rows, columns=%s", len(df), list(df.columns)
+            "Fetched macro data: %d rows, columns=%s", len(df), list(df.columns),
         )
         return df
     except Exception as exc:
@@ -146,7 +146,7 @@ def build_features(
     import importlib.util as _ilu
 
     _spec = _ilu.spec_from_file_location(
-        "ml._training_module", Path(__file__).parent / "training.py"
+        "ml._training_module", Path(__file__).parent / "training.py",
     )
     _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
     _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
@@ -295,7 +295,7 @@ def walk_forward_eval(
                 "accuracy": round(acc, 4),
                 "f1": round(f1, 4),
                 "sharpe": round(sharpe, 4),
-            }
+            },
         )
         logger.info(
             "Fold %d/%d  acc=%.3f  f1=%.3f  sharpe=%.3f  train=%d  test=%d",
@@ -552,7 +552,7 @@ def main():
         "yfinance clips to earliest available date (~1974 for GC=F).",
     )
     parser.add_argument(
-        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)"
+        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)",
     )
     parser.add_argument(
         "--no-macro",
@@ -560,10 +560,10 @@ def main():
         help="Skip macro features (DXY, VIX, yields, SPX)",
     )
     parser.add_argument(
-        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)"
+        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)",
     )
     parser.add_argument(
-        "--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)"
+        "--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)",
     )
     parser.add_argument(
         "--oos-years",
@@ -682,17 +682,17 @@ def main():
         fin = report[f"final_{model_type}"]
         print(f"\n{model_type.upper()}")
         print(
-            f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}"
+            f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}",
         )
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
         mean_sharpe = wf.get("mean_sharpe", 0.0)
         print(
             f"  Walk-forward Sharpe   : {mean_sharpe:.3f}"
-            f"  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)"
+            f"  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
         )
         print(
             f"  p-value (vs random)   : {wf['p_value']:.4f}"
-            f"  {'✓ significant' if wf['significant'] else '✗ not significant'}"
+            f"  {'✓ significant' if wf['significant'] else '✗ not significant'}",
         )
         print(f"  Final holdout accuracy: {fin['accuracy']:.3f}")
         print(f"  Final holdout F1      : {fin['f1']:.3f}")
@@ -702,11 +702,11 @@ def main():
             sig = "✓ significant" if oos["significant"] else "✗ not significant"
             acc_se = oos.get("accuracy_se", 0.0)
             print(
-                f"  OOS period            : {oos.get('oos_period', 'n/a')}"
+                f"  OOS period            : {oos.get('oos_period', 'n/a')}",
             )
             print(
                 f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}"
-                f"  (n={oos['oos_size']})"
+                f"  (n={oos['oos_size']})",
             )
             print(f"  OOS F1                : {oos['f1']:.3f}")
             print(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")

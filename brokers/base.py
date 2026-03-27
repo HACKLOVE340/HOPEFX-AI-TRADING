@@ -240,7 +240,7 @@ class BrokerConnector(ABC):
         self.name = self.__class__.__name__
         # Per-connector rate limiter (default 10 req/s; override in subclass)
         self.rate_limiter = RateLimiter(
-            calls_per_second=float(config.get("rate_limit_rps", 10.0))
+            calls_per_second=float(config.get("rate_limit_rps", 10.0)),
         )
 
         logger.info("Initialized %s broker connector", self.name)
@@ -354,7 +354,7 @@ class BrokerConnector(ABC):
 
     @abstractmethod
     def get_market_data(
-        self, symbol: str, timeframe: str = "1h", limit: int = 100
+        self, symbol: str, timeframe: str = "1h", limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Get market data (OHLCV).

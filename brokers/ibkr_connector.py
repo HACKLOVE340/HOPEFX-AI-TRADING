@@ -72,7 +72,7 @@ try:
 except ImportError:
     IB_AVAILABLE = False
     logger.error(
-        "ib_insync not installed. Install with: pip install ib_insync==0.9.86"
+        "ib_insync not installed. Install with: pip install ib_insync==0.9.86",
     )
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ class IBKRConfig:
             raise ValueError(
                 f"IBKR_PORT={self.port} is not a recognised TWS/Gateway port. "
                 f"Valid: {valid_ports}. "
-                f"4001=gateway-live, 4002=gateway-paper, 7496=tws-live, 7497=tws-paper"
+                f"4001=gateway-live, 4002=gateway-paper, 7496=tws-live, 7497=tws-paper",
             )
 
     @property
@@ -153,7 +153,7 @@ class IBKRConnector(BrokerConnector):
     ) -> None:
         if not IB_AVAILABLE:
             raise ImportError(
-                "ib_insync is required. Install: pip install ib_insync==0.9.86"
+                "ib_insync is required. Install: pip install ib_insync==0.9.86",
             )
 
         self._cfg = config or IBKRConfig()
@@ -220,7 +220,7 @@ class IBKRConnector(BrokerConnector):
 
                 if self._account_id and self._account_id not in accounts:
                     raise RuntimeError(
-                        f"Configured account {self._account_id!r} not in managed accounts: {accounts}"
+                        f"Configured account {self._account_id!r} not in managed accounts: {accounts}",
                     )
                 if not self._account_id:
                     self._account_id = accounts[0]
@@ -250,7 +250,7 @@ class IBKRConnector(BrokerConnector):
 
                 if attempt < _MAX_RECONNECT_ATTEMPTS:
                     logger.warning(
-                        "Retrying in %.1fs…", self._reconnect_delay
+                        "Retrying in %.1fs…", self._reconnect_delay,
                     )
                     time.sleep(self._reconnect_delay)
                     self._reconnect_delay = min(
@@ -672,7 +672,7 @@ class IBKRConnector(BrokerConnector):
                             callback(tick)
                         except Exception as cb_exc:
                             logger.error(
-                                "IBKRConnector tick callback error: %s", cb_exc
+                                "IBKRConnector tick callback error: %s", cb_exc,
                             )
 
             self._ib.pendingTickersEvent += _on_pending_tickers

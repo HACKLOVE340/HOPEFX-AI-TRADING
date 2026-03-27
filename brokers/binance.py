@@ -99,7 +99,7 @@ class BinanceConnector(BrokerConnector):
             params["signature"] = signature
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account", params=params
+                f"{self.base_url}/api/v3/account", params=params,
             )
             response.raise_for_status()
 
@@ -247,7 +247,7 @@ class BinanceConnector(BrokerConnector):
             params["signature"] = self._generate_signature(params)
 
             response = self.session.delete(
-                f"{self.base_url}/api/v3/order", params=params
+                f"{self.base_url}/api/v3/order", params=params,
             )
             response.raise_for_status()
 
@@ -335,7 +335,7 @@ class BinanceConnector(BrokerConnector):
             params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account", params=params
+                f"{self.base_url}/api/v3/account", params=params,
             )
             response.raise_for_status()
 
@@ -390,7 +390,7 @@ class BinanceConnector(BrokerConnector):
             params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account", params=params
+                f"{self.base_url}/api/v3/account", params=params,
             )
             response.raise_for_status()
 
@@ -448,7 +448,7 @@ class BinanceConnector(BrokerConnector):
             params["signature"] = self._generate_signature(params)
 
             response = self.session.get(
-                f"{self.base_url}/api/v3/account", params=params
+                f"{self.base_url}/api/v3/account", params=params,
             )
             response.raise_for_status()
 
@@ -485,7 +485,7 @@ class BinanceConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "1m", limit: int = 100
+        self, symbol: str, timeframe: str = "1m", limit: int = 100,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data (klines/candlesticks).
@@ -524,7 +524,7 @@ class BinanceConnector(BrokerConnector):
                         "low": float(kline[3]),
                         "close": float(kline[4]),
                         "volume": float(kline[5]),
-                    }
+                    },
                 )
 
             return candles

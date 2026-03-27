@@ -296,7 +296,7 @@ class AdvancedRiskAnalytics:
                 f"calculate_var_historical called with time_horizon={time_horizon} > 1. "
                 "sqrt(t) scaling is not valid for XAUUSD (fat tails, autocorrelation). "
                 "Use calculate_var_multiday() or calculate_var_ewma() instead. "
-                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only)."
+                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only).",
             )
 
         # 1-day VaR at the requested confidence level
@@ -313,7 +313,7 @@ class AdvancedRiskAnalytics:
             t = int(time_horizon)
             if len(returns) >= t * 2:
                 multi_day = np.array(
-                    [np.sum(returns[i : i + t]) for i in range(len(returns) - t + 1)]
+                    [np.sum(returns[i : i + t]) for i in range(len(returns) - t + 1)],
                 )
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
@@ -395,7 +395,7 @@ class AdvancedRiskAnalytics:
                 "Parametric sqrt(t) scaling assumes i.i.d. normal returns — invalid for "
                 "XAUUSD (fat tails, autocorrelation). "
                 "Use calculate_var_multiday() or calculate_var_ewma() instead. "
-                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only)."
+                "Set HOPEFX_VAR_ENFORCE_MULTIDAY=0 to disable this check (tests only).",
             )
 
         # Test normality (Jarque-Bera) and warn if rejected at 5% level.
@@ -416,7 +416,7 @@ class AdvancedRiskAnalytics:
                     )
             except Exception as _jb_exc:
                 logger.debug(
-                    "calculate_var_parametric: Jarque-Bera test skipped: %s", _jb_exc
+                    "calculate_var_parametric: Jarque-Bera test skipped: %s", _jb_exc,
                 )
 
         mean_return = np.mean(returns)
@@ -656,7 +656,7 @@ class AdvancedRiskAnalytics:
                 [
                     np.sum(returns[i : i + time_horizon])
                     for i in range(len(returns) - time_horizon + 1)
-                ]
+                ],
             )
 
         var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
@@ -711,7 +711,7 @@ class AdvancedRiskAnalytics:
         if len(returns) < 10:
             # Delegate to 1-day historical (no multi-day scaling needed)
             return self.calculate_var_historical(
-                returns, confidence_level, 1, portfolio_value
+                returns, confidence_level, 1, portfolio_value,
             )
 
         # Compute EWMA variance
@@ -725,7 +725,7 @@ class AdvancedRiskAnalytics:
 
         if hist_vol == 0:
             return self.calculate_var_historical(
-                returns, confidence_level, 1, portfolio_value
+                returns, confidence_level, 1, portfolio_value,
             )
 
         # Scale historical returns by vol ratio (volatility-weighted HS)
@@ -747,7 +747,7 @@ class AdvancedRiskAnalytics:
                     [
                         np.sum(scaled_returns[i : i + t])
                         for i in range(len(scaled_returns) - t + 1)
-                    ]
+                    ],
                 )
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
@@ -811,12 +811,12 @@ class AdvancedRiskAnalytics:
             # calculate_var_historical does not enforce the multiday flag for
             # 1-day horizons, so no global mutation is needed.
             result = self.calculate_var_historical(
-                returns, confidence_level, 1, portfolio_value
+                returns, confidence_level, 1, portfolio_value,
             )
             return result
         else:
             return self.calculate_var_ewma(
-                returns, confidence_level, time_horizon, portfolio_value
+                returns, confidence_level, time_horizon, portfolio_value,
             )
 
     def calculate_cvar(
@@ -892,7 +892,7 @@ class AdvancedRiskAnalytics:
         # Generate random walks
         np.random.seed(42)  # Reproducibility
         random_returns = np.random.normal(
-            daily_return, daily_vol, (num_simulations, time_horizon)
+            daily_return, daily_vol, (num_simulations, time_horizon),
         )
 
         # Calculate cumulative returns (geometric)
@@ -944,7 +944,7 @@ class AdvancedRiskAnalytics:
         # Extract parameters
         values = np.array([positions[a]["value"] for a in asset_names])
         returns = np.array(
-            [positions[a].get("expected_return", 0.0) for a in asset_names]
+            [positions[a].get("expected_return", 0.0) for a in asset_names],
         )
         vols = np.array([positions[a].get("volatility", 0.20) for a in asset_names])
 
@@ -998,7 +998,7 @@ class AdvancedRiskAnalytics:
     # ============================================================
 
     def run_stress_test(
-        self, portfolio: Dict[str, Dict], scenario_name: str
+        self, portfolio: Dict[str, Dict], scenario_name: str,
     ) -> StressTestResult:
         """
         Run a stress test scenario on portfolio.
@@ -1059,7 +1059,7 @@ class AdvancedRiskAnalytics:
         )
 
     def run_all_stress_tests(
-        self, portfolio: Dict[str, Dict]
+        self, portfolio: Dict[str, Dict],
     ) -> List[StressTestResult]:
         """Run all stress test scenarios."""
         results = []
@@ -1097,7 +1097,7 @@ class AdvancedRiskAnalytics:
 
         # Find drawdown start (last peak before max drawdown)
         max_drawdown_start = np.argmax(
-            equity_curve[: max_drawdown_idx + 1] == running_max[max_drawdown_idx]
+            equity_curve[: max_drawdown_idx + 1] == running_max[max_drawdown_idx],
         )
         max_drawdown_duration = max_drawdown_idx - max_drawdown_start
 
@@ -1125,7 +1125,7 @@ class AdvancedRiskAnalytics:
         )
 
     def _identify_drawdown_events(
-        self, drawdown: np.ndarray, threshold: float = -0.05
+        self, drawdown: np.ndarray, threshold: float = -0.05,
     ) -> List[Dict]:
         """Identify significant drawdown events."""
         events = []
@@ -1145,7 +1145,7 @@ class AdvancedRiskAnalytics:
                         "duration": i - start_idx,
                         "max_drawdown": float(np.min(drawdown[start_idx : i + 1])),
                         "recovered": True,
-                    }
+                    },
                 )
 
         # Handle ongoing drawdown
@@ -1157,7 +1157,7 @@ class AdvancedRiskAnalytics:
                     "duration": len(drawdown) - start_idx,
                     "max_drawdown": float(np.min(drawdown[start_idx:])),
                     "recovered": False,
-                }
+                },
             )
 
         return events
@@ -1185,7 +1185,7 @@ class AdvancedRiskAnalytics:
             elif not uw and in_period:
                 in_period = False
                 periods.append(
-                    {"start_idx": start_idx, "end_idx": i, "duration": i - start_idx}
+                    {"start_idx": start_idx, "end_idx": i, "duration": i - start_idx},
                 )
 
         if in_period:
@@ -1194,7 +1194,7 @@ class AdvancedRiskAnalytics:
                     "start_idx": start_idx,
                     "end_idx": len(drawdown) - 1,
                     "duration": len(drawdown) - start_idx,
-                }
+                },
             )
 
         return periods
@@ -1212,7 +1212,7 @@ class AdvancedRiskAnalytics:
         return np.sqrt(periods_per_year) * np.mean(excess_returns) / np.std(returns)
 
     def calculate_sortino_ratio(
-        self, returns: np.ndarray, periods_per_year: int = 252
+        self, returns: np.ndarray, periods_per_year: int = 252,
     ) -> float:
         """Calculate annualized Sortino ratio (using downside deviation)."""
         excess_returns = returns - self.risk_free_rate / periods_per_year
@@ -1225,7 +1225,7 @@ class AdvancedRiskAnalytics:
         return np.sqrt(periods_per_year) * np.mean(excess_returns) / downside_std
 
     def calculate_calmar_ratio(
-        self, returns: np.ndarray, equity_curve: np.ndarray = None
+        self, returns: np.ndarray, equity_curve: np.ndarray = None,
     ) -> float:
         """Calculate Calmar ratio (annual return / max drawdown)."""
         annual_return = np.mean(returns) * 252
@@ -1255,13 +1255,13 @@ class AdvancedRiskAnalytics:
 
         # VaR calculations
         var_hist = self.calculate_var_historical(
-            returns, portfolio_value=portfolio_value
+            returns, portfolio_value=portfolio_value,
         )
         var_param = self.calculate_var_parametric(
-            returns, portfolio_value=portfolio_value
+            returns, portfolio_value=portfolio_value,
         )
         var_mc = self.calculate_var_monte_carlo(
-            returns, portfolio_value=portfolio_value
+            returns, portfolio_value=portfolio_value,
         )
         cvar = self.calculate_cvar(returns, portfolio_value=portfolio_value)
 
@@ -1296,7 +1296,7 @@ class AdvancedRiskAnalytics:
     # ------------------------------------------------------------------
 
     def calculate_var(
-        self, returns, confidence: float = None, confidence_level: float = None, **kw
+        self, returns, confidence: float = None, confidence_level: float = None, **kw,
     ) -> float:
         """Return VaR as a negative number (loss). Uses historical simulation."""
         import numpy as _np
@@ -1308,7 +1308,7 @@ class AdvancedRiskAnalytics:
         return var  # already negative for loss distributions
 
     def calculate_sharpe(
-        self, returns, risk_free_rate: float = None, annualize: bool = True
+        self, returns, risk_free_rate: float = None, annualize: bool = True,
     ) -> float:
         """Alias for calculate_sharpe_ratio with optional risk_free_rate override."""
         old_rfr = self.risk_free_rate
@@ -1324,7 +1324,7 @@ _orig_cvar = AdvancedRiskAnalytics.calculate_cvar
 
 
 def _patched_cvar(
-    self, returns, confidence_level=None, confidence=None, portfolio_value=None
+    self, returns, confidence_level=None, confidence=None, portfolio_value=None,
 ):
     cl = confidence or confidence_level
     arr = np.asarray(returns, dtype=float)

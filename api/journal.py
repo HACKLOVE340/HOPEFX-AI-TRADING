@@ -84,10 +84,10 @@ class JournalEntry(BaseModel):
     rule_deviation: Optional[str] = None
     screenshot_url: Optional[str] = None
     created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
     )
     updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -255,7 +255,7 @@ async def list_trades(
 
 
 @router.post(
-    "/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED
+    "/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED,
 )
 async def create_entry(
     entry: JournalEntry,
@@ -327,7 +327,7 @@ async def get_stats() -> JournalStats:
                 count=len(tagged),
                 win_rate=round(len(tag_wins) / len(tagged) * 100, 1) if tagged else 0,
                 avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
-            )
+            ),
         )
 
     all_emotions = set(e.get("emotion") for e in closed if e.get("emotion"))
@@ -344,7 +344,7 @@ async def get_stats() -> JournalStats:
                 if em_entries
                 else 0,
                 avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
-            )
+            ),
         )
 
     return JournalStats(

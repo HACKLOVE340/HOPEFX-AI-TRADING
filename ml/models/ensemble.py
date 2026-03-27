@@ -187,7 +187,7 @@ class EnsemblePredictor(BaseMLModel):
             model = Sequential(
                 [
                     LSTM(
-                        64, return_sequences=True, input_shape=(self.sequence_length, 1)
+                        64, return_sequences=True, input_shape=(self.sequence_length, 1),
                     ),
                     Dropout(0.2),
                     BatchNormalization(),
@@ -195,11 +195,11 @@ class EnsemblePredictor(BaseMLModel):
                     Dropout(0.2),
                     Dense(16, activation="relu"),
                     Dense(1),
-                ]
+                ],
             )
 
             model.compile(
-                optimizer=Adam(learning_rate=0.001), loss="huber", metrics=["mae"]
+                optimizer=Adam(learning_rate=0.001), loss="huber", metrics=["mae"],
             )
 
             self.models["lstm"] = model
@@ -246,7 +246,7 @@ class EnsemblePredictor(BaseMLModel):
 
         except ImportError:
             self.logger.warning(
-                "scikit-learn not available, skipping Gradient Boosting"
+                "scikit-learn not available, skipping Gradient Boosting",
             )
             self.use_gb = False
 
@@ -309,7 +309,7 @@ class EnsemblePredictor(BaseMLModel):
         return np.array(features), np.array(targets)
 
     def _prepare_lstm_sequences(
-        self, data: np.ndarray
+        self, data: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare sequences for LSTM."""
         X, y = [], []
@@ -407,7 +407,7 @@ class EnsemblePredictor(BaseMLModel):
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "results": results,
                     "data_points": len(X_train),
-                }
+                },
             )
 
             return results
@@ -460,14 +460,14 @@ class EnsemblePredictor(BaseMLModel):
                 # Get LSTM prediction
                 if "lstm" in self.models:
                     lstm_seq = data_scaled[i : i + self.sequence_length].reshape(
-                        1, self.sequence_length, 1
+                        1, self.sequence_length, 1,
                     )
                     if lstm_seq.shape[1] == self.sequence_length:
                         lstm_pred_scaled = self.models["lstm"].predict(
-                            lstm_seq, verbose=0
+                            lstm_seq, verbose=0,
                         )[0][0]
                         lstm_pred = self.scaler_y.inverse_transform(
-                            [[lstm_pred_scaled]]
+                            [[lstm_pred_scaled]],
                         )[0][0]
                         model_predictions["lstm"] = ModelPrediction(
                             model_name="lstm",
@@ -479,7 +479,7 @@ class EnsemblePredictor(BaseMLModel):
                 # Get Random Forest prediction
                 if "random_forest" in self.models:
                     rf_pred_scaled = self.models["random_forest"].predict(
-                        [X_features[i]]
+                        [X_features[i]],
                     )[0]
                     rf_pred = self.scaler_y.inverse_transform([[rf_pred_scaled]])[0][0]
                     model_predictions["random_forest"] = ModelPrediction(
@@ -492,14 +492,14 @@ class EnsemblePredictor(BaseMLModel):
                 # Get Gradient Boosting prediction
                 if "gradient_boosting" in self.models:
                     gb_pred_scaled = self.models["gradient_boosting"].predict(
-                        [X_features[i]]
+                        [X_features[i]],
                     )[0]
                     gb_pred = self.scaler_y.inverse_transform([[gb_pred_scaled]])[0][0]
                     model_predictions["gradient_boosting"] = ModelPrediction(
                         model_name="gradient_boosting",
                         prediction=gb_pred,
                         confidence=self._calculate_model_confidence(
-                            "gradient_boosting"
+                            "gradient_boosting",
                         ),
                         weight=self.model_weights["gradient_boosting"],
                     )
@@ -528,7 +528,7 @@ class EnsemblePredictor(BaseMLModel):
             raise
 
     def _combine_predictions(
-        self, model_predictions: Dict[str, ModelPrediction]
+        self, model_predictions: Dict[str, ModelPrediction],
     ) -> EnsemblePrediction:
         """Combine individual model predictions into ensemble prediction."""
 

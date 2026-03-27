@@ -353,7 +353,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         result = {
             "overall": _metrics(np.ones(len(X), dtype=bool), "overall"),
             "mean_reverting": _metrics(
-                (labels == REGIME_MEAN_REVERTING).values, "mean_reverting"
+                (labels == REGIME_MEAN_REVERTING).values, "mean_reverting",
             ),
             "trending": _metrics((labels == REGIME_TRENDING).values, "trending"),
             "mixed": _metrics((labels == REGIME_MIXED).values, "mixed"),
@@ -446,7 +446,7 @@ def walk_forward_regime_eval(
                     for k, v in eval_result.items()
                     if k not in ("overall", "regime_counts", "regime_models_trained")
                 },
-            }
+            },
         )
         logger.info(
             "Fold %d/%d  acc=%.3f  f1=%.3f  auc=%.3f  train=%d  test=%d",

@@ -51,7 +51,7 @@ class RSIStrategy(BaseStrategy):
         self.overbought = overbought
         logger.info(
             f"RSI Strategy initialized: period={period}, "
-            f"oversold={oversold}, overbought={overbought}"
+            f"oversold={oversold}, overbought={overbought}",
         )
 
     def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -92,7 +92,7 @@ class RSIStrategy(BaseStrategy):
                 price,
                 datetime.now(timezone.utc),
                 confidence=min(
-                    0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4
+                    0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4,
                 ),
             )
         return None

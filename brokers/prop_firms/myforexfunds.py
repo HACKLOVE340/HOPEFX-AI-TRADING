@@ -57,7 +57,7 @@ class MyForexFundsConnector(MT5Connector):
         self.account_size = config.get("account_size", 100000)
 
         logger.info(
-            f"MyForexFunds Connector initialized for ${self.account_size} account"
+            f"MyForexFunds Connector initialized for ${self.account_size} account",
         )
 
     def get_myforexfunds_rules(self) -> Dict[str, Any]:

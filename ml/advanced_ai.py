@@ -137,7 +137,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         # Observation: window returns + atr_norm + position + pnl_norm
         obs_dim = window + 3
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)  # 0=flat, 1=long, 2=short
 
@@ -231,7 +231,7 @@ class PPORLAgent:
         if not (_SB3_AVAILABLE and _GYM_AVAILABLE):
             raise ImportError(
                 "stable-baselines3 and gymnasium are required for PPORLAgent. "
-                "pip install stable-baselines3 gymnasium"
+                "pip install stable-baselines3 gymnasium",
             )
         self.total_timesteps = total_timesteps
         self.policy = policy
@@ -248,7 +248,7 @@ class PPORLAgent:
     def train(self, df: pd.DataFrame, window: int = 10) -> None:
         """Train PPO on the supplied OHLCV DataFrame."""
         logger.info(
-            "ppo_agent.train bars=%d timesteps=%d", len(df), self.total_timesteps
+            "ppo_agent.train bars=%d timesteps=%d", len(df), self.total_timesteps,
         )
 
         def _make_env():
@@ -305,8 +305,8 @@ class PPORLAgent:
         # Value function as a rough confidence proxy (normalised sigmoid)
         value = float(
             self._model.policy.predict_values(
-                self._model.policy.obs_to_tensor(obs.reshape(1, -1))[0]
-            ).item()
+                self._model.policy.obs_to_tensor(obs.reshape(1, -1))[0],
+            ).item(),
         )
         confidence = float(1 / (1 + np.exp(-value)))
         return int(action) - 1, confidence  # map {0,1,2} → {-1,0,1}
@@ -373,12 +373,12 @@ class VectorRAGNewsSentiment:
         if not (_FAISS_AVAILABLE and _ST_AVAILABLE):
             raise ImportError(
                 "faiss-cpu and sentence-transformers are required for VectorRAGNewsSentiment. "
-                "pip install faiss-cpu sentence-transformers"
+                "pip install faiss-cpu sentence-transformers",
             )
         self.top_k = top_k
         self._encoder = SentenceTransformer(model_name)
         self._index = faiss.IndexFlatIP(
-            self.EMBED_DIM
+            self.EMBED_DIM,
         )  # Inner-product (cosine after norm)
         self._stored_headlines: list[str] = []
         self._stored_scores: list[float] = []  # Ground-truth sentiment labels
@@ -406,13 +406,13 @@ class VectorRAGNewsSentiment:
             self._stored_scores.extend(scores)
 
         logger.info(
-            "rag.add_items count=%d total=%d", len(items), len(self._stored_headlines)
+            "rag.add_items count=%d total=%d", len(items), len(self._stored_headlines),
         )
 
     def _encode(self, texts: list[str]) -> np.ndarray:
         """Encode texts and L2-normalise for cosine similarity via inner product."""
         emb = self._encoder.encode(
-            texts, convert_to_numpy=True, normalize_embeddings=True
+            texts, convert_to_numpy=True, normalize_embeddings=True,
         )
         return emb.astype(np.float32)
 
@@ -428,7 +428,7 @@ class VectorRAGNewsSentiment:
         """
         if self._index.ntotal == 0:
             return SentimentResult(
-                headline=item.headline, sentiment_score=0.0, confidence=0.0
+                headline=item.headline, sentiment_score=0.0, confidence=0.0,
             )
 
         query_emb = self._encode([item.headline])
@@ -472,7 +472,7 @@ class VectorRAGNewsSentiment:
         faiss.write_index(self._index, str(Path(directory) / "news.index"))
         with open(Path(directory) / "metadata.pkl", "wb") as fh:
             pickle.dump(
-                {"headlines": self._stored_headlines, "scores": self._stored_scores}, fh
+                {"headlines": self._stored_headlines, "scores": self._stored_scores}, fh,
             )
         logger.info("rag.saved directory=%s", directory)
 
@@ -487,7 +487,7 @@ class VectorRAGNewsSentiment:
             self._stored_headlines = meta["headlines"]
             self._stored_scores = meta["scores"]
         logger.info(
-            "rag.loaded directory=%s items=%d", directory, len(self._stored_headlines)
+            "rag.loaded directory=%s items=%d", directory, len(self._stored_headlines),
         )
 
 
@@ -596,7 +596,7 @@ class AdvancedAIEnsemble:
     def train_rl(self, df: pd.DataFrame, timesteps: int = 100_000) -> None:
         if self._rl is None:
             raise RuntimeError(
-                "RL agent not available — install stable-baselines3 + gymnasium"
+                "RL agent not available — install stable-baselines3 + gymnasium",
             )
         self._rl.total_timesteps = timesteps
         self._rl.train(df)
@@ -605,7 +605,7 @@ class AdvancedAIEnsemble:
     def add_news_history(self, items: list[tuple[str, float]]) -> None:
         if self._rag is None:
             raise RuntimeError(
-                "RAG not available — install faiss-cpu + sentence-transformers"
+                "RAG not available — install faiss-cpu + sentence-transformers",
             )
         self._rag.add_items(items)
 

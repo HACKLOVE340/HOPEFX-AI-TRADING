@@ -108,7 +108,7 @@ RECOMMENDED_VARS: List[EnvVar] = [
     EnvVar("SMTP_USER", required=False, description="SMTP username"),
     EnvVar("SMTP_PASSWORD", required=False, description="SMTP password"),
     EnvVar(
-        "FROM_EMAIL", required=False, description="Sender address for system emails"
+        "FROM_EMAIL", required=False, description="Sender address for system emails",
     ),
 ]
 
@@ -139,11 +139,11 @@ def validate_environment(strict: bool = False) -> ValidationResult:
         val = os.getenv(var.name)
         if not val:
             result.errors.append(
-                f"Missing required env var: {var.name} — {var.description}"
+                f"Missing required env var: {var.name} — {var.description}",
             )
         elif var.min_length and len(val) < var.min_length:
             result.errors.append(
-                f"{var.name} is too short ({len(val)} chars, need ≥{var.min_length}) — {var.description}"
+                f"{var.name} is too short ({len(val)} chars, need ≥{var.min_length}) — {var.description}",
             )
 
     for var in RECOMMENDED_VARS:
@@ -161,7 +161,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
 
 
 def validate_and_report(
-    strict: bool = False, exit_on_error: bool = True
+    strict: bool = False, exit_on_error: bool = True,
 ) -> ValidationResult:
     """
     Run validation, log results, and optionally exit on errors.

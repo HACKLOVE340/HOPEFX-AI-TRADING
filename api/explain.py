@@ -195,7 +195,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                     feature=fc.feature_name,
                     importance=fc.contribution,
                     description=explainer.feature_descriptions.get(
-                        fc.feature_name, fc.feature_name
+                        fc.feature_name, fc.feature_name,
                     ),
                 )
                 for fc in sorted(
@@ -228,16 +228,16 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
             description="RSI showing oversold conditions",
         ),
         FeatureImportance(
-            feature="macd", importance=0.28, description="MACD bullish crossover"
+            feature="macd", importance=0.28, description="MACD bullish crossover",
         ),
         FeatureImportance(
-            feature="atr", importance=0.18, description="Volatility within normal range"
+            feature="atr", importance=0.18, description="Volatility within normal range",
         ),
         FeatureImportance(
-            feature="sma_20", importance=0.14, description="Price above 20-period SMA"
+            feature="sma_20", importance=0.14, description="Price above 20-period SMA",
         ),
         FeatureImportance(
-            feature="volume_ratio", importance=0.08, description="Volume above average"
+            feature="volume_ratio", importance=0.08, description="Volume above average",
         ),
     ]
     return SignalExplanation(
@@ -296,7 +296,7 @@ async def explain_signal(request: Request, signal_id: str):
 
 
 @router.get(
-    "/latest", response_model=SignalExplanation, summary="Explain the latest signal"
+    "/latest", response_model=SignalExplanation, summary="Explain the latest signal",
 )
 async def explain_latest(request: Request):
     """

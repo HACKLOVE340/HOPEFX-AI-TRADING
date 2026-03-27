@@ -31,8 +31,8 @@ _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
 
 ALLOWED_SYMBOLS = frozenset(
     os.getenv(
-        "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF"
-    ).split(",")
+        "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
+    ).split(","),
 )
 MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
@@ -49,7 +49,7 @@ def _get_jwt_secret() -> str:
     if not secret:
         raise RuntimeError(
             "SECURITY_JWT_SECRET environment variable is not set. "
-            'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+            'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"',
         )
     if len(secret) < 32:
         raise RuntimeError("SECURITY_JWT_SECRET must be at least 32 characters")
@@ -83,7 +83,7 @@ def _decode_token(token: str) -> TokenPayload:
                 raise
             except Exception as exc:
                 logger.warning(
-                    "Token blacklist check failed, allowing token (fail-open): %s", exc
+                    "Token blacklist check failed, allowing token (fail-open): %s", exc,
                 )
 
         return TokenPayload(**payload)

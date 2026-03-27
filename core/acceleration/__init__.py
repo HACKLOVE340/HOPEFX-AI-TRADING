@@ -47,7 +47,7 @@ class QuantizedTransformer(nn.Module):
     """Ultra-fast transformer for market prediction"""
 
     def __init__(
-        self, input_dim: int = 512, hidden_dim: int = 256, num_layers: int = 4
+        self, input_dim: int = 512, hidden_dim: int = 256, num_layers: int = 4,
     ):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, hidden_dim)
@@ -61,7 +61,7 @@ class QuantizedTransformer(nn.Module):
                     batch_first=True,
                 )
                 for _ in range(num_layers)
-            ]
+            ],
         )
         self.output = nn.Sequential(
             nn.LayerNorm(hidden_dim),
@@ -85,7 +85,7 @@ class GPUInferenceEngine:
     def __init__(self, config: GPUConfig = None):
         self.config = config or GPUConfig()
         self.device = torch.device(
-            self.config.device if torch.cuda.is_available() else "cpu"
+            self.config.device if torch.cuda.is_available() else "cpu",
         )
 
         self.model = QuantizedTransformer().to(self.device).eval()
@@ -105,7 +105,7 @@ class GPUInferenceEngine:
         self.running = False
 
         print(
-            f"🚀 GPU Engine: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}"
+            f"🚀 GPU Engine: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}",
         )
         print(f"   Batch size: {self.config.batch_size}")
         print(f"   Mixed precision: {self.config.mixed_precision}")
@@ -119,7 +119,7 @@ class GPUInferenceEngine:
 
         try:
             return await asyncio.wait_for(
-                future, timeout=self.config.max_latency_ms / 1000
+                future, timeout=self.config.max_latency_ms / 1000,
             )
         except asyncio.TimeoutError:
             return {"error": "timeout", "direction": 0.5, "confidence": 0}
@@ -138,7 +138,7 @@ class GPUInferenceEngine:
                     break
                 try:
                     req_id, feat = await asyncio.wait_for(
-                        self.batch_queue.get(), timeout=max(0, timeout)
+                        self.batch_queue.get(), timeout=max(0, timeout),
                     )
                     batch.append(feat)
                     ids.append(req_id)
@@ -176,7 +176,7 @@ class GPUInferenceEngine:
                         "direction": float(cpu_direction[i][1]),  # Prob of up
                         "confidence": float(cpu_confidence[i]),
                         "request_id": req_id,
-                    }
+                    },
                 )
                 del self.results[req_id]
 

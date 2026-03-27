@@ -41,7 +41,7 @@ _results: Dict[str, dict] = {}
 
 class BacktestRequest(BaseModel):
     strategy: str = Field(
-        ..., description="Strategy name (e.g. 'MovingAverageCrossover')"
+        ..., description="Strategy name (e.g. 'MovingAverageCrossover')",
     )
     symbol: str = Field(..., min_length=1, max_length=20)
     start_date: str = Field(..., description="ISO date string, e.g. '2023-01-01'")
@@ -222,7 +222,7 @@ _wf_results: Dict[str, dict] = {}
 
 
 def _generate_mock_walk_forward(
-    strategy: str = "MovingAverageCrossover", symbol: str = "XAU/USD"
+    strategy: str = "MovingAverageCrossover", symbol: str = "XAU/USD",
 ) -> dict:
     """Generate demo walk-forward data when no real results exist."""
     import math
@@ -255,7 +255,7 @@ def _generate_mock_walk_forward(
                 "total_trades": 80 + int(random.random() * 60),
                 "win_rate": round(50 + random.random() * 15, 2),
                 "equity_curve": equity,
-            }
+            },
         )
     avg_sharpe = sum(f["sharpe"] for f in folds) / len(folds)
     avg_acc = sum(f["accuracy"] for f in folds) / len(folds)
@@ -289,7 +289,7 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
     """Return the most recent walk-forward result, or demo data if none exist."""
     if _wf_results:
         latest = sorted(
-            _wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True
+            _wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True,
         )[0]
         return latest
     return _generate_mock_walk_forward()
@@ -444,7 +444,7 @@ def _build_pdf(result: dict) -> bytes:
             f"Symbol: <b>{result['symbol']}</b> &nbsp;·&nbsp; "
             f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
             subtitle_style,
-        )
+        ),
     )
     story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=12))
 
@@ -475,8 +475,8 @@ def _build_pdf(result: dict) -> bytes:
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
+            ],
+        ),
     )
     story.append(params_table)
     story.append(Spacer(1, 14))
@@ -514,8 +514,8 @@ def _build_pdf(result: dict) -> bytes:
                 # Colour the return row
                 ("TEXTCOLOR", (1, 2), (1, 2), ret_color),
                 ("FONTNAME", (1, 2), (1, 2), "Helvetica-Bold"),
-            ]
-        )
+            ],
+        ),
     )
     story.append(perf_table)
     story.append(Spacer(1, 20))
@@ -552,7 +552,7 @@ def _build_pdf(result: dict) -> bytes:
             "only and does not constitute financial advice. Trading involves substantial "
             "risk of loss.",
             disclaimer_style,
-        )
+        ),
     )
 
     doc.build(story)

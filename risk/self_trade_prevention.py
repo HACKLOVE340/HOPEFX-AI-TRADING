@@ -106,7 +106,7 @@ class SelfTradePrevention:
         """Determine action when self-trade detected"""
         logger.warning(
             f"Self-trade detected: {new_order.id} vs {resting_order.id} "
-            f"on {new_order.symbol}"
+            f"on {new_order.symbol}",
         )
 
         if self.action == SelfTradeAction.CANCEL_RESTING:

@@ -145,12 +145,12 @@ class ForexTradingEnv:
         if len(self._features) < 10:
             raise ValueError(
                 f"Not enough valid windows: {len(self._features)} "
-                f"(need at least 10, have {len(df)} candles)"
+                f"(need at least 10, have {len(df)} candles)",
             )
 
         obs_dim = _FEATURE_DIM + 3
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)
 
@@ -345,7 +345,7 @@ class RLAgent:
             from stable_baselines3.common.env_checker import check_env
         except ImportError:
             raise ImportError(
-                "stable-baselines3 required: pip install stable-baselines3"
+                "stable-baselines3 required: pip install stable-baselines3",
             )
 
         logger.info("Training PPO for %d timesteps …", timesteps)
@@ -399,7 +399,7 @@ class RLAgent:
         """
         if self._model is None:
             raise RuntimeError(
-                "Model not trained or loaded — call train() or load() first"
+                "Model not trained or loaded — call train() or load() first",
             )
 
         import pandas as pd

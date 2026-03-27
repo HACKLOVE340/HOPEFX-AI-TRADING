@@ -56,11 +56,11 @@ class ITS8OSStrategy(BaseStrategy):
         # Strategy parameters
         params = config.parameters or {}
         self.enabled_setups = params.get(
-            "enabled_setups", list(range(1, 9))
+            "enabled_setups", list(range(1, 9)),
         )  # All 8 by default
         self.min_setup_score = params.get("min_setup_score", 0.6)
         self.confluence_required = params.get(
-            "confluence_required", 2
+            "confluence_required", 2,
         )  # Min setups agreeing
 
         # Kill Zone times (UTC)
@@ -124,7 +124,7 @@ class ITS8OSStrategy(BaseStrategy):
             # Setup 6: Silver Bullet
             if 6 in self.enabled_setups:
                 setup_results["silver_bullet"] = self._analyze_silver_bullet(
-                    prices, current_time
+                    prices, current_time,
                 )
 
             # Setup 7: Optimal Trade Entry
@@ -144,7 +144,7 @@ class ITS8OSStrategy(BaseStrategy):
                 "setup_results": setup_results,
                 "confluence": confluence,
                 "active_kill_zone": setup_results.get("kill_zone", {}).get(
-                    "active_zone"
+                    "active_zone",
                 ),
             }
 
@@ -188,7 +188,7 @@ class ITS8OSStrategy(BaseStrategy):
                     "bullish_setups": confluence["bullish_setups"],
                     "active_kill_zone": analysis.get("active_kill_zone"),
                     "setup_details": self._extract_signal_details(
-                        setup_results, "bullish"
+                        setup_results, "bullish",
                     ),
                 }
 
@@ -202,7 +202,7 @@ class ITS8OSStrategy(BaseStrategy):
                     "bearish_setups": confluence["bearish_setups"],
                     "active_kill_zone": analysis.get("active_kill_zone"),
                     "setup_details": self._extract_signal_details(
-                        setup_results, "bearish"
+                        setup_results, "bearish",
                     ),
                 }
 
@@ -461,7 +461,7 @@ class ITS8OSStrategy(BaseStrategy):
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_silver_bullet(
-        self, prices: List[Dict], current_time: datetime
+        self, prices: List[Dict], current_time: datetime,
     ) -> Dict[str, Any]:
         """
         Setup 6: Silver Bullet Setup
@@ -567,7 +567,7 @@ class ITS8OSStrategy(BaseStrategy):
             return {"in_ote_zone": False, "signal": "neutral", "score": 0.0}
 
     def _analyze_session(
-        self, prices: List[Dict], current_time: datetime
+        self, prices: List[Dict], current_time: datetime,
     ) -> Dict[str, Any]:
         """
         Setup 8: Session-based Analysis
@@ -675,7 +675,7 @@ class ITS8OSStrategy(BaseStrategy):
             }
 
     def _extract_signal_details(
-        self, setup_results: Dict, direction: str
+        self, setup_results: Dict, direction: str,
     ) -> Dict[str, Any]:
         """Extract details of setups supporting the signal"""
         details = {}

@@ -106,7 +106,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
             "config": app_state.config is not None,
             "database": app_state.db_engine is not None,
             "cache": app_state.cache is not None,
-        }
+        },
     }
 
 
@@ -249,7 +249,7 @@ async def decide_kyc(
         # Audit log
         log_activity(
             f"KYC {body.action} for user {body.user_id} by admin {user.sub}"
-            + (f" — {body.notes}" if body.notes else "")
+            + (f" — {body.notes}" if body.notes else ""),
         )
 
         # Notify user via email

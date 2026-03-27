@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/chat", tags=["AI Chat"])
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096, description="User message")
     session_id: Optional[str] = Field(
-        None, description="Optional session ID for history isolation"
+        None, description="Optional session ID for history isolation",
     )
 
 
@@ -76,7 +76,7 @@ def _get_agent(session_id: Optional[str] = None):
 
 
 @router.post(
-    "", response_model=ChatResponse, summary="Send a message to the AI assistant"
+    "", response_model=ChatResponse, summary="Send a message to the AI assistant",
 )
 async def ai_chat(
     body: ChatRequest,

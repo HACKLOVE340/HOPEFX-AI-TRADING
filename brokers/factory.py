@@ -110,7 +110,7 @@ class BrokerFactory:
                 raise ValueError(f"{broker_class} is not a BrokerConnector subclass")
         except ImportError as exc:
             logger.debug(
-                "BrokerConnector base class unavailable during registration: %s", exc
+                "BrokerConnector base class unavailable during registration: %s", exc,
             )
         cls._brokers[name.lower()] = broker_class
         logger.info(f"Broker registered: {name}")

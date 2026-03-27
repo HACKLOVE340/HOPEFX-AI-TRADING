@@ -150,7 +150,7 @@ async def get_trader_signals(trader_id: str, limit: int = 10):
                 "pnl": pnl,
                 "copies": random.randint(0, 12),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            }
+            },
         )
     return {"signals": signals}
 

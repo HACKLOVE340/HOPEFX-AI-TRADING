@@ -53,7 +53,7 @@ except ImportError:
     _MT5_AVAILABLE = False
     logger.warning(
         "MetaTrader5 package not available — bridge runs in signal-export mode only. "
-        "Install on Windows: pip install MetaTrader5"
+        "Install on Windows: pip install MetaTrader5",
     )
 
 # ── signal export directory ───────────────────────────────────────────────────
@@ -218,7 +218,7 @@ class EX5SignalExporter:
                 if status == "REJECTED":
                     raise RuntimeError(
                         f"MT5 EA rejected signal {signal_path.name}: "
-                        f"{data.get('reject_reason', 'unknown')}"
+                        f"{data.get('reject_reason', 'unknown')}",
                     )
             except (json.JSONDecodeError, KeyError):
                 pass
@@ -362,7 +362,7 @@ class MT5Bridge:
         if not order.stop_loss:
             raise ValueError(
                 f"Order for {order.symbol!r} rejected: stop_loss must be set. "
-                "Never trade without a stop-loss."
+                "Never trade without a stop-loss.",
             )
 
         self._enforce(order.symbol)
@@ -456,7 +456,7 @@ class MT5Bridge:
         if not _MT5_AVAILABLE:
             raise RuntimeError(
                 "monitor_fill() with a ticket requires direct MT5 mode. "
-                "In signal-export mode, use EX5SignalExporter.poll_fill(path)."
+                "In signal-export mode, use EX5SignalExporter.poll_fill(path).",
             )
 
         deadline = time.monotonic() + timeout_sec
@@ -616,7 +616,7 @@ class MT5Bridge:
         return await loop.run_in_executor(None, self.send_order, order)
 
     async def async_close_position(
-        self, symbol: str, volume: Optional[float] = None
+        self, symbol: str, volume: Optional[float] = None,
     ) -> List[MT5FillResult]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)

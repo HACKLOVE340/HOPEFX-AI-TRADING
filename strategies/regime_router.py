@@ -74,7 +74,7 @@ _DEFAULT_REGIME_STRATEGY: Dict[str, str] = {
 }
 
 _MANIFEST_PATH = Path(
-    os.getenv("REGIME_MANIFEST", "ml/saved_models/regime_manifest.json")
+    os.getenv("REGIME_MANIFEST", "ml/saved_models/regime_manifest.json"),
 )
 
 
@@ -163,7 +163,7 @@ def _atr(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int) -
 
 
 def _adx_approx(
-    highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int
+    highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int,
 ) -> float:
     """Approximate ADX using directional movement."""
     if len(highs) < period + 1:
@@ -197,7 +197,7 @@ class RegimePerformance:
     total_trades: int = 0
     avg_return_pct: float = 0.0
     updated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -269,7 +269,7 @@ def update_regime_performance(
                 win_rate=win_rate,
                 total_trades=total_trades,
                 avg_return_pct=avg_return_pct,
-            )
+            ),
         )
 
     entries.sort(key=lambda p: p.sharpe, reverse=True)

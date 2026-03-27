@@ -143,7 +143,7 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
 async def _fetch_market_data(
-    symbol: str, app_state: Any = None
+    symbol: str, app_state: Any = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Fetch latest OHLCV data for a symbol.
@@ -233,7 +233,7 @@ async def run_signal_engine(app_state: Any) -> None:
 
 
 def _compute_signal(
-    brain: Any, data: Dict[str, Any], symbol: str
+    brain: Any, data: Dict[str, Any], symbol: str,
 ) -> Optional[Dict[str, Any]]:
     """
     Run StrategyBrain and return a signal dict, or None if no consensus.
@@ -283,7 +283,7 @@ def _build_ohlcv_df(data: Dict[str, Any]) -> "pd.DataFrame":
             "low": lows if len(lows) == n else prices,
             "close": prices,
             "volume": volumes if len(volumes) == n else [0.0] * n,
-        }
+        },
     )
     # Overwrite last bar with actual OHLCV from the tick
     ohlcv_df.iloc[-1] = [
@@ -297,7 +297,7 @@ def _build_ohlcv_df(data: Dict[str, Any]) -> "pd.DataFrame":
 
 
 def _fetch_macro_df(
-    ohlcv_df: "pd.DataFrame", symbol: str
+    ohlcv_df: "pd.DataFrame", symbol: str,
 ) -> Optional["pd.DataFrame"]:
     """
     Align MacroStore series to the OHLCV hourly index.
@@ -352,7 +352,7 @@ def _fetch_macro_df(
 
 
 def _fetch_mtf_df(
-    ohlcv_df: "pd.DataFrame", app_state: Any = None
+    ohlcv_df: "pd.DataFrame", app_state: Any = None,
 ) -> Optional[Any]:
     """
     Fetch MTF regime features from MTFFusionStore if available and enabled.
@@ -442,7 +442,7 @@ def _compute_ml_probability(
                 try:
                     prob = online_store.blend(prob, ohlcv_df)
                     logger.debug(
-                        "Phase3 online blend: %s → %.4f", symbol, prob
+                        "Phase3 online blend: %s → %.4f", symbol, prob,
                     )
                 except Exception as ol_exc:
                     logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
@@ -453,7 +453,7 @@ def _compute_ml_probability(
                 try:
                     prob = deep_store.blend(prob, ohlcv_df)
                     logger.debug(
-                        "Phase4 deep blend: %s → %.4f", symbol, prob
+                        "Phase4 deep blend: %s → %.4f", symbol, prob,
                     )
                 except Exception as de_exc:
                     logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
@@ -623,7 +623,7 @@ async def _publish_and_broadcast(
                     model_version=model_ver,
                 ),
                 model_version=model_ver,
-            )
+            ),
         )
     except Exception as ev_exc:
         logger.debug("Typed event publish failed: %s", ev_exc)
@@ -675,13 +675,13 @@ async def _execute_if_approved(
         gate_result = get_gate().check()
         if not gate_result.allowed:
             logger.warning(
-                "Auto-trade blocked by LiveTradingGate: %s", gate_result.reason
+                "Auto-trade blocked by LiveTradingGate: %s", gate_result.reason,
             )
             return
     except Exception as _gate_exc:
         # Gate unavailable → fail safe: block the trade.
         logger.error(
-            "LiveTradingGate check raised an exception — blocking trade: %s", _gate_exc
+            "LiveTradingGate check raised an exception — blocking trade: %s", _gate_exc,
         )
         return
 
@@ -712,7 +712,7 @@ async def _execute_if_approved(
             assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
             if not assessment.can_trade:
                 logger.info(
-                    "Auto-trade blocked by risk manager: %s", assessment.messages
+                    "Auto-trade blocked by risk manager: %s", assessment.messages,
                 )
                 return
 
@@ -878,7 +878,7 @@ async def _tick(app_state: Any) -> None:
 
         # 1. Fetch OHLCV
         data: Optional[Dict[str, Any]] = await _fetch_market_data(
-            symbol, app_state=app_state
+            symbol, app_state=app_state,
         )
         if not data:
             continue
@@ -894,7 +894,7 @@ async def _tick(app_state: Any) -> None:
 
         # 3. ML probability enrichment (advanced model with macro + MTF features)
         ml_probability, model_ver = _compute_ml_probability(
-            data, symbol, base_confidence, app_state=app_state
+            data, symbol, base_confidence, app_state=app_state,
         )
 
         # 4. Build signal payload

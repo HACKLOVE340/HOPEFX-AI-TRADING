@@ -77,13 +77,13 @@ def _get_user_id(request: Request) -> str:
             import jwt as pyjwt
 
             secret = os.getenv(
-                "JWT_SECRET_KEY", "hopefx-secret-key-change-in-production"
+                "JWT_SECRET_KEY", "hopefx-secret-key-change-in-production",
             )
             payload = pyjwt.decode(token, secret, algorithms=["HS256"])
             return str(payload.get("sub", "anonymous"))
     except Exception as exc:
         logger.debug(
-            "Settings user extraction failed, defaulting to anonymous: %s", exc
+            "Settings user extraction failed, defaulting to anonymous: %s", exc,
         )
     return "anonymous"
 
@@ -221,8 +221,8 @@ async def _test_discord(webhook_url: str) -> None:
                 "title": "HOPEFX — Test Notification",
                 "description": "Discord notifications are working correctly.",
                 "color": 0x22C55E,
-            }
-        ]
+            },
+        ],
     }
     async with aiohttp.ClientSession() as session:
         async with session.post(webhook_url, json=payload) as resp:
@@ -260,5 +260,5 @@ async def _test_telegram(bot_token: str, chat_id: str) -> None:
             data = await resp.json()
             if not data.get("ok"):
                 raise ValueError(
-                    f"Telegram error: {data.get('description', 'unknown')}"
+                    f"Telegram error: {data.get('description', 'unknown')}",
                 )

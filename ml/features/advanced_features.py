@@ -30,7 +30,7 @@ class AdvancedFeatureEngineer:
         self.lookback_periods = lookback_periods
 
     def engineer_features(
-        self, df: pd.DataFrame, include_advanced: bool = True
+        self, df: pd.DataFrame, include_advanced: bool = True,
     ) -> pd.DataFrame:
         """
         Engineer all features
@@ -194,7 +194,7 @@ class AdvancedFeatureEngineer:
 
         # MACD
         df["macd"], df["macd_signal"], df["macd_hist"] = self._calculate_macd(
-            df["close"]
+            df["close"],
         )
 
         # Momentum
@@ -379,7 +379,7 @@ class AdvancedFeatureEngineer:
         return rsi
 
     def _calculate_macd(
-        self, prices: pd.Series
+        self, prices: pd.Series,
     ) -> Tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate MACD"""
         ema12 = prices.ewm(span=12).mean()
@@ -392,7 +392,7 @@ class AdvancedFeatureEngineer:
         return macd, signal, hist
 
     def _calculate_stochastic(
-        self, df: pd.DataFrame, period: int = 14
+        self, df: pd.DataFrame, period: int = 14,
     ) -> Tuple[pd.Series, pd.Series]:
         """Calculate Stochastic Oscillator"""
         low_min = df["low"].rolling(period).min()
@@ -430,7 +430,7 @@ class AdvancedFeatureEngineer:
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
         sma = typical_price.rolling(period).mean()
         mad = typical_price.rolling(period).apply(
-            lambda x: np.mean(np.abs(x - x.mean()))
+            lambda x: np.mean(np.abs(x - x.mean())),
         )
 
         cci = (typical_price - sma) / (0.015 * mad + 1e-10)
@@ -464,7 +464,7 @@ class AdvancedFeatureEngineer:
             return 0
 
     def _calculate_permutation_entropy(
-        self, prices: np.ndarray, order: int = 3
+        self, prices: np.ndarray, order: int = 3,
     ) -> float:
         """Calculate permutation entropy"""
         try:

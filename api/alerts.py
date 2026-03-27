@@ -84,7 +84,7 @@ def _serialise(alert) -> Dict[str, Any]:
                 if hasattr(d["condition_type"], "value")
                 else d["condition_type"],
                 "threshold": d.get("threshold", 0),
-            }
+            },
         ]
 
     # Normalise notification channels key

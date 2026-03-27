@@ -69,7 +69,7 @@ class _TokenBlacklist:
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
         except Exception:
             logger.warning(
-                "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)"
+                "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)",
             )
             self._redis = None
 
@@ -277,7 +277,7 @@ class AuthService:
             if not user:
                 return False, "Invalid or expired verification token"
             if user.email_verify_expires and _now() > user.email_verify_expires.replace(
-                tzinfo=timezone.utc
+                tzinfo=timezone.utc,
             ):
                 return False, "Verification token expired. Request a new one."
             user.is_email_verified = True
@@ -340,7 +340,7 @@ class AuthService:
                         ip_address=ip_address,
                         success=success,
                         failure_reason=reason if not success else None,
-                    )
+                    ),
                 )
                 session.commit()
                 # Prometheus metric
@@ -403,7 +403,7 @@ class AuthService:
             # Issue tokens
             access_token = self._create_access_token(user)
             raw_refresh, session_row = self._create_refresh_session(
-                user, ip_address, device_info, session
+                user, ip_address, device_info, session,
             )
 
             # Update last login
@@ -433,7 +433,7 @@ class AuthService:
     # ── Token refresh ─────────────────────────────────────────────────────────
 
     def refresh(
-        self, raw_refresh_token: str, ip_address: str = "unknown"
+        self, raw_refresh_token: str, ip_address: str = "unknown",
     ) -> Tuple[bool, str, Optional[dict]]:
         """
         Rotate refresh token. Old token is revoked, new pair issued.
@@ -465,7 +465,7 @@ class AuthService:
             # Issue new pair
             access_token = self._create_access_token(user)
             raw_new, _ = self._create_refresh_session(
-                user, ip_address, sess_row.device_info or "", session
+                user, ip_address, sess_row.device_info or "", session,
             )
             session.commit()
 
@@ -483,7 +483,7 @@ class AuthService:
     # ── Logout ────────────────────────────────────────────────────────────────
 
     def logout(
-        self, raw_refresh_token: str, access_token: Optional[str] = None
+        self, raw_refresh_token: str, access_token: Optional[str] = None,
     ) -> Tuple[bool, str]:
         from database.user_models import UserSession
 
@@ -504,7 +504,7 @@ class AuthService:
         if access_token:
             try:
                 payload = jwt.decode(
-                    access_token, _get_secret(), algorithms=[ALGORITHM]
+                    access_token, _get_secret(), algorithms=[ALGORITHM],
                 )
                 jti = payload.get("jti")
                 exp = payload.get("exp", 0)
@@ -522,7 +522,7 @@ class AuthService:
 
         with self._sf() as session:
             session.query(UserSession).filter_by(
-                user_id=user_id, is_revoked=False
+                user_id=user_id, is_revoked=False,
             ).update({"is_revoked": True, "revoked_at": _now()})
             session.commit()
         return True, "All sessions revoked"
@@ -631,14 +631,14 @@ class AuthService:
             "jti": secrets.token_hex(16),  # unique token ID for blacklisting
             "iat": int(now.timestamp()),
             "exp": int(
-                (now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp()
+                (now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp(),
             ),
             "type": "access",
         }
         return jwt.encode(payload, _get_secret(), algorithm=ALGORITHM)
 
     def _create_refresh_session(
-        self, user, ip_address: str, device_info: str, session
+        self, user, ip_address: str, device_info: str, session,
     ) -> Tuple[str, object]:
         from database.user_models import UserSession
 

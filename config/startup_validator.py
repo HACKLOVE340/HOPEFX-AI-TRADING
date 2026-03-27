@@ -81,16 +81,16 @@ def validate_environment(*, strict: bool = True) -> None:
     if not jwt_val:
         errors.append(
             "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
-            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
     elif len(jwt_val) < 32:
         errors.append(
-            f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)"
+            f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
         )
     elif jwt_val.startswith("CHANGE_ME"):
         errors.append(
             "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
-            "replace with a real random secret before deploying"
+            "replace with a real random secret before deploying",
         )
 
     # ── Database ──────────────────────────────────────────────────────────────
@@ -102,15 +102,15 @@ def validate_environment(*, strict: bool = True) -> None:
         if not db_url and not db_host:
             errors.append(
                 "MISSING  DATABASE_URL or DB_HOST: "
-                "set DATABASE_URL=postgresql://user:pass@host:5432/db"
+                "set DATABASE_URL=postgresql://user:pass@host:5432/db",
             )
         if not db_url and db_host and not db_pass:
             errors.append(
-                "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL"
+                "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
             )
         if db_pass and len(db_pass) < 12:
             errors.append(
-                f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)"
+                f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
             )
 
     # ── Redis ─────────────────────────────────────────────────────────────────
@@ -123,16 +123,16 @@ def validate_environment(*, strict: bool = True) -> None:
                 redis_port = os.getenv("REDIS_PORT", "6379")
                 errors.append(
                     f"MISSING  REDIS_URL: found REDIS_HOST={redis_host} — "
-                    f"set REDIS_URL=redis://{redis_host}:{redis_port}/0"
+                    f"set REDIS_URL=redis://{redis_host}:{redis_port}/0",
                 )
             else:
                 errors.append(
                     "MISSING  REDIS_URL: Redis connection URL — "
-                    "set REDIS_URL=redis://localhost:6379/0"
+                    "set REDIS_URL=redis://localhost:6379/0",
                 )
         elif not redis_url.startswith(("redis://", "rediss://")):
             errors.append(
-                f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://"
+                f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://",
             )
 
     # ── Config encryption key ─────────────────────────────────────────────────
@@ -141,15 +141,15 @@ def validate_environment(*, strict: bool = True) -> None:
         if not enc_key:
             errors.append(
                 "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
-                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
             )
         elif len(enc_key) < 32:
             errors.append(
-                f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)"
+                f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
             )
         elif enc_key.startswith("CHANGE_ME"):
             errors.append(
-                "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying"
+                "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
             )
 
     # ── Broker type + live trading guard ─────────────────────────────────────
@@ -157,7 +157,7 @@ def validate_environment(*, strict: bool = True) -> None:
     valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}
     if broker_type not in valid_broker_types:
         errors.append(
-            f"INVALID  BROKER_TYPE={broker_type!r}: must be one of {sorted(valid_broker_types)}"
+            f"INVALID  BROKER_TYPE={broker_type!r}: must be one of {sorted(valid_broker_types)}",
         )
 
     # Prevent accidental live auto-trading: SIGNAL_ENGINE_AUTO_TRADE=true
@@ -166,7 +166,7 @@ def validate_environment(*, strict: bool = True) -> None:
     if auto_trade == "true" and broker_type == "paper" and not dev_mode:
         errors.append(
             "CONFLICT SIGNAL_ENGINE_AUTO_TRADE=true with BROKER_TYPE=paper in production — "
-            "set BROKER_TYPE to a live broker or disable auto-trading"
+            "set BROKER_TYPE to a live broker or disable auto-trading",
         )
 
     # OANDA credentials required when BROKER_TYPE=oanda
@@ -175,11 +175,11 @@ def validate_environment(*, strict: bool = True) -> None:
         oanda_acct = os.getenv("BROKER_OANDA_ACCOUNT", os.getenv("OANDA_ACCOUNT_ID", "")).strip()
         if not oanda_key:
             errors.append(
-                "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda"
+                "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda",
             )
         if not oanda_acct:
             errors.append(
-                "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda"
+                "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda",
             )
 
     # ── Kill switch deactivation token ───────────────────────────────────────
@@ -190,22 +190,22 @@ def validate_environment(*, strict: bool = True) -> None:
         if not ks_token:
             errors.append(
                 "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
-                'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+                'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
             )
         elif len(ks_token) < 32:
             errors.append(
-                f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)"
+                f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
             )
         elif ks_token.startswith("CHANGE_ME"):
             errors.append(
-                "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying"
+                "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
             )
 
     # ── Optional validated vars ───────────────────────────────────────────────
     sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
     if sentry_dsn and not sentry_dsn.startswith("https://"):
         errors.append(
-            f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN"
+            f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN",
         )
 
     mobile_cors = os.getenv("MOBILE_CORS_ORIGINS", "").strip()
@@ -219,7 +219,7 @@ def validate_environment(*, strict: bool = True) -> None:
         if bad:
             errors.append(
                 f"INVALID  MOBILE_CORS_ORIGINS: non-https origins: {bad} — "
-                "all origins must start with https:// (or http://localhost for dev)"
+                "all origins must start with https:// (or http://localhost for dev)",
             )
 
     ibkr_port = os.getenv("IBKR_PORT", "").strip()
@@ -228,7 +228,7 @@ def validate_environment(*, strict: bool = True) -> None:
             errors.append(
                 f"INVALID  IBKR_PORT={ibkr_port!r}: "
                 "must be one of 4001 (gateway-live), 4002 (gateway-paper), "
-                "7496 (tws-live), 7497 (tws-paper)"
+                "7496 (tws-live), 7497 (tws-paper)",
             )
 
     # ── CORS wildcard guard ───────────────────────────────────────────────────
@@ -241,7 +241,7 @@ def validate_environment(*, strict: bool = True) -> None:
             errors.append(
                 "INSECURE ALLOWED_ORIGINS contains '*' in production — "
                 "set ALLOWED_ORIGINS to a comma-separated list of explicit "
-                "https:// origins (e.g. https://app.example.com)"
+                "https:// origins (e.g. https://app.example.com)",
             )
 
     if errors:

@@ -72,7 +72,7 @@ def _get_oanda_cb():
         # Do not raise: the broker must still be usable without the CB module.
         import logging as _log
         _log.getLogger(__name__).warning(
-            "OANDA circuit breaker unavailable — broker calls unprotected: %s", _cb_exc
+            "OANDA circuit breaker unavailable — broker calls unprotected: %s", _cb_exc,
         )
         return None
 
@@ -194,7 +194,7 @@ _STATUS_MAP: Dict[str, OrderStatus] = {
 
 
 def _parse_order_response(
-    data: Dict, symbol: str, side: OrderSide, qty: float
+    data: Dict, symbol: str, side: OrderSide, qty: float,
 ) -> Order:
     fill = data.get("orderFillTransaction")
     create = data.get("orderCreateTransaction")
@@ -283,7 +283,7 @@ def _parse_positions(raw_positions: List[Dict]) -> List[Position]:
                 unrealized_pnl=upnl,
                 realized_pnl=rpnl,
                 timestamp=datetime.now(timezone.utc),
-            )
+            ),
         )
     return out
 
@@ -353,10 +353,10 @@ class OANDAConnector(BrokerConnector):
                 {
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
-                }
+                },
             )
             r = self.session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}", timeout=10
+                f"{self.base_url}/v3/accounts/{self.account_id}", timeout=10,
             )
             r.raise_for_status()
             self.connected = True
@@ -402,7 +402,7 @@ class OANDAConnector(BrokerConnector):
                 "units": str(int(units)),
                 "type": "MARKET" if order_type == OrderType.MARKET else "LIMIT",
                 "timeInForce": "FOK" if order_type == OrderType.MARKET else "GTC",
-            }
+            },
         }
         if price and order_type != OrderType.MARKET:
             body["order"]["price"] = str(price)
@@ -480,7 +480,7 @@ class OANDAConnector(BrokerConnector):
             return None
         try:
             r = self.session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}/summary", timeout=10
+                f"{self.base_url}/v3/accounts/{self.account_id}/summary", timeout=10,
             )
             r.raise_for_status()
             a = r.json().get("account", {})
@@ -492,7 +492,7 @@ class OANDAConnector(BrokerConnector):
                 margin_used=float(a.get("marginUsed", 0)),
                 margin_available=float(a.get("marginAvailable", nav)),
                 positions_count=int(
-                    a.get("openPositionCount", a.get("openTradeCount", 0))
+                    a.get("openPositionCount", a.get("openTradeCount", 0)),
                 ),
                 timestamp=datetime.now(timezone.utc),
             )
@@ -501,7 +501,7 @@ class OANDAConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "H1", limit: int = 100
+        self, symbol: str, timeframe: str = "H1", limit: int = 100,
     ) -> List[Dict]:
         if not self.connected or not self.session:
             return []
@@ -637,7 +637,7 @@ class AsyncOANDAConnector:
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             )
             async with self._session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}"
+                f"{self.base_url}/v3/accounts/{self.account_id}",
             ) as resp:
                 resp.raise_for_status()
             self.connected = True
@@ -670,7 +670,7 @@ class AsyncOANDAConnector:
     def _require_session(self) -> Any:
         if not self.connected or self._session is None:
             raise RuntimeError(
-                "AsyncOANDAConnector is not connected. Call await connect() first."
+                "AsyncOANDAConnector is not connected. Call await connect() first.",
             )
         return self._session
 
@@ -691,7 +691,7 @@ class AsyncOANDAConnector:
                 "units": str(int(units)),
                 "type": "MARKET" if order_type == OrderType.MARKET else "LIMIT",
                 "timeInForce": "FOK" if order_type == OrderType.MARKET else "GTC",
-            }
+            },
         }
         if price and order_type != OrderType.MARKET:
             body["order"]["price"] = str(price)
@@ -707,7 +707,7 @@ class AsyncOANDAConnector:
                         data = await resp.json()
             else:
                 async with session.post(
-                    f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body
+                    f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body,
                 ) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -720,7 +720,7 @@ class AsyncOANDAConnector:
         session = self._require_session()
         try:
             async with session.put(
-                f"{self.base_url}/v3/accounts/{self.account_id}/orders/{order_id}/cancel"
+                f"{self.base_url}/v3/accounts/{self.account_id}/orders/{order_id}/cancel",
             ) as resp:
                 resp.raise_for_status()
             return True
@@ -732,7 +732,7 @@ class AsyncOANDAConnector:
         session = self._require_session()
         try:
             async with session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}/orders/{order_id}"
+                f"{self.base_url}/v3/accounts/{self.account_id}/orders/{order_id}",
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
@@ -745,7 +745,7 @@ class AsyncOANDAConnector:
         session = self._require_session()
         try:
             async with session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}/openPositions"
+                f"{self.base_url}/v3/accounts/{self.account_id}/openPositions",
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
@@ -771,7 +771,7 @@ class AsyncOANDAConnector:
         session = self._require_session()
         try:
             async with session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}/summary"
+                f"{self.base_url}/v3/accounts/{self.account_id}/summary",
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
@@ -784,7 +784,7 @@ class AsyncOANDAConnector:
                 margin_used=float(a.get("marginUsed", 0)),
                 margin_available=float(a.get("marginAvailable", nav)),
                 positions_count=int(
-                    a.get("openPositionCount", a.get("openTradeCount", 0))
+                    a.get("openPositionCount", a.get("openTradeCount", 0)),
                 ),
                 timestamp=datetime.now(timezone.utc),
             )
@@ -793,7 +793,7 @@ class AsyncOANDAConnector:
             return None
 
     async def get_market_data(
-        self, symbol: str, timeframe: str = "H1", limit: int = 100
+        self, symbol: str, timeframe: str = "H1", limit: int = 100,
     ) -> List[Dict]:
         session = self._require_session()
         gran = _TF_MAP.get(timeframe, timeframe)

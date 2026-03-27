@@ -376,7 +376,7 @@ class AdvancedOrderManager:
             self.stats["total_orders"] += 1
 
         logger.info(
-            f"Created trailing stop: {order.id} - {side.value} {quantity} {symbol}"
+            f"Created trailing stop: {order.id} - {side.value} {quantity} {symbol}",
         )
         return order
 
@@ -425,7 +425,7 @@ class AdvancedOrderManager:
         )
 
         oco = OCOOrder(
-            id=str(uuid.uuid4()), symbol=symbol, order1=limit_order, order2=stop_order
+            id=str(uuid.uuid4()), symbol=symbol, order1=limit_order, order2=stop_order,
         )
 
         # Link orders
@@ -525,7 +525,7 @@ class AdvancedOrderManager:
 
         logger.info(
             f"Created bracket order: {bracket.id} - "
-            f"Entry@{entry_price or 'MARKET'}, SL@{stop_loss_price}, TP@{take_profit_price}"
+            f"Entry@{entry_price or 'MARKET'}, SL@{stop_loss_price}, TP@{take_profit_price}",
         )
         return bracket
 
@@ -569,7 +569,7 @@ class AdvancedOrderManager:
             self.stats["total_orders"] += 1
 
         logger.info(
-            f"Created conditional order: {conditional.id} with {len(conditions)} conditions"
+            f"Created conditional order: {conditional.id} with {len(conditions)} conditions",
         )
         return conditional
 
@@ -658,7 +658,7 @@ class AdvancedOrderManager:
         return scaled
 
     def update_trailing_stop(
-        self, order_id: str, current_price: float
+        self, order_id: str, current_price: float,
     ) -> Optional[float]:
         """
         Update trailing stop price based on current price.
@@ -726,7 +726,7 @@ class AdvancedOrderManager:
         return None
 
     def evaluate_conditional_order(
-        self, order_id: str, market_data: Dict[str, Any]
+        self, order_id: str, market_data: Dict[str, Any],
     ) -> bool:
         """
         Evaluate conditions for a conditional order.
@@ -899,21 +899,21 @@ class AdvancedOrderManager:
                         o
                         for o in self.orders.values()
                         if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ]
+                    ],
                 ),
                 "active_oco": len(
                     [
                         o
                         for o in self.oco_orders.values()
                         if o.status == OrderStatus.PENDING
-                    ]
+                    ],
                 ),
                 "active_brackets": len(
                     [
                         b
                         for b in self.bracket_orders.values()
                         if b.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ]
+                    ],
                 ),
                 "trailing_stops": len(self.trailing_stops),
                 "conditional_orders": len(self.conditional_orders),

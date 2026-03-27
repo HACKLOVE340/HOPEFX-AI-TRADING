@@ -116,7 +116,7 @@ class StrategyOrchestra:
                                 "signal_type": signal.signal_type.value,
                                 "confidence": signal.confidence,
                             },
-                        )
+                        ),
                     )
             except Exception as e:
                 print(f"Error in {sid}: {e}")
@@ -133,7 +133,7 @@ class StrategyOrchestra:
                         "strength": composite.confidence,
                     },
                     priority=2,
-                )
+                ),
             )
 
     def _calculate_composite_signal(self) -> Optional[Signal]:

@@ -91,7 +91,7 @@ class PositionTracker:
             return True
 
     async def close_position(
-        self, position_id: str, exit_price: float, commission: float = 0
+        self, position_id: str, exit_price: float, commission: float = 0,
     ) -> Optional[Position]:
         """Close position"""
         async with self._lock:
@@ -118,7 +118,7 @@ class PositionTracker:
             logger.info(
                 f"Position closed: {position_id} | "
                 f"Realized P&L: ${pos.realized_pnl:.2f} | "
-                f"Commission: ${pos.commission:.2f}"
+                f"Commission: ${pos.commission:.2f}",
             )
 
             return pos

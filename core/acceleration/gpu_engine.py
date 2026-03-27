@@ -58,7 +58,7 @@ class GARCHModel:
 
             # Student-t log-likelihood
             log_likelihood = -np.sum(
-                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance))
+                np.log(stats.t.pdf(returns / np.sqrt(variance), nu) / np.sqrt(variance)),
             )
             return log_likelihood
 
@@ -130,7 +130,7 @@ class CopulaRiskModel:
         """Simulate correlated returns"""
         # Generate correlated uniforms
         normal = np.random.multivariate_normal(
-            np.zeros(len(self.marginals)), self.correlation, n_sims
+            np.zeros(len(self.marginals)), self.correlation, n_sims,
         )
         uniform = stats.norm.cdf(normal)
 
@@ -231,7 +231,7 @@ class RealTimeRiskMonitor:
         self.kill_switch_triggered = False
 
     def update_portfolio(
-        self, positions: Dict[str, Decimal], prices: Dict[str, Decimal]
+        self, positions: Dict[str, Decimal], prices: Dict[str, Decimal],
     ):
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)
@@ -313,7 +313,7 @@ class GPUInferenceEngine:
         self.device = self.config.device
         if self.device == "cuda" and not _HAS_CUDA:
             _gpu_logger.warning(
-                "CUDA requested but not available — falling back to CPU"
+                "CUDA requested but not available — falling back to CPU",
             )
             self.device = "cpu"
         _gpu_logger.info("GPUInferenceEngine initialised on device=%s", self.device)
@@ -349,7 +349,7 @@ class GPUFeatureEngine:
         window = min(20, len(returns))
         rolling_mean = _np.convolve(returns, _np.ones(window) / window, mode="valid")
         rolling_std = _np.array(
-            [returns[i : i + window].std() for i in range(len(returns) - window + 1)]
+            [returns[i : i + window].std() for i in range(len(returns) - window + 1)],
         )
         min_len = min(len(returns), len(rolling_mean), len(rolling_std))
         return _np.column_stack(
@@ -357,5 +357,5 @@ class GPUFeatureEngine:
                 returns[-min_len:],
                 rolling_mean[-min_len:],
                 rolling_std[-min_len:],
-            ]
+            ],
         )

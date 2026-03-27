@@ -96,7 +96,7 @@ class HourlyTrainer:
         if not self.enabled:
             logger.info(
                 "HourlyTrainer disabled — set ML_HOURLY_ENABLED=true to enable. "
-                "Online updates and hourly retraining will not run."
+                "Online updates and hourly retraining will not run.",
             )
             return
 

@@ -271,7 +271,7 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
         if not cvar_allowed:
             logger.warning(
-                "Order blocked by CVaR gate: user=%s reason=%s", user_id, cvar_reason
+                "Order blocked by CVaR gate: user=%s reason=%s", user_id, cvar_reason,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -323,7 +323,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     try:
         result = await _broker_call("place_market_order", symbol=order.symbol,
             side=order.side,
-            quantity=order.quantity,)
+            quantity=order.quantity)
         return result
     except HTTPException:
         raise
@@ -338,7 +338,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
 
 
 async def _record_fill(
-    order: "OrderRequest", result: Any, user_id: str
+    order: "OrderRequest", result: Any, user_id: str,
 ) -> Dict[str, Any]:
     """
     Broadcast the fill over WebSocket, send FCM push, send email, update
@@ -508,7 +508,7 @@ async def close_position(
     success = await _broker_call("close_position", position_id)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Position not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Position not found",
         )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
@@ -922,7 +922,7 @@ def _make_strategy_router():
 
             if _fomc_regime_override.get("active"):
                 fomc_multiplier = _fomc_regime_override.get(
-                    "position_size_multiplier", 1.0
+                    "position_size_multiplier", 1.0,
                 )
         except Exception as exc:
             logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
