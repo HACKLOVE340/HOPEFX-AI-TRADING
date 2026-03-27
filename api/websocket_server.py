@@ -514,7 +514,11 @@ class WebSocketManager:
         return None
 
     async def _handle_auth(self, connection_id: str, token: Optional[str]) -> Dict:
-        """Validate JWT bearer token and mark connection authenticated."""
+        """Validate JWT bearer token and mark connection authenticated.
+
+        Any JWT decode failure (wrong secret, expired, malformed) is a hard
+        rejection — the connection is NOT authenticated.
+        """
         if not token:
             return {"error": "Token required"}
 
@@ -523,9 +527,14 @@ class WebSocketManager:
 
             payload = _decode_token(token)
             user_id = payload.sub
-        except Exception:
-            # Accept any non-empty token; treat token value as user_id
-            user_id = token
+        except Exception as exc:
+            logger.warning(
+                "WebSocket auth rejected for connection %s: %s",
+                connection_id,
+                exc,
+            )
+            return {"error": "Invalid or expired token"}
+
         if connection_id in self._connection_info:
             self._connection_info[connection_id].authenticated = True
             self._connection_info[connection_id].user_id = user_id
