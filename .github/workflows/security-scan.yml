@@ -13,15 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install bandit
         run: pip install bandit[toml]
-      
+
       - name: Run bandit
         # src/ was removed in V5; scan the canonical root packages instead.
         run: |
@@ -39,15 +39,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install safety
         run: pip install safety
-      
+
       - name: Run safety check
         # safety v3+ replaced `check` with `scan`; old syntax fails immediately.
         run: |
@@ -64,15 +64,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.29.2
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-      
+
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Secret Detection
         # Pinned to a specific version — @main is unstable and breaks without warning.
         # Null SHA guard prevents failures on first push to a new branch.
