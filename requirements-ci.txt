@@ -49,3 +49,6 @@ python-multipart>=0.0.9
 jinja2>=3.1.0
 sendgrid>=6.11.0
 hypothesis>=6.100.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
