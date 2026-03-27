@@ -16,6 +16,19 @@ service:
   type: ClusterIP
   port: 8000
 
+# ── Trading engine (core/main_loop.py) ───────────────────────────────────────
+trading:
+  enabled: true
+  replicaCount: 1          # always 1 — multiple instances would double-trade
+  command: ["python", "-m", "core.main_loop"]
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
 # ── Redis sidecar ────────────────────────────────────────────────────────────
 redis:
   image: redis:7-alpine
@@ -53,10 +66,22 @@ env:
   DB_PATH: "/app/data/hopefx.db"
   PROP_FIRM_CONFIG: "/app/data/prop_firm_mode.json"
   ML_MODEL_DIR: "/app/data/models"
+  # Safety: paper trading by default — override to "false" for live
+  OANDA_PRACTICE: "true"
+  # Connector hub tuning
+  ML_MIN_TRADE_PROB: "0.58"
+  STRATEGY_MIN_BARS: "100"
+  STRATEGY_TICKS_PER_BAR: "10"
+  RISK_MAX_DAILY_LOSS_PCT: "0.05"
+  RISK_MAX_DRAWDOWN_PCT: "0.10"
+  FIX_CONFIG_FILE: "/app/fix.cfg"
 
 # ── Secret references (values injected at deploy time) ───────────────────────
-# Set these via: helm install hopefx . --set secrets.BINANCE_API_KEY=xxx
+# Set these via: helm install hopefx . --set secrets.OANDA_API_KEY=xxx
+# Or use an external secrets manager (Vault, AWS Secrets Manager, etc.)
 secrets:
+  OANDA_API_KEY: ""
+  OANDA_ACCOUNT_ID: ""
   BINANCE_API_KEY: ""
   BINANCE_SECRET: ""
   MT5_LOGIN: ""
@@ -66,6 +91,8 @@ secrets:
   TELEGRAM_BOT_TOKEN: ""
   TELEGRAM_CHAT_ID: ""
   OPENAI_API_KEY: ""
+  FIX_USERNAME: ""
+  FIX_PASSWORD: ""
 
 # ── Liveness / readiness probes ──────────────────────────────────────────────
 probes:
