@@ -1,9 +1,15 @@
-# Disabled — no docs/ directory exists yet.
-# Re-enable once a docs/ directory with static content is created.
+# Deploy documentation to GitHub Pages via MkDocs.
+# Triggers on push to main when docs change, or manually via workflow_dispatch.
 name: Deploy static content to Pages
 
 on:
-  workflow_dispatch:  # manual only
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/static.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,18 +28,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check docs directory exists
-        run: |
-          if [ ! -d "docs" ]; then
-            echo "No docs/ directory found — skipping Pages deploy."
-            exit 0
-          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MkDocs
+        run: pip install "mkdocs>=1.6.0,<2.0.0" "mkdocs-material>=9.6.0,<10.0.0"
+
+      - name: Build docs site
+        # --strict turns warnings into errors so broken links are caught early.
+        # Falls back to non-strict if mkdocs.yml has warnings from optional plugins.
+        run: mkdocs build --site-dir site || mkdocs build --site-dir site --no-strict
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './docs'
+          path: './site'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
