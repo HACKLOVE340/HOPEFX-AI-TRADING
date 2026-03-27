@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["WebSocket Live"])
 
+# Tracks last mid price per symbol for change_pct calculation
+_last_mid: dict[str, float] = {}
+
 # ─── Connection registry ──────────────────────────────────────────────────────
 
 
@@ -267,14 +270,26 @@ async def _eventbus_tick_broadcaster() -> None:
         async for msg in bus.subscribe(CH_TICK):
             if _manager.connection_count == 0:
                 continue
+            # Normalise to frontend PriceTick schema:
+            # { type: "price_tick", data: PriceTick }
+            symbol = msg.get("symbol", "XAU/USD")
+            mid    = float(msg.get("mid") or 0)
+            # Track previous mid for change_pct calculation
+            prev   = _last_mid.get(symbol, mid)
+            change = ((mid - prev) / prev * 100) if prev else 0.0
+            _last_mid[symbol] = mid
+
             tick = {
-                "type":      "price_tick",
-                "symbol":    msg.get("symbol", "XAU/USD"),
-                "bid":       msg.get("bid"),
-                "ask":       msg.get("ask"),
-                "mid":       msg.get("mid"),
-                "spread":    msg.get("spread"),
-                "timestamp": msg.get("timestamp"),
+                "type": "price_tick",
+                "data": {
+                    "symbol":     symbol,
+                    "bid":        msg.get("bid"),
+                    "ask":        msg.get("ask"),
+                    "mid":        mid,
+                    "spread":     msg.get("spread"),
+                    "timestamp":  msg.get("timestamp"),
+                    "change_pct": round(change, 4),
+                },
             }
             await _manager.broadcast("prices", tick)
     except Exception as exc:  # noqa: BLE001
@@ -297,13 +312,29 @@ async def _eventbus_signal_broadcaster() -> None:
                 continue
             if _manager.connection_count == 0:
                 continue
+            # Normalise to the frontend WsMessage schema:
+            # { type: "signal", data: Signal }
+            direction_raw = (msg.get("direction") or "neutral").lower()
+            direction_fe  = (
+                "long"  if direction_raw == "buy"  else
+                "short" if direction_raw == "sell" else
+                "neutral"
+            )
+            mid = msg.get("mid", 0.0)
             signal = {
-                "type":       "signal",
-                "symbol":     msg.get("symbol"),
-                "direction":  msg.get("direction"),
-                "confidence": msg.get("confidence"),
-                "mid":        msg.get("mid"),
-                "timestamp":  msg.get("timestamp"),
+                "type": "signal",
+                "data": {
+                    "id":           f"sig_{msg.get('tick_seq', 0)}",
+                    "symbol":       msg.get("symbol", "XAU/USD"),
+                    "direction":    direction_fe,
+                    "confidence":   msg.get("confidence", 0.0),
+                    "model":        "advanced_oos",
+                    "entry_price":  mid,
+                    "stop_loss":    round(mid * 0.998, 5),   # 0.2% SL placeholder
+                    "take_profit":  round(mid * 1.004, 5),   # 0.4% TP placeholder
+                    "generated_at": msg.get("timestamp", ""),
+                    "status":       "active",
+                },
             }
             await _manager.broadcast("signals", signal)
     except Exception as exc:  # noqa: BLE001
