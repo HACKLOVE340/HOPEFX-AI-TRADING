@@ -74,14 +74,23 @@ class BacktestResult(BaseModel):
 
 _STRATEGY_MAP = {
     "MovingAverageCrossover": "strategies.ma_crossover.MovingAverageCrossover",
+    "ma_crossover": "strategies.ma_crossover.MovingAverageCrossover",
     "RSIStrategy": "strategies.rsi_strategy.RSIStrategy",
+    "rsi": "strategies.rsi_strategy.RSIStrategy",
     "MACDStrategy": "strategies.macd_strategy.MACDStrategy",
+    "macd": "strategies.macd_strategy.MACDStrategy",
     "BollingerBands": "strategies.bollinger_bands.BollingerBandsStrategy",
+    "bollinger": "strategies.bollinger_bands.BollingerBandsStrategy",
     "SMCICTStrategy": "strategies.smc_ict.SMCICTStrategy",
+    "smc_ict": "strategies.smc_ict.SMCICTStrategy",
     "EMAcrossover": "strategies.ema_crossover.EMAcrossoverStrategy",
+    "ema_crossover": "strategies.ema_crossover.EMAcrossoverStrategy",
     "MeanReversion": "strategies.mean_reversion.MeanReversionStrategy",
+    "mean_reversion": "strategies.mean_reversion.MeanReversionStrategy",
     "Breakout": "strategies.breakout.BreakoutStrategy",
+    "breakout": "strategies.breakout.BreakoutStrategy",
     "Stochastic": "strategies.stochastic.StochasticStrategy",
+    "stochastic": "strategies.stochastic.StochasticStrategy",
 }
 
 
@@ -101,8 +110,16 @@ def _load_strategy(name: str, params: Optional[dict] = None):
 
 
 def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> "pd.DataFrame":
-    """Fetch OHLCV data via yfinance."""
+    """
+    Fetch OHLCV data for backtesting.
 
+    Priority:
+    1. yfinance live download (requires internet + valid ticker)
+    2. Local CSV files in data/ directory (always available for XAUUSD)
+    """
+    import pathlib
+
+    # 1. Try yfinance
     try:
         import yfinance as yf
 
@@ -110,12 +127,63 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> "pd.DataFrame"
         interval = interval_map.get(freq, "1d")
         ticker = yf.Ticker(symbol)
         df = ticker.history(start=start, end=end, interval=interval)
-        if df.empty:
-            raise ValueError(f"No data for {symbol} {start}→{end}")
-        df.columns = [c.lower() for c in df.columns]
-        return df[["open", "high", "low", "close", "volume"]].dropna()
-    except ImportError:
-        raise ValueError("yfinance not installed")
+        if not df.empty:
+            df.columns = [c.lower() for c in df.columns]
+            return df[["open", "high", "low", "close", "volume"]].dropna()
+        logger.debug("yfinance returned empty for %s %s→%s", symbol, start, end)
+    except Exception as exc:
+        logger.debug("yfinance failed (%s), trying local CSV: %s", symbol, exc)
+
+    # 2. Local CSV fallback
+    sym_upper = symbol.upper().replace("-", "_").replace("/", "_")
+    if "_" not in sym_upper and len(sym_upper) == 6:
+        sym_upper = sym_upper[:3] + "_" + sym_upper[3:]
+
+    # Map requested frequency to available CSV files
+    freq_file_map = {
+        "1d": ["XAU_USD_D", "XAUUSD_40Y", "XAUUSD_5Y", "XAUUSD_2Y"],
+        "1h": ["XAU_USD_H1"],
+        "4h": ["XAU_USD_H4"],
+        "15m": ["XAU_USD_M15"],
+        "30m": ["XAU_USD_M30"],
+        "5m": ["XAU_USD_M5"],
+        "1m": ["XAU_USD_M1"],
+    }
+    data_dir = pathlib.Path(__file__).parent.parent / "data"
+    candidates = freq_file_map.get(freq, freq_file_map["1d"])
+
+    # Also try generic symbol-based names
+    candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
+
+    for stem in candidates:
+        csv_path = data_dir / f"{stem}.csv"
+        if not csv_path.exists():
+            continue
+        try:
+            df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+            df = df.rename(columns={"timestamp": "time"}).set_index("time")
+            df = df[["open", "high", "low", "close", "volume"]].dropna()
+            df.index = pd.to_datetime(df.index, utc=True)
+
+            # Filter to requested date range
+            start_ts = pd.Timestamp(start, tz="UTC")
+            end_ts = pd.Timestamp(end, tz="UTC")
+            df = df[(df.index >= start_ts) & (df.index < end_ts)]
+
+            if len(df) >= 10:
+                logger.info(
+                    "Backtest data: loaded %d bars from %s for %s %s→%s",
+                    len(df), csv_path.name, symbol, start, end,
+                )
+                return df
+        except Exception as exc:
+            logger.debug("CSV load failed (%s): %s", csv_path, exc)
+
+    raise ValueError(
+        f"No data for {symbol} {start}→{end}. "
+        "Available local data: XAUUSD (2005–present). "
+        "For other symbols set up yfinance or add CSV files to data/."
+    )
 
 
 def _run_backtest_sync(req: BacktestRequest) -> dict:
