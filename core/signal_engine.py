@@ -490,7 +490,7 @@ def _compute_ml_probability(
                     logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
 
             logger.debug(
-                "ML chain (%s) %s: final=%.4f " "[macro=%s mtf=%s anomaly_w=%.2f]",
+                "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s anomaly_w=%.2f]",
                 adv_predictor.version,
                 symbol,
                 prob,

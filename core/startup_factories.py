@@ -867,8 +867,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
             )
         else:
             log_activity(
-                f"DeepEnsembleStore inactive (Phase 4) — "
-                f"{store._gate_failure_reason}",
+                f"DeepEnsembleStore inactive (Phase 4) — {store._gate_failure_reason}",
             )
         return store if activated else None
     except Exception as exc:

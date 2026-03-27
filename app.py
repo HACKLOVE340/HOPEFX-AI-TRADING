@@ -1193,28 +1193,35 @@ async def login_page():
     if template_path.exists():
         return HTMLResponse(content=template_path.read_text(encoding="utf-8"))
     return HTMLResponse(
-        content='<html><body><p>Login template missing. '
-                '<a href="/docs">Use /docs to authenticate.</a></p></body></html>',
+        content="<html><body><p>Login template missing. "
+        '<a href="/docs">Use /docs to authenticate.</a></p></body></html>',
         status_code=200,
     )
 
 
-@app.get("/register", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
+@app.get(
+    "/register", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False
+)
 async def register_page():
     """Redirect /register to the login page (registration is via API)."""
     return HTMLResponse(
         content='<html><head><meta http-equiv="refresh" content="0;url=/login"></head>'
-                "<body>Redirecting to login…</body></html>",
+        "<body>Redirecting to login…</body></html>",
         status_code=200,
     )
 
 
-@app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"], include_in_schema=False)
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse,
+    tags=["Dashboard"],
+    include_in_schema=False,
+)
 async def dashboard_redirect():
     """Redirect /dashboard to the paper-trading dashboard."""
     return HTMLResponse(
         content='<html><head><meta http-equiv="refresh" content="0;url=/paper-trading"></head>'
-                "<body>Redirecting…</body></html>",
+        "<body>Redirecting…</body></html>",
         status_code=200,
     )
 

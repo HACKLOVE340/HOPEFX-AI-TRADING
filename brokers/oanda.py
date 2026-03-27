@@ -140,7 +140,7 @@ def resolve_oanda_urls(
     r = (region or _DEFAULT_REGION).lower()
     if r not in _REGION_ENDPOINTS:
         logger.warning(
-            "Unknown OANDA region %r — falling back to 'us'. " "Valid regions: %s",
+            "Unknown OANDA region %r — falling back to 'us'. Valid regions: %s",
             r,
             list(_REGION_ENDPOINTS),
         )

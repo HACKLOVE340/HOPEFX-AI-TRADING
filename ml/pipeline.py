@@ -567,7 +567,7 @@ class MLPipeline:
         y = feats["y"]
 
         logger.info(
-            "MLPipeline: features computed | rows=%d features=%d " "class_balance=%.3f",
+            "MLPipeline: features computed | rows=%d features=%d class_balance=%.3f",
             len(feats),
             len(feature_cols),
             y.mean(),
