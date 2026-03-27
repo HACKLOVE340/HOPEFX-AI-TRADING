@@ -73,13 +73,11 @@ class TestScanCriteria:
         from analysis.market_scanner import ScanCriteria, ScanCriteriaType
 
         criteria = ScanCriteria(
-            type=ScanCriteriaType.RSI_OVERSOLD,
-            parameters={'threshold': 30},
-            weight=1.5
+            type=ScanCriteriaType.RSI_OVERSOLD, parameters={"threshold": 30}, weight=1.5
         )
 
         assert criteria.type == ScanCriteriaType.RSI_OVERSOLD
-        assert criteria.parameters['threshold'] == 30
+        assert criteria.parameters["threshold"] == 30
         assert criteria.weight == 1.5
 
     def test_criteria_to_dict(self):
@@ -87,13 +85,12 @@ class TestScanCriteria:
         from analysis.market_scanner import ScanCriteria, ScanCriteriaType
 
         criteria = ScanCriteria(
-            type=ScanCriteriaType.BREAKOUT,
-            parameters={'period': 20}
+            type=ScanCriteriaType.BREAKOUT, parameters={"period": 20}
         )
 
         result = criteria.to_dict()
-        assert result['type'] == 'breakout'
-        assert result['parameters']['period'] == 20
+        assert result["type"] == "breakout"
+        assert result["parameters"]["period"] == 20
 
 
 class TestScanResult:
@@ -104,16 +101,16 @@ class TestScanResult:
         from analysis.market_scanner import ScanResult, SignalDirection
 
         result = ScanResult(
-            symbol='XAUUSD',
-            criteria_met=['rsi_oversold', 'uptrend'],
+            symbol="XAUUSD",
+            criteria_met=["rsi_oversold", "uptrend"],
             total_criteria=3,
             match_score=0.67,
             direction=SignalDirection.BULLISH,
             signal_strength=75.0,
-            details={'rsi': 28}
+            details={"rsi": 28},
         )
 
-        assert result.symbol == 'XAUUSD'
+        assert result.symbol == "XAUUSD"
         assert len(result.criteria_met) == 2
         assert result.signal_strength == 75.0
 
@@ -122,18 +119,18 @@ class TestScanResult:
         from analysis.market_scanner import ScanResult, SignalDirection
 
         result = ScanResult(
-            symbol='EURUSD',
-            criteria_met=['momentum'],
+            symbol="EURUSD",
+            criteria_met=["momentum"],
             total_criteria=2,
             match_score=0.5,
             direction=SignalDirection.BEARISH,
             signal_strength=50.0,
-            details={}
+            details={},
         )
 
         data = result.to_dict()
-        assert data['symbol'] == 'EURUSD'
-        assert data['direction'] == 'bearish'
+        assert data["symbol"] == "EURUSD"
+        assert data["direction"] == "bearish"
 
 
 class TestMarketOpportunity:
@@ -144,19 +141,19 @@ class TestMarketOpportunity:
         from analysis.market_scanner import MarketOpportunity, SignalDirection
 
         opportunity = MarketOpportunity(
-            symbol='XAUUSD',
-            opportunity_type='breakout',
+            symbol="XAUUSD",
+            opportunity_type="breakout",
             direction=SignalDirection.BULLISH,
             strength=80.0,
             entry_price=1950.00,
             stop_loss=1940.00,
             take_profit=1970.00,
             risk_reward=2.0,
-            triggers=['breakout', 'momentum'],
-            analysis={'rsi': 55}
+            triggers=["breakout", "momentum"],
+            analysis={"rsi": 55},
         )
 
-        assert opportunity.symbol == 'XAUUSD'
+        assert opportunity.symbol == "XAUUSD"
         assert opportunity.strength == 80.0
         assert opportunity.risk_reward == 2.0
 
@@ -166,8 +163,8 @@ class TestMarketOpportunity:
 
         # Valid opportunity
         opportunity = MarketOpportunity(
-            symbol='XAUUSD',
-            opportunity_type='test',
+            symbol="XAUUSD",
+            opportunity_type="test",
             direction=SignalDirection.BULLISH,
             strength=80,
             entry_price=1950,
@@ -176,7 +173,7 @@ class TestMarketOpportunity:
             risk_reward=2.0,
             triggers=[],
             analysis={},
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
         assert opportunity.is_valid is True
@@ -190,21 +187,21 @@ class TestMarketOpportunity:
         from analysis.market_scanner import MarketOpportunity, SignalDirection
 
         opportunity = MarketOpportunity(
-            symbol='XAUUSD',
-            opportunity_type='momentum',
+            symbol="XAUUSD",
+            opportunity_type="momentum",
             direction=SignalDirection.BULLISH,
             strength=75,
             entry_price=1950,
             stop_loss=1940,
             take_profit=1970,
             risk_reward=2.0,
-            triggers=['momentum'],
-            analysis={}
+            triggers=["momentum"],
+            analysis={},
         )
 
         result = opportunity.to_dict()
-        assert result['symbol'] == 'XAUUSD'
-        assert result['direction'] == 'bullish'
+        assert result["symbol"] == "XAUUSD"
+        assert result["direction"] == "bullish"
 
 
 class TestMarketScanner:
@@ -216,19 +213,19 @@ class TestMarketScanner:
 
         scanner = MarketScanner()
         assert scanner is not None
-        assert hasattr(scanner, '_symbols')
-        assert hasattr(scanner, '_criteria')
+        assert hasattr(scanner, "_symbols")
+        assert hasattr(scanner, "_criteria")
 
     def test_add_symbols(self):
         """Test adding symbols."""
         from analysis.market_scanner import MarketScanner
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD', 'EURUSD', 'GBPUSD'])
+        scanner.add_symbols(["XAUUSD", "EURUSD", "GBPUSD"])
 
         symbols = scanner.get_symbols()
-        assert 'XAUUSD' in symbols
-        assert 'EURUSD' in symbols
+        assert "XAUUSD" in symbols
+        assert "EURUSD" in symbols
         assert len(symbols) == 3
 
     def test_set_symbols(self):
@@ -236,11 +233,11 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.set_symbols(['EURUSD', 'GBPUSD'])
+        scanner.add_symbols(["XAUUSD"])
+        scanner.set_symbols(["EURUSD", "GBPUSD"])
 
         symbols = scanner.get_symbols()
-        assert 'XAUUSD' not in symbols
+        assert "XAUUSD" not in symbols
         assert len(symbols) == 2
 
     def test_remove_symbol(self):
@@ -248,19 +245,19 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD', 'EURUSD'])
-        scanner.remove_symbol('XAUUSD')
+        scanner.add_symbols(["XAUUSD", "EURUSD"])
+        scanner.remove_symbol("XAUUSD")
 
         symbols = scanner.get_symbols()
-        assert 'XAUUSD' not in symbols
-        assert 'EURUSD' in symbols
+        assert "XAUUSD" not in symbols
+        assert "EURUSD" in symbols
 
     def test_add_criteria(self):
         """Test adding criteria."""
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
         scanner.add_criteria(ScanCriteriaType.UPTREND)
 
         criteria = scanner.get_criteria()
@@ -281,19 +278,19 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD', 'EURUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD", "EURUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
         market_data = {
-            'XAUUSD': {'price': 1950, 'open': 1945, 'rsi': 25},
-            'EURUSD': {'price': 1.08, 'open': 1.079, 'rsi': 55}
+            "XAUUSD": {"price": 1950, "open": 1945, "rsi": 25},
+            "EURUSD": {"price": 1.08, "open": 1.079, "rsi": 55},
         }
 
         results = scanner.scan(market_data, min_strength=0)
 
         assert len(results) >= 1
         # XAUUSD should match RSI oversold
-        xauusd_result = next((r for r in results if r.symbol == 'XAUUSD'), None)
+        xauusd_result = next((r for r in results if r.symbol == "XAUUSD"), None)
         assert xauusd_result is not None
 
     def test_scan_multiple_criteria(self):
@@ -301,17 +298,17 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
         scanner.add_criteria(ScanCriteriaType.UPTREND)
 
         market_data = {
-            'XAUUSD': {
-                'price': 1950,
-                'open': 1945,
-                'rsi': 25,
-                'ma_20': 1940,
-                'ma_50': 1930
+            "XAUUSD": {
+                "price": 1950,
+                "open": 1945,
+                "rsi": 25,
+                "ma_20": 1940,
+                "ma_50": 1930,
             }
         }
 
@@ -323,11 +320,11 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERBOUGHT, {'threshold': 70})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERBOUGHT, {"threshold": 70})
 
         market_data = {
-            'XAUUSD': {'price': 1950, 'rsi': 50}  # RSI not overbought
+            "XAUUSD": {"price": 1950, "rsi": 50}  # RSI not overbought
         }
 
         results = scanner.scan(market_data, min_strength=50)
@@ -338,10 +335,10 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
-        market_data = {'XAUUSD': {'price': 1950, 'rsi': 25}}
+        market_data = {"XAUUSD": {"price": 1950, "rsi": 25}}
 
         results_low = scanner.scan(market_data, min_strength=0)
         results_high = scanner.scan(market_data, min_strength=90)
@@ -354,27 +351,27 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
-        market_data = {'XAUUSD': {'price': 1950, 'rsi': 25}}
+        market_data = {"XAUUSD": {"price": 1950, "rsi": 25}}
         scanner.scan(market_data, min_strength=0)
 
-        result = scanner.get_last_result('XAUUSD')
+        result = scanner.get_last_result("XAUUSD")
         assert result is not None
-        assert result.symbol == 'XAUUSD'
+        assert result.symbol == "XAUUSD"
 
     def test_get_all_results(self):
         """Test getting all last results."""
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD', 'EURUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD", "EURUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
         market_data = {
-            'XAUUSD': {'price': 1950, 'rsi': 25},
-            'EURUSD': {'price': 1.08, 'rsi': 28}
+            "XAUUSD": {"price": 1950, "rsi": 25},
+            "EURUSD": {"price": 1.08, "rsi": 28},
         }
         scanner.scan(market_data, min_strength=0)
 
@@ -386,19 +383,19 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
         scanner.add_criteria(ScanCriteriaType.UPTREND)
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
         # Create strong signal
         market_data = {
-            'XAUUSD': {
-                'price': 1950,
-                'open': 1940,
-                'rsi': 25,
-                'ma_20': 1940,
-                'ma_50': 1920
+            "XAUUSD": {
+                "price": 1950,
+                "open": 1940,
+                "rsi": 25,
+                "ma_20": 1940,
+                "ma_50": 1920,
             }
         }
         scanner.scan(market_data, min_strength=50)
@@ -411,13 +408,13 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD', 'EURUSD', 'GBPUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD", "EURUSD", "GBPUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
         market_data = {
-            'XAUUSD': {'price': 1950, 'rsi': 20},
-            'EURUSD': {'price': 1.08, 'rsi': 25},
-            'GBPUSD': {'price': 1.25, 'rsi': 28}
+            "XAUUSD": {"price": 1950, "rsi": 20},
+            "EURUSD": {"price": 1.08, "rsi": 25},
+            "GBPUSD": {"price": 1.25, "rsi": 28},
         }
         scanner.scan(market_data, min_strength=0)
 
@@ -429,8 +426,8 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner.add_symbols(["XAUUSD"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
         scanner.add_criteria(ScanCriteriaType.UPTREND)
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
@@ -438,12 +435,12 @@ class TestMarketScanner:
         scanner.on_opportunity(lambda opp: callbacks.append(opp))
 
         market_data = {
-            'XAUUSD': {
-                'price': 1950,
-                'open': 1940,
-                'rsi': 20,
-                'ma_20': 1940,
-                'ma_50': 1920
+            "XAUUSD": {
+                "price": 1950,
+                "open": 1940,
+                "rsi": 20,
+                "ma_20": 1940,
+                "ma_50": 1920,
             }
         }
         scanner.scan(market_data, min_strength=50)
@@ -456,13 +453,13 @@ class TestMarketScanner:
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
         scanner = MarketScanner()
-        scanner.add_symbols(['XAUUSD'])
+        scanner.add_symbols(["XAUUSD"])
         scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD)
 
         stats = scanner.get_stats()
-        assert 'symbols_count' in stats
-        assert 'criteria_count' in stats
-        assert 'scans_performed' in stats
+        assert "symbols_count" in stats
+        assert "criteria_count" in stats
+        assert "scans_performed" in stats
 
     def test_global_instance(self):
         """Test global scanner instance."""
@@ -477,15 +474,15 @@ class TestMarketScanner:
         """Test parallel scanning mode."""
         from analysis.market_scanner import MarketScanner, ScanCriteriaType
 
-        scanner = MarketScanner(config={'parallel_scan': True})
-        scanner.add_symbols(['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY'])
-        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {'threshold': 30})
+        scanner = MarketScanner(config={"parallel_scan": True})
+        scanner.add_symbols(["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"])
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30})
 
         market_data = {
-            'XAUUSD': {'price': 1950, 'rsi': 25},
-            'EURUSD': {'price': 1.08, 'rsi': 28},
-            'GBPUSD': {'price': 1.25, 'rsi': 22},
-            'USDJPY': {'price': 150.5, 'rsi': 55}
+            "XAUUSD": {"price": 1950, "rsi": 25},
+            "EURUSD": {"price": 1.08, "rsi": 28},
+            "GBPUSD": {"price": 1.25, "rsi": 22},
+            "USDJPY": {"price": 150.5, "rsi": 55},
         }
 
         results = scanner.scan(market_data, min_strength=0)

@@ -82,7 +82,9 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
         return BrokerTestResponse(ok=False, broker="oanda", error="API key is required")
     if not req.accountId:
         return BrokerTestResponse(
-            ok=False, broker="oanda", error="Account ID is required",
+            ok=False,
+            broker="oanda",
+            error="Account ID is required",
         )
 
     base = (

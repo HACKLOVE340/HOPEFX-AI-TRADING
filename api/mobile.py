@@ -31,7 +31,9 @@ router = APIRouter(prefix="/api/mobile", tags=["Mobile"])
 
 class RegisterPushBody(BaseModel):
     fcm_token: str = Field(
-        ..., min_length=10, description="Firebase Cloud Messaging device token",
+        ...,
+        min_length=10,
+        description="Firebase Cloud Messaging device token",
     )
     platform: str = Field("android", description="'android' or 'ios'")
 

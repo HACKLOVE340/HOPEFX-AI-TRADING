@@ -49,11 +49,13 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-_ENABLED          = os.getenv("ML_HOURLY_ENABLED", "false").lower() in ("true", "1", "yes")
-_INTERVAL_SECS    = int(os.getenv("ML_HOURLY_INTERVAL_SECONDS", "3600"))
+_ENABLED = os.getenv("ML_HOURLY_ENABLED", "false").lower() in ("true", "1", "yes")
+_INTERVAL_SECS = int(os.getenv("ML_HOURLY_INTERVAL_SECONDS", "3600"))
 _FULL_RETRAIN_HRS = int(os.getenv("ML_FULL_RETRAIN_HOURS", "24"))
-_SYMBOLS          = [s.strip() for s in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if s.strip()]
-_MODEL_DIR        = os.getenv("ML_MODEL_DIR", "ml/models")
+_SYMBOLS = [
+    s.strip() for s in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if s.strip()
+]
+_MODEL_DIR = os.getenv("ML_MODEL_DIR", "ml/models")
 
 
 class HourlyTrainer:
@@ -77,15 +79,15 @@ class HourlyTrainer:
         symbols: Optional[List[str]] = None,
         model_dir: str = _MODEL_DIR,
     ) -> None:
-        self.enabled          = enabled
-        self.interval_secs    = interval_secs
+        self.enabled = enabled
+        self.interval_secs = interval_secs
         self.full_retrain_hrs = full_retrain_hrs
-        self.symbols          = symbols or _SYMBOLS
-        self.model_dir        = model_dir
+        self.symbols = symbols or _SYMBOLS
+        self.model_dir = model_dir
 
         self._last_full_retrain: Dict[str, float] = {}  # symbol → epoch
         self._online_update_count: int = 0
-        self._full_retrain_count: int  = 0
+        self._full_retrain_count: int = 0
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
 
@@ -102,7 +104,9 @@ class HourlyTrainer:
 
         logger.info(
             "HourlyTrainer starting: symbols=%s interval=%ds full_retrain_every=%dh",
-            self.symbols, self.interval_secs, self.full_retrain_hrs,
+            self.symbols,
+            self.interval_secs,
+            self.full_retrain_hrs,
         )
         self._running = True
         await self._loop()
@@ -116,14 +120,14 @@ class HourlyTrainer:
     def status(self) -> Dict[str, Any]:
         """Return current trainer state for the admin dashboard."""
         return {
-            "enabled":              self.enabled,
-            "running":              self._running,
-            "interval_secs":        self.interval_secs,
-            "full_retrain_hrs":     self.full_retrain_hrs,
-            "symbols":              self.symbols,
-            "online_update_count":  self._online_update_count,
-            "full_retrain_count":   self._full_retrain_count,
-            "last_full_retrain":    {
+            "enabled": self.enabled,
+            "running": self._running,
+            "interval_secs": self.interval_secs,
+            "full_retrain_hrs": self.full_retrain_hrs,
+            "symbols": self.symbols,
+            "online_update_count": self._online_update_count,
+            "full_retrain_count": self._full_retrain_count,
+            "last_full_retrain": {
                 sym: datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
                 for sym, ts in self._last_full_retrain.items()
             },
@@ -145,7 +149,8 @@ class HourlyTrainer:
             sleep_secs = max(0.0, self.interval_secs - elapsed)
             logger.debug(
                 "HourlyTrainer cycle done in %.1fs — sleeping %.0fs",
-                elapsed, sleep_secs,
+                elapsed,
+                sleep_secs,
             )
             try:
                 await asyncio.sleep(sleep_secs)
@@ -178,19 +183,28 @@ class HourlyTrainer:
         """
         try:
             from ml.online_learner import get_online_learner  # noqa: PLC0415
+
             learner = get_online_learner(symbol)
             if learner is None:
                 return
 
             bars = await self._fetch_recent_bars(symbol, n=24)
             if bars is None or len(bars) < 5:
-                logger.debug("OnlineUpdate %s: insufficient bars (%s)", symbol, len(bars) if bars is not None else 0)
+                logger.debug(
+                    "OnlineUpdate %s: insufficient bars (%s)",
+                    symbol,
+                    len(bars) if bars is not None else 0,
+                )
                 return
 
             learner.partial_fit(bars)
-            logger.debug("OnlineUpdate %s: fed %d bars to OnlineLearner", symbol, len(bars))
+            logger.debug(
+                "OnlineUpdate %s: fed %d bars to OnlineLearner", symbol, len(bars)
+            )
         except ImportError:
-            logger.debug("OnlineLearner not available — skipping online update for %s", symbol)
+            logger.debug(
+                "OnlineLearner not available — skipping online update for %s", symbol
+            )
         except Exception as exc:
             logger.warning("OnlineUpdate %s failed: %s", symbol, exc)
 
@@ -215,18 +229,26 @@ class HourlyTrainer:
             model_names = list(results.keys()) if results else []
             logger.info(
                 "HourlyTrainer: full retrain complete for %s in %.1fs — models: %s",
-                symbol, elapsed, model_names,
+                symbol,
+                elapsed,
+                model_names,
             )
 
             # Reload live inference so the signal engine picks up new weights
             await self._reload_live_inference(symbol)
 
         except Exception as exc:
-            logger.error("HourlyTrainer: full retrain failed for %s: %s", symbol, exc, exc_info=True)
+            logger.error(
+                "HourlyTrainer: full retrain failed for %s: %s",
+                symbol,
+                exc,
+                exc_info=True,
+            )
 
     def _run_pipeline_sync(self, symbol: str) -> Dict[str, Any]:
         """Synchronous wrapper around run_training.run_pipeline (runs in thread)."""
         from ml.run_training import run_pipeline  # noqa: PLC0415
+
         return run_pipeline(
             symbol=symbol,
             model_types=["random_forest", "xgboost"],
@@ -237,6 +259,7 @@ class HourlyTrainer:
         """Reload the live inference model after a full retrain."""
         try:
             from ml.live_inference import LiveInference  # noqa: PLC0415
+
             infer = LiveInference(symbol=symbol, model_dir=self.model_dir)
             infer.reload()
             logger.info("LiveInference reloaded for %s", symbol)
@@ -247,6 +270,7 @@ class HourlyTrainer:
         """Fetch the last N H1 bars from the local CSV."""
         try:
             import pandas as pd  # noqa: PLC0415
+
             csv_path = Path(f"data/{symbol}_H1.csv")
             if not csv_path.exists():
                 return None
@@ -282,6 +306,7 @@ if __name__ == "__main__":
 
     try:
         from dotenv import load_dotenv
+
         load_dotenv(_ROOT / ".env")
     except ImportError:
         pass
@@ -294,7 +319,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX hourly ML trainer")
     parser.add_argument("--once", action="store_true", help="Run one cycle then exit")
     parser.add_argument("--symbol", default=None, help="Override ML_SYMBOLS")
-    parser.add_argument("--full-retrain", action="store_true", help="Force a full retrain now")
+    parser.add_argument(
+        "--full-retrain", action="store_true", help="Force a full retrain now"
+    )
     args = parser.parse_args()
 
     symbols = [args.symbol] if args.symbol else _SYMBOLS

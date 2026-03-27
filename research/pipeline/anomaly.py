@@ -111,10 +111,10 @@ class AnomalyWeighter:
             self._lof = LocalOutlierFactor(
                 n_neighbors=lof_neighbors,
                 contamination=contamination,
-                novelty=True,   # novelty=True allows predict() on new data
+                novelty=True,  # novelty=True allows predict() on new data
                 n_jobs=-1,
             )
-        self._threshold: float = 0.0   # decision_function threshold (≈0 for IF)
+        self._threshold: float = 0.0  # decision_function threshold (≈0 for IF)
         self._lof_threshold: float = 0.0
         self._fitted = False
 
@@ -151,7 +151,9 @@ class AnomalyWeighter:
         n_anomalies = int((if_scores < self._threshold).sum())
         logger.info(
             "AnomalyWeighter fitted: %d/%d bars flagged (%.1f%%) [IF%s]",
-            n_anomalies, len(arr), 100 * n_anomalies / len(arr),
+            n_anomalies,
+            len(arr),
+            100 * n_anomalies / len(arr),
             "+LOF" if self._lof is not None else "",
         )
         return self
@@ -174,8 +176,8 @@ class AnomalyWeighter:
             try:
                 lof_scores = self._lof.decision_function(arr)
                 # Normalise both to comparable scale before blending
-                if_norm  = (if_scores  - self._threshold)
-                lof_norm = (lof_scores - self._lof_threshold)
+                if_norm = if_scores - self._threshold
+                lof_norm = lof_scores - self._lof_threshold
                 return self.if_weight * if_norm + (1.0 - self.if_weight) * lof_norm
             except Exception:
                 pass  # fall through to IF-only
@@ -233,8 +235,8 @@ class AnomalyWeighter:
         scores = self.decision_scores(df)
         weights = self.sample_weights(df)
         out = df.copy()
-        out["anomaly_score"]  = scores
-        out["is_anomaly"]     = scores < 0.0
+        out["anomaly_score"] = scores
+        out["is_anomaly"] = scores < 0.0
         out["anomaly_weight"] = weights
         return out
 
@@ -242,6 +244,7 @@ class AnomalyWeighter:
 
     def save(self, path: str | Path) -> None:
         import pickle
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
@@ -251,6 +254,7 @@ class AnomalyWeighter:
     @classmethod
     def load(cls, path: str | Path) -> "AnomalyWeighter":
         import pickle
+
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
@@ -274,7 +278,9 @@ class AnomalyWeighter:
         """
         scores = self.decision_scores(X)
         idx = np.argsort(scores)[:top_n]
-        report = X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
+        report = (
+            X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
+        )
         report["anomaly_score"] = scores[idx]
         return report
 
@@ -282,6 +288,7 @@ class AnomalyWeighter:
 # ─────────────────────────────────────────────────────────────────────────────
 # AnomalyWeightStore — live inference store for signal engine
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class AnomalyWeightStore:
     """
@@ -356,32 +363,32 @@ class AnomalyWeightStore:
           6. close location within bar: (close-low)/(high-low)
         """
         try:
-            c  = ohlcv_df["close"]
-            h  = ohlcv_df["high"]
+            c = ohlcv_df["close"]
+            h = ohlcv_df["high"]
             lo = ohlcv_df["low"]
-            v  = ohlcv_df.get(
-                "volume", pd.Series(np.ones(len(c)), index=c.index)
-            )
+            v = ohlcv_df.get("volume", pd.Series(np.ones(len(c)), index=c.index))
 
-            log_ret    = np.log(c / c.shift(1)).fillna(0)
-            hl_range   = ((h - lo) / c.replace(0, np.nan)).fillna(0)
-            vol_mean   = v.rolling(20).mean()
-            vol_std    = v.rolling(20).std().replace(0, np.nan)
-            vol_z      = ((v - vol_mean) / vol_std).fillna(0)
-            atr14      = ((h - lo).rolling(14).mean() / c.replace(0, np.nan)).fillna(0)
+            log_ret = np.log(c / c.shift(1)).fillna(0)
+            hl_range = ((h - lo) / c.replace(0, np.nan)).fillna(0)
+            vol_mean = v.rolling(20).mean()
+            vol_std = v.rolling(20).std().replace(0, np.nan)
+            vol_z = ((v - vol_mean) / vol_std).fillna(0)
+            atr14 = ((h - lo).rolling(14).mean() / c.replace(0, np.nan)).fillna(0)
             sma20_dist = ((c - c.rolling(20).mean()) / c.replace(0, np.nan)).fillna(0)
-            sq_ret     = log_ret ** 2
-            close_loc  = ((c - lo) / (h - lo).replace(0, np.nan)).fillna(0.5)
+            sq_ret = log_ret**2
+            close_loc = ((c - lo) / (h - lo).replace(0, np.nan)).fillna(0.5)
 
-            feat = np.column_stack([
-                log_ret.values,
-                hl_range.values,
-                vol_z.values,
-                atr14.values,
-                sma20_dist.values,
-                sq_ret.values,
-                close_loc.values,
-            ])
+            feat = np.column_stack(
+                [
+                    log_ret.values,
+                    hl_range.values,
+                    vol_z.values,
+                    atr14.values,
+                    sma20_dist.values,
+                    sq_ret.values,
+                    close_loc.values,
+                ]
+            )
             return np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
         except Exception:
             return None
@@ -407,13 +414,14 @@ class AnomalyWeightStore:
             # Append latest row to rolling buffer
             self._buffer.append(feat[-1].copy())
             if len(self._buffer) > self.window_size:
-                self._buffer = self._buffer[-self.window_size:]
+                self._buffer = self._buffer[-self.window_size :]
 
             self._bars_since_refit += 1
 
             # Refit when due or on first call with enough data
-            if (not self._fitted or self._bars_since_refit >= self.refit_every) \
-                    and len(self._buffer) >= self.MIN_FIT_BARS:
+            if (not self._fitted or self._bars_since_refit >= self.refit_every) and len(
+                self._buffer
+            ) >= self.MIN_FIT_BARS:
                 self._refit()
 
             if self._weighter is None or not self._weighter._fitted:
@@ -430,9 +438,11 @@ class AnomalyWeightStore:
                     logger.debug(
                         "Anomaly detected: score=%.4f (threshold=%.4f) "
                         "→ down-weight %.0f%% [%d/%d total]",
-                        score, self.anomaly_threshold,
+                        score,
+                        self.anomaly_threshold,
                         (1 - self.down_weight_factor) * 100,
-                        self._anomaly_count, self._total_scored,
+                        self._anomaly_count,
+                        self._total_scored,
                     )
                     return self.down_weight_factor
                 return 1.0
@@ -457,7 +467,8 @@ class AnomalyWeightStore:
             self._bars_since_refit = 0
             logger.debug(
                 "AnomalyWeightStore: refitted on %d bars (LOF=%s)",
-                len(X), self.use_lof and len(X) >= 100,
+                len(X),
+                self.use_lof and len(X) >= 100,
             )
             # Persist after successful refit
             if self.persist_path:
@@ -483,9 +494,7 @@ class AnomalyWeightStore:
         try:
             self._weighter = AnomalyWeighter.load(self.persist_path)
             self._fitted = True
-            logger.info(
-                "AnomalyWeightStore: warm-started from %s", self.persist_path
-            )
+            logger.info("AnomalyWeightStore: warm-started from %s", self.persist_path)
         except Exception as exc:
             logger.debug("AnomalyWeightStore warm-start failed: %s", exc)
 

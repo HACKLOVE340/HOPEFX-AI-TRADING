@@ -37,7 +37,7 @@ router = APIRouter(prefix="/api/explain", tags=["Explainability"])
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 # Configurable via env; defaults are conservative to protect proprietary ML data.
-_EXPLAIN_LIMIT        = os.getenv("EXPLAIN_RATE_LIMIT", "30/minute")
+_EXPLAIN_LIMIT = os.getenv("EXPLAIN_RATE_LIMIT", "30/minute")
 _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 
 
@@ -53,6 +53,7 @@ def _get_limiter():
         # standalone (tests, embedded apps).
         try:
             from app import app as _main_app
+
             lim = getattr(_main_app.state, "limiter", None)
             if lim is not None:
                 return lim
@@ -96,6 +97,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
             # when the limit is breached.  We call it synchronously here because
             # the underlying storage (Redis or in-memory) is synchronous.
             from slowapi.util import get_remote_address  # noqa: PLC0415
+
             key = get_remote_address(request)
             limiter.hit(limit_str, key)  # type: ignore[attr-defined]
             return
@@ -104,6 +106,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
             # (fail-open) so a Redis outage never blocks the explain endpoint.
             try:
                 from slowapi.errors import RateLimitExceeded  # noqa: PLC0415
+
                 if isinstance(exc, RateLimitExceeded):
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -127,7 +130,9 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
         logger.warning("explain.py: invalid rate limit string %r — skipping", limit_str)
         return
 
-    client_ip = getattr(request.client, "host", "unknown") if request.client else "unknown"
+    client_ip = (
+        getattr(request.client, "host", "unknown") if request.client else "unknown"
+    )
     now = time.monotonic()
     cutoff = now - window_secs
 
@@ -195,7 +200,8 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                     feature=fc.feature_name,
                     importance=fc.contribution,
                     description=explainer.feature_descriptions.get(
-                        fc.feature_name, fc.feature_name,
+                        fc.feature_name,
+                        fc.feature_name,
                     ),
                 )
                 for fc in sorted(
@@ -228,16 +234,24 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
             description="RSI showing oversold conditions",
         ),
         FeatureImportance(
-            feature="macd", importance=0.28, description="MACD bullish crossover",
+            feature="macd",
+            importance=0.28,
+            description="MACD bullish crossover",
         ),
         FeatureImportance(
-            feature="atr", importance=0.18, description="Volatility within normal range",
+            feature="atr",
+            importance=0.18,
+            description="Volatility within normal range",
         ),
         FeatureImportance(
-            feature="sma_20", importance=0.14, description="Price above 20-period SMA",
+            feature="sma_20",
+            importance=0.14,
+            description="Price above 20-period SMA",
         ),
         FeatureImportance(
-            feature="volume_ratio", importance=0.08, description="Volume above average",
+            feature="volume_ratio",
+            importance=0.08,
+            description="Volume above average",
         ),
     ]
     return SignalExplanation(
@@ -296,7 +310,9 @@ async def explain_signal(request: Request, signal_id: str):
 
 
 @router.get(
-    "/latest", response_model=SignalExplanation, summary="Explain the latest signal",
+    "/latest",
+    response_model=SignalExplanation,
+    summary="Explain the latest signal",
 )
 async def explain_latest(request: Request):
     """

@@ -104,7 +104,8 @@ def _simulate_ab_test(req: ABTestRequest) -> dict:
             "strategy": name,
             "final_equity": round(final, 2),
             "total_return": round(
-                (final - req.initial_capital) / req.initial_capital * 100, 2,
+                (final - req.initial_capital) / req.initial_capital * 100,
+                2,
             ),
             "sharpe_ratio": round(sharpe, 3),
             "max_drawdown": round(max(drawdowns), 2),
@@ -137,7 +138,8 @@ def _simulate_ab_test(req: ABTestRequest) -> dict:
 
 @router.post("/api/ab-test/start", status_code=201)
 async def start_ab_test(
-    req: ABTestRequest, user: TokenPayload = Depends(get_current_user),
+    req: ABTestRequest,
+    user: TokenPayload = Depends(get_current_user),
 ):
     test_id = str(uuid.uuid4())[:12]
     results = _simulate_ab_test(req)
@@ -337,7 +339,8 @@ async def list_indicators(user: TokenPayload = Depends(get_current_user)):
 
 @router.post("/api/indicators", status_code=201)
 async def save_indicator(
-    req: SaveIndicatorRequest, user: TokenPayload = Depends(get_current_user),
+    req: SaveIndicatorRequest,
+    user: TokenPayload = Depends(get_current_user),
 ):
     ind_id = str(uuid.uuid4())[:12]
     _indicators[ind_id] = {
@@ -541,7 +544,8 @@ def _run_monte_carlo(
         "p95_equity": round(p95, 2),
         "probability_of_ruin": round(ruin_count / simulations * 100, 2),
         "expected_return_pct": round(
-            (median - initial_capital) / initial_capital * 100, 2,
+            (median - initial_capital) / initial_capital * 100,
+            2,
         ),
         "histogram": histogram,
         "histogram_min": round(min_e, 2),
@@ -566,7 +570,12 @@ async def run_monte_carlo(
     capital = req.initial_capital or result.get("initial_capital", 10000)
 
     mc = _run_monte_carlo(
-        win_rate, avg_win, avg_loss, n_trades, capital, req.simulations,
+        win_rate,
+        avg_win,
+        avg_loss,
+        n_trades,
+        capital,
+        req.simulations,
     )
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(timezone.utc).isoformat()

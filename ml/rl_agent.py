@@ -150,7 +150,10 @@ class ForexTradingEnv:
 
         obs_dim = _FEATURE_DIM + 3
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32,
+            low=-np.inf,
+            high=np.inf,
+            shape=(obs_dim,),
+            dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)
 
@@ -342,7 +345,7 @@ class RLAgent:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
-            from stable_baselines3.common.env_checker import check_env
+            from stable_baselines3.common.env_checker import check_env  # noqa: F401
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",

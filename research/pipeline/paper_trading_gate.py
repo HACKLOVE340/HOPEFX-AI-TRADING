@@ -62,9 +62,9 @@ logger = logging.getLogger(__name__)
 _DEFAULT_STATE_PATH = "data/paper_trading_gate.json"
 
 # Gate thresholds (match spec exactly)
-PHASE2_MIN_DAYS   = 30
-PHASE3_MIN_DAYS   = 90
-PHASE3_MIN_FILLS  = 500
+PHASE2_MIN_DAYS = 30
+PHASE3_MIN_DAYS = 90
+PHASE3_MIN_FILLS = 500
 PHASE2_MAX_SHARPE_DROP = 0.2
 
 
@@ -83,8 +83,7 @@ class PaperTradingGate:
 
     def __init__(self, state_path: Optional[str] = None) -> None:
         self._state_path = Path(
-            state_path
-            or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH)
+            state_path or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH)
         )
         self._state: Dict = self._load_state()
 
@@ -95,7 +94,7 @@ class PaperTradingGate:
         default: Dict = {
             "run_start_utc": os.getenv("OANDA_PAPER_RUN_START_UTC", ""),
             "fill_count": int(os.getenv("OANDA_PAPER_FILL_COUNT", "0")),
-            "fills": [],           # list of {ts, pnl} dicts
+            "fills": [],  # list of {ts, pnl} dicts
             "sharpe_before": None,
             "sharpe_after": None,
             "phase2_enabled_at": None,
@@ -178,10 +177,12 @@ class PaperTradingGate:
         Total fill count after recording.
         """
         self._state["fill_count"] = self._state.get("fill_count", 0) + 1
-        self._state.setdefault("fills", []).append({
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "pnl": float(pnl),
-        })
+        self._state.setdefault("fills", []).append(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "pnl": float(pnl),
+            }
+        )
         # Keep only last 1000 fills in memory to bound file size
         if len(self._state["fills"]) > 1000:
             self._state["fills"] = self._state["fills"][-1000:]
@@ -204,11 +205,13 @@ class PaperTradingGate:
         after  : Sharpe ratio after 30-day window with anomaly weighting on.
         """
         self._state["sharpe_before"] = float(before)
-        self._state["sharpe_after"]  = float(after)
+        self._state["sharpe_after"] = float(after)
         self._save_state()
         logger.info(
             "PaperTradingGate: Sharpe recorded before=%.3f after=%.3f drop=%.3f",
-            before, after, before - after,
+            before,
+            after,
+            before - after,
         )
 
     # ── Gate checks ───────────────────────────────────────────────────────────
@@ -243,9 +246,7 @@ class PaperTradingGate:
                     f"({sb:.3f}→{sa:.3f}), max={PHASE2_MAX_SHARPE_DROP}."
                 )
 
-        return True, (
-            f"Phase 2 gate passed: {self.elapsed_days} days elapsed."
-        )
+        return True, (f"Phase 2 gate passed: {self.elapsed_days} days elapsed.")
 
     def phase3_ready(self) -> Tuple[bool, str]:
         """
@@ -256,8 +257,7 @@ class PaperTradingGate:
         # Fill count gate
         if self.fill_count < PHASE3_MIN_FILLS:
             return False, (
-                f"Phase 3: {self.fill_count} fills, "
-                f"need >= {PHASE3_MIN_FILLS}."
+                f"Phase 3: {self.fill_count} fills, " f"need >= {PHASE3_MIN_FILLS}."
             )
 
         # Time gate
@@ -337,6 +337,7 @@ def get_gate() -> PaperTradingGate:
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
+
 def _cli() -> None:
     import argparse
 
@@ -346,23 +347,34 @@ def _cli() -> None:
         epilog=__doc__,
     )
     parser.add_argument(
-        "--status", action="store_true",
+        "--status",
+        action="store_true",
         help="Print current gate status",
     )
     parser.add_argument(
-        "--set-start", action="store_true",
+        "--set-start",
+        action="store_true",
         help="Set the paper run start to now",
     )
     parser.add_argument(
-        "--record-fill", type=float, metavar="PNL", nargs="?", const=0.0,
+        "--record-fill",
+        type=float,
+        metavar="PNL",
+        nargs="?",
+        const=0.0,
         help="Record a fill with optional PNL",
     )
     parser.add_argument(
-        "--record-sharpe", nargs=2, type=float, metavar=("BEFORE", "AFTER"),
+        "--record-sharpe",
+        nargs=2,
+        type=float,
+        metavar=("BEFORE", "AFTER"),
         help="Record Sharpe before and after enabling anomaly weighting",
     )
     parser.add_argument(
-        "--state-path", type=str, default=None,
+        "--state-path",
+        type=str,
+        default=None,
         help="Override state file path",
     )
     args = parser.parse_args()
@@ -379,9 +391,13 @@ def _cli() -> None:
 
     if args.record_sharpe:
         gate.record_sharpe(before=args.record_sharpe[0], after=args.record_sharpe[1])
-        print(f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}")
+        print(
+            f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}"
+        )
 
-    if args.status or not any([args.set_start, args.record_fill is not None, args.record_sharpe]):
+    if args.status or not any(
+        [args.set_start, args.record_fill is not None, args.record_sharpe]
+    ):
         gate.print_status()
 
 

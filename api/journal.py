@@ -255,7 +255,9 @@ async def list_trades(
 
 
 @router.post(
-    "/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED,
+    "/trades",
+    response_model=JournalEntry,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_entry(
     entry: JournalEntry,

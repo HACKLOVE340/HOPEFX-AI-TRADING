@@ -8,6 +8,7 @@
 # Load .env before any other imports so all env vars are available at module load
 try:
     from dotenv import load_dotenv as _load_dotenv
+
     _load_dotenv(override=False)  # override=False: real env vars take precedence
 except ImportError:
     pass
@@ -26,28 +27,27 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
-import asyncio
-import logging
-import os
-import sys
-from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+import asyncio  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any, Dict, List, Optional  # noqa: E402
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-import uvicorn
+from fastapi import FastAPI, HTTPException, Request, status  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse, HTMLResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+import uvicorn  # noqa: E402
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -55,49 +55,58 @@ sys.path.insert(0, str(project_root))
 
 # ── Startup validation — fail loud before any connections are opened ──────────
 # Import here so the check runs before broker/DB/Redis init.
-from config.startup_validator import validate_environment
+from config.startup_validator import validate_environment  # noqa: E402
+
 validate_environment(strict=True)  # calls sys.exit(1) on failure
 
-from api.admin import router as admin_router, log_activity, apply_persisted_risk_settings
-from auth.router import router as auth_router
-from api.trading import router as trading_router
-from api.monetization import router as monetization_router
-from api.backtesting import router as backtesting_router
-from api.chat import router as chat_router
-from api.prop_firm import router as prop_firm_router
-from api.performance import router as performance_router
-from api.explain import router as explain_router
-from api.macro import router as macro_router
-from api.broker import router as broker_router
-from api.landing import router as landing_router
-from api.payments import router as payments_router
-from api.settings import router as settings_router
-from api.status import router as status_router
-from api.brain import router as brain_router
-from api.two_factor import router as two_factor_router
-from api.calendar import router as calendar_router
-from api.watchlist import router as watchlist_router
-from api.journal import router as journal_router
-from api.profiles import router as profiles_router
-from api.social_feed import router as social_feed_router, leaderboard_router as social_leaderboard_router
-from api.mobile import router as mobile_router
-from api.whitelabel_admin import router as whitelabel_router
-from api.billing import router as billing_router
-from api.platform import router as platform_router, setup_rate_limiting, init_sentry
-from api.advanced_trading import router as advanced_router
-from api.ml import router as ml_router
-from api.alerts import router as alerts_router
+from api.admin import (  # noqa: E402
+    router as admin_router,
+    log_activity,
+    apply_persisted_risk_settings,
+)
+from auth.router import router as auth_router  # noqa: E402
+from api.trading import router as trading_router  # noqa: E402
+from api.monetization import router as monetization_router  # noqa: E402
+from api.backtesting import router as backtesting_router  # noqa: E402
+from api.chat import router as chat_router  # noqa: E402
+from api.prop_firm import router as prop_firm_router  # noqa: E402
+from api.performance import router as performance_router  # noqa: E402
+from api.explain import router as explain_router  # noqa: E402
+from api.macro import router as macro_router  # noqa: E402
+from api.broker import router as broker_router  # noqa: E402
+from api.landing import router as landing_router  # noqa: E402
+from api.payments import router as payments_router  # noqa: E402
+from api.settings import router as settings_router  # noqa: E402
+from api.status import router as status_router  # noqa: E402
+from api.brain import router as brain_router  # noqa: E402
+from api.two_factor import router as two_factor_router  # noqa: E402
+from api.calendar import router as calendar_router  # noqa: E402
+from api.watchlist import router as watchlist_router  # noqa: E402
+from api.journal import router as journal_router  # noqa: E402
+from api.profiles import router as profiles_router  # noqa: E402
+from api.social_feed import (  # noqa: E402
+    router as social_feed_router,
+    leaderboard_router as social_leaderboard_router,
+)
+from api.mobile import router as mobile_router  # noqa: E402
+from api.whitelabel_admin import router as whitelabel_router  # noqa: E402
+from api.billing import router as billing_router  # noqa: E402
+from api.platform import router as platform_router, setup_rate_limiting, init_sentry  # noqa: E402
+from api.advanced_trading import router as advanced_router  # noqa: E402
+from api.ml import router as ml_router  # noqa: E402
+from api.alerts import router as alerts_router  # noqa: E402
 
 # GraphQL — strawberry-graphql (api/graphql_schema.py avoids shadowing graphql-core)
 try:
     from api.graphql_schema import graphql_router as _graphql_router
+
     _graphql_available = True
 except Exception as _gql_err:
     _graphql_router = None
     _graphql_available = False
     logger.warning("GraphQL router not loaded: %s", _gql_err)
-from config.feature_flags import flags as feature_flags
-from kill_switch import KillSwitch, create_kill_switch_router
+from config.feature_flags import flags as feature_flags  # noqa: E402
+from kill_switch import KillSwitch, create_kill_switch_router  # noqa: E402
 
 # (logging and logger already configured at module top)
 
@@ -126,15 +135,27 @@ app = FastAPI(
         {"name": "Auth", "description": "Login, logout, token refresh, 2FA"},
         {"name": "Trading", "description": "Orders, positions, account, prices"},
         {"name": "Signals", "description": "AI signal generation and history"},
-        {"name": "Watchlist", "description": "Per-user symbol watchlists (auth required)"},
-        {"name": "AI Chat", "description": "LLM assistant (auth required — OpenAI-backed)"},
+        {
+            "name": "Watchlist",
+            "description": "Per-user symbol watchlists (auth required)",
+        },
+        {
+            "name": "AI Chat",
+            "description": "LLM assistant (auth required — OpenAI-backed)",
+        },
         {"name": "Risk", "description": "Risk metrics, kill switch, CVaR"},
-        {"name": "Admin", "description": "System status, logs, KYC (admin role required)"},
+        {
+            "name": "Admin",
+            "description": "System status, logs, KYC (admin role required)",
+        },
         {"name": "Monetization", "description": "Subscriptions, payments, marketplace"},
         {"name": "Calendar", "description": "Economic calendar events"},
         {"name": "Performance", "description": "Backtest and live performance metrics"},
         {"name": "Broker", "description": "Broker connection status and management"},
-        {"name": "ML", "description": "Model inference, training status, feature importance"},
+        {
+            "name": "ML",
+            "description": "Model inference, training status, feature importance",
+        },
     ],
 )
 
@@ -178,6 +199,7 @@ if _graphql_available and _graphql_router is not None:
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
     from api.ws_live import router as ws_live_router
+
     app.include_router(ws_live_router)
     logger.info("✓ Live WebSocket router registered (/ws/live)")
 except Exception as _ws_live_err:
@@ -194,14 +216,20 @@ if _ks_router is not None:
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring
+
     setup_prometheus_monitoring(app)
 except Exception as _prom_err:
     import logging as _logging
-    _logging.getLogger(__name__).warning("Prometheus monitoring setup failed: %s", _prom_err)
+
+    _logging.getLogger(__name__).warning(
+        "Prometheus monitoring setup failed: %s", _prom_err
+    )
+
 
 # Global application state
 class AppState:
     """Application state container"""
+
     def __init__(self):
         self.config = None
         self.db_engine = None
@@ -242,12 +270,14 @@ class AppState:
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
+
 app_state = AppState()
 
 
 # Pydantic models
 class HealthResponse(BaseModel):
     """Health check response"""
+
     status: str
     version: str
     environment: str
@@ -256,6 +286,7 @@ class HealthResponse(BaseModel):
 
 class StatusResponse(BaseModel):
     """System status response"""
+
     application: str
     version: str
     environment: str
@@ -267,6 +298,7 @@ class StatusResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Error response"""
+
     error: str
     detail: Optional[str] = None
 
@@ -277,7 +309,7 @@ def get_db() -> Session:
     if not app_state.db_session_factory:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database not initialized"
+            detail="Database not initialized",
         )
 
     db = app_state.db_session_factory()
@@ -299,13 +331,14 @@ def setup_cors(app: FastAPI):
     from any non-localhost origin.
     """
     import logging as _logging
+
     _cors_logger = _logging.getLogger(__name__)
 
-    raw = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:8000')
-    allowed_origins = [o.strip() for o in raw.split(',') if o.strip()]
+    raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000")
+    allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
 
-    app_env = os.getenv('APP_ENV', 'development')
-    if app_env == 'production' and all('localhost' in o for o in allowed_origins):
+    app_env = os.getenv("APP_ENV", "development")
+    if app_env == "production" and all("localhost" in o for o in allowed_origins):
         _cors_logger.warning(
             "CORS is restricted to localhost in a production environment. "
             "Set ALLOWED_ORIGINS to your frontend domain(s) to allow browser access."
@@ -358,6 +391,7 @@ def setup_metrics_middleware(app: FastAPI):
     try:
         from starlette.middleware.base import BaseHTTPMiddleware
         from core.metrics import make_metrics_middleware
+
         app.add_middleware(BaseHTTPMiddleware, dispatch=make_metrics_middleware())
         logger.info("Prometheus metrics middleware registered")
     except Exception as exc:
@@ -379,9 +413,9 @@ async def _oanda_price_poller(state):
     _SYMBOLS = [s.strip().upper() for s in _SYMBOLS]
     _INTERVAL = float(os.getenv("OANDA_POLL_INTERVAL", "1.0"))
 
-    oanda_token   = os.getenv("BROKER_OANDA_TOKEN", "")
+    oanda_token = os.getenv("BROKER_OANDA_TOKEN", "")
     oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "")
-    oanda_env     = os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
+    oanda_env = os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
 
     if not oanda_token or not oanda_account:
         logger.info("OANDA price poller disabled — BROKER_OANDA_TOKEN/ACCOUNT not set")
@@ -389,20 +423,28 @@ async def _oanda_price_poller(state):
 
     try:
         from brokers.oanda import OANDAConnector
+
         oanda = OANDAConnector(
             api_key=oanda_token,
             account_id=oanda_account,
             practice=(oanda_env != "live"),
         )
         if not oanda.connect():
-            logger.warning("OANDA price poller: connection failed — using static prices")
+            logger.warning(
+                "OANDA price poller: connection failed — using static prices"
+            )
             return
-        logger.info("OANDA price poller connected — symbols=%s interval=%.1fs", _SYMBOLS, _INTERVAL)
+        logger.info(
+            "OANDA price poller connected — symbols=%s interval=%.1fs",
+            _SYMBOLS,
+            _INTERVAL,
+        )
     except Exception as exc:
         logger.warning("OANDA price poller init failed: %s", exc)
         return
 
     from core.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+
     _cb = CircuitBreaker.get("oanda_poller", failure_threshold=5, reset_timeout=60.0)
     _backoff = 1.0
     _MAX_BACKOFF = 300.0
@@ -423,11 +465,15 @@ async def _oanda_price_poller(state):
             oanda.disconnect()
             return
         except CircuitBreakerOpen as cbo:
-            logger.warning("OANDA price poller: circuit OPEN — sleeping %.0fs", cbo.retry_after)
+            logger.warning(
+                "OANDA price poller: circuit OPEN — sleeping %.0fs", cbo.retry_after
+            )
             await _asyncio.sleep(min(cbo.retry_after, _MAX_BACKOFF))
             continue
         except Exception as exc:
-            logger.warning("OANDA price poller error (backoff=%.0fs): %s", _backoff, exc)
+            logger.warning(
+                "OANDA price poller error (backoff=%.0fs): %s", _backoff, exc
+            )
             await _asyncio.sleep(_backoff)
             _backoff = min(_backoff * 2, _MAX_BACKOFF)
             continue
@@ -449,7 +495,8 @@ async def _price_stream_loop(ws_manager):
 
     logger.info(
         "Price stream loop started — symbols=%s interval=%.1fs",
-        _STREAM_SYMBOLS, _POLL_INTERVAL,
+        _STREAM_SYMBOLS,
+        _POLL_INTERVAL,
     )
 
     while True:
@@ -490,6 +537,7 @@ async def lifespan(_app: FastAPI):
     try:
         from prometheus_monitoring import _sync_loop as _prom_sync_loop
         import os as _os
+
         _prom_interval = float(_os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         asyncio.create_task(_prom_sync_loop(_prom_interval))
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
@@ -498,6 +546,7 @@ async def lifespan(_app: FastAPI):
     # Start live WebSocket broadcasters
     try:
         from api.ws_live import start_broadcasters
+
         start_broadcasters()
         logger.info("✓ Live WebSocket broadcasters started (/ws/live)")
     except Exception as _ws_err:
@@ -519,14 +568,23 @@ def _run_startup_stress_tests(risk_manager: Any) -> None:
     """
     try:
         from risk.advanced_analytics import AdvancedRiskAnalytics
+
         AdvancedRiskAnalytics()
 
         scenarios = [
-            {"name": "2008 Financial Crisis",   "equity_shock": -0.38, "vol_multiplier": 3.5},
-            {"name": "COVID-19 March 2020",      "equity_shock": -0.34, "vol_multiplier": 4.0},
-            {"name": "Gold Flash Crash",         "equity_shock": -0.15, "vol_multiplier": 2.5},
-            {"name": "USD Spike +10%",           "equity_shock": -0.12, "vol_multiplier": 2.0},
-            {"name": "Liquidity Crunch",         "equity_shock": -0.20, "vol_multiplier": 3.0},
+            {
+                "name": "2008 Financial Crisis",
+                "equity_shock": -0.38,
+                "vol_multiplier": 3.5,
+            },
+            {
+                "name": "COVID-19 March 2020",
+                "equity_shock": -0.34,
+                "vol_multiplier": 4.0,
+            },
+            {"name": "Gold Flash Crash", "equity_shock": -0.15, "vol_multiplier": 2.5},
+            {"name": "USD Spike +10%", "equity_shock": -0.12, "vol_multiplier": 2.0},
+            {"name": "Liquidity Crunch", "equity_shock": -0.20, "vol_multiplier": 3.0},
         ]
 
         portfolio_value = risk_manager.current_balance or 100_000.0
@@ -580,59 +638,157 @@ async def startup_event():
 
     # ── Core infrastructure ───────────────────────────────────────────────────
     (
-        _registry
-        .register("env_check",            F.init_env,                    required=False)
-        .register("config",               F.init_config,                 required=True,  deps=["env_check"])
-        .register("database",             F.init_database,               required=True,  deps=["config"])
-        .register("cache",                F.init_cache,                  required=False, deps=["config"])
+        _registry.register("env_check", F.init_env, required=False)
+        .register("config", F.init_config, required=True, deps=["env_check"])
+        .register("database", F.init_database, required=True, deps=["config"])
+        .register("cache", F.init_cache, required=False, deps=["config"])
         # ── Background services ───────────────────────────────────────────────
-        .register("data_scheduler",       F.init_data_scheduler,         required=False, deps=["config"])
-        .register("websocket",            _app(F.init_websocket),        required=False, deps=["config"])
-        .register("alert_engine",         _app(F.init_alert_engine),     required=False, deps=["config"])
+        .register(
+            "data_scheduler", F.init_data_scheduler, required=False, deps=["config"]
+        )
+        .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
+        .register(
+            "alert_engine", _app(F.init_alert_engine), required=False, deps=["config"]
+        )
         # ── Analysis / data routers ───────────────────────────────────────────
-        .register("order_flow",           _app(F.init_order_flow),       required=False, deps=["config"])
-        .register("time_and_sales",       _app(F.init_time_and_sales),   required=False, deps=["config"])
-        .register("market_scanner",       _app(F.init_market_scanner),   required=False, deps=["config"])
-        .register("dom",                  _app(F.init_dom),              required=False, deps=["config"])
-        .register("signals_router",       _app(F.init_signals_router),   required=False, deps=["config"])
-        .register("news_router",          _app(F.init_news_router),      required=False, deps=["config"])
+        .register(
+            "order_flow", _app(F.init_order_flow), required=False, deps=["config"]
+        )
+        .register(
+            "time_and_sales",
+            _app(F.init_time_and_sales),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "market_scanner",
+            _app(F.init_market_scanner),
+            required=False,
+            deps=["config"],
+        )
+        .register("dom", _app(F.init_dom), required=False, deps=["config"])
+        .register(
+            "signals_router",
+            _app(F.init_signals_router),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "news_router", _app(F.init_news_router), required=False, deps=["config"]
+        )
         # ── Auth / risk / trading ─────────────────────────────────────────────
-        .register("auth_service",         F.init_auth,                   required=False, deps=["database"])
-        .register("risk_manager",         F.init_risk_manager,           required=False, deps=["config"])
-        .register("broker",               F.init_broker,                 required=False, deps=["database"])
-        .register("price_engine",         F.init_price_engine,           required=False, deps=["broker"])
-        .register("compliance_manager",   F.init_compliance,             required=False, deps=["database"])
-        .register("prop_enforcer",        F.init_prop_enforcer,          required=False, deps=["compliance_manager"])
-        .register("aml",                  F.init_aml,                    required=False, deps=["database"])
-        .register("strategy_brain",       F.init_strategy_brain,         required=False, deps=["config"])
-        .register("event_store",          F.init_event_store,            required=False, deps=["config"])
-        .register("position_tracker",     F.init_position_tracker,       required=False, deps=["config"])
-        .register("trade_executor",       F.init_trade_executor,         required=False, deps=["broker", "risk_manager", "position_tracker"])
-        .register("brain",                F.init_hopefx_brain,           required=False, deps=["price_engine", "risk_manager", "broker", "strategy_brain", "alert_engine", "position_tracker", "trade_executor"])
+        .register("auth_service", F.init_auth, required=False, deps=["database"])
+        .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
+        .register("broker", F.init_broker, required=False, deps=["database"])
+        .register("price_engine", F.init_price_engine, required=False, deps=["broker"])
+        .register(
+            "compliance_manager", F.init_compliance, required=False, deps=["database"]
+        )
+        .register(
+            "prop_enforcer",
+            F.init_prop_enforcer,
+            required=False,
+            deps=["compliance_manager"],
+        )
+        .register("aml", F.init_aml, required=False, deps=["database"])
+        .register(
+            "strategy_brain", F.init_strategy_brain, required=False, deps=["config"]
+        )
+        .register("event_store", F.init_event_store, required=False, deps=["config"])
+        .register(
+            "position_tracker", F.init_position_tracker, required=False, deps=["config"]
+        )
+        .register(
+            "trade_executor",
+            F.init_trade_executor,
+            required=False,
+            deps=["broker", "risk_manager", "position_tracker"],
+        )
+        .register(
+            "brain",
+            F.init_hopefx_brain,
+            required=False,
+            deps=[
+                "price_engine",
+                "risk_manager",
+                "broker",
+                "strategy_brain",
+                "alert_engine",
+                "position_tracker",
+                "trade_executor",
+            ],
+        )
         # ── Payments / social ─────────────────────────────────────────────────
-        .register("wallet_manager",       F.init_wallet,                 required=False, deps=["database"])
-        .register("social",               F.init_social,                 required=False, deps=["config"])
-        .register("regime_router",        F.init_regime_router,          required=False, deps=["strategy_brain"])
+        .register("wallet_manager", F.init_wallet, required=False, deps=["database"])
+        .register("social", F.init_social, required=False, deps=["config"])
+        .register(
+            "regime_router",
+            F.init_regime_router,
+            required=False,
+            deps=["strategy_brain"],
+        )
         # ── Macro feature store (must start before signal engine) ────────────
-        .register("macro_store",          F.init_macro_store,            required=False, deps=["config"])
+        .register("macro_store", F.init_macro_store, required=False, deps=["config"])
         # ── MTF fusion store (Phase 1 — H4/D1 regime features) ───────────────
-        .register("mtf_store",            F.init_mtf_store,              required=False, deps=["data_scheduler"])
+        .register(
+            "mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"]
+        )
         # ── Engines ───────────────────────────────────────────────────────────
-        .register("signal_engine",        F.init_signal_engine,          required=False, deps=["risk_manager", "broker", "macro_store", "mtf_store"])
+        .register(
+            "signal_engine",
+            F.init_signal_engine,
+            required=False,
+            deps=["risk_manager", "broker", "macro_store", "mtf_store"],
+        )
         # ── Hourly ML retraining (online update + full retrain) ───────────────
-        .register("hourly_trainer",       F.init_hourly_trainer,         required=False, deps=["data_scheduler"])
-        .register("reconciler",           F.init_reconciler,             required=False, deps=["database", "broker"])
-        .register("telegram_bot",         F.init_telegram_bot,           required=False, deps=["alert_engine"])
-        .register("mobile",               _app(F.init_mobile),           required=False, deps=["config"])
-        .register("hyperopt",             _app(F.init_hyperopt),         required=False, deps=["config"])
+        .register(
+            "hourly_trainer",
+            F.init_hourly_trainer,
+            required=False,
+            deps=["data_scheduler"],
+        )
+        .register(
+            "reconciler", F.init_reconciler, required=False, deps=["database", "broker"]
+        )
+        .register(
+            "telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"]
+        )
+        .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
+        .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
         # ── Feature-flagged ───────────────────────────────────────────────────
-        .register("research_engine",      _app_flags(F.init_research),       required=False, deps=["config"])
-        .register("explainer",            _app_flags(F.init_explainability),  required=False, deps=["config"])
-        .register("transparency_engine",  _app_flags(F.init_transparency),    required=False, deps=["config"])
-        .register("teams_manager",        _app_flags(F.init_teams),           required=False, deps=["config"])
-        .register("nocode_builder",       _app_flags(F.init_nocode),          required=False, deps=["config"])
-        .register("replay_engine",        _app_flags(F.init_replay),          required=False, deps=["config"])
-        .register("ml_feature_engineer",  _app_flags(F.init_ml_predictions),  required=False, deps=["config"])
+        .register(
+            "research_engine",
+            _app_flags(F.init_research),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "explainer",
+            _app_flags(F.init_explainability),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "transparency_engine",
+            _app_flags(F.init_transparency),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "teams_manager", _app_flags(F.init_teams), required=False, deps=["config"]
+        )
+        .register(
+            "nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"]
+        )
+        .register(
+            "replay_engine", _app_flags(F.init_replay), required=False, deps=["config"]
+        )
+        .register(
+            "ml_feature_engineer",
+            _app_flags(F.init_ml_predictions),
+            required=False,
+            deps=["config"],
+        )
     )
 
     try:
@@ -645,11 +801,13 @@ async def startup_event():
         _state_receivers = []
         try:
             from api.trading import set_state as _trading_set_state
+
             _state_receivers.append(("api.trading", _trading_set_state))
         except ImportError:
             pass
         try:
             from api.admin import set_state as _admin_set_state
+
             _state_receivers.append(("api.admin", _admin_set_state))
         except ImportError:
             pass
@@ -727,6 +885,7 @@ async def health_check():
     if app_state.db_engine:
         try:
             from sqlalchemy import text as _text
+
             with app_state.db_engine.connect() as _conn:
                 _conn.execute(_text("SELECT 1"))
             components["database"] = "healthy"
@@ -739,7 +898,11 @@ async def health_check():
     # Cache (Redis) — optional
     if app_state.cache:
         try:
-            ok = app_state.cache.health_check() if hasattr(app_state.cache, "health_check") else True
+            ok = (
+                app_state.cache.health_check()
+                if hasattr(app_state.cache, "health_check")
+                else True
+            )
             components["cache"] = "healthy" if ok else "degraded"
         except Exception:
             components["cache"] = "degraded"
@@ -747,31 +910,44 @@ async def health_check():
         components["cache"] = "unavailable"
 
     # Auth service
-    components["auth"] = "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
+    components["auth"] = (
+        "healthy" if getattr(app_state, "auth_service", None) else "unavailable"
+    )
 
     # Risk manager
-    components["risk_manager"] = "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
+    components["risk_manager"] = (
+        "healthy" if getattr(app_state, "risk_manager", None) else "unavailable"
+    )
 
     # Compliance manager
-    components["compliance"] = "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
+    components["compliance"] = (
+        "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
+    )
     _pe = getattr(app_state, "prop_enforcer", None)
     if _pe is not None:
         _pe_status = _pe.status()
-        components["prop_enforcer"] = "halted" if _pe_status.get("halted") else "healthy"
+        components["prop_enforcer"] = (
+            "halted" if _pe_status.get("halted") else "healthy"
+        )
     else:
         components["prop_enforcer"] = "unavailable"
 
     # Strategy brain
-    components["strategy_brain"] = "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
+    components["strategy_brain"] = (
+        "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"
+    )
 
     # WebSocket manager
-    components["websocket"] = "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
+    components["websocket"] = (
+        "healthy" if getattr(app_state, "ws_manager", None) else "unavailable"
+    )
 
     # Email
     # "healthy"   — SENDGRID_API_KEY is set (high-deliverability path)
     # "degraded"  — only raw SMTP credentials available (low-deliverability fallback)
     # "unavailable" — no credentials configured at all
     import os as _os
+
     _sg_key = _os.getenv("SENDGRID_API_KEY", "")
     _smtp_host = _os.getenv("SMTP_HOST", "")
     _smtp_user = _os.getenv("SMTP_USER", "") or _os.getenv("SMTP_USERNAME", "")
@@ -784,9 +960,11 @@ async def health_check():
 
     # Overall: degraded if any critical component is not healthy
     critical = ["api", "config", "database"]
-    overall_status = "healthy" if all(
-        components.get(c) == "healthy" for c in critical
-    ) else "degraded"
+    overall_status = (
+        "healthy"
+        if all(components.get(c) == "healthy" for c in critical)
+        else "degraded"
+    )
 
     return HealthResponse(
         status=overall_status,
@@ -806,12 +984,16 @@ async def get_status():
     """
     # Don't raise 503 - return status even if not fully initialized
     # This allows health checks to work in test environments
-    
+
     # Safe cache health check
     cache_connected = False
     if app_state.cache is not None:
         try:
-            cache_connected = app_state.cache.health_check() if hasattr(app_state.cache, 'health_check') else True
+            cache_connected = (
+                app_state.cache.health_check()
+                if hasattr(app_state.cache, "health_check")
+                else True
+            )
         except Exception as e:
             logger.warning(f"Cache health check failed: {e}")
             cache_connected = False
@@ -830,6 +1012,7 @@ async def get_status():
 # /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
 
 # ── SendGrid email webhook ────────────────────────────────────────────────────
+
 
 def _verify_sendgrid_signature(
     public_key_b64: str,
@@ -857,7 +1040,8 @@ def _verify_sendgrid_signature(
     try:
         import base64
         from cryptography.hazmat.primitives.asymmetric.ec import (
-            ECDSA, EllipticCurvePublicKey,
+            ECDSA,
+            EllipticCurvePublicKey,
         )
         from cryptography.hazmat.primitives.hashes import SHA256
         from cryptography.hazmat.primitives.serialization import load_der_public_key
@@ -908,14 +1092,18 @@ async def sendgrid_webhook(request: Request):
                 "SendGrid webhook received but SENDGRID_WEBHOOK_PUBLIC_KEY is not set — "
                 "rejecting request. Set the key or SENDGRID_WEBHOOK_VERIFY=false for dev."
             )
-            raise HTTPException(status_code=403, detail="Webhook signature key not configured")
+            raise HTTPException(
+                status_code=403, detail="Webhook signature key not configured"
+            )
 
         sig = request.headers.get("X-Twilio-Email-Event-Webhook-Signature", "")
         ts = request.headers.get("X-Twilio-Email-Event-Webhook-Timestamp", "")
 
         if not sig or not ts:
             logger.warning("SendGrid webhook missing signature headers — rejected")
-            raise HTTPException(status_code=403, detail="Missing webhook signature headers")
+            raise HTTPException(
+                status_code=403, detail="Missing webhook signature headers"
+            )
 
         if not _verify_sendgrid_signature(webhook_pub_key, raw_body, sig, ts):
             logger.critical(
@@ -927,6 +1115,7 @@ async def sendgrid_webhook(request: Request):
     # ── Parse events ──────────────────────────────────────────────────────────
     try:
         import json as _json
+
         events = _json.loads(raw_body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -946,15 +1135,20 @@ async def sendgrid_webhook(request: Request):
         try:
             from database.models import EmailSuppression
             from sqlalchemy.orm import sessionmaker
+
             if app_state.db_engine:
                 Session = sessionmaker(bind=app_state.db_engine)
                 with Session() as session:
-                    exists = session.query(EmailSuppression).filter_by(email=email).first()
+                    exists = (
+                        session.query(EmailSuppression).filter_by(email=email).first()
+                    )
                     if not exists:
                         session.add(EmailSuppression(email=email, reason=event_type))
                         session.commit()
                         suppressed.append(email)
-                        logger.info("Email suppressed: %s (reason: %s)", email, event_type)
+                        logger.info(
+                            "Email suppressed: %s (reason: %s)", email, event_type
+                        )
         except Exception as exc:
             logger.error("Failed to record email suppression for %s: %s", email, exc)
 
@@ -1000,7 +1194,7 @@ async def pricing_page():
     """
     template_path = Path(__file__).parent / "templates" / "pricing.html"
     if template_path.exists():
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             return HTMLResponse(content=f.read())
     else:
         return HTMLResponse(
@@ -1014,7 +1208,7 @@ async def pricing_page():
             </body>
             </html>
             """,
-            status_code=200
+            status_code=200,
         )
 
 
@@ -1033,7 +1227,7 @@ async def paper_trading_dashboard():
     """
     template_path = Path(__file__).parent / "templates" / "paper_trading.html"
     if template_path.exists():
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             return HTMLResponse(content=f.read())
     else:
         return HTMLResponse(
@@ -1047,7 +1241,7 @@ async def paper_trading_dashboard():
             </body>
             </html>
             """,
-            status_code=200
+            status_code=200,
         )
 
 
@@ -1098,7 +1292,9 @@ setup_metrics_middleware(app)
 # routes take precedence.  Falls back gracefully when dist/ doesn't exist yet.
 _dashboard_dist = Path(__file__).parent / "dashboard" / "dist"
 if _dashboard_dist.exists():
-    app.mount("/app", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard")
+    app.mount(
+        "/app", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard"
+    )
     logger.info("React dashboard mounted at /app (dashboard/dist/)")
 else:
     logger.warning(
@@ -1110,10 +1306,10 @@ def run_server():
     """Run the API server"""
     # Default to localhost for security, use 0.0.0.0 only when explicitly set
     # Set API_HOST=0.0.0.0 in production environment to bind to all interfaces
-    host = os.getenv('API_HOST', '127.0.0.1')
-    port = int(os.getenv('API_PORT', 8000))
-    workers = int(os.getenv('API_WORKERS', 4))
-    reload = os.getenv('ENVIRONMENT', 'development') == 'development'
+    host = os.getenv("API_HOST", "127.0.0.1")
+    port = int(os.getenv("API_PORT", 8000))
+    workers = int(os.getenv("API_WORKERS", 4))
+    reload = os.getenv("ENVIRONMENT", "development") == "development"
 
     logger.info(f"Starting API server on {host}:{port}")
     logger.info(f"Workers: {workers}, Reload: {reload}")
@@ -1127,5 +1323,5 @@ def run_server():
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_server()

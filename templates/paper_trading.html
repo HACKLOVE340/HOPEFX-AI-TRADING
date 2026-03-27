@@ -271,7 +271,7 @@ paper_trading_html = '''<!DOCTYPE html>
     <script>
         // API client
         const API_BASE = window.location.origin;
-        
+
         async function fetchPrices() {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/prices`);
@@ -281,7 +281,7 @@ paper_trading_html = '''<!DOCTYPE html>
                 console.error('Failed to fetch prices:', e);
             }
         }
-        
+
         async function fetchAccount() {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/account`);
@@ -291,7 +291,7 @@ paper_trading_html = '''<!DOCTYPE html>
                 console.error('Failed to fetch account:', e);
             }
         }
-        
+
         async function fetchPositions() {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/positions`);
@@ -301,7 +301,7 @@ paper_trading_html = '''<!DOCTYPE html>
                 console.error('Failed to fetch positions:', e);
             }
         }
-        
+
         function updatePrices(prices) {
             const container = document.getElementById('prices');
             container.innerHTML = Object.entries(prices).map(([symbol, data]) => {
@@ -316,7 +316,7 @@ paper_trading_html = '''<!DOCTYPE html>
                 `;
             }).join('');
         }
-        
+
         function updateAccount(account) {
             document.getElementById('balance').textContent = '$' + account.balance.toLocaleString('en-US', {minimumFractionDigits: 2});
             document.getElementById('equity').textContent = '$' + account.equity.toLocaleString('en-US', {minimumFractionDigits: 2});
@@ -327,16 +327,16 @@ paper_trading_html = '''<!DOCTYPE html>
             document.getElementById('margin-used').textContent = '$' + account.margin_used.toLocaleString();
             document.getElementById('free-margin').textContent = '$' + account.free_margin.toLocaleString();
         }
-        
+
         function updatePositions(positions) {
             const container = document.getElementById('positions');
             document.getElementById('open-positions').textContent = positions.length;
-            
+
             if (positions.length === 0) {
                 container.innerHTML = '<div style="color: #8892b0; text-align: center; padding: 20px;">No open positions</div>';
                 return;
             }
-            
+
             container.innerHTML = positions.map(pos => `
                 <div class="position-item">
                     <div class="position-header">
@@ -356,12 +356,12 @@ paper_trading_html = '''<!DOCTYPE html>
                 </div>
             `).join('');
         }
-        
+
         async function placeOrder(side) {
             const symbol = document.getElementById('symbol').value;
             const quantity = parseFloat(document.getElementById('quantity').value);
             const orderType = document.getElementById('order-type').value;
-            
+
             try {
                 const res = await fetch(`${API_BASE}/api/trading/order`, {
                     method: 'POST',
@@ -373,7 +373,7 @@ paper_trading_html = '''<!DOCTYPE html>
                         order_type: orderType
                     })
                 });
-                
+
                 const result = await res.json();
                 if (res.ok) {
                     logActivity(`${side.toUpperCase()} order executed: ${quantity} ${symbol} @ ${result.filled_price}`);
@@ -386,7 +386,7 @@ paper_trading_html = '''<!DOCTYPE html>
                 alert('Order error: ' + e.message);
             }
         }
-        
+
         async function closePosition(positionId) {
             try {
                 const res = await fetch(`${API_BASE}/api/trading/positions/${positionId}`, {
@@ -401,10 +401,10 @@ paper_trading_html = '''<!DOCTYPE html>
                 alert('Close error: ' + e.message);
             }
         }
-        
+
         async function emergencyStop() {
             if (!confirm('Are you sure? This will close ALL positions immediately!')) return;
-            
+
             try {
                 const res = await fetch(`${API_BASE}/api/trading/emergency-stop`, {method: 'POST'});
                 if (res.ok) {
@@ -415,13 +415,13 @@ paper_trading_html = '''<!DOCTYPE html>
                 alert('Emergency stop failed: ' + e.message);
             }
         }
-        
+
         function logActivity(message) {
             const log = document.getElementById('activity-log');
             const time = new Date().toLocaleTimeString();
             log.innerHTML = `<div style="padding: 8px; border-bottom: 1px solid #2d3748; font-size: 13px;"><span style="color: #00d4ff;">[${time}]</span> ${message}</div>` + log.innerHTML;
         }
-        
+
         // Initialize
         setInterval(fetchPrices, 1000);
         setInterval(fetchAccount, 2000);

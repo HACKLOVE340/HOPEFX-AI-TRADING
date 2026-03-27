@@ -18,7 +18,6 @@ GET /api/status/history — last 90 days of daily uptime records
 from __future__ import annotations
 
 import logging
-import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -386,31 +385,44 @@ async def paper_trading_status():
         try:
             starter_status = _json.loads(_starter_path.read_text())
         except Exception as _e:
-            logger.warning("paper_trading_status: could not read starter status: %s", _e)
+            logger.warning(
+                "paper_trading_status: could not read starter status: %s", _e
+            )
 
     # Source 2: oanda_paper_clock (legacy clock)
     clock_status: dict = {}
     try:
         from brokers.oanda_paper_clock import get_clock
+
         clock_status = get_clock().status()
     except Exception as exc:
         logger.warning("paper_trading_status: clock unavailable: %s", exc)
 
     # Merge — starter_status takes precedence for overlapping keys
     merged = {
-        "started":          clock_status.get("started", bool(starter_status)),
-        "started_utc":      clock_status.get("started_utc"),
-        "elapsed_days":     starter_status.get("elapsed_days", clock_status.get("elapsed_days", 0.0)),
-        "remaining_days":   max(0.0, 30.0 - float(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0)))),
-        "target_days":      30,
-        "complete":         starter_status.get("complete", clock_status.get("complete", False)),
-        "environment":      clock_status.get("environment"),
-        "account_id":       clock_status.get("account_id"),
-        "current_balance":  starter_status.get("current_balance"),
-        "start_balance":    starter_status.get("start_balance"),
-        "drawdown_pct":     starter_status.get("drawdown_pct"),
-        "trade_count":      starter_status.get("trade_count"),
-        "updated_at":       starter_status.get("updated_at"),
+        "started": clock_status.get("started", bool(starter_status)),
+        "started_utc": clock_status.get("started_utc"),
+        "elapsed_days": starter_status.get(
+            "elapsed_days", clock_status.get("elapsed_days", 0.0)
+        ),
+        "remaining_days": max(
+            0.0,
+            30.0
+            - float(
+                starter_status.get(
+                    "elapsed_days", clock_status.get("elapsed_days", 30.0)
+                )
+            ),
+        ),
+        "target_days": 30,
+        "complete": starter_status.get("complete", clock_status.get("complete", False)),
+        "environment": clock_status.get("environment"),
+        "account_id": clock_status.get("account_id"),
+        "current_balance": starter_status.get("current_balance"),
+        "start_balance": starter_status.get("start_balance"),
+        "drawdown_pct": starter_status.get("drawdown_pct"),
+        "trade_count": starter_status.get("trade_count"),
+        "updated_at": starter_status.get("updated_at"),
     }
     return merged
 
@@ -439,6 +451,7 @@ async def paper_trading_gate_status():
     """
     try:
         from research.pipeline.paper_trading_gate import get_gate
+
         gate = get_gate()
         return gate.status()
     except Exception as exc:
@@ -471,6 +484,7 @@ async def live_trading_gate_status():
     """
     try:
         from core.live_trading_gate import get_gate
+
         return get_gate().status_dict()
     except Exception as exc:
         logger.warning("live_trading_gate_status failed: %s", exc)
@@ -500,10 +514,12 @@ async def paper_trading_gate_record_fill(pnl: float = 0.0):
     """
     try:
         from research.pipeline.paper_trading_gate import get_gate
+
         gate = get_gate()
         count = gate.record_fill(pnl=pnl)
         return {"status": "recorded", "fill_count": count, "pnl": pnl}
     except Exception as exc:
         logger.warning("paper_trading_gate_record_fill failed: %s", exc)
         from fastapi import HTTPException
+
         raise HTTPException(status_code=503, detail=str(exc))

@@ -51,7 +51,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,6 +65,7 @@ try:
     import discord
     from discord import app_commands
     from discord.ext import commands
+
     _DISCORD_AVAILABLE = True
 except ImportError:
     _DISCORD_AVAILABLE = False
@@ -75,16 +76,17 @@ except ImportError:
     sys.exit(1)
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-DATA_DIR     = Path("data")
+DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 TESTERS_FILE = DATA_DIR / "beta_testers.json"
 RESULTS_FILE = DATA_DIR / "challenge_results.json"
-STATUS_FILE  = DATA_DIR / "paper_trading_status.json"
+STATUS_FILE = DATA_DIR / "paper_trading_status.json"
 
 
 # ── config ────────────────────────────────────────────────────────────────────
 def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
+
 
 def _require(key: str) -> str:
     val = _env(key)
@@ -93,15 +95,17 @@ def _require(key: str) -> str:
         sys.exit(1)
     return val
 
-BOT_TOKEN         = _require("DISCORD_BOT_TOKEN")
-GUILD_ID          = int(_env("DISCORD_GUILD_ID", "0") or "0")
-ANNOUNCE_CHANNEL  = _env("DISCORD_ANNOUNCE_CHANNEL", "announcements")
-MIN_PNL_PCT       = float(_env("CHALLENGE_MIN_PNL_PCT",  "10.0"))
-MAX_DD_PCT        = float(_env("CHALLENGE_MAX_DD_PCT",    "5.0"))
-MIN_DAYS          = int(_env("CHALLENGE_MIN_DAYS",        "4"))
+
+BOT_TOKEN = _require("DISCORD_BOT_TOKEN")
+GUILD_ID = int(_env("DISCORD_GUILD_ID", "0") or "0")
+ANNOUNCE_CHANNEL = _env("DISCORD_ANNOUNCE_CHANNEL", "announcements")
+MIN_PNL_PCT = float(_env("CHALLENGE_MIN_PNL_PCT", "10.0"))
+MAX_DD_PCT = float(_env("CHALLENGE_MAX_DD_PCT", "5.0"))
+MIN_DAYS = int(_env("CHALLENGE_MIN_DAYS", "4"))
 
 
 # ── persistence helpers ───────────────────────────────────────────────────────
+
 
 def _load_json(path: Path, default: Any) -> Any:
     if path.exists():
@@ -111,11 +115,13 @@ def _load_json(path: Path, default: Any) -> Any:
             pass
     return default
 
+
 def _save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, default=str))
 
 
 # ── pass criteria ─────────────────────────────────────────────────────────────
+
 
 def _check_pass(pnl_pct: float, dd_pct: float, days: int) -> tuple[bool, str]:
     """Return (passed, reason_string)."""
@@ -153,6 +159,7 @@ async def on_ready():
 
 # ── /join ─────────────────────────────────────────────────────────────────────
 
+
 @tree.command(name="join", description="Join the HOPEFX beta challenge program")
 async def join_cmd(interaction: discord.Interaction):
     testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
@@ -168,12 +175,12 @@ async def join_cmd(interaction: discord.Interaction):
         return
 
     testers[uid] = {
-        "discord_id":   uid,
-        "username":     str(interaction.user),
+        "discord_id": uid,
+        "username": str(interaction.user),
         "display_name": interaction.user.display_name,
-        "joined_at":    datetime.now(timezone.utc).isoformat(),
-        "passed":       False,
-        "results":      [],
+        "joined_at": datetime.now(timezone.utc).isoformat(),
+        "passed": False,
+        "results": [],
     }
     _save_json(TESTERS_FILE, testers)
     logger.info("New beta tester: %s (%s)", interaction.user, uid)
@@ -192,18 +199,16 @@ async def join_cmd(interaction: discord.Interaction):
 
 # ── /result ───────────────────────────────────────────────────────────────────
 
-@tree.command(
-    name="result",
-    description="Submit your paper trading result"
-)
+
+@tree.command(name="result", description="Submit your paper trading result")
 @app_commands.describe(
-    pnl_pct      = "Your total P&L percentage (e.g. 12.5)",
-    drawdown_pct = "Your maximum drawdown percentage (e.g. 3.2)",
-    trading_days = "Number of days you traded (e.g. 10)",
+    pnl_pct="Your total P&L percentage (e.g. 12.5)",
+    drawdown_pct="Your maximum drawdown percentage (e.g. 3.2)",
+    trading_days="Number of days you traded (e.g. 10)",
 )
 async def result_cmd(
     interaction: discord.Interaction,
-    pnl_pct:      float,
+    pnl_pct: float,
     drawdown_pct: float,
     trading_days: int,
 ):
@@ -221,25 +226,27 @@ async def result_cmd(
     # Record result
     result_entry = {
         "submitted_at": datetime.now(timezone.utc).isoformat(),
-        "pnl_pct":      pnl_pct,
+        "pnl_pct": pnl_pct,
         "drawdown_pct": drawdown_pct,
         "trading_days": trading_days,
-        "passed":       passed,
-        "reason":       reason,
+        "passed": passed,
+        "reason": reason,
     }
     testers[uid]["results"].append(result_entry)
     if passed and not testers[uid]["passed"]:
-        testers[uid]["passed"]    = True
+        testers[uid]["passed"] = True
         testers[uid]["passed_at"] = datetime.now(timezone.utc).isoformat()
     _save_json(TESTERS_FILE, testers)
 
     # Also append to challenge_results.json for audit trail
     all_results: List[dict] = _load_json(RESULTS_FILE, [])
-    all_results.append({
-        "discord_id":   uid,
-        "username":     str(interaction.user),
-        **result_entry,
-    })
+    all_results.append(
+        {
+            "discord_id": uid,
+            "username": str(interaction.user),
+            **result_entry,
+        }
+    )
     _save_json(RESULTS_FILE, all_results)
 
     if passed:
@@ -255,7 +262,9 @@ async def result_cmd(
             ),
             color=discord.Color.gold(),
         )
-        embed.set_footer(text=f"Submitted {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+        embed.set_footer(
+            text=f"Submitted {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+        )
 
         await interaction.response.send_message(embed=embed)
 
@@ -268,7 +277,9 @@ async def result_cmd(
                     "The team will contact you shortly to activate your account."
                 )
             except discord.Forbidden:
-                logger.warning("Could not DM winner %s (DMs disabled)", interaction.user)
+                logger.warning(
+                    "Could not DM winner %s (DMs disabled)", interaction.user
+                )
 
             # Post to announcements channel
             announce_ch = discord.utils.get(
@@ -283,8 +294,12 @@ async def result_cmd(
                     f"Results: P&L **+{pnl_pct:.2f}%** | DD **{drawdown_pct:.2f}%** | "
                     f"**{trading_days}** trading days"
                 )
-            logger.info("FIRST PASSER: %s — P&L=%.2f%% DD=%.2f%%",
-                        interaction.user, pnl_pct, drawdown_pct)
+            logger.info(
+                "FIRST PASSER: %s — P&L=%.2f%% DD=%.2f%%",
+                interaction.user,
+                pnl_pct,
+                drawdown_pct,
+            )
     else:
         await interaction.response.send_message(
             f"📊 **Result recorded** for **{interaction.user.display_name}**\n\n"
@@ -297,6 +312,7 @@ async def result_cmd(
 
 
 # ── /leaderboard ──────────────────────────────────────────────────────────────
+
 
 @tree.command(name="leaderboard", description="Top 10 beta testers by P&L")
 async def leaderboard_cmd(interaction: discord.Interaction):
@@ -314,12 +330,14 @@ async def leaderboard_cmd(interaction: discord.Interaction):
         if not t.get("results"):
             continue
         best = max(t["results"], key=lambda r: r["pnl_pct"])
-        rows.append({
-            "name":     t.get("display_name", t.get("username", uid)),
-            "pnl_pct":  best["pnl_pct"],
-            "dd_pct":   best["drawdown_pct"],
-            "passed":   t.get("passed", False),
-        })
+        rows.append(
+            {
+                "name": t.get("display_name", t.get("username", uid)),
+                "pnl_pct": best["pnl_pct"],
+                "dd_pct": best["drawdown_pct"],
+                "passed": t.get("passed", False),
+            }
+        )
 
     rows.sort(key=lambda r: r["pnl_pct"], reverse=True)
     top10 = rows[:10]
@@ -327,7 +345,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
     lines = ["**🏆 HOPEFX Beta Challenge Leaderboard**\n"]
     medals = ["🥇", "🥈", "🥉"] + ["  "] * 7
     for i, row in enumerate(top10):
-        badge  = "✅" if row["passed"] else "  "
+        badge = "✅" if row["passed"] else "  "
         lines.append(
             f"{medals[i]} **{i+1}.** {row['name']} — "
             f"P&L: **{row['pnl_pct']:+.2f}%** | DD: {row['dd_pct']:.2f}% {badge}"
@@ -337,6 +355,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
 
 
 # ── /status ───────────────────────────────────────────────────────────────────
+
 
 @tree.command(name="status", description="Show current paper trading session status")
 async def status_cmd(interaction: discord.Interaction):
@@ -351,7 +370,9 @@ async def status_cmd(interaction: discord.Interaction):
     try:
         s = json.loads(STATUS_FILE.read_text())
     except Exception:
-        await interaction.response.send_message("Status file unreadable.", ephemeral=True)
+        await interaction.response.send_message(
+            "Status file unreadable.", ephemeral=True
+        )
         return
 
     complete = s.get("complete", False)
@@ -360,12 +381,20 @@ async def status_cmd(interaction: discord.Interaction):
         title=f"📊 Paper Trading Status — {status_icon}",
         color=discord.Color.green() if complete else discord.Color.blue(),
     )
-    embed.add_field(name="Balance",       value=f"${s.get('current_balance', 0):,.2f}", inline=True)
-    embed.add_field(name="Start Balance", value=f"${s.get('start_balance', 0):,.2f}",   inline=True)
-    embed.add_field(name="Drawdown",      value=f"{s.get('drawdown_pct', 0):.2f}%",     inline=True)
-    embed.add_field(name="Trades",        value=str(s.get("trade_count", 0)),            inline=True)
-    embed.add_field(name="Elapsed Days",  value=f"{s.get('elapsed_days', 0):.1f}",      inline=True)
-    embed.add_field(name="Updated",       value=s.get("updated_at", "unknown"),          inline=False)
+    embed.add_field(
+        name="Balance", value=f"${s.get('current_balance', 0):,.2f}", inline=True
+    )
+    embed.add_field(
+        name="Start Balance", value=f"${s.get('start_balance', 0):,.2f}", inline=True
+    )
+    embed.add_field(
+        name="Drawdown", value=f"{s.get('drawdown_pct', 0):.2f}%", inline=True
+    )
+    embed.add_field(name="Trades", value=str(s.get("trade_count", 0)), inline=True)
+    embed.add_field(
+        name="Elapsed Days", value=f"{s.get('elapsed_days', 0):.1f}", inline=True
+    )
+    embed.add_field(name="Updated", value=s.get("updated_at", "unknown"), inline=False)
     embed.set_footer(text="HOPEFX AI Trading — Paper Mode")
 
     await interaction.response.send_message(embed=embed)
@@ -373,20 +402,21 @@ async def status_cmd(interaction: discord.Interaction):
 
 # ── /stats ────────────────────────────────────────────────────────────────────
 
+
 @tree.command(name="stats", description="Show challenge program statistics")
 async def stats_cmd(interaction: discord.Interaction):
     testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
-    total    = len(testers)
-    passed   = sum(1 for t in testers.values() if t.get("passed"))
-    active   = sum(1 for t in testers.values() if t.get("results"))
+    total = len(testers)
+    passed = sum(1 for t in testers.values() if t.get("passed"))
+    active = sum(1 for t in testers.values() if t.get("results"))
 
     embed = discord.Embed(
         title="📈 HOPEFX Beta Challenge Stats",
         color=discord.Color.purple(),
     )
-    embed.add_field(name="Total Registered", value=str(total),  inline=True)
-    embed.add_field(name="Active Testers",   value=str(active), inline=True)
-    embed.add_field(name="Passed",           value=str(passed), inline=True)
+    embed.add_field(name="Total Registered", value=str(total), inline=True)
+    embed.add_field(name="Active Testers", value=str(active), inline=True)
+    embed.add_field(name="Passed", value=str(passed), inline=True)
     embed.add_field(
         name="Pass Criteria",
         value=(
@@ -405,6 +435,9 @@ async def stats_cmd(interaction: discord.Interaction):
 if __name__ == "__main__":
     logger.info(
         "Starting HOPEFX Challenge Bot | guild=%s | pass_criteria=P&L≥%.0f%% DD≤%.0f%% days≥%d",
-        GUILD_ID or "global", MIN_PNL_PCT, MAX_DD_PCT, MIN_DAYS,
+        GUILD_ID or "global",
+        MIN_PNL_PCT,
+        MAX_DD_PCT,
+        MIN_DAYS,
     )
     bot.run(BOT_TOKEN)

@@ -19,27 +19,30 @@ logger = logging.getLogger(__name__)
 class CryptoWalletManager:
     """Manages crypto wallets with hot/cold separation"""
 
-    HOT_WALLET_THRESHOLD = Decimal('10000.00')  # USD
+    HOT_WALLET_THRESHOLD = Decimal("10000.00")  # USD
 
     def __init__(self):
         self.hot_wallet_balances = {
-            'BTC': Decimal('0'),
-            'USDT': Decimal('0'),
-            'ETH': Decimal('0')
+            "BTC": Decimal("0"),
+            "USDT": Decimal("0"),
+            "ETH": Decimal("0"),
         }
         self.cold_wallet_balances = {
-            'BTC': Decimal('0'),
-            'USDT': Decimal('0'),
-            'ETH': Decimal('0')
+            "BTC": Decimal("0"),
+            "USDT": Decimal("0"),
+            "ETH": Decimal("0"),
         }
 
     def get_balance(self, currency: str) -> Dict:
         """Get wallet balances"""
         return {
-            'currency': currency,
-            'hot_wallet': float(self.hot_wallet_balances.get(currency, 0)),
-            'cold_wallet': float(self.cold_wallet_balances.get(currency, 0)),
-            'total': float(self.hot_wallet_balances.get(currency, 0) + self.cold_wallet_balances.get(currency, 0))
+            "currency": currency,
+            "hot_wallet": float(self.hot_wallet_balances.get(currency, 0)),
+            "cold_wallet": float(self.cold_wallet_balances.get(currency, 0)),
+            "total": float(
+                self.hot_wallet_balances.get(currency, 0)
+                + self.cold_wallet_balances.get(currency, 0)
+            ),
         }
 
     def move_to_cold_storage(self, currency: str, amount: Decimal) -> bool:

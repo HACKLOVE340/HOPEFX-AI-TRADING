@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class OrderBookSide(Enum):
     """Order book side."""
+
     BID = "bid"
     ASK = "ask"
 
@@ -36,6 +37,7 @@ class OrderBookSide(Enum):
 @dataclass
 class OrderBookLevel:
     """Single level in the order book."""
+
     price: float
     size: float
     order_count: int = 1
@@ -43,10 +45,10 @@ class OrderBookLevel:
 
     def to_dict(self) -> Dict:
         return {
-            'price': self.price,
-            'size': self.size,
-            'order_count': self.order_count,
-            'timestamp': self.timestamp.isoformat()
+            "price": self.price,
+            "size": self.size,
+            "order_count": self.order_count,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
@@ -55,6 +57,7 @@ class OrderBook:
     """
     Complete order book for a symbol.
     """
+
     symbol: str
     bids: List[OrderBookLevel] = field(default_factory=list)
     asks: List[OrderBookLevel] = field(default_factory=list)
@@ -108,9 +111,8 @@ class OrderBook:
 
         # Weight by inverse of volume (larger volume = closer to that side)
         weighted = (
-            (self.best_bid * ask_volume + self.best_ask * bid_volume) /
-            total_volume
-        )
+            self.best_bid * ask_volume + self.best_ask * bid_volume
+        ) / total_volume
         return round(weighted, 5)
 
     @property
@@ -147,27 +149,28 @@ class OrderBook:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'bids': [level.to_dict() for level in self.bids],
-            'asks': [level.to_dict() for level in self.asks],
-            'best_bid': self.best_bid,
-            'best_ask': self.best_ask,
-            'spread': self.spread,
-            'spread_pct': self.spread_pct,
-            'mid_price': self.mid_price,
-            'weighted_mid_price': self.weighted_mid_price,
-            'total_bid_volume': self.total_bid_volume,
-            'total_ask_volume': self.total_ask_volume,
-            'imbalance': self.imbalance,
-            'depth_levels': self.depth_levels,
-            'timestamp': self.timestamp.isoformat(),
-            'sequence': self.sequence
+            "symbol": self.symbol,
+            "bids": [level.to_dict() for level in self.bids],
+            "asks": [level.to_dict() for level in self.asks],
+            "best_bid": self.best_bid,
+            "best_ask": self.best_ask,
+            "spread": self.spread,
+            "spread_pct": self.spread_pct,
+            "mid_price": self.mid_price,
+            "weighted_mid_price": self.weighted_mid_price,
+            "total_bid_volume": self.total_bid_volume,
+            "total_ask_volume": self.total_ask_volume,
+            "imbalance": self.imbalance,
+            "depth_levels": self.depth_levels,
+            "timestamp": self.timestamp.isoformat(),
+            "sequence": self.sequence,
         }
 
 
 @dataclass
 class OrderBookAnalysis:
     """Order book analysis results."""
+
     symbol: str
     timestamp: datetime
 
@@ -245,7 +248,7 @@ class DepthOfMarketService:
         self._order_books: Dict[str, OrderBook] = {}
 
         # Historical snapshots
-        self._history_size = self.config.get('history_size', 100)
+        self._history_size = self.config.get("history_size", 100)
         self._history: Dict[str, deque] = {}
 
         # Sequence counter
@@ -255,8 +258,8 @@ class DepthOfMarketService:
         self._lock = threading.RLock()
 
         # Configuration
-        self._max_levels = self.config.get('max_levels', 50)
-        self._volume_threshold = self.config.get('volume_threshold', 0.1)
+        self._max_levels = self.config.get("max_levels", 50)
+        self._volume_threshold = self.config.get("volume_threshold", 0.1)
 
         logger.info("Depth of Market Service initialized")
 
@@ -269,7 +272,7 @@ class DepthOfMarketService:
         symbol: str,
         bids: List[Tuple[float, float]],
         asks: List[Tuple[float, float]],
-        timestamp: Optional[datetime] = None
+        timestamp: Optional[datetime] = None,
     ):
         """
         Update order book for a symbol.
@@ -286,11 +289,11 @@ class DepthOfMarketService:
             # Convert to OrderBookLevel objects
             bid_levels = [
                 OrderBookLevel(price=price, size=size)
-                for price, size in bids[:self._max_levels]
+                for price, size in bids[: self._max_levels]
             ]
             ask_levels = [
                 OrderBookLevel(price=price, size=size)
-                for price, size in asks[:self._max_levels]
+                for price, size in asks[: self._max_levels]
             ]
 
             # Create or update order book
@@ -299,7 +302,7 @@ class DepthOfMarketService:
                 bids=bid_levels,
                 asks=ask_levels,
                 timestamp=timestamp or datetime.now(timezone.utc),
-                sequence=self._sequence
+                sequence=self._sequence,
             )
 
             self._order_books[symbol] = order_book
@@ -311,13 +314,7 @@ class DepthOfMarketService:
 
             logger.debug(f"Order book updated: {symbol}, seq={self._sequence}")
 
-    def update_level(
-        self,
-        symbol: str,
-        side: OrderBookSide,
-        price: float,
-        size: float
-    ):
+    def update_level(self, symbol: str, side: OrderBookSide, price: float, size: float):
         """
         Update a single level in the order book.
 
@@ -366,11 +363,7 @@ class DepthOfMarketService:
     # ORDER BOOK RETRIEVAL
     # ================================================================
 
-    def get_order_book(
-        self,
-        symbol: str,
-        levels: int = 10
-    ) -> Optional[OrderBook]:
+    def get_order_book(self, symbol: str, levels: int = 10) -> Optional[OrderBook]:
         """
         Get order book for a symbol.
 
@@ -394,16 +387,12 @@ class DepthOfMarketService:
                     bids=order_book.bids[:levels],
                     asks=order_book.asks[:levels],
                     timestamp=order_book.timestamp,
-                    sequence=order_book.sequence
+                    sequence=order_book.sequence,
                 )
 
             return order_book
 
-    def get_order_book_dict(
-        self,
-        symbol: str,
-        levels: int = 10
-    ) -> Optional[Dict]:
+    def get_order_book_dict(self, symbol: str, levels: int = 10) -> Optional[Dict]:
         """Get order book as dictionary."""
         order_book = self.get_order_book(symbol, levels)
         return order_book.to_dict() if order_book else None
@@ -416,12 +405,12 @@ class DepthOfMarketService:
 
             order_book = self._order_books[symbol]
             return {
-                'symbol': symbol,
-                'best_bid': order_book.best_bid,
-                'best_ask': order_book.best_ask,
-                'spread': order_book.spread,
-                'mid_price': order_book.mid_price,
-                'timestamp': order_book.timestamp.isoformat()
+                "symbol": symbol,
+                "best_bid": order_book.best_bid,
+                "best_ask": order_book.best_ask,
+                "spread": order_book.spread,
+                "mid_price": order_book.mid_price,
+                "timestamp": order_book.timestamp.isoformat(),
             }
 
     def get_spread(self, symbol: str) -> Optional[float]:
@@ -478,11 +467,11 @@ class DepthOfMarketService:
 
             # Determine market bias
             if imbalance > 0.2:
-                market_bias = 'bullish'
+                market_bias = "bullish"
             elif imbalance < -0.2:
-                market_bias = 'bearish'
+                market_bias = "bearish"
             else:
-                market_bias = 'neutral'
+                market_bias = "neutral"
 
             return OrderBookAnalysis(
                 symbol=symbol,
@@ -503,13 +492,11 @@ class DepthOfMarketService:
                 key_ask_levels=key_ask_levels,
                 buying_pressure=buying_pressure,
                 selling_pressure=selling_pressure,
-                market_bias=market_bias
+                market_bias=market_bias,
             )
 
     def _find_key_levels(
-        self,
-        levels: List[OrderBookLevel],
-        top_n: int = 3
+        self, levels: List[OrderBookLevel], top_n: int = 3
     ) -> List[Dict]:
         """Find key price levels with high volume."""
         if not levels:
@@ -519,11 +506,7 @@ class DepthOfMarketService:
         sorted_levels = sorted(levels, key=lambda x: -x.size)
 
         return [
-            {
-                'price': level.price,
-                'size': level.size,
-                'rank': i + 1
-            }
+            {"price": level.price, "size": level.size, "rank": i + 1}
             for i, level in enumerate(sorted_levels[:top_n])
         ]
 
@@ -533,20 +516,18 @@ class DepthOfMarketService:
             value = abs(value)
 
         if value > 0.4:
-            return 'strong'
+            return "strong"
         elif value > 0.15:
-            return 'moderate'
+            return "moderate"
         else:
-            return 'weak'
+            return "weak"
 
     # ================================================================
     # VISUALIZATION DATA
     # ================================================================
 
     def get_dom_visualization_data(
-        self,
-        symbol: str,
-        levels: int = 20
+        self, symbol: str, levels: int = 20
     ) -> Optional[Dict]:
         """
         Get data formatted for DOM visualization.
@@ -589,14 +570,15 @@ class DepthOfMarketService:
             # gap between adjacent price levels, or fall back to a sensible
             # default per-instrument precision (0.01 for most FX/metals).
             _MIN_PRICE_GAP_THRESHOLD = 1e-9  # gaps below this are float-noise
-            _TICK_SIZE_PRECISION = 10         # decimal places for tick rounding
+            _TICK_SIZE_PRECISION = 10  # decimal places for tick rounding
             tick_size = 0.01
             if len(all_prices) >= 2:
                 sorted_prices = sorted(set(all_prices))
                 gaps = [
                     abs(sorted_prices[i + 1] - sorted_prices[i])
                     for i in range(len(sorted_prices) - 1)
-                    if abs(sorted_prices[i + 1] - sorted_prices[i]) > _MIN_PRICE_GAP_THRESHOLD
+                    if abs(sorted_prices[i + 1] - sorted_prices[i])
+                    > _MIN_PRICE_GAP_THRESHOLD
                 ]
                 if gaps:
                     tick_size = round(min(gaps), _TICK_SIZE_PRECISION)
@@ -605,49 +587,49 @@ class DepthOfMarketService:
             price = max_price
             while price >= min_price:
                 row = {
-                    'price': price,
-                    'bid_size': bid_map.get(price, 0),
-                    'ask_size': ask_map.get(price, 0),
-                    'is_best_bid': price == order_book.best_bid,
-                    'is_best_ask': price == order_book.best_ask,
-                    'is_mid': abs(price - (order_book.mid_price or 0)) < tick_size
+                    "price": price,
+                    "bid_size": bid_map.get(price, 0),
+                    "ask_size": ask_map.get(price, 0),
+                    "is_best_bid": price == order_book.best_bid,
+                    "is_best_ask": price == order_book.best_ask,
+                    "is_mid": abs(price - (order_book.mid_price or 0)) < tick_size,
                 }
                 ladder.append(row)
                 price = round(price - tick_size, 5)
 
             # Calculate max sizes for scaling
-            max_bid = max((row['bid_size'] for row in ladder), default=1)
-            max_ask = max((row['ask_size'] for row in ladder), default=1)
+            max_bid = max((row["bid_size"] for row in ladder), default=1)
+            max_ask = max((row["ask_size"] for row in ladder), default=1)
 
             # Add scaled values
             for row in ladder:
-                row['bid_pct'] = round(row['bid_size'] / max_bid * 100, 1) if max_bid > 0 else 0
-                row['ask_pct'] = round(row['ask_size'] / max_ask * 100, 1) if max_ask > 0 else 0
+                row["bid_pct"] = (
+                    round(row["bid_size"] / max_bid * 100, 1) if max_bid > 0 else 0
+                )
+                row["ask_pct"] = (
+                    round(row["ask_size"] / max_ask * 100, 1) if max_ask > 0 else 0
+                )
 
             return {
-                'symbol': symbol,
-                'ladder': ladder,
-                'summary': {
-                    'best_bid': order_book.best_bid,
-                    'best_ask': order_book.best_ask,
-                    'spread': order_book.spread,
-                    'mid_price': order_book.mid_price,
-                    'imbalance': order_book.imbalance,
-                    'total_bid_volume': order_book.total_bid_volume,
-                    'total_ask_volume': order_book.total_ask_volume,
+                "symbol": symbol,
+                "ladder": ladder,
+                "summary": {
+                    "best_bid": order_book.best_bid,
+                    "best_ask": order_book.best_ask,
+                    "spread": order_book.spread,
+                    "mid_price": order_book.mid_price,
+                    "imbalance": order_book.imbalance,
+                    "total_bid_volume": order_book.total_bid_volume,
+                    "total_ask_volume": order_book.total_ask_volume,
                 },
-                'timestamp': order_book.timestamp.isoformat()
+                "timestamp": order_book.timestamp.isoformat(),
             }
 
     # ================================================================
     # HISTORY & SNAPSHOTS
     # ================================================================
 
-    def get_order_book_history(
-        self,
-        symbol: str,
-        limit: int = 50
-    ) -> List[Dict]:
+    def get_order_book_history(self, symbol: str, limit: int = 50) -> List[Dict]:
         """Get historical order book snapshots."""
         with self._lock:
             if symbol not in self._history:
@@ -656,11 +638,7 @@ class DepthOfMarketService:
             snapshots = list(self._history[symbol])[-limit:]
             return [ob.to_dict() for ob in snapshots]
 
-    def get_imbalance_history(
-        self,
-        symbol: str,
-        limit: int = 50
-    ) -> List[Dict]:
+    def get_imbalance_history(self, symbol: str, limit: int = 50) -> List[Dict]:
         """Get imbalance history for a symbol."""
         with self._lock:
             if symbol not in self._history:
@@ -669,10 +647,10 @@ class DepthOfMarketService:
             snapshots = list(self._history[symbol])[-limit:]
             return [
                 {
-                    'timestamp': ob.timestamp.isoformat(),
-                    'imbalance': ob.imbalance,
-                    'spread': ob.spread,
-                    'mid_price': ob.mid_price
+                    "timestamp": ob.timestamp.isoformat(),
+                    "imbalance": ob.imbalance,
+                    "spread": ob.spread,
+                    "mid_price": ob.mid_price,
                 }
                 for ob in snapshots
             ]
@@ -704,19 +682,19 @@ class DepthOfMarketService:
         """Get service statistics."""
         with self._lock:
             return {
-                'symbols_tracked': len(self._order_books),
-                'total_updates': self._sequence,
-                'symbols': list(self._order_books.keys()),
-                'history_sizes': {
-                    symbol: len(history)
-                    for symbol, history in self._history.items()
-                }
+                "symbols_tracked": len(self._order_books),
+                "total_updates": self._sequence,
+                "symbols": list(self._order_books.keys()),
+                "history_sizes": {
+                    symbol: len(history) for symbol, history in self._history.items()
+                },
             }
 
 
 # ================================================================
 # FASTAPI INTEGRATION
 # ================================================================
+
 
 def create_dom_router(dom_service: DepthOfMarketService):
     """

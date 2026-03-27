@@ -128,7 +128,9 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
             logger.warning("Macro data fetch returned empty DataFrame")
             return None
         logger.info(
-            "Fetched macro data: %d rows, columns=%s", len(df), list(df.columns),
+            "Fetched macro data: %d rows, columns=%s",
+            len(df),
+            list(df.columns),
         )
         return df
     except Exception as exc:
@@ -146,7 +148,8 @@ def build_features(
     import importlib.util as _ilu
 
     _spec = _ilu.spec_from_file_location(
-        "ml._training_module", Path(__file__).parent / "training.py",
+        "ml._training_module",
+        Path(__file__).parent / "training.py",
     )
     _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
     _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
@@ -435,7 +438,12 @@ def oos_eval(
     import xgboost as xgb
     from scipy.stats import binomtest
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score, classification_report, f1_score, roc_auc_score
+    from sklearn.metrics import (
+        accuracy_score,
+        classification_report,
+        f1_score,
+        roc_auc_score,
+    )
 
     if model_type == "xgb":
         model = xgb.XGBClassifier(
@@ -487,15 +495,27 @@ def oos_eval(
 
     # OOS date range
     oos_start = (
-        X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+        X_oos.index[0].date()
+        if hasattr(X_oos.index[0], "date")
+        else str(X_oos.index[0])
     )
     oos_end = (
-        X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
+        X_oos.index[-1].date()
+        if hasattr(X_oos.index[-1], "date")
+        else str(X_oos.index[-1])
     )
 
     logger.info(
         "OOS %s  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        model_type.upper(), acc, acc_se, f1, auc, n, k, p_value, p_value < 0.05,
+        model_type.upper(),
+        acc,
+        acc_se,
+        f1,
+        auc,
+        n,
+        k,
+        p_value,
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -552,7 +572,9 @@ def main():
         "yfinance clips to earliest available date (~1974 for GC=F).",
     )
     parser.add_argument(
-        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)",
+        "--symbol",
+        default="GC=F",
+        help="Yahoo Finance symbol (default: GC=F)",
     )
     parser.add_argument(
         "--no-macro",
@@ -560,10 +582,16 @@ def main():
         help="Skip macro features (DXY, VIX, yields, SPX)",
     )
     parser.add_argument(
-        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)",
+        "--horizon",
+        type=int,
+        default=1,
+        help="Prediction horizon in bars (default: 1)",
     )
     parser.add_argument(
-        "--splits", type=int, default=5, help="Walk-forward CV splits (default: 5)",
+        "--splits",
+        type=int,
+        default=5,
+        help="Walk-forward CV splits (default: 5)",
     )
     parser.add_argument(
         "--oos-years",

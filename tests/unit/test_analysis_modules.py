@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ohlcv(
     n: int = 200,
     base_price: float = 1950.0,
@@ -246,8 +247,13 @@ class TestMarketRegimeDetector:
         from analysis.market_analysis import MarketRegime
 
         expected = {
-            "trending_up", "trending_down", "ranging",
-            "volatile", "breakout", "consolidation", "choppy",
+            "trending_up",
+            "trending_down",
+            "ranging",
+            "volatile",
+            "breakout",
+            "consolidation",
+            "choppy",
         }
         actual = {r.value for r in MarketRegime}
         assert actual == expected
@@ -492,7 +498,11 @@ class TestSessionAnalyzer:
         assert TradingSession.PACIFIC in sessions
 
     def test_analyze_session_asian(self):
-        from analysis.market_analysis import SessionAnalyzer, TradingSession, SessionAnalysis
+        from analysis.market_analysis import (
+            SessionAnalyzer,
+            TradingSession,
+            SessionAnalysis,
+        )
 
         analyzer = SessionAnalyzer()
         asian_time = datetime(2024, 1, 15, 3, 0)
@@ -578,7 +588,11 @@ class TestSessionAnalyzer:
         assert actual == expected
 
     def test_analyze_session_without_explicit_time(self):
-        from analysis.market_analysis import SessionAnalyzer, TradingSession, SessionAnalysis
+        from analysis.market_analysis import (
+            SessionAnalyzer,
+            TradingSession,
+            SessionAnalysis,
+        )
 
         analyzer = SessionAnalyzer()
         result = analyzer.analyze_session(TradingSession.ASIAN)
@@ -697,7 +711,9 @@ class TestMarketScannerExtended:
         scanner.add_symbols(["XAUUSD"])
         scanner.add_criteria(ScanCriteriaType.VOLUME_SPIKE, {"multiplier": 2.0})
 
-        data = {"XAUUSD": {"price": 1950.0, "volume": 3_000_000, "avg_volume": 1_000_000}}
+        data = {
+            "XAUUSD": {"price": 1950.0, "volume": 3_000_000, "avg_volume": 1_000_000}
+        }
         results = scanner.scan(data, min_strength=0)
         assert len(results) == 1
         assert "volume_spike" in results[0].criteria_met
@@ -885,7 +901,6 @@ class TestMarketScannerExtended:
         assert len(results) == 1
 
     def test_scan_no_criteria_returns_empty(self):
-
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
         data = {"XAUUSD": {"price": 1950.0}}
@@ -903,7 +918,9 @@ class TestMarketScannerExtended:
         )
         scanner.add_criteria(ScanCriteriaType.UPTREND)
 
-        data = {"XAUUSD": {"price": 1970.0, "rsi": 60, "ma_20": 1960.0, "ma_50": 1940.0}}
+        data = {
+            "XAUUSD": {"price": 1970.0, "rsi": 60, "ma_20": 1960.0, "ma_50": 1940.0}
+        }
         results = scanner.scan(data, min_strength=0)
         assert results == []
 
@@ -1083,8 +1100,15 @@ class TestOrderFlowDashboard:
         dashboard = self._empty_dashboard()
         result = dashboard.get_complete_analysis("XAUUSD")
         expected_keys = {
-            "symbol", "timestamp", "time_sales", "order_book", "order_flow",
-            "institutional_flow", "volume_profile", "key_levels", "aggression",
+            "symbol",
+            "timestamp",
+            "time_sales",
+            "order_book",
+            "order_flow",
+            "institutional_flow",
+            "volume_profile",
+            "key_levels",
+            "aggression",
             "large_orders",
         }
         assert expected_keys.issubset(set(result.keys()))
@@ -1113,9 +1137,17 @@ class TestOrderFlowDashboard:
         dashboard = self._empty_dashboard()
         result = dashboard.get_summary("XAUUSD")
         expected_keys = {
-            "symbol", "timestamp", "bias", "dom_imbalance", "buy_pressure",
-            "sell_pressure", "smart_money_direction", "cumulative_delta",
-            "spread", "large_order_count", "signals",
+            "symbol",
+            "timestamp",
+            "bias",
+            "dom_imbalance",
+            "buy_pressure",
+            "sell_pressure",
+            "smart_money_direction",
+            "cumulative_delta",
+            "spread",
+            "large_order_count",
+            "signals",
         }
         assert expected_keys.issubset(set(result.keys()))
 
@@ -1127,7 +1159,9 @@ class TestOrderFlowDashboard:
     def test_get_summary_full_dashboard_after_trades(self):
         dashboard = self._full_dashboard()
         for i in range(5):
-            dashboard.add_trade("XAUUSD", 1950.0 + i, 1.0, "buy" if i % 2 == 0 else "sell")
+            dashboard.add_trade(
+                "XAUUSD", 1950.0 + i, 1.0, "buy" if i % 2 == 0 else "sell"
+            )
         result = dashboard.get_summary("XAUUSD")
         assert result["symbol"] == "XAUUSD"
 

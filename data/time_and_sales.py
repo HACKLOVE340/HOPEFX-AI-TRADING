@@ -585,9 +585,7 @@ def create_time_and_sales_router(service: TimeAndSalesService):
         return stats.to_dict()
 
     @router.get("/{symbol}/histogram")
-    async def get_histogram(
-        symbol: str, bins: int = 20, lookback_minutes: int = 60
-    ):
+    async def get_histogram(symbol: str, bins: int = 20, lookback_minutes: int = 60):
         """Get price/volume histogram."""
         return service.get_trade_histogram(
             symbol, bins=bins, lookback_minutes=lookback_minutes
@@ -596,9 +594,7 @@ def create_time_and_sales_router(service: TimeAndSalesService):
     @router.get("/{symbol}/statistics")
     async def get_statistics(symbol: str, lookback_minutes: int = 60):
         """Get trade statistics."""
-        return service.get_trade_statistics(
-            symbol, lookback_minutes=lookback_minutes
-        )
+        return service.get_trade_statistics(symbol, lookback_minutes=lookback_minutes)
 
     @router.get("/stats")
     async def get_service_stats():

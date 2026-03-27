@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 # ── optional MT5 import (Windows-only package) ────────────────────────────────
 try:
     import MetaTrader5 as mt5  # type: ignore
+
     _MT5_AVAILABLE = True
 except ImportError:
     mt5 = None  # type: ignore
@@ -62,57 +63,60 @@ _SIGNAL_DIR = Path(os.environ.get("MT5_SIGNAL_DIR", "data/mt5_signals"))
 
 # ── domain types ─────────────────────────────────────────────────────────────
 
+
 class OrderSide(Enum):
-    BUY  = "BUY"
+    BUY = "BUY"
     SELL = "SELL"
 
 
 class OrderType(Enum):
     MARKET = auto()
-    LIMIT  = auto()
-    STOP   = auto()
+    LIMIT = auto()
+    STOP = auto()
 
 
 class FillStatus(Enum):
-    PENDING   = auto()
-    FILLED    = auto()
-    PARTIAL   = auto()
-    REJECTED  = auto()
+    PENDING = auto()
+    FILLED = auto()
+    PARTIAL = auto()
+    REJECTED = auto()
     CANCELLED = auto()
 
 
 @dataclass
 class MT5Order:
-    symbol:      str
-    side:        OrderSide
-    volume:      float
-    order_type:  OrderType = OrderType.MARKET
-    price:       Optional[float] = None
-    stop_loss:   Optional[float] = None   # mandatory — bridge rejects if None/0
+    symbol: str
+    side: OrderSide
+    volume: float
+    order_type: OrderType = OrderType.MARKET
+    price: Optional[float] = None
+    stop_loss: Optional[float] = None  # mandatory — bridge rejects if None/0
     take_profit: Optional[float] = None
-    deviation:   int   = 20
-    magic:       int   = 234_001
-    comment:     str   = "HOPEFX"
+    deviation: int = 20
+    magic: int = 234_001
+    comment: str = "HOPEFX"
     timeout_sec: float = 10.0
 
 
 @dataclass
 class MT5FillResult:
-    ticket:        int
-    status:        FillStatus
+    ticket: int
+    status: FillStatus
     filled_volume: float
-    fill_price:    float
-    commission:    float
-    swap:          float
-    profit:        float
-    comment:       str
-    raw:           Any = field(default=None, repr=False)
+    fill_price: float
+    commission: float
+    swap: float
+    profit: float
+    comment: str
+    raw: Any = field(default=None, repr=False)
 
 
 # ── retry decorator ───────────────────────────────────────────────────────────
 
+
 def _retry(max_attempts: int = 3, base_delay: float = 0.5):
     """Retry with exponential back-off; re-raises last exception on exhaustion."""
+
     def decorator(fn):
         def wrapper(*args, **kwargs):
             delay = base_delay
@@ -124,17 +128,23 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
                     last_exc = exc
                     logger.warning(
                         "mt5_bridge retry attempt=%d/%d fn=%s error=%s",
-                        attempt, max_attempts, fn.__name__, exc,
+                        attempt,
+                        max_attempts,
+                        fn.__name__,
+                        exc,
                     )
                     if attempt < max_attempts:
                         time.sleep(delay)
                         delay *= 2
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator
 
 
 # ── .ex5 signal export stub ───────────────────────────────────────────────────
+
 
 class EX5SignalExporter:
     """
@@ -175,18 +185,18 @@ class EX5SignalExporter:
         ts = int(time.time())
         signal_id = f"{order.symbol}_{order.side.value}_{ts}"
         payload = {
-            "id":          signal_id,
-            "symbol":      order.symbol,
-            "side":        order.side.value,
-            "volume":      order.volume,
-            "order_type":  order.order_type.name,
-            "price":       order.price,
-            "stop_loss":   order.stop_loss,
+            "id": signal_id,
+            "symbol": order.symbol,
+            "side": order.side.value,
+            "volume": order.volume,
+            "order_type": order.order_type.name,
+            "price": order.price,
+            "stop_loss": order.stop_loss,
             "take_profit": order.take_profit,
-            "magic":       order.magic,
-            "comment":     order.comment,
-            "issued_at":   datetime.now(timezone.utc).isoformat(),
-            "status":      "PENDING",
+            "magic": order.magic,
+            "comment": order.comment,
+            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "status": "PENDING",
         }
         path = self.signal_dir / f"{signal_id}.json"
         path.write_text(json.dumps(payload, indent=2))
@@ -205,15 +215,15 @@ class EX5SignalExporter:
                 status = data.get("status", "PENDING")
                 if status == "FILLED":
                     return MT5FillResult(
-                        ticket        = int(data.get("ticket", 0)),
-                        status        = FillStatus.FILLED,
-                        filled_volume = float(data.get("fill_volume", data["volume"])),
-                        fill_price    = float(data.get("fill_price", 0)),
-                        commission    = float(data.get("commission", 0)),
-                        swap          = float(data.get("swap", 0)),
-                        profit        = float(data.get("profit", 0)),
-                        comment       = data.get("comment", ""),
-                        raw           = data,
+                        ticket=int(data.get("ticket", 0)),
+                        status=FillStatus.FILLED,
+                        filled_volume=float(data.get("fill_volume", data["volume"])),
+                        fill_price=float(data.get("fill_price", 0)),
+                        commission=float(data.get("commission", 0)),
+                        swap=float(data.get("swap", 0)),
+                        profit=float(data.get("profit", 0)),
+                        comment=data.get("comment", ""),
+                        raw=data,
                     )
                 if status == "REJECTED":
                     raise RuntimeError(
@@ -223,7 +233,9 @@ class EX5SignalExporter:
             except (json.JSONDecodeError, KeyError):
                 pass
             time.sleep(0.5)
-        raise TimeoutError(f"Signal {signal_path.name} not filled within {timeout_sec}s")
+        raise TimeoutError(
+            f"Signal {signal_path.name} not filled within {timeout_sec}s"
+        )
 
     def cleanup_old_signals(self, max_age_hours: int = 24) -> int:
         """Remove signal files older than max_age_hours. Returns count removed."""
@@ -237,6 +249,7 @@ class EX5SignalExporter:
 
 
 # ── main bridge ───────────────────────────────────────────────────────────────
+
 
 class MT5Bridge:
     """
@@ -260,25 +273,25 @@ class MT5Bridge:
 
     def __init__(
         self,
-        server:     str,
-        login:      int,
-        password:   str,
-        path:       Optional[str] = None,
-        portable:   bool = False,
-        timeout_ms: int  = 60_000,
+        server: str,
+        login: int,
+        password: str,
+        path: Optional[str] = None,
+        portable: bool = False,
+        timeout_ms: int = 60_000,
         enforcer=None,
         signal_dir: Path = _SIGNAL_DIR,
     ) -> None:
-        self.server     = server
-        self.login      = login
-        self.password   = password
-        self.path       = path
-        self.portable   = portable
+        self.server = server
+        self.login = login
+        self.password = password
+        self.path = path
+        self.portable = portable
         self.timeout_ms = timeout_ms
-        self._enforcer  = enforcer
+        self._enforcer = enforcer
         self._connected = False
-        self._lock      = threading.Lock()
-        self._exporter  = EX5SignalExporter(signal_dir)
+        self._lock = threading.Lock()
+        self._exporter = EX5SignalExporter(signal_dir)
 
     @classmethod
     def from_env(cls, enforcer=None) -> "MT5Bridge":
@@ -287,11 +300,11 @@ class MT5Bridge:
         if not login_str:
             raise EnvironmentError("MT5_LOGIN env var not set")
         return cls(
-            server   = os.environ.get("MT5_SERVER", ""),
-            login    = int(login_str),
-            password = os.environ.get("MT5_PASSWORD", ""),
-            path     = os.environ.get("MT5_PATH"),
-            enforcer = enforcer,
+            server=os.environ.get("MT5_SERVER", ""),
+            login=int(login_str),
+            password=os.environ.get("MT5_PASSWORD", ""),
+            path=os.environ.get("MT5_PATH"),
+            enforcer=enforcer,
         )
 
     # ── connection lifecycle ──────────────────────────────────────────────────
@@ -311,10 +324,10 @@ class MT5Bridge:
             raise ConnectionError(f"mt5.initialize failed: {mt5.last_error()}")
 
         authorised = mt5.login(
-            login    = self.login,
-            password = self.password,
-            server   = self.server,
-            timeout  = self.timeout_ms,
+            login=self.login,
+            password=self.password,
+            server=self.server,
+            timeout=self.timeout_ms,
         )
         if not authorised:
             mt5.shutdown()
@@ -324,7 +337,8 @@ class MT5Bridge:
         info = mt5.account_info()
         logger.info(
             "mt5_bridge connected server=%s login=%s balance=%.2f currency=%s",
-            self.server, self.login,
+            self.server,
+            self.login,
             info.balance if info else 0,
             info.currency if info else "?",
         )
@@ -386,33 +400,45 @@ class MT5Bridge:
             raise RuntimeError(f"No tick data for {order.symbol!r}")
 
         if order.order_type == OrderType.MARKET:
-            price    = tick.ask if order.side == OrderSide.BUY else tick.bid
-            action   = mt5.TRADE_ACTION_DEAL
-            mt5_type = mt5.ORDER_TYPE_BUY if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL
+            price = tick.ask if order.side == OrderSide.BUY else tick.bid
+            action = mt5.TRADE_ACTION_DEAL
+            mt5_type = (
+                mt5.ORDER_TYPE_BUY
+                if order.side == OrderSide.BUY
+                else mt5.ORDER_TYPE_SELL
+            )
         elif order.order_type == OrderType.LIMIT:
             if order.price is None:
                 raise ValueError("LIMIT order requires a price")
-            price    = order.price
-            action   = mt5.TRADE_ACTION_PENDING
-            mt5_type = mt5.ORDER_TYPE_BUY_LIMIT if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_LIMIT
+            price = order.price
+            action = mt5.TRADE_ACTION_PENDING
+            mt5_type = (
+                mt5.ORDER_TYPE_BUY_LIMIT
+                if order.side == OrderSide.BUY
+                else mt5.ORDER_TYPE_SELL_LIMIT
+            )
         else:
             if order.price is None:
                 raise ValueError("STOP order requires a price")
-            price    = order.price
-            action   = mt5.TRADE_ACTION_PENDING
-            mt5_type = mt5.ORDER_TYPE_BUY_STOP if order.side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_STOP
+            price = order.price
+            action = mt5.TRADE_ACTION_PENDING
+            mt5_type = (
+                mt5.ORDER_TYPE_BUY_STOP
+                if order.side == OrderSide.BUY
+                else mt5.ORDER_TYPE_SELL_STOP
+            )
 
         request: Dict[str, Any] = {
-            "action":       action,
-            "symbol":       order.symbol,
-            "volume":       float(order.volume),
-            "type":         mt5_type,
-            "price":        float(price),
-            "sl":           float(order.stop_loss),
-            "deviation":    order.deviation,
-            "magic":        order.magic,
-            "comment":      order.comment,
-            "type_time":    mt5.ORDER_TIME_GTC,
+            "action": action,
+            "symbol": order.symbol,
+            "volume": float(order.volume),
+            "type": mt5_type,
+            "price": float(price),
+            "sl": float(order.stop_loss),
+            "deviation": order.deviation,
+            "magic": order.magic,
+            "comment": order.comment,
+            "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
         if order.take_profit is not None:
@@ -422,23 +448,28 @@ class MT5Bridge:
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             retcode = result.retcode if result else -1
             comment = result.comment if result else "no result"
-            raise RuntimeError(f"MT5 order rejected retcode={retcode} comment={comment!r}")
+            raise RuntimeError(
+                f"MT5 order rejected retcode={retcode} comment={comment!r}"
+            )
 
         fill = MT5FillResult(
-            ticket        = result.order,
-            status        = FillStatus.FILLED,
-            filled_volume = result.volume,
-            fill_price    = result.price,
-            commission    = getattr(result, "commission", 0.0),
-            swap          = getattr(result, "swap", 0.0),
-            profit        = getattr(result, "profit", 0.0),
-            comment       = result.comment,
-            raw           = result,
+            ticket=result.order,
+            status=FillStatus.FILLED,
+            filled_volume=result.volume,
+            fill_price=result.price,
+            commission=getattr(result, "commission", 0.0),
+            swap=getattr(result, "swap", 0.0),
+            profit=getattr(result, "profit", 0.0),
+            comment=result.comment,
+            raw=result,
         )
         logger.info(
             "mt5_bridge filled ticket=%d symbol=%s side=%s vol=%.2f price=%.5f",
-            fill.ticket, order.symbol, order.side.value,
-            fill.filled_volume, fill.fill_price,
+            fill.ticket,
+            order.symbol,
+            order.side.value,
+            fill.filled_volume,
+            fill.fill_price,
         )
         return fill
 
@@ -446,9 +477,9 @@ class MT5Bridge:
 
     def monitor_fill(
         self,
-        ticket:        int,
+        ticket: int,
         poll_interval: float = 0.5,
-        timeout_sec:   float = 30.0,
+        timeout_sec: float = 30.0,
     ) -> MT5FillResult:
         """Poll MT5 until a pending order is filled, rejected, or timeout expires."""
         self._require_connected()
@@ -466,47 +497,49 @@ class MT5Bridge:
                 time.sleep(poll_interval)
                 continue
 
-            now   = datetime.utcnow()
+            now = datetime.utcnow()
             deals = mt5.history_deals_get(now - timedelta(minutes=5), now)
             if deals:
                 for deal in deals:
                     if deal.order == ticket:
                         return MT5FillResult(
-                            ticket        = ticket,
-                            status        = FillStatus.FILLED,
-                            filled_volume = deal.volume,
-                            fill_price    = deal.price,
-                            commission    = deal.commission,
-                            swap          = deal.swap,
-                            profit        = deal.profit,
-                            comment       = deal.comment,
-                            raw           = deal,
+                            ticket=ticket,
+                            status=FillStatus.FILLED,
+                            filled_volume=deal.volume,
+                            fill_price=deal.price,
+                            commission=deal.commission,
+                            swap=deal.swap,
+                            profit=deal.profit,
+                            comment=deal.comment,
+                            raw=deal,
                         )
             time.sleep(poll_interval)
 
-        raise TimeoutError(f"monitor_fill: ticket {ticket} not filled within {timeout_sec}s")
+        raise TimeoutError(
+            f"monitor_fill: ticket {ticket} not filled within {timeout_sec}s"
+        )
 
     # ── position management ───────────────────────────────────────────────────
 
     @_retry(max_attempts=2, base_delay=0.5)
     def close_position(
         self,
-        symbol:    str,
-        volume:    Optional[float] = None,
-        deviation: int   = 20,
-        magic:     int   = 234_001,
-        comment:   str   = "HOPEFX close",
+        symbol: str,
+        volume: Optional[float] = None,
+        deviation: int = 20,
+        magic: int = 234_001,
+        comment: str = "HOPEFX close",
     ) -> List[MT5FillResult]:
         """Close all (or partial) open positions for symbol."""
         self._require_connected()
 
         if not _MT5_AVAILABLE:
             close_order = MT5Order(
-                symbol    = symbol,
-                side      = OrderSide.SELL,
-                volume    = volume or 0.0,
-                stop_loss = 0.0001,
-                comment   = "HOPEFX close",
+                symbol=symbol,
+                side=OrderSide.SELL,
+                volume=volume or 0.0,
+                stop_loss=0.0001,
+                comment="HOPEFX close",
             )
             path = self._exporter.export(close_order)
             fill = self._exporter.poll_fill(path, timeout_sec=30.0)
@@ -519,26 +552,30 @@ class MT5Bridge:
 
         results: List[MT5FillResult] = []
         for pos in positions:
-            close_type  = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
-            tick        = mt5.symbol_info_tick(symbol)
+            close_type = (
+                mt5.ORDER_TYPE_SELL
+                if pos.type == mt5.POSITION_TYPE_BUY
+                else mt5.ORDER_TYPE_BUY
+            )
+            tick = mt5.symbol_info_tick(symbol)
             if tick is None:
                 logger.error("mt5_bridge.close_position: no tick for %s", symbol)
                 continue
 
             close_price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
-            close_vol   = volume if volume is not None else pos.volume
+            close_vol = volume if volume is not None else pos.volume
 
             request = {
-                "action":       mt5.TRADE_ACTION_DEAL,
-                "symbol":       symbol,
-                "volume":       float(close_vol),
-                "type":         close_type,
-                "position":     pos.ticket,
-                "price":        close_price,
-                "deviation":    deviation,
-                "magic":        magic,
-                "comment":      comment,
-                "type_time":    mt5.ORDER_TIME_GTC,
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": float(close_vol),
+                "type": close_type,
+                "position": pos.ticket,
+                "price": close_price,
+                "deviation": deviation,
+                "magic": magic,
+                "comment": comment,
+                "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
             result = mt5.order_send(request)
@@ -546,25 +583,29 @@ class MT5Bridge:
                 retcode = result.retcode if result else -1
                 logger.error(
                     "mt5_bridge.close_position failed ticket=%d retcode=%d",
-                    pos.ticket, retcode,
+                    pos.ticket,
+                    retcode,
                 )
                 continue
 
             fill = MT5FillResult(
-                ticket        = result.order,
-                status        = FillStatus.FILLED,
-                filled_volume = result.volume,
-                fill_price    = result.price,
-                commission    = getattr(result, "commission", 0.0),
-                swap          = getattr(result, "swap", 0.0),
-                profit        = getattr(result, "profit", 0.0),
-                comment       = result.comment,
-                raw           = result,
+                ticket=result.order,
+                status=FillStatus.FILLED,
+                filled_volume=result.volume,
+                fill_price=result.price,
+                commission=getattr(result, "commission", 0.0),
+                swap=getattr(result, "swap", 0.0),
+                profit=getattr(result, "profit", 0.0),
+                comment=result.comment,
+                raw=result,
             )
             results.append(fill)
             logger.info(
                 "mt5_bridge closed ticket=%d symbol=%s vol=%.2f price=%.5f",
-                fill.ticket, symbol, fill.filled_volume, fill.fill_price,
+                fill.ticket,
+                symbol,
+                fill.filled_volume,
+                fill.fill_price,
             )
         return results
 
@@ -578,15 +619,15 @@ class MT5Bridge:
         if info is None:
             raise RuntimeError(f"mt5.account_info() failed: {mt5.last_error()}")
         return {
-            "login":        info.login,
-            "server":       info.server,
-            "balance":      info.balance,
-            "equity":       info.equity,
-            "margin":       info.margin,
-            "margin_free":  info.margin_free,
+            "login": info.login,
+            "server": info.server,
+            "balance": info.balance,
+            "equity": info.equity,
+            "margin": info.margin,
+            "margin_free": info.margin_free,
             "margin_level": info.margin_level,
-            "leverage":     info.leverage,
-            "currency":     info.currency,
+            "leverage": info.leverage,
+            "currency": info.currency,
         }
 
     def get_position(self, symbol: str) -> Dict[str, Any]:
@@ -597,16 +638,16 @@ class MT5Bridge:
         if not positions:
             return {}
         total_volume = sum(p.volume for p in positions)
-        avg_price    = sum(p.price_open * p.volume for p in positions) / total_volume
+        avg_price = sum(p.price_open * p.volume for p in positions) / total_volume
         total_profit = sum(p.profit for p in positions)
-        side         = "LONG" if positions[0].type == mt5.POSITION_TYPE_BUY else "SHORT"
+        side = "LONG" if positions[0].type == mt5.POSITION_TYPE_BUY else "SHORT"
         return {
-            "symbol":          symbol,
-            "side":            side,
-            "volume":          total_volume,
+            "symbol": symbol,
+            "side": side,
+            "volume": total_volume,
             "avg_entry_price": avg_price,
-            "unrealized_pnl":  total_profit,
-            "tickets":         [p.ticket for p in positions],
+            "unrealized_pnl": total_profit,
+            "tickets": [p.ticket for p in positions],
         }
 
     # ── async wrappers ────────────────────────────────────────────────────────
@@ -616,7 +657,9 @@ class MT5Bridge:
         return await loop.run_in_executor(None, self.send_order, order)
 
     async def async_close_position(
-        self, symbol: str, volume: Optional[float] = None,
+        self,
+        symbol: str,
+        volume: Optional[float] = None,
     ) -> List[MT5FillResult]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)

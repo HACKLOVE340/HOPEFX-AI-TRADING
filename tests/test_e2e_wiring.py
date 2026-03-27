@@ -47,6 +47,7 @@ if _ROOT not in sys.path:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _set_jwt(monkeypatch, value: str = "x" * 48) -> None:
     monkeypatch.setenv("SECURITY_JWT_SECRET", value)
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
@@ -55,6 +56,7 @@ def _set_jwt(monkeypatch, value: str = "x" * 48) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1-4  Startup validator
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestStartupValidator:
     def test_dev_mode_passes_with_only_jwt_secret(self, monkeypatch):
@@ -66,6 +68,7 @@ class TestStartupValidator:
         monkeypatch.delenv("REDIS_URL", raising=False)
 
         from config.startup_validator import validate_environment
+
         # Must not raise
         validate_environment(strict=False)
 
@@ -77,7 +80,11 @@ class TestStartupValidator:
         monkeypatch.delenv("DB_HOST", raising=False)
         monkeypatch.delenv("REDIS_URL", raising=False)
 
-        from config.startup_validator import validate_environment, StartupValidationError
+        from config.startup_validator import (
+            validate_environment,
+            StartupValidationError,
+        )
+
         with pytest.raises(StartupValidationError) as exc_info:
             validate_environment(strict=False)
         msg = str(exc_info.value)
@@ -87,12 +94,21 @@ class TestStartupValidator:
     def test_placeholder_jwt_secret_rejected(self, monkeypatch):
         """CHANGE_ME placeholder must be rejected even if long enough."""
         monkeypatch.setenv("APP_ENV", "development")
-        monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
+        monkeypatch.setenv(
+            "SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret"
+        )
 
-        from config.startup_validator import validate_environment, StartupValidationError
+        from config.startup_validator import (
+            validate_environment,
+            StartupValidationError,
+        )
+
         with pytest.raises(StartupValidationError) as exc_info:
             validate_environment(strict=False)
-        assert "CHANGE_ME" in str(exc_info.value) or "placeholder" in str(exc_info.value).lower()
+        assert (
+            "CHANGE_ME" in str(exc_info.value)
+            or "placeholder" in str(exc_info.value).lower()
+        )
 
     def test_jwt_secret_key_alias_accepted(self, monkeypatch):
         """JWT_SECRET_KEY is an accepted alias for SECURITY_JWT_SECRET."""
@@ -101,6 +117,7 @@ class TestStartupValidator:
         monkeypatch.setenv("JWT_SECRET_KEY", "b" * 48)
 
         from config.startup_validator import validate_environment
+
         validate_environment(strict=False)  # must not raise
 
 
@@ -108,48 +125,55 @@ class TestStartupValidator:
 # 5-8  Router prefix wiring
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRouterPrefixes:
     def test_auth_router_prefix(self, monkeypatch):
         _set_jwt(monkeypatch)
         from auth.router import router
+
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(p.startswith("/api/auth/") for p in paths), (
-            f"Auth router has non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
-        )
+        assert all(
+            p.startswith("/api/auth/") for p in paths
+        ), f"Auth router has non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
 
     def test_ml_router_prefix(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.ml import router
+
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(p.startswith("/api/ml/") for p in paths), (
-            f"ML router has non-/api/ml paths: {[p for p in paths if not p.startswith('/api/ml/')]}"
-        )
+        assert all(
+            p.startswith("/api/ml/") for p in paths
+        ), f"ML router has non-/api/ml paths: {[p for p in paths if not p.startswith('/api/ml/')]}"
 
     def test_admin_router_prefix(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.admin import router
+
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(p.startswith("/api/admin/") for p in paths), (
-            f"Admin router has non-/api/admin paths: {[p for p in paths if not p.startswith('/api/admin/')]}"
-        )
+        assert all(
+            p.startswith("/api/admin/") for p in paths
+        ), f"Admin router has non-/api/admin paths: {[p for p in paths if not p.startswith('/api/admin/')]}"
 
     def test_social_leaderboard_route_exists(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.social_feed import leaderboard_router
+
         paths = [r.path for r in leaderboard_router.routes if hasattr(r, "path")]
-        assert "/api/social/leaderboard" in paths, (
-            f"Leaderboard route missing. Found: {paths}"
-        )
+        assert (
+            "/api/social/leaderboard" in paths
+        ), f"Leaderboard route missing. Found: {paths}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 9-12  MacroStore → live inference wiring
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMacroStoreWiring:
     def test_update_and_snapshot(self):
         """MacroStore.update() stores a value; snapshot() returns it."""
         from ml.macro_store import MacroStore
+
         store = MacroStore()
         store.update("dxy", "2026-01-02", 102.5)
         snap = store.snapshot()
@@ -231,11 +255,14 @@ class TestMacroStoreWiring:
 
         try:
             client = TestClient(app)
-            resp = client.post("/api/macro/store/update", json={
-                "series_name": "us10y",
-                "date": "2026-01-02",
-                "value": 4.25,
-            })
+            resp = client.post(
+                "/api/macro/store/update",
+                json={
+                    "series_name": "us10y",
+                    "date": "2026-01-02",
+                    "value": 4.25,
+                },
+            )
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "updated"
@@ -276,6 +303,7 @@ class TestMacroStoreWiring:
 # 13-15  ML endpoints
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestMLEndpoints:
     @pytest.fixture
     def ml_client(self, monkeypatch):
@@ -293,8 +321,17 @@ class TestMLEndpoints:
         resp = ml_client.get("/api/ml/accuracy")
         assert resp.status_code == 200
         data = resp.json()
-        for field in ("model_id", "accuracy", "precision", "recall", "f1", "sharpe",
-                      "win_rate", "total_signals", "evaluated_at"):
+        for field in (
+            "model_id",
+            "accuracy",
+            "precision",
+            "recall",
+            "f1",
+            "sharpe",
+            "win_rate",
+            "total_signals",
+            "evaluated_at",
+        ):
             assert field in data, f"Missing field: {field}"
         assert 0.0 <= data["accuracy"] <= 1.0
 
@@ -306,7 +343,9 @@ class TestMLEndpoints:
 
     def test_predict_endpoint_fallback(self, ml_client):
         """POST /api/ml/predict/{symbol} returns PredictResponse even without model."""
-        resp = ml_client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100})
+        resp = ml_client.post(
+            "/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100}
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["symbol"] == "XAUUSD"
@@ -316,7 +355,9 @@ class TestMLEndpoints:
 
     def test_predict_normalises_symbol(self, ml_client):
         """Symbol is uppercased and dashes replaced with slashes."""
-        resp = ml_client.post("/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50})
+        resp = ml_client.post(
+            "/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50}
+        )
         assert resp.status_code == 200
         assert resp.json()["symbol"] == "XAU/USD"
 
@@ -324,6 +365,7 @@ class TestMLEndpoints:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 16  CORS safety
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCORSSafety:
     def test_wildcard_origin_not_used_with_credentials(self, monkeypatch):
@@ -340,9 +382,12 @@ class TestCORSSafety:
 
         # Simulate what app.py does
         import os
+
         raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
         allowed = [o.strip() for o in raw.split(",") if o.strip()]
-        assert "*" not in allowed, "Wildcard origin must not be used with allow_credentials=True"
+        assert (
+            "*" not in allowed
+        ), "Wildcard origin must not be used with allow_credentials=True"
 
         app = FastAPI()
         # This must not raise ValueError
@@ -359,6 +404,7 @@ class TestCORSSafety:
 # 17  Pre-trade gate: exception blocks trade
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPreTradeGate:
     def test_exception_in_gate_blocks_trade(self, monkeypatch, tmp_path):
         """
@@ -369,15 +415,22 @@ class TestPreTradeGate:
         which fires inside _check_drawdown / _check_daily_loss.
         """
         _set_jwt(monkeypatch)
-        from risk.pre_trade_gate import PreTradeGate, GateOrder, TradeBlocked, RiskManagerError
+        from risk.pre_trade_gate import (
+            PreTradeGate,
+            GateOrder,
+            TradeBlocked,
+            RiskManagerError,
+        )
 
         class _ExplodingConfig:
             @property
             def max_drawdown_pct(self):
                 raise RuntimeError("config exploded — simulating broken risk manager")
+
             @property
             def daily_loss_limit_pct(self):
                 raise RuntimeError("config exploded")
+
             @property
             def max_open_positions(self):
                 raise RuntimeError("config exploded")
@@ -386,7 +439,7 @@ class TestPreTradeGate:
             # Attributes the gate reads via getattr
             _kill_switch = None
             _trading_halted = False
-            daily_pnl = -9999.0          # large loss to trigger daily_loss check
+            daily_pnl = -9999.0  # large loss to trigger daily_loss check
             daily_starting_equity = 100.0
             config = _ExplodingConfig()  # raises on attribute access
             current_drawdown = 0.0
@@ -404,6 +457,7 @@ class TestPreTradeGate:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 18  Kill switch persistence
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestKillSwitch:
     def test_activate_persists_to_state_file(self, tmp_path):
@@ -431,20 +485,23 @@ class TestKillSwitch:
 
         # Wrong token must raise PermissionError or return falsy — never silently deactivate
         try:
-            result = ks.deactivate("wrong-token")
+            result = ks.deactivate("wrong-token")  # noqa: F841
             # If it returns without raising, the switch must still be active
-            assert ks.is_active(), (
-                "Deactivation with wrong token must not clear the kill switch"
-            )
+            assert (
+                ks.is_active()
+            ), "Deactivation with wrong token must not clear the kill switch"
         except PermissionError:
             pass  # expected — wrong token correctly rejected
         except Exception as exc:
-            pytest.fail(f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}")
+            pytest.fail(
+                f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 19  Social leaderboard endpoint
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSocialLeaderboard:
     @pytest.fixture
@@ -477,7 +534,9 @@ class TestSocialLeaderboard:
         """period= query param is accepted without error."""
         for period in ("monthly", "quarterly", "all"):
             resp = leaderboard_client.get(f"/api/social/leaderboard?period={period}")
-            assert resp.status_code == 200, f"period={period} returned {resp.status_code}"
+            assert (
+                resp.status_code == 200
+            ), f"period={period} returned {resp.status_code}"
 
     def test_leaderboard_ranks_are_sequential(self, leaderboard_client):
         """Ranks start at 1 and are sequential."""
@@ -490,6 +549,7 @@ class TestSocialLeaderboard:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 20  App imports cleanly in dev mode
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestAppImport:
     def test_startup_validator_passes_in_dev_with_jwt_only(self, monkeypatch):
@@ -506,17 +566,26 @@ class TestAppImport:
         monkeypatch.delenv("REDIS_HOST", raising=False)
 
         from config.startup_validator import validate_environment
+
         validate_environment(strict=False)  # must not raise or sys.exit
 
     def test_all_api_routers_importable(self, monkeypatch):
         """All API routers must import without error given a valid JWT secret."""
         _set_jwt(monkeypatch)
         router_modules = [
-            "api.ml", "api.macro", "api.trading", "api.admin",
-            "api.social_feed", "api.alerts", "api.performance",
-            "api.broker", "api.calendar", "api.watchlist",
+            "api.ml",
+            "api.macro",
+            "api.trading",
+            "api.admin",
+            "api.social_feed",
+            "api.alerts",
+            "api.performance",
+            "api.broker",
+            "api.calendar",
+            "api.watchlist",
         ]
         import importlib
+
         for mod_name in router_modules:
             try:
                 mod = importlib.import_module(mod_name)

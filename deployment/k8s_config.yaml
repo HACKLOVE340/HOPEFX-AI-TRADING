@@ -29,7 +29,7 @@ spec:
                 matchLabels:
                   app: hopefx
               topologyKey: kubernetes.io/hostname
-      
+
       containers:
         - name: hopefx
           image: hopefx/ultimate:v3.0
@@ -42,7 +42,7 @@ spec:
               memory: "64Gi"
               cpu: "32"
               nvidia.com/gpu: 1
-          
+
           env:
             - name: HSM_TYPE
               value: "cloudhsm"
@@ -52,7 +52,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-          
+
           volumeMounts:
             - name: event-store
               mountPath: /data/events
@@ -61,7 +61,7 @@ spec:
               readOnly: true
             - name: config
               mountPath: /config
-      
+
       volumes:
         - name: event-store
           persistentVolumeClaim:

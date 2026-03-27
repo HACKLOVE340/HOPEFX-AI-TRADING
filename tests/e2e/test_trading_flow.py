@@ -82,9 +82,7 @@ async def test_buy_signal_to_fill(broker, risk, metrics):
     metrics.get_collector("hopefx_orders_total").inc(
         1, {"symbol": "XAUUSD", "side": "buy"}
     )
-    metrics.get_collector("hopefx_signals_total").inc(
-        1, {"direction": "buy"}
-    )
+    metrics.get_collector("hopefx_signals_total").inc(1, {"direction": "buy"})
 
     positions = broker.get_positions()
     assert any(p.symbol == "XAUUSD" for p in positions)
@@ -203,9 +201,7 @@ def test_risk_blocks_after_max_drawdown(risk):
     risk.update_equity(100_000.0)
     risk.update_equity(89_000.0)  # 11% drawdown — over 10% limit
 
-    assessment = risk.assess_risk(
-        {"equity": 89_000.0, "balance": 89_000.0}, []
-    )
+    assessment = risk.assess_risk({"equity": 89_000.0, "balance": 89_000.0}, [])
     assert isinstance(assessment.can_trade, bool)
     assert hasattr(assessment, "level")
 
@@ -238,6 +234,7 @@ def test_sentry_init_no_dsn_returns_false():
     """init_sentry returns False gracefully when SENTRY_DSN is not set."""
     with patch.dict(os.environ, {"SENTRY_DSN": ""}):
         from monitoring.sentry_config import init_sentry
+
         result = init_sentry()
     assert result is False
 
@@ -249,10 +246,11 @@ def test_journal_create_entry_requires_auth():
     """POST /api/journal/trades endpoint has get_current_user dependency."""
     import inspect
     from api.journal import create_entry
+
     sig = inspect.signature(create_entry)
-    assert "user" in sig.parameters, (
-        "create_entry must have a 'user' parameter with get_current_user dependency"
-    )
+    assert (
+        "user" in sig.parameters
+    ), "create_entry must have a 'user' parameter with get_current_user dependency"
 
 
 # ── Scenario 11: Prop firm status requires auth ───────────────────────────────
@@ -262,10 +260,11 @@ def test_prop_firm_status_requires_auth():
     """GET /api/risk/prop-firm-status endpoint has get_current_user dependency."""
     import inspect
     from api.prop_firm import prop_firm_status
+
     sig = inspect.signature(prop_firm_status)
-    assert "user" in sig.parameters, (
-        "prop_firm_status must have a 'user' parameter with get_current_user dependency"
-    )
+    assert (
+        "user" in sig.parameters
+    ), "prop_firm_status must have a 'user' parameter with get_current_user dependency"
 
 
 # ── Scenario 12: explain.py rate limit enforced ───────────────────────────────

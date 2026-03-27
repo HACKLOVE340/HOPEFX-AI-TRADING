@@ -116,10 +116,10 @@ class MockStrategy(BaseStrategy):
         config = StrategyConfig(name=name, symbol=symbol, timeframe="1H")
         super().__init__(config)
         self.performance = {...}  # Backward compatibility
-    
+
     def analyze(self, data):
         return {'analyzed': True, 'data': data}
-    
+
     def generate_signal(self, analysis):
         return Signal(...)
 ```

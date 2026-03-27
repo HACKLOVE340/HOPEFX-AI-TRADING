@@ -161,13 +161,16 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10),
+                url,
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 data = await r.json()
                 bal = data.get("account", {}).get("balance", "?")
                 logger.info(
-                    "OANDA connected — account %s balance %s", self.account_id, bal,
+                    "OANDA connected — account %s balance %s",
+                    self.account_id,
+                    bal,
                 )
                 return True
         except Exception as exc:
@@ -216,7 +219,9 @@ class OANDAStream:
                 if not self._running:
                     return
                 logger.warning(
-                    "Stream error (%s) — reconnecting in %.0fs", exc, backoff,
+                    "Stream error (%s) — reconnecting in %.0fs",
+                    exc,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
@@ -226,7 +231,8 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10),
+                url,
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 a = (await r.json()).get("account", {})
@@ -251,7 +257,8 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10),
+                url,
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 out = []
@@ -317,7 +324,9 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/orders"
             async with self._session.post(
-                url, json=body, timeout=aiohttp.ClientTimeout(total=10),
+                url,
+                json=body,
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 return self._parse_order_response(await r.json(), symbol, side, units)

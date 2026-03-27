@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _is_dev() -> bool:
     return os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test")
@@ -54,6 +55,7 @@ def _jwt_secret_value() -> str:
 # Public exception
 # ---------------------------------------------------------------------------
 
+
 class StartupValidationError(RuntimeError):
     """Raised when one or more required env vars are missing or invalid."""
 
@@ -61,6 +63,7 @@ class StartupValidationError(RuntimeError):
 # ---------------------------------------------------------------------------
 # Validator
 # ---------------------------------------------------------------------------
+
 
 def validate_environment(*, strict: bool = True) -> None:
     """
@@ -171,8 +174,12 @@ def validate_environment(*, strict: bool = True) -> None:
 
     # OANDA credentials required when BROKER_TYPE=oanda
     if broker_type == "oanda":
-        oanda_key = os.getenv("BROKER_OANDA_TOKEN", os.getenv("OANDA_API_KEY", "")).strip()
-        oanda_acct = os.getenv("BROKER_OANDA_ACCOUNT", os.getenv("OANDA_ACCOUNT_ID", "")).strip()
+        oanda_key = os.getenv(
+            "BROKER_OANDA_TOKEN", os.getenv("OANDA_API_KEY", "")
+        ).strip()
+        oanda_acct = os.getenv(
+            "BROKER_OANDA_ACCOUNT", os.getenv("OANDA_ACCOUNT_ID", "")
+        ).strip()
         if not oanda_key:
             errors.append(
                 "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda",
@@ -214,7 +221,9 @@ def validate_environment(*, strict: bool = True) -> None:
             o.strip()
             for o in mobile_cors.split(",")
             if o.strip()
-            and not o.strip().startswith(("https://", "http://localhost", "http://127."))
+            and not o.strip().startswith(
+                ("https://", "http://localhost", "http://127.")
+            )
         ]
         if bad:
             errors.append(
@@ -260,9 +269,7 @@ def validate_environment(*, strict: bool = True) -> None:
         raise StartupValidationError(msg)
 
     n_optional = sum(
-        1
-        for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT")
-        if os.getenv(v)
+        1 for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT") if os.getenv(v)
     )
     logger.info(
         "Startup validation passed (mode=%s, %d optional vars checked).",

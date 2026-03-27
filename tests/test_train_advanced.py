@@ -85,7 +85,9 @@ class TestBuildAdvancedFeatures:
 
         df = _make_ohlcv()
         X, y = build_advanced_features(df, macro_df=None)
-        assert X.shape[1] == 100, f"Expected 100 features without macro, got {X.shape[1]}"
+        assert (
+            X.shape[1] == 100
+        ), f"Expected 100 features without macro, got {X.shape[1]}"
 
     def test_feature_count_with_macro(self):
         from ml.advanced_features import build_advanced_features
@@ -114,7 +116,9 @@ class TestBuildAdvancedFeatures:
 
         df = _make_ohlcv()
         _, y = build_advanced_features(df, macro_df=None)
-        assert set(y.unique()).issubset({0, 1}), f"Target has non-binary values: {y.unique()}"
+        assert set(y.unique()).issubset(
+            {0, 1}
+        ), f"Target has non-binary values: {y.unique()}"
 
     def test_no_close_lag_features(self):
         """Raw price lags are non-stationary — must not appear in feature matrix."""
@@ -199,7 +203,9 @@ class TestOosEvalAdvanced:
         try:
             X_cv, y_cv, X_oos, y_oos = cv_oos_split
             oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
-            assert (tmp_path / "advanced_oos.pkl").exists(), "advanced_oos.pkl not saved"
+            assert (
+                tmp_path / "advanced_oos.pkl"
+            ).exists(), "advanced_oos.pkl not saved"
         finally:
             ta.MODEL_DIR = original
 
@@ -285,7 +291,9 @@ class TestExtractFeatureImportance:
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             for k, v in imp.items():
-                assert isinstance(v, float), f"Importance for {k} is not float: {type(v)}"
+                assert isinstance(
+                    v, float
+                ), f"Importance for {k} is not float: {type(v)}"
         finally:
             ta.MODEL_DIR = original
 
@@ -316,7 +324,9 @@ class TestCLIDefaults:
 
     def test_default_oos_years_is_8(self):
         ns = self._parse([])
-        assert ns.oos_years == 8.0, f"Default --oos-years should be 8.0, got {ns.oos_years}"
+        assert (
+            ns.oos_years == 8.0
+        ), f"Default --oos-years should be 8.0, got {ns.oos_years}"
 
     def test_default_symbol_is_gcf(self):
         ns = self._parse([])

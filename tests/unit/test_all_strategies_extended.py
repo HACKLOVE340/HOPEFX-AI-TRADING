@@ -27,16 +27,27 @@ import numpy as np
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from strategies.base import BaseStrategy, StrategyConfig, Signal, SignalType, StrategyStatus
+from strategies.base import (
+    BaseStrategy,
+    StrategyConfig,
+    Signal,
+    SignalType,
+    StrategyStatus,
+)
 
 
 # ---------------------------------------------------------------------------
 # OHLCV data helpers
 # ---------------------------------------------------------------------------
 
-def make_ohlcv_data(periods: int = 60, base: float = 1900.0,
-                    trend: float = 0.0, noise: float = 0.5,
-                    seed: int = 42) -> pd.DataFrame:
+
+def make_ohlcv_data(
+    periods: int = 60,
+    base: float = 1900.0,
+    trend: float = 0.0,
+    noise: float = 0.5,
+    seed: int = 42,
+) -> pd.DataFrame:
     """Generate a realistic OHLCV DataFrame."""
     rng = np.random.default_rng(seed)
     changes = rng.normal(trend, noise, periods)
@@ -56,14 +67,23 @@ def make_ohlcv_data(periods: int = 60, base: float = 1900.0,
     )
 
 
-def make_ohlcv_list(periods: int = 60, base: float = 1900.0,
-                    trend: float = 0.0, noise: float = 0.5,
-                    seed: int = 42) -> List[Dict[str, float]]:
+def make_ohlcv_list(
+    periods: int = 60,
+    base: float = 1900.0,
+    trend: float = 0.0,
+    noise: float = 0.5,
+    seed: int = 42,
+) -> List[Dict[str, float]]:
     """Generate OHLCV data as a list of dicts (for new-style strategies)."""
     df = make_ohlcv_data(periods, base, trend, noise, seed)
     return [
-        {"open": r["open"], "high": r["high"],
-         "low": r["low"], "close": r["close"], "volume": r["volume"]}
+        {
+            "open": r["open"],
+            "high": r["high"],
+            "low": r["low"],
+            "close": r["close"],
+            "volume": r["volume"],
+        }
         for _, r in df.iterrows()
     ]
 
@@ -73,8 +93,7 @@ def _df_from_arrays(prices, highs, lows, opens, volumes):
     n = len(prices)
     dates = pd.date_range("2023-01-01", periods=n, freq="h")
     return pd.DataFrame(
-        {"open": opens, "high": highs, "low": lows,
-         "close": prices, "volume": volumes},
+        {"open": opens, "high": highs, "low": lows, "close": prices, "volume": volumes},
         index=dates,
     )
 
@@ -83,14 +102,14 @@ def _df_from_arrays(prices, highs, lows, opens, volumes):
 # Targeted data generators for specific signals
 # ---------------------------------------------------------------------------
 
-def make_bb_buy_df(period: int = 20, std_dev: float = 2.0, n: int = 60,
-                   seed: int = 0):
+
+def make_bb_buy_df(period: int = 20, std_dev: float = 2.0, n: int = 60, seed: int = 0):
     """Prices where the last bar is below the lower Bollinger Band."""
     rng = np.random.default_rng(seed)
     prices = np.ones(n) * 1900.0 + rng.uniform(-0.0005, 0.0005, n)
-    sma = prices[-(period + 1):-1].mean()
-    std = prices[-(period + 1):-1].std(ddof=1)
-    prices[-2] = sma + 0.001          # prev bar inside bands
+    sma = prices[-(period + 1) : -1].mean()
+    std = prices[-(period + 1) : -1].std(ddof=1)
+    prices[-2] = sma + 0.001  # prev bar inside bands
     prices[-1] = sma - std_dev * std - 0.5  # last bar below lower band
     highs = prices + 0.5
     lows = prices - 0.5
@@ -194,7 +213,7 @@ def make_breakout_buy_df(lookback: int = 20, n: int = 60):
     highs = prices + 2.0
     lows = prices - 2.0
     # Make resistance level clear
-    resistance = highs[-(lookback + 2):-1].max()
+    resistance = highs[-(lookback + 2) : -1].max()
     prices[-1] = resistance + 5.0
     highs[-1] = resistance + 10.0
     lows[-1] = prices[-1] - 2.0
@@ -211,7 +230,7 @@ def make_breakout_sell_df(lookback: int = 20, n: int = 60):
     prices = 1900.0 + rng.uniform(-1, 1, n)
     highs = prices + 2.0
     lows = prices - 2.0
-    support = lows[-(lookback + 2):-1].min()
+    support = lows[-(lookback + 2) : -1].min()
     prices[-1] = support - 5.0
     lows[-1] = support - 10.0
     highs[-1] = prices[-1] + 2.0
@@ -228,6 +247,7 @@ def make_breakout_sell_df(lookback: int = 20, n: int = 60):
 # BaseStrategy does not accept.  We bypass their broken __init__ and wire
 # up the object manually.
 # ---------------------------------------------------------------------------
+
 
 def _make_old_strategy(cls, **params):
     """
@@ -283,6 +303,7 @@ def _make_old_strategy(cls, **params):
 # BaseStrategy interface tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBaseStrategyInterface:
     """Tests for BaseStrategy interface and helpers."""
@@ -298,8 +319,12 @@ class TestBaseStrategyInterface:
 
     def test_strategy_config_custom_params(self):
         cfg = StrategyConfig(
-            name="T2", symbol="GBPUSD", timeframe="4H",
-            enabled=False, risk_per_trade=2.5, max_positions=5,
+            name="T2",
+            symbol="GBPUSD",
+            timeframe="4H",
+            enabled=False,
+            risk_per_trade=2.5,
+            max_positions=5,
             parameters={"fast": 10, "slow": 30},
         )
         assert cfg.enabled is False
@@ -443,6 +468,7 @@ class TestBaseStrategyInterface:
 # BollingerBandsStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBollingerBandsStrategy:
     """Tests for BollingerBandsStrategy."""
@@ -450,6 +476,7 @@ class TestBollingerBandsStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.bollinger_bands import BollingerBandsStrategy
+
         self.cls = BollingerBandsStrategy
 
     def _make(self, period=20, std_dev=2.0):
@@ -512,6 +539,7 @@ class TestBollingerBandsStrategy:
 # EMAcrossoverStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestEMAcrossoverStrategy:
     """Tests for EMAcrossoverStrategy."""
@@ -519,6 +547,7 @@ class TestEMAcrossoverStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.ema_crossover import EMAcrossoverStrategy
+
         self.cls = EMAcrossoverStrategy
 
     def _make(self, fast=12, slow=26):
@@ -572,6 +601,7 @@ class TestEMAcrossoverStrategy:
 # MACDStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestMACDStrategy:
     """Tests for MACDStrategy."""
@@ -579,6 +609,7 @@ class TestMACDStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.macd_strategy import MACDStrategy
+
         self.cls = MACDStrategy
 
     def _make(self, fast=12, slow=26, signal=9):
@@ -645,6 +676,7 @@ class TestMACDStrategy:
 # RSIStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestRSIStrategy:
     """Tests for RSIStrategy."""
@@ -652,6 +684,7 @@ class TestRSIStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.rsi_strategy import RSIStrategy
+
         self.cls = RSIStrategy
 
     def _make(self, period=14, oversold=30, overbought=70):
@@ -723,6 +756,7 @@ class TestRSIStrategy:
 # MeanReversionStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestMeanReversionStrategy:
     """Tests for MeanReversionStrategy."""
@@ -730,6 +764,7 @@ class TestMeanReversionStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.mean_reversion import MeanReversionStrategy
+
         self.cls = MeanReversionStrategy
 
     def _make(self, period=20, std_dev=2.0):
@@ -779,6 +814,7 @@ class TestMeanReversionStrategy:
 # StochasticStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestStochasticStrategy:
     """Tests for StochasticStrategy."""
@@ -786,6 +822,7 @@ class TestStochasticStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.stochastic import StochasticStrategy
+
         self.cls = StochasticStrategy
 
     def _make(self, k=14, d=3, oversold=20, overbought=80):
@@ -848,6 +885,7 @@ class TestStochasticStrategy:
 # BreakoutStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBreakoutStrategy:
     """Tests for BreakoutStrategy."""
@@ -855,6 +893,7 @@ class TestBreakoutStrategy:
     @pytest.fixture(autouse=True)
     def _setup(self):
         from strategies.breakout import BreakoutStrategy
+
         self.cls = BreakoutStrategy
 
     def _make(self, lookback=20, threshold=0.02):
@@ -927,6 +966,7 @@ class TestBreakoutStrategy:
 # SMCICTStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSMCICTStrategy:
     """Tests for SMCICTStrategy (new-style with StrategyConfig)."""
@@ -948,6 +988,7 @@ class TestSMCICTStrategy:
     @pytest.fixture
     def strategy(self, config):
         from strategies.smc_ict import SMCICTStrategy
+
         return SMCICTStrategy(config=config)
 
     @pytest.fixture
@@ -965,15 +1006,34 @@ class TestSMCICTStrategy:
         assert isinstance(result, dict)
 
     def test_analyze_insufficient_data_returns_error(self, strategy):
-        result = strategy.analyze({"prices": [{"close": 1900, "high": 1902, "low": 1898, "volume": 100, "open": 1900}]})
+        result = strategy.analyze(
+            {
+                "prices": [
+                    {
+                        "close": 1900,
+                        "high": 1902,
+                        "low": 1898,
+                        "volume": 100,
+                        "open": 1900,
+                    }
+                ]
+            }
+        )
         assert "error" in result
 
     def test_analyze_returns_expected_keys(self, strategy, prices_list):
         result = strategy.analyze({"prices": prices_list})
         if "error" not in result:
-            for key in ("current_price", "market_structure", "order_blocks",
-                        "fair_value_gaps", "liquidity_zones", "premium_discount",
-                        "ote_levels", "timestamp"):
+            for key in (
+                "current_price",
+                "market_structure",
+                "order_blocks",
+                "fair_value_gaps",
+                "liquidity_zones",
+                "premium_discount",
+                "ote_levels",
+                "timestamp",
+            ):
                 assert key in result
 
     def test_generate_signal_returns_none_or_signal(self, strategy, prices_list):
@@ -1036,9 +1096,16 @@ class TestSMCICTStrategy:
             "high": 1902.0,
             "low": 1898.0,
             "volume": 1000,
-            "market_structure": {"trend": "bullish", "type": "higher_highs_higher_lows", "strength": 0.6},
+            "market_structure": {
+                "trend": "bullish",
+                "type": "higher_highs_higher_lows",
+                "strength": 0.6,
+            },
             "order_blocks": {"bullish": [1900.0], "bearish": []},
-            "fair_value_gaps": {"bullish": [{"bottom": 1898.0, "top": 1902.0}], "bearish": []},
+            "fair_value_gaps": {
+                "bullish": [{"bottom": 1898.0, "top": 1902.0}],
+                "bearish": [],
+            },
             "liquidity_zones": {"swept_above": False, "swept_below": True},
             "premium_discount": {"zone": "discount", "level": 0.8},
             "ote_levels": {"bullish": [1900.0], "bearish": []},
@@ -1055,9 +1122,16 @@ class TestSMCICTStrategy:
             "high": 1902.0,
             "low": 1898.0,
             "volume": 1000,
-            "market_structure": {"trend": "bearish", "type": "lower_highs_lower_lows", "strength": 0.6},
+            "market_structure": {
+                "trend": "bearish",
+                "type": "lower_highs_lower_lows",
+                "strength": 0.6,
+            },
             "order_blocks": {"bullish": [], "bearish": [1900.0]},
-            "fair_value_gaps": {"bullish": [], "bearish": [{"bottom": 1898.0, "top": 1902.0}]},
+            "fair_value_gaps": {
+                "bullish": [],
+                "bearish": [{"bottom": 1898.0, "top": 1902.0}],
+            },
             "liquidity_zones": {"swept_above": True, "swept_below": False},
             "premium_discount": {"zone": "premium", "level": 0.8},
             "ote_levels": {"bullish": [], "bearish": [1900.0]},
@@ -1084,6 +1158,7 @@ class TestSMCICTStrategy:
 # ITS8OSStrategy tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestITS8OSStrategy:
     """Tests for ITS8OSStrategy (new-style with StrategyConfig)."""
@@ -1104,6 +1179,7 @@ class TestITS8OSStrategy:
     @pytest.fixture
     def strategy(self, config):
         from strategies.its_8_os import ITS8OSStrategy
+
         return ITS8OSStrategy(config=config)
 
     @pytest.fixture
@@ -1117,21 +1193,29 @@ class TestITS8OSStrategy:
         assert len(strategy.kill_zones) == 4
 
     def test_analyze_returns_dict(self, strategy, prices_list):
-        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(timezone.utc)})
+        result = strategy.analyze(
+            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+        )
         assert isinstance(result, dict)
 
     def test_analyze_insufficient_data_returns_error(self, strategy):
-        result = strategy.analyze({"prices": [], "timestamp": datetime.now(timezone.utc)})
+        result = strategy.analyze(
+            {"prices": [], "timestamp": datetime.now(timezone.utc)}
+        )
         assert "error" in result
 
     def test_analyze_returns_setup_results(self, strategy, prices_list):
-        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(timezone.utc)})
+        result = strategy.analyze(
+            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+        )
         if "error" not in result:
             assert "setup_results" in result
             assert "confluence" in result
 
     def test_generate_signal_returns_none_or_signal(self, strategy, prices_list):
-        analysis = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(timezone.utc)})
+        analysis = strategy.analyze(
+            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+        )
         result = strategy.generate_signal(analysis)
         assert result is None or isinstance(result, Signal)
 
@@ -1226,13 +1310,16 @@ class TestITS8OSStrategy:
 
     def test_on_bar_integration(self, strategy, prices_list):
         strategy.start()
-        result = strategy.on_bar({"prices": prices_list, "timestamp": datetime.now(timezone.utc)})
+        result = strategy.on_bar(
+            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+        )
         assert result is None or isinstance(result, Signal)
 
 
 # ---------------------------------------------------------------------------
 # StrategyBrain tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestStrategyBrain:
@@ -1241,12 +1328,15 @@ class TestStrategyBrain:
     @pytest.fixture
     def brain(self):
         from strategies.strategy_brain import StrategyBrain
-        return StrategyBrain(config={
-            "min_strategies_required": 2,
-            "consensus_threshold": 0.6,
-            "performance_weight": 0.4,
-            "confidence_weight": 0.6,
-        })
+
+        return StrategyBrain(
+            config={
+                "min_strategies_required": 2,
+                "consensus_threshold": 0.6,
+                "performance_weight": 0.4,
+                "confidence_weight": 0.6,
+            }
+        )
 
     @pytest.fixture
     def buy_strategy(self):
@@ -1312,6 +1402,7 @@ class TestStrategyBrain:
 
     def test_init_defaults(self):
         from strategies.strategy_brain import StrategyBrain
+
         b = StrategyBrain()
         assert b.min_strategies_required == 2
         assert b.consensus_threshold == 0.6
@@ -1463,6 +1554,7 @@ class TestStrategyBrain:
         cfg2 = StrategyConfig(name="S2", symbol="XAUUSD", timeframe="1H")
 
         for cfg in (cfg1, cfg2):
+
             class _B(BaseStrategy):
                 def analyze(self, data):
                     return {"price": 1900.0}
@@ -1573,7 +1665,9 @@ class TestStrategyBrain:
 
         # Update performance to skew weights
         for _ in range(5):
-            brain.update_strategy_performance("BuyAlways", signal_correct=True, pnl=100.0)
+            brain.update_strategy_performance(
+                "BuyAlways", signal_correct=True, pnl=100.0
+            )
         for _ in range(5):
             brain.update_strategy_performance("BA2c", signal_correct=False, pnl=-100.0)
 

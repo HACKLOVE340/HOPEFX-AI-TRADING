@@ -14,8 +14,10 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
 class ConditionOperator(Enum):
     """Condition operators"""
+
     GREATER_THAN = ">"
     LESS_THAN = "<"
     GREATER_EQUAL = ">="
@@ -28,12 +30,14 @@ class ConditionOperator(Enum):
 
 class LogicOperator(Enum):
     """Logic operators for combining conditions"""
+
     AND = "AND"
     OR = "OR"
 
 
 class ActionType(Enum):
     """Trading action types"""
+
     BUY = "BUY"
     SELL = "SELL"
     CLOSE_LONG = "CLOSE_LONG"
@@ -43,6 +47,7 @@ class ActionType(Enum):
 
 class IndicatorType(Enum):
     """Available indicators"""
+
     PRICE = "PRICE"
     SMA = "SMA"
     EMA = "EMA"
@@ -66,11 +71,12 @@ class IndicatorType(Enum):
 @dataclass
 class Indicator:
     """Indicator configuration"""
+
     indicator_type: IndicatorType
     period: int = 14
     source: str = "close"  # open, high, low, close
     params: Dict[str, Any] = field(default_factory=dict)
-    
+
     def get_id(self) -> str:
         """Get unique identifier for this indicator."""
         return f"{self.indicator_type.value}_{self.period}_{self.source}"
@@ -79,38 +85,41 @@ class Indicator:
 @dataclass
 class Condition:
     """Single condition in a strategy rule"""
+
     condition_id: str
     left_indicator: Indicator
     operator: ConditionOperator
     right_indicator: Union[Indicator, float]  # Can be indicator or constant
-    
+
     def evaluate(self, data: Dict[str, float]) -> bool:
         """Evaluate the condition against current data."""
         left_value = self._get_value(self.left_indicator, data)
-        
+
         if isinstance(self.right_indicator, (int, float)):
             right_value = self.right_indicator
         else:
             right_value = self._get_value(self.right_indicator, data)
-        
+
         if left_value is None or right_value is None:
             return False
-        
+
         operators = {
-            ConditionOperator.GREATER_THAN: lambda l, r: l > r,
-            ConditionOperator.LESS_THAN: lambda l, r: l < r,
-            ConditionOperator.GREATER_EQUAL: lambda l, r: l >= r,
-            ConditionOperator.LESS_EQUAL: lambda l, r: l <= r,
-            ConditionOperator.EQUAL: lambda l, r: l == r,
-            ConditionOperator.NOT_EQUAL: lambda l, r: l != r,
+            ConditionOperator.GREATER_THAN: lambda l, r: l > r,  # noqa: E741
+            ConditionOperator.LESS_THAN: lambda l, r: l < r,  # noqa: E741
+            ConditionOperator.GREATER_EQUAL: lambda l, r: l >= r,  # noqa: E741
+            ConditionOperator.LESS_EQUAL: lambda l, r: l <= r,  # noqa: E741
+            ConditionOperator.EQUAL: lambda l, r: l == r,  # noqa: E741
+            ConditionOperator.NOT_EQUAL: lambda l, r: l != r,  # noqa: E741
         }
-        
+
         op_func = operators.get(self.operator)
         if op_func:
             return op_func(left_value, right_value)
         return False
-    
-    def _get_value(self, indicator: Indicator, data: Dict[str, float]) -> Optional[float]:
+
+    def _get_value(
+        self, indicator: Indicator, data: Dict[str, float]
+    ) -> Optional[float]:
         """Get indicator value from data."""
         key = indicator.get_id()
         return data.get(key)
@@ -119,16 +128,17 @@ class Condition:
 @dataclass
 class ConditionGroup:
     """Group of conditions combined with logic operators"""
+
     conditions: List[Condition]
     logic: LogicOperator = LogicOperator.AND
-    
+
     def evaluate(self, data: Dict[str, float]) -> bool:
         """Evaluate all conditions in the group."""
         if not self.conditions:
             return False
-        
+
         results = [c.evaluate(data) for c in self.conditions]
-        
+
         if self.logic == LogicOperator.AND:
             return all(results)
         else:  # OR
@@ -138,6 +148,7 @@ class ConditionGroup:
 @dataclass
 class TradingAction:
     """Trading action to execute when conditions are met"""
+
     action_type: ActionType
     position_size: float = 1.0  # Percentage of balance or fixed size
     size_type: str = "percent"  # "percent" or "fixed"
@@ -149,6 +160,7 @@ class TradingAction:
 @dataclass
 class StrategyRule:
     """A complete strategy rule with conditions and actions"""
+
     rule_id: str
     name: str
     condition_groups: List[ConditionGroup]
@@ -160,6 +172,7 @@ class StrategyRule:
 @dataclass
 class NoCodeStrategy:
     """Complete no-code strategy definition"""
+
     strategy_id: str
     name: str
     description: str
@@ -169,60 +182,60 @@ class NoCodeStrategy:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     enabled: bool = True
-    
+
     def to_json(self) -> str:
         """Serialize strategy to JSON."""
         return json.dumps(self.to_dict(), indent=2)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
-            'strategy_id': self.strategy_id,
-            'name': self.name,
-            'description': self.description,
-            'symbol': self.symbol,
-            'timeframe': self.timeframe,
-            'rules': [self._rule_to_dict(r) for r in self.rules],
-            'enabled': self.enabled,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
+            "strategy_id": self.strategy_id,
+            "name": self.name,
+            "description": self.description,
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "rules": [self._rule_to_dict(r) for r in self.rules],
+            "enabled": self.enabled,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
-    
+
     def _rule_to_dict(self, rule: StrategyRule) -> Dict[str, Any]:
         """Convert rule to dictionary."""
         return {
-            'rule_id': rule.rule_id,
-            'name': rule.name,
-            'enabled': rule.enabled,
-            'priority': rule.priority,
-            'condition_groups': [
+            "rule_id": rule.rule_id,
+            "name": rule.name,
+            "enabled": rule.enabled,
+            "priority": rule.priority,
+            "condition_groups": [
                 {
-                    'logic': cg.logic.value,
-                    'conditions': [
+                    "logic": cg.logic.value,
+                    "conditions": [
                         {
-                            'id': c.condition_id,
-                            'left': {
-                                'type': c.left_indicator.indicator_type.value,
-                                'period': c.left_indicator.period,
+                            "id": c.condition_id,
+                            "left": {
+                                "type": c.left_indicator.indicator_type.value,
+                                "period": c.left_indicator.period,
                             },
-                            'operator': c.operator.value,
-                            'right': c.right_indicator if isinstance(c.right_indicator, (int, float)) else {
-                                'type': c.right_indicator.indicator_type.value,
-                                'period': c.right_indicator.period,
-                            }
+                            "operator": c.operator.value,
+                            "right": c.right_indicator
+                            if isinstance(c.right_indicator, (int, float))
+                            else {
+                                "type": c.right_indicator.indicator_type.value,
+                                "period": c.right_indicator.period,
+                            },
                         }
                         for c in cg.conditions
-                    ]
+                    ],
                 }
                 for cg in rule.condition_groups
             ],
-            'action': {
-                'type': rule.action.action_type.value,
-                'position_size': rule.action.position_size,
-                'size_type': rule.action.size_type,
-                'stop_loss': rule.action.stop_loss,
-                'take_profit': rule.action.take_profit,
-            }
+            "action": {
+                "type": rule.action.action_type.value,
+                "position_size": rule.action.position_size,
+                "size_type": rule.action.size_type,
+                "stop_loss": rule.action.stop_loss,
+                "take_profit": rule.action.take_profit,
+            },
         }
-
-

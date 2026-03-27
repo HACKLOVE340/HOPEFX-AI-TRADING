@@ -122,11 +122,13 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(timezone.utc)
         for _ in range(8):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
+            )
         for _ in range(2):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
+            )
 
         metrics = analyzer.get_aggression_metrics("XAUUSD")
         assert metrics is not None
@@ -140,11 +142,13 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(timezone.utc)
         for _ in range(2):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
+            )
         for _ in range(8):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
+            )
 
         metrics = analyzer.get_aggression_metrics("XAUUSD")
         assert metrics.dominant_side == "sellers"
@@ -157,8 +161,11 @@ class TestAdvancedOrderFlowAnalyzer:
         now = datetime.now(timezone.utc)
         for i in range(20):
             analyzer.add_trade(
-                "XAUUSD", 1950.0 + i * 0.5, 100.0, "buy" if i % 2 == 0 else "sell",
-                timestamp=now - timedelta(minutes=5)
+                "XAUUSD",
+                1950.0 + i * 0.5,
+                100.0,
+                "buy" if i % 2 == 0 else "sell",
+                timestamp=now - timedelta(minutes=5),
             )
 
         levels = analyzer.get_volume_imbalance_by_level("XAUUSD", price_bins=5)
@@ -179,16 +186,24 @@ class TestAdvancedOrderFlowAnalyzer:
         # Create consistently buy-dominated price levels
         for i in range(30):
             analyzer.add_trade(
-                "XAUUSD", 1950.0 + i * 0.1, 100.0, "buy",
-                timestamp=now - timedelta(minutes=5)
+                "XAUUSD",
+                1950.0 + i * 0.1,
+                100.0,
+                "buy",
+                timestamp=now - timedelta(minutes=5),
             )
         for i in range(30):
             analyzer.add_trade(
-                "XAUUSD", 1950.0 + i * 0.1, 20.0, "sell",
-                timestamp=now - timedelta(minutes=5)
+                "XAUUSD",
+                1950.0 + i * 0.1,
+                20.0,
+                "sell",
+                timestamp=now - timedelta(minutes=5),
             )
 
-        stacked = analyzer.get_stacked_imbalances("XAUUSD", price_bins=10, min_stack_size=2)
+        stacked = analyzer.get_stacked_imbalances(
+            "XAUUSD", price_bins=10, min_stack_size=2
+        )
         assert isinstance(stacked, list)
 
     def test_detect_delta_divergence_not_enough_data(self):
@@ -208,14 +223,20 @@ class TestAdvancedOrderFlowAnalyzer:
         # First half: high price, more sells → delta falling
         for i in range(10):
             analyzer.add_trade(
-                "XAUUSD", 1960.0 - i * 0.1, 100.0, "sell",
-                timestamp=now - timedelta(minutes=30 + i)
+                "XAUUSD",
+                1960.0 - i * 0.1,
+                100.0,
+                "sell",
+                timestamp=now - timedelta(minutes=30 + i),
             )
         # Second half: lower price, more buys → delta rising
         for i in range(10):
             analyzer.add_trade(
-                "XAUUSD", 1950.0 + i * 0.1, 100.0, "buy",
-                timestamp=now - timedelta(minutes=15 + i)
+                "XAUUSD",
+                1950.0 + i * 0.1,
+                100.0,
+                "buy",
+                timestamp=now - timedelta(minutes=15 + i),
             )
 
         result = analyzer.detect_delta_divergence("XAUUSD")
@@ -231,11 +252,13 @@ class TestAdvancedOrderFlowAnalyzer:
 
         # Concentrated volume at one price
         for _ in range(20):
-            analyzer.add_trade("XAUUSD", 1950.0, 500.0, "buy",
-                               timestamp=now - timedelta(hours=2))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(hours=2)
+            )
         for i in range(5):
-            analyzer.add_trade("XAUUSD", 1960.0 + i, 50.0, "sell",
-                               timestamp=now - timedelta(hours=2))
+            analyzer.add_trade(
+                "XAUUSD", 1960.0 + i, 50.0, "sell", timestamp=now - timedelta(hours=2)
+            )
 
         clusters = analyzer.get_volume_clusters("XAUUSD")
         assert isinstance(clusters, list)
@@ -270,11 +293,13 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(timezone.utc)
         for _ in range(6):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
+            )
         for _ in range(4):
-            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell",
-                               timestamp=now - timedelta(minutes=5))
+            analyzer.add_trade(
+                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
+            )
 
         pressure = analyzer.get_pressure_gauges("XAUUSD")
         assert pressure is not None

@@ -163,7 +163,7 @@ pytest tests/ --collect-only
 
 The dependency installation issue is completely resolved. The CI/CD pipeline will now successfully install all required packages on Python 3.11 and 3.12, allowing tests to run properly.
 
-**Status:** ✅ RESOLVED  
-**Python Compatibility:** 3.11, 3.12  
-**Packages Installed:** 180+  
-**CI Status:** Will pass  
+**Status:** ✅ RESOLVED
+**Python Compatibility:** 3.11, 3.12
+**Packages Installed:** 180+
+**CI Status:** Will pass

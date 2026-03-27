@@ -19,7 +19,13 @@ from datetime import datetime
 from database.models import Base
 
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, Integer, ForeignKey, Index,
+    Column,
+    String,
+    Boolean,
+    DateTime,
+    Integer,
+    ForeignKey,
+    Index,
 )
 from sqlalchemy.orm import relationship
 
@@ -40,6 +46,7 @@ class UserStatus(str, enum.Enum):
 
 class User(Base):
     """Core user account."""
+
     __tablename__ = "users"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -47,7 +54,9 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default=UserRole.TRADER.value)
-    status = Column(String(30), nullable=False, default=UserStatus.PENDING_VERIFICATION.value)
+    status = Column(
+        String(30), nullable=False, default=UserStatus.PENDING_VERIFICATION.value
+    )
 
     # Verification
     is_email_verified = Column(Boolean, default=False, nullable=False)
@@ -59,11 +68,13 @@ class User(Base):
     password_reset_expires = Column(DateTime, nullable=True)
 
     # 2FA
-    totp_secret = Column(String(64), nullable=True)       # encrypted TOTP secret
+    totp_secret = Column(String(64), nullable=True)  # encrypted TOTP secret
     totp_enabled = Column(Boolean, default=False)
 
     # KYC
-    kyc_status = Column(String(20), default="unverified")  # unverified/pending/approved/rejected
+    kyc_status = Column(
+        String(20), default="unverified"
+    )  # unverified/pending/approved/rejected
 
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -72,8 +83,12 @@ class User(Base):
     last_login_ip = Column(String(45), nullable=True)
 
     # Relations
-    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
-    login_attempts = relationship("LoginAttempt", back_populates="user", cascade="all, delete-orphan")
+    sessions = relationship(
+        "UserSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    login_attempts = relationship(
+        "LoginAttempt", back_populates="user", cascade="all, delete-orphan"
+    )
     accounts = relationship("Account", back_populates="user", lazy="dynamic")
 
     __table_args__ = (
@@ -91,11 +106,19 @@ class UserSession(Base):
     Refresh token store — one row per active session.
     Deleting a row revokes that session immediately.
     """
+
     __tablename__ = "user_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    refresh_token_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 of raw token
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    refresh_token_hash = Column(
+        String(64), unique=True, nullable=False
+    )  # SHA-256 of raw token
     device_info = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -113,10 +136,13 @@ class UserSession(Base):
 
 class LoginAttempt(Base):
     """Tracks failed login attempts for brute-force protection."""
+
     __tablename__ = "login_attempts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     email = Column(String(255), nullable=True, index=True)
     ip_address = Column(String(45), nullable=False, index=True)
     success = Column(Boolean, default=False)

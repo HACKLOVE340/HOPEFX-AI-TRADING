@@ -152,7 +152,8 @@ class RedisStateStore:
         positions = self.load_positions()
         if orders:
             logger.info(
-                "RedisStateStore: restored %d open order(s) from Redis", len(orders),
+                "RedisStateStore: restored %d open order(s) from Redis",
+                len(orders),
             )
         if positions:
             logger.info(

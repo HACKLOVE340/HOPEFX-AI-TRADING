@@ -22,26 +22,31 @@ from sklearn.ensemble import RandomForestClassifier
 # RandomForestTradingClassifier tests
 # ---------------------------------------------------------------------------
 
+
 class TestRandomForestClassifierExtended:
     """Extended tests covering uncovered lines in random_forest.py."""
 
     @pytest.fixture
     def rf(self):
         from ml.models.random_forest import RandomForestTradingClassifier
+
         return RandomForestTradingClassifier()
 
     @pytest.fixture
     def rf_custom(self):
         from ml.models.random_forest import RandomForestTradingClassifier
-        return RandomForestTradingClassifier(config={
-            'n_estimators': 10,
-            'max_depth': 5,
-            'min_samples_split': 2,
-            'min_samples_leaf': 1,
-            'max_features': 'sqrt',
-            'random_state': 0,
-            'class_weight': 'balanced',
-        })
+
+        return RandomForestTradingClassifier(
+            config={
+                "n_estimators": 10,
+                "max_depth": 5,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": "sqrt",
+                "random_state": 0,
+                "class_weight": "balanced",
+            }
+        )
 
     @pytest.fixture
     def training_data(self):
@@ -54,7 +59,8 @@ class TestRandomForestClassifierExtended:
     @pytest.fixture
     def trained_rf(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10, 'max_depth': 5})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10, "max_depth": 5})
         X, y = training_data
         rf.train(X, y)
         return rf
@@ -75,47 +81,52 @@ class TestRandomForestClassifierExtended:
 
     def test_train_basic(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y = training_data
         metrics = rf.train(X, y)
-        assert 'train_accuracy' in metrics
-        assert metrics['train_accuracy'] > 0
+        assert "train_accuracy" in metrics
+        assert metrics["train_accuracy"] > 0
         assert rf.is_trained is True
 
     def test_train_with_feature_names(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y = training_data
-        feature_names = [f'feat_{i}' for i in range(X.shape[1])]
+        feature_names = [f"feat_{i}" for i in range(X.shape[1])]
         metrics = rf.train(X, y, feature_names=feature_names)
-        assert 'n_features' in metrics
+        assert "n_features" in metrics
         assert rf.feature_names == feature_names
 
     def test_train_with_validation_data(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y = training_data
         X_train, X_val = X[:150], X[150:]
         y_train, y_val = y[:150], y[150:]
         metrics = rf.train(X_train, y_train, X_val=X_val, y_val=y_val)
-        assert 'val_accuracy' in metrics
-        assert 'val_samples' in metrics
+        assert "val_accuracy" in metrics
+        assert "val_samples" in metrics
 
     def test_train_with_string_labels(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y_int = training_data
         # Must use object dtype for the encoder to activate
-        y_str = np.array(['SELL', 'HOLD', 'BUY'])[y_int].astype(object)
+        y_str = np.array(["SELL", "HOLD", "BUY"])[y_int].astype(object)
         metrics = rf.train(X, y_str)
         assert rf.label_encoder is not None
-        assert 'train_accuracy' in metrics
+        assert "train_accuracy" in metrics
 
     def test_train_dataframe_input(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X_np, y = training_data
-        X_df = pd.DataFrame(X_np, columns=[f'col_{i}' for i in range(X_np.shape[1])])
+        X_df = pd.DataFrame(X_np, columns=[f"col_{i}" for i in range(X_np.shape[1])])
         rf.train(X_df, y)
         assert rf.feature_names == list(X_df.columns)
 
@@ -128,15 +139,17 @@ class TestRandomForestClassifierExtended:
 
     def test_predict_string_labels(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y_int = training_data
-        y_str = np.array(['SELL', 'HOLD', 'BUY'])[y_int]
+        y_str = np.array(["SELL", "HOLD", "BUY"])[y_int]
         rf.train(X, y_str)
         predictions = rf.predict(X[:10])
-        assert all(p in ['SELL', 'HOLD', 'BUY'] for p in predictions)
+        assert all(p in ["SELL", "HOLD", "BUY"] for p in predictions)
 
     def test_predict_raises_if_not_trained(self):
         from ml.models.random_forest import RandomForestTradingClassifier
+
         rf = RandomForestTradingClassifier()
         with pytest.raises(ValueError, match="not trained"):
             rf.predict(np.random.randn(5, 10))
@@ -151,6 +164,7 @@ class TestRandomForestClassifierExtended:
 
     def test_predict_proba_raises_if_not_trained(self):
         from ml.models.random_forest import RandomForestTradingClassifier
+
         rf = RandomForestTradingClassifier()
         with pytest.raises(ValueError, match="not trained"):
             rf.predict_proba(np.random.randn(5, 10))
@@ -182,42 +196,47 @@ class TestRandomForestClassifierExtended:
     def test_evaluate_detailed(self, trained_rf, training_data):
         X, y = training_data
         result = trained_rf.evaluate_detailed(X[150:], y[150:])
-        assert 'accuracy' in result
-        assert 'precision' in result
-        assert 'recall' in result
-        assert 'f1_score' in result
-        assert 'confusion_matrix' in result
-        assert 0 <= result['accuracy'] <= 1
+        assert "accuracy" in result
+        assert "precision" in result
+        assert "recall" in result
+        assert "f1_score" in result
+        assert "confusion_matrix" in result
+        assert 0 <= result["accuracy"] <= 1
 
     def test_evaluate_detailed_string_labels(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 10})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 10})
         X, y_int = training_data
-        y_str = np.array(['SELL', 'HOLD', 'BUY'])[y_int]
+        y_str = np.array(["SELL", "HOLD", "BUY"])[y_int]
         rf.train(X[:150], y_str[:150])
         result = rf.evaluate_detailed(X[150:], y_str[150:])
-        assert 'accuracy' in result
+        assert "accuracy" in result
 
     # --- optimize_hyperparameters (quick) ---
 
     def test_optimize_hyperparameters(self, training_data):
         from ml.models.random_forest import RandomForestTradingClassifier
-        rf = RandomForestTradingClassifier(config={'n_estimators': 5})
+
+        rf = RandomForestTradingClassifier(config={"n_estimators": 5})
         X, y = training_data
         # Small param grid for speed
         param_grid = {
-            'n_estimators': [5, 10],
-            'max_depth': [3, 5],
+            "n_estimators": [5, 10],
+            "max_depth": [3, 5],
         }
-        result = rf.optimize_hyperparameters(X[:100], y[:100], param_grid=param_grid, cv=2)
-        assert 'best_params' in result
-        assert 'best_score' in result
+        result = rf.optimize_hyperparameters(
+            X[:100], y[:100], param_grid=param_grid, cv=2
+        )
+        assert "best_params" in result
+        assert "best_score" in result
         assert rf.is_trained is True
 
 
 # ---------------------------------------------------------------------------
 # EnsemblePredictor extended tests (sklearn parts, no TF)
 # ---------------------------------------------------------------------------
+
 
 class TestEnsemblePredictorExtended:
     """Extended tests for EnsemblePredictor covering sklearn-only paths."""
@@ -226,14 +245,17 @@ class TestEnsemblePredictorExtended:
     def ensemble_no_lstm(self):
         """Create ensemble without LSTM (TF not needed)."""
         from ml.models.ensemble import EnsemblePredictor
-        return EnsemblePredictor(config={
-            'use_lstm': False,
-            'use_rf': True,
-            'use_gb': True,
-            'use_xgb': False,
-            'sequence_length': 20,
-            'dynamic_weights': True,
-        })
+
+        return EnsemblePredictor(
+            config={
+                "use_lstm": False,
+                "use_rf": True,
+                "use_gb": True,
+                "use_xgb": False,
+                "sequence_length": 20,
+                "dynamic_weights": True,
+            }
+        )
 
     @pytest.fixture
     def prices(self):
@@ -242,16 +264,16 @@ class TestEnsemblePredictorExtended:
 
     def test_build_no_lstm(self, ensemble_no_lstm):
         ensemble_no_lstm.build()
-        assert 'random_forest' in ensemble_no_lstm.models
-        assert 'gradient_boosting' in ensemble_no_lstm.models
-        assert 'lstm' not in ensemble_no_lstm.models
+        assert "random_forest" in ensemble_no_lstm.models
+        assert "gradient_boosting" in ensemble_no_lstm.models
+        assert "lstm" not in ensemble_no_lstm.models
 
     def test_train_no_lstm(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
         dummy_y = np.zeros(len(prices))  # Not used but required param
         results = ensemble_no_lstm.train(prices, dummy_y)
-        assert 'random_forest' in results
-        assert 'gradient_boosting' in results
+        assert "random_forest" in results
+        assert "gradient_boosting" in results
         assert ensemble_no_lstm.is_trained
 
     def test_predict_no_lstm(self, ensemble_no_lstm, prices):
@@ -266,64 +288,97 @@ class TestEnsemblePredictorExtended:
         predictions = ensemble_no_lstm.predict_with_confidence(prices[-50:])
         assert len(predictions) > 0
         for pred in predictions:
-            assert hasattr(pred, 'prediction')
-            assert hasattr(pred, 'confidence')
-            assert pred.consensus in ('strong', 'moderate', 'weak', 'divergent', 'single_model')
+            assert hasattr(pred, "prediction")
+            assert hasattr(pred, "confidence")
+            assert pred.consensus in (
+                "strong",
+                "moderate",
+                "weak",
+                "divergent",
+                "single_model",
+            )
 
     def test_update_performance(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
         ensemble_no_lstm.train(prices, np.zeros(len(prices)))
         # Update performance tracking
-        ensemble_no_lstm.update_performance('random_forest', 1905.0, 1903.0)
-        ensemble_no_lstm.update_performance('gradient_boosting', 1902.0, 1904.0)
+        ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
+        ensemble_no_lstm.update_performance("gradient_boosting", 1902.0, 1904.0)
         perf = ensemble_no_lstm.model_performance
-        assert perf['random_forest']['total'] == 1
-        assert perf['gradient_boosting']['total'] == 1
+        assert perf["random_forest"]["total"] == 1
+        assert perf["gradient_boosting"]["total"] == 1
 
     def test_update_weights_dynamic(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
         ensemble_no_lstm.train(prices, np.zeros(len(prices)))
         # Add some performance data
         for _ in range(10):
-            ensemble_no_lstm.update_performance('random_forest', 1905.0, 1903.0)
+            ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
         # Weights should still sum to ~1
-        total_weight = sum(ensemble_no_lstm.model_weights.get(m, 0)
-                          for m in ensemble_no_lstm.models.keys())
+        total_weight = sum(
+            ensemble_no_lstm.model_weights.get(m, 0)
+            for m in ensemble_no_lstm.models.keys()
+        )
         assert abs(total_weight - 1.0) < 0.01
 
     def test_get_model_summary(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
         ensemble_no_lstm.train(prices, np.zeros(len(prices)))
         summary = ensemble_no_lstm.get_model_summary()
-        assert 'models' in summary
-        assert 'weights' in summary
-        assert 'is_trained' in summary
-        assert summary['is_trained'] is True
+        assert "models" in summary
+        assert "weights" in summary
+        assert "is_trained" in summary
+        assert summary["is_trained"] is True
 
     def test_combine_predictions_empty(self):
         from ml.models.ensemble import EnsemblePredictor
-        e = EnsemblePredictor(config={'use_lstm': False, 'use_rf': False, 'use_gb': False, 'use_xgb': False})
+
+        e = EnsemblePredictor(
+            config={
+                "use_lstm": False,
+                "use_rf": False,
+                "use_gb": False,
+                "use_xgb": False,
+            }
+        )
         result = e._combine_predictions({})
         assert result.prediction == 0.0
         assert result.confidence == 0.0
 
     def test_calculate_model_confidence_no_history(self):
         from ml.models.ensemble import EnsemblePredictor
-        e = EnsemblePredictor(config={'use_lstm': False, 'use_rf': False, 'use_gb': False, 'use_xgb': False})
-        conf = e._calculate_model_confidence('random_forest')
+
+        e = EnsemblePredictor(
+            config={
+                "use_lstm": False,
+                "use_rf": False,
+                "use_gb": False,
+                "use_xgb": False,
+            }
+        )
+        conf = e._calculate_model_confidence("random_forest")
         assert conf == 0.5  # Default confidence
 
     def test_calculate_model_confidence_with_history(self, ensemble_no_lstm, prices):
         ensemble_no_lstm.build()
         ensemble_no_lstm.train(prices, np.zeros(len(prices)))
         for _ in range(20):
-            ensemble_no_lstm.update_performance('random_forest', 1905.0, 1903.0)
-        conf = ensemble_no_lstm._calculate_model_confidence('random_forest')
+            ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
+        conf = ensemble_no_lstm._calculate_model_confidence("random_forest")
         assert 0.1 <= conf <= 0.95
 
     def test_prepare_features(self):
         from ml.models.ensemble import EnsemblePredictor
-        e = EnsemblePredictor(config={'sequence_length': 20, 'use_lstm': False, 'use_rf': False, 'use_gb': False, 'use_xgb': False})
+
+        e = EnsemblePredictor(
+            config={
+                "sequence_length": 20,
+                "use_lstm": False,
+                "use_rf": False,
+                "use_gb": False,
+                "use_xgb": False,
+            }
+        )
         data = np.linspace(1900, 2000, 100)
         features, targets = e._prepare_features(data)
         assert features.shape[1] == 10  # 10 feature columns
@@ -334,13 +389,15 @@ class TestEnsemblePredictorExtended:
 # LSTMPricePredictor extended tests (non-TF parts)
 # ---------------------------------------------------------------------------
 
+
 class TestLSTMPricePredictorExtended:
     """Extended tests for LSTMPricePredictor covering non-TF code paths."""
 
     @pytest.fixture
     def lstm(self):
         from ml.models.lstm import LSTMPricePredictor
-        return LSTMPricePredictor(config={'sequence_length': 10})
+
+        return LSTMPricePredictor(config={"sequence_length": 10})
 
     def test_init_params(self, lstm):
         assert lstm.sequence_length == 10
@@ -404,14 +461,17 @@ class TestLSTMPricePredictorExtended:
 
     def test_initialization_custom_config(self):
         from ml.models.lstm import LSTMPricePredictor
-        lstm = LSTMPricePredictor(config={
-            'sequence_length': 30,
-            'lstm_units': [64, 32, 16],
-            'dropout': 0.3,
-            'epochs': 50,
-            'batch_size': 64,
-            'learning_rate': 0.0005,
-        })
+
+        lstm = LSTMPricePredictor(
+            config={
+                "sequence_length": 30,
+                "lstm_units": [64, 32, 16],
+                "dropout": 0.3,
+                "epochs": 50,
+                "batch_size": 64,
+                "learning_rate": 0.0005,
+            }
+        )
         assert lstm.sequence_length == 30
         assert lstm.lstm_units == [64, 32, 16]
         assert lstm.dropout == 0.3

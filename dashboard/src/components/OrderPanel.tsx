@@ -10,7 +10,7 @@ export function OrderPanel() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const response = await fetch('/api/trading/order', {
       method: 'POST',
       headers: {
@@ -40,8 +40,8 @@ export function OrderPanel() {
         <button
           onClick={() => setSide('buy')}
           className={`flex-1 py-2 rounded font-medium transition-colors ${
-            side === 'buy' 
-              ? 'bg-green-600 text-white' 
+            side === 'buy'
+              ? 'bg-green-600 text-white'
               : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
@@ -50,8 +50,8 @@ export function OrderPanel() {
         <button
           onClick={() => setSide('sell')}
           className={`flex-1 py-2 rounded font-medium transition-colors ${
-            side === 'sell' 
-              ? 'bg-red-600 text-white' 
+            side === 'sell'
+              ? 'bg-red-600 text-white'
               : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
@@ -113,8 +113,8 @@ export function OrderPanel() {
         <button
           type="submit"
           className={`w-full py-3 rounded-lg font-bold text-white transition-transform active:scale-95 ${
-            side === 'buy' 
-              ? 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400' 
+            side === 'buy'
+              ? 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400'
               : 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400'
           }`}
         >

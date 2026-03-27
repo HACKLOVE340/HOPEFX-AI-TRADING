@@ -26,7 +26,10 @@ class RandomForestModel:
     """Random Forest classifier for trade direction prediction."""
 
     def __init__(
-        self, n_estimators: int = 100, max_depth: int = 10, random_state: int = 42,
+        self,
+        n_estimators: int = 100,
+        max_depth: int = 10,
+        random_state: int = 42,
     ):
         self.n_estimators = n_estimators
         self.max_depth = max_depth

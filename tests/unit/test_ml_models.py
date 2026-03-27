@@ -16,27 +16,28 @@ import os
 
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
-import tempfile
-from unittest.mock import MagicMock, patch
+import tempfile  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
 
-import numpy as np
-import pandas as pd
-import pytest
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import pytest  # noqa: E402
 
-from ml.features.technical import TechnicalFeatureEngineer
-from ml.models.base import BaseMLModel
-from ml.models.ensemble import (
+from ml.features.technical import TechnicalFeatureEngineer  # noqa: E402
+from ml.models.base import BaseMLModel  # noqa: E402
+from ml.models.ensemble import (  # noqa: E402
     EnsemblePredictor,
     EnsemblePrediction,
     ModelPrediction,
 )
-from ml.models.lstm import LSTMPricePredictor
-from ml.models.random_forest import RandomForestTradingClassifier
+from ml.models.lstm import LSTMPricePredictor  # noqa: E402
+from ml.models.random_forest import RandomForestTradingClassifier  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures shared across test classes
 # ---------------------------------------------------------------------------
+
 
 def _make_ohlcv(n: int = 300, seed: int = 42) -> pd.DataFrame:
     """Return a realistic OHLCV DataFrame of length *n*."""
@@ -67,6 +68,7 @@ def _make_price_series(n: int = 200, seed: int = 0) -> np.ndarray:
 # Concrete subclass of the abstract BaseMLModel for testing
 # ---------------------------------------------------------------------------
 
+
 class _ConcreteModel(BaseMLModel):
     """Minimal concrete subclass used to exercise BaseMLModel methods."""
 
@@ -86,6 +88,7 @@ class _ConcreteModel(BaseMLModel):
 # ===========================================================================
 # BaseMLModel Tests
 # ===========================================================================
+
 
 @pytest.mark.unit
 class TestBaseMLModel:
@@ -219,6 +222,7 @@ class TestBaseMLModel:
 # LSTMPricePredictor Tests
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestLSTMPricePredictor:
     """Tests for LSTMPricePredictor (TensorFlow mocked)."""
@@ -283,7 +287,9 @@ class TestLSTMPricePredictor:
     def test_get_model_summary_built(self):
         lstm = LSTMPricePredictor()
         mock_model = MagicMock()
-        mock_model.summary = MagicMock(side_effect=lambda print_fn: print_fn("LSTM summary"))
+        mock_model.summary = MagicMock(
+            side_effect=lambda print_fn: print_fn("LSTM summary")
+        )
         lstm.model = mock_model
         summary = lstm.get_model_summary()
         assert "LSTM summary" in summary
@@ -294,6 +300,7 @@ class TestLSTMPricePredictor:
         # If TensorFlow is not installed, build() should raise ImportError
         try:
             import tensorflow  # noqa: F401  – already available or not
+
             # TF available: build should set self.model
             lstm.build()
             assert lstm.model is not None
@@ -325,9 +332,7 @@ class TestLSTMPricePredictor:
         # Mock model
         n_input = 12  # will produce 12 - seq_len = 7 sequences
         mock_model = MagicMock()
-        mock_model.predict = MagicMock(
-            return_value=np.zeros((n_input - seq_len, 1))
-        )
+        mock_model.predict = MagicMock(return_value=np.zeros((n_input - seq_len, 1)))
         lstm.model = mock_model
 
         data = np.random.randn(n_input)
@@ -338,6 +343,7 @@ class TestLSTMPricePredictor:
 # ===========================================================================
 # RandomForestTradingClassifier Tests
 # ===========================================================================
+
 
 @pytest.mark.unit
 class TestRandomForestTradingClassifier:
@@ -462,7 +468,9 @@ class TestRandomForestTradingClassifier:
         rf.is_trained = True
         mock_model = MagicMock()
         mock_model.predict.return_value = np.array([2, 1])
-        mock_model.predict_proba.return_value = np.array([[0.1, 0.2, 0.7], [0.3, 0.6, 0.1]])
+        mock_model.predict_proba.return_value = np.array(
+            [[0.1, 0.2, 0.7], [0.3, 0.6, 0.1]]
+        )
         rf.model = mock_model
 
         preds, confidences = rf.predict_with_confidence(np.random.randn(2, 5))
@@ -526,6 +534,7 @@ class TestRandomForestTradingClassifier:
 # ===========================================================================
 # EnsemblePredictor Tests
 # ===========================================================================
+
 
 @pytest.mark.unit
 class TestEnsemblePredictor:
@@ -672,7 +681,9 @@ class TestEnsemblePredictor:
         ep.model_performance["gradient_boosting"]["total"] = 10
         ep.model_performance["gradient_boosting"]["correct"] = 6
         ep._update_weights()
-        total = ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
+        total = (
+            ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
+        )
         assert total == pytest.approx(1.0, abs=1e-6)
 
     def test_get_model_summary_structure(self):
@@ -730,6 +741,7 @@ class TestEnsemblePredictor:
 # ===========================================================================
 # TechnicalFeatureEngineer Tests (with known-value validation)
 # ===========================================================================
+
 
 @pytest.mark.unit
 class TestTechnicalFeatureEngineerExtended:
@@ -832,7 +844,9 @@ class TestTechnicalFeatureEngineerExtended:
         result = fe.create_features(df)
         # After dropna(), result may be empty for n=50 (sma_200 requires 200 rows)
         if len(result) == 0:
-            pytest.skip("Insufficient rows survive dropna() for n=50 with 200-period indicators")
+            pytest.skip(
+                "Insufficient rows survive dropna() for n=50 with 200-period indicators"
+            )
         assert result["rsi_14"].between(0, 100).all()
 
     def test_stochastic_columns_present(self, fe, ohlcv):
@@ -916,7 +930,14 @@ class TestTechnicalFeatureEngineerExtended:
 
     def test_price_pattern_columns(self, fe, ohlcv):
         result = fe.create_features(ohlcv)
-        for col in ["body", "upper_shadow", "lower_shadow", "is_bullish", "is_bearish", "is_doji"]:
+        for col in [
+            "body",
+            "upper_shadow",
+            "lower_shadow",
+            "is_bullish",
+            "is_bearish",
+            "is_doji",
+        ]:
             assert col in result.columns
 
     def test_is_bullish_and_bearish_not_both(self, fe, ohlcv):
@@ -984,7 +1005,9 @@ class TestTechnicalFeatureEngineerExtended:
 
     def test_create_labels_forward_return(self, fe, ohlcv):
         fe.create_features(ohlcv)
-        labels = fe.create_labels(ohlcv, method="forward_return", periods=5, threshold=0.01)
+        labels = fe.create_labels(
+            ohlcv, method="forward_return", periods=5, threshold=0.01
+        )
         assert isinstance(labels, pd.Series)
         assert set(labels.unique()).issubset({0, 1, 2})
 

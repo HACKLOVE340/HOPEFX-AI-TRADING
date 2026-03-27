@@ -127,13 +127,19 @@ class BaseMLModel(ABC):
             try:
                 metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
                 metrics["precision"] = precision_score(
-                    y_test, np.round(predictions), average="weighted",
+                    y_test,
+                    np.round(predictions),
+                    average="weighted",
                 )
                 metrics["recall"] = recall_score(
-                    y_test, np.round(predictions), average="weighted",
+                    y_test,
+                    np.round(predictions),
+                    average="weighted",
                 )
                 metrics["f1"] = f1_score(
-                    y_test, np.round(predictions), average="weighted",
+                    y_test,
+                    np.round(predictions),
+                    average="weighted",
                 )
             except Exception:
                 pass  # Skip if not applicable

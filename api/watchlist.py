@@ -64,9 +64,11 @@ def _reset_watchlists() -> None:
 
 # ── DB session helper ─────────────────────────────────────────────────────────
 
+
 def _get_session() -> Optional[object]:
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr is None:
             return None
@@ -78,6 +80,7 @@ def _get_session() -> Optional[object]:
 
 # ── Dedicated-table persistence ───────────────────────────────────────────────
 
+
 def _db_load(user_id: str) -> Optional[List[str]]:
     """Load from dedicated watchlists table. Returns None when DB unavailable."""
     session = _get_session()
@@ -85,6 +88,7 @@ def _db_load(user_id: str) -> Optional[List[str]]:
         return None
     try:
         from database.models import WatchlistEntry
+
         rows = (
             session.query(WatchlistEntry)
             .filter(WatchlistEntry.user_id == user_id)
@@ -109,6 +113,7 @@ def _db_add(user_id: str, symbol: str) -> bool:
         return False
     try:
         from database.models import WatchlistEntry
+
         entry = WatchlistEntry(user_id=user_id, symbol=symbol)
         session.add(entry)
         session.commit()
@@ -119,7 +124,9 @@ def _db_add(user_id: str, symbol: str) -> bool:
         session.rollback()
         exc_str = str(exc).lower()
         if "unique" in exc_str or "duplicate" in exc_str:
-            raise HTTPException(status_code=409, detail=f"{symbol} already in watchlist")
+            raise HTTPException(
+                status_code=409, detail=f"{symbol} already in watchlist"
+            )
         logger.debug("watchlist: DB add failed for %s/%s: %s", user_id, symbol, exc)
         return False
     finally:
@@ -136,6 +143,7 @@ def _db_remove(user_id: str, symbol: str) -> bool:
         return False
     try:
         from database.models import WatchlistEntry
+
         row = (
             session.query(WatchlistEntry)
             .filter(
@@ -164,6 +172,7 @@ def _db_remove(user_id: str, symbol: str) -> bool:
 
 # ── Unified load / save (DB-first, memory fallback) ───────────────────────────
 
+
 def _load_watchlist(user_id: str) -> List[str]:
     db_val = _db_load(user_id)
     if db_val is not None:
@@ -190,6 +199,7 @@ def _mem_remove(user_id: str, symbol: str) -> None:
 
 # ── Price helper ──────────────────────────────────────────────────────────────
 
+
 def _get_price(symbol: str) -> dict:
     base = _BASE_PRICES.get(symbol, 1.0)
     noise = random.uniform(-0.002, 0.002)
@@ -207,6 +217,7 @@ def _get_price(symbol: str) -> dict:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+
 class WatchlistItem(BaseModel):
     symbol: str
     bid: float
@@ -223,6 +234,7 @@ class WatchlistResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=WatchlistResponse)
 async def get_watchlist(

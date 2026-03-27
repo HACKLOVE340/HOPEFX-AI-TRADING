@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class MarketRegime(Enum):
     """Market regime types."""
+
     TRENDING_UP = "trending_up"
     TRENDING_DOWN = "trending_down"
     RANGING = "ranging"
@@ -38,6 +39,7 @@ class MarketRegime(Enum):
 
 class TradingSession(Enum):
     """Major trading sessions."""
+
     ASIAN = "asian"
     LONDON = "london"
     NEW_YORK = "new_york"
@@ -48,6 +50,7 @@ class TradingSession(Enum):
 @dataclass
 class RegimeAnalysis:
     """Market regime analysis result."""
+
     current_regime: MarketRegime
     regime_strength: float  # 0-1
     trend_direction: str  # 'up', 'down', 'neutral'
@@ -59,20 +62,21 @@ class RegimeAnalysis:
 
     def to_dict(self) -> Dict:
         return {
-            'current_regime': self.current_regime.value,
-            'regime_strength': self.regime_strength,
-            'trend_direction': self.trend_direction,
-            'volatility_percentile': self.volatility_percentile,
-            'volume_state': self.volume_state,
-            'regime_duration': self.regime_duration,
-            'transition_probability': self.transition_probability,
-            'timestamp': self.timestamp.isoformat()
+            "current_regime": self.current_regime.value,
+            "regime_strength": self.regime_strength,
+            "trend_direction": self.trend_direction,
+            "volatility_percentile": self.volatility_percentile,
+            "volume_state": self.volume_state,
+            "regime_duration": self.regime_duration,
+            "transition_probability": self.transition_probability,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class TimeframeAnalysis:
     """Single timeframe analysis result."""
+
     timeframe: str
     trend: str  # 'bullish', 'bearish', 'neutral'
     trend_strength: float
@@ -86,6 +90,7 @@ class TimeframeAnalysis:
 @dataclass
 class ConfluenceAnalysis:
     """Multi-timeframe confluence analysis result."""
+
     overall_bias: str  # 'bullish', 'bearish', 'neutral'
     confidence: float  # 0-1
     timeframe_alignment: float  # % of timeframes agreeing
@@ -99,6 +104,7 @@ class ConfluenceAnalysis:
 @dataclass
 class SessionAnalysis:
     """Trading session analysis result."""
+
     session: TradingSession
     is_active: bool
     time_remaining_minutes: int
@@ -112,6 +118,7 @@ class SessionAnalysis:
 @dataclass
 class VolumeProfile:
     """Volume profile analysis result."""
+
     poc: float  # Point of Control (highest volume price)
     value_area_high: float
     value_area_low: float
@@ -141,9 +148,9 @@ class MarketRegimeDetector:
             config: Configuration dict
         """
         self.config = config or {}
-        self.lookback_period = self.config.get('lookback_period', 100)
-        self.atr_period = self.config.get('atr_period', 14)
-        self.trend_period = self.config.get('trend_period', 20)
+        self.lookback_period = self.config.get("lookback_period", 100)
+        self.atr_period = self.config.get("atr_period", 14)
+        self.trend_period = self.config.get("trend_period", 20)
 
         # Regime history for transition analysis
         self.regime_history = []
@@ -172,9 +179,7 @@ class MarketRegimeDetector:
             volume_state = self._analyze_volume(prices)
 
             # Determine regime
-            regime, strength = self._classify_regime(
-                adx, volatility_pct, trend, prices
-            )
+            regime, strength = self._classify_regime(adx, volatility_pct, trend, prices)
 
             # Calculate regime duration
             duration = self._calculate_regime_duration(regime)
@@ -185,18 +190,17 @@ class MarketRegimeDetector:
             analysis = RegimeAnalysis(
                 current_regime=regime,
                 regime_strength=strength,
-                trend_direction=trend['direction'],
+                trend_direction=trend["direction"],
                 volatility_percentile=volatility_pct,
                 volume_state=volume_state,
                 regime_duration=duration,
-                transition_probability=transition_prob
+                transition_probability=transition_prob,
             )
 
             # Update history
-            self.regime_history.append({
-                'regime': regime,
-                'timestamp': datetime.now(timezone.utc)
-            })
+            self.regime_history.append(
+                {"regime": regime, "timestamp": datetime.now(timezone.utc)}
+            )
             self.regime_history = self.regime_history[-1000:]  # Keep last 1000
 
             return analysis
@@ -207,9 +211,9 @@ class MarketRegimeDetector:
 
     def _calculate_atr(self, prices: pd.DataFrame) -> pd.Series:
         """Calculate Average True Range."""
-        high = prices['high']
-        low = prices['low']
-        close = prices['close']
+        high = prices["high"]
+        low = prices["low"]
+        close = prices["close"]
 
         tr1 = high - low
         tr2 = abs(high - close.shift(1))
@@ -222,9 +226,9 @@ class MarketRegimeDetector:
 
     def _calculate_adx(self, prices: pd.DataFrame, period: int = 14) -> float:
         """Calculate Average Directional Index."""
-        high = prices['high']
-        low = prices['low']
-        prices['close']
+        high = prices["high"]
+        low = prices["low"]
+        prices["close"]
 
         # Calculate +DM and -DM
         plus_dm = high.diff()
@@ -251,9 +255,7 @@ class MarketRegimeDetector:
         return float(adx.iloc[-1]) if not np.isnan(adx.iloc[-1]) else 20.0
 
     def _calculate_volatility_percentile(
-        self,
-        prices: pd.DataFrame,
-        atr: pd.Series
+        self, prices: pd.DataFrame, atr: pd.Series
     ) -> float:
         """Calculate current volatility percentile vs history."""
         current_atr = atr.iloc[-1]
@@ -267,7 +269,7 @@ class MarketRegimeDetector:
 
     def _calculate_trend(self, prices: pd.DataFrame) -> Dict[str, Any]:
         """Calculate trend direction and strength."""
-        close = prices['close']
+        close = prices["close"]
 
         # Multiple MA periods
         sma_short = close.rolling(10).mean()
@@ -280,69 +282,67 @@ class MarketRegimeDetector:
         sma_l = sma_long.iloc[-1]
 
         # Determine direction
-        bullish_count = sum([
-            current_price > sma_s,
-            current_price > sma_m,
-            current_price > sma_l,
-            sma_s > sma_m,
-            sma_m > sma_l
-        ])
+        bullish_count = sum(
+            [
+                current_price > sma_s,
+                current_price > sma_m,
+                current_price > sma_l,
+                sma_s > sma_m,
+                sma_m > sma_l,
+            ]
+        )
 
         if bullish_count >= 4:
-            direction = 'up'
+            direction = "up"
             strength = bullish_count / 5
         elif bullish_count <= 1:
-            direction = 'down'
+            direction = "down"
             strength = (5 - bullish_count) / 5
         else:
-            direction = 'neutral'
+            direction = "neutral"
             strength = 0.5
 
         return {
-            'direction': direction,
-            'strength': strength,
-            'ma_alignment': bullish_count / 5
+            "direction": direction,
+            "strength": strength,
+            "ma_alignment": bullish_count / 5,
         }
 
     def _analyze_volume(self, prices: pd.DataFrame) -> str:
         """Analyze volume state."""
-        if 'volume' not in prices.columns:
-            return 'unknown'
+        if "volume" not in prices.columns:
+            return "unknown"
 
-        volume = prices['volume']
+        volume = prices["volume"]
         avg_volume = volume.rolling(20).mean()
         current_volume = volume.iloc[-1]
         avg_vol = avg_volume.iloc[-1]
 
         if current_volume > avg_vol * 1.5:
-            return 'high'
+            return "high"
         elif current_volume < avg_vol * 0.5:
-            return 'low'
+            return "low"
         else:
-            return 'normal'
+            return "normal"
 
     def _classify_regime(
-        self,
-        adx: float,
-        volatility_pct: float,
-        trend: Dict,
-        prices: pd.DataFrame
+        self, adx: float, volatility_pct: float, trend: Dict, prices: pd.DataFrame
     ) -> Tuple[MarketRegime, float]:
         """Classify market regime based on indicators."""
 
-        close = prices['close']
+        close = prices["close"]
         close.pct_change().dropna()
 
         # Calculate range metrics
-        recent_high = prices['high'].tail(20).max()
-        recent_low = prices['low'].tail(20).min()
+        recent_high = prices["high"].tail(20).max()
+        recent_low = prices["low"].tail(20).min()
         range_pct = (recent_high - recent_low) / recent_low
 
         # Classify based on ADX and volatility
-        if adx > 25 and trend['direction'] == 'up':
+        if adx > 25 and trend["direction"] == "up":
             return MarketRegime.TRENDING_UP, min(adx / 50, 1.0)
 
-        elif adx > 25 and trend['direction'] == 'down':
+        elif adx > 25 and trend["direction"] == "down":
             return MarketRegime.TRENDING_DOWN, min(adx / 50, 1.0)
 
         elif volatility_pct > 80:
@@ -372,14 +372,16 @@ class MarketRegimeDetector:
 
         duration = 0
         for entry in reversed(self.regime_history):
-            if entry['regime'] == current_regime:
+            if entry["regime"] == current_regime:
                 duration += 1
             else:
                 break
 
         return duration + 1
 
-    def _calculate_transition_probability(self, current_regime: MarketRegime) -> Dict[str, float]:
+    def _calculate_transition_probability(
+        self, current_regime: MarketRegime
+    ) -> Dict[str, float]:
         """Calculate regime transition probabilities based on history."""
         if len(self.regime_history) < 10:
             # Default probabilities
@@ -388,8 +390,8 @@ class MarketRegimeDetector:
         # Count transitions from current regime
         transitions = {}
         for i in range(len(self.regime_history) - 1):
-            if self.regime_history[i]['regime'] == current_regime:
-                next_regime = self.regime_history[i + 1]['regime'].value
+            if self.regime_history[i]["regime"] == current_regime:
+                next_regime = self.regime_history[i + 1]["regime"].value
                 transitions[next_regime] = transitions.get(next_regime, 0) + 1
 
         # Normalize
@@ -404,11 +406,11 @@ class MarketRegimeDetector:
         return RegimeAnalysis(
             current_regime=MarketRegime.RANGING,
             regime_strength=0.5,
-            trend_direction='neutral',
+            trend_direction="neutral",
             volatility_percentile=50.0,
-            volume_state='unknown',
+            volume_state="unknown",
             regime_duration=0,
-            transition_probability={}
+            transition_probability={},
         )
 
 
@@ -431,27 +433,26 @@ class MultiTimeframeAnalyzer:
             timeframes: List of timeframes to analyze
             config: Configuration dict
         """
-        self.timeframes = timeframes or ['M5', 'M15', 'H1', 'H4', 'D1']
+        self.timeframes = timeframes or ["M5", "M15", "H1", "H4", "D1"]
         self.config = config or {}
 
         # Timeframe weights (higher = more important)
         self.tf_weights = {
-            'M1': 0.05,
-            'M5': 0.10,
-            'M15': 0.15,
-            'M30': 0.15,
-            'H1': 0.20,
-            'H4': 0.20,
-            'D1': 0.25,
-            'W1': 0.30,
-            'MN1': 0.35,
+            "M1": 0.05,
+            "M5": 0.10,
+            "M15": 0.15,
+            "M30": 0.15,
+            "H1": 0.20,
+            "H4": 0.20,
+            "D1": 0.25,
+            "W1": 0.30,
+            "MN1": 0.35,
         }
 
         logger.info(f"MTF Analyzer initialized with timeframes: {self.timeframes}")
 
     def analyze_confluence(
-        self,
-        data_by_timeframe: Dict[str, pd.DataFrame]
+        self, data_by_timeframe: Dict[str, pd.DataFrame]
     ) -> ConfluenceAnalysis:
         """
         Analyze confluence across multiple timeframes.
@@ -475,10 +476,10 @@ class MultiTimeframeAnalyzer:
                 tf_analyses[tf] = analysis
 
                 # Track trend direction
-                if analysis.trend == 'bullish':
+                if analysis.trend == "bullish":
                     trends.append(1)
                     weighted_trends.append(self.tf_weights.get(tf, 0.1))
-                elif analysis.trend == 'bearish':
+                elif analysis.trend == "bearish":
                     trends.append(-1)
                     weighted_trends.append(-self.tf_weights.get(tf, 0.1))
                 else:
@@ -490,14 +491,16 @@ class MultiTimeframeAnalyzer:
                 return self._default_confluence()
 
             weighted_sum = sum(weighted_trends)
-            alignment = sum(1 for t in trends if t == np.sign(weighted_sum)) / len(trends)
+            alignment = sum(1 for t in trends if t == np.sign(weighted_sum)) / len(
+                trends
+            )
 
             if weighted_sum > 0.1:
-                overall_bias = 'bullish'
+                overall_bias = "bullish"
             elif weighted_sum < -0.1:
-                overall_bias = 'bearish'
+                overall_bias = "bearish"
             else:
-                overall_bias = 'neutral'
+                overall_bias = "neutral"
 
             # Calculate confidence
             confidence = abs(weighted_sum) * alignment
@@ -517,18 +520,20 @@ class MultiTimeframeAnalyzer:
                 timeframe_analyses=tf_analyses,
                 key_confluence_levels=confluence_levels,
                 recommended_action=recommendation,
-                risk_level=risk_level
+                risk_level=risk_level,
             )
 
         except Exception as e:
             logger.error(f"Error in confluence analysis: {e}")
             return self._default_confluence()
 
-    def _analyze_single_timeframe(self, tf: str, data: pd.DataFrame) -> TimeframeAnalysis:
+    def _analyze_single_timeframe(
+        self, tf: str, data: pd.DataFrame
+    ) -> TimeframeAnalysis:
         """Analyze a single timeframe."""
-        close = data['close']
-        data['high']
-        data['low']
+        close = data["close"]
+        data["high"]
+        data["low"]
 
         # Calculate trend
         sma_fast = close.rolling(10).mean()
@@ -538,19 +543,19 @@ class MultiTimeframeAnalyzer:
         current_price = close.iloc[-1]
 
         if current_price > sma_fast.iloc[-1] > sma_slow.iloc[-1] > sma_50.iloc[-1]:
-            trend = 'bullish'
+            trend = "bullish"
             trend_strength = 0.9
         elif current_price < sma_fast.iloc[-1] < sma_slow.iloc[-1] < sma_50.iloc[-1]:
-            trend = 'bearish'
+            trend = "bearish"
             trend_strength = 0.9
         elif current_price > sma_slow.iloc[-1]:
-            trend = 'bullish'
+            trend = "bullish"
             trend_strength = 0.5
         elif current_price < sma_slow.iloc[-1]:
-            trend = 'bearish'
+            trend = "bearish"
             trend_strength = 0.5
         else:
-            trend = 'neutral'
+            trend = "neutral"
             trend_strength = 0.3
 
         # Find support/resistance
@@ -560,7 +565,9 @@ class MultiTimeframeAnalyzer:
         # Calculate proximity to key levels
         all_levels = support_levels + resistance_levels
         if all_levels:
-            distances = [abs(current_price - level) / current_price for level in all_levels]
+            distances = [
+                abs(current_price - level) / current_price for level in all_levels
+            ]
             key_level_proximity = min(distances)
         else:
             key_level_proximity = 1.0
@@ -569,14 +576,14 @@ class MultiTimeframeAnalyzer:
         momentum = (current_price - close.iloc[-20]) / close.iloc[-20]
 
         # Volume trend
-        if 'volume' in data.columns:
-            vol_sma = data['volume'].rolling(20).mean()
-            if data['volume'].iloc[-1] > vol_sma.iloc[-1]:
-                volume_trend = 'increasing'
+        if "volume" in data.columns:
+            vol_sma = data["volume"].rolling(20).mean()
+            if data["volume"].iloc[-1] > vol_sma.iloc[-1]:
+                volume_trend = "increasing"
             else:
-                volume_trend = 'decreasing'
+                volume_trend = "decreasing"
         else:
-            volume_trend = 'unknown'
+            volume_trend = "unknown"
 
         return TimeframeAnalysis(
             timeframe=tf,
@@ -586,37 +593,48 @@ class MultiTimeframeAnalyzer:
             resistance_levels=resistance_levels,
             key_level_proximity=key_level_proximity,
             momentum=momentum,
-            volume_trend=volume_trend
+            volume_trend=volume_trend,
         )
 
-    def _find_support_levels(self, data: pd.DataFrame, num_levels: int = 3) -> List[float]:
+    def _find_support_levels(
+        self, data: pd.DataFrame, num_levels: int = 3
+    ) -> List[float]:
         """Find support levels using swing lows."""
-        lows = data['low'].values
+        lows = data["low"].values
         levels = []
 
         for i in range(2, len(lows) - 2):
-            if lows[i] < lows[i-1] and lows[i] < lows[i-2] and \
-               lows[i] < lows[i+1] and lows[i] < lows[i+2]:
+            if (
+                lows[i] < lows[i - 1]
+                and lows[i] < lows[i - 2]
+                and lows[i] < lows[i + 1]
+                and lows[i] < lows[i + 2]
+            ):
                 levels.append(float(lows[i]))
 
         # Return most recent levels
         return levels[-num_levels:] if levels else []
 
-    def _find_resistance_levels(self, data: pd.DataFrame, num_levels: int = 3) -> List[float]:
+    def _find_resistance_levels(
+        self, data: pd.DataFrame, num_levels: int = 3
+    ) -> List[float]:
         """Find resistance levels using swing highs."""
-        highs = data['high'].values
+        highs = data["high"].values
         levels = []
 
         for i in range(2, len(highs) - 2):
-            if highs[i] > highs[i-1] and highs[i] > highs[i-2] and \
-               highs[i] > highs[i+1] and highs[i] > highs[i+2]:
+            if (
+                highs[i] > highs[i - 1]
+                and highs[i] > highs[i - 2]
+                and highs[i] > highs[i + 1]
+                and highs[i] > highs[i + 2]
+            ):
                 levels.append(float(highs[i]))
 
         return levels[-num_levels:] if levels else []
 
     def _find_confluence_levels(
-        self,
-        tf_analyses: Dict[str, TimeframeAnalysis]
+        self, tf_analyses: Dict[str, TimeframeAnalysis]
     ) -> List[Dict]:
         """Find levels that appear on multiple timeframes."""
         all_supports = []
@@ -624,64 +642,80 @@ class MultiTimeframeAnalyzer:
 
         for tf, analysis in tf_analyses.items():
             for level in analysis.support_levels:
-                all_supports.append({'level': level, 'timeframe': tf})
+                all_supports.append({"level": level, "timeframe": tf})
             for level in analysis.resistance_levels:
-                all_resistances.append({'level': level, 'timeframe': tf})
+                all_resistances.append({"level": level, "timeframe": tf})
 
         # Cluster nearby levels
         confluence_levels = []
 
         # Process supports
         for sup in all_supports:
-            matching = [s for s in all_supports
-                       if abs(s['level'] - sup['level']) / sup['level'] < 0.005]
+            matching = [
+                s
+                for s in all_supports
+                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005
+            ]
             if len(matching) >= 2:
-                avg_level = np.mean([s['level'] for s in matching])
-                tfs = list(set(s['timeframe'] for s in matching))
-                if not any(abs(cl['level'] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
-                    confluence_levels.append({
-                        'level': avg_level,
-                        'type': 'support',
-                        'timeframes': tfs,
-                        'strength': len(matching)
-                    })
+                avg_level = np.mean([s["level"] for s in matching])
+                tfs = list(set(s["timeframe"] for s in matching))
+                if not any(
+                    abs(cl["level"] - avg_level) < avg_level * 0.003
+                    for cl in confluence_levels
+                ):
+                    confluence_levels.append(
+                        {
+                            "level": avg_level,
+                            "type": "support",
+                            "timeframes": tfs,
+                            "strength": len(matching),
+                        }
+                    )
 
         # Process resistances
         for res in all_resistances:
-            matching = [r for r in all_resistances
-                       if abs(r['level'] - res['level']) / res['level'] < 0.005]
+            matching = [
+                r
+                for r in all_resistances
+                if abs(r["level"] - res["level"]) / res["level"] < 0.005
+            ]
             if len(matching) >= 2:
-                avg_level = np.mean([r['level'] for r in matching])
-                tfs = list(set(r['timeframe'] for r in matching))
-                if not any(abs(cl['level'] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
-                    confluence_levels.append({
-                        'level': avg_level,
-                        'type': 'resistance',
-                        'timeframes': tfs,
-                        'strength': len(matching)
-                    })
+                avg_level = np.mean([r["level"] for r in matching])
+                tfs = list(set(r["timeframe"] for r in matching))
+                if not any(
+                    abs(cl["level"] - avg_level) < avg_level * 0.003
+                    for cl in confluence_levels
+                ):
+                    confluence_levels.append(
+                        {
+                            "level": avg_level,
+                            "type": "resistance",
+                            "timeframes": tfs,
+                            "strength": len(matching),
+                        }
+                    )
 
-        return sorted(confluence_levels, key=lambda x: -x['strength'])[:10]
+        return sorted(confluence_levels, key=lambda x: -x["strength"])[:10]
 
     def _generate_recommendation(
         self,
         bias: str,
         confidence: float,
         alignment: float,
-        analyses: Dict[str, TimeframeAnalysis]
+        analyses: Dict[str, TimeframeAnalysis],
     ) -> Tuple[str, str]:
         """Generate trading recommendation."""
 
         if confidence > 0.7 and alignment > 0.7:
-            if bias == 'bullish':
+            if bias == "bullish":
                 return "Strong BUY setup - High timeframe alignment", "low"
-            elif bias == 'bearish':
+            elif bias == "bearish":
                 return "Strong SELL setup - High timeframe alignment", "low"
 
         elif confidence > 0.5 and alignment > 0.5:
-            if bias == 'bullish':
+            if bias == "bullish":
                 return "Moderate BUY setup - Wait for pullback to support", "medium"
-            elif bias == 'bearish':
+            elif bias == "bearish":
                 return "Moderate SELL setup - Wait for pullback to resistance", "medium"
 
         elif confidence < 0.3 or alignment < 0.4:
@@ -693,13 +727,13 @@ class MultiTimeframeAnalyzer:
     def _default_confluence(self) -> ConfluenceAnalysis:
         """Return default confluence analysis."""
         return ConfluenceAnalysis(
-            overall_bias='neutral',
+            overall_bias="neutral",
             confidence=0.0,
             timeframe_alignment=0.0,
             timeframe_analyses={},
             key_confluence_levels=[],
             recommended_action="Insufficient data",
-            risk_level='high'
+            risk_level="high",
         )
 
 
@@ -725,11 +759,11 @@ class SessionAnalyzer:
 
     # Best pairs per session
     BEST_PAIRS = {
-        TradingSession.ASIAN: ['USDJPY', 'AUDUSD', 'NZDUSD', 'AUDJPY'],
-        TradingSession.LONDON: ['EURUSD', 'GBPUSD', 'EURGBP', 'XAUUSD'],
-        TradingSession.NEW_YORK: ['EURUSD', 'GBPUSD', 'USDCAD', 'XAUUSD'],
-        TradingSession.OVERLAP_LONDON_NY: ['EURUSD', 'GBPUSD', 'XAUUSD'],
-        TradingSession.PACIFIC: ['AUDUSD', 'NZDUSD'],
+        TradingSession.ASIAN: ["USDJPY", "AUDUSD", "NZDUSD", "AUDJPY"],
+        TradingSession.LONDON: ["EURUSD", "GBPUSD", "EURGBP", "XAUUSD"],
+        TradingSession.NEW_YORK: ["EURUSD", "GBPUSD", "USDCAD", "XAUUSD"],
+        TradingSession.OVERLAP_LONDON_NY: ["EURUSD", "GBPUSD", "XAUUSD"],
+        TradingSession.PACIFIC: ["AUDUSD", "NZDUSD"],
     }
 
     def __init__(self):
@@ -755,9 +789,7 @@ class SessionAnalyzer:
         return active_sessions
 
     def analyze_session(
-        self,
-        session: TradingSession,
-        utc_time: datetime = None
+        self, session: TradingSession, utc_time: datetime = None
     ) -> SessionAnalysis:
         """Analyze a specific trading session."""
         if utc_time is None:
@@ -797,11 +829,20 @@ class SessionAnalyzer:
         }
 
         key_times_map = {
-            TradingSession.ASIAN: ['00:00 UTC - Tokyo Open', '01:00 UTC - Sydney Close'],
-            TradingSession.LONDON: ['07:00 UTC - London Open', '08:00 UTC - Frankfurt Open'],
-            TradingSession.NEW_YORK: ['12:00 UTC - NY Open', '14:30 UTC - US Economic Data'],
-            TradingSession.OVERLAP_LONDON_NY: ['12:00-14:00 UTC - Highest Volume'],
-            TradingSession.PACIFIC: ['21:00 UTC - Sydney Open'],
+            TradingSession.ASIAN: [
+                "00:00 UTC - Tokyo Open",
+                "01:00 UTC - Sydney Close",
+            ],
+            TradingSession.LONDON: [
+                "07:00 UTC - London Open",
+                "08:00 UTC - Frankfurt Open",
+            ],
+            TradingSession.NEW_YORK: [
+                "12:00 UTC - NY Open",
+                "14:30 UTC - US Economic Data",
+            ],
+            TradingSession.OVERLAP_LONDON_NY: ["12:00-14:00 UTC - Highest Volume"],
+            TradingSession.PACIFIC: ["21:00 UTC - Sydney Open"],
         }
 
         return SessionAnalysis(
@@ -811,8 +852,8 @@ class SessionAnalyzer:
             typical_volatility=volatility_map.get(session, 0.5),
             typical_volume=volume_map.get(session, 0.5),
             best_pairs=self.BEST_PAIRS.get(session, []),
-            session_range={'start': str(start), 'end': str(end)},
-            key_times=key_times_map.get(session, [])
+            session_range={"start": str(start), "end": str(end)},
+            key_times=key_times_map.get(session, []),
         )
 
     def get_optimal_trading_times(self, pair: str) -> List[str]:

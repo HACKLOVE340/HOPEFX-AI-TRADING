@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class PaymentStatus(str, Enum):
     """Payment status enumeration"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     SUCCEEDED = "succeeded"
@@ -47,7 +48,7 @@ class Payment:
         amount: Decimal,
         currency: str = "USD",
         payment_method: str = "stripe",
-        status: PaymentStatus = PaymentStatus.PENDING
+        status: PaymentStatus = PaymentStatus.PENDING,
     ):
         self.payment_id = payment_id
         self.user_id = user_id
@@ -79,17 +80,19 @@ class Payment:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'payment_id': self.payment_id,
-            'user_id': self.user_id,
-            'subscription_id': self.subscription_id,
-            'invoice_id': self.invoice_id,
-            'amount': float(self.amount),
-            'currency': self.currency,
-            'payment_method': self.payment_method,
-            'status': self.status.value,
-            'created_at': self.created_at.isoformat(),
-            'processed_at': self.processed_at.isoformat() if self.processed_at else None,
-            'error_message': self.error_message
+            "payment_id": self.payment_id,
+            "user_id": self.user_id,
+            "subscription_id": self.subscription_id,
+            "invoice_id": self.invoice_id,
+            "amount": float(self.amount),
+            "currency": self.currency,
+            "payment_method": self.payment_method,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "processed_at": self.processed_at.isoformat()
+            if self.processed_at
+            else None,
+            "error_message": self.error_message,
         }
 
 
@@ -105,10 +108,10 @@ class PaymentProcessor:
     def _configure_webhooks(self) -> None:
         """Configure webhook handlers"""
         self._webhook_handlers = {
-            'payment_intent.succeeded': self._handle_payment_succeeded,
-            'payment_intent.failed': self._handle_payment_failed,
-            'customer.subscription.created': self._handle_subscription_created,
-            'customer.subscription.deleted': self._handle_subscription_cancelled,
+            "payment_intent.succeeded": self._handle_payment_succeeded,
+            "payment_intent.failed": self._handle_payment_failed,
+            "customer.subscription.created": self._handle_subscription_created,
+            "customer.subscription.deleted": self._handle_subscription_cancelled,
         }
 
     def create_payment(
@@ -116,15 +119,14 @@ class PaymentProcessor:
         user_id: str,
         subscription_id: str,
         tier: SubscriptionTier,
-        duration_months: int = 1
+        duration_months: int = 1,
     ) -> tuple:
         """Create a payment for subscription"""
         import uuid
 
         # Generate access code
         access_code_obj = access_code_generator.generate_code(
-            tier=tier,
-            duration_days=30 * duration_months
+            tier=tier, duration_days=30 * duration_months
         )
 
         # Create invoice
@@ -133,7 +135,7 @@ class PaymentProcessor:
             subscription_id=subscription_id,
             tier=tier,
             access_code=access_code_obj.code,
-            duration_months=duration_months
+            duration_months=duration_months,
         )
 
         # Create payment record
@@ -146,7 +148,7 @@ class PaymentProcessor:
             amount=invoice.amount,
             currency=invoice.currency,
             payment_method="stripe",
-            status=PaymentStatus.PENDING
+            status=PaymentStatus.PENDING,
         )
 
         self._payments[payment_id] = payment
@@ -181,17 +183,21 @@ class PaymentProcessor:
             invoice_generator.mark_invoice_paid(payment.invoice_id)
 
             # Activate subscription
-            subscription = subscription_manager.get_subscription(payment.subscription_id)
+            subscription = subscription_manager.get_subscription(
+                payment.subscription_id
+            )
             if subscription:
                 subscription.status = SubscriptionStatus.ACTIVE
                 logger.info(f"Activated subscription {subscription.subscription_id}")
 
             # Trigger success webhook
-            self._handle_payment_succeeded({
-                'payment_id': payment_id,
-                'amount': float(payment.amount),
-                'user_id': payment.user_id
-            })
+            self._handle_payment_succeeded(
+                {
+                    "payment_id": payment_id,
+                    "amount": float(payment.amount),
+                    "user_id": payment.user_id,
+                }
+            )
 
             return True
 
@@ -201,7 +207,7 @@ class PaymentProcessor:
 
     def _handle_payment_succeeded(self, event_data: Dict) -> None:
         """Handle successful payment webhook"""
-        payment_id = event_data.get('payment_id')
+        payment_id = event_data.get("payment_id")
         logger.info(f"Payment succeeded webhook: {payment_id}")
 
         # Send confirmation email (would integrate with email service)
@@ -210,8 +216,8 @@ class PaymentProcessor:
 
     def _handle_payment_failed(self, event_data: Dict) -> None:
         """Handle failed payment webhook"""
-        payment_id = event_data.get('payment_id')
-        error = event_data.get('error', 'Unknown error')
+        payment_id = event_data.get("payment_id")
+        error = event_data.get("error", "Unknown error")
         logger.error(f"Payment failed webhook: {payment_id} - {error}")
 
         # Send failure notification
@@ -219,12 +225,12 @@ class PaymentProcessor:
 
     def _handle_subscription_created(self, event_data: Dict) -> None:
         """Handle subscription created webhook"""
-        subscription_id = event_data.get('subscription_id')
+        subscription_id = event_data.get("subscription_id")
         logger.info(f"Subscription created webhook: {subscription_id}")
 
     def _handle_subscription_cancelled(self, event_data: Dict) -> None:
         """Handle subscription cancelled webhook"""
-        subscription_id = event_data.get('subscription_id')
+        subscription_id = event_data.get("subscription_id")
         logger.info(f"Subscription cancelled webhook: {subscription_id}")
 
         # Cancel subscription
@@ -245,16 +251,14 @@ class PaymentProcessor:
             return False
 
     def create_stripe_payment_intent(
-        self,
-        amount: Decimal,
-        currency: str = "USD",
-        customer_id: Optional[str] = None
+        self, amount: Decimal, currency: str = "USD", customer_id: Optional[str] = None
     ) -> Optional[str]:
         """Create Stripe payment intent (placeholder)"""
         # In production, would use Stripe SDK
         # stripe.PaymentIntent.create(amount=amount, currency=currency, ...)
 
         import uuid
+
         intent_id = f"pi_{uuid.uuid4().hex[:24]}"
         logger.info(f"Created Stripe payment intent: {intent_id}")
         return intent_id
@@ -266,7 +270,9 @@ class PaymentProcessor:
             return False
 
         if payment.status != PaymentStatus.SUCCEEDED:
-            logger.error(f"Cannot refund payment {payment_id} with status {payment.status}")
+            logger.error(
+                f"Cannot refund payment {payment_id} with status {payment.status}"
+            )
             return False
 
         refund_amount = amount or payment.amount
@@ -291,19 +297,29 @@ class PaymentProcessor:
     def get_payment_stats(self) -> Dict:
         """Get payment statistics"""
         total = len(self._payments)
-        succeeded = len([p for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED])
-        failed = len([p for p in self._payments.values() if p.status == PaymentStatus.FAILED])
-        pending = len([p for p in self._payments.values() if p.status == PaymentStatus.PENDING])
+        succeeded = len(
+            [p for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED]
+        )
+        failed = len(
+            [p for p in self._payments.values() if p.status == PaymentStatus.FAILED]
+        )
+        pending = len(
+            [p for p in self._payments.values() if p.status == PaymentStatus.PENDING]
+        )
 
-        total_amount = sum(p.amount for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED)
+        total_amount = sum(
+            p.amount
+            for p in self._payments.values()
+            if p.status == PaymentStatus.SUCCEEDED
+        )
 
         return {
-            'total_payments': total,
-            'succeeded': succeeded,
-            'failed': failed,
-            'pending': pending,
-            'total_revenue': float(total_amount),
-            'success_rate': (succeeded / total * 100) if total > 0 else 0.0
+            "total_payments": total,
+            "succeeded": succeeded,
+            "failed": failed,
+            "pending": pending,
+            "total_revenue": float(total_amount),
+            "success_rate": (succeeded / total * 100) if total > 0 else 0.0,
         }
 
 

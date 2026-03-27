@@ -590,12 +590,12 @@ Handle disconnections:
 ```javascript
 function connect() {
   const ws = new WebSocket('ws://localhost:5000/ws');
-  
+
   ws.onclose = () => {
     console.log('Disconnected. Reconnecting in 5s...');
     setTimeout(connect, 5000);
   };
-  
+
   return ws;
 }
 ```

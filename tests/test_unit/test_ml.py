@@ -12,11 +12,13 @@ import numpy as np
 try:
     from ml.online_learner import XGBoostOnlineModel  # type: ignore[import]
     from ml.robust_predictor import DriftDetector, DriftResult  # type: ignore[import]
+
     HAS_ML_DEPS = True
 except ImportError:
     try:
         # Fallback: check if xgboost is available at all
         import xgboost  # noqa: F401
+
         HAS_ML_DEPS = False  # modules exist but classes may differ
     except ImportError:
         HAS_ML_DEPS = False
@@ -31,14 +33,14 @@ pytestmark = pytest.mark.skipif(
 def test_xgboost_training():
     """Test XGBoost model training."""
     model = XGBoostOnlineModel()
-    
+
     # Generate synthetic data
     np.random.seed(42)
     X = np.random.randn(1000, 10)
     y = (X[:, 0] + X[:, 1] > 0).astype(int)
-    
+
     asyncio.run(model.fit(X, y))
-    
+
     assert model._is_trained
     assert model.metadata is not None
     assert model.metadata.val_score > 0.5
@@ -71,8 +73,12 @@ def test_drift_detection():
 def test_feature_store_consistency():
     """Property-based test for feature store."""
     from hypothesis import given, strategies as st
-    
-    @given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100))
+
+    @given(
+        st.lists(
+            st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100
+        )
+    )
     def features_computed_correctly(prices):
         # Property: features should be deterministic given same inputs
         pass

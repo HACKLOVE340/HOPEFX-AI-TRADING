@@ -35,6 +35,7 @@ from backtest.engine import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def base_config():
     return BacktestConfig(
@@ -59,6 +60,7 @@ def broker(base_config):
 # Test 1: commission deducted
 # ---------------------------------------------------------------------------
 
+
 def test_commission_deducted(broker):
     initial_cash = broker.cash
     broker.place_market_order("XAUUSD", "buy", 1.0, 2000.0)
@@ -73,6 +75,7 @@ def test_commission_deducted(broker):
 # ---------------------------------------------------------------------------
 # Test 2: overnight financing reduces cash
 # ---------------------------------------------------------------------------
+
 
 def test_overnight_financing_applied(base_config):
     cfg = BacktestConfig(
@@ -105,6 +108,7 @@ def test_overnight_financing_applied(base_config):
 # Test 3: variable slippage higher on wide bars
 # ---------------------------------------------------------------------------
 
+
 def test_variable_slippage_higher_on_wide_bars():
     cfg = BacktestConfig(
         start_date=datetime(2023, 1, 1),
@@ -130,6 +134,7 @@ def test_variable_slippage_higher_on_wide_bars():
 # ---------------------------------------------------------------------------
 # Test 4: Sortino >= Sharpe for positive-skew returns
 # ---------------------------------------------------------------------------
+
 
 def test_sortino_gte_sharpe_positive_skew():
     """
@@ -159,6 +164,7 @@ def test_sortino_gte_sharpe_positive_skew():
 # Test 5: significance test p < 0.05 with a clear edge
 # ---------------------------------------------------------------------------
 
+
 def test_significance_test_with_clear_edge():
     """
     A strategy with a consistent positive edge should produce p < 0.05
@@ -182,6 +188,7 @@ def test_significance_test_with_clear_edge():
 # Test 6: Monte Carlo ruin probability is 0 for profitable strategy
 # ---------------------------------------------------------------------------
 
+
 def test_monte_carlo_ruin_zero_for_profitable():
     cfg = BacktestConfig(
         start_date=datetime(2023, 1, 1),
@@ -195,15 +202,16 @@ def test_monte_carlo_ruin_zero_for_profitable():
     trade_returns = np.full(100, 0.01)
     mc = engine.run_monte_carlo_simulation(trade_returns, n_simulations=500)
 
-    assert mc["mc_ruin_probability"] == pytest.approx(0.0), (
-        "A consistently profitable strategy should have zero ruin probability"
-    )
+    assert mc["mc_ruin_probability"] == pytest.approx(
+        0.0
+    ), "A consistently profitable strategy should have zero ruin probability"
     assert mc["mc_median_final"] > 1.0
 
 
 # ---------------------------------------------------------------------------
 # Test 7: Monte Carlo p5 < median < p95
 # ---------------------------------------------------------------------------
+
 
 def test_monte_carlo_percentile_ordering():
     cfg = BacktestConfig(
@@ -218,17 +226,14 @@ def test_monte_carlo_percentile_ordering():
     trade_returns = rng.normal(0.005, 0.02, 80)
     mc = engine.run_monte_carlo_simulation(trade_returns, n_simulations=500)
 
-    assert mc["mc_p5_final"] <= mc["mc_median_final"], (
-        "p5 should be <= median"
-    )
-    assert mc["mc_median_final"] <= mc["mc_p95_final"], (
-        "median should be <= p95"
-    )
+    assert mc["mc_p5_final"] <= mc["mc_median_final"], "p5 should be <= median"
+    assert mc["mc_median_final"] <= mc["mc_p95_final"], "median should be <= p95"
 
 
 # ---------------------------------------------------------------------------
 # Test 8: regime breakdown contains expected keys
 # ---------------------------------------------------------------------------
+
 
 def test_regime_breakdown_keys():
     cfg = BacktestConfig(
@@ -257,20 +262,50 @@ def test_regime_breakdown_keys():
 # Test 9: BacktestResult dataclass has all required fields
 # ---------------------------------------------------------------------------
 
+
 def test_backtest_result_has_all_fields():
     required_fields = [
-        "total_return", "total_trades", "winning_trades", "losing_trades",
-        "win_rate", "profit_factor", "max_drawdown", "sharpe_ratio",
-        "sortino_ratio", "calmar_ratio", "omega_ratio", "tail_ratio",
-        "skewness", "kurtosis", "avg_mae", "avg_mfe",
-        "t_statistic", "p_value", "is_significant", "sample_size",
-        "mc_median_final", "mc_p5_final", "mc_p95_final", "mc_ruin_probability",
-        "regime_breakdown", "equity_curve", "trades", "metrics",
+        "total_return",
+        "total_trades",
+        "winning_trades",
+        "losing_trades",
+        "win_rate",
+        "profit_factor",
+        "max_drawdown",
+        "sharpe_ratio",
+        "sortino_ratio",
+        "calmar_ratio",
+        "omega_ratio",
+        "tail_ratio",
+        "skewness",
+        "kurtosis",
+        "avg_mae",
+        "avg_mfe",
+        "t_statistic",
+        "p_value",
+        "is_significant",
+        "sample_size",
+        "mc_median_final",
+        "mc_p5_final",
+        "mc_p95_final",
+        "mc_ruin_probability",
+        "regime_breakdown",
+        "equity_curve",
+        "trades",
+        "metrics",
     ]
     result = BacktestResult(
-        total_return=0.0, total_trades=0, winning_trades=0, losing_trades=0,
-        win_rate=0.0, profit_factor=0.0, max_drawdown=0.0, sharpe_ratio=0.0,
-        equity_curve=[], trades=[], metrics={},
+        total_return=0.0,
+        total_trades=0,
+        winning_trades=0,
+        losing_trades=0,
+        win_rate=0.0,
+        profit_factor=0.0,
+        max_drawdown=0.0,
+        sharpe_ratio=0.0,
+        equity_curve=[],
+        trades=[],
+        metrics={},
     )
     for field in required_fields:
         assert hasattr(result, field), f"BacktestResult missing field: {field}"
@@ -279,6 +314,7 @@ def test_backtest_result_has_all_fields():
 # ---------------------------------------------------------------------------
 # Test 10: _max_consecutive correctly counts streaks
 # ---------------------------------------------------------------------------
+
 
 def test_max_consecutive_counts_correctly():
     cfg = BacktestConfig(
@@ -290,13 +326,13 @@ def test_max_consecutive_counts_correctly():
     engine = BacktestEngine(cfg)
 
     trades = [
-        {"net_pnl": 10},   # win
-        {"net_pnl": 10},   # win
-        {"net_pnl": 10},   # win  ← streak of 3
-        {"net_pnl": -5},   # loss
-        {"net_pnl": 10},   # win
-        {"net_pnl": -5},   # loss
-        {"net_pnl": -5},   # loss  ← streak of 2
+        {"net_pnl": 10},  # win
+        {"net_pnl": 10},  # win
+        {"net_pnl": 10},  # win  ← streak of 3
+        {"net_pnl": -5},  # loss
+        {"net_pnl": 10},  # win
+        {"net_pnl": -5},  # loss
+        {"net_pnl": -5},  # loss  ← streak of 2
     ]
 
     assert engine._max_consecutive(trades, "win") == 3

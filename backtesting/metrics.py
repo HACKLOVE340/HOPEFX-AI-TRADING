@@ -25,8 +25,13 @@ class PerformanceMetrics:
     risk metrics, and trade statistics.
     """
 
-    def __init__(self, equity_curve: pd.DataFrame, trade_history: pd.DataFrame,
-                 initial_capital: float, risk_free_rate: float = 0.02):
+    def __init__(
+        self,
+        equity_curve: pd.DataFrame,
+        trade_history: pd.DataFrame,
+        initial_capital: float,
+        risk_free_rate: float = 0.02,
+    ):
         """
         Initialize metrics calculator.
 
@@ -46,32 +51,40 @@ class PerformanceMetrics:
         metrics = {}
 
         # Return metrics
-        metrics['total_return'] = self.calculate_total_return()
-        metrics['annual_return'] = self.calculate_annual_return()
-        metrics['monthly_return'] = self.calculate_monthly_return()
+        metrics["total_return"] = self.calculate_total_return()
+        metrics["annual_return"] = self.calculate_annual_return()
+        metrics["monthly_return"] = self.calculate_monthly_return()
 
         # Risk metrics
-        metrics['sharpe_ratio'] = self.calculate_sharpe_ratio()
-        metrics['sortino_ratio'] = self.calculate_sortino_ratio()
-        metrics['max_drawdown'] = self.calculate_max_drawdown()
-        metrics['calmar_ratio'] = self.calculate_calmar_ratio()
-        metrics['volatility'] = self.calculate_volatility()
+        metrics["sharpe_ratio"] = self.calculate_sharpe_ratio()
+        metrics["sortino_ratio"] = self.calculate_sortino_ratio()
+        metrics["max_drawdown"] = self.calculate_max_drawdown()
+        metrics["calmar_ratio"] = self.calculate_calmar_ratio()
+        metrics["volatility"] = self.calculate_volatility()
 
         # Trade statistics
-        metrics['total_trades'] = self.calculate_total_trades()
-        metrics['winning_trades'] = self.calculate_winning_trades()
-        metrics['losing_trades'] = self.calculate_losing_trades()
-        metrics['win_rate'] = self.calculate_win_rate()
-        metrics['profit_factor'] = self.calculate_profit_factor()
-        metrics['avg_win'] = self.calculate_avg_win()
-        metrics['avg_loss'] = self.calculate_avg_loss()
-        metrics['largest_win'] = self.calculate_largest_win()
-        metrics['largest_loss'] = self.calculate_largest_loss()
-        metrics['avg_trade_duration'] = self.calculate_avg_trade_duration()
+        metrics["total_trades"] = self.calculate_total_trades()
+        metrics["winning_trades"] = self.calculate_winning_trades()
+        metrics["losing_trades"] = self.calculate_losing_trades()
+        metrics["win_rate"] = self.calculate_win_rate()
+        metrics["profit_factor"] = self.calculate_profit_factor()
+        metrics["avg_win"] = self.calculate_avg_win()
+        metrics["avg_loss"] = self.calculate_avg_loss()
+        metrics["largest_win"] = self.calculate_largest_win()
+        metrics["largest_loss"] = self.calculate_largest_loss()
+        metrics["avg_trade_duration"] = self.calculate_avg_trade_duration()
 
         # Portfolio metrics
-        metrics['final_equity'] = self.equity_curve['equity'].iloc[-1] if not self.equity_curve.empty else self.initial_capital
-        metrics['peak_equity'] = self.equity_curve['equity'].max() if not self.equity_curve.empty else self.initial_capital
+        metrics["final_equity"] = (
+            self.equity_curve["equity"].iloc[-1]
+            if not self.equity_curve.empty
+            else self.initial_capital
+        )
+        metrics["peak_equity"] = (
+            self.equity_curve["equity"].max()
+            if not self.equity_curve.empty
+            else self.initial_capital
+        )
 
         return metrics
 
@@ -79,7 +92,7 @@ class PerformanceMetrics:
         """Calculate total return percentage."""
         if self.equity_curve.empty:
             return 0.0
-        final_equity = self.equity_curve['equity'].iloc[-1]
+        final_equity = self.equity_curve["equity"].iloc[-1]
         return ((final_equity - self.initial_capital) / self.initial_capital) * 100
 
     def calculate_annual_return(self) -> float:
@@ -106,7 +119,7 @@ class PerformanceMetrics:
         if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
-        returns = self.equity_curve['equity'].pct_change().dropna()
+        returns = self.equity_curve["equity"].pct_change().dropna()
 
         if returns.std() == 0:
             return 0.0
@@ -120,7 +133,7 @@ class PerformanceMetrics:
         if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
-        returns = self.equity_curve['equity'].pct_change().dropna()
+        returns = self.equity_curve["equity"].pct_change().dropna()
         downside_returns = returns[returns < 0]
 
         if len(downside_returns) == 0 or downside_returns.std() == 0:
@@ -135,7 +148,7 @@ class PerformanceMetrics:
         if self.equity_curve.empty:
             return 0.0
 
-        equity = self.equity_curve['equity']
+        equity = self.equity_curve["equity"]
         cummax = equity.cummax()
         drawdown = (equity - cummax) / cummax * 100
 
@@ -156,7 +169,7 @@ class PerformanceMetrics:
         if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
-        returns = self.equity_curve['equity'].pct_change().dropna()
+        returns = self.equity_curve["equity"].pct_change().dropna()
         return returns.std() * np.sqrt(252) * 100
 
     def calculate_total_trades(self) -> int:
@@ -167,13 +180,13 @@ class PerformanceMetrics:
         """Calculate number of winning trades."""
         if self.trade_history.empty:
             return 0
-        return len(self.trade_history[self.trade_history['pnl'] > 0])
+        return len(self.trade_history[self.trade_history["pnl"] > 0])
 
     def calculate_losing_trades(self) -> int:
         """Calculate number of losing trades."""
         if self.trade_history.empty:
             return 0
-        return len(self.trade_history[self.trade_history['pnl'] < 0])
+        return len(self.trade_history[self.trade_history["pnl"] < 0])
 
     def calculate_win_rate(self) -> float:
         """Calculate win rate percentage."""
@@ -188,11 +201,11 @@ class PerformanceMetrics:
         if self.trade_history.empty:
             return 0.0
 
-        gross_profit = self.trade_history[self.trade_history['pnl'] > 0]['pnl'].sum()
-        gross_loss = abs(self.trade_history[self.trade_history['pnl'] < 0]['pnl'].sum())
+        gross_profit = self.trade_history[self.trade_history["pnl"] > 0]["pnl"].sum()
+        gross_loss = abs(self.trade_history[self.trade_history["pnl"] < 0]["pnl"].sum())
 
         if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
+            return float("inf") if gross_profit > 0 else 0.0
 
         return gross_profit / gross_loss
 
@@ -200,28 +213,28 @@ class PerformanceMetrics:
         """Calculate average winning trade."""
         if self.trade_history.empty:
             return 0.0
-        winning_trades = self.trade_history[self.trade_history['pnl'] > 0]['pnl']
+        winning_trades = self.trade_history[self.trade_history["pnl"] > 0]["pnl"]
         return winning_trades.mean() if len(winning_trades) > 0 else 0.0
 
     def calculate_avg_loss(self) -> float:
         """Calculate average losing trade."""
         if self.trade_history.empty:
             return 0.0
-        losing_trades = self.trade_history[self.trade_history['pnl'] < 0]['pnl']
+        losing_trades = self.trade_history[self.trade_history["pnl"] < 0]["pnl"]
         return losing_trades.mean() if len(losing_trades) > 0 else 0.0
 
     def calculate_largest_win(self) -> float:
         """Calculate largest winning trade."""
         if self.trade_history.empty:
             return 0.0
-        winning_trades = self.trade_history[self.trade_history['pnl'] > 0]['pnl']
+        winning_trades = self.trade_history[self.trade_history["pnl"] > 0]["pnl"]
         return winning_trades.max() if len(winning_trades) > 0 else 0.0
 
     def calculate_largest_loss(self) -> float:
         """Calculate largest losing trade."""
         if self.trade_history.empty:
             return 0.0
-        losing_trades = self.trade_history[self.trade_history['pnl'] < 0]['pnl']
+        losing_trades = self.trade_history[self.trade_history["pnl"] < 0]["pnl"]
         return losing_trades.min() if len(losing_trades) > 0 else 0.0
 
     def calculate_avg_trade_duration(self) -> Optional[float]:

@@ -86,7 +86,9 @@ class OrderResult:
 class Query:
     @strawberry.field(description="Recent price ticks for a symbol")
     def trading_data(
-        self, symbol: str = "XAU/USD", limit: int = 10,
+        self,
+        symbol: str = "XAU/USD",
+        limit: int = 10,
     ) -> List[TradingData]:
         try:
             from app import app as _app
@@ -157,7 +159,11 @@ class Query:
         except Exception as exc:
             logger.debug("GraphQL account info fetch failed, using stub data: %s", exc)
         return AccountInfo(
-            balance=10000, equity=10420, margin=200, free_margin=9820, pnl=420,
+            balance=10000,
+            equity=10420,
+            margin=200,
+            free_margin=9820,
+            pnl=420,
         )
 
     @strawberry.field(description="Performance summary")
@@ -209,7 +215,11 @@ class Mutation:
     ) -> OrderResult:
         order_id = str(uuid.uuid4())[:8]
         logger.info(
-            "GraphQL placeOrder: %s %s %s lots %s", order_id, direction, lots, symbol,
+            "GraphQL placeOrder: %s %s %s lots %s",
+            order_id,
+            direction,
+            lots,
+            symbol,
         )
         return OrderResult(
             placed=True,

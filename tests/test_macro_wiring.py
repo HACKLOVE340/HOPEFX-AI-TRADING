@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 # ── unit: MacroStore ──────────────────────────────────────────────────────────
 
+
 def test_macro_store_update_and_snapshot():
     from ml.macro_store import MacroStore
 
@@ -69,12 +70,14 @@ def test_macro_store_missing_series_fills_zero():
 
 # ── unit: _push_snapshot_to_store ────────────────────────────────────────────
 
+
 def test_push_snapshot_to_store():
     from api.macro import _push_snapshot_to_store
     from ml.macro_store import MacroStore
 
     # Patch the module-level singleton with a fresh store
     import ml.macro_store as _ms
+
     original = _ms.macro_store
     _ms.macro_store = MacroStore()
 
@@ -96,6 +99,7 @@ def test_push_snapshot_to_store():
 
 
 # ── integration: API endpoints ────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def client():

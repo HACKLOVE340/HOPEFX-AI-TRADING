@@ -96,13 +96,15 @@ def make_hammer_candles(price: float = 2000.0, n_down: int = 25) -> pd.DataFrame
         lo = min(o, c) - rng.uniform(0.1, 1.0)
         rows.append({"open": o, "high": h, "low": lo, "close": c, "volume": 5000.0})
     # Hammer candle: body in upper portion, long lower wick, tiny upper wick
-    rows.append({
-        "open": price + 3.0,
-        "high": price + 5.5,
-        "low": price - 20.0,
-        "close": price + 5.0,
-        "volume": 7000.0,
-    })
+    rows.append(
+        {
+            "open": price + 3.0,
+            "high": price + 5.5,
+            "low": price - 20.0,
+            "close": price + 5.0,
+            "volume": 7000.0,
+        }
+    )
     index = pd.date_range("2024-01-01", periods=len(rows), freq="h")
     return pd.DataFrame(rows, index=index)
 
@@ -143,8 +145,16 @@ class TestChartPattern:
         pattern = self._make_pattern()
         d = pattern.to_dict()
 
-        for key in ("pattern_type", "direction", "confidence", "start_index",
-                    "end_index", "key_levels", "description", "timestamp"):
+        for key in (
+            "pattern_type",
+            "direction",
+            "confidence",
+            "start_index",
+            "end_index",
+            "key_levels",
+            "description",
+            "timestamp",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_to_dict_values(self):
@@ -206,7 +216,9 @@ class TestChartPatternDetector:
         """Detector accepts and applies custom config."""
         from analysis.patterns.chart_patterns import ChartPatternDetector
 
-        det = ChartPatternDetector(config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5})
+        det = ChartPatternDetector(
+            config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5}
+        )
         assert det.min_bars == 50
         assert det.sensitivity == 0.01
         assert det.swing_window == 5
@@ -444,7 +456,10 @@ class TestCandlestickPattern:
 
     def test_import(self):
         """CandlestickPattern and CandlestickPatternDetector can be imported."""
-        from analysis.patterns.candlestick import CandlestickPattern, CandlestickPatternDetector
+        from analysis.patterns.candlestick import (
+            CandlestickPattern,
+            CandlestickPatternDetector,
+        )
 
         assert CandlestickPattern is not None
         assert CandlestickPatternDetector is not None
@@ -454,8 +469,16 @@ class TestCandlestickPattern:
         pattern = self._make_pattern()
         d = pattern.to_dict()
 
-        for key in ("pattern_name", "pattern_type", "direction", "confidence",
-                    "index", "candles_count", "description", "timestamp"):
+        for key in (
+            "pattern_name",
+            "pattern_type",
+            "direction",
+            "confidence",
+            "index",
+            "candles_count",
+            "description",
+            "timestamp",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_to_dict_values_match(self):
@@ -507,7 +530,11 @@ class TestCandlestickPatternDetector:
         from analysis.patterns.candlestick import CandlestickPatternDetector
 
         det = CandlestickPatternDetector(
-            config={"doji_threshold": 0.03, "wick_ratio": 3.0, "max_patterns_per_type": 5}
+            config={
+                "doji_threshold": 0.03,
+                "wick_ratio": 3.0,
+                "max_patterns_per_type": 5,
+            }
         )
         assert det.doji_threshold == 0.03
         assert det.wick_ratio == 3.0
@@ -564,7 +591,9 @@ class TestCandlestickPatternDetector:
         patterns = det.detect_patterns(df, min_confidence=0.0)
 
         for p in patterns:
-            assert 0.0 <= p.confidence <= 1.0, f"Out-of-range confidence: {p.confidence}"
+            assert (
+                0.0 <= p.confidence <= 1.0
+            ), f"Out-of-range confidence: {p.confidence}"
 
     def test_detect_patterns_valid_direction(self):
         """All returned patterns have a valid direction."""
@@ -663,7 +692,10 @@ class TestCandlestickPatternDetector:
 
     def test_get_pattern_at_index_sorted_by_confidence(self):
         """get_pattern_at_index() returns results sorted by confidence descending."""
-        from analysis.patterns.candlestick import CandlestickPattern, CandlestickPatternDetector
+        from analysis.patterns.candlestick import (
+            CandlestickPattern,
+            CandlestickPatternDetector,
+        )
 
         det = CandlestickPatternDetector()
         patterns = [
@@ -683,16 +715,20 @@ class TestCandlestickPatternDetector:
         # Build a 5-bar dataset whose last bar is an extreme doji
         df = make_ohlcv(n=4)
         doji_row = pd.DataFrame(
-            {"open": [2000.0], "high": [2010.0], "low": [1990.0], "close": [2000.1], "volume": [5000.0]},
+            {
+                "open": [2000.0],
+                "high": [2010.0],
+                "low": [1990.0],
+                "close": [2000.1],
+                "volume": [5000.0],
+            },
             index=[df.index[-1] + pd.Timedelta(hours=1)],
         )
         df = pd.concat([df, doji_row])
 
         patterns = det.detect_single_candle_patterns(df)
         names = [p.pattern_name for p in patterns]
-        assert any("doji" in n.lower() for n in names), (
-            f"Expected a Doji among {names}"
-        )
+        assert any("doji" in n.lower() for n in names), f"Expected a Doji among {names}"
 
     def test_hammer_detection_on_crafted_candles(self):
         """A crafted Hammer/Hanging Man candle is detected by the single-candle detector."""
@@ -704,9 +740,9 @@ class TestCandlestickPatternDetector:
         names = [p.pattern_name for p in patterns]
         # Hammer and Hanging Man share the same candle structure; the name
         # depends on the trend context (downtrend → Hammer, otherwise → Hanging Man).
-        assert any(n in ("Hammer", "Hanging Man") for n in names), (
-            f"Expected Hammer or Hanging Man among {names}"
-        )
+        assert any(
+            n in ("Hammer", "Hanging Man") for n in names
+        ), f"Expected Hammer or Hanging Man among {names}"
 
     def test_to_dict_on_detected_patterns(self):
         """Each detected pattern can be serialised via to_dict()."""
@@ -730,7 +766,11 @@ class TestCandlestickPatternDetector:
         patterns = det.detect_patterns(df, min_confidence=0.0)
 
         for p in patterns:
-            assert p.candles_count in (1, 2, 3), f"Unexpected candles_count: {p.candles_count}"
+            assert p.candles_count in (
+                1,
+                2,
+                3,
+            ), f"Unexpected candles_count: {p.candles_count}"
 
 
 # ================================================================
@@ -760,7 +800,10 @@ class TestPriceLevel:
 
     def test_import(self):
         """PriceLevel and SupportResistanceDetector can be imported."""
-        from analysis.patterns.support_resistance import PriceLevel, SupportResistanceDetector
+        from analysis.patterns.support_resistance import (
+            PriceLevel,
+            SupportResistanceDetector,
+        )
 
         assert PriceLevel is not None
         assert SupportResistanceDetector is not None
@@ -770,8 +813,17 @@ class TestPriceLevel:
         level = self._make_level()
         d = level.to_dict()
 
-        for key in ("price", "level_type", "strength", "touch_count",
-                    "last_touch", "method", "is_active", "description", "timestamp"):
+        for key in (
+            "price",
+            "level_type",
+            "strength",
+            "touch_count",
+            "last_touch",
+            "method",
+            "is_active",
+            "description",
+            "timestamp",
+        ):
             assert key in d, f"Missing key: {key}"
 
     def test_to_dict_values_match(self):
@@ -837,7 +889,12 @@ class TestSupportResistanceDetector:
         from analysis.patterns.support_resistance import SupportResistanceDetector
 
         det = SupportResistanceDetector(
-            config={"sensitivity": 0.01, "swing_window": 3, "min_bars": 20, "round_number_increment": 25.0}
+            config={
+                "sensitivity": 0.01,
+                "swing_window": 3,
+                "min_bars": 20,
+                "round_number_increment": 25.0,
+            }
         )
         assert det.sensitivity == 0.01
         assert det.swing_window == 3
@@ -902,7 +959,10 @@ class TestSupportResistanceDetector:
 
     def test_detect_levels_price_levels_are_price_level_instances(self):
         """Each item in detect_levels() lists is a PriceLevel."""
-        from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
+        from analysis.patterns.support_resistance import (
+            SupportResistanceDetector,
+            PriceLevel,
+        )
 
         det = SupportResistanceDetector()
         df = make_ohlcv(n=100)
@@ -910,7 +970,9 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert isinstance(lvl, PriceLevel), f"Expected PriceLevel, got {type(lvl)}"
+                assert isinstance(
+                    lvl, PriceLevel
+                ), f"Expected PriceLevel, got {type(lvl)}"
 
     def test_get_swing_levels_returns_list(self):
         """get_swing_levels() returns a list."""
@@ -968,9 +1030,9 @@ class TestSupportResistanceDetector:
         levels = det.get_fibonacci_levels(df)
 
         for lvl in levels:
-            assert price_min - 1e-6 <= lvl.price <= price_max + 1e-6, (
-                f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
-            )
+            assert (
+                price_min - 1e-6 <= lvl.price <= price_max + 1e-6
+            ), f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
 
     def test_get_fibonacci_levels_empty_df(self):
         """get_fibonacci_levels() returns empty list for empty DataFrame."""
@@ -999,9 +1061,9 @@ class TestSupportResistanceDetector:
 
         for lvl in levels:
             remainder = lvl.price % increment
-            assert remainder < 1e-6 or abs(remainder - increment) < 1e-6, (
-                f"Level {lvl.price} is not a multiple of {increment}"
-            )
+            assert (
+                remainder < 1e-6 or abs(remainder - increment) < 1e-6
+            ), f"Level {lvl.price} is not a multiple of {increment}"
 
     def test_get_round_number_levels_method_label(self):
         """All round-number levels carry method='round_number'."""
@@ -1047,7 +1109,10 @@ class TestSupportResistanceDetector:
 
     def test_classify_level_support(self):
         """classify_level() returns 'support' for level below current price."""
-        from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
+        from analysis.patterns.support_resistance import (
+            SupportResistanceDetector,
+            PriceLevel,
+        )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
         level = PriceLevel(
@@ -1064,7 +1129,10 @@ class TestSupportResistanceDetector:
 
     def test_classify_level_resistance(self):
         """classify_level() returns 'resistance' for level above current price."""
-        from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
+        from analysis.patterns.support_resistance import (
+            SupportResistanceDetector,
+            PriceLevel,
+        )
 
         det = SupportResistanceDetector(config={"sensitivity": 0.001})
         level = PriceLevel(
@@ -1081,7 +1149,10 @@ class TestSupportResistanceDetector:
 
     def test_classify_level_pivot(self):
         """classify_level() returns 'pivot' when level is within sensitivity band."""
-        from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
+        from analysis.patterns.support_resistance import (
+            SupportResistanceDetector,
+            PriceLevel,
+        )
 
         sensitivity = 0.005
         current_price = 2000.0
@@ -1109,9 +1180,9 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert 0.0 <= lvl.strength <= 1.0, (
-                    f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
-                )
+                assert (
+                    0.0 <= lvl.strength <= 1.0
+                ), f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
 
     def test_detect_levels_to_dict_on_results(self):
         """Each detected level can be serialised via to_dict()."""

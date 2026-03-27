@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import yfinance as yf
+
     YFINANCE_AVAILABLE = True
 except ImportError:
     YFINANCE_AVAILABLE = False
@@ -33,7 +34,9 @@ except ImportError:
 class DataSource:
     """Base class for data sources."""
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """
         Get historical data for a symbol.
 
@@ -51,7 +54,7 @@ class DataSource:
 class YahooFinanceSource(DataSource):
     """Yahoo Finance data source using yfinance library."""
 
-    def __init__(self, interval: str = '1d'):
+    def __init__(self, interval: str = "1d"):
         """
         Initialize Yahoo Finance source.
 
@@ -64,15 +67,13 @@ class YahooFinanceSource(DataSource):
         self.interval = interval
         logger.info(f"Initialized Yahoo Finance source with {interval} interval")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Download data from Yahoo Finance."""
         try:
             ticker = yf.Ticker(symbol)
-            df = ticker.history(
-                start=start_date,
-                end=end_date,
-                interval=self.interval
-            )
+            df = ticker.history(start=start_date, end=end_date, interval=self.interval)
 
             if df.empty:
                 logger.warning(f"No data returned from Yahoo Finance for {symbol}")
@@ -96,7 +97,7 @@ class YahooFinanceSource(DataSource):
 class CSVDataSource(DataSource):
     """CSV file data source."""
 
-    def __init__(self, data_dir: str, date_column: str = 'date'):
+    def __init__(self, data_dir: str, date_column: str = "date"):
         """
         Initialize CSV data source.
 
@@ -108,7 +109,9 @@ class CSVDataSource(DataSource):
         self.date_column = date_column
         logger.info(f"Initialized CSV source from {data_dir}")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Load data from CSV file."""
         import os
 
@@ -165,16 +168,15 @@ class BrokerDataSource(DataSource):
         self.broker = broker
         logger.info("Initialized broker data source")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Get historical data from broker."""
         try:
             # This depends on broker implementation
-            if hasattr(self.broker, 'get_market_data'):
+            if hasattr(self.broker, "get_market_data"):
                 df = self.broker.get_market_data(
-                    symbol=symbol,
-                    timeframe='D1',
-                    start=start_date,
-                    end=end_date
+                    symbol=symbol, timeframe="D1", start=start_date, end=end_date
                 )
                 return df
             else:
@@ -189,6 +191,7 @@ class BrokerDataSource(DataSource):
 # ============================================================
 # FREE DATA SOURCES - No API key or free tier available
 # ============================================================
+
 
 class AlphaVantageSource(DataSource):
     """
@@ -213,7 +216,7 @@ class AlphaVantageSource(DataSource):
             api_key: Alpha Vantage API key (free at alphavantage.co)
                      Can also be set via ALPHA_VANTAGE_API_KEY env var
         """
-        self.api_key = api_key or os.environ.get('ALPHA_VANTAGE_API_KEY', '')
+        self.api_key = api_key or os.environ.get("ALPHA_VANTAGE_API_KEY", "")
         if not self.api_key:
             logger.warning(
                 "Alpha Vantage API key not set. "
@@ -222,7 +225,9 @@ class AlphaVantageSource(DataSource):
         else:
             logger.info("Initialized Alpha Vantage source")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Download data from Alpha Vantage."""
         if not self.api_key:
             logger.error("Alpha Vantage API key required")
@@ -232,35 +237,35 @@ class AlphaVantageSource(DataSource):
             import requests
 
             # Determine if forex or stock
-            if '/' in symbol:  # Forex pair like EUR/USD
-                from_currency, to_currency = symbol.split('/')
+            if "/" in symbol:  # Forex pair like EUR/USD
+                from_currency, to_currency = symbol.split("/")
                 params = {
-                    'function': 'FX_DAILY',
-                    'from_symbol': from_currency,
-                    'to_symbol': to_currency,
-                    'outputsize': 'full',
-                    'apikey': self.api_key
+                    "function": "FX_DAILY",
+                    "from_symbol": from_currency,
+                    "to_symbol": to_currency,
+                    "outputsize": "full",
+                    "apikey": self.api_key,
                 }
-                data_key = 'Time Series FX (Daily)'
+                data_key = "Time Series FX (Daily)"
             else:  # Stock symbol
                 params = {
-                    'function': 'TIME_SERIES_DAILY',
-                    'symbol': symbol,
-                    'outputsize': 'full',
-                    'apikey': self.api_key
+                    "function": "TIME_SERIES_DAILY",
+                    "symbol": symbol,
+                    "outputsize": "full",
+                    "apikey": self.api_key,
                 }
-                data_key = 'Time Series (Daily)'
+                data_key = "Time Series (Daily)"
 
             response = requests.get(self.BASE_URL, params=params, timeout=30)
             data = response.json()
 
             if data_key not in data:
-                error_msg = data.get('Note', data.get('Error Message', 'Unknown error'))
+                error_msg = data.get("Note", data.get("Error Message", "Unknown error"))
                 logger.error(f"Alpha Vantage error: {error_msg}")
                 return pd.DataFrame()
 
             # Parse data
-            df = pd.DataFrame.from_dict(data[data_key], orient='index')
+            df = pd.DataFrame.from_dict(data[data_key], orient="index")
             df.index = pd.to_datetime(df.index)
             df = df.sort_index()
 
@@ -268,7 +273,7 @@ class AlphaVantageSource(DataSource):
             # Select only the OHLC columns we need
             if len(df.columns) >= 4:
                 df = df.iloc[:, :4]  # Take first 4 columns (open, high, low, close)
-            df.columns = ['open', 'high', 'low', 'close']
+            df.columns = ["open", "high", "low", "close"]
             df = df.astype(float)
 
             # Filter by date range
@@ -284,13 +289,23 @@ class AlphaVantageSource(DataSource):
             logger.error(f"Error downloading {symbol} from Alpha Vantage: {e}")
             return pd.DataFrame()
 
-    def get_forex(self, from_currency: str, to_currency: str,
-                  start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_forex(
+        self,
+        from_currency: str,
+        to_currency: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame:
         """Get forex data."""
         return self.get_data(f"{from_currency}/{to_currency}", start_date, end_date)
 
-    def get_crypto(self, symbol: str, market: str = 'USD',
-                   start_date: datetime = None, end_date: datetime = None) -> pd.DataFrame:
+    def get_crypto(
+        self,
+        symbol: str,
+        market: str = "USD",
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ) -> pd.DataFrame:
         """
         Get cryptocurrency data.
 
@@ -308,40 +323,42 @@ class AlphaVantageSource(DataSource):
             import requests
 
             params = {
-                'function': 'DIGITAL_CURRENCY_DAILY',
-                'symbol': symbol,
-                'market': market,
-                'apikey': self.api_key
+                "function": "DIGITAL_CURRENCY_DAILY",
+                "symbol": symbol,
+                "market": market,
+                "apikey": self.api_key,
             }
 
             response = requests.get(self.BASE_URL, params=params, timeout=30)
             data = response.json()
 
-            data_key = 'Time Series (Digital Currency Daily)'
+            data_key = "Time Series (Digital Currency Daily)"
             if data_key not in data:
-                error_msg = data.get('Note', data.get('Error Message', 'Unknown error'))
+                error_msg = data.get("Note", data.get("Error Message", "Unknown error"))
                 logger.error(f"Alpha Vantage crypto error: {error_msg}")
                 return pd.DataFrame()
 
             # Parse data
-            df = pd.DataFrame.from_dict(data[data_key], orient='index')
+            df = pd.DataFrame.from_dict(data[data_key], orient="index")
             df.index = pd.to_datetime(df.index)
             df = df.sort_index()
 
             # Extract relevant columns (close price in market currency)
-            close_col = f'4a. close ({market})'
-            open_col = f'1a. open ({market})'
-            high_col = f'2a. high ({market})'
-            low_col = f'3a. low ({market})'
-            vol_col = '5. volume'
+            close_col = f"4a. close ({market})"
+            open_col = f"1a. open ({market})"
+            high_col = f"2a. high ({market})"
+            low_col = f"3a. low ({market})"
+            vol_col = "5. volume"
 
-            result = pd.DataFrame({
-                'open': df[open_col].astype(float),
-                'high': df[high_col].astype(float),
-                'low': df[low_col].astype(float),
-                'close': df[close_col].astype(float),
-                'volume': df[vol_col].astype(float)
-            })
+            result = pd.DataFrame(
+                {
+                    "open": df[open_col].astype(float),
+                    "high": df[high_col].astype(float),
+                    "low": df[low_col].astype(float),
+                    "close": df[close_col].astype(float),
+                    "volume": df[vol_col].astype(float),
+                }
+            )
 
             # Filter by date range
             if start_date:
@@ -349,7 +366,9 @@ class AlphaVantageSource(DataSource):
             if end_date:
                 result = result[result.index <= end_date]
 
-            logger.info(f"Downloaded {len(result)} bars for {symbol}/{market} crypto from Alpha Vantage")
+            logger.info(
+                f"Downloaded {len(result)} bars for {symbol}/{market} crypto from Alpha Vantage"
+            )
             return result
 
         except ImportError:
@@ -374,23 +393,25 @@ class CoinGeckoSource(DataSource):
         """Initialize CoinGecko source."""
         logger.info("Initialized CoinGecko source (free, no API key needed)")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Download crypto data from CoinGecko."""
         try:
             import requests
 
             # Map common symbols to CoinGecko IDs
             symbol_map = {
-                'BTC': 'bitcoin',
-                'ETH': 'ethereum',
-                'XRP': 'ripple',
-                'SOL': 'solana',
-                'ADA': 'cardano',
-                'DOGE': 'dogecoin',
-                'DOT': 'polkadot',
-                'MATIC': 'matic-network',
-                'LINK': 'chainlink',
-                'AVAX': 'avalanche-2',
+                "BTC": "bitcoin",
+                "ETH": "ethereum",
+                "XRP": "ripple",
+                "SOL": "solana",
+                "ADA": "cardano",
+                "DOGE": "dogecoin",
+                "DOT": "polkadot",
+                "MATIC": "matic-network",
+                "LINK": "chainlink",
+                "AVAX": "avalanche-2",
             }
 
             coin_id = symbol_map.get(symbol.upper(), symbol.lower())
@@ -401,39 +422,39 @@ class CoinGeckoSource(DataSource):
                 days = 1
 
             url = f"{self.BASE_URL}/coins/{coin_id}/market_chart"
-            params = {
-                'vs_currency': 'usd',
-                'days': days,
-                'interval': 'daily'
-            }
+            params = {"vs_currency": "usd", "days": days, "interval": "daily"}
 
             response = requests.get(url, params=params, timeout=30)
             data = response.json()
 
-            if 'prices' not in data:
+            if "prices" not in data:
                 logger.error(f"CoinGecko error: {data.get('error', 'Unknown error')}")
                 return pd.DataFrame()
 
             # Parse price data
-            prices = pd.DataFrame(data['prices'], columns=['timestamp', 'price'])
-            prices['timestamp'] = pd.to_datetime(prices['timestamp'], unit='ms')
-            prices.set_index('timestamp', inplace=True)
+            prices = pd.DataFrame(data["prices"], columns=["timestamp", "price"])
+            prices["timestamp"] = pd.to_datetime(prices["timestamp"], unit="ms")
+            prices.set_index("timestamp", inplace=True)
 
             # Add volume if available
-            if 'total_volumes' in data:
-                volumes = pd.DataFrame(data['total_volumes'], columns=['timestamp', 'volume'])
-                volumes['timestamp'] = pd.to_datetime(volumes['timestamp'], unit='ms')
-                volumes.set_index('timestamp', inplace=True)
+            if "total_volumes" in data:
+                volumes = pd.DataFrame(
+                    data["total_volumes"], columns=["timestamp", "volume"]
+                )
+                volumes["timestamp"] = pd.to_datetime(volumes["timestamp"], unit="ms")
+                volumes.set_index("timestamp", inplace=True)
                 prices = prices.join(volumes)
 
             # Create OHLC from daily closes
-            df = pd.DataFrame({
-                'open': prices['price'],
-                'high': prices['price'],
-                'low': prices['price'],
-                'close': prices['price'],
-                'volume': prices.get('volume', 0)
-            })
+            df = pd.DataFrame(
+                {
+                    "open": prices["price"],
+                    "high": prices["price"],
+                    "low": prices["price"],
+                    "close": prices["price"],
+                    "volume": prices.get("volume", 0),
+                }
+            )
 
             # Filter by date range
             df = df[(df.index >= start_date) & (df.index <= end_date)]
@@ -452,6 +473,7 @@ class CoinGeckoSource(DataSource):
         """Get list of all supported coins."""
         try:
             import requests
+
             response = requests.get(f"{self.BASE_URL}/coins/list", timeout=30)
             return response.json()
         except Exception as e:
@@ -477,10 +499,12 @@ class ExchangeRateSource(DataSource):
         Args:
             api_key: Optional API key for higher limits
         """
-        self.api_key = api_key or os.environ.get('EXCHANGE_RATE_API_KEY', '')
+        self.api_key = api_key or os.environ.get("EXCHANGE_RATE_API_KEY", "")
         logger.info("Initialized Exchange Rate source")
 
-    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """
         Get forex data.
 
@@ -491,8 +515,8 @@ class ExchangeRateSource(DataSource):
             import requests
 
             # Parse forex pair
-            if '/' in symbol:
-                base, quote = symbol.split('/')
+            if "/" in symbol:
+                base, quote = symbol.split("/")
             else:
                 base, quote = symbol[:3], symbol[3:]
 
@@ -500,22 +524,25 @@ class ExchangeRateSource(DataSource):
             response = requests.get(url, timeout=30)
             data = response.json()
 
-            if 'rates' not in data:
+            if "rates" not in data:
                 logger.error(f"Exchange Rate API error for {symbol}")
                 return pd.DataFrame()
 
-            rate = data['rates'].get(quote)
+            rate = data["rates"].get(quote)
             if rate is None:
                 logger.error(f"Currency {quote} not found in Exchange Rate API")
                 return pd.DataFrame()
 
             # Create single-row dataframe with current rate
-            df = pd.DataFrame({
-                'open': [rate],
-                'high': [rate],
-                'low': [rate],
-                'close': [rate],
-            }, index=[pd.Timestamp.now()])
+            df = pd.DataFrame(
+                {
+                    "open": [rate],
+                    "high": [rate],
+                    "low": [rate],
+                    "close": [rate],
+                },
+                index=[pd.Timestamp.now()],
+            )
 
             logger.info(f"Got current rate for {symbol}: {rate}")
             return df
@@ -527,14 +554,15 @@ class ExchangeRateSource(DataSource):
             logger.error(f"Error getting rate for {symbol}: {e}")
             return pd.DataFrame()
 
-    def get_all_rates(self, base: str = 'USD') -> Dict[str, float]:
+    def get_all_rates(self, base: str = "USD") -> Dict[str, float]:
         """Get all exchange rates for a base currency."""
         try:
             import requests
+
             url = f"{self.BASE_URL}/{base}"
             response = requests.get(url, timeout=30)
             data = response.json()
-            return data.get('rates', {})
+            return data.get("rates", {})
         except Exception as e:
             logger.error(f"Error getting all rates: {e}")
             return {}
@@ -543,6 +571,7 @@ class ExchangeRateSource(DataSource):
 # ============================================================
 # UNIFIED DATA MANAGER
 # ============================================================
+
 
 class DataManager:
     """
@@ -560,14 +589,43 @@ class DataManager:
 
     # Symbol type mappings
     FOREX_PAIRS = [
-        'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD',
-        'XAUUSD', 'XAGUSD', 'XAUEUR',  # Gold & Silver
-        'EUR/USD', 'GBP/USD', 'USD/JPY', 'XAU/USD',
+        "EURUSD",
+        "GBPUSD",
+        "USDJPY",
+        "USDCHF",
+        "AUDUSD",
+        "USDCAD",
+        "NZDUSD",
+        "XAUUSD",
+        "XAGUSD",
+        "XAUEUR",  # Gold & Silver
+        "EUR/USD",
+        "GBP/USD",
+        "USD/JPY",
+        "XAU/USD",
     ]
 
     CRYPTO_SYMBOLS = [
-        'BTC', 'ETH', 'XRP', 'SOL', 'ADA', 'DOGE', 'DOT', 'MATIC', 'LINK', 'AVAX',
-        'BNB', 'USDT', 'USDC', 'SHIB', 'LTC', 'TRX', 'UNI', 'ATOM', 'XMR', 'XLM'
+        "BTC",
+        "ETH",
+        "XRP",
+        "SOL",
+        "ADA",
+        "DOGE",
+        "DOT",
+        "MATIC",
+        "LINK",
+        "AVAX",
+        "BNB",
+        "USDT",
+        "USDC",
+        "SHIB",
+        "LTC",
+        "TRX",
+        "UNI",
+        "ATOM",
+        "XMR",
+        "XLM",
     ]
 
     # Pre-computed normalized forex pairs for efficient lookup
@@ -581,13 +639,15 @@ class DataManager:
             alpha_vantage_key: Optional Alpha Vantage API key
             cache_dir: Directory for caching data
         """
-        self.alpha_vantage_key = alpha_vantage_key or os.environ.get('ALPHA_VANTAGE_API_KEY')
-        self.cache_dir = cache_dir or os.environ.get('DATA_CACHE_DIR', './data/cache')
+        self.alpha_vantage_key = alpha_vantage_key or os.environ.get(
+            "ALPHA_VANTAGE_API_KEY"
+        )
+        self.cache_dir = cache_dir or os.environ.get("DATA_CACHE_DIR", "./data/cache")
 
         # Initialize normalized forex pairs set (cached)
         if DataManager._NORMALIZED_FOREX_PAIRS is None:
             DataManager._NORMALIZED_FOREX_PAIRS = set(
-                p.replace('/', '') for p in self.FOREX_PAIRS
+                p.replace("/", "") for p in self.FOREX_PAIRS
             )
 
         # Initialize sources
@@ -595,26 +655,28 @@ class DataManager:
 
         # Yahoo Finance (always available with yfinance installed)
         if YFINANCE_AVAILABLE:
-            self.sources['yahoo'] = YahooFinanceSource()
+            self.sources["yahoo"] = YahooFinanceSource()
 
         # Alpha Vantage (if API key available)
         if self.alpha_vantage_key:
-            self.sources['alphavantage'] = AlphaVantageSource(self.alpha_vantage_key)
+            self.sources["alphavantage"] = AlphaVantageSource(self.alpha_vantage_key)
 
         # CoinGecko (always available, free)
-        self.sources['coingecko'] = CoinGeckoSource()
+        self.sources["coingecko"] = CoinGeckoSource()
 
         # Exchange Rate API (always available for current rates)
-        self.sources['exchangerate'] = ExchangeRateSource()
+        self.sources["exchangerate"] = ExchangeRateSource()
 
-        logger.info(f"DataManager initialized with sources: {list(self.sources.keys())}")
+        logger.info(
+            f"DataManager initialized with sources: {list(self.sources.keys())}"
+        )
 
     def get_data(
         self,
         symbol: str,
         start_date: datetime,
         end_date: datetime,
-        preferred_source: str = None
+        preferred_source: str = None,
     ) -> pd.DataFrame:
         """
         Get historical data for any symbol.
@@ -649,74 +711,82 @@ class DataManager:
 
     def _is_crypto(self, symbol: str) -> bool:
         """Check if symbol is cryptocurrency."""
-        base = symbol.split('/')[0] if '/' in symbol else symbol
+        base = symbol.split("/")[0] if "/" in symbol else symbol
         return base in self.CRYPTO_SYMBOLS
 
     def _is_forex(self, symbol: str) -> bool:
         """Check if symbol is forex pair using cached normalized set."""
-        normalized = symbol.replace('/', '')
+        normalized = symbol.replace("/", "")
         return normalized in self._NORMALIZED_FOREX_PAIRS
 
-    def _get_crypto_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def _get_crypto_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Get cryptocurrency data."""
         # Try CoinGecko first (free, no API key)
-        if 'coingecko' in self.sources:
-            df = self.sources['coingecko'].get_data(symbol, start_date, end_date)
+        if "coingecko" in self.sources:
+            df = self.sources["coingecko"].get_data(symbol, start_date, end_date)
             if not df.empty:
                 return df
 
         # Try Alpha Vantage
-        if 'alphavantage' in self.sources:
-            df = self.sources['alphavantage'].get_crypto(symbol, 'USD', start_date, end_date)
+        if "alphavantage" in self.sources:
+            df = self.sources["alphavantage"].get_crypto(
+                symbol, "USD", start_date, end_date
+            )
             if not df.empty:
                 return df
 
         # Try Yahoo Finance (BTC-USD format)
-        if 'yahoo' in self.sources:
+        if "yahoo" in self.sources:
             yahoo_symbol = f"{symbol}-USD"
-            df = self.sources['yahoo'].get_data(yahoo_symbol, start_date, end_date)
+            df = self.sources["yahoo"].get_data(yahoo_symbol, start_date, end_date)
             if not df.empty:
                 return df
 
         logger.warning(f"No data found for crypto symbol {symbol}")
         return pd.DataFrame()
 
-    def _get_forex_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def _get_forex_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Get forex data."""
         # Try Alpha Vantage first (best forex support)
-        if 'alphavantage' in self.sources:
+        if "alphavantage" in self.sources:
             # Format symbol for Alpha Vantage (EUR/USD)
-            if '/' not in symbol:
+            if "/" not in symbol:
                 formatted = f"{symbol[:3]}/{symbol[3:]}"
             else:
                 formatted = symbol
-            df = self.sources['alphavantage'].get_data(formatted, start_date, end_date)
+            df = self.sources["alphavantage"].get_data(formatted, start_date, end_date)
             if not df.empty:
                 return df
 
         # Try Yahoo Finance
-        if 'yahoo' in self.sources:
+        if "yahoo" in self.sources:
             # Yahoo uses format like EURUSD=X
-            clean_symbol = symbol.replace('/', '')
+            clean_symbol = symbol.replace("/", "")
             yahoo_symbol = f"{clean_symbol}=X"
-            df = self.sources['yahoo'].get_data(yahoo_symbol, start_date, end_date)
+            df = self.sources["yahoo"].get_data(yahoo_symbol, start_date, end_date)
             if not df.empty:
                 return df
 
         logger.warning(f"No data found for forex symbol {symbol}")
         return pd.DataFrame()
 
-    def _get_stock_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def _get_stock_data(
+        self, symbol: str, start_date: datetime, end_date: datetime
+    ) -> pd.DataFrame:
         """Get stock data."""
         # Try Yahoo Finance first (best stock support)
-        if 'yahoo' in self.sources:
-            df = self.sources['yahoo'].get_data(symbol, start_date, end_date)
+        if "yahoo" in self.sources:
+            df = self.sources["yahoo"].get_data(symbol, start_date, end_date)
             if not df.empty:
                 return df
 
         # Try Alpha Vantage
-        if 'alphavantage' in self.sources:
-            df = self.sources['alphavantage'].get_data(symbol, start_date, end_date)
+        if "alphavantage" in self.sources:
+            df = self.sources["alphavantage"].get_data(symbol, start_date, end_date)
             if not df.empty:
                 return df
 
@@ -730,32 +800,32 @@ class DataManager:
     def get_source_info(self) -> Dict[str, Dict[str, Any]]:
         """Get information about available data sources."""
         return {
-            'yahoo': {
-                'name': 'Yahoo Finance',
-                'available': 'yahoo' in self.sources,
-                'api_key_required': False,
-                'supports': ['stocks', 'forex', 'crypto'],
-                'limits': 'Generous, unofficial API'
+            "yahoo": {
+                "name": "Yahoo Finance",
+                "available": "yahoo" in self.sources,
+                "api_key_required": False,
+                "supports": ["stocks", "forex", "crypto"],
+                "limits": "Generous, unofficial API",
             },
-            'alphavantage': {
-                'name': 'Alpha Vantage',
-                'available': 'alphavantage' in self.sources,
-                'api_key_required': True,
-                'supports': ['stocks', 'forex', 'crypto', 'indicators'],
-                'limits': 'Free: 5/min, 500/day'
+            "alphavantage": {
+                "name": "Alpha Vantage",
+                "available": "alphavantage" in self.sources,
+                "api_key_required": True,
+                "supports": ["stocks", "forex", "crypto", "indicators"],
+                "limits": "Free: 5/min, 500/day",
             },
-            'coingecko': {
-                'name': 'CoinGecko',
-                'available': 'coingecko' in self.sources,
-                'api_key_required': False,
-                'supports': ['crypto'],
-                'limits': '10-50 calls/min'
+            "coingecko": {
+                "name": "CoinGecko",
+                "available": "coingecko" in self.sources,
+                "api_key_required": False,
+                "supports": ["crypto"],
+                "limits": "10-50 calls/min",
             },
-            'exchangerate': {
-                'name': 'Exchange Rate API',
-                'available': 'exchangerate' in self.sources,
-                'api_key_required': False,
-                'supports': ['forex (current rates only)'],
-                'limits': '1500 requests/month'
-            }
+            "exchangerate": {
+                "name": "Exchange Rate API",
+                "available": "exchangerate" in self.sources,
+                "api_key_required": False,
+                "supports": ["forex (current rates only)"],
+                "limits": "1500 requests/month",
+            },
         }

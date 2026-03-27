@@ -14,12 +14,10 @@ ib_insync is not installed in CI; tests patch the module-level IB_AVAILABLE
 flag and inject a mock IB class directly into the module namespace.
 """
 
-import sys
-import types
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-from brokers.base import AccountInfo, Order, OrderSide, OrderStatus, OrderType, Position
+from brokers.base import AccountInfo, Order, OrderSide, OrderType
 from brokers.ibkr_connector import IBKRConfig, IBKRConnector
 import brokers.ibkr_connector as _ibkr_mod
 
@@ -27,6 +25,7 @@ import brokers.ibkr_connector as _ibkr_mod
 # ---------------------------------------------------------------------------
 # IBKRConfig
 # ---------------------------------------------------------------------------
+
 
 class TestIBKRConfig:
     def test_valid_paper_port(self):
@@ -60,6 +59,7 @@ class TestIBKRConfig:
 # IBKRConnector — mocked IB
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_ib():
     """Build a mock ib_insync.IB instance."""
     ib = MagicMock()
@@ -76,9 +76,8 @@ def _make_mock_ib():
     return ib
 
 
-from contextlib import contextmanager
+from contextlib import contextmanager  # noqa: E402
 
-from contextlib import contextmanager
 
 _MISSING = object()  # sentinel
 
@@ -260,9 +259,11 @@ class TestIBKRConnectorPositions:
 # BrokerManager
 # ---------------------------------------------------------------------------
 
+
 class TestBrokerManager:
     def test_register_and_get_active(self):
         from brokers.manager import BrokerManager
+
         mgr = BrokerManager(primary_broker_name="paper")
 
         mock_broker = MagicMock()
@@ -275,12 +276,14 @@ class TestBrokerManager:
 
     def test_set_active_unknown_raises(self):
         from brokers.manager import BrokerManager
+
         mgr = BrokerManager()
         with pytest.raises(ValueError, match="not registered"):
             mgr.set_active("nonexistent")
 
     def test_kill_switch_blocks_place_order(self):
         from brokers.manager import BrokerManager
+
         ks = MagicMock()
         ks.is_active.return_value = True
         ks._reason = "halt"
@@ -301,6 +304,7 @@ class TestBrokerManager:
 
     def test_auto_failover_to_paper_after_failures(self):
         from brokers.manager import BrokerManager, _MAX_CONSECUTIVE_FAILURES
+
         mgr = BrokerManager(primary_broker_name="ibkr")
 
         mock_ibkr = MagicMock()
@@ -327,6 +331,7 @@ class TestBrokerManager:
 
     def test_heartbeat_returns_health_per_broker(self):
         from brokers.manager import BrokerManager
+
         mgr = BrokerManager()
 
         mock_broker = MagicMock()
@@ -341,6 +346,7 @@ class TestBrokerManager:
 
     def test_connect_all_calls_each_broker(self):
         from brokers.manager import BrokerManager
+
         mgr = BrokerManager()
 
         b1 = MagicMock()

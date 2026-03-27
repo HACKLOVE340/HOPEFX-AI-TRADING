@@ -29,6 +29,7 @@ Usage
     clock.maybe_start(account_id="101-001-123", environment="practice")
     status = clock.status()
 """
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,9 @@ class OandaPaperClock:
         Returns True if the clock was started now, False if already running.
         """
         if self._stamp_path.exists():
-            logger.debug("OandaPaperClock: already started, stamp exists at %s", self._stamp_path)
+            logger.debug(
+                "OandaPaperClock: already started, stamp exists at %s", self._stamp_path
+            )
             return False
 
         now = datetime.now(timezone.utc)
@@ -95,7 +98,9 @@ class OandaPaperClock:
             self._stamp_path.write_text(json.dumps(stamp, indent=2))
             logger.info(
                 "OandaPaperClock: 30-day clock STARTED at %s (account=%s env=%s)",
-                now.isoformat(), account_id, environment,
+                now.isoformat(),
+                account_id,
+                environment,
             )
             # Also sync to PaperTradingGate so phase gates use the same start time
             self._sync_gate(now)
@@ -108,6 +113,7 @@ class OandaPaperClock:
         """Sync start time to PaperTradingGate singleton."""
         try:
             from research.pipeline.paper_trading_gate import get_gate
+
             gate = get_gate()
             if gate.run_start is None:
                 gate.set_run_start(start_dt)
@@ -124,7 +130,9 @@ class OandaPaperClock:
         Compatible with the /api/status/paper-trading response schema.
         """
         if not self._stamp_path.exists():
-            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv("BROKER_OANDA_TOKEN", "")
+            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv(
+                "BROKER_OANDA_TOKEN", ""
+            )
             if oanda_key:
                 note = (
                     "OANDA credentials detected but broker has not connected yet. "

@@ -23,12 +23,14 @@ class TestRealTimeSignalService:
     def test_service_creation(self):
         """Signal service can be instantiated."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         assert svc is not None
 
     def test_get_signal_summary_empty(self):
         """Summary returns correct structure when no signals exist."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         summary = svc.get_signal_summary()
         assert "active_signals" in summary
@@ -42,6 +44,7 @@ class TestRealTimeSignalService:
     def test_get_active_signals_empty(self):
         """Active signals list is empty initially."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         signals = svc.get_active_signals()
         assert isinstance(signals, list)
@@ -50,6 +53,7 @@ class TestRealTimeSignalService:
     def test_get_signal_history_empty(self):
         """Signal history is empty initially."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         history = svc.get_signal_history()
         assert isinstance(history, list)
@@ -58,6 +62,7 @@ class TestRealTimeSignalService:
     def test_get_analytics(self):
         """Analytics object is returned with required keys."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         analytics = svc.get_analytics()
         assert isinstance(analytics, dict)
@@ -65,6 +70,7 @@ class TestRealTimeSignalService:
     def test_get_websocket_channels(self):
         """WebSocket channels list is returned."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         channels = svc.get_websocket_channels()
         assert isinstance(channels, list)
@@ -75,9 +81,11 @@ class TestRealTimeSignalService:
     def test_subscribe_and_unsubscribe(self):
         """Subscribe and unsubscribe callbacks work without error."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
 
         received = []
+
         def callback(event_type, data):
             received.append((event_type, data))
 
@@ -89,6 +97,7 @@ class TestRealTimeSignalService:
     def test_signal_generation_returns_result_or_none(self):
         """generate_signal returns a TradingSignal or None (not an exception)."""
         from api.signals import RealTimeSignalService, SignalDirection
+
         svc = RealTimeSignalService()
         # Low confidence signal — service may return None based on min_confidence
         result = svc.generate_signal(
@@ -111,6 +120,7 @@ class TestRealTimeSignalService:
     def test_create_and_get_alert(self):
         """Create an alert and verify it is retrievable."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         alert = svc.create_alert(
             symbol="XAUUSD",
@@ -127,6 +137,7 @@ class TestRealTimeSignalService:
     def test_delete_alert(self):
         """Delete an alert removes it from the list."""
         from api.signals import RealTimeSignalService
+
         svc = RealTimeSignalService()
         alert = svc.create_alert(symbol="BTCUSD", direction="sell", min_confidence=0.6)
         assert len(svc.get_alerts()) >= 1
@@ -142,12 +153,14 @@ class TestSignalsRouter:
     def test_create_signals_router_returns_router(self):
         """create_signals_router() returns a non-None FastAPI router."""
         from api.signals import create_signals_router
+
         router = create_signals_router()
         assert router is not None
 
     def test_signals_router_has_all_endpoints(self):
         """Router exposes all 9 expected paths."""
         from api.signals import create_signals_router
+
         router = create_signals_router()
         paths = [route.path for route in router.routes]
         expected = [
@@ -166,9 +179,11 @@ class TestSignalsRouter:
         """_get_signal_service() returns the same instance on repeated calls."""
         # Reset singleton first
         import api.signals as signals_module
+
         signals_module._signal_service = None
 
         from api.signals import _get_signal_service
+
         svc1 = _get_signal_service()
         svc2 = _get_signal_service()
         assert svc1 is svc2

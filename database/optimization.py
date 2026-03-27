@@ -14,8 +14,9 @@ from sqlalchemy import create_engine, text
 logging.basicConfig(level=logging.INFO)
 
 # Configure your database connection
-DATABASE_URI = 'your_database_uri_here'
+DATABASE_URI = "your_database_uri_here"
 engine = create_engine(DATABASE_URI)
+
 
 def analyze_query_performance(query):
     start_time = time.time()  # Start timing
@@ -28,7 +29,7 @@ def analyze_query_performance(query):
     return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example usage
-    sample_query = 'SELECT * FROM your_table;'  # Replace with your actual query
+    sample_query = "SELECT * FROM your_table;"  # Replace with your actual query
     analyze_query_performance(sample_query)

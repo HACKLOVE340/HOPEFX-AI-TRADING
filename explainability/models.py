@@ -13,8 +13,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ExplanationType(Enum):
     """Types of AI explanations"""
+
     FEATURE_IMPORTANCE = "feature_importance"
     DECISION_PATH = "decision_path"
     CONFIDENCE_INTERVAL = "confidence_interval"
@@ -26,6 +28,7 @@ class ExplanationType(Enum):
 @dataclass
 class FeatureContribution:
     """Single feature's contribution to prediction"""
+
     feature_name: str
     feature_value: float
     contribution: float  # Positive = supports prediction, negative = against
@@ -36,6 +39,7 @@ class FeatureContribution:
 @dataclass
 class DecisionNode:
     """Node in decision path"""
+
     node_id: int
     feature: str
     threshold: float
@@ -48,6 +52,7 @@ class DecisionNode:
 @dataclass
 class Explanation:
     """Complete AI explanation for a prediction"""
+
     explanation_id: str
     prediction: float
     prediction_class: str  # 'BUY', 'SELL', 'HOLD'
@@ -63,6 +68,7 @@ class Explanation:
 @dataclass
 class ModelPerformanceExplanation:
     """Explanation of model's historical performance"""
+
     model_name: str
     accuracy: float
     precision: float
@@ -74,5 +80,3 @@ class ModelPerformanceExplanation:
     best_performing_conditions: List[str]
     worst_performing_conditions: List[str]
     feature_importance_history: List[Dict[str, float]]
-
-

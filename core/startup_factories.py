@@ -318,14 +318,19 @@ async def init_broker(s: Any) -> Any:
 
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
     oanda_token = os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
-    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
-    oanda_env = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice"))
+    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv(
+        "OANDA_ACCOUNT_ID", ""
+    )
+    oanda_env = os.getenv(
+        "OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
+    )
     oanda_practice = oanda_env != "live"
 
     # ── OANDA path ────────────────────────────────────────────────────────────
     if broker_type == "oanda" and oanda_token and oanda_account:
         try:
             from brokers.oanda import AsyncOANDAConnector
+
             b = AsyncOANDAConnector(
                 api_key=oanda_token,
                 account_id=oanda_account,
@@ -334,10 +339,13 @@ async def init_broker(s: Any) -> Any:
             connected = await b.connect()
             if connected:
                 env_label = "practice" if oanda_practice else "LIVE"
-                log_activity(f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)")
+                log_activity(
+                    f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)"
+                )
                 logger.info(
                     "OANDA %s broker connected — account=%s…",
-                    env_label, oanda_account[:8],
+                    env_label,
+                    oanda_account[:8],
                 )
                 # ── 30-day paper trading clock ────────────────────────────────
                 _stamp_oanda_paper_start(oanda_account, oanda_practice)
@@ -349,13 +357,16 @@ async def init_broker(s: Any) -> Any:
                 )
         except Exception as exc:
             logger.warning(
-                "OANDA broker init failed (%s) — falling back to paper broker.", exc,
+                "OANDA broker init failed (%s) — falling back to paper broker.",
+                exc,
             )
 
     # ── Paper broker fallback ─────────────────────────────────────────────────
     from brokers.paper_trading import PaperTradingBroker
 
-    bal = float(os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000")))
+    bal = float(
+        os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000"))
+    )
     b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
     await b.connect()
 
@@ -392,7 +403,8 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             existing = json.loads(stamp_path.read_text())
             started = existing.get("started_utc", "unknown")
             logger.info(
-                "OANDA paper trading clock already running since %s", started,
+                "OANDA paper trading clock already running since %s",
+                started,
             )
         except Exception:
             pass
@@ -580,7 +592,9 @@ async def init_macro_store(s: Any) -> Any:
     # Bootstrap: fetch CSVs if missing or stale (best-effort, non-blocking)
     try:
         n_written = await asyncio.get_event_loop().run_in_executor(
-            None, bootstrap, False,
+            None,
+            bootstrap,
+            False,
         )
         logger.info("MacroStore bootstrap: %d series available", n_written)
     except Exception as exc:
@@ -614,7 +628,8 @@ async def init_macro_store(s: Any) -> Any:
             await _asyncio.sleep(wait_secs)
             try:
                 await _asyncio.get_event_loop().run_in_executor(
-                    None, daily_refresh,
+                    None,
+                    daily_refresh,
                 )
                 load_into_store(macro_store)
                 logger.info("MacroStore daily refresh complete")
@@ -678,13 +693,17 @@ async def init_anomaly_store(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
     try:
         from config.feature_flags import flags
+
         if not getattr(flags, "ANOMALY_WEIGHTING", False):
-            logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
+            logger.info(
+                "AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false"
+            )
             return None
     except Exception:
         return None
@@ -706,6 +725,7 @@ async def init_anomaly_store(s: Any) -> Any:
         )
         # Wire into signal engine module-level singleton
         import core.signal_engine as _se
+
         _se._anomaly_store = store
         s.anomaly_store = store
 
@@ -733,11 +753,13 @@ async def init_online_learner_store(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
     try:
         from config.feature_flags import flags
+
         if not getattr(flags, "ONLINE_LEARNING", False):
             logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
             return None
@@ -752,18 +774,20 @@ async def init_online_learner_store(s: Any) -> Any:
             "ml/saved_models/online_learner.pkl",
         )
         primary_w = float(os.getenv("ONLINE_PRIMARY_WEIGHT", "0.7"))
-        online_w  = float(os.getenv("ONLINE_ONLINE_WEIGHT",  "0.3"))
+        online_w = float(os.getenv("ONLINE_ONLINE_WEIGHT", "0.3"))
         store = OnlineLearnerStore(
             primary_weight=primary_w,
             online_weight=online_w,
             min_fills=int(os.getenv("ONLINE_MIN_FILLS", "20")),
             buffer_size=int(os.getenv("ONLINE_BUFFER_SIZE", "500")),
-            adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower() == "true",
+            adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower()
+            == "true",
             use_adwin=os.getenv("ONLINE_USE_ADWIN", "true").lower() == "true",
             persist_path=persist_path,
         )
         # Wire into signal engine module-level singleton
         import core.signal_engine as _se
+
         _se._online_learner_store = store
         s.online_learner_store = store
 
@@ -792,11 +816,13 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
     try:
         from config.feature_flags import flags
+
         if not getattr(flags, "DEEP_ENSEMBLE", False):
             logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
             return None
@@ -806,9 +832,15 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     try:
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
-        model_path  = os.getenv("DEEP_ENSEMBLE_MODEL_PATH",  DeepEnsembleStore.DEFAULT_MODEL_PATH)
-        meta_path   = os.getenv("DEEP_ENSEMBLE_META_PATH",   DeepEnsembleStore.DEFAULT_META_PATH)
-        scaler_path = os.getenv("DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH)
+        model_path = os.getenv(
+            "DEEP_ENSEMBLE_MODEL_PATH", DeepEnsembleStore.DEFAULT_MODEL_PATH
+        )
+        meta_path = os.getenv(
+            "DEEP_ENSEMBLE_META_PATH", DeepEnsembleStore.DEFAULT_META_PATH
+        )
+        scaler_path = os.getenv(
+            "DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH
+        )
 
         store = DeepEnsembleStore(
             model_path=model_path,
@@ -825,6 +857,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
         if activated:
             # Wire into signal engine module-level singleton
             import core.signal_engine as _se
+
             _se._deep_ensemble_store = store
             s.deep_ensemble_store = store
             log_activity(
@@ -855,8 +888,9 @@ async def init_signal_engine(s: Any) -> Any:
     # Best-effort — a missing webhook URL or network error must not block startup.
     try:
         from notifications.discord_bot import discord_signal_bot  # noqa: PLC0415
+
         broker_type = os.getenv("BROKER_TYPE", "paper")
-        env_label   = os.getenv("APP_ENV", "development")
+        env_label = os.getenv("APP_ENV", "development")
         asyncio.create_task(
             discord_signal_bot.post_alert(
                 message=(
@@ -866,9 +900,9 @@ async def init_signal_engine(s: Any) -> Any:
                 ),
                 level="info",
                 details={
-                    "Symbols":    os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD"),
-                    "Interval":   f"{os.getenv('SIGNAL_ENGINE_INTERVAL', '300')}s",
-                    "Model":      "advanced_oos.pkl (68% OOS accuracy)",
+                    "Symbols": os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD"),
+                    "Interval": f"{os.getenv('SIGNAL_ENGINE_INTERVAL', '300')}s",
+                    "Model": "advanced_oos.pkl (68% OOS accuracy)",
                 },
             ),
         )

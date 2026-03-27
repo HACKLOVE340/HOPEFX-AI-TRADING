@@ -30,7 +30,8 @@ class TestCopyRelationship:
 
     def test_max_allocation_stored(self):
         rel = CopyRelationship(
-            follower_id="f1", leader_id="l1",
+            follower_id="f1",
+            leader_id="l1",
             max_allocation=Decimal("5000"),
         )
         assert rel.max_allocation == Decimal("5000")
@@ -149,7 +150,12 @@ class TestCopyTradingEngine:
     @pytest.mark.asyncio
     async def test_copy_trade_full_ratio_same_balance(self):
         engine = self._engine()
-        leader_trade = {"symbol": "EURUSD", "side": "buy", "quantity": 1.0, "price": 1.08}
+        leader_trade = {
+            "symbol": "EURUSD",
+            "side": "buy",
+            "quantity": 1.0,
+            "price": 1.08,
+        }
         follower_config = {
             "follower_id": "f1",
             "copy_ratio": 1.0,

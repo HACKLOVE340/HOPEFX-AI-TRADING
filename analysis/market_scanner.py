@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class ScanCriteriaType(Enum):
     """Types of scan criteria."""
+
     # Price-based
     BREAKOUT = "breakout"
     PRICE_ABOVE_MA = "price_above_ma"
@@ -74,6 +75,7 @@ class ScanCriteriaType(Enum):
 
 class SignalDirection(Enum):
     """Direction of opportunity signal."""
+
     BULLISH = "bullish"
     BEARISH = "bearish"
     NEUTRAL = "neutral"
@@ -82,6 +84,7 @@ class SignalDirection(Enum):
 @dataclass
 class ScanCriteria:
     """Single scan criterion configuration."""
+
     type: ScanCriteriaType
     parameters: Dict[str, Any] = field(default_factory=dict)
     weight: float = 1.0  # Importance weight
@@ -89,16 +92,17 @@ class ScanCriteria:
 
     def to_dict(self) -> Dict:
         return {
-            'type': self.type.value,
-            'parameters': self.parameters,
-            'weight': self.weight,
-            'required': self.required
+            "type": self.type.value,
+            "parameters": self.parameters,
+            "weight": self.weight,
+            "required": self.required,
         }
 
 
 @dataclass
 class ScanResult:
     """Result for a single symbol from a scan."""
+
     symbol: str
     criteria_met: List[str]
     total_criteria: int
@@ -110,20 +114,21 @@ class ScanResult:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'criteria_met': self.criteria_met,
-            'total_criteria': self.total_criteria,
-            'match_score': self.match_score,
-            'direction': self.direction.value,
-            'signal_strength': self.signal_strength,
-            'details': self.details,
-            'timestamp': self.timestamp.isoformat()
+            "symbol": self.symbol,
+            "criteria_met": self.criteria_met,
+            "total_criteria": self.total_criteria,
+            "match_score": self.match_score,
+            "direction": self.direction.value,
+            "signal_strength": self.signal_strength,
+            "details": self.details,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
 @dataclass
 class MarketOpportunity:
     """Trading opportunity identified by scanner."""
+
     symbol: str
     opportunity_type: str
     direction: SignalDirection
@@ -145,19 +150,19 @@ class MarketOpportunity:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'opportunity_type': self.opportunity_type,
-            'direction': self.direction.value,
-            'strength': self.strength,
-            'entry_price': self.entry_price,
-            'stop_loss': self.stop_loss,
-            'take_profit': self.take_profit,
-            'risk_reward': self.risk_reward,
-            'triggers': self.triggers,
-            'analysis': self.analysis,
-            'timestamp': self.timestamp.isoformat(),
-            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
-            'is_valid': self.is_valid
+            "symbol": self.symbol,
+            "opportunity_type": self.opportunity_type,
+            "direction": self.direction.value,
+            "strength": self.strength,
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "risk_reward": self.risk_reward,
+            "triggers": self.triggers,
+            "analysis": self.analysis,
+            "timestamp": self.timestamp.isoformat(),
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "is_valid": self.is_valid,
         }
 
 
@@ -208,7 +213,7 @@ class MarketScanner:
         # Results storage
         self._last_results: Dict[str, ScanResult] = {}
         self._opportunities: List[MarketOpportunity] = []
-        self._max_opportunities = self.config.get('max_opportunities', 100)
+        self._max_opportunities = self.config.get("max_opportunities", 100)
 
         # Data providers
         self._data_providers: Dict[str, Callable] = {}
@@ -220,15 +225,15 @@ class MarketScanner:
         self._lock = threading.RLock()
 
         # Configuration
-        self._min_strength = self.config.get('min_strength', 50.0)
-        self._parallel_scan = self.config.get('parallel_scan', True)
-        self._max_workers = self.config.get('max_workers', 10)
+        self._min_strength = self.config.get("min_strength", 50.0)
+        self._parallel_scan = self.config.get("parallel_scan", True)
+        self._max_workers = self.config.get("max_workers", 10)
 
         # Statistics
         self._stats = {
-            'scans_performed': 0,
-            'opportunities_found': 0,
-            'last_scan_time': None
+            "scans_performed": 0,
+            "opportunities_found": 0,
+            "last_scan_time": None,
         }
 
         logger.info("Market Scanner initialized")
@@ -269,7 +274,7 @@ class MarketScanner:
         criteria_type: ScanCriteriaType,
         parameters: Optional[Dict] = None,
         weight: float = 1.0,
-        required: bool = False
+        required: bool = False,
     ):
         """
         Add a scan criterion.
@@ -284,7 +289,7 @@ class MarketScanner:
             type=criteria_type,
             parameters=parameters or {},
             weight=weight,
-            required=required
+            required=required,
         )
         with self._lock:
             self._criteria.append(criteria)
@@ -306,7 +311,7 @@ class MarketScanner:
         self,
         market_data: Dict[str, Dict[str, Any]],
         criteria: Optional[List[ScanCriteriaType]] = None,
-        min_strength: Optional[float] = None
+        min_strength: Optional[float] = None,
     ) -> List[ScanResult]:
         """
         Run scan across all symbols.
@@ -345,10 +350,7 @@ class MarketScanner:
         # Determine which criteria to use
         active_criteria = self._criteria
         if criteria:
-            active_criteria = [
-                c for c in self._criteria
-                if c.type in criteria
-            ]
+            active_criteria = [c for c in self._criteria if c.type in criteria]
 
         if not active_criteria:
             logger.warning("No scan criteria configured")
@@ -371,8 +373,8 @@ class MarketScanner:
                 self._last_results[result.symbol] = result
 
             # Update stats
-            self._stats['scans_performed'] += 1
-            self._stats['last_scan_time'] = datetime.now(timezone.utc).isoformat()
+            self._stats["scans_performed"] += 1
+            self._stats["last_scan_time"] = datetime.now(timezone.utc).isoformat()
 
         # Generate opportunities from results
         self._generate_opportunities(results)
@@ -380,9 +382,7 @@ class MarketScanner:
         return results
 
     def _scan_sequential(
-        self,
-        market_data: Dict[str, Dict[str, Any]],
-        criteria: List[ScanCriteria]
+        self, market_data: Dict[str, Dict[str, Any]], criteria: List[ScanCriteria]
     ) -> List[ScanResult]:
         """Scan symbols sequentially."""
         results = []
@@ -398,9 +398,7 @@ class MarketScanner:
         return results
 
     def _scan_parallel(
-        self,
-        market_data: Dict[str, Dict[str, Any]],
-        criteria: List[ScanCriteria]
+        self, market_data: Dict[str, Dict[str, Any]], criteria: List[ScanCriteria]
     ) -> List[ScanResult]:
         """Scan symbols in parallel."""
         results = []
@@ -408,10 +406,7 @@ class MarketScanner:
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
             futures = {
                 executor.submit(
-                    self._scan_symbol,
-                    symbol,
-                    market_data.get(symbol, {}),
-                    criteria
+                    self._scan_symbol, symbol, market_data.get(symbol, {}), criteria
                 ): symbol
                 for symbol in self._symbols
                 if symbol in market_data
@@ -429,10 +424,7 @@ class MarketScanner:
         return results
 
     def _scan_symbol(
-        self,
-        symbol: str,
-        data: Dict[str, Any],
-        criteria: List[ScanCriteria]
+        self, symbol: str, data: Dict[str, Any], criteria: List[ScanCriteria]
     ) -> Optional[ScanResult]:
         """Scan a single symbol against criteria."""
         if not data:
@@ -455,10 +447,10 @@ class MarketScanner:
                 met_weight += criterion.weight
 
                 # Determine direction contribution
-                direction = detail.get('direction', 'neutral')
-                if direction == 'bullish':
+                direction = detail.get("direction", "neutral")
+                if direction == "bullish":
                     bullish_score += criterion.weight
-                elif direction == 'bearish':
+                elif direction == "bearish":
                     bearish_score += criterion.weight
 
                 details[criterion.type.value] = detail
@@ -488,14 +480,10 @@ class MarketScanner:
             match_score=round(match_score, 4),
             direction=direction,
             signal_strength=round(signal_strength, 2),
-            details=details
+            details=details,
         )
 
-    def _check_criterion(
-        self,
-        criterion: ScanCriteria,
-        data: Dict[str, Any]
-    ) -> tuple:
+    def _check_criterion(self, criterion: ScanCriteria, data: Dict[str, Any]) -> tuple:
         """
         Check if a criterion is met.
 
@@ -505,245 +493,233 @@ class MarketScanner:
         ctype = criterion.type
         params = criterion.parameters
 
-        price = data.get('price', data.get('close', 0))
-        open_price = data.get('open', price)
-        high = data.get('high', price)
-        low = data.get('low', price)
-        volume = data.get('volume', 0)
+        price = data.get("price", data.get("close", 0))
+        open_price = data.get("open", price)
+        high = data.get("high", price)
+        low = data.get("low", price)
+        volume = data.get("volume", 0)
 
         # Moving averages
-        ma_20 = data.get('ma_20', data.get('sma_20', price))
-        ma_50 = data.get('ma_50', data.get('sma_50', price))
-        data.get('ma_200', data.get('sma_200', price))
+        ma_20 = data.get("ma_20", data.get("sma_20", price))
+        ma_50 = data.get("ma_50", data.get("sma_50", price))
+        data.get("ma_200", data.get("sma_200", price))
 
         # Indicators
-        rsi = data.get('rsi', data.get('rsi_14', 50))
-        macd = data.get('macd', 0)
-        macd_signal = data.get('macd_signal', 0)
-        data.get('stoch_k', 50)
-        data.get('stoch_d', 50)
-        atr = data.get('atr', 0)
+        rsi = data.get("rsi", data.get("rsi_14", 50))
+        macd = data.get("macd", 0)
+        macd_signal = data.get("macd_signal", 0)
+        data.get("stoch_k", 50)
+        data.get("stoch_d", 50)
+        atr = data.get("atr", 0)
 
         # Historical levels
-        high_20 = data.get('high_20', high)
-        low_20 = data.get('low_20', low)
-        avg_volume = data.get('avg_volume', volume)
+        high_20 = data.get("high_20", high)
+        low_20 = data.get("low_20", low)
+        avg_volume = data.get("avg_volume", volume)
 
         # Check criteria
         if ctype == ScanCriteriaType.BREAKOUT:
-            period = params.get('period', 20)
-            high_key = f'high_{period}'
+            period = params.get("period", 20)
+            high_key = f"high_{period}"
             high_period = data.get(high_key, high_20)
 
             if price > high_period:
                 return True, {
-                    'direction': 'bullish',
-                    'level': high_period,
-                    'breakout_pct': round((price - high_period) / high_period * 100, 2)
+                    "direction": "bullish",
+                    "level": high_period,
+                    "breakout_pct": round((price - high_period) / high_period * 100, 2),
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.PRICE_ABOVE_MA:
-            ma_period = params.get('period', 20)
-            ma_key = f'ma_{ma_period}'
-            ma_value = data.get(ma_key, data.get(f'sma_{ma_period}', ma_20))
+            ma_period = params.get("period", 20)
+            ma_key = f"ma_{ma_period}"
+            ma_value = data.get(ma_key, data.get(f"sma_{ma_period}", ma_20))
 
             if price > ma_value:
                 return True, {
-                    'direction': 'bullish',
-                    'ma': ma_value,
-                    'distance_pct': round((price - ma_value) / ma_value * 100, 2)
+                    "direction": "bullish",
+                    "ma": ma_value,
+                    "distance_pct": round((price - ma_value) / ma_value * 100, 2),
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.PRICE_BELOW_MA:
-            ma_period = params.get('period', 20)
-            ma_key = f'ma_{ma_period}'
-            ma_value = data.get(ma_key, data.get(f'sma_{ma_period}', ma_20))
+            ma_period = params.get("period", 20)
+            ma_key = f"ma_{ma_period}"
+            ma_value = data.get(ma_key, data.get(f"sma_{ma_period}", ma_20))
 
             if price < ma_value:
                 return True, {
-                    'direction': 'bearish',
-                    'ma': ma_value,
-                    'distance_pct': round((ma_value - price) / ma_value * 100, 2)
+                    "direction": "bearish",
+                    "ma": ma_value,
+                    "distance_pct": round((ma_value - price) / ma_value * 100, 2),
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.RSI_OVERBOUGHT:
-            threshold = params.get('threshold', 70)
+            threshold = params.get("threshold", 70)
             if rsi > threshold:
                 return True, {
-                    'direction': 'bearish',
-                    'rsi': rsi,
-                    'threshold': threshold
+                    "direction": "bearish",
+                    "rsi": rsi,
+                    "threshold": threshold,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.RSI_OVERSOLD:
-            threshold = params.get('threshold', 30)
+            threshold = params.get("threshold", 30)
             if rsi < threshold:
                 return True, {
-                    'direction': 'bullish',
-                    'rsi': rsi,
-                    'threshold': threshold
+                    "direction": "bullish",
+                    "rsi": rsi,
+                    "threshold": threshold,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.MOMENTUM:
             # Price change and RSI combination
-            change_pct = params.get('min_change_pct', 1.0)
-            price_change = ((price - open_price) / open_price) * 100 if open_price > 0 else 0
+            change_pct = params.get("min_change_pct", 1.0)
+            price_change = (
+                ((price - open_price) / open_price) * 100 if open_price > 0 else 0
+            )
 
             if abs(price_change) >= change_pct:
-                direction = 'bullish' if price_change > 0 else 'bearish'
+                direction = "bullish" if price_change > 0 else "bearish"
                 return True, {
-                    'direction': direction,
-                    'change_pct': round(price_change, 2),
-                    'rsi': rsi
+                    "direction": direction,
+                    "change_pct": round(price_change, 2),
+                    "rsi": rsi,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.VOLUME_SPIKE:
-            multiplier = params.get('multiplier', 2.0)
+            multiplier = params.get("multiplier", 2.0)
             if avg_volume > 0 and volume > avg_volume * multiplier:
                 return True, {
-                    'direction': 'neutral',
-                    'volume': volume,
-                    'avg_volume': avg_volume,
-                    'multiplier': round(volume / avg_volume, 2)
+                    "direction": "neutral",
+                    "volume": volume,
+                    "avg_volume": avg_volume,
+                    "multiplier": round(volume / avg_volume, 2),
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.MACD_BULLISH_CROSS:
-            prev_macd = data.get('prev_macd', macd)
-            prev_signal = data.get('prev_macd_signal', macd_signal)
+            prev_macd = data.get("prev_macd", macd)
+            prev_signal = data.get("prev_macd_signal", macd_signal)
 
             if prev_macd <= prev_signal and macd > macd_signal:
                 return True, {
-                    'direction': 'bullish',
-                    'macd': macd,
-                    'signal': macd_signal
+                    "direction": "bullish",
+                    "macd": macd,
+                    "signal": macd_signal,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.MACD_BEARISH_CROSS:
-            prev_macd = data.get('prev_macd', macd)
-            prev_signal = data.get('prev_macd_signal', macd_signal)
+            prev_macd = data.get("prev_macd", macd)
+            prev_signal = data.get("prev_macd_signal", macd_signal)
 
             if prev_macd >= prev_signal and macd < macd_signal:
                 return True, {
-                    'direction': 'bearish',
-                    'macd': macd,
-                    'signal': macd_signal
+                    "direction": "bearish",
+                    "macd": macd,
+                    "signal": macd_signal,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.UPTREND:
             # Price above MA20 > MA50 > MA200
             if price > ma_20 > ma_50:
-                return True, {
-                    'direction': 'bullish',
-                    'ma_20': ma_20,
-                    'ma_50': ma_50
-                }
+                return True, {"direction": "bullish", "ma_20": ma_20, "ma_50": ma_50}
             return False, {}
 
         elif ctype == ScanCriteriaType.DOWNTREND:
             if price < ma_20 < ma_50:
-                return True, {
-                    'direction': 'bearish',
-                    'ma_20': ma_20,
-                    'ma_50': ma_50
-                }
+                return True, {"direction": "bearish", "ma_20": ma_20, "ma_50": ma_50}
             return False, {}
 
         elif ctype == ScanCriteriaType.MA_CROSSOVER:
-            fast = params.get('fast_period', 20)
-            slow = params.get('slow_period', 50)
-            fast_ma = data.get(f'ma_{fast}', ma_20)
-            slow_ma = data.get(f'ma_{slow}', ma_50)
-            prev_fast_ma = data.get(f'prev_ma_{fast}', fast_ma)
-            prev_slow_ma = data.get(f'prev_ma_{slow}', slow_ma)
+            fast = params.get("fast_period", 20)
+            slow = params.get("slow_period", 50)
+            fast_ma = data.get(f"ma_{fast}", ma_20)
+            slow_ma = data.get(f"ma_{slow}", ma_50)
+            prev_fast_ma = data.get(f"prev_ma_{fast}", fast_ma)
+            prev_slow_ma = data.get(f"prev_ma_{slow}", slow_ma)
 
             if prev_fast_ma <= prev_slow_ma and fast_ma > slow_ma:
                 return True, {
-                    'direction': 'bullish',
-                    'fast_ma': fast_ma,
-                    'slow_ma': slow_ma,
-                    'cross_type': 'golden_cross'
+                    "direction": "bullish",
+                    "fast_ma": fast_ma,
+                    "slow_ma": slow_ma,
+                    "cross_type": "golden_cross",
                 }
             elif prev_fast_ma >= prev_slow_ma and fast_ma < slow_ma:
                 return True, {
-                    'direction': 'bearish',
-                    'fast_ma': fast_ma,
-                    'slow_ma': slow_ma,
-                    'cross_type': 'death_cross'
+                    "direction": "bearish",
+                    "fast_ma": fast_ma,
+                    "slow_ma": slow_ma,
+                    "cross_type": "death_cross",
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.VOLATILITY_EXPANSION:
-            atr_multiplier = params.get('multiplier', 1.5)
-            avg_atr = data.get('avg_atr', atr)
+            atr_multiplier = params.get("multiplier", 1.5)
+            avg_atr = data.get("avg_atr", atr)
 
             if avg_atr > 0 and atr > avg_atr * atr_multiplier:
                 return True, {
-                    'direction': 'neutral',
-                    'atr': atr,
-                    'avg_atr': avg_atr,
-                    'expansion': round(atr / avg_atr, 2)
+                    "direction": "neutral",
+                    "atr": atr,
+                    "avg_atr": avg_atr,
+                    "expansion": round(atr / avg_atr, 2),
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.NEW_HIGH:
-            period = params.get('period', 20)
-            high_key = f'high_{period}'
+            period = params.get("period", 20)
+            high_key = f"high_{period}"
             period_high = data.get(high_key, high_20)
 
             if high >= period_high:
                 return True, {
-                    'direction': 'bullish',
-                    'high': high,
-                    'period_high': period_high
+                    "direction": "bullish",
+                    "high": high,
+                    "period_high": period_high,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.NEW_LOW:
-            period = params.get('period', 20)
-            low_key = f'low_{period}'
+            period = params.get("period", 20)
+            low_key = f"low_{period}"
             period_low = data.get(low_key, low_20)
 
             if low <= period_low:
                 return True, {
-                    'direction': 'bearish',
-                    'low': low,
-                    'period_low': period_low
+                    "direction": "bearish",
+                    "low": low,
+                    "period_low": period_low,
                 }
             return False, {}
 
         elif ctype == ScanCriteriaType.GAP_UP:
-            gap_pct = params.get('min_gap_pct', 1.0)
-            prev_close = data.get('prev_close', open_price)
+            gap_pct = params.get("min_gap_pct", 1.0)
+            prev_close = data.get("prev_close", open_price)
 
             if prev_close > 0:
                 gap = ((open_price - prev_close) / prev_close) * 100
                 if gap >= gap_pct:
-                    return True, {
-                        'direction': 'bullish',
-                        'gap_pct': round(gap, 2)
-                    }
+                    return True, {"direction": "bullish", "gap_pct": round(gap, 2)}
             return False, {}
 
         elif ctype == ScanCriteriaType.GAP_DOWN:
-            gap_pct = params.get('min_gap_pct', 1.0)
-            prev_close = data.get('prev_close', open_price)
+            gap_pct = params.get("min_gap_pct", 1.0)
+            prev_close = data.get("prev_close", open_price)
 
             if prev_close > 0:
                 gap = ((prev_close - open_price) / prev_close) * 100
                 if gap >= gap_pct:
-                    return True, {
-                        'direction': 'bearish',
-                        'gap_pct': round(gap, 2)
-                    }
+                    return True, {"direction": "bearish", "gap_pct": round(gap, 2)}
             return False, {}
 
         # Default: not met
@@ -766,15 +742,15 @@ class MarketScanner:
         # Get price from details
         price = None
         for detail in result.details.values():
-            if 'price' in detail:
-                price = detail['price']
+            if "price" in detail:
+                price = detail["price"]
                 break
 
         if not price:
             return None
 
         # Calculate basic levels
-        atr = result.details.get('atr', 0)
+        atr = result.details.get("atr", 0)
         if not atr:
             atr = price * 0.01  # Default 1% ATR
 
@@ -796,7 +772,7 @@ class MarketScanner:
 
         return MarketOpportunity(
             symbol=result.symbol,
-            opportunity_type='/'.join(result.criteria_met[:2]),
+            opportunity_type="/".join(result.criteria_met[:2]),
             direction=result.direction,
             strength=result.signal_strength,
             entry_price=price,
@@ -805,7 +781,7 @@ class MarketScanner:
             risk_reward=risk_reward,
             triggers=result.criteria_met,
             analysis=result.details,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=4)
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
         )
 
     def _add_opportunity(self, opportunity: MarketOpportunity):
@@ -817,7 +793,7 @@ class MarketScanner:
             if len(self._opportunities) > self._max_opportunities:
                 self._opportunities.pop(0)
 
-            self._stats['opportunities_found'] += 1
+            self._stats["opportunities_found"] += 1
 
             # Notify callbacks
             for callback in self._on_opportunity_callbacks:
@@ -830,7 +806,7 @@ class MarketScanner:
         self,
         symbol: Optional[str] = None,
         direction: Optional[SignalDirection] = None,
-        min_strength: float = 0
+        min_strength: float = 0,
     ) -> List[MarketOpportunity]:
         """Get stored opportunities with optional filters."""
         with self._lock:
@@ -869,15 +845,16 @@ class MarketScanner:
         """Get scanner statistics."""
         return {
             **self._stats,
-            'symbols_count': len(self._symbols),
-            'criteria_count': len(self._criteria),
-            'active_opportunities': len([o for o in self._opportunities if o.is_valid])
+            "symbols_count": len(self._symbols),
+            "criteria_count": len(self._criteria),
+            "active_opportunities": len([o for o in self._opportunities if o.is_valid]),
         }
 
 
 # ================================================================
 # FASTAPI INTEGRATION
 # ================================================================
+
 
 def create_scanner_router(scanner: MarketScanner):
     """
@@ -917,9 +894,7 @@ def create_scanner_router(scanner: MarketScanner):
                 raise HTTPException(status_code=400, detail=str(e))
 
         results = scanner.scan(
-            request.market_data,
-            criteria=criteria,
-            min_strength=request.min_strength
+            request.market_data, criteria=criteria, min_strength=request.min_strength
         )
         return [r.to_dict() for r in results]
 
@@ -928,7 +903,7 @@ def create_scanner_router(scanner: MarketScanner):
         symbol: Optional[str] = None,
         direction: Optional[str] = None,
         min_strength: float = 0,
-        limit: int = 20
+        limit: int = 20,
     ):
         """Get trading opportunities."""
         dir_enum = SignalDirection(direction) if direction else None
@@ -962,13 +937,13 @@ def create_scanner_router(scanner: MarketScanner):
         try:
             criteria_type = ScanCriteriaType(request.criteria_type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid criteria type: {request.criteria_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid criteria type: {request.criteria_type}",
+            )
 
         scanner.add_criteria(
-            criteria_type,
-            request.parameters,
-            request.weight,
-            request.required
+            criteria_type, request.parameters, request.weight, request.required
         )
         return {"status": "added"}
 

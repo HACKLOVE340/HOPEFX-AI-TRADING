@@ -53,7 +53,9 @@ class APIGateway:
             try:
                 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
                 self._redis_client = _redis_lib.from_url(
-                    redis_url, socket_connect_timeout=2, socket_timeout=2,
+                    redis_url,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
                 )
                 self._redis_client.ping()
             except Exception as exc:
@@ -269,7 +271,10 @@ class APIGateway:
                 print(f"WebSocket error: {e}")
 
     def _verify_token(
-        self, token: str, required_role: str = "user", raise_exception: bool = True,
+        self,
+        token: str,
+        required_role: str = "user",
+        raise_exception: bool = True,
     ) -> bool:
         """Verify JWT token"""
         try:
@@ -282,7 +287,8 @@ class APIGateway:
             if role_hierarchy.get(user_role, 0) < role_hierarchy.get(required_role, 0):
                 if raise_exception:
                     raise HTTPException(
-                        status_code=403, detail="Insufficient permissions",
+                        status_code=403,
+                        detail="Insufficient permissions",
                     )
                 return False
 

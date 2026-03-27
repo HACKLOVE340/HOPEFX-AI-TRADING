@@ -135,18 +135,18 @@ import 'package:dio/dio.dart';
 class HopeFXClient {
   final Dio _dio;
   final String baseUrl;
-  
-  HopeFXClient({required this.baseUrl, required String apiKey}) 
+
+  HopeFXClient({required this.baseUrl, required String apiKey})
     : _dio = Dio(BaseOptions(
         baseUrl: baseUrl,
         headers: {'Authorization': 'Bearer $apiKey'},
       ));
-  
+
   Future<Map<String, dynamic>> getPortfolio() async {
     final response = await _dio.get('/api/v1/portfolio');
     return response.data;
   }
-  
+
   Future<Map<String, dynamic>> placeOrder({
     required String symbol,
     required String side,
@@ -160,7 +160,7 @@ class HopeFXClient {
     });
     return response.data;
   }
-  
+
   Stream<Map<String, dynamic>> priceStream(String symbol) {
     // WebSocket implementation
     return Stream.empty();
@@ -315,12 +315,12 @@ class PushNotificationManager:
     """
     Push notification manager for mobile apps
     """
-    
+
     def __init__(self, credentials_path: str = None):
         if credentials_path:
             cred = credentials.Certificate(credentials_path)
             firebase_admin.initialize_app(cred)
-    
+
     def send_trade_alert(self, token: str, signal: dict):
         """Send trade signal notification"""
         message = messaging.Message(
@@ -336,14 +336,14 @@ class PushNotificationManager:
             },
             token=token,
         )
-        
+
         response = messaging.send(message)
         return response
-    
+
     def send_price_alert(self, token: str, symbol: str, price: float, threshold: float):
         """Send price alert notification"""
         direction = "above" if price >= threshold else "below"
-        
+
         message = messaging.Message(
             notification=messaging.Notification(
                 title=f"Price Alert: {symbol}",
@@ -357,14 +357,14 @@ class PushNotificationManager:
             },
             token=token,
         )
-        
+
         return messaging.send(message)
-    
+
     def send_position_update(self, token: str, position: dict):
         """Send position update notification"""
         pnl = position.get('unrealized_pnl', 0)
         pnl_emoji = "📈" if pnl > 0 else "📉" if pnl < 0 else "➡️"
-        
+
         message = messaging.Message(
             notification=messaging.Notification(
                 title=f"{pnl_emoji} Position Update",
@@ -377,7 +377,7 @@ class PushNotificationManager:
             },
             token=token,
         )
-        
+
         return messaging.send(message)
 ```
 
@@ -392,7 +392,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export async function requestNotificationPermission() {
   const authStatus = await messaging().requestPermission();
-  const enabled = 
+  const enabled =
     authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
     authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
@@ -400,7 +400,7 @@ export async function requestNotificationPermission() {
     const token = await messaging().getToken();
     await registerDeviceToken(token);
   }
-  
+
   return enabled;
 }
 
@@ -433,17 +433,17 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = 
+  final FlutterLocalNotificationsPlugin _localNotifications =
     FlutterLocalNotificationsPlugin();
 
   Future<void> initialize() async {
     // Request permission
     await _messaging.requestPermission();
-    
+
     // Get token
     final token = await _messaging.getToken();
     await _registerToken(token!);
-    
+
     // Handle messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
@@ -537,7 +537,7 @@ from fastapi import WebSocket
 @router.websocket("/ws/mobile")
 async def mobile_websocket(websocket: WebSocket):
     await websocket.accept()
-    
+
     try:
         while True:
             # Send combined updates
@@ -567,7 +567,7 @@ import { LineChart, CandlestickChart } from 'react-native-wagmi-charts';
 
 export function TradingChart({ data, type = 'candlestick' }) {
   const { width } = Dimensions.get('window');
-  
+
   if (type === 'candlestick') {
     return (
       <CandlestickChart.Provider data={data}>
@@ -580,7 +580,7 @@ export function TradingChart({ data, type = 'candlestick' }) {
       </CandlestickChart.Provider>
     );
   }
-  
+
   return (
     <LineChart.Provider data={data}>
       <LineChart width={width} height={300}>
@@ -602,14 +602,14 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 
 export function TradePanel({ symbol, currentPrice, onTrade }) {
   const [quantity, setQuantity] = useState(0.1);
-  
+
   return (
     <View style={styles.container}>
       <View style={styles.priceDisplay}>
         <Text style={styles.symbol}>{symbol}</Text>
         <Text style={styles.price}>${currentPrice.toFixed(2)}</Text>
       </View>
-      
+
       <View style={styles.quantitySelector}>
         <TouchableOpacity onPress={() => setQuantity(q => Math.max(0.01, q - 0.01))}>
           <Text style={styles.button}>-</Text>
@@ -619,15 +619,15 @@ export function TradePanel({ symbol, currentPrice, onTrade }) {
           <Text style={styles.button}>+</Text>
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.tradeButtons}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tradeButton, styles.buyButton]}
           onPress={() => onTrade('buy', quantity)}
         >
           <Text style={styles.buttonText}>BUY</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tradeButton, styles.sellButton]}
           onPress={() => onTrade('sell', quantity)}
         >
@@ -682,14 +682,14 @@ import * as LocalAuthentication from 'expo-local-authentication';
 export async function authenticateWithBiometrics() {
   const hasHardware = await LocalAuthentication.hasHardwareAsync();
   const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-  
+
   if (hasHardware && isEnrolled) {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to access HOPEFX',
     });
     return result.success;
   }
-  
+
   return false;
 }
 ```

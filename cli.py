@@ -7,6 +7,7 @@
 # Load .env first so all env vars are available before any module imports
 try:
     from dotenv import load_dotenv as _load_dotenv
+
     _load_dotenv(override=False)
 except ImportError:
     pass
@@ -17,26 +18,25 @@ HOPEFX AI Trading Framework - Command Line Interface
 Provides a command-line interface for managing the trading framework.
 """
 
-import argparse
-import logging
-import os
-import sys
-from pathlib import Path
+import argparse  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine  # noqa: E402
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from cache import MarketDataCache
-from config import initialize_config
-from database.models import Base
+from cache import MarketDataCache  # noqa: E402
+from config import initialize_config  # noqa: E402
+from database.models import Base  # noqa: E402
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def cmd_status(args):
 
 def cmd_config(args):
     """Manage configuration"""
-    if args.action == 'show':
+    if args.action == "show":
         try:
             config = initialize_config()
             logger.info("Current Configuration:")
@@ -144,7 +144,7 @@ def cmd_config(args):
             logger.error(f"Failed to show config: {e}")
             return 1
 
-    elif args.action == 'validate':
+    elif args.action == "validate":
         try:
             config = initialize_config()
             if config.validate():
@@ -165,23 +165,25 @@ def cmd_cache(args):
     try:
         cache = MarketDataCache()
 
-        if args.action == 'stats':
+        if args.action == "stats":
             stats = cache.get_statistics()
             logger.info("Cache Statistics:")
             logger.info(f"  Total keys: {stats.total_keys}")
             logger.info(f"  Total hits: {stats.total_hits}")
             logger.info(f"  Total misses: {stats.total_misses}")
             logger.info(f"  Hit rate: {stats.hit_rate:.2f}%")
-            logger.info(f"  Memory usage: {stats.memory_usage_bytes / 1024 / 1024:.2f} MB")
+            logger.info(
+                f"  Memory usage: {stats.memory_usage_bytes / 1024 / 1024:.2f} MB"
+            )
 
-        elif args.action == 'clear':
+        elif args.action == "clear":
             if cache.clear_all():
                 logger.info("✓ Cache cleared")
             else:
                 logger.error("✗ Failed to clear cache")
                 return 1
 
-        elif args.action == 'health':
+        elif args.action == "health":
             if cache.health_check():
                 logger.info("✓ Cache is healthy")
             else:
@@ -202,11 +204,11 @@ def cmd_db(args):
         connection_string = config.database.get_connection_string()
         engine = create_engine(connection_string)
 
-        if args.action == 'create':
+        if args.action == "create":
             Base.metadata.create_all(engine)
             logger.info("✓ Database tables created")
 
-        elif args.action == 'drop':
+        elif args.action == "drop":
             if not args.force:
                 logger.error("This will delete all data! Use --force to confirm")
                 return 1
@@ -224,18 +226,22 @@ def cmd_start(args):
     """Start the API server"""
     import uvicorn
 
-    environment = os.getenv('ENVIRONMENT', 'development')
+    environment = os.getenv("ENVIRONMENT", "development")
 
     # Refuse to start in production without a real encryption key
-    if not os.getenv('CONFIG_ENCRYPTION_KEY'):
-        if environment == 'production':
+    if not os.getenv("CONFIG_ENCRYPTION_KEY"):
+        if environment == "production":
             logger.error(
                 "CONFIG_ENCRYPTION_KEY must be set for production. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
             return 1
-        logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development only.")
-        os.environ['CONFIG_ENCRYPTION_KEY'] = 'dev-key-minimum-32-characters-long-for-testing'
+        logger.warning(
+            "CONFIG_ENCRYPTION_KEY not set. Using default for development only."
+        )
+        os.environ["CONFIG_ENCRYPTION_KEY"] = (
+            "dev-key-minimum-32-characters-long-for-testing"
+        )
 
     host = args.host
     port = args.port
@@ -270,85 +276,76 @@ def cmd_start(args):
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        prog='hopefx',
-        description='HOPEFX AI Trading Framework CLI',
+        prog="hopefx",
+        description="HOPEFX AI Trading Framework CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
-        '--version',
-        action='version',
-        version='HOPEFX AI Trading Framework v1.0.0'
+        "--version", action="version", version="HOPEFX AI Trading Framework v1.0.0"
     )
 
     parser.add_argument(
-        '--env', '--environment',
-        dest='environment',
+        "--env",
+        "--environment",
+        dest="environment",
         default=None,
-        help='Environment (development/staging/production)'
+        help="Environment (development/staging/production)",
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # init command
-    parser_init = subparsers.add_parser('init', help='Initialize the application')
+    parser_init = subparsers.add_parser("init", help="Initialize the application")
     parser_init.set_defaults(func=cmd_init)
 
     # status command
-    parser_status = subparsers.add_parser('status', help='Show system status')
+    parser_status = subparsers.add_parser("status", help="Show system status")
     parser_status.set_defaults(func=cmd_status)
 
     # config command
-    parser_config = subparsers.add_parser('config', help='Manage configuration')
+    parser_config = subparsers.add_parser("config", help="Manage configuration")
     parser_config.add_argument(
-        'action',
-        choices=['show', 'validate'],
-        help='Config action'
+        "action", choices=["show", "validate"], help="Config action"
     )
     parser_config.set_defaults(func=cmd_config)
 
     # cache command
-    parser_cache = subparsers.add_parser('cache', help='Manage cache')
+    parser_cache = subparsers.add_parser("cache", help="Manage cache")
     parser_cache.add_argument(
-        'action',
-        choices=['stats', 'clear', 'health'],
-        help='Cache action'
+        "action", choices=["stats", "clear", "health"], help="Cache action"
     )
     parser_cache.set_defaults(func=cmd_cache)
 
     # db command
-    parser_db = subparsers.add_parser('db', help='Manage database')
-    parser_db.add_argument(
-        'action',
-        choices=['create', 'drop'],
-        help='Database action'
-    )
-    parser_db.add_argument('--force', action='store_true', help='Force operation')
+    parser_db = subparsers.add_parser("db", help="Manage database")
+    parser_db.add_argument("action", choices=["create", "drop"], help="Database action")
+    parser_db.add_argument("--force", action="store_true", help="Force operation")
     parser_db.set_defaults(func=cmd_db)
 
     # start command
-    parser_start = subparsers.add_parser('start', help='Start the API server')
+    parser_start = subparsers.add_parser("start", help="Start the API server")
     parser_start.add_argument(
-        '--host',
-        default=os.getenv('API_HOST', '127.0.0.1'),
-        help='Host to bind (default: 127.0.0.1)',
+        "--host",
+        default=os.getenv("API_HOST", "127.0.0.1"),
+        help="Host to bind (default: 127.0.0.1)",
     )
     parser_start.add_argument(
-        '--port',
+        "--port",
         type=int,
-        default=int(os.getenv('API_PORT', 5000)),
-        help='Port to listen on (default: 5000)',
+        default=int(os.getenv("API_PORT", 5000)),
+        help="Port to listen on (default: 5000)",
     )
     parser_start.add_argument(
-        '--workers',
+        "--workers",
         type=int,
-        default=int(os.getenv('API_WORKERS', 1)),
-        help='Number of worker processes (default: 1)',
+        default=int(os.getenv("API_WORKERS", 1)),
+        help="Number of worker processes (default: 1)",
     )
     parser_start.add_argument(
-        '--no-reload',
-        action='store_true',
-        help='Disable auto-reload (recommended for production)',
+        "--no-reload",
+        action="store_true",
+        help="Disable auto-reload (recommended for production)",
     )
     parser_start.set_defaults(func=cmd_start)
 
@@ -367,5 +364,5 @@ def main():
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

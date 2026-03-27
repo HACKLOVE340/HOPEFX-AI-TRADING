@@ -116,11 +116,13 @@ class TradeExecutor:
 
             if result.success:
                 self.metrics.get_collector("orders_filled_total").inc(
-                    1, {"symbol": symbol, "type": "market"},
+                    1,
+                    {"symbol": symbol, "type": "market"},
                 )
             else:
                 self.metrics.get_collector("orders_rejected_total").inc(
-                    1, {"symbol": symbol, "reason": result.status.value},
+                    1,
+                    {"symbol": symbol, "reason": result.status.value},
                 )
 
             # Notify callbacks
@@ -154,7 +156,12 @@ class TradeExecutor:
         # ── Mandatory pre-trade gate ──────────────────────────────────────────
         # Any exception (TradeBlocked OR RiskManagerError) blocks the order.
         # There is NO "allow anyway" path — a broken risk check is a hard stop.
-        from risk.pre_trade_gate import GateOrder, PreTradeGate, RiskManagerError, TradeBlocked
+        from risk.pre_trade_gate import (
+            GateOrder,
+            PreTradeGate,
+            RiskManagerError,
+            TradeBlocked,
+        )
 
         gate = PreTradeGate(self.risk_manager)
         gate_order = GateOrder(
@@ -172,7 +179,11 @@ class TradeExecutor:
             logger.warning(
                 "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%s "
                 "reason_code=%s detail=%s",
-                symbol, side, size, exc.reason_code, exc.detail,
+                symbol,
+                side,
+                size,
+                exc.reason_code,
+                exc.detail,
             )
             return ExecutionResult(
                 success=False,
@@ -189,10 +200,14 @@ class TradeExecutor:
             logger.critical(
                 "RISK MANAGER ERROR — order blocked as safety measure | "
                 "symbol=%s side=%s qty=%s error=%s",
-                symbol, side, size, exc,
+                symbol,
+                side,
+                size,
+                exc,
             )
             try:
                 import sentry_sdk
+
                 sentry_sdk.capture_exception(exc)
             except Exception:
                 pass
@@ -209,7 +224,9 @@ class TradeExecutor:
 
         # Place order through broker
         order = await self.broker.place_market_order(
-            symbol=symbol, side=side, quantity=size,
+            symbol=symbol,
+            side=side,
+            quantity=size,
         )
 
         # Update position tracker
@@ -274,7 +291,9 @@ class TradeExecutor:
         if success:
             # Update position tracker
             closed_position = await self.position_tracker.close_position(
-                position_id, position.current_price, commission=position.commission,
+                position_id,
+                position.current_price,
+                commission=position.commission,
             )
 
             # Record trade result for strategy performance

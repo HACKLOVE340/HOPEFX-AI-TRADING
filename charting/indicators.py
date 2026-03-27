@@ -19,7 +19,9 @@ class Indicator:
         self.period = period
 
     def calculate(self, data: List[float]) -> List[float]:
-        raise NotImplementedError(f"{self.__class__.__name__}.calculate() not implemented")
+        raise NotImplementedError(
+            f"{self.__class__.__name__}.calculate() not implemented"
+        )
 
 
 class SMA(Indicator):
@@ -33,7 +35,7 @@ class SMA(Indicator):
             return []
         result = []
         for i in range(self.period - 1, len(data)):
-            window = data[i - self.period + 1: i + 1]
+            window = data[i - self.period + 1 : i + 1]
             result.append(sum(window) / self.period)
         return result
 
@@ -49,9 +51,9 @@ class EMA(Indicator):
             return []
         k = 2.0 / (self.period + 1)
         # Seed with SMA of first `period` values
-        sma = sum(data[:self.period]) / self.period
+        sma = sum(data[: self.period]) / self.period
         result = [sma]
-        for price in data[self.period:]:
+        for price in data[self.period :]:
             result.append(price * k + result[-1] * (1 - k))
         return result
 
@@ -71,8 +73,8 @@ class RSI(Indicator):
             gains.append(max(diff, 0))
             losses.append(max(-diff, 0))
 
-        avg_gain = sum(gains[:self.period]) / self.period
-        avg_loss = sum(losses[:self.period]) / self.period
+        avg_gain = sum(gains[: self.period]) / self.period
+        avg_loss = sum(losses[: self.period]) / self.period
 
         result = []
         for i in range(self.period, len(gains)):

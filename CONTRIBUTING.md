@@ -136,42 +136,42 @@ from config import ConfigManager
 class TradingStrategy:
     """
     A trading strategy implementation.
-    
+
     This class implements a trend-following strategy based on
     moving average crossovers.
-    
+
     Attributes:
         name: Strategy name
         config: Configuration dictionary
     """
-    
+
     def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
         """
         Initialize trading strategy.
-        
+
         Args:
             name: Name of the strategy
             config: Optional configuration dictionary
         """
         self.name = name
         self.config = config or {}
-    
+
     def generate_signal(self, data: Dict[str, Any]) -> str:
         """
         Generate trading signal from market data.
-        
+
         Args:
             data: Market data dictionary
-            
+
         Returns:
             Signal as string ('BUY', 'SELL', or 'HOLD')
-            
+
         Raises:
             ValueError: If data is invalid
         """
         if not data:
             raise ValueError("Data cannot be empty")
-        
+
         # Implementation here
         return "HOLD"
 ```
@@ -260,9 +260,9 @@ def encryption_key():
 def test_config_manager_init(temp_config_dir, encryption_key):
     """Test ConfigManager initialization"""
     os.environ['CONFIG_ENCRYPTION_KEY'] = encryption_key
-    
+
     manager = ConfigManager(str(temp_config_dir))
-    
+
     assert manager.config_dir == temp_config_dir
     assert manager.encryption is not None
 
@@ -270,13 +270,13 @@ def test_config_manager_init(temp_config_dir, encryption_key):
 def test_encryption_roundtrip(encryption_key):
     """Test encryption and decryption"""
     os.environ['CONFIG_ENCRYPTION_KEY'] = encryption_key
-    
+
     em = EncryptionManager()
     original = "sensitive-data"
-    
+
     encrypted = em.encrypt(original)
     decrypted = em.decrypt(encrypted)
-    
+
     assert decrypted == original
     assert encrypted != original
 
@@ -284,12 +284,12 @@ def test_encryption_roundtrip(encryption_key):
 def test_password_hashing(encryption_key):
     """Test password hashing and verification"""
     os.environ['CONFIG_ENCRYPTION_KEY'] = encryption_key
-    
+
     em = EncryptionManager()
     password = "test123"
-    
+
     hashed = em.hash_password(password)
-    
+
     assert em.verify_password("test123", hashed) is True
     assert em.verify_password("wrong", hashed) is False
 ```
@@ -308,28 +308,28 @@ def calculate_position_size(
 ) -> float:
     """
     Calculate position size based on risk parameters.
-    
+
     Uses the fixed fractional position sizing method to determine
     the appropriate position size given account balance and risk.
-    
+
     Args:
         account_balance: Total account balance in base currency
         risk_percent: Percentage of account to risk (e.g., 2.0 for 2%)
         stop_loss_pips: Stop loss distance in pips
-        
+
     Returns:
         Position size in lots
-        
+
     Raises:
         ValueError: If any parameter is negative or zero
-        
+
     Example:
         >>> calculate_position_size(10000, 2.0, 50)
         0.04
     """
     if account_balance <= 0 or risk_percent <= 0 or stop_loss_pips <= 0:
         raise ValueError("All parameters must be positive")
-    
+
     # Implementation
     return 0.04
 ```

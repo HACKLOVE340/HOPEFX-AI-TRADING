@@ -29,7 +29,11 @@ class BollingerBandsStrategy(BaseStrategy):
     """
 
     def __init__(
-        self, config: StrategyConfig, *_args, period: int = 20, std_dev: float = 2.0,
+        self,
+        config: StrategyConfig,
+        *_args,
+        period: int = 20,
+        std_dev: float = 2.0,
     ):
         """
         Initialize Bollinger Bands strategy.

@@ -92,7 +92,8 @@ class RSIStrategy(BaseStrategy):
                 price,
                 datetime.now(timezone.utc),
                 confidence=min(
-                    0.95, 0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4,
+                    0.95,
+                    0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4,
                 ),
             )
         return None

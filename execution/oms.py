@@ -166,7 +166,9 @@ class OrderLifecycleManager:
 
         if random.random() < 0.05:  # 5% rejection rate
             self._transition(
-                order, OrderStatus.REJECTED, reason="INSUFFICIENT_LIQUIDITY",
+                order,
+                OrderStatus.REJECTED,
+                reason="INSUFFICIENT_LIQUIDITY",
             )
         else:
             self._transition(order, OrderStatus.NEW)
@@ -199,7 +201,10 @@ class OrderLifecycleManager:
             new_status = OrderStatus.PARTIALLY_FILLED
 
         return self._transition(
-            order, new_status, fill_qty=fill_qty, fill_price=fill_price,
+            order,
+            new_status,
+            fill_qty=fill_qty,
+            fill_price=fill_price,
         )
 
     def cancel_order(self, order_id: str) -> bool:
@@ -319,7 +324,8 @@ class ComplexOrderManager:
 
         # Register callback
         self.oms.register_callback(
-            OrderStatus.FILLED, lambda o, ctx: self._cancel_siblings(o),
+            OrderStatus.FILLED,
+            lambda o, ctx: self._cancel_siblings(o),
         )
 
         return parent_id
@@ -338,7 +344,10 @@ class ComplexOrderManager:
                 self.oms.cancel_order(order.id)
 
     def create_bracket(
-        self, entry: Order, take_profit: Decimal, stop_loss: Decimal,
+        self,
+        entry: Order,
+        take_profit: Decimal,
+        stop_loss: Decimal,
     ) -> str:
         """
         Bracket order: Entry + Take Profit + Stop Loss.
@@ -364,7 +373,11 @@ class ComplexOrderManager:
         return bracket_id
 
     def _place_bracket_exits(
-        self, entry: Order, tp: Decimal, sl: Decimal, bracket_id: str,
+        self,
+        entry: Order,
+        tp: Decimal,
+        sl: Decimal,
+        bracket_id: str,
     ):
         """Place take profit and stop loss as OCO"""
         # Create TP order
@@ -466,7 +479,10 @@ class ComplexOrderManager:
         self.oms.submit_order(child_id)
 
     def _check_reveal_next(
-        self, filled_slice: Order, parent_id: str, display_size: Decimal,
+        self,
+        filled_slice: Order,
+        parent_id: str,
+        display_size: Decimal,
     ):
         """Check if we should reveal next iceberg slice"""
         # If slice is fully filled, reveal next

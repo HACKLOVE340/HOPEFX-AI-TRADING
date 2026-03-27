@@ -122,12 +122,16 @@ def _send(
         if loop.is_running():
             # Fire-and-forget from async context
             asyncio.ensure_future(
-                channel.send_email_async([to], subject, plain_body=subject, html_body=html)
+                channel.send_email_async(
+                    [to], subject, plain_body=subject, html_body=html
+                )
             )
             return True
         else:
             return loop.run_until_complete(
-                channel.send_email_async([to], subject, plain_body=subject, html_body=html)
+                channel.send_email_async(
+                    [to], subject, plain_body=subject, html_body=html
+                )
             )
     except Exception as exc:
         logger.error("email_triggers: send failed for %s: %s", template, exc)
@@ -160,7 +164,9 @@ def send_trade_fill_email(
     to          : Recipient email (defaults to SMTP_TO env var)
     """
     recipient = to or _DEFAULT_TO
-    subject = f"Trade Filled: {direction.upper()} {quantity:.2f} {symbol} @ {fill_price:,.2f}"
+    subject = (
+        f"Trade Filled: {direction.upper()} {quantity:.2f} {symbol} @ {fill_price:,.2f}"
+    )
     return _send(
         to=recipient,
         subject=subject,

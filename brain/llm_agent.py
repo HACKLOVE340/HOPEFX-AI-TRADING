@@ -68,14 +68,16 @@ def _load_recent_candles_from_csv(
 
         candles = []
         for _, row in df.iterrows():
-            candles.append({
-                "timestamp": str(row.get("timestamp", "")),
-                "open":   float(row.get("open", 0)),
-                "high":   float(row.get("high", 0)),
-                "low":    float(row.get("low", 0)),
-                "close":  float(row.get("close", 0)),
-                "volume": int(row.get("volume", 0)),
-            })
+            candles.append(
+                {
+                    "timestamp": str(row.get("timestamp", "")),
+                    "open": float(row.get("open", 0)),
+                    "high": float(row.get("high", 0)),
+                    "low": float(row.get("low", 0)),
+                    "close": float(row.get("close", 0)),
+                    "volume": int(row.get("volume", 0)),
+                }
+            )
         return candles
     except Exception:
         return []
@@ -163,14 +165,15 @@ Output ONLY the new Python code — no markdown, no explanation.
 
 # ── data classes ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class BacktestResult:
-    sharpe:       float
+    sharpe: float
     total_return: float
     max_drawdown: float
-    win_rate:     float
-    trades:       int
-    error:        Optional[str] = None
+    win_rate: float
+    trades: int
+    error: Optional[str] = None
 
     def summary(self) -> str:
         if self.error:
@@ -184,17 +187,18 @@ class BacktestResult:
 
 @dataclass
 class AgentResult:
-    success:         bool
-    strategy_code:   str
-    strategy_name:   str
-    backtest:        Optional[BacktestResult]
-    iterations:      int
-    conversation:    List[Dict[str, str]] = field(default_factory=list)
-    error:           Optional[str] = None
-    strategy_id:     str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    success: bool
+    strategy_code: str
+    strategy_name: str
+    backtest: Optional[BacktestResult]
+    iterations: int
+    conversation: List[Dict[str, str]] = field(default_factory=list)
+    error: Optional[str] = None
+    strategy_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
 
 
 # ── sandbox execution ─────────────────────────────────────────────────────────
+
 
 def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
     """
@@ -203,8 +207,18 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
     Returns (instance, None) on success or (None, error_message) on failure.
     """
     # Static safety check — reject dangerous imports
-    _BANNED = {"subprocess", "os.system", "eval", "exec", "open",
-               "__import__", "socket", "requests", "aiohttp", "httpx"}
+    _BANNED = {
+        "subprocess",
+        "os.system",
+        "eval",
+        "exec",
+        "open",
+        "__import__",
+        "socket",
+        "requests",
+        "aiohttp",
+        "httpx",
+    }
     for token in _BANNED:
         if token in code:
             return None, f"Banned token '{token}' found in generated code"
@@ -222,10 +236,10 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
         tmp_path = f.name
 
     try:
-        spec   = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
+        spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        cls    = getattr(module, "GeneratedStrategy", None)
+        cls = getattr(module, "GeneratedStrategy", None)
         if cls is None:
             return None, "No class named 'GeneratedStrategy' found"
         instance = cls()
@@ -241,12 +255,13 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
 
 # ── quick backtest ────────────────────────────────────────────────────────────
 
+
 def _run_backtest(
-    strategy:        Any,
-    candles:         List[Dict],
+    strategy: Any,
+    candles: List[Dict],
     initial_balance: float = 10_000.0,
-    position_pct:    float = 0.10,
-    commission:      float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
+    position_pct: float = 0.10,
+    commission: float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
 ) -> BacktestResult:
     """
     Walk-forward backtest on a list of OHLCV dicts.
@@ -256,7 +271,7 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd
+        import pandas as pd  # noqa: F401
         from strategies.base import SignalType
     except ImportError as exc:
         return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
@@ -264,21 +279,21 @@ def _run_backtest(
     if len(candles) < 60:
         return BacktestResult(0, 0, 0, 0, 0, error="Not enough candle data")
 
-    balance      = initial_balance
+    balance = initial_balance
     equity_curve: List[float] = [balance]
-    position     = 0.0   # positive = long units, negative = short units
-    entry_price  = 0.0
+    position = 0.0  # positive = long units, negative = short units
+    entry_price = 0.0
     wins = losses = 0
 
     for i in range(50, len(candles)):
-        window = candles[max(0, i - 100): i + 1]
-        price  = float(candles[i]["close"])
+        window = candles[max(0, i - 100) : i + 1]
+        price = float(candles[i]["close"])
 
         # call the real two-step strategy API
         sig_type = None
         try:
             analysis = strategy.analyze({"candles": window})
-            signal   = strategy.generate_signal(analysis)
+            signal = strategy.generate_signal(analysis)
             if signal is not None:
                 sig_type = signal.signal_type
         except Exception:
@@ -286,8 +301,9 @@ def _run_backtest(
 
         # close on opposite signal
         if position != 0:
-            if (position > 0 and sig_type == SignalType.SELL) or \
-               (position < 0 and sig_type == SignalType.BUY):
+            if (position > 0 and sig_type == SignalType.SELL) or (
+                position < 0 and sig_type == SignalType.BUY
+            ):
                 pnl = position * (price - entry_price)
                 pnl -= abs(position) * price * commission
                 balance += pnl
@@ -295,43 +311,44 @@ def _run_backtest(
                     wins += 1
                 else:
                     losses += 1
-                position    = 0.0
+                position = 0.0
                 entry_price = 0.0
 
         # open new position
         if position == 0 and sig_type in (SignalType.BUY, SignalType.SELL):
-            size        = (balance * position_pct) / price
-            position    = size if sig_type == SignalType.BUY else -size
+            size = (balance * position_pct) / price
+            position = size if sig_type == SignalType.BUY else -size
             entry_price = price
-            balance    -= abs(position) * price * commission
+            balance -= abs(position) * price * commission
 
         equity_curve.append(balance + position * (price - entry_price))
 
     # close any open position at last price
     if position != 0:
         last_price = float(candles[-1]["close"])
-        balance   += position * (last_price - entry_price)
+        balance += position * (last_price - entry_price)
 
-    eq  = np.array(equity_curve, dtype=float)
+    eq = np.array(equity_curve, dtype=float)
     ret = np.diff(eq) / (eq[:-1] + 1e-9)
 
-    sharpe       = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))
+    sharpe = float(np.mean(ret) / (np.std(ret) + 1e-9) * np.sqrt(252 * 24))
     total_return = float((eq[-1] - eq[0]) / (eq[0] + 1e-9))
-    peak         = np.maximum.accumulate(eq)
-    max_dd       = float(np.min((eq - peak) / (peak + 1e-9)))
+    peak = np.maximum.accumulate(eq)
+    max_dd = float(np.min((eq - peak) / (peak + 1e-9)))
     total_trades = wins + losses
-    win_rate     = wins / total_trades if total_trades > 0 else 0.0
+    win_rate = wins / total_trades if total_trades > 0 else 0.0
 
     return BacktestResult(
-        sharpe       = sharpe,
-        total_return = total_return,
-        max_drawdown = max_dd,
-        win_rate     = win_rate,
-        trades       = total_trades,
+        sharpe=sharpe,
+        total_return=total_return,
+        max_drawdown=max_dd,
+        win_rate=win_rate,
+        trades=total_trades,
     )
 
 
 # ── LLM agent ─────────────────────────────────────────────────────────────────
+
 
 class LLMAgent:
     """
@@ -349,12 +366,12 @@ class LLMAgent:
 
     def __init__(
         self,
-        api_key:         Optional[str] = None,
-        model:           str           = "gpt-4o",
-        max_iterations:  int           = 3,
-        target_sharpe:   float         = 1.5,
-        candle_fetcher:  Optional[Any] = None,
-        enable_rag:      bool          = True,
+        api_key: Optional[str] = None,
+        model: str = "gpt-4o",
+        max_iterations: int = 3,
+        target_sharpe: float = 1.5,
+        candle_fetcher: Optional[Any] = None,
+        enable_rag: bool = True,
     ):
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
         if not key:
@@ -362,22 +379,22 @@ class LLMAgent:
                 "OpenAI API key required — set OPENAI_API_KEY env var "
                 "or pass api_key= to LLMAgent()"
             )
-        self._client         = openai.AsyncOpenAI(api_key=key)
-        self.model           = model
-        self.max_iterations  = max_iterations
-        self.target_sharpe   = target_sharpe
-        self.candle_fetcher  = candle_fetcher
+        self._client = openai.AsyncOpenAI(api_key=key)
+        self.model = model
+        self.max_iterations = max_iterations
+        self.target_sharpe = target_sharpe
+        self.candle_fetcher = candle_fetcher
         self._history: List[Dict[str, str]] = []
-        self._enable_rag     = enable_rag
-        self._vector_store   = None  # lazy-initialised on first chat call
+        self._enable_rag = enable_rag
+        self._vector_store = None  # lazy-initialised on first chat call
 
     # ── public ────────────────────────────────────────────────────────────────
 
     async def generate_strategy(
         self,
-        prompt:     str,
-        symbol:     str = "XAU_USD",
-        timeframe:  str = "H1",
+        prompt: str,
+        symbol: str = "XAU_USD",
+        timeframe: str = "H1",
         candle_count: int = 500,
     ) -> AgentResult:
         """
@@ -397,7 +414,9 @@ class LLMAgent:
         if self.candle_fetcher:
             try:
                 candles = await self.candle_fetcher(symbol, timeframe, candle_count)
-                logger.info("Fetched %d candles for %s %s", len(candles), symbol, timeframe)
+                logger.info(
+                    "Fetched %d candles for %s %s", len(candles), symbol, timeframe
+                )
             except Exception as exc:
                 logger.warning("Candle fetch failed: %s — backtesting disabled", exc)
 
@@ -414,23 +433,25 @@ class LLMAgent:
             code, llm_error = await self._call_llm()
             if llm_error:
                 return AgentResult(
-                    success       = False,
-                    strategy_code = "",
-                    strategy_name = "GeneratedStrategy",
-                    backtest      = None,
-                    iterations    = iteration,
-                    conversation  = list(self._history),
-                    error         = llm_error,
+                    success=False,
+                    strategy_code="",
+                    strategy_name="GeneratedStrategy",
+                    backtest=None,
+                    iterations=iteration,
+                    conversation=list(self._history),
+                    error=llm_error,
                 )
 
             # ── compile ───────────────────────────────────────────────────────
             instance, compile_error = _compile_strategy(code)
             if compile_error:
                 logger.warning("Compile error (iter %d): %s", iteration, compile_error)
-                self._history.append({
-                    "role":    "user",
-                    "content": f"Your code had a compile error:\n{compile_error}\n\nFix it and output only the corrected code.",
-                })
+                self._history.append(
+                    {
+                        "role": "user",
+                        "content": f"Your code had a compile error:\n{compile_error}\n\nFix it and output only the corrected code.",
+                    }
+                )
                 continue
 
             # ── backtest ──────────────────────────────────────────────────────
@@ -442,18 +463,18 @@ class LLMAgent:
                 bt = None
 
             result = AgentResult(
-                success       = bt is None or (bt.error is None and bt.sharpe >= self.target_sharpe),
-                strategy_code = code,
-                strategy_name = "GeneratedStrategy",
-                backtest      = bt,
-                iterations    = iteration,
-                conversation  = list(self._history),
+                success=bt is None
+                or (bt.error is None and bt.sharpe >= self.target_sharpe),
+                strategy_code=code,
+                strategy_name="GeneratedStrategy",
+                backtest=bt,
+                iterations=iteration,
+                conversation=list(self._history),
             )
 
             # track best so far
             if best_result is None or (
-                bt and best_result.backtest and
-                bt.sharpe > best_result.backtest.sharpe
+                bt and best_result.backtest and bt.sharpe > best_result.backtest.sharpe
             ):
                 best_result = result
 
@@ -464,9 +485,9 @@ class LLMAgent:
             # ── reflect and retry ─────────────────────────────────────────────
             if iteration < self.max_iterations:
                 reflect_msg = _REFLECT_PROMPT.format(
-                    result_summary  = bt.summary() if bt else "No backtest data",
-                    target_sharpe   = self.target_sharpe,
-                    achieved_sharpe = bt.sharpe if bt else 0.0,
+                    result_summary=bt.summary() if bt else "No backtest data",
+                    target_sharpe=self.target_sharpe,
+                    achieved_sharpe=bt.sharpe if bt else 0.0,
                 )
                 self._history.append({"role": "user", "content": reflect_msg})
 
@@ -476,12 +497,12 @@ class LLMAgent:
             return best_result
 
         return AgentResult(
-            success       = False,
-            strategy_code = "",
-            strategy_name = "GeneratedStrategy",
-            backtest      = None,
-            iterations    = self.max_iterations,
-            error         = "All iterations exhausted without valid strategy",
+            success=False,
+            strategy_code="",
+            strategy_name="GeneratedStrategy",
+            backtest=None,
+            iterations=self.max_iterations,
+            error="All iterations exhausted without valid strategy",
         )
 
     async def chat(self, message: str) -> str:
@@ -536,6 +557,7 @@ class LLMAgent:
             # Lazy-init vector store
             if self._vector_store is None:
                 from research.vector_store import MarketVectorStore
+
                 persist_dir = os.getenv("VECTORDB_DIR", "data/vectordb")
                 self._vector_store = MarketVectorStore(persist_dir=persist_dir)
 
@@ -585,9 +607,7 @@ class LLMAgent:
             content = response.choices[0].message.content.strip()
             if content.startswith("```"):
                 lines = content.splitlines()
-                content = "\n".join(
-                    l for l in lines if not l.startswith("```")
-                ).strip()
+                content = "\n".join(l for l in lines if not l.startswith("```")).strip()  # noqa: E741
             return content, None
         except openai.AuthenticationError:
             return "", "Invalid OpenAI API key"
@@ -602,19 +622,16 @@ class LLMAgent:
         """Call GPT-4 and return (content, error)."""
         try:
             response = await self._client.chat.completions.create(
-                model       = self.model,
-                messages    = self._history,
-                temperature = 0.3,
-                max_tokens  = 2048,
+                model=self.model,
+                messages=self._history,
+                temperature=0.3,
+                max_tokens=2048,
             )
             content = response.choices[0].message.content.strip()
             # strip accidental markdown fences
             if content.startswith("```"):
-                lines   = content.splitlines()
-                content = "\n".join(
-                    l for l in lines
-                    if not l.startswith("```")
-                ).strip()
+                lines = content.splitlines()
+                content = "\n".join(l for l in lines if not l.startswith("```")).strip()  # noqa: E741
             self._history.append({"role": "assistant", "content": content})
             return content, None
         except openai.AuthenticationError:
@@ -629,10 +646,11 @@ class LLMAgent:
 
 # ── convenience factory ───────────────────────────────────────────────────────
 
+
 def create_agent(
     oanda_stream=None,
     api_key: Optional[str] = None,
-    model:   str           = "gpt-4o",
+    model: str = "gpt-4o",
     **kwargs,
 ) -> LLMAgent:
     """
@@ -645,12 +663,13 @@ def create_agent(
     """
     fetcher = None
     if oanda_stream is not None:
+
         async def fetcher(symbol: str, timeframe: str, count: int) -> List[Dict]:
             return await oanda_stream.get_candles(symbol, timeframe, count)
 
     return LLMAgent(
-        api_key        = api_key,
-        model          = model,
-        candle_fetcher = fetcher,
+        api_key=api_key,
+        model=model,
+        candle_fetcher=fetcher,
         **kwargs,
     )

@@ -89,20 +89,38 @@ class AMLGate:
         # ── DB-dependent rules ────────────────────────────────────────────────
         if self._sf:
             try:
-                decision = self._check_db_rules(user_id, amount, currency, flags, risk_score)
+                decision = self._check_db_rules(
+                    user_id, amount, currency, flags, risk_score
+                )
                 if decision:
                     return decision
             except Exception as exc:
-                logger.warning("AML DB check failed for user %s: %s — allowing (fail open)", user_id, exc)
+                logger.warning(
+                    "AML DB check failed for user %s: %s — allowing (fail open)",
+                    user_id,
+                    exc,
+                )
 
         # ── Approved ──────────────────────────────────────────────────────────
         if flags:
             risk_score = min(risk_score + 0.1 * len(flags), 0.8)
-            logger.warning("AML: withdrawal allowed with flags %s for user %s amount %s", flags, user_id, amount)
+            logger.warning(
+                "AML: withdrawal allowed with flags %s for user %s amount %s",
+                flags,
+                user_id,
+                amount,
+            )
         else:
-            logger.info("AML: withdrawal approved for user %s amount %s %s", user_id, amount, currency)
+            logger.info(
+                "AML: withdrawal approved for user %s amount %s %s",
+                user_id,
+                amount,
+                currency,
+            )
 
-        return AMLDecision(allowed=True, reason="Approved", risk_score=risk_score, flags=flags)
+        return AMLDecision(
+            allowed=True, reason="Approved", risk_score=risk_score, flags=flags
+        )
 
     def _check_db_rules(
         self,
@@ -145,7 +163,7 @@ class AMLGate:
                 return AMLDecision(
                     allowed=False,
                     reason=f"Daily withdrawal limit of {DAILY_WITHDRAWAL_LIMIT} {currency} would be exceeded "
-                           f"(current: {daily_total}, requested: {amount})",
+                    f"(current: {daily_total}, requested: {amount})",
                     risk_score=0.9,
                     flags=["DAILY_LIMIT_EXCEEDED"],
                 )
@@ -167,7 +185,10 @@ class AMLGate:
                     risk_score = max(risk_score, 0.7)
                     logger.warning(
                         "AML: rapid turnaround detected for user %s — deposit %.2f then withdrawal %.2f within %dh",
-                        user_id, dep.amount, amount, RAPID_TURNAROUND_HOURS,
+                        user_id,
+                        dep.amount,
+                        amount,
+                        RAPID_TURNAROUND_HOURS,
                     )
                     break
 

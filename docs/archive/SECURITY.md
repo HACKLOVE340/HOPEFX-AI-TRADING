@@ -177,7 +177,7 @@ If you have existing encrypted configuration data:
    ```bash
    # Generate new salt
    export CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
-   
+
    # Re-encrypt your configuration
    python -c "
    from config.config_manager import ConfigManager

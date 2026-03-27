@@ -56,7 +56,7 @@ class Portfolio:
             fill: FillEvent with trade details
             current_prices: Dict of current prices for all symbols
         """
-        direction_multiplier = 1 if fill.direction == 'BUY' else -1
+        direction_multiplier = 1 if fill.direction == "BUY" else -1
         fill_cost = fill.fill_price * fill.quantity
 
         # Update cash
@@ -70,7 +70,7 @@ class Portfolio:
         new_position = old_position + (direction_multiplier * fill.quantity)
 
         # Update average price
-        if fill.direction == 'BUY':
+        if fill.direction == "BUY":
             if fill.symbol in self.avg_prices and old_position > 0:
                 # Average up
                 total_cost = (self.avg_prices[fill.symbol] * old_position) + fill_cost
@@ -81,7 +81,9 @@ class Portfolio:
             # Selling - check if closing position
             if new_position == 0:
                 # Position closed
-                pnl = (fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)) * fill.quantity
+                pnl = (
+                    fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)
+                ) * fill.quantity
                 self._record_trade(fill, pnl)
                 if fill.symbol in self.avg_prices:
                     del self.avg_prices[fill.symbol]
@@ -94,7 +96,9 @@ class Portfolio:
         # Update equity
         self._update_equity(current_prices)
 
-        logger.debug(f"Updated portfolio: {fill.direction} {fill.quantity} {fill.symbol} @ {fill.fill_price:.4f}")
+        logger.debug(
+            f"Updated portfolio: {fill.direction} {fill.quantity} {fill.symbol} @ {fill.fill_price:.4f}"
+        )
 
     def _record_trade(self, fill: FillEvent, pnl: float):
         """Record completed trade."""
@@ -106,12 +110,12 @@ class Portfolio:
             self.losing_trades += 1
 
         trade = {
-            'timestamp': fill.timestamp,
-            'symbol': fill.symbol,
-            'quantity': fill.quantity,
-            'price': fill.fill_price,
-            'pnl': pnl,
-            'commission': fill.commission
+            "timestamp": fill.timestamp,
+            "symbol": fill.symbol,
+            "quantity": fill.quantity,
+            "price": fill.fill_price,
+            "pnl": pnl,
+            "commission": fill.commission,
         }
 
         self.trade_history.append(trade)
@@ -136,12 +140,14 @@ class Portfolio:
         """
         self._update_equity(current_prices)
 
-        self.equity_curve.append({
-            'timestamp': timestamp,
-            'equity': self.equity,
-            'cash': self.cash,
-            'positions_value': self.equity - self.cash
-        })
+        self.equity_curve.append(
+            {
+                "timestamp": timestamp,
+                "equity": self.equity,
+                "cash": self.cash,
+                "positions_value": self.equity - self.cash,
+            }
+        )
 
     def get_equity_curve(self) -> pd.DataFrame:
         """Get equity curve as DataFrame."""
@@ -149,7 +155,7 @@ class Portfolio:
             return pd.DataFrame()
 
         df = pd.DataFrame(self.equity_curve)
-        df.set_index('timestamp', inplace=True)
+        df.set_index("timestamp", inplace=True)
         return df
 
     def get_trade_history(self) -> pd.DataFrame:
@@ -166,8 +172,8 @@ class Portfolio:
         for symbol, quantity in self.positions.items():
             if quantity != 0:
                 holdings[symbol] = {
-                    'quantity': quantity,
-                    'avg_price': self.avg_prices.get(symbol, 0),
+                    "quantity": quantity,
+                    "avg_price": self.avg_prices.get(symbol, 0),
                 }
 
         return holdings

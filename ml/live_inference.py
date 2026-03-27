@@ -81,12 +81,16 @@ class _FeatureCache:
             import redis as _redis_lib
 
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            client = _redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+            client = _redis_lib.from_url(
+                url, socket_connect_timeout=1, socket_timeout=1
+            )
             client.ping()
             self._redis = client
             logger.debug("Feature cache: Redis connected at %s", url)
         except Exception as exc:
-            logger.debug("Feature cache: Redis unavailable (%s) — using in-memory LRU", exc)
+            logger.debug(
+                "Feature cache: Redis unavailable (%s) — using in-memory LRU", exc
+            )
 
     @staticmethod
     def _make_key(symbol: str, last_ts: Any) -> str:
@@ -206,6 +210,7 @@ class AdvancedModelPredictor:
             # Fire Sentry alert — ML fallback will activate
             try:
                 from monitoring.sentry_config import capture_ml_fallback_event
+
                 capture_ml_fallback_event(
                     reason=str(exc),
                     fallback_model="xgb_macro.pkl",
@@ -266,7 +271,9 @@ class AdvancedModelPredictor:
                 return None
             result = X.iloc[[-1]]  # last bar only
             self._cache.set(symbol, last_ts, result)
-            logger.debug("Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts)
+            logger.debug(
+                "Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts
+            )
             return result
         except Exception as exc:
             logger.warning("Feature build failed: %s", exc)
@@ -324,7 +331,8 @@ class AdvancedModelPredictor:
                     X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
                     logger.debug(
                         "MTF features appended: %d d_*/h_* columns for %s",
-                        len(mtf_cols), symbol,
+                        len(mtf_cols),
+                        symbol,
                     )
             except Exception as mtf_exc:
                 logger.debug("MTF feature append failed (non-fatal): %s", mtf_exc)

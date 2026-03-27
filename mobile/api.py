@@ -165,9 +165,7 @@ class MobileAPIServer:
         rate_limiter=None,
     ) -> None:
         resolved_secret = (
-            jwt_secret
-            or os.getenv("SECURITY_JWT_SECRET")
-            or os.getenv("JWT_SECRET")
+            jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
         )
         if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
@@ -234,9 +232,13 @@ class MobileAPIServer:
         try:
             payload = jwt.decode(token, self.jwt_secret, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+            )
         except jwt.DecodeError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
 
         if payload.get("type") != expected_type:
             raise HTTPException(
@@ -245,7 +247,9 @@ class MobileAPIServer:
             )
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim"
+            )
         return user_id
 
     async def _verify_token(self, authorization: str = Header(...)) -> str:
@@ -265,7 +269,6 @@ class MobileAPIServer:
     # ── Routes ────────────────────────────────────────────────────────────────
 
     def _setup_routes(self) -> None:
-
         # ── Health ────────────────────────────────────────────────────────────
         @self.app.get("/health", tags=["Health"])
         async def health_check():
@@ -376,11 +379,15 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.error("Failed to fetch account for %s: %s", user_id, exc, exc_info=True)
+                logger.error(
+                    "Failed to fetch account for %s: %s", user_id, exc, exc_info=True
+                )
                 raise HTTPException(status_code=500, detail="Failed to fetch account")
 
         # ── Trading ───────────────────────────────────────────────────────────
-        @self.app.get("/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"])
+        @self.app.get(
+            "/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"]
+        )
         async def get_quote(symbol: str, user_id: str = Depends(self._verify_token)):
             try:
                 if not self.broker:
@@ -398,10 +405,14 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.error("Failed to fetch quote for %s: %s", symbol, exc, exc_info=True)
+                logger.error(
+                    "Failed to fetch quote for %s: %s", symbol, exc, exc_info=True
+                )
                 raise HTTPException(status_code=500, detail="Failed to fetch quote")
 
-        @self.app.post("/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"])
+        @self.app.post(
+            "/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"]
+        )
         async def place_order(
             order: PlaceOrderRequest,
             background_tasks: BackgroundTasks,
@@ -424,7 +435,10 @@ class MobileAPIServer:
                     except Exception as risk_exc:
                         logger.error(
                             "Risk check raised exception for %s/%s: %s",
-                            user_id, order.symbol, risk_exc, exc_info=True,
+                            user_id,
+                            order.symbol,
+                            risk_exc,
+                            exc_info=True,
                         )
                         raise HTTPException(
                             status_code=503,
@@ -466,10 +480,14 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.error("Order placement failed for %s: %s", user_id, exc, exc_info=True)
+                logger.error(
+                    "Order placement failed for %s: %s", user_id, exc, exc_info=True
+                )
                 raise HTTPException(status_code=500, detail="Order placement failed")
 
-        @self.app.get("/api/v2/trades", response_model=List[TradeData], tags=["Trading"])
+        @self.app.get(
+            "/api/v2/trades", response_model=List[TradeData], tags=["Trading"]
+        )
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
             try:
                 if not self.broker:
@@ -499,7 +517,9 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.error("Failed to fetch trades for %s: %s", user_id, exc, exc_info=True)
+                logger.error(
+                    "Failed to fetch trades for %s: %s", user_id, exc, exc_info=True
+                )
                 raise HTTPException(status_code=500, detail="Failed to fetch trades")
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
@@ -529,7 +549,9 @@ class MobileAPIServer:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.error("Failed to close trade %s: %s", trade_id, exc, exc_info=True)
+                logger.error(
+                    "Failed to close trade %s: %s", trade_id, exc, exc_info=True
+                )
                 raise HTTPException(status_code=500, detail="Failed to close trade")
 
         # ── Performance ───────────────────────────────────────────────────────
@@ -551,9 +573,14 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error(
-                    "Failed to fetch performance for %s: %s", user_id, exc, exc_info=True
+                    "Failed to fetch performance for %s: %s",
+                    user_id,
+                    exc,
+                    exc_info=True,
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch performance")
+                raise HTTPException(
+                    status_code=500, detail="Failed to fetch performance"
+                )
 
         # ── News ──────────────────────────────────────────────────────────────
         @self.app.get("/api/v2/news", response_model=List[NewsItem], tags=["News"])
@@ -569,19 +596,27 @@ class MobileAPIServer:
 
         # ── Notifications ─────────────────────────────────────────────────────
         @self.app.get("/api/v2/notifications/preferences", tags=["Notifications"])
-        async def get_notification_preferences(user_id: str = Depends(self._verify_token)):
+        async def get_notification_preferences(
+            user_id: str = Depends(self._verify_token),
+        ):
             try:
                 if not self.db:
                     return NotificationPreferences()
                 prefs = self.db.get_notification_preferences(user_id)
-                return NotificationPreferences(**prefs) if prefs else NotificationPreferences()
+                return (
+                    NotificationPreferences(**prefs)
+                    if prefs
+                    else NotificationPreferences()
+                )
             except HTTPException:
                 raise
             except Exception as exc:
                 logger.error(
                     "Failed to fetch prefs for %s: %s", user_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch preferences")
+                raise HTTPException(
+                    status_code=500, detail="Failed to fetch preferences"
+                )
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -600,7 +635,9 @@ class MobileAPIServer:
                 logger.error(
                     "Failed to update prefs for %s: %s", user_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to update preferences")
+                raise HTTPException(
+                    status_code=500, detail="Failed to update preferences"
+                )
 
         # ── WebSocket: quotes ─────────────────────────────────────────────────
         @self.app.websocket("/api/v2/ws/quotes")

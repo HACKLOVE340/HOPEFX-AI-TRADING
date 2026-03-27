@@ -74,7 +74,9 @@ class TechnicalIndicators:
 
     @staticmethod
     def bollinger_bands(
-        prices: np.ndarray, period: int = 20, std_dev: float = 2.0,
+        prices: np.ndarray,
+        period: int = 20,
+        std_dev: float = 2.0,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Bollinger Bands"""
         sma = TechnicalIndicators.sma(prices, period)
@@ -88,7 +90,10 @@ class TechnicalIndicators:
 
     @staticmethod
     def macd(
-        prices: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9,
+        prices: np.ndarray,
+        fast: int = 12,
+        slow: int = 26,
+        signal: int = 9,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """MACD"""
         ema_fast = TechnicalIndicators.ema(prices, fast)
@@ -102,7 +107,10 @@ class TechnicalIndicators:
 
     @staticmethod
     def atr(
-        high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14,
+        high: np.ndarray,
+        low: np.ndarray,
+        close: np.ndarray,
+        period: int = 14,
     ) -> np.ndarray:
         """Average True Range"""
         tr1 = high[1:] - low[1:]
@@ -147,7 +155,10 @@ class FeatureEngineer:
         self._cache_size = 1000
 
     def extract_features(
-        self, symbol: str, ohlcv_data: List[Any], order_book: Optional[Dict] = None,
+        self,
+        symbol: str,
+        ohlcv_data: List[Any],
+        order_book: Optional[Dict] = None,
     ) -> Optional[FeatureVector]:
         """
         Extract ML features from market data

@@ -68,67 +68,66 @@ _OANDA_REGION = os.getenv("OANDA_REGION", "us")
 _OANDA_URLS: Dict[str, Dict[str, str]] = {
     "us": {
         "practice": "https://api-fxpractice.oanda.com",
-        "live":     "https://api-fxtrade.oanda.com",
+        "live": "https://api-fxtrade.oanda.com",
     },
     "eu": {
         "practice": "https://api-fxpractice.oanda.com",
-        "live":     "https://api-fxtrade.oanda.com",
+        "live": "https://api-fxtrade.oanda.com",
     },
     "sg": {
         "practice": "https://api-fxpractice.oanda.com",
-        "live":     "https://api-fxtrade.oanda.com",
+        "live": "https://api-fxtrade.oanda.com",
     },
 }
 
-_OANDA_BASE = (
-    _OANDA_URLS.get(_OANDA_REGION, _OANDA_URLS["us"])
-    .get(_OANDA_ENV, "https://api-fxpractice.oanda.com")
+_OANDA_BASE = _OANDA_URLS.get(_OANDA_REGION, _OANDA_URLS["us"]).get(
+    _OANDA_ENV, "https://api-fxpractice.oanda.com"
 )
 
 # Granularity codes and their duration in seconds
 # Supported: M1, M5, M15, M30, H1, H4, D, W, M
 TIMEFRAME_SECONDS: Dict[str, int] = {
-    "M1":  60,
-    "M5":  300,
+    "M1": 60,
+    "M5": 300,
     "M15": 900,
     "M30": 1_800,
-    "H1":  3_600,
-    "H4":  14_400,
-    "D":   86_400,
-    "W":   604_800,
-    "M":   2_592_000,   # ~30 days
+    "H1": 3_600,
+    "H4": 14_400,
+    "D": 86_400,
+    "W": 604_800,
+    "M": 2_592_000,  # ~30 days
 }
 
 # yfinance interval mapping for each OANDA granularity
 _YF_INTERVAL_MAP: Dict[str, str] = {
-    "M1":  "1m",
-    "M5":  "5m",
+    "M1": "1m",
+    "M5": "5m",
     "M15": "15m",
     "M30": "30m",
-    "H1":  "1h",
-    "H4":  "4h",
-    "D":   "1d",
-    "W":   "1wk",
-    "M":   "1mo",
+    "H1": "1h",
+    "H4": "4h",
+    "D": "1d",
+    "W": "1wk",
+    "M": "1mo",
 }
 
 # yfinance lookback period for each granularity (intraday data has limits)
 _YF_PERIOD_MAP: Dict[str, str] = {
-    "M1":  "7d",
-    "M5":  "60d",
+    "M1": "7d",
+    "M5": "60d",
     "M15": "60d",
     "M30": "60d",
-    "H1":  "730d",
-    "H4":  "730d",
-    "D":   "max",
-    "W":   "max",
-    "M":   "max",
+    "H1": "730d",
+    "H4": "730d",
+    "D": "max",
+    "W": "max",
+    "M": "max",
 }
 
 # yfinance symbol map
 _YF_SYMBOL_MAP: Dict[str, str] = {
     "XAU_USD": "GC=F",
-    "XAUUSD":  "GC=F",
+    "XAUUSD": "GC=F",
     "EUR_USD": "EURUSD=X",
     "GBP_USD": "GBPUSD=X",
     "USD_JPY": "JPY=X",
@@ -149,6 +148,7 @@ ALL_TIMEFRAMES: Tuple[str, ...] = ("M1", "M5", "M15", "M30", "H1", "H4", "D", "W
 # ---------------------------------------------------------------------------
 # OANDA fetcher
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_oanda(
     symbol: str,
@@ -173,7 +173,8 @@ async def _fetch_oanda(
     if granularity not in TIMEFRAME_SECONDS:
         logger.error(
             "Unsupported granularity: %s. Supported: %s",
-            granularity, list(TIMEFRAME_SECONDS),
+            granularity,
+            list(TIMEFRAME_SECONDS),
         )
         return []
 
@@ -200,7 +201,9 @@ async def _fetch_oanda(
     try:
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, params=params, timeout=timeout) as resp:
+            async with session.get(
+                url, headers=headers, params=params, timeout=timeout
+            ) as resp:
                 if resp.status == 401:
                     logger.error("OANDA auth failed (401) — check OANDA_API_KEY")
                     return []
@@ -210,7 +213,9 @@ async def _fetch_oanda(
                     return []
                 if resp.status != 200:
                     text = await resp.text()
-                    logger.error("OANDA fetch failed status=%d: %s", resp.status, text[:200])
+                    logger.error(
+                        "OANDA fetch failed status=%d: %s", resp.status, text[:200]
+                    )
                     return []
                 data = await resp.json()
     except asyncio.TimeoutError:
@@ -226,20 +231,24 @@ async def _fetch_oanda(
             continue
         mid = candle.get("mid", {})
         try:
-            bars.append({
-                "timestamp": candle["time"][:19],
-                "open":      float(mid["o"]),
-                "high":      float(mid["h"]),
-                "low":       float(mid["l"]),
-                "close":     float(mid["c"]),
-                "volume":    int(candle.get("volume", 0)),
-            })
+            bars.append(
+                {
+                    "timestamp": candle["time"][:19],
+                    "open": float(mid["o"]),
+                    "high": float(mid["h"]),
+                    "low": float(mid["l"]),
+                    "close": float(mid["c"]),
+                    "volume": int(candle.get("volume", 0)),
+                }
+            )
         except (KeyError, ValueError) as exc:
             logger.warning("Skipping malformed candle: %s", exc)
 
     logger.info(
         "OANDA: fetched %d bars for %s/%s (from=%s)",
-        len(bars), symbol, granularity,
+        len(bars),
+        symbol,
+        granularity,
         from_dt.strftime("%Y-%m-%d") if from_dt else "latest",
     )
     return bars
@@ -248,6 +257,7 @@ async def _fetch_oanda(
 # ---------------------------------------------------------------------------
 # yfinance fallback fetcher
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_yfinance(
     symbol: str,
@@ -302,8 +312,7 @@ async def _fetch_yfinance(
     # Flatten MultiIndex columns if present (yfinance >= 0.2.x)
     if hasattr(hist.columns, "levels"):
         hist.columns = [
-            c[0].lower() if isinstance(c, tuple) else c.lower()
-            for c in hist.columns
+            c[0].lower() if isinstance(c, tuple) else c.lower() for c in hist.columns
         ]
     else:
         hist.columns = [c.lower() for c in hist.columns]
@@ -319,20 +328,25 @@ async def _fetch_yfinance(
             else:
                 ts_str = str(ts)[:19]
 
-            bars.append({
-                "timestamp": ts_str,
-                "open":      float(row.get("open", row.get("Open", 0))),
-                "high":      float(row.get("high", row.get("High", 0))),
-                "low":       float(row.get("low", row.get("Low", 0))),
-                "close":     float(row.get("close", row.get("Close", 0))),
-                "volume":    int(row.get("volume", row.get("Volume", 0))),
-            })
+            bars.append(
+                {
+                    "timestamp": ts_str,
+                    "open": float(row.get("open", row.get("Open", 0))),
+                    "high": float(row.get("high", row.get("High", 0))),
+                    "low": float(row.get("low", row.get("Low", 0))),
+                    "close": float(row.get("close", row.get("Close", 0))),
+                    "volume": int(row.get("volume", row.get("Volume", 0))),
+                }
+            )
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning("Skipping malformed yfinance row: %s", exc)
 
     logger.info(
         "yfinance: fetched %d bars for %s/%s (interval=%s)",
-        len(bars), yf_symbol, granularity, interval,
+        len(bars),
+        yf_symbol,
+        granularity,
+        interval,
     )
     return bars
 
@@ -340,6 +354,7 @@ async def _fetch_yfinance(
 # ---------------------------------------------------------------------------
 # CSV persistence
 # ---------------------------------------------------------------------------
+
 
 def _csv_path(symbol: str, timeframe: str) -> Path:
     """Return the CSV path for a symbol/timeframe pair."""
@@ -403,6 +418,7 @@ def _append_bars(path: Path, bars: List[Dict]) -> int:
 # Single-timeframe update
 # ---------------------------------------------------------------------------
 
+
 async def _update_timeframe(
     symbol: str,
     granularity: str,
@@ -428,14 +444,20 @@ async def _update_timeframe(
         except ValueError:
             logger.warning(
                 "Could not parse last timestamp '%s' for %s/%s",
-                last_ts, symbol, granularity,
+                last_ts,
+                symbol,
+                granularity,
             )
 
     # Choose data source
     if _OANDA_KEY and _OANDA_ACCOUNT:
-        bars = await _fetch_oanda(symbol, granularity, count=fetch_count, from_dt=from_dt)
+        bars = await _fetch_oanda(
+            symbol, granularity, count=fetch_count, from_dt=from_dt
+        )
     else:
-        logger.info("OANDA credentials absent — using yfinance for %s/%s", symbol, granularity)
+        logger.info(
+            "OANDA credentials absent — using yfinance for %s/%s", symbol, granularity
+        )
         bars = await _fetch_yfinance(symbol, granularity, from_dt=from_dt)
 
     if not bars:
@@ -445,6 +467,7 @@ async def _update_timeframe(
     # Validate before persisting
     try:
         from data.validator import DataValidator
+
         validator = DataValidator(symbol=symbol.replace("_", ""))
         valid_bars: List[Dict] = []
         for i, bar in enumerate(bars):
@@ -454,7 +477,10 @@ async def _update_timeframe(
             else:
                 logger.warning(
                     "Dropping invalid bar %d (%s/%s): %s",
-                    i, symbol, granularity, result.errors,
+                    i,
+                    symbol,
+                    granularity,
+                    result.errors,
                 )
     except Exception:
         # Validator unavailable — persist all bars
@@ -466,6 +492,7 @@ async def _update_timeframe(
 # ---------------------------------------------------------------------------
 # DataScheduler
 # ---------------------------------------------------------------------------
+
 
 class DataScheduler:
     """
@@ -503,13 +530,17 @@ class DataScheduler:
             except Exception as exc:
                 logger.error(
                     "Update failed for %s/%s: %s",
-                    self.symbol, tf, exc, exc_info=True,
+                    self.symbol,
+                    tf,
+                    exc,
+                    exc_info=True,
                 )
                 results[tf] = 0
         total = sum(results.values())
         logger.info(
             "DataScheduler run_once complete: %d total new bars across %d timeframes",
-            total, len(self.timeframes),
+            total,
+            len(self.timeframes),
         )
         return results
 
@@ -518,7 +549,9 @@ class DataScheduler:
         self._running = True
         logger.info(
             "DataScheduler started: symbol=%s timeframes=%s interval=%ds",
-            self.symbol, self.timeframes, self.interval_secs,
+            self.symbol,
+            self.timeframes,
+            self.interval_secs,
         )
         while self._running:
             try:
@@ -536,6 +569,7 @@ class DataScheduler:
 # ---------------------------------------------------------------------------
 # Historical backfill
 # ---------------------------------------------------------------------------
+
 
 async def backfill(
     symbol: str = _SYMBOL,
@@ -576,7 +610,8 @@ async def backfill(
 
     logger.info(
         "Backfill started: %s/%s from %s to %s",
-        symbol, granularity,
+        symbol,
+        granularity,
         from_date.strftime("%Y-%m-%d"),
         to_date.strftime("%Y-%m-%d"),
     )
@@ -589,14 +624,16 @@ async def backfill(
             "  OANDA_ACCOUNT_ID=your_account_id\n"
             "Get a free practice account at https://www.oanda.com/register/\n"
             "Falling back to yfinance for %s/%s ...",
-            symbol, granularity,
+            symbol,
+            granularity,
         )
         bars = await _fetch_yfinance(symbol, granularity, from_dt=from_date)
         if bars:
             total_appended = _append_bars(path, bars)
         logger.info(
             "yfinance backfill complete: %d bars appended to %s",
-            total_appended, path,
+            total_appended,
+            path,
         )
         return total_appended
 
@@ -609,14 +646,16 @@ async def backfill(
         )
 
         bars = await _fetch_oanda(
-            symbol, granularity,
+            symbol,
+            granularity,
             count=_OANDA_MAX_COUNT,
             from_dt=cursor,
             to_dt=chunk_end,
         )
         if not bars:
             logger.warning(
-                "  No bars returned for chunk starting %s — stopping", cursor,
+                "  No bars returned for chunk starting %s — stopping",
+                cursor,
             )
             break
 
@@ -677,12 +716,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--timeframe",
         default=None,
-        help="Single timeframe to update (default: all). One of: " + ", ".join(ALL_TIMEFRAMES),
+        help="Single timeframe to update (default: all). One of: "
+        + ", ".join(ALL_TIMEFRAMES),
     )
     parser.add_argument(
         "--granularity",
         default="H1",
-        help="Granularity for backfill (default: H1). One of: " + ", ".join(ALL_TIMEFRAMES),
+        help="Granularity for backfill (default: H1). One of: "
+        + ", ".join(ALL_TIMEFRAMES),
     )
     parser.add_argument(
         "--from",
@@ -702,11 +743,13 @@ if __name__ == "__main__":
         if args.backfill:
             from_dt = (
                 datetime.fromisoformat(args.from_date).replace(tzinfo=timezone.utc)
-                if args.from_date else None
+                if args.from_date
+                else None
             )
             to_dt = (
                 datetime.fromisoformat(args.to_date).replace(tzinfo=timezone.utc)
-                if args.to_date else None
+                if args.to_date
+                else None
             )
             count = await backfill(
                 symbol=args.symbol,

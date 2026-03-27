@@ -63,6 +63,7 @@ _MTF_STORE_SINGLETON: Optional["MTFFusionStore"] = None
 # Daily regime features
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
     """
     Derive regime context columns from daily OHLCV.
@@ -94,13 +95,17 @@ def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
     d["d_trend_20"] = np.where(c > sma20, 1, -1)
     d["d_trend_50"] = np.where(c > sma50, 1, -1)
     d["d_trend_200"] = np.where(c > sma200, 1, -1)
-    d["d_ma_align"] = ((d["d_trend_20"] == 1) & (d["d_trend_50"] == 1) & (d["d_trend_200"] == 1)).astype(int)
+    d["d_ma_align"] = (
+        (d["d_trend_20"] == 1) & (d["d_trend_50"] == 1) & (d["d_trend_200"] == 1)
+    ).astype(int)
 
     # Volatility regime
     log_ret = np.log(c / c.shift(1))
     rv20 = log_ret.rolling(20).std() * np.sqrt(252)
     d["d_realvol_20"] = rv20
-    d["d_high_vol"] = (rv20 > rv20.rolling(252, min_periods=60).quantile(0.75)).astype(int)
+    d["d_high_vol"] = (rv20 > rv20.rolling(252, min_periods=60).quantile(0.75)).astype(
+        int
+    )
 
     # RSI
     delta = c.diff()
@@ -136,6 +141,7 @@ def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
 # Hourly regime features (from 1h bars or resampled from 5m)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _compute_hourly_regime(hourly: pd.DataFrame) -> pd.DataFrame:
     """
     Lightweight regime features from 1-hour bars.
@@ -148,7 +154,9 @@ def _compute_hourly_regime(hourly: pd.DataFrame) -> pd.DataFrame:
     d["h_trend_20"] = np.where(c > sma20h, 1, -1)
 
     log_ret = np.log(c / c.shift(1))
-    d["h_realvol_20"] = log_ret.rolling(20).std() * np.sqrt(252 * 6.5)  # ~6.5 trading hours/day
+    d["h_realvol_20"] = log_ret.rolling(20).std() * np.sqrt(
+        252 * 6.5
+    )  # ~6.5 trading hours/day
 
     delta = c.diff()
     gain = delta.clip(lower=0).ewm(com=13, adjust=False).mean()
@@ -166,6 +174,7 @@ def _compute_hourly_regime(hourly: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Alignment helper (forward-fill, no look-ahead)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _align_to_intraday(
     intraday_idx: pd.DatetimeIndex,
@@ -194,6 +203,7 @@ def _align_to_intraday(
 # ─────────────────────────────────────────────────────────────────────────────
 # MTF Fusion class
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MTFFusion:
     """
@@ -229,7 +239,9 @@ class MTFFusion:
         """
         # ── Daily regime ──────────────────────────────────────────────────────
         daily_regime = _compute_daily_regime(daily_df)
-        daily_aligned = _align_to_intraday(intraday_df.index, daily_regime, shift_periods=1)
+        daily_aligned = _align_to_intraday(
+            intraday_df.index, daily_regime, shift_periods=1
+        )
 
         # ── Hourly regime ─────────────────────────────────────────────────────
         if hourly_df is None and self.resample_hourly_from_5m:
@@ -237,7 +249,9 @@ class MTFFusion:
 
         if hourly_df is not None:
             hourly_regime = _compute_hourly_regime(hourly_df)
-            hourly_aligned = _align_to_intraday(intraday_df.index, hourly_regime, shift_periods=1)
+            hourly_aligned = _align_to_intraday(
+                intraday_df.index, hourly_regime, shift_periods=1
+            )
         else:
             hourly_aligned = pd.DataFrame(index=intraday_df.index)
 
@@ -288,6 +302,7 @@ class MTFFusion:
 # MTFFusionStore — live inference store
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MTFFusionStore:
     """
     Production store that loads H4 and D1 OHLCV from the data scheduler CSVs,
@@ -309,7 +324,7 @@ class MTFFusionStore:
     """
 
     # Maximum bars to keep in memory (prevents unbounded growth)
-    MAX_H4_BARS = 5000   # ~2.8 years of H4
+    MAX_H4_BARS = 5000  # ~2.8 years of H4
     MAX_D1_BARS = 10000  # ~40 years of daily
 
     def __init__(
@@ -335,6 +350,7 @@ class MTFFusionStore:
         Registers self as the module-level singleton after successful load.
         """
         import asyncio
+
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._load_data)
         # Register as module singleton so signal_engine can find it
@@ -362,9 +378,9 @@ class MTFFusionStore:
 
             # Trim to max bars
             if self._h4_df is not None and len(self._h4_df) > self.MAX_H4_BARS:
-                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS:]
+                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS :]
             if self._d1_df is not None and len(self._d1_df) > self.MAX_D1_BARS:
-                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS:]
+                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS :]
 
             self._bootstrapped = True
             logger.info(
@@ -377,14 +393,24 @@ class MTFFusionStore:
         """Load a scheduler CSV into a UTC-indexed OHLCV DataFrame."""
         try:
             from pathlib import Path
+
             if not Path(path).exists():
                 logger.debug("MTFFusionStore: %s CSV not found at %s", label, path)
                 return None
             df = pd.read_csv(path, parse_dates=["time"])
-            df = df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
+            df = (
+                df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
+            )
             # Normalise column names to lowercase
             df.columns = [c.lower() for c in df.columns]
-            ts_col = next((c for c in ("timestamp", "time", "date", "datetime") if c in df.columns), None)
+            ts_col = next(
+                (
+                    c
+                    for c in ("timestamp", "time", "date", "datetime")
+                    if c in df.columns
+                ),
+                None,
+            )
             if ts_col is None:
                 logger.warning("MTFFusionStore: no timestamp column in %s", path)
                 return None
@@ -404,21 +430,38 @@ class MTFFusionStore:
         """Fallback: fetch H4 and D1 from yfinance (GC=F proxy for XAU_USD)."""
         try:
             import yfinance as yf
+
             ticker = "GC=F"
             logger.info("MTFFusionStore: falling back to yfinance (%s)", ticker)
 
             if self._h4_df is None:
-                raw = yf.download(ticker, period="2y", interval="1h", progress=False, auto_adjust=True)
+                raw = yf.download(
+                    ticker, period="2y", interval="1h", progress=False, auto_adjust=True
+                )
                 if not raw.empty:
                     raw.columns = [c.lower() for c in raw.columns]
                     raw.index = pd.to_datetime(raw.index, utc=True)
                     # Resample 1h → 4h
-                    agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+                    agg = {
+                        "open": "first",
+                        "high": "max",
+                        "low": "min",
+                        "close": "last",
+                        "volume": "sum",
+                    }
                     available = {k: v for k, v in agg.items() if k in raw.columns}
-                    self._h4_df = raw.resample("4h").agg(available).dropna(subset=["close"])
+                    self._h4_df = (
+                        raw.resample("4h").agg(available).dropna(subset=["close"])
+                    )
 
             if self._d1_df is None:
-                raw = yf.download(ticker, period="10y", interval="1d", progress=False, auto_adjust=True)
+                raw = yf.download(
+                    ticker,
+                    period="10y",
+                    interval="1d",
+                    progress=False,
+                    auto_adjust=True,
+                )
                 if not raw.empty:
                     raw.columns = [c.lower() for c in raw.columns]
                     raw.index = pd.to_datetime(raw.index, utc=True)
@@ -465,7 +508,7 @@ class MTFFusionStore:
                         if new_row.index[0] not in self._h4_df.index:
                             self._h4_df = pd.concat([self._h4_df, new_row]).sort_index()
                             if len(self._h4_df) > self.MAX_H4_BARS:
-                                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS:]
+                                self._h4_df = self._h4_df.iloc[-self.MAX_H4_BARS :]
                 else:  # D1
                     if self._d1_df is None:
                         self._d1_df = new_row
@@ -473,11 +516,12 @@ class MTFFusionStore:
                         if new_row.index[0] not in self._d1_df.index:
                             self._d1_df = pd.concat([self._d1_df, new_row]).sort_index()
                             if len(self._d1_df) > self.MAX_D1_BARS:
-                                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS:]
+                                self._d1_df = self._d1_df.iloc[-self.MAX_D1_BARS :]
 
                 logger.debug(
                     "MTFFusionStore.push_bar: %s bar appended (%s)",
-                    tf, bar.name,
+                    tf,
+                    bar.name,
                 )
             except Exception as exc:
                 logger.debug("MTFFusionStore.push_bar failed: %s", exc)
@@ -523,7 +567,9 @@ class MTFFusionStore:
                 # Build hourly regime features from H4 (or skip)
                 if self._h4_df is not None:
                     hourly_regime = _compute_hourly_regime(self._h4_df)
-                    hourly_aligned = _align_to_intraday(idx, hourly_regime, shift_periods=1)
+                    hourly_aligned = _align_to_intraday(
+                        idx, hourly_regime, shift_periods=1
+                    )
                 else:
                     hourly_aligned = pd.DataFrame(index=idx)
 
@@ -539,7 +585,9 @@ class MTFFusionStore:
     @property
     def is_ready(self) -> bool:
         """True when bootstrap has completed and at least one timeframe is loaded."""
-        return self._bootstrapped and (self._d1_df is not None or self._h4_df is not None)
+        return self._bootstrapped and (
+            self._d1_df is not None or self._h4_df is not None
+        )
 
     def status(self) -> Dict:
         """Return a health-check dict for monitoring endpoints."""

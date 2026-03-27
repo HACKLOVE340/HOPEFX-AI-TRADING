@@ -28,12 +28,14 @@ from strategies.base import BaseStrategy, StrategyConfig, StrategyStatus
 # Helper: create a concrete old-style strategy instance
 # ---------------------------------------------------------------------------
 
+
 def make_concrete(cls, **params):
     """
     Create a concrete instance of an old-style strategy, covering __init__.
 
     Patches BaseStrategy.__init__ so the 3-arg super().__init__ works.
     """
+
     class Concrete(cls):
         def analyze(self, data):
             return {}
@@ -44,13 +46,17 @@ def make_concrete(cls, **params):
         self.status = StrategyStatus.IDLE
         self.positions = []
         self.signals_history = []
-        self.performance_metrics = {'total_signals': 0, 'winning_signals': 0,
-                                    'losing_signals': 0, 'total_pnl': 0.0}
+        self.performance_metrics = {
+            "total_signals": 0,
+            "winning_signals": 0,
+            "losing_signals": 0,
+            "total_pnl": 0.0,
+        }
         self.logger = logging.getLogger(cls.__name__)
 
-    with patch.object(BaseStrategy, '__init__', _base_init):
+    with patch.object(BaseStrategy, "__init__", _base_init):
         s = Concrete.__new__(Concrete)
-        Concrete.__init__(s, 'TestStrategy', 'XAUUSD', MagicMock(), **params)
+        Concrete.__init__(s, "TestStrategy", "XAUUSD", MagicMock(), **params)
 
     return s
 
@@ -65,24 +71,27 @@ def _df(prices, highs=None, lows=None, opens=None, volumes=None):
         opens = prices[:]
     if volumes is None:
         volumes = [1000] * n
-    dates = pd.date_range('2023-01-01', periods=n, freq='h')
-    return pd.DataFrame({
-        'open': opens, 'high': highs, 'low': lows,
-        'close': prices, 'volume': volumes
-    }, index=dates)
+    dates = pd.date_range("2023-01-01", periods=n, freq="h")
+    return pd.DataFrame(
+        {"open": opens, "high": highs, "low": lows, "close": prices, "volume": volumes},
+        index=dates,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Stochastic __init__ coverage
 # ---------------------------------------------------------------------------
 
+
 class TestStochasticInit:
     """Test StochasticStrategy __init__ to cover lines 36-41."""
 
     def test_init_covers_all_attributes(self):
         from strategies.stochastic import StochasticStrategy
-        s = make_concrete(StochasticStrategy, k_period=10, d_period=5,
-                          oversold=25, overbought=75)
+
+        s = make_concrete(
+            StochasticStrategy, k_period=10, d_period=5, oversold=25, overbought=75
+        )
         assert s.k_period == 10
         assert s.d_period == 5
         assert s.oversold == 25
@@ -96,15 +105,17 @@ class TestStochasticSignalPaths:
     def strat(self):
         """Create stochastic strategy instance via _make_old_strategy pattern."""
         from strategies.stochastic import StochasticStrategy
-        config = StrategyConfig(name='Stoch_Test', symbol='XAUUSD', timeframe='1H')
+
+        config = StrategyConfig(name="Stoch_Test", symbol="XAUUSD", timeframe="1H")
 
         class _Concrete(StochasticStrategy):
-            def analyze(self, data): return {}
+            def analyze(self, data):
+                return {}
 
         _Concrete.__name__ = StochasticStrategy.__name__
         instance = object.__new__(_Concrete)
         BaseStrategy.__init__(instance, config)
-        instance.logger = logging.getLogger('Stochastic')
+        instance.logger = logging.getLogger("Stochastic")
         instance.k_period = 14
         instance.d_period = 3
         instance.oversold = 20
@@ -124,15 +135,19 @@ class TestStochasticSignalPaths:
         df = _df(prices, highs, lows)
 
         # Patch calculate_stochastic to return specific values
-        k_vals = [15.0] * (n - 1) + [21.0]  # prev=15 (< oversold), current=21 (> oversold)
+        k_vals = [15.0] * (n - 1) + [
+            21.0
+        ]  # prev=15 (< oversold), current=21 (> oversold)
         d_vals = [10.0] * n
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'BUY'
-        assert result['confidence'] == 0.75
+        assert result["type"] == "BUY"
+        assert result["confidence"] == 0.75
 
     def test_bearish_crossover_in_overbought(self, strat):
         """Cover lines 131-133: bearish crossover in overbought."""
@@ -146,10 +161,12 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'SELL'
-        assert result['confidence'] == 0.85
+        assert result["type"] == "SELL"
+        assert result["confidence"] == 0.85
 
     def test_divergence_bearish_crossover_above_50(self, strat):
         """Cover lines 143-150: bearish crossover above 50 but below overbought."""
@@ -163,10 +180,12 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'SELL'
-        assert result['confidence'] == 0.55
+        assert result["type"] == "SELL"
+        assert result["confidence"] == 0.55
 
     def test_divergence_bullish_crossover_below_50(self, strat):
         """Cover lines 155-162: bullish crossover below 50 but above oversold."""
@@ -180,10 +199,12 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'BUY'
-        assert result['confidence'] == 0.55
+        assert result["type"] == "BUY"
+        assert result["confidence"] == 0.55
 
     def test_divergence_above_50_no_crossover_hold(self, strat):
         """Cover line 172: HOLD in neutral divergence range."""
@@ -198,10 +219,12 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'neutral' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "neutral" in result["reason"]
 
     def test_nan_stochastic_returns_hold(self, strat):
         """Cover lines 103-110: NaN stochastic check."""
@@ -209,33 +232,39 @@ class TestStochasticSignalPaths:
         prices = [1900.0] * n
         df = _df(prices)
 
-        k_vals = [float('nan')] * n
-        d_vals = [float('nan')] * n
+        k_vals = [float("nan")] * n
+        d_vals = [float("nan")] * n
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_stochastic', return_value=(k_series, d_series)):
+        with patch.object(
+            strat, "calculate_stochastic", return_value=(k_series, d_series)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'NaN' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "NaN" in result["reason"]
 
     def test_exception_handling(self, strat):
         """Cover lines 190-192: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(strat, 'calculate_stochastic', side_effect=RuntimeError("test error")):
+        with patch.object(
+            strat, "calculate_stochastic", side_effect=RuntimeError("test error")
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'Error' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "Error" in result["reason"]
 
 
 # ---------------------------------------------------------------------------
 # Breakout __init__ and signal path coverage
 # ---------------------------------------------------------------------------
 
+
 class TestBreakoutInit:
     def test_init_covers_attributes(self):
         from strategies.breakout import BreakoutStrategy
+
         s = make_concrete(BreakoutStrategy, lookback_period=15, breakout_threshold=0.03)
         assert s.lookback_period == 15
         assert s.breakout_threshold == 0.03
@@ -247,15 +276,17 @@ class TestBreakoutSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.breakout import BreakoutStrategy
-        config = StrategyConfig(name='Breakout_Test', symbol='XAUUSD', timeframe='1H')
+
+        config = StrategyConfig(name="Breakout_Test", symbol="XAUUSD", timeframe="1H")
 
         class _Concrete(BreakoutStrategy):
-            def analyze(self, data): return {}
+            def analyze(self, data):
+                return {}
 
         _Concrete.__name__ = BreakoutStrategy.__name__
         instance = object.__new__(_Concrete)
         BaseStrategy.__init__(instance, config)
-        instance.logger = logging.getLogger('Breakout')
+        instance.logger = logging.getLogger("Breakout")
         instance.lookback_period = 20
         instance.breakout_threshold = 0.02
         return instance
@@ -281,18 +312,19 @@ class TestBreakoutSignalPaths:
 
         result = strat.generate_signal(df)
         # Should be SELL (bearish breakout) or near support
-        assert result['type'] in ('SELL', 'BUY', 'HOLD')
-        assert 0.0 <= result['confidence'] <= 1.0
+        assert result["type"] in ("SELL", "BUY", "HOLD")
+        assert 0.0 <= result["confidence"] <= 1.0
 
     def test_breakout_exception_handling(self, strat):
         """Cover lines 199-201: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(strat, 'identify_support_resistance',
-                          side_effect=RuntimeError("test error")):
+        with patch.object(
+            strat, "identify_support_resistance", side_effect=RuntimeError("test error")
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'Error' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "Error" in result["reason"]
 
     def test_approaching_support_buy(self, strat):
         """Cover line 180: approaching support."""
@@ -300,14 +332,17 @@ class TestBreakoutSignalPaths:
         # Price is slightly above the min (support)
         prices = [base] * 40 + [base + 1.0] * 10  # Small range
         highs = [base + 20] * 50  # High resistance
-        lows = [base - 1] * 50   # Support at base-1
+        lows = [base - 1] * 50  # Support at base-1
         df = _df(prices, highs, lows)
 
-        with patch.object(strat, 'identify_support_resistance',
-                          return_value=(prices[-1] * 0.999, prices[-1] + 20)):
+        with patch.object(
+            strat,
+            "identify_support_resistance",
+            return_value=(prices[-1] * 0.999, prices[-1] + 20),
+        ):
             result = strat.generate_signal(df)
         # Near support = BUY or HOLD
-        assert result['type'] in ('BUY', 'HOLD')
+        assert result["type"] in ("BUY", "HOLD")
 
     def test_bearish_breakout_with_high_volume(self, strat):
         """Cover lines 130-145: bearish breakout with volume confirmation."""
@@ -320,7 +355,7 @@ class TestBreakoutSignalPaths:
 
         df = _df(prices, highs, lows_arr, prices[:], volumes)
         result = strat.generate_signal(df)
-        assert result['type'] in ('SELL', 'BUY', 'HOLD')
+        assert result["type"] in ("SELL", "BUY", "HOLD")
 
     def test_bearish_breakout_via_patch(self, strat):
         """Cover lines 130-145, 152-164: bearish SELL breakout via patched support/resistance."""
@@ -336,11 +371,12 @@ class TestBreakoutSignalPaths:
         # Patch to return support above current_low
         support = base - 0.2  # current_low(base-0.5) < support(base-0.2) ✓
         resistance = base + 10.0
-        with patch.object(strat, 'identify_support_resistance',
-                          return_value=(support, resistance)):
+        with patch.object(
+            strat, "identify_support_resistance", return_value=(support, resistance)
+        ):
             result = strat.generate_signal(df)
         # Should SELL (bearish breakout below support)
-        assert result['type'] == 'SELL'
+        assert result["type"] == "SELL"
 
     def test_bearish_breakout_close_below_support(self, strat):
         """Cover the confidence boost when close is also below support (lines 159-162)."""
@@ -355,19 +391,22 @@ class TestBreakoutSignalPaths:
         volumes = [100] * n
         df = _df(prices, highs_arr, lows_arr, list(prices), volumes)
 
-        with patch.object(strat, 'identify_support_resistance',
-                          return_value=(support, resistance)):
+        with patch.object(
+            strat, "identify_support_resistance", return_value=(support, resistance)
+        ):
             result = strat.generate_signal(df)
-        assert result['type'] == 'SELL'
+        assert result["type"] == "SELL"
 
 
 # ---------------------------------------------------------------------------
 # Bollinger Bands __init__ and signal path coverage
 # ---------------------------------------------------------------------------
 
+
 class TestBollingerBandsInit:
     def test_init_covers_attributes(self):
         from strategies.bollinger_bands import BollingerBandsStrategy
+
         s = make_concrete(BollingerBandsStrategy, period=15, std_dev=2.5)
         assert s.period == 15
         assert s.std_dev == 2.5
@@ -379,14 +418,16 @@ class TestBollingerBandsSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.bollinger_bands import BollingerBandsStrategy
-        config = StrategyConfig(name='BB_Test', symbol='XAUUSD', timeframe='1H')
+
+        config = StrategyConfig(name="BB_Test", symbol="XAUUSD", timeframe="1H")
 
         class _Concrete(BollingerBandsStrategy):
-            def analyze(self, data): return {}
+            def analyze(self, data):
+                return {}
 
         instance = object.__new__(_Concrete)
         BaseStrategy.__init__(instance, config)
-        instance.logger = logging.getLogger('BollingerBands')
+        instance.logger = logging.getLogger("BollingerBands")
         instance.period = 20
         instance.std_dev = 2.0
         return instance
@@ -397,7 +438,7 @@ class TestBollingerBandsSignalPaths:
         prices = [1900.0] * n  # All same price → zero std → zero bandwidth
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
+        assert result["type"] == "HOLD"
 
     def test_price_crossing_above_lower_band_buy(self, strat):
         """Cover lines 106-107: prev_price < prev_lower, current_price > current_lower."""
@@ -413,6 +454,7 @@ class TestBollingerBandsSignalPaths:
 
         # Override the calculation
         import pandas as pd
+
         idx = df.index
         pd.Series(prices, index=idx)
 
@@ -422,7 +464,7 @@ class TestBollingerBandsSignalPaths:
         mod_df = _df(mod_prices)
 
         result = strat.generate_signal(mod_df)
-        assert result['type'] in ('BUY', 'SELL', 'HOLD')  # verify it runs
+        assert result["type"] in ("BUY", "SELL", "HOLD")  # verify it runs
 
     def test_bounce_buy_above_lower_band(self, strat):
         """Cover line 85-87: price below lower band with bounce."""
@@ -433,30 +475,30 @@ class TestBollingerBandsSignalPaths:
         df = _df(prices, highs, lows)
         result = strat.generate_signal(df)
         # With price well below lower band + bounce
-        assert result['type'] in ('BUY', 'SELL', 'HOLD')
+        assert result["type"] in ("BUY", "SELL", "HOLD")
 
     def test_price_above_upper_band_no_reversal(self, strat):
         """Cover lines 117-119: overbought without reversal (current >= prev)."""
         prices = [1900.0] * 23 + [1930.0, 1931.0]  # Above upper, still rising
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] in ('SELL', 'BUY', 'HOLD')
+        assert result["type"] in ("SELL", "BUY", "HOLD")
 
     def test_price_crossing_below_upper_band_sell(self, strat):
         """Cover lines 130-131: prev_price > prev_upper, current < current_upper."""
         prices = [1900.0] * 22 + [1940.0, 1941.0, 1895.0]
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] in ('SELL', 'BUY', 'HOLD')
+        assert result["type"] in ("SELL", "BUY", "HOLD")
 
     def test_exception_handling(self, strat):
         """Cover lines 177-179: exception handler."""
         df = _df([1900.0] * 25)
         # Make close.rolling() fail
-        with patch.object(pd.Series, 'rolling', side_effect=RuntimeError("test error")):
+        with patch.object(pd.Series, "rolling", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'Error' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "Error" in result["reason"]
 
     def test_walking_upper_band_buy(self, strat):
         """Cover lines 141-143: walking upper band (percent_b > 0.9)."""
@@ -470,7 +512,7 @@ class TestBollingerBandsSignalPaths:
         df = _df(prices)
         result = strat.generate_signal(df)
         # May trigger BUY (walking upper) or SELL/HOLD depending on exact band values
-        assert result['type'] in ('BUY', 'SELL', 'HOLD')
+        assert result["type"] in ("BUY", "SELL", "HOLD")
 
     def test_walking_lower_band_sell(self, strat):
         """Cover lines 148-150: walking lower band (percent_b < 0.1)."""
@@ -478,7 +520,7 @@ class TestBollingerBandsSignalPaths:
         prices = [1900.0] * 23 + [1898.1, 1898.2]
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] in ('BUY', 'SELL', 'HOLD')
+        assert result["type"] in ("BUY", "SELL", "HOLD")
 
     def test_hold_inside_bands_else_reason(self, strat):
         """Cover lines 154-156: else reason for price inside bands."""
@@ -490,17 +532,19 @@ class TestBollingerBandsSignalPaths:
         prices = base_prices + [sum(base_prices[-20:]) / 20]
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert '%B' in result['reason'] or 'band' in result['reason'].lower()
+        assert result["type"] == "HOLD"
+        assert "%B" in result["reason"] or "band" in result["reason"].lower()
 
 
 # ---------------------------------------------------------------------------
 # RSI __init__ and signal path coverage
 # ---------------------------------------------------------------------------
 
+
 class TestRSIInit:
     def test_init_covers_attributes(self):
         from strategies.rsi_strategy import RSIStrategy
+
         s = make_concrete(RSIStrategy, period=10, oversold=25, overbought=75)
         assert s.period == 10
         assert s.oversold == 25
@@ -513,14 +557,16 @@ class TestRSISignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.rsi_strategy import RSIStrategy
-        config = StrategyConfig(name='RSI_Test', symbol='XAUUSD', timeframe='1H')
+
+        config = StrategyConfig(name="RSI_Test", symbol="XAUUSD", timeframe="1H")
 
         class _Concrete(RSIStrategy):
-            def analyze(self, data): return {}
+            def analyze(self, data):
+                return {}
 
         instance = object.__new__(_Concrete)
         BaseStrategy.__init__(instance, config)
-        instance.logger = logging.getLogger('RSI')
+        instance.logger = logging.getLogger("RSI")
         instance.period = 14
         instance.oversold = 30
         instance.overbought = 70
@@ -535,10 +581,10 @@ class TestRSISignalPaths:
         rsi_vals = [25.0] * (n - 1) + [27.0]  # current(27) > prev(25) = rising
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
-        assert result['type'] == 'BUY'
-        assert 'rising' in result['reason']
+        assert result["type"] == "BUY"
+        assert "rising" in result["reason"]
 
     def test_overbought_falling_higher_confidence(self, strat):
         """Cover line 125: RSI overbought and falling."""
@@ -549,10 +595,10 @@ class TestRSISignalPaths:
         rsi_vals = [75.0] * (n - 1) + [73.0]  # falling from 75 to 73
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
-        assert result['type'] == 'SELL'
-        assert 'falling' in result['reason']
+        assert result["type"] == "SELL"
+        assert "falling" in result["reason"]
 
     def test_nan_rsi_returns_hold(self, strat):
         """Cover line 92: NaN RSI check."""
@@ -560,17 +606,17 @@ class TestRSISignalPaths:
         prices = [1900.0] * n
         df = _df(prices)
 
-        rsi_vals = [float('nan')] * n
+        rsi_vals = [float("nan")] * n
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'NaN' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "NaN" in result["reason"]
 
     def test_exit_long_position_sell(self, strat):
         """Cover lines 131-134: exit LONG position."""
-        strat.position = 'LONG'
+        strat.position = "LONG"
         n = 30
         prices = [1900.0] * n
         df = _df(prices)
@@ -579,14 +625,14 @@ class TestRSISignalPaths:
         rsi_vals = [72.0] * (n - 1) + [71.0]
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
         # Should produce a SELL signal to exit long
-        assert result['type'] == 'SELL'
+        assert result["type"] == "SELL"
 
     def test_exit_short_position_buy(self, strat):
         """Cover lines 138-141: exit SHORT position."""
-        strat.position = 'SHORT'
+        strat.position = "SHORT"
         n = 30
         prices = [1900.0] * n
         df = _df(prices)
@@ -595,18 +641,18 @@ class TestRSISignalPaths:
         rsi_vals = [28.0] * (n - 1) + [29.0]  # current(29) > prev(28) = rising
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
-        assert result['type'] == 'BUY'
+        assert result["type"] == "BUY"
 
     def test_exception_handling(self, strat):
         """Cover lines 160-162: exception handler."""
         df = _df([1900.0] * 30)
 
-        with patch.object(strat, 'calculate_rsi', side_effect=RuntimeError("test")):
+        with patch.object(strat, "calculate_rsi", side_effect=RuntimeError("test")):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'Error' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "Error" in result["reason"]
 
     def test_neutral_rsi_hold(self, strat):
         """Cover else branch: neutral RSI → HOLD."""
@@ -618,18 +664,20 @@ class TestRSISignalPaths:
         rsi_vals = [50.0] * n
         rsi_series = pd.Series(rsi_vals, index=df.index)
 
-        with patch.object(strat, 'calculate_rsi', return_value=rsi_series):
+        with patch.object(strat, "calculate_rsi", return_value=rsi_series):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
+        assert result["type"] == "HOLD"
 
 
 # ---------------------------------------------------------------------------
 # MeanReversion __init__ and signal path coverage
 # ---------------------------------------------------------------------------
 
+
 class TestMeanReversionInit:
     def test_init_covers_attributes(self):
         from strategies.mean_reversion import MeanReversionStrategy
+
         s = make_concrete(MeanReversionStrategy, period=10, std_dev=1.5)
         assert s.period == 10
         assert s.std_dev == 1.5
@@ -641,14 +689,16 @@ class TestMeanReversionSignalPaths:
     @pytest.fixture
     def strat(self):
         from strategies.mean_reversion import MeanReversionStrategy
-        config = StrategyConfig(name='MR_Test', symbol='XAUUSD', timeframe='1H')
+
+        config = StrategyConfig(name="MR_Test", symbol="XAUUSD", timeframe="1H")
 
         class _Concrete(MeanReversionStrategy):
-            def analyze(self, data): return {}
+            def analyze(self, data):
+                return {}
 
         instance = object.__new__(_Concrete)
         BaseStrategy.__init__(instance, config)
-        instance.logger = logging.getLogger('MeanReversion')
+        instance.logger = logging.getLogger("MeanReversion")
         instance.period = 20
         instance.std_dev = 2.0
         return instance
@@ -659,31 +709,31 @@ class TestMeanReversionSignalPaths:
         prices = [1900.0] * n  # Constant → zero std
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
+        assert result["type"] == "HOLD"
 
     def test_exit_long_sell_to_mean(self, strat):
         """Cover lines 104-108: LONG position reverts to mean."""
-        strat.position = 'LONG'
+        strat.position = "LONG"
         # Price at or above SMA (reverted to mean)
         prices = [1900.0] * 24 + [1900.5]  # Price near mean
         df = _df(prices)
 
         result = strat.generate_signal(df)
         # If price is within bands and position is LONG, should sell
-        assert result['type'] in ('SELL', 'BUY', 'HOLD')
+        assert result["type"] in ("SELL", "BUY", "HOLD")
 
     def test_exit_short_buy_to_mean(self, strat):
         """Cover lines 110-114: SHORT position reverts to mean."""
-        strat.position = 'SHORT'
+        strat.position = "SHORT"
         prices = [1900.0] * 24 + [1899.5]  # Price near mean
         df = _df(prices)
         result = strat.generate_signal(df)
-        assert result['type'] in ('BUY', 'SELL', 'HOLD')
+        assert result["type"] in ("BUY", "SELL", "HOLD")
 
     def test_exception_handling(self, strat):
         """Cover lines 132-134: exception handler."""
         df = _df([1900.0] * 25)
-        with patch.object(pd.Series, 'rolling', side_effect=RuntimeError("test error")):
+        with patch.object(pd.Series, "rolling", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
-        assert result['type'] == 'HOLD'
-        assert 'Error' in result['reason']
+        assert result["type"] == "HOLD"
+        assert "Error" in result["reason"]

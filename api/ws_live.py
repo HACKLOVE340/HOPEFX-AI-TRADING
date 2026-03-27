@@ -83,7 +83,9 @@ class LiveConnectionManager:
                 await ws.send_text(json.dumps(msg))
             except Exception as exc:
                 logger.debug(
-                    "WebSocket send failed for %s, disconnecting: %s", cid, exc,
+                    "WebSocket send failed for %s, disconnecting: %s",
+                    cid,
+                    exc,
                 )
                 self.disconnect(cid)
 
@@ -271,7 +273,8 @@ async def push_position_update(position: dict) -> None:
 
 async def push_position_close(position_id: str) -> None:
     await _manager.broadcast(
-        "positions", {"type": "position_close", "data": {"id": position_id}},
+        "positions",
+        {"type": "position_close", "data": {"id": position_id}},
     )
 
 

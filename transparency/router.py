@@ -9,7 +9,8 @@ from datetime import timezone
 
 from transparency.engine import ExecutionTransparencyEngine
 
-def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
+
+def create_transparency_router(engine: "ExecutionTransparencyEngine"):
     """
     Create a FastAPI router for the Execution Transparency module.
 
@@ -62,6 +63,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_report(days: int = 30):
         """Generate an execution quality report for the last N days."""
         from datetime import datetime, timedelta
+
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         report = engine.generate_report(start, end)
@@ -84,6 +86,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_slippage_distribution(days: int = 30):
         """Get slippage distribution data for charting."""
         from datetime import datetime, timedelta
+
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         return engine.get_slippage_distribution(start, end)
@@ -92,6 +95,7 @@ def create_transparency_router(engine: 'ExecutionTransparencyEngine'):
     async def get_latency_trend(days: int = 30):
         """Get daily latency trend data."""
         from datetime import datetime, timedelta
+
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
         return engine.get_latency_trend(start, end)

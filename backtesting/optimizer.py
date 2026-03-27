@@ -37,7 +37,9 @@ class ParameterOptimizer:
 
         logger.info(f"Initialized parameter optimizer for {strategy_class.__name__}")
 
-    def grid_search(self, param_grid: Dict[str, List[Any]], metric: str = 'sharpe_ratio') -> Dict:
+    def grid_search(
+        self, param_grid: Dict[str, List[Any]], metric: str = "sharpe_ratio"
+    ) -> Dict:
         """
         Perform grid search over parameter space.
 
@@ -58,7 +60,7 @@ class ParameterOptimizer:
         logger.info(f"Testing {len(combinations)} parameter combinations...")
 
         results = []
-        best_score = float('-inf')
+        best_score = float("-inf")
         best_params = None
 
         for combination in combinations:
@@ -70,19 +72,19 @@ class ParameterOptimizer:
 
                 # Run backtest
                 engine = BacktestEngine(
-                    self.data_handler,
-                    strategy,
-                    self.initial_capital
+                    self.data_handler, strategy, self.initial_capital
                 )
 
                 backtest_results = engine.run()
-                score = backtest_results['metrics'].get(metric, 0)
+                score = backtest_results["metrics"].get(metric, 0)
 
-                results.append({
-                    'params': params,
-                    'score': score,
-                    'metrics': backtest_results['metrics']
-                })
+                results.append(
+                    {
+                        "params": params,
+                        "score": score,
+                        "metrics": backtest_results["metrics"],
+                    }
+                )
 
                 if score > best_score:
                     best_score = score
@@ -96,7 +98,7 @@ class ParameterOptimizer:
         logger.info(f"Best {metric}: {best_score:.4f} with params: {best_params}")
 
         return {
-            'best_params': best_params,
-            'best_score': best_score,
-            'all_results': pd.DataFrame(results)
+            "best_params": best_params,
+            "best_score": best_score,
+            "all_results": pd.DataFrame(results),
         }

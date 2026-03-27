@@ -167,7 +167,7 @@ class MyStrategy(BaseStrategy):
     def __init__(self, config):
         super().__init__(config)
         self.name = "My Custom Strategy"
-    
+
     def generate_signal(self, data):
         # Your logic here
         if should_buy:
@@ -201,7 +201,7 @@ print(results.summary())
 
 ### What is paper trading and how do I use it?
 
-Paper trading simulates real trading without risking real money. 
+Paper trading simulates real trading without risking real money.
 
 ```bash
 # Start paper trading
@@ -325,7 +325,7 @@ class MyModel(BaseModel):
     def train(self, X, y):
         # Training logic
         pass
-    
+
     def predict(self, X):
         # Prediction logic
         return predictions

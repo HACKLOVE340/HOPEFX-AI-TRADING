@@ -39,6 +39,7 @@ class TestFullTradePipeline:
         self.broker.update_market_price("XAUUSD", 2050.0)
 
         from brokers.base import OrderSide, OrderType
+
         order = self.broker.place_order(
             symbol="XAUUSD",
             side=OrderSide.BUY,
@@ -103,6 +104,7 @@ class TestFullTradePipeline:
         self.broker.update_market_price("EURUSD", 1.0850)
 
         from brokers.base import OrderSide, OrderType
+
         self.broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
         self.broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
 

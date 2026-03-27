@@ -1,6 +1,6 @@
 # HOPEFX Documentation
 
-**AI-powered gold and forex trading platform.**  
+**AI-powered gold and forex trading platform.**
 Automated strategies, real-time signals, and institutional-grade risk management.
 
 ---

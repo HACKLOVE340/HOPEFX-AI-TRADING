@@ -28,7 +28,7 @@ def test_account():
         open_positions={},
         daily_pnl=Decimal("0"),
         total_pnl=Decimal("0"),
-        max_drawdown=Decimal("0")
+        max_drawdown=Decimal("0"),
     )
 
 
@@ -37,9 +37,7 @@ def test_position_sizing_atr(test_account):
     sizer = PositionSizer(method="atr")
 
     size = sizer.calculate_size(
-        account=test_account,
-        entry_price=Decimal("1800"),
-        atr=Decimal("2.0")
+        account=test_account, entry_price=Decimal("1800"), atr=Decimal("2.0")
     )
 
     # Should be reasonable size
@@ -82,6 +80,6 @@ def test_risk_manager_signal_validation(tmp_path):
     # Establish peak equity then drop 7% to breach the 5% drawdown limit
     manager.peak_equity = 100_000.0
     manager.daily_starting_equity = 100_000.0
-    manager.update_equity(93_000.0)   # 7% drawdown > 5% limit
+    manager.update_equity(93_000.0)  # 7% drawdown > 5% limit
 
     assert manager.kill_switch_active

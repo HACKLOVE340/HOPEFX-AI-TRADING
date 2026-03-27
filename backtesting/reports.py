@@ -31,12 +31,12 @@ class ReportGenerator:
 
     def generate_text_report(self) -> str:
         """Generate text report."""
-        metrics = self.results['metrics']
+        metrics = self.results["metrics"]
 
         report = []
-        report.append("="*60)
+        report.append("=" * 60)
         report.append("BACKTEST REPORT")
-        report.append("="*60)
+        report.append("=" * 60)
         report.append("")
 
         report.append("PERFORMANCE METRICS")
@@ -63,7 +63,7 @@ class ReportGenerator:
         report.append(f"Largest Loss: ${metrics['largest_loss']:.2f}")
         report.append("")
 
-        report.append("="*60)
+        report.append("=" * 60)
 
         return "\n".join(report)
 
@@ -71,7 +71,7 @@ class ReportGenerator:
         """Save report to file."""
         report = self.generate_text_report()
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write(report)
 
         logger.info(f"Report saved to {filename}")

@@ -17,6 +17,7 @@ Features:
 
 import sys
 
+
 class DeploymentManager:
     def __init__(self, environments):
         self.environments = environments
@@ -39,11 +40,12 @@ class DeploymentManager:
         print("Rolling back to previous version...")
         # Implement rollback logic here
 
-if __name__ == '__main__':
-    environments = ['development', 'staging', 'production']
+
+if __name__ == "__main__":
+    environments = ["development", "staging", "production"]
     manager = DeploymentManager(environments)
     if len(sys.argv) != 2:
-        print('Usage: deploy.py <environment>')
+        print("Usage: deploy.py <environment>")
         sys.exit(1)
     environment = sys.argv[1]
     manager.deploy(environment)

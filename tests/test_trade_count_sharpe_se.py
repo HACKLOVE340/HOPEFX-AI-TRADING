@@ -29,17 +29,21 @@ import pandas as pd
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ohlcv(n: int = 500, seed: int = 42) -> pd.DataFrame:
     """Synthetic OHLCV with a mild uptrend and realistic noise."""
     rng = np.random.default_rng(seed)
     close = 2000.0 + np.cumsum(rng.normal(0.5, 8.0, n))
-    df = pd.DataFrame({
-        "open":   close - rng.uniform(0, 3, n),
-        "high":   close + rng.uniform(1, 12, n),
-        "low":    close - rng.uniform(1, 12, n),
-        "close":  close,
-        "volume": rng.uniform(500, 3000, n),
-    }, index=pd.date_range("2021-01-01", periods=n, freq="h"))
+    df = pd.DataFrame(
+        {
+            "open": close - rng.uniform(0, 3, n),
+            "high": close + rng.uniform(1, 12, n),
+            "low": close - rng.uniform(1, 12, n),
+            "close": close,
+            "volume": rng.uniform(500, 3000, n),
+        },
+        index=pd.date_range("2021-01-01", periods=n, freq="h"),
+    )
     return df
 
 
@@ -47,21 +51,25 @@ def _make_ohlcv(n: int = 500, seed: int = 42) -> pd.DataFrame:
 # trade_level_sharpe()
 # ---------------------------------------------------------------------------
 
+
 class TestTradeLevelSharpe:
     def test_returns_zero_for_empty_list(self):
         from real_data_backtest import trade_level_sharpe
+
         sharpe, se = trade_level_sharpe([])
         assert sharpe == 0.0
         assert se == 0.0
 
     def test_returns_zero_for_single_trade(self):
         from real_data_backtest import trade_level_sharpe
+
         sharpe, se = trade_level_sharpe([100.0])
         assert sharpe == 0.0
         assert se == 0.0
 
     def test_positive_sharpe_for_positive_mean_pnl(self):
         from real_data_backtest import trade_level_sharpe
+
         rng = np.random.default_rng(0)
         pnls = rng.normal(loc=50.0, scale=20.0, size=100).tolist()
         sharpe, se = trade_level_sharpe(pnls)
@@ -69,6 +77,7 @@ class TestTradeLevelSharpe:
 
     def test_negative_sharpe_for_negative_mean_pnl(self):
         from real_data_backtest import trade_level_sharpe
+
         rng = np.random.default_rng(1)
         pnls = rng.normal(loc=-50.0, scale=20.0, size=100).tolist()
         sharpe, se = trade_level_sharpe(pnls)
@@ -77,6 +86,7 @@ class TestTradeLevelSharpe:
     def test_se_formula_exact(self):
         """SE = 1/sqrt(2*(N-1)) exactly."""
         from real_data_backtest import trade_level_sharpe
+
         rng = np.random.default_rng(2)
         n = 50
         pnls = rng.normal(50, 20, n).tolist()
@@ -86,6 +96,7 @@ class TestTradeLevelSharpe:
 
     def test_se_decreases_with_more_trades(self):
         from real_data_backtest import trade_level_sharpe
+
         rng = np.random.default_rng(3)
         _, se_50 = trade_level_sharpe(rng.normal(50, 20, 50).tolist())
         _, se_250 = trade_level_sharpe(rng.normal(50, 20, 250).tolist())
@@ -110,12 +121,14 @@ class TestTradeLevelSharpe:
     def test_zero_std_returns_zero(self):
         """All-identical PnLs → std=0 → Sharpe=0."""
         from real_data_backtest import trade_level_sharpe
+
         sharpe, se = trade_level_sharpe([100.0] * 50)
         assert sharpe == 0.0
 
     def test_avg_hold_hours_affects_annualisation(self):
         """Longer hold time → lower annualised Sharpe (less compounding)."""
         from real_data_backtest import trade_level_sharpe
+
         rng = np.random.default_rng(4)
         pnls = rng.normal(50, 20, 100).tolist()
         sharpe_1h, _ = trade_level_sharpe(pnls, avg_hold_hours=1.0)
@@ -128,9 +141,11 @@ class TestTradeLevelSharpe:
 # run_backtest() — returns (equity_df, trade_pnls)
 # ---------------------------------------------------------------------------
 
+
 class TestRunBacktestSignature:
     def test_returns_tuple_of_df_and_list(self):
         from real_data_backtest import run_backtest
+
         df = _make_ohlcv(300)
         result = run_backtest(df)
         assert isinstance(result, tuple)
@@ -141,6 +156,7 @@ class TestRunBacktestSignature:
 
     def test_equity_df_has_required_columns(self):
         from real_data_backtest import run_backtest
+
         df = _make_ohlcv(300)
         equity_df, _ = run_backtest(df)
         for col in ["equity", "trade_pnl", "in_trade", "direction"]:
@@ -148,6 +164,7 @@ class TestRunBacktestSignature:
 
     def test_trade_pnls_are_floats(self):
         from real_data_backtest import run_backtest
+
         df = _make_ohlcv(500)
         _, trade_pnls = run_backtest(df)
         for pnl in trade_pnls:
@@ -155,6 +172,7 @@ class TestRunBacktestSignature:
 
     def test_equity_starts_near_initial_capital(self):
         from real_data_backtest import run_backtest, INITIAL_CAPITAL
+
         df = _make_ohlcv(300)
         equity_df, _ = run_backtest(df, INITIAL_CAPITAL)
         # First bar equity should be within $100 of initial (entry commission)
@@ -163,12 +181,18 @@ class TestRunBacktestSignature:
     def test_no_trades_on_constant_price(self):
         """Constant price → no ATR expansion → no signals → no trades."""
         from real_data_backtest import run_backtest
+
         n = 100
-        df = pd.DataFrame({
-            "open": [2000.0] * n, "high": [2000.0] * n,
-            "low": [2000.0] * n, "close": [2000.0] * n,
-            "volume": [1000.0] * n,
-        }, index=pd.date_range("2021-01-01", periods=n, freq="h", name="timestamp"))
+        df = pd.DataFrame(
+            {
+                "open": [2000.0] * n,
+                "high": [2000.0] * n,
+                "low": [2000.0] * n,
+                "close": [2000.0] * n,
+                "volume": [1000.0] * n,
+            },
+            index=pd.date_range("2021-01-01", periods=n, freq="h", name="timestamp"),
+        )
         equity_df, trade_pnls = run_backtest(df)
         # Constant price → all rolling windows produce NaN → dropna() removes all bars
         # Result: zero trades
@@ -178,6 +202,7 @@ class TestRunBacktestSignature:
 # ---------------------------------------------------------------------------
 # generate_signals() — ABSTAIN_THRESHOLD
 # ---------------------------------------------------------------------------
+
 
 class TestAbstainThreshold:
     def test_lower_threshold_produces_more_signals(self):
@@ -196,18 +221,20 @@ class TestAbstainThreshold:
         count_55 = (df_55["signal"] != 0).sum()
 
         rdb.ABSTAIN_THRESHOLD = original
-        assert count_52 >= count_55, (
-            f"Lower threshold should produce ≥ signals: {count_52} vs {count_55}"
-        )
+        assert (
+            count_52 >= count_55
+        ), f"Lower threshold should produce ≥ signals: {count_52} vs {count_55}"
 
     def test_signals_are_only_1_minus1_or_0(self):
         from real_data_backtest import generate_signals
+
         df = _make_ohlcv(500)
         result = generate_signals(df)
         assert set(result["signal"].unique()).issubset({-1, 0, 1})
 
     def test_score_column_in_minus1_to_1(self):
         from real_data_backtest import generate_signals
+
         df = _make_ohlcv(500)
         result = generate_signals(df)
         assert result["score"].min() >= -1.0 - 1e-9
@@ -218,23 +245,33 @@ class TestAbstainThreshold:
 # walk_forward_backtest() — returns trade-level Sharpe
 # ---------------------------------------------------------------------------
 
+
 class TestWalkForwardBacktest:
     def test_returns_required_keys(self):
         from real_data_backtest import walk_forward_backtest
+
         df = _make_ohlcv(500)
         result = walk_forward_backtest(df)
         for key in [
-            "train_equity", "test_equity", "full_equity",
-            "train_sharpe", "test_sharpe",
-            "train_sharpe_se", "test_sharpe_se",
-            "train_trade_count", "test_trade_count",
-            "train_pnls", "test_pnls",
-            "bar_sharpe_train", "bar_sharpe_test",
+            "train_equity",
+            "test_equity",
+            "full_equity",
+            "train_sharpe",
+            "test_sharpe",
+            "train_sharpe_se",
+            "test_sharpe_se",
+            "train_trade_count",
+            "test_trade_count",
+            "train_pnls",
+            "test_pnls",
+            "bar_sharpe_train",
+            "bar_sharpe_test",
         ]:
             assert key in result, f"Missing key: {key}"
 
     def test_trade_count_positive(self):
         from real_data_backtest import walk_forward_backtest
+
         df = _make_ohlcv(1000)
         result = walk_forward_backtest(df)
         total = result["train_trade_count"] + result["test_trade_count"]
@@ -243,6 +280,7 @@ class TestWalkForwardBacktest:
     def test_se_consistent_with_trade_count(self):
         """SE should equal 1/sqrt(2*(N-1)) for the test trade count."""
         from real_data_backtest import walk_forward_backtest
+
         df = _make_ohlcv(1000)
         result = walk_forward_backtest(df)
         n = result["test_trade_count"]
@@ -252,6 +290,7 @@ class TestWalkForwardBacktest:
 
     def test_full_equity_is_concatenation(self):
         from real_data_backtest import walk_forward_backtest
+
         df = _make_ohlcv(500)
         result = walk_forward_backtest(df)
         expected_len = len(result["train_equity"]) + len(result["test_equity"])
@@ -262,18 +301,22 @@ class TestWalkForwardBacktest:
 # Gold pip value
 # ---------------------------------------------------------------------------
 
+
 class TestPipValue:
     def test_gold_pip_value(self):
         from real_data_backtest import _pip_value_for_price, GOLD_PIP_VALUE
+
         assert _pip_value_for_price(2000.0) == GOLD_PIP_VALUE
 
     def test_crypto_pip_value(self):
         from real_data_backtest import _pip_value_for_price, CRYPTO_PIP_VALUE
+
         assert _pip_value_for_price(1.2) == CRYPTO_PIP_VALUE
 
     def test_gold_slippage_dollar_value(self):
         """3 pips × $0.10/pip = $0.30 slippage at gold price."""
         from real_data_backtest import _pip_value_for_price, SLIPPAGE_PIPS
+
         pip_val = _pip_value_for_price(2000.0)
         dollar_slip = SLIPPAGE_PIPS * pip_val
         assert abs(dollar_slip - 0.30) < 1e-9, f"Expected $0.30, got ${dollar_slip}"

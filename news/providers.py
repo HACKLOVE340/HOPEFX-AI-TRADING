@@ -25,6 +25,7 @@ import requests
 
 try:
     import feedparser
+
     _FEEDPARSER_AVAILABLE = True
 except ImportError:
     feedparser = None  # type: ignore[assignment]
@@ -42,6 +43,7 @@ if not _FEEDPARSER_AVAILABLE:
 @dataclass
 class NewsArticle:
     """Represents a news article"""
+
     title: str
     description: str
     source: str
@@ -55,15 +57,15 @@ class NewsArticle:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'title': self.title,
-            'description': self.description,
-            'source': self.source,
-            'published_at': self.published_at.isoformat(),
-            'url': self.url,
-            'author': self.author,
-            'content': self.content,
-            'symbols': self.symbols,
-            'sentiment': self.sentiment
+            "title": self.title,
+            "description": self.description,
+            "source": self.source,
+            "published_at": self.published_at.isoformat(),
+            "url": self.url,
+            "author": self.author,
+            "content": self.content,
+            "symbols": self.symbols,
+            "sentiment": self.sentiment,
         }
 
 
@@ -103,7 +105,7 @@ class NewsAPIProvider(NewsProvider):
         language: str = "en",
         sort_by: str = "publishedAt",
         page_size: int = 20,
-        from_date: Optional[datetime] = None
+        from_date: Optional[datetime] = None,
     ) -> List[NewsArticle]:
         """
         Get news from NewsAPI
@@ -124,29 +126,27 @@ class NewsAPIProvider(NewsProvider):
                 from_date = datetime.now(timezone.utc) - timedelta(days=1)
 
             params = {
-                'q': query,
-                'language': language,
-                'sortBy': sort_by,
-                'pageSize': min(page_size, 100),
-                'from': from_date.isoformat(),
-                'apiKey': self.api_key
+                "q": query,
+                "language": language,
+                "sortBy": sort_by,
+                "pageSize": min(page_size, 100),
+                "from": from_date.isoformat(),
+                "apiKey": self.api_key,
             }
 
             response = requests.get(
-                f"{self.BASE_URL}/everything",
-                params=params,
-                timeout=10
+                f"{self.BASE_URL}/everything", params=params, timeout=10
             )
             response.raise_for_status()
 
             data = response.json()
 
-            if data.get('status') != 'ok':
+            if data.get("status") != "ok":
                 self.logger.error(f"NewsAPI error: {data.get('message')}")
                 return []
 
             articles = []
-            for article in data.get('articles', []):
+            for article in data.get("articles", []):
                 try:
                     articles.append(self.format_article(article))
                 except Exception as e:
@@ -166,15 +166,15 @@ class NewsAPIProvider(NewsProvider):
     def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
         """Format NewsAPI article"""
         return NewsArticle(
-            title=raw_article.get('title', ''),
-            description=raw_article.get('description', ''),
-            source=raw_article.get('source', {}).get('name', 'Unknown'),
+            title=raw_article.get("title", ""),
+            description=raw_article.get("description", ""),
+            source=raw_article.get("source", {}).get("name", "Unknown"),
             published_at=datetime.fromisoformat(
-                raw_article.get('publishedAt', '').replace('Z', '+00:00')
+                raw_article.get("publishedAt", "").replace("Z", "+00:00")
             ),
-            url=raw_article.get('url', ''),
-            author=raw_article.get('author'),
-            content=raw_article.get('content')
+            url=raw_article.get("url", ""),
+            author=raw_article.get("author"),
+            content=raw_article.get("content"),
         )
 
 
@@ -196,7 +196,7 @@ class AlphaVantageNewsProvider(NewsProvider):
         self,
         tickers: Optional[str] = None,
         topics: str = "financial_markets",
-        limit: int = 50
+        limit: int = 50,
     ) -> List[NewsArticle]:
         """
         Get news from Alpha Vantage
@@ -211,26 +211,26 @@ class AlphaVantageNewsProvider(NewsProvider):
         """
         try:
             params = {
-                'function': 'NEWS_SENTIMENT',
-                'topics': topics,
-                'limit': limit,
-                'apikey': self.api_key
+                "function": "NEWS_SENTIMENT",
+                "topics": topics,
+                "limit": limit,
+                "apikey": self.api_key,
             }
 
             if tickers:
-                params['tickers'] = tickers
+                params["tickers"] = tickers
 
             response = requests.get(self.BASE_URL, params=params, timeout=10)
             response.raise_for_status()
 
             data = response.json()
 
-            if 'Error Message' in data:
+            if "Error Message" in data:
                 self.logger.error(f"Alpha Vantage error: {data['Error Message']}")
                 return []
 
             articles = []
-            for item in data.get('feed', []):
+            for item in data.get("feed", []):
                 try:
                     articles.append(self.format_article(item))
                 except Exception as e:
@@ -250,25 +250,24 @@ class AlphaVantageNewsProvider(NewsProvider):
     def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
         """Format Alpha Vantage article"""
         # Extract overall sentiment score
-        sentiment_score = float(raw_article.get('overall_sentiment_score', 0))
+        sentiment_score = float(raw_article.get("overall_sentiment_score", 0))
 
         # Extract symbols
         symbols = [
-            ticker['ticker']
-            for ticker in raw_article.get('ticker_sentiment', [])
+            ticker["ticker"] for ticker in raw_article.get("ticker_sentiment", [])
         ]
 
         return NewsArticle(
-            title=raw_article.get('title', ''),
-            description=raw_article.get('summary', ''),
-            source=raw_article.get('source', 'Unknown'),
+            title=raw_article.get("title", ""),
+            description=raw_article.get("summary", ""),
+            source=raw_article.get("source", "Unknown"),
             published_at=datetime.strptime(
-                raw_article.get('time_published', ''), '%Y%m%dT%H%M%S'
+                raw_article.get("time_published", ""), "%Y%m%dT%H%M%S"
             ),
-            url=raw_article.get('url', ''),
-            author=', '.join(raw_article.get('authors', [])),
+            url=raw_article.get("url", ""),
+            author=", ".join(raw_article.get("authors", [])),
             sentiment=sentiment_score,
-            symbols=symbols if symbols else None
+            symbols=symbols if symbols else None,
         )
 
 
@@ -280,10 +279,10 @@ class RSSFeedProvider(NewsProvider):
     """
 
     DEFAULT_FEEDS = {
-        'forex_factory': 'https://www.forexfactory.com/feed',
-        'trading_economics': 'https://tradingeconomics.com/rss/news.aspx',
-        'reuters': 'https://www.reutersagency.com/feed/',
-        'bloomberg': 'https://www.bloomberg.com/feed/podcast/etf-report.xml'
+        "forex_factory": "https://www.forexfactory.com/feed",
+        "trading_economics": "https://tradingeconomics.com/rss/news.aspx",
+        "reuters": "https://www.reutersagency.com/feed/",
+        "bloomberg": "https://www.bloomberg.com/feed/podcast/etf-report.xml",
     }
 
     def __init__(self):
@@ -295,9 +294,7 @@ class RSSFeedProvider(NewsProvider):
         self.feeds[name] = url
 
     def get_news(
-        self,
-        feeds: Optional[List[str]] = None,
-        hours_back: int = 24
+        self, feeds: Optional[List[str]] = None, hours_back: int = 24
     ) -> List[NewsArticle]:
         """
         Get news from RSS feeds
@@ -322,7 +319,9 @@ class RSSFeedProvider(NewsProvider):
 
             try:
                 if not _FEEDPARSER_AVAILABLE:
-                    self.logger.warning("feedparser not installed — skipping RSS feed '%s'", feed_name)
+                    self.logger.warning(
+                        "feedparser not installed — skipping RSS feed '%s'", feed_name
+                    )
                     continue
                 feed_url = self.feeds[feed_name]
                 feed = feedparser.parse(feed_url)
@@ -349,19 +348,21 @@ class RSSFeedProvider(NewsProvider):
         """Format RSS feed entry"""
         # Parse published date
         published_at = datetime.now(timezone.utc)
-        if hasattr(entry, 'published_parsed') and entry.published_parsed:
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
             published_at = datetime(*entry.published_parsed[:6])
-        elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
+        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
             published_at = datetime(*entry.updated_parsed[:6])
 
         return NewsArticle(
-            title=entry.get('title', ''),
-            description=entry.get('summary', ''),
+            title=entry.get("title", ""),
+            description=entry.get("summary", ""),
             source=source,
             published_at=published_at,
-            url=entry.get('link', ''),
-            author=entry.get('author'),
-            content=entry.get('content', [{}])[0].get('value') if hasattr(entry, 'content') else None
+            url=entry.get("link", ""),
+            author=entry.get("author"),
+            content=entry.get("content", [{}])[0].get("value")
+            if hasattr(entry, "content")
+            else None,
         )
 
 
@@ -374,7 +375,7 @@ class MultiSourceAggregator:
         self,
         newsapi_key: Optional[str] = None,
         alphavantage_key: Optional[str] = None,
-        use_rss: bool = True
+        use_rss: bool = True,
     ):
         self.providers = []
 
@@ -394,7 +395,7 @@ class MultiSourceAggregator:
         query: Optional[str] = None,
         symbols: Optional[List[str]] = None,
         hours_back: int = 24,
-        deduplicate: bool = True
+        deduplicate: bool = True,
     ) -> List[NewsArticle]:
         """
         Get news from all configured providers
@@ -415,7 +416,7 @@ class MultiSourceAggregator:
                 if isinstance(provider, NewsAPIProvider) and query:
                     articles = provider.get_news(query=query)
                 elif isinstance(provider, AlphaVantageNewsProvider) and symbols:
-                    articles = provider.get_news(tickers=','.join(symbols))
+                    articles = provider.get_news(tickers=",".join(symbols))
                 elif isinstance(provider, RSSFeedProvider):
                     articles = provider.get_news(hours_back=hours_back)
                 else:
@@ -424,7 +425,9 @@ class MultiSourceAggregator:
                 all_articles.extend(articles)
 
             except Exception as e:
-                self.logger.error(f"Error fetching from {provider.__class__.__name__}: {e}")
+                self.logger.error(
+                    f"Error fetching from {provider.__class__.__name__}: {e}"
+                )
                 continue
 
         if deduplicate:
@@ -455,11 +458,11 @@ class MultiSourceAggregator:
 # Global aggregator instance (to be configured with API keys)
 news_aggregator = None
 
+
 def initialize_aggregator(newsapi_key=None, alphavantage_key=None):
     """Initialize the global news aggregator"""
     global news_aggregator
     news_aggregator = MultiSourceAggregator(
-        newsapi_key=newsapi_key,
-        alphavantage_key=alphavantage_key
+        newsapi_key=newsapi_key, alphavantage_key=alphavantage_key
     )
     return news_aggregator

@@ -16,41 +16,43 @@ from datetime import datetime, timezone
 
 class DashboardServer:
     """Web dashboard for HOPEFX Ultimate"""
-    
+
     def __init__(self, orchestra, event_bus):
         self.orchestra = orchestra
         self.event_bus = event_bus
         self.app = FastAPI()
         self.clients = []
         self._setup_routes()
-    
+
     def _setup_routes(self):
         @self.app.get("/")
         def home():
             return HTMLResponse(self._html())
-        
+
         @self.app.get("/api/status")
         def status():
             return {
-                'orchestra': self.orchestra.get_heatmap_data(),
-                'events': self.event_bus.get_metrics(),
-                'time': datetime.now(timezone.utc).isoformat()
+                "orchestra": self.orchestra.get_heatmap_data(),
+                "events": self.event_bus.get_metrics(),
+                "time": datetime.now(timezone.utc).isoformat(),
             }
-        
+
         @self.app.websocket("/ws")
         async def ws(websocket: WebSocket):
             await websocket.accept()
             self.clients.append(websocket)
             try:
                 while True:
-                    await websocket.send_json({
-                        'heatmap': self.orchestra.get_heatmap_data(),
-                        'events': self.event_bus.get_metrics()
-                    })
+                    await websocket.send_json(
+                        {
+                            "heatmap": self.orchestra.get_heatmap_data(),
+                            "events": self.event_bus.get_metrics(),
+                        }
+                    )
                     await asyncio.sleep(1)
             except Exception:
                 self.clients.remove(websocket)
-    
+
     def _html(self):
         return """<!DOCTYPE html>
 <html>
@@ -92,11 +94,11 @@ class DashboardServer:
             document.getElementById('regime').textContent = d.heatmap.current_regime;
             document.getElementById('active').textContent = d.heatmap.active_count;
             document.getElementById('events').textContent = d.events.published;
-            
+
             let s = '';
             for (const [id, data] of Object.entries(d.heatmap.strategies)) {
                 s += `<div class="strategy ${data.active ? 'active' : ''}">
-                    <strong>${id}</strong> | Win: ${(data.win_rate * 100).toFixed(1)}% | 
+                    <strong>${id}</strong> | Win: ${(data.win_rate * 100).toFixed(1)}% |
                     Sharpe: ${data.sharpe.toFixed(2)} | Alloc: ${(data.allocation * 100).toFixed(0)}%
                 </div>`;
             }
@@ -106,7 +108,8 @@ class DashboardServer:
     </script>
 </body>
 </html>"""
-    
+
     def run(self, port=8080):
         import uvicorn
+
         uvicorn.run(self.app, host="0.0.0.0", port=port)

@@ -163,7 +163,10 @@ def _atr(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int) -
 
 
 def _adx_approx(
-    highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int,
+    highs: np.ndarray,
+    lows: np.ndarray,
+    closes: np.ndarray,
+    period: int,
 ) -> float:
     """Approximate ADX using directional movement."""
     if len(highs) < period + 1:

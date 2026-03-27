@@ -26,10 +26,9 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
-import pandas as pd
 from scipy import stats
 
 logger = logging.getLogger(__name__)
@@ -41,12 +40,14 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class VaRResult:
     """Value-at-Risk result."""
-    confidence: float          # e.g. 0.95
-    var_historical: float      # historical simulation VaR (loss, positive = loss)
-    var_parametric: float      # parametric (normal) VaR
+
+    confidence: float  # e.g. 0.95
+    var_historical: float  # historical simulation VaR (loss, positive = loss)
+    var_parametric: float  # parametric (normal) VaR
     var_cornish_fisher: float  # Cornish-Fisher adjusted VaR
     horizon_days: int = 1
 
@@ -59,9 +60,10 @@ class VaRResult:
 @dataclass
 class ESResult:
     """Expected Shortfall (CVaR) result."""
+
     confidence: float
-    es_historical: float       # historical ES
-    es_parametric: float       # parametric ES
+    es_historical: float  # historical ES
+    es_parametric: float  # parametric ES
     n_observations: int
 
     @property
@@ -73,6 +75,7 @@ class ESResult:
 @dataclass
 class SlippageSimResult:
     """Monte Carlo slippage simulation result."""
+
     symbol: str
     quantity: float
     side: str
@@ -92,11 +95,12 @@ class RegimeDriftScore:
     Score > 1.0 indicates significant regime change.
     Uses Kolmogorov-Smirnov test + volatility ratio.
     """
+
     ks_statistic: float
     ks_pvalue: float
-    vol_ratio: float           # current_vol / reference_vol
-    drift_score: float         # composite score (higher = more drift)
-    regime_changed: bool       # drift_score > threshold
+    vol_ratio: float  # current_vol / reference_vol
+    drift_score: float  # composite score (higher = more drift)
+    regime_changed: bool  # drift_score > threshold
 
     @property
     def description(self) -> str:
@@ -108,16 +112,17 @@ class RegimeDriftScore:
 @dataclass
 class SharpeResult:
     sharpe: float
-    sharpe_se: float           # standard error of Sharpe estimate
+    sharpe_se: float  # standard error of Sharpe estimate
     annualised_return: float
     annualised_vol: float
     n_observations: int
-    passes_gate: bool          # Sharpe > 1.5 AND SE < 0.3
+    passes_gate: bool  # Sharpe > 1.5 AND SE < 0.3
 
 
 @dataclass
 class PreTradeRiskReport:
     """All risk metrics for a proposed trade."""
+
     symbol: str
     side: str
     quantity: float
@@ -153,6 +158,7 @@ class PreTradeRiskReport:
 # ---------------------------------------------------------------------------
 # VaR
 # ---------------------------------------------------------------------------
+
 
 def compute_var(
     returns: np.ndarray,
@@ -213,6 +219,7 @@ def compute_var(
 # Expected Shortfall (CVaR)
 # ---------------------------------------------------------------------------
 
+
 def compute_es(
     returns: np.ndarray,
     confidence: float = 0.99,
@@ -255,6 +262,7 @@ def compute_es(
 # ---------------------------------------------------------------------------
 # Monte Carlo slippage simulation
 # ---------------------------------------------------------------------------
+
 
 def simulate_slippage(
     symbol: str,
@@ -306,9 +314,7 @@ def simulate_slippage(
 
     # For BUY: all components add to cost; for SELL: timing can reduce cost
     direction = 1.0 if side.upper() == "BUY" else -1.0
-    total_slippage_bps = (
-        half_spread_bps + impact_bps + direction * timing_slippage
-    )
+    total_slippage_bps = half_spread_bps + impact_bps + direction * timing_slippage
 
     # Slippage is always a cost (take absolute value for SELL)
     total_slippage_bps = np.abs(total_slippage_bps)
@@ -337,6 +343,7 @@ def simulate_slippage(
 # ---------------------------------------------------------------------------
 # Regime drift detection
 # ---------------------------------------------------------------------------
+
 
 def compute_regime_drift(
     reference_returns: np.ndarray,
@@ -395,6 +402,7 @@ def compute_regime_drift(
 # Sharpe ratio
 # ---------------------------------------------------------------------------
 
+
 def compute_sharpe(
     returns: np.ndarray,
     risk_free_rate: float = 0.05,
@@ -431,9 +439,12 @@ def compute_sharpe(
 
     if std_excess < 1e-10:
         return SharpeResult(
-            sharpe=0.0, sharpe_se=999.0,
-            annualised_return=0.0, annualised_vol=0.0,
-            n_observations=n, passes_gate=False,
+            sharpe=0.0,
+            sharpe_se=999.0,
+            annualised_return=0.0,
+            annualised_vol=0.0,
+            n_observations=n,
+            passes_gate=False,
         )
 
     sr = mean_excess / std_excess
@@ -461,6 +472,7 @@ def compute_sharpe(
 # Max drawdown
 # ---------------------------------------------------------------------------
 
+
 def compute_max_drawdown(equity_curve: np.ndarray) -> float:
     """
     Compute maximum drawdown from an equity curve.
@@ -483,6 +495,7 @@ def compute_max_drawdown(equity_curve: np.ndarray) -> float:
 # Pre-trade risk report
 # ---------------------------------------------------------------------------
 
+
 def generate_pre_trade_report(
     symbol: str,
     side: str,
@@ -492,10 +505,10 @@ def generate_pre_trade_report(
     equity_curve: Optional[np.ndarray] = None,
     reference_returns: Optional[np.ndarray] = None,
     bid_ask_spread_bps: float = 5.0,
-    max_var_pct: float = 0.02,       # block if VaR > 2% of notional
-    max_es_pct: float = 0.03,        # block if ES > 3% of notional
+    max_var_pct: float = 0.02,  # block if VaR > 2% of notional
+    max_es_pct: float = 0.03,  # block if ES > 3% of notional
     max_slippage_bps: float = 20.0,  # block if p99 slippage > 20bps
-    max_drift_score: float = 2.0,    # block if regime drift > 2.0
+    max_drift_score: float = 2.0,  # block if regime drift > 2.0
     min_sharpe: float = 1.5,
     max_drawdown_limit: float = 0.08,
 ) -> PreTradeRiskReport:
@@ -592,17 +605,27 @@ def generate_pre_trade_report(
         logger.warning(
             "PRE-TRADE RISK REPORT: BLOCKED | symbol=%s side=%s qty=%.4f "
             "notional=%.2f reasons=%s",
-            symbol, side, quantity, notional, block_reasons,
+            symbol,
+            side,
+            quantity,
+            notional,
+            block_reasons,
         )
     else:
         logger.info(
             "PRE-TRADE RISK REPORT: APPROVED | symbol=%s side=%s qty=%.4f "
             "notional=%.2f var95=%.4f es99=%.4f slip_p99=%.1fbps "
             "drift=%.2f sharpe=%.2f mdd=%.2%%",
-            symbol, side, quantity, notional,
-            var_result.var, es_result.es,
+            symbol,
+            side,
+            quantity,
+            notional,
+            var_result.var,
+            es_result.es,
             slip_result.p99_slippage_bps,
-            regime.drift_score, sharpe.sharpe, mdd * 100,
+            regime.drift_score,
+            sharpe.sharpe,
+            mdd * 100,
         )
 
     return PreTradeRiskReport(

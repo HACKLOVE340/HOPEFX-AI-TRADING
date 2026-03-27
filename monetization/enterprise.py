@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class PartnerType(str, Enum):
     """Partner program types"""
+
     RESELLER = "reseller"
     WHITE_LABEL = "white_label"
     INTEGRATION = "integration"
@@ -37,6 +38,7 @@ class PartnerType(str, Enum):
 
 class PartnerStatus(str, Enum):
     """Partner status"""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -45,6 +47,7 @@ class PartnerStatus(str, Enum):
 
 class WhiteLabelStatus(str, Enum):
     """White-label deployment status"""
+
     PENDING = "pending"
     CONFIGURING = "configuring"
     DEPLOYED = "deployed"
@@ -54,17 +57,18 @@ class WhiteLabelStatus(str, Enum):
 
 # Partner commission rates
 PARTNER_COMMISSION_RATES = {
-    PartnerType.RESELLER: Decimal("0.20"),      # 20%
-    PartnerType.WHITE_LABEL: Decimal("0.30"),   # 30%
-    PartnerType.INTEGRATION: Decimal("0.10"),   # 10%
-    PartnerType.REFERRAL: Decimal("0.15"),      # 15%
-    PartnerType.TECHNOLOGY: Decimal("0.25"),    # 25%
+    PartnerType.RESELLER: Decimal("0.20"),  # 20%
+    PartnerType.WHITE_LABEL: Decimal("0.30"),  # 30%
+    PartnerType.INTEGRATION: Decimal("0.10"),  # 10%
+    PartnerType.REFERRAL: Decimal("0.15"),  # 15%
+    PartnerType.TECHNOLOGY: Decimal("0.25"),  # 25%
 }
 
 
 @dataclass
 class WhiteLabelConfig:
     """White-label branding configuration"""
+
     company_name: str
     logo_url: str
     primary_color: str
@@ -85,6 +89,7 @@ class WhiteLabelConfig:
 @dataclass
 class EnterpriseFeatures:
     """Enterprise-specific feature configuration"""
+
     sso_enabled: bool = False
     sso_provider: Optional[str] = None
     sso_config: Optional[Dict[str, Any]] = None
@@ -113,7 +118,7 @@ class Partner:
         partner_type: PartnerType,
         status: PartnerStatus = PartnerStatus.PENDING,
         contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None
+        contact_phone: Optional[str] = None,
     ):
         self.partner_id = partner_id
         self.company_name = company_name
@@ -124,22 +129,22 @@ class Partner:
         self.status = status
         self.created_at = datetime.now(timezone.utc)
         self.approved_at: Optional[datetime] = None
-        
+
         # Commission settings
         self.commission_rate = PARTNER_COMMISSION_RATES.get(
             partner_type, Decimal("0.10")
         )
         self.custom_commission_rate: Optional[Decimal] = None
-        
+
         # Revenue tracking
         self.total_revenue = Decimal("0.00")
         self.total_commissions = Decimal("0.00")
         self.pending_payout = Decimal("0.00")
-        
+
         # Referrals/clients
         self.client_count = 0
         self.api_key: Optional[str] = None
-        
+
         # Contract details
         self.contract_start: Optional[datetime] = None
         self.contract_end: Optional[datetime] = None
@@ -183,21 +188,25 @@ class Partner:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'partner_id': self.partner_id,
-            'company_name': self.company_name,
-            'contact_email': self.contact_email,
-            'contact_name': self.contact_name,
-            'partner_type': self.partner_type.value,
-            'status': self.status.value,
-            'commission_rate': float(self.get_commission_rate()),
-            'total_revenue': float(self.total_revenue),
-            'total_commissions': float(self.total_commissions),
-            'pending_payout': float(self.pending_payout),
-            'client_count': self.client_count,
-            'created_at': self.created_at.isoformat(),
-            'approved_at': self.approved_at.isoformat() if self.approved_at else None,
-            'contract_start': self.contract_start.isoformat() if self.contract_start else None,
-            'contract_end': self.contract_end.isoformat() if self.contract_end else None
+            "partner_id": self.partner_id,
+            "company_name": self.company_name,
+            "contact_email": self.contact_email,
+            "contact_name": self.contact_name,
+            "partner_type": self.partner_type.value,
+            "status": self.status.value,
+            "commission_rate": float(self.get_commission_rate()),
+            "total_revenue": float(self.total_revenue),
+            "total_commissions": float(self.total_commissions),
+            "pending_payout": float(self.pending_payout),
+            "client_count": self.client_count,
+            "created_at": self.created_at.isoformat(),
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
+            "contract_start": self.contract_start.isoformat()
+            if self.contract_start
+            else None,
+            "contract_end": self.contract_end.isoformat()
+            if self.contract_end
+            else None,
         }
 
 
@@ -210,7 +219,7 @@ class WhiteLabelInstance:
         partner_id: str,
         name: str,
         config: WhiteLabelConfig,
-        status: WhiteLabelStatus = WhiteLabelStatus.PENDING
+        status: WhiteLabelStatus = WhiteLabelStatus.PENDING,
     ):
         self.instance_id = instance_id
         self.partner_id = partner_id
@@ -219,15 +228,15 @@ class WhiteLabelInstance:
         self.status = status
         self.created_at = datetime.now(timezone.utc)
         self.deployed_at: Optional[datetime] = None
-        
+
         # Enterprise features
         self.enterprise_features = EnterpriseFeatures()
-        
+
         # Usage stats
         self.total_users = 0
         self.active_users = 0
         self.total_revenue = Decimal("0.00")
-        
+
         # Technical details
         self.subdomain: Optional[str] = None
         self.api_endpoint: Optional[str] = None
@@ -266,32 +275,32 @@ class WhiteLabelInstance:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'instance_id': self.instance_id,
-            'partner_id': self.partner_id,
-            'name': self.name,
-            'status': self.status.value,
-            'config': {
-                'company_name': self.config.company_name,
-                'logo_url': self.config.logo_url,
-                'primary_color': self.config.primary_color,
-                'secondary_color': self.config.secondary_color,
-                'custom_domain': self.config.custom_domain,
-                'support_email': self.config.support_email
+            "instance_id": self.instance_id,
+            "partner_id": self.partner_id,
+            "name": self.name,
+            "status": self.status.value,
+            "config": {
+                "company_name": self.config.company_name,
+                "logo_url": self.config.logo_url,
+                "primary_color": self.config.primary_color,
+                "secondary_color": self.config.secondary_color,
+                "custom_domain": self.config.custom_domain,
+                "support_email": self.config.support_email,
             },
-            'enterprise_features': {
-                'sso_enabled': self.enterprise_features.sso_enabled,
-                'dedicated_support': self.enterprise_features.dedicated_support,
-                'sla_tier': self.enterprise_features.sla_tier,
-                'audit_logging': self.enterprise_features.audit_logging,
-                'max_users': self.enterprise_features.max_users
+            "enterprise_features": {
+                "sso_enabled": self.enterprise_features.sso_enabled,
+                "dedicated_support": self.enterprise_features.dedicated_support,
+                "sla_tier": self.enterprise_features.sla_tier,
+                "audit_logging": self.enterprise_features.audit_logging,
+                "max_users": self.enterprise_features.max_users,
             },
-            'total_users': self.total_users,
-            'active_users': self.active_users,
-            'total_revenue': float(self.total_revenue),
-            'subdomain': self.subdomain,
-            'api_endpoint': self.api_endpoint,
-            'created_at': self.created_at.isoformat(),
-            'deployed_at': self.deployed_at.isoformat() if self.deployed_at else None
+            "total_users": self.total_users,
+            "active_users": self.active_users,
+            "total_revenue": float(self.total_revenue),
+            "subdomain": self.subdomain,
+            "api_endpoint": self.api_endpoint,
+            "created_at": self.created_at.isoformat(),
+            "deployed_at": self.deployed_at.isoformat() if self.deployed_at else None,
         }
 
 
@@ -304,7 +313,7 @@ class EnterpriseCustomer:
         company_name: str,
         contact_email: str,
         tier: SubscriptionTier = SubscriptionTier.ENTERPRISE,
-        contact_name: Optional[str] = None
+        contact_name: Optional[str] = None,
     ):
         self.customer_id = customer_id
         self.company_name = company_name
@@ -312,27 +321,23 @@ class EnterpriseCustomer:
         self.contact_name = contact_name
         self.tier = tier
         self.created_at = datetime.now(timezone.utc)
-        
+
         # Enterprise features configuration
         self.features = EnterpriseFeatures()
-        
+
         # Contract details
         self.contract_value = Decimal("0.00")
         self.contract_start: Optional[datetime] = None
         self.contract_end: Optional[datetime] = None
         self.billing_cycle: str = "annual"
         self.auto_renew = True
-        
+
         # Usage
         self.user_count = 0
         self.api_calls = 0
         self.data_storage_gb = 0
 
-    def configure_sso(
-        self,
-        provider: str,
-        config: Dict[str, Any]
-    ) -> None:
+    def configure_sso(self, provider: str, config: Dict[str, Any]) -> None:
         """Configure SSO for enterprise customer"""
         self.features.sso_enabled = True
         self.features.sso_provider = provider
@@ -357,34 +362,36 @@ class EnterpriseCustomer:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'customer_id': self.customer_id,
-            'company_name': self.company_name,
-            'contact_email': self.contact_email,
-            'contact_name': self.contact_name,
-            'tier': self.tier.value,
-            'features': {
-                'sso_enabled': self.features.sso_enabled,
-                'sso_provider': self.features.sso_provider,
-                'dedicated_support': self.features.dedicated_support,
-                'sla_tier': self.features.sla_tier,
-                'audit_logging': self.features.audit_logging,
-                'mfa_required': self.features.mfa_required,
-                'max_users': self.features.max_users,
-                'api_rate_limit': self.features.api_rate_limit_override
+            "customer_id": self.customer_id,
+            "company_name": self.company_name,
+            "contact_email": self.contact_email,
+            "contact_name": self.contact_name,
+            "tier": self.tier.value,
+            "features": {
+                "sso_enabled": self.features.sso_enabled,
+                "sso_provider": self.features.sso_provider,
+                "dedicated_support": self.features.dedicated_support,
+                "sla_tier": self.features.sla_tier,
+                "audit_logging": self.features.audit_logging,
+                "mfa_required": self.features.mfa_required,
+                "max_users": self.features.max_users,
+                "api_rate_limit": self.features.api_rate_limit_override,
             },
-            'contract': {
-                'value': float(self.contract_value),
-                'start': self.contract_start.isoformat() if self.contract_start else None,
-                'end': self.contract_end.isoformat() if self.contract_end else None,
-                'billing_cycle': self.billing_cycle,
-                'auto_renew': self.auto_renew
+            "contract": {
+                "value": float(self.contract_value),
+                "start": self.contract_start.isoformat()
+                if self.contract_start
+                else None,
+                "end": self.contract_end.isoformat() if self.contract_end else None,
+                "billing_cycle": self.billing_cycle,
+                "auto_renew": self.auto_renew,
             },
-            'usage': {
-                'users': self.user_count,
-                'api_calls': self.api_calls,
-                'storage_gb': self.data_storage_gb
+            "usage": {
+                "users": self.user_count,
+                "api_calls": self.api_calls,
+                "storage_gb": self.data_storage_gb,
             },
-            'created_at': self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
 
 
@@ -403,22 +410,22 @@ class EnterpriseManager:
         partner_type: PartnerType,
         contact_name: Optional[str] = None,
         contact_phone: Optional[str] = None,
-        custom_commission_rate: Optional[Decimal] = None
+        custom_commission_rate: Optional[Decimal] = None,
     ) -> Partner:
         """Register a new partner"""
         import uuid
 
         partner_id = f"PTR-{uuid.uuid4().hex[:12].upper()}"
-        
+
         partner = Partner(
             partner_id=partner_id,
             company_name=company_name,
             contact_email=contact_email,
             partner_type=partner_type,
             contact_name=contact_name,
-            contact_phone=contact_phone
+            contact_phone=contact_phone,
         )
-        
+
         if custom_commission_rate:
             partner.custom_commission_rate = custom_commission_rate
 
@@ -436,18 +443,16 @@ class EnterpriseManager:
         if not partner:
             return False
         partner.approve()
-        
+
         # Generate API key for partner
         import secrets
+
         partner.api_key = f"pk_{secrets.token_hex(24)}"
-        
+
         return True
 
     def create_white_label_instance(
-        self,
-        partner_id: str,
-        name: str,
-        config: WhiteLabelConfig
+        self, partner_id: str, name: str, config: WhiteLabelConfig
     ) -> Optional[WhiteLabelInstance]:
         """Create white-label instance for partner"""
         import uuid
@@ -462,27 +467,25 @@ class EnterpriseManager:
             return None
 
         instance_id = f"WL-{uuid.uuid4().hex[:12].upper()}"
-        
+
         instance = WhiteLabelInstance(
-            instance_id=instance_id,
-            partner_id=partner_id,
-            name=name,
-            config=config
+            instance_id=instance_id, partner_id=partner_id, name=name, config=config
         )
-        
+
         # Generate subdomain
-        subdomain_base = name.lower().replace(' ', '-')
+        subdomain_base = name.lower().replace(" ", "-")
         instance.subdomain = f"{subdomain_base}.hopefx.ai"
         instance.api_endpoint = f"https://api.{subdomain_base}.hopefx.ai"
 
         self._white_label_instances[instance_id] = instance
-        logger.info(f"Created white-label instance {instance_id} for partner {partner_id}")
-        
+        logger.info(
+            f"Created white-label instance {instance_id} for partner {partner_id}"
+        )
+
         return instance
 
     def get_white_label_instance(
-        self,
-        instance_id: str
+        self, instance_id: str
     ) -> Optional[WhiteLabelInstance]:
         """Get white-label instance by ID"""
         return self._white_label_instances.get(instance_id)
@@ -502,43 +505,39 @@ class EnterpriseManager:
         tier: SubscriptionTier = SubscriptionTier.ENTERPRISE,
         contact_name: Optional[str] = None,
         contract_value: Optional[Decimal] = None,
-        contract_months: int = 12
+        contract_months: int = 12,
     ) -> EnterpriseCustomer:
         """Register enterprise customer"""
         import uuid
 
         customer_id = f"ENT-{uuid.uuid4().hex[:12].upper()}"
-        
+
         customer = EnterpriseCustomer(
             customer_id=customer_id,
             company_name=company_name,
             contact_email=contact_email,
             tier=tier,
-            contact_name=contact_name
+            contact_name=contact_name,
         )
-        
+
         if contract_value:
             customer.contract_value = contract_value
             customer.contract_start = datetime.now(timezone.utc)
-            customer.contract_end = datetime.now(timezone.utc) + timedelta(days=30 * contract_months)
+            customer.contract_end = datetime.now(timezone.utc) + timedelta(
+                days=30 * contract_months
+            )
 
         self._enterprise_customers[customer_id] = customer
         logger.info(f"Registered enterprise customer {customer_id}: {company_name}")
-        
+
         return customer
 
-    def get_enterprise_customer(
-        self,
-        customer_id: str
-    ) -> Optional[EnterpriseCustomer]:
+    def get_enterprise_customer(self, customer_id: str) -> Optional[EnterpriseCustomer]:
         """Get enterprise customer by ID"""
         return self._enterprise_customers.get(customer_id)
 
     def configure_enterprise_sso(
-        self,
-        customer_id: str,
-        provider: str,
-        config: Dict[str, Any]
+        self, customer_id: str, provider: str, config: Dict[str, Any]
     ) -> bool:
         """Configure SSO for enterprise customer"""
         customer = self.get_enterprise_customer(customer_id)
@@ -547,59 +546,53 @@ class EnterpriseManager:
         customer.configure_sso(provider, config)
         return True
 
-    def get_partner_clients(
-        self,
-        partner_id: str
-    ) -> List[WhiteLabelInstance]:
+    def get_partner_clients(self, partner_id: str) -> List[WhiteLabelInstance]:
         """Get all white-label instances for a partner"""
         return [
-            inst for inst in self._white_label_instances.values()
+            inst
+            for inst in self._white_label_instances.values()
             if inst.partner_id == partner_id
         ]
 
     def get_all_partners(
         self,
         partner_type: Optional[PartnerType] = None,
-        status: Optional[PartnerStatus] = None
+        status: Optional[PartnerStatus] = None,
     ) -> List[Partner]:
         """Get all partners with optional filters"""
         partners = list(self._partners.values())
-        
+
         if partner_type:
             partners = [p for p in partners if p.partner_type == partner_type]
         if status:
             partners = [p for p in partners if p.status == status]
-            
+
         return partners
 
     def get_all_white_label_instances(
-        self,
-        status: Optional[WhiteLabelStatus] = None
+        self, status: Optional[WhiteLabelStatus] = None
     ) -> List[WhiteLabelInstance]:
         """Get all white-label instances"""
         instances = list(self._white_label_instances.values())
-        
+
         if status:
             instances = [i for i in instances if i.status == status]
-            
+
         return instances
 
     def get_all_enterprise_customers(
-        self,
-        tier: Optional[SubscriptionTier] = None
+        self, tier: Optional[SubscriptionTier] = None
     ) -> List[EnterpriseCustomer]:
         """Get all enterprise customers"""
         customers = list(self._enterprise_customers.values())
-        
+
         if tier:
             customers = [c for c in customers if c.tier == tier]
-            
+
         return customers
 
     def process_partner_payout(
-        self,
-        partner_id: str,
-        amount: Optional[Decimal] = None
+        self, partner_id: str, amount: Optional[Decimal] = None
     ) -> Optional[Dict[str, Any]]:
         """Process payout for partner"""
         import uuid
@@ -609,7 +602,7 @@ class EnterpriseManager:
             return None
 
         payout_amount = amount or partner.pending_payout
-        
+
         if payout_amount <= 0:
             return None
 
@@ -618,11 +611,11 @@ class EnterpriseManager:
         partner.pending_payout -= payout_amount
 
         return {
-            'payout_id': payout_id,
-            'partner_id': partner_id,
-            'amount': float(payout_amount),
-            'status': 'processed',
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            "payout_id": payout_id,
+            "partner_id": partner_id,
+            "amount": float(payout_amount),
+            "status": "processed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_enterprise_stats(self) -> Dict[str, Any]:
@@ -636,33 +629,37 @@ class EnterpriseManager:
         total_enterprise_contract_value = sum(c.contract_value for c in customers)
 
         return {
-            'partners': {
-                'total': len(partners),
-                'active': len([p for p in partners if p.is_active()]),
-                'pending': len([p for p in partners if p.status == PartnerStatus.PENDING]),
-                'by_type': {
+            "partners": {
+                "total": len(partners),
+                "active": len([p for p in partners if p.is_active()]),
+                "pending": len(
+                    [p for p in partners if p.status == PartnerStatus.PENDING]
+                ),
+                "by_type": {
                     pt.value: len([p for p in partners if p.partner_type == pt])
                     for pt in PartnerType
                 },
-                'total_revenue': float(total_partner_revenue),
-                'total_commissions': float(total_partner_commissions)
+                "total_revenue": float(total_partner_revenue),
+                "total_commissions": float(total_partner_commissions),
             },
-            'white_label': {
-                'total_instances': len(instances),
-                'deployed': len([i for i in instances if i.is_active()]),
-                'pending': len([i for i in instances if i.status == WhiteLabelStatus.PENDING]),
-                'total_users': sum(i.total_users for i in instances),
-                'total_revenue': float(sum(i.total_revenue for i in instances))
+            "white_label": {
+                "total_instances": len(instances),
+                "deployed": len([i for i in instances if i.is_active()]),
+                "pending": len(
+                    [i for i in instances if i.status == WhiteLabelStatus.PENDING]
+                ),
+                "total_users": sum(i.total_users for i in instances),
+                "total_revenue": float(sum(i.total_revenue for i in instances)),
             },
-            'enterprise_customers': {
-                'total': len(customers),
-                'by_tier': {
+            "enterprise_customers": {
+                "total": len(customers),
+                "by_tier": {
                     tier.value: len([c for c in customers if c.tier == tier])
                     for tier in [SubscriptionTier.ENTERPRISE, SubscriptionTier.ELITE]
                 },
-                'total_contract_value': float(total_enterprise_contract_value),
-                'total_users': sum(c.user_count for c in customers)
-            }
+                "total_contract_value": float(total_enterprise_contract_value),
+                "total_users": sum(c.user_count for c in customers),
+            },
         }
 
 

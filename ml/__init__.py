@@ -87,7 +87,9 @@ def _verify_checksum(path: _Path) -> bool:
     try:
         stored = _json.loads(_CHECKSUM_FILE.read_text())
     except Exception as exc:
-        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
+        _ml_logger.warning(
+            "Could not read model checksums: %s — skipping verification", exc
+        )
         return True
 
     name = path.name
@@ -102,7 +104,9 @@ def _verify_checksum(path: _Path) -> bool:
             "MODEL INTEGRITY FAILURE: %s checksum mismatch. "
             "Expected %s, got %s. "
             "The file may have been tampered with. Refusing to load.",
-            name, stored[name][:16] + "...", actual[:16] + "...",
+            name,
+            stored[name][:16] + "...",
+            actual[:16] + "...",
         )
         return False
     return True
@@ -134,11 +138,15 @@ def _try_load(path: _Path) -> _Optional[_Any]:
         return None
     try:
         import joblib as _joblib
+
         return _joblib.load(path)
     except Exception as _jl_exc:
-        _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
+        _ml_logger.debug(
+            "joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc
+        )
         try:
             import pickle as _pickle
+
             with open(path, "rb") as f:
                 return _pickle.load(f)
         except Exception as exc:
@@ -185,6 +193,7 @@ def _load_models() -> None:
         if _meta_path.exists():
             try:
                 import json as _json
+
                 with open(_meta_path) as _f:
                     _meta = _json.load(_f)
                 _oos_acc = _meta.get("oos_accuracy", "?")
@@ -196,7 +205,12 @@ def _load_models() -> None:
                 _ml_logger.info(
                     "Active ML model: advanced_oos.pkl — "
                     "OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
-                    _oos_acc, _oos_se, _oos_p, _oos_period, _n_features, _trained_at,
+                    _oos_acc,
+                    _oos_se,
+                    _oos_p,
+                    _oos_period,
+                    _n_features,
+                    _trained_at,
                 )
                 # Warn if loaded model accuracy is below the validated 68% threshold
                 if isinstance(_oos_acc, float) and _oos_acc < 0.60:
@@ -238,6 +252,7 @@ def _load_models() -> None:
     # Fire a Sentry fatal-level issue so operators get paged immediately
     try:
         from monitoring.sentry_config import capture_ml_fallback_event
+
         capture_ml_fallback_event(
             reason=f"advanced_oos.pkl not loadable from {_SAVED}",
             fallback_model="xgb_macro.pkl",
@@ -325,7 +340,8 @@ try:
     from ml.live_inference import get_advanced_predictor
 except Exception as _live_inf_exc:
     _ml_logger.warning(
-        "ml.live_inference unavailable — advanced predictor disabled: %s", _live_inf_exc,
+        "ml.live_inference unavailable — advanced predictor disabled: %s",
+        _live_inf_exc,
     )
 
     def get_advanced_predictor():  # type: ignore[misc]
@@ -351,7 +367,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, List, Optional  # noqa: F401
 
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
@@ -459,8 +475,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 }
             except Exception as _report_exc:
                 import logging as _log
+
                 _log.getLogger(__name__).warning(
-                    "Failed to read training report: %s", _report_exc,
+                    "Failed to read training report: %s",
+                    _report_exc,
                 )
 
         # No trained model yet — return honest untrained state.
@@ -502,8 +520,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 }
             except Exception as _pred_exc:
                 import logging as _log
+
                 _log.getLogger(__name__).warning(
-                    "Failed to read training report for predict: %s", _pred_exc,
+                    "Failed to read training report for predict: %s",
+                    _pred_exc,
                 )
 
         return {

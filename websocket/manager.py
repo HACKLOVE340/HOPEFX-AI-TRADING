@@ -7,6 +7,7 @@ import asyncio
 import websockets
 import json
 
+
 class WebSocketManager:
     def __init__(self):
         self.connections = set()
@@ -30,10 +31,11 @@ class WebSocketManager:
             message = json.dumps(message)
             await asyncio.wait([user.send(message) for user in self.connections])
 
-    def start_server(self, host='localhost', port=8765):
+    def start_server(self, host="localhost", port=8765):
         server = websockets.serve(self.connection_handler, host, port)
         asyncio.get_event_loop().run_until_complete(server)
         asyncio.get_event_loop().run_forever()
+
 
 # Example usage:
 if __name__ == "__main__":

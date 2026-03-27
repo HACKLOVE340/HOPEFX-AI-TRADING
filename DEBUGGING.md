@@ -21,7 +21,7 @@ if not salt:
     salt_bytes = hashlib.sha256(self.master_key.encode()).digest()[:16]
 ```
 
-**Impact:** 
+**Impact:**
 - **Before:** Anyone with the source code could attempt to decrypt encrypted credentials
 - **After:** Unique salt per installation significantly increases security
 
@@ -126,7 +126,7 @@ def _connect_with_retry(self, ..., max_retries=3, retry_delay=1.0):
 # cache/market_data_cache.py
 class TickData:  # Dataclass for caching
 
-# database/models.py  
+# database/models.py
 class TickData(Base):  # SQLAlchemy model
 ```
 
@@ -149,7 +149,7 @@ class CachedTickData:  # Clear distinction
 #### 1. Database Migration Strategy
 **Issue:** No Alembic or migration tool configured
 **Impact:** Schema changes difficult to manage across environments
-**Recommendation:** 
+**Recommendation:**
 ```bash
 pip install alembic
 alembic init alembic
@@ -184,7 +184,7 @@ except json.JSONDecodeError as e:
 - Both TensorFlow (2.15.0) and PyTorch (2.1.1)
 - Multiple data analysis libraries
 
-**Recommendation:** 
+**Recommendation:**
 - Audit actual usage
 - Consider optional dependency groups
 - Pin all versions for reproducibility
@@ -211,11 +211,11 @@ from config.config_manager import ConfigManager, EncryptionManager
 def test_encryption_roundtrip():
     os.environ['CONFIG_ENCRYPTION_KEY'] = 'test-key-32-chars-minimum-here'
     em = EncryptionManager()
-    
+
     original = "sensitive-data"
     encrypted = em.encrypt(original)
     decrypted = em.decrypt(encrypted)
-    
+
     assert decrypted == original
     assert encrypted != original
 ```

@@ -6,6 +6,7 @@
 """
 Backtesting engine — runs signal-based backtests on OHLCV DataFrames.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -67,7 +68,9 @@ class BacktestEngine:
         )
         self.bars_per_day = bars_per_day
         # Daily rate derived from annual rate
-        self._overnight_rate_per_bar = self.overnight_rate_annual / 365 / self.bars_per_day
+        self._overnight_rate_per_bar = (
+            self.overnight_rate_annual / 365 / self.bars_per_day
+        )
         self.trades: List[dict] = []
         self.equity_curve: List[float] = [initial_balance]
 
@@ -75,7 +78,7 @@ class BacktestEngine:
     def run_backtest(
         self,
         data: pd.DataFrame,
-        signals,          # pd.Series or callable(data) -> pd.Series
+        signals,  # pd.Series or callable(data) -> pd.Series
     ) -> BacktestResult:
         """
         Run a backtest.
@@ -98,13 +101,13 @@ class BacktestEngine:
         total_commission = 0.0
         total_overnight = 0.0
 
-        position = 0        # current position size (units)
+        position = 0  # current position size (units)
         entry_price = 0.0
         entry_signal = 0
 
         for i in range(1, len(data)):
             prev_sig = signals.iloc[i - 1]
-            price    = data["close"].iloc[i]
+            price = data["close"].iloc[i]
             data["close"].iloc[i - 1]
 
             # Close existing position on signal flip or exit
@@ -114,20 +117,22 @@ class BacktestEngine:
                 total_commission += commission
                 net_pnl = pnl - commission
                 self.balance += net_pnl
-                self.trades.append({
-                    "entry_price": entry_price,
-                    "exit_price":  price,
-                    "size":        position,
-                    "pnl":         net_pnl,
-                    "win":         net_pnl > 0,
-                })
+                self.trades.append(
+                    {
+                        "entry_price": entry_price,
+                        "exit_price": price,
+                        "size": position,
+                        "pnl": net_pnl,
+                        "win": net_pnl > 0,
+                    }
+                )
                 position = 0
 
             # Open new position
             if prev_sig != 0 and position == 0:
                 size = (self.balance * self.position_size_pct) / price
                 position = size if prev_sig == 1 else -size
-                entry_price  = price
+                entry_price = price
                 entry_signal = prev_sig
 
             # Overnight financing cost — charged every bar on open positions.
@@ -149,13 +154,15 @@ class BacktestEngine:
             total_commission += commission
             net_pnl = pnl - commission
             self.balance += net_pnl
-            self.trades.append({
-                "entry_price": entry_price,
-                "exit_price":  price,
-                "size":        position,
-                "pnl":         net_pnl,
-                "win":         net_pnl > 0,
-            })
+            self.trades.append(
+                {
+                    "entry_price": entry_price,
+                    "exit_price": price,
+                    "size": position,
+                    "pnl": net_pnl,
+                    "win": net_pnl > 0,
+                }
+            )
             equity[-1] = self.balance
 
         self.equity_curve = equity
@@ -167,7 +174,8 @@ class BacktestEngine:
         daily_ret = np.diff(eq) / eq[:-1]
         sharpe = (
             float(np.mean(daily_ret) / np.std(daily_ret) * np.sqrt(252))
-            if np.std(daily_ret) > 0 else 0.0
+            if np.std(daily_ret) > 0
+            else 0.0
         )
 
         roll_max = np.maximum.accumulate(eq)
@@ -209,9 +217,9 @@ class BacktestEngine:
 
         sim_returns = np.array(sim_returns)
         return {
-            "mean_return":   float(np.mean(sim_returns)),
-            "std_return":    float(np.std(sim_returns)),
-            "percentile_5":  float(np.percentile(sim_returns, 5)),
+            "mean_return": float(np.mean(sim_returns)),
+            "std_return": float(np.std(sim_returns)),
+            "percentile_5": float(np.percentile(sim_returns, 5)),
             "percentile_95": float(np.percentile(sim_returns, 95)),
             "n_simulations": n_simulations,
         }

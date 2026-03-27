@@ -226,7 +226,10 @@ class AsyncExecutionEngine:
                 return False
 
     async def modify_order(
-        self, order_id: str, new_price: float, new_qty: Optional[float] = None,
+        self,
+        order_id: str,
+        new_price: float,
+        new_qty: Optional[float] = None,
     ) -> bool:
         """Modify existing order (cancel + replace)"""
         if order_id not in self.orders:
@@ -486,7 +489,9 @@ class AsyncExecutionEngine:
                 broker_id = order.metadata.get("broker_id")
 
                 fill_data = await self._rate_limited_request(
-                    venue, "get_fills", broker_id,
+                    venue,
+                    "get_fills",
+                    broker_id,
                 )
 
                 for fd in fill_data:

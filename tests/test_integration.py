@@ -151,9 +151,7 @@ def test_risk_validate_trade_returns_typed_tuple(risk):
 def test_risk_assess_risk_has_required_fields(risk):
     """assess_risk returns an object with can_trade and level attributes."""
     risk.update_equity(100_000.0)
-    assessment = risk.assess_risk(
-        {"equity": 100_000.0, "balance": 100_000.0}, []
-    )
+    assessment = risk.assess_risk({"equity": 100_000.0, "balance": 100_000.0}, [])
     assert hasattr(assessment, "can_trade")
     assert hasattr(assessment, "level")
     assert isinstance(assessment.can_trade, bool)
@@ -163,9 +161,7 @@ def test_risk_drawdown_tracking(risk):
     """Equity drop below threshold is reflected in drawdown state."""
     risk.update_equity(100_000.0)
     risk.update_equity(89_000.0)  # 11% drawdown — over 10% limit
-    assessment = risk.assess_risk(
-        {"equity": 89_000.0, "balance": 89_000.0}, []
-    )
+    assessment = risk.assess_risk({"equity": 89_000.0, "balance": 89_000.0}, [])
     # At 11% drawdown the system should flag it
     assert isinstance(assessment.can_trade, bool)
 
@@ -251,40 +247,59 @@ def test_metrics_latency_histogram_observe(metrics):
 
 def test_email_fill_no_smtp_returns_bool():
     from notifications.email_triggers import send_trade_fill_email
+
     result = send_trade_fill_email(
-        symbol="XAUUSD", direction="buy", quantity=0.1,
-        fill_price=2050.0, net_pnl=None, commission=3.5, to="",
+        symbol="XAUUSD",
+        direction="buy",
+        quantity=0.1,
+        fill_price=2050.0,
+        net_pnl=None,
+        commission=3.5,
+        to="",
     )
     assert isinstance(result, bool)
 
 
 def test_email_daily_report_no_smtp_returns_bool():
     from notifications.email_triggers import send_daily_report_email
+
     result = send_daily_report_email(
-        date="2026-03-26", daily_pnl=312.50, daily_pnl_pct=0.31,
-        total_trades=3, win_rate_pct=66.7, equity=105_312.50, to="",
+        date="2026-03-26",
+        daily_pnl=312.50,
+        daily_pnl_pct=0.31,
+        total_trades=3,
+        win_rate_pct=66.7,
+        equity=105_312.50,
+        to="",
     )
     assert isinstance(result, bool)
 
 
 def test_email_risk_halt_no_smtp_returns_bool():
     from notifications.email_triggers import send_risk_halt_email
+
     result = send_risk_halt_email(
         reason="Daily loss limit reached",
-        drawdown_pct=5.02, limit_pct=5.0, to="",
+        drawdown_pct=5.02,
+        limit_pct=5.0,
+        to="",
     )
     assert isinstance(result, bool)
 
 
 def test_fcm_log_only_when_no_key(capsys):
     """PushNotificationManager logs when no FCM key is set."""
-    with patch.dict(os.environ, {
-        "FIREBASE_SERVER_KEY": "",
-        "FIREBASE_CREDENTIALS_JSON": "",
-        "FIREBASE_CREDENTIALS_BASE64": "",
-        "FIREBASE_PROJECT_ID": "",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "FIREBASE_SERVER_KEY": "",
+            "FIREBASE_CREDENTIALS_JSON": "",
+            "FIREBASE_CREDENTIALS_BASE64": "",
+            "FIREBASE_PROJECT_ID": "",
+        },
+    ):
         from mobile.push_notifications import PushNotificationManager
+
         mgr = PushNotificationManager()
         assert mgr.fcm_enabled is False
         result = mgr.send_notification("user1", "Test", "Body")
@@ -299,25 +314,37 @@ def test_fcm_log_only_when_no_key(capsys):
 
 def test_discord_bot_skips_when_no_webhook():
     from notifications.discord_bot import DiscordSignalBot
+
     with patch.dict(os.environ, {"DISCORD_WEBHOOK_URL": ""}):
         bot = DiscordSignalBot()
-        result = bot.post_signal_sync({
-            "symbol": "XAUUSD", "direction": "BUY",
-            "confidence": 0.72, "probability": 0.68,
-            "model_version": "advanced_oos_v1",
-        })
+        result = bot.post_signal_sync(
+            {
+                "symbol": "XAUUSD",
+                "direction": "BUY",
+                "confidence": 0.72,
+                "probability": 0.68,
+                "model_version": "advanced_oos_v1",
+            }
+        )
     assert result is False
 
 
 def test_discord_embed_has_required_keys():
     from notifications.discord_bot import _build_signal_embed
-    embed = _build_signal_embed({
-        "symbol": "XAUUSD", "direction": "BUY",
-        "confidence": 0.72, "probability": 0.68,
-        "model_version": "advanced_oos_v1",
-        "entry_price": 2050.0, "stop_loss": 2030.0, "take_profit": 2090.0,
-        "timestamp": "2026-03-26T12:00:00Z",
-    })
+
+    embed = _build_signal_embed(
+        {
+            "symbol": "XAUUSD",
+            "direction": "BUY",
+            "confidence": 0.72,
+            "probability": 0.68,
+            "model_version": "advanced_oos_v1",
+            "entry_price": 2050.0,
+            "stop_loss": 2030.0,
+            "take_profit": 2090.0,
+            "timestamp": "2026-03-26T12:00:00Z",
+        }
+    )
     assert "title" in embed
     assert "color" in embed
     assert "fields" in embed
@@ -329,12 +356,14 @@ def test_discord_embed_has_required_keys():
 
 def test_discord_rr_ratio_computed():
     from notifications.discord_bot import _rr_ratio
+
     rr = _rr_ratio(entry=2050.0, sl=2030.0, tp=2090.0)
     assert rr == "2.00:1"
 
 
 def test_discord_direction_emoji():
     from notifications.discord_bot import _direction_emoji
+
     assert _direction_emoji("BUY") == "📈"
     assert _direction_emoji("SELL") == "📉"
     assert _direction_emoji("HOLD") == "⏸️"

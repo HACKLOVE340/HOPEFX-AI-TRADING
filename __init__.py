@@ -9,9 +9,9 @@ Advanced AI-powered trading framework with machine learning, real-time analysis,
 multi-broker integration, and intelligent trade execution.
 """
 
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Team'
-__license__ = 'MIT'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Team"
+__license__ = "MIT"
 
 # Import main components — wrapped so partial installs don't break the package
 try:
@@ -32,8 +32,12 @@ except Exception:  # pragma: no cover
 # Import trading components — wrapped so partial installs don't break the package
 try:
     from strategies import (
-        BaseStrategy, Signal, SignalType, StrategyStatus,
-        StrategyManager, MovingAverageCrossover
+        BaseStrategy,
+        Signal,
+        SignalType,
+        StrategyStatus,
+        StrategyManager,
+        MovingAverageCrossover,
     )
 except Exception:  # pragma: no cover
     pass
@@ -45,60 +49,63 @@ except Exception:  # pragma: no cover
 
 try:
     from brokers import (
-        BrokerConnector, Order, Position, AccountInfo,
-        OrderType, OrderSide, OrderStatus, PaperTradingBroker
+        BrokerConnector,
+        Order,
+        Position,
+        AccountInfo,
+        OrderType,
+        OrderSide,
+        OrderStatus,
+        PaperTradingBroker,
     )
 except Exception:  # pragma: no cover
     pass
 
 try:
-    from notifications import NotificationManager, NotificationLevel, NotificationChannel
+    from notifications import (
+        NotificationManager,
+        NotificationLevel,
+        NotificationChannel,
+    )
 except Exception:  # pragma: no cover
     pass
 
 __all__ = [
     # Version info
-    '__version__',
-    '__author__',
-    '__license__',
-
+    "__version__",
+    "__author__",
+    "__license__",
     # Configuration
-    'ConfigManager',
-    'initialize_config',
-
+    "ConfigManager",
+    "initialize_config",
     # Cache
-    'MarketDataCache',
-    'Timeframe',
-
+    "MarketDataCache",
+    "Timeframe",
     # Database
-    'Base',
-
+    "Base",
     # Strategies
-    'BaseStrategy',
-    'Signal',
-    'SignalType',
-    'StrategyStatus',
-    'StrategyManager',
-    'MovingAverageCrossover',
-
+    "BaseStrategy",
+    "Signal",
+    "SignalType",
+    "StrategyStatus",
+    "StrategyManager",
+    "MovingAverageCrossover",
     # Risk Management
-    'RiskManager',
-    'RiskConfig',
-    'PositionSize',
-    'PositionSizeMethod',
-
+    "RiskManager",
+    "RiskConfig",
+    "PositionSize",
+    "PositionSizeMethod",
     # Brokers
-    'BrokerConnector',
-    'Order',
-    'Position',
-    'AccountInfo',
-    'OrderType',
-    'OrderSide',
-    'OrderStatus',
-    'PaperTradingBroker',
-
+    "BrokerConnector",
+    "Order",
+    "Position",
+    "AccountInfo",
+    "OrderType",
+    "OrderSide",
+    "OrderStatus",
+    "PaperTradingBroker",
     # Notifications
-    'NotificationManager',
-    'NotificationLevel',
-    'NotificationChannel',
+    "NotificationManager",
+    "NotificationLevel",
+    "NotificationChannel",
 ]

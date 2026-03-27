@@ -413,10 +413,9 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate HOPEFX Helm chart files"
-    )
+    parser = argparse.ArgumentParser(description="Generate HOPEFX Helm chart files")
     parser.add_argument(
         "--output-dir",
         default="helm/hopefx",

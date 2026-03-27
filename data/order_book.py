@@ -43,7 +43,9 @@ class OrderBook:
             return self.best_ask - self.best_bid
         return None
 
-    def update(self, bids: List[Tuple[float, float]], asks: List[Tuple[float, float]]) -> None:
+    def update(
+        self, bids: List[Tuple[float, float]], asks: List[Tuple[float, float]]
+    ) -> None:
         self.bids = [OrderBookLevel(p, s) for p, s in sorted(bids, reverse=True)]
         self.asks = [OrderBookLevel(p, s) for p, s in sorted(asks)]
         self.timestamp = time.time()
@@ -60,8 +62,12 @@ class MultiSymbolOrderBook:
             self._books[symbol] = OrderBook(symbol=symbol)
         return self._books[symbol]
 
-    def update(self, symbol: str, bids: List[Tuple[float, float]],
-               asks: List[Tuple[float, float]]) -> None:
+    def update(
+        self,
+        symbol: str,
+        bids: List[Tuple[float, float]],
+        asks: List[Tuple[float, float]],
+    ) -> None:
         self.get_book(symbol).update(bids, asks)
 
     def get_mid_price(self, symbol: str) -> Optional[float]:

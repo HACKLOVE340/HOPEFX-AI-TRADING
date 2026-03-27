@@ -85,7 +85,13 @@ class PortfolioManager:
             mu = returns.mean()
             returns.std()
             port_ret = sum(w[a] * mu[a] for a in assets)
-            port_vol = float(np.sqrt(np.dot(list(w.values()), np.dot(returns.cov().values, list(w.values())))))
+            port_vol = float(
+                np.sqrt(
+                    np.dot(
+                        list(w.values()), np.dot(returns.cov().values, list(w.values()))
+                    )
+                )
+            )
             sharpe = port_ret / port_vol if port_vol > 0 else 0.0
             return {"weights": w, "expected_sharpe": sharpe}
 
@@ -174,8 +180,8 @@ class PortfolioManager:
         w = np.array([weights[a] for a in assets])
         sigma = cov_matrix.loc[assets, assets].values
 
-        marginal = sigma @ w          # (Sigma * w)
-        contrib = w * marginal        # element-wise
+        marginal = sigma @ w  # (Sigma * w)
+        contrib = w * marginal  # element-wise
         total = float(contrib.sum())
 
         if total == 0:

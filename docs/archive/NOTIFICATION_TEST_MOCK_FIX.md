@@ -46,11 +46,11 @@ When mocking in Python, you need to patch the module **where it's used**, not wh
    ```python
    # mymodule.py
    import requests
-   
+
    def my_function():
        requests.post(...)
    ```
-   
+
    Test:
    ```python
    @patch('mymodule.requests.post')  # Patch where it's used
@@ -63,7 +63,7 @@ When mocking in Python, you need to patch the module **where it's used**, not wh
        import requests
        requests.post(...)
    ```
-   
+
    Test:
    ```python
    @patch('mymodule.requests.post')  # Still patch where it's used

@@ -118,7 +118,9 @@ class MessageThrottler:
             self.minute_window.popleft()
 
     def _enter_throttle_state(
-        self, now: float, duration: Optional[float] = None,
+        self,
+        now: float,
+        duration: Optional[float] = None,
     ) -> None:
         """Enter throttled state"""
         cooldown = duration or self.cooldown

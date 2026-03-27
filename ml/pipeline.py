@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import traceback
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -40,6 +38,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="statsmodels")
 
 try:
     from statsmodels.tsa.stattools import adfuller, kpss
+
     _STATSMODELS = True
 except ImportError:
     _STATSMODELS = False
@@ -47,14 +46,16 @@ except ImportError:
 
 try:
     import xgboost as xgb
+
     _XGB = True
 except ImportError:
     _XGB = False
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
+    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
     from sklearn.preprocessing import StandardScaler
+
     _SKLEARN = True
 except ImportError:
     _SKLEARN = False
@@ -63,6 +64,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class StationarityResult:
@@ -104,11 +106,11 @@ class ValidationReport:
     oos_accuracy: float
     oos_accuracy_std: float
     mean_auc: float
-    p_value: float                  # binomial test vs 0.5 baseline
+    p_value: float  # binomial test vs 0.5 baseline
     n_folds: int
     n_total_oos_samples: int
-    passes_accuracy_gate: bool      # >= 65%
-    passes_pvalue_gate: bool        # < 0.001
+    passes_accuracy_gate: bool  # >= 65%
+    passes_pvalue_gate: bool  # < 0.001
     folds: List[WalkForwardFold] = field(default_factory=list)
     feature_importances: Dict[str, float] = field(default_factory=dict)
     timestamp: str = field(
@@ -133,6 +135,7 @@ class ValidationReport:
 # ---------------------------------------------------------------------------
 # Feature engineering
 # ---------------------------------------------------------------------------
+
 
 class FeatureEngineer:
     """
@@ -201,11 +204,14 @@ class FeatureEngineer:
         feats["bb_pos"] = (c - sma20) / (2 * std20 + 1e-10)
 
         # ATR normalised
-        tr = pd.concat([
-            h - lo,
-            (h - c.shift(1)).abs(),
-            (lo - c.shift(1)).abs(),
-        ], axis=1).max(axis=1)
+        tr = pd.concat(
+            [
+                h - lo,
+                (h - c.shift(1)).abs(),
+                (lo - c.shift(1)).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
         feats["atr_norm"] = tr.rolling(14).mean() / (c + 1e-10)
 
         # Volume z-score
@@ -249,6 +255,7 @@ class FeatureEngineer:
 # ---------------------------------------------------------------------------
 # Stationarity tests
 # ---------------------------------------------------------------------------
+
 
 class StationarityTester:
     """
@@ -317,7 +324,9 @@ class StationarityTester:
         )
 
     def test_dataframe(
-        self, df: pd.DataFrame, feature_cols: List[str],
+        self,
+        df: pd.DataFrame,
+        feature_cols: List[str],
     ) -> Dict[str, StationarityResult]:
         results = {}
         for col in feature_cols:
@@ -326,7 +335,10 @@ class StationarityTester:
             status = "STATIONARY" if r.is_stationary else "NON-STATIONARY"
             logger.info(
                 "Stationarity [%s] %s | ADF p=%.4f KPSS p=%.4f",
-                status, col, r.adf_pvalue, r.kpss_pvalue,
+                status,
+                col,
+                r.adf_pvalue,
+                r.kpss_pvalue,
             )
         return results
 
@@ -334,6 +346,7 @@ class StationarityTester:
 # ---------------------------------------------------------------------------
 # Walk-forward validator
 # ---------------------------------------------------------------------------
+
 
 class WalkForwardValidator:
     """
@@ -353,7 +366,8 @@ class WalkForwardValidator:
         self._min_train_size = min_train_size
 
     def split(
-        self, n: int,
+        self,
+        n: int,
     ) -> List[Tuple[range, range]]:
         """
         Generate (train_indices, test_indices) for each fold.
@@ -380,6 +394,7 @@ class WalkForwardValidator:
 # ---------------------------------------------------------------------------
 # XGBoost model
 # ---------------------------------------------------------------------------
+
 
 class XGBoostPredictor:
     """
@@ -469,13 +484,21 @@ class XGBoostPredictor:
         if self._model is None:
             raise RuntimeError("No model to save.")
         import joblib
+
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump({"model": self._model, "scaler": self._scaler,
-                     "features": self._feature_names}, path)
+        joblib.dump(
+            {
+                "model": self._model,
+                "scaler": self._scaler,
+                "features": self._feature_names,
+            },
+            path,
+        )
         logger.info("XGBoostPredictor saved to %s", path)
 
     def load(self, path: str) -> None:
         import joblib
+
         obj = joblib.load(path)
         self._model = obj["model"]
         self._scaler = obj["scaler"]
@@ -486,6 +509,7 @@ class XGBoostPredictor:
 # ---------------------------------------------------------------------------
 # ML Pipeline
 # ---------------------------------------------------------------------------
+
 
 class MLPipeline:
     """
@@ -543,9 +567,10 @@ class MLPipeline:
         y = feats["y"]
 
         logger.info(
-            "MLPipeline: features computed | rows=%d features=%d "
-            "class_balance=%.3f",
-            len(feats), len(feature_cols), y.mean(),
+            "MLPipeline: features computed | rows=%d features=%d " "class_balance=%.3f",
+            len(feats),
+            len(feature_cols),
+            y.mean(),
         )
 
         # ── 2. Stationarity tests ─────────────────────────────────────────────
@@ -554,7 +579,8 @@ class MLPipeline:
         if nonstationary:
             logger.warning(
                 "MLPipeline: %d non-stationary features: %s",
-                len(nonstationary), nonstationary,
+                len(nonstationary),
+                nonstationary,
             )
 
         if self._drop_nonstationary and nonstationary:
@@ -562,7 +588,8 @@ class MLPipeline:
             X = feats[feature_cols]
             logger.info(
                 "MLPipeline: dropped %d non-stationary features. Remaining: %d",
-                len(nonstationary), len(feature_cols),
+                len(nonstationary),
+                len(feature_cols),
             )
 
         self._stationary_features = feature_cols
@@ -574,25 +601,32 @@ class MLPipeline:
         logger.info(
             "MLPipeline: OOS accuracy=%.4f (target=%.2f) p=%.6f (target=%.4f) "
             "AUC=%.4f folds=%d",
-            report.oos_accuracy, self.OOS_ACCURACY_TARGET,
-            report.p_value, self.PVALUE_TARGET,
-            report.mean_auc, report.n_folds,
+            report.oos_accuracy,
+            self.OOS_ACCURACY_TARGET,
+            report.p_value,
+            self.PVALUE_TARGET,
+            report.mean_auc,
+            report.n_folds,
         )
 
         if not report.passes_accuracy_gate:
             logger.warning(
                 "MLPipeline: OOS accuracy %.4f < target %.2f — model NOT deployed.",
-                report.oos_accuracy, self.OOS_ACCURACY_TARGET,
+                report.oos_accuracy,
+                self.OOS_ACCURACY_TARGET,
             )
         if not report.passes_pvalue_gate:
             logger.warning(
                 "MLPipeline: p-value %.6f >= target %.4f — results may be noise.",
-                report.p_value, self.PVALUE_TARGET,
+                report.p_value,
+                self.PVALUE_TARGET,
             )
 
         # ── 4. Final model training (full dataset) ────────────────────────────
         if report.passes_accuracy_gate and report.passes_pvalue_gate:
-            logger.info("MLPipeline: gates passed — training final model on full dataset.")
+            logger.info(
+                "MLPipeline: gates passed — training final model on full dataset."
+            )
             self._predictor.fit(X, y)
             model_path = str(self._model_dir / "xgb_xauusd.pkl")
             self._predictor.save(model_path)
@@ -655,7 +689,12 @@ class MLPipeline:
 
             logger.info(
                 "MLPipeline fold %d/%d | train=%d test=%d acc=%.4f auc=%.4f",
-                i + 1, len(splits), len(train_idx), len(test_idx), acc, auc,
+                i + 1,
+                len(splits),
+                len(train_idx),
+                len(test_idx),
+                acc,
+                auc,
             )
 
         # Aggregate metrics

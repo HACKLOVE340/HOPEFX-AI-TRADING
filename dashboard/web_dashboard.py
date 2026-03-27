@@ -19,13 +19,15 @@ try:
     from aiohttp import web, WSMsgType
     import aiohttp_jinja2
     import jinja2
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly
-    import plotly.graph_objs as go
+    import plotly  # noqa: F401
+    import plotly.graph_objs as go  # noqa: F401
+
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
@@ -37,66 +39,68 @@ class DashboardWebSocketManager:
     """
     Manages WebSocket connections for real-time dashboard updates
     """
-    
+
     def __init__(self):
         self.clients: Set[web.WebSocketResponse] = set()
         self._lock = asyncio.Lock()
         self._running = False
         self._broadcast_task: Optional[asyncio.Task] = None
-    
+
     async def register(self, ws: web.WebSocketResponse):
         """Register new client"""
         async with self._lock:
             self.clients.add(ws)
             logger.info(f"Dashboard client connected. Total: {len(self.clients)}")
-    
+
     async def unregister(self, ws: web.WebSocketResponse):
         """Unregister client"""
         async with self._lock:
             self.clients.discard(ws)
             logger.info(f"Dashboard client disconnected. Total: {len(self.clients)}")
-    
+
     async def broadcast(self, message: Dict):
         """Broadcast message to all clients"""
         if not self.clients:
             return
-        
+
         message_str = json.dumps(message, default=str)
         disconnected = []
-        
+
         async with self._lock:
             for ws in self.clients:
                 try:
                     ws.send_str(message_str)
                 except Exception:
                     disconnected.append(ws)
-            
+
             # Remove disconnected clients
             for ws in disconnected:
                 self.clients.discard(ws)
-    
+
     async def start_broadcasting(self, data_source, interval: float = 1.0):
         """Start periodic data broadcasting"""
         self._running = True
-        
+
         while self._running:
             try:
                 # Get latest data
                 data = await data_source.get_dashboard_data()
-                await self.broadcast({
-                    'type': 'update',
-                    'timestamp': datetime.now(timezone.utc).isoformat(),
-                    'data': data
-                })
-                
+                await self.broadcast(
+                    {
+                        "type": "update",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "data": data,
+                    }
+                )
+
                 await asyncio.sleep(interval)
-                
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Broadcast error: {e}")
                 await asyncio.sleep(5)
-    
+
     def stop(self):
         """Stop broadcasting"""
         self._running = False
@@ -106,16 +110,16 @@ class DashboardDataSource:
     """
     Provides data for dashboard from trading system
     """
-    
+
     def __init__(self, trading_app):
         self.app = trading_app
         self._price_history: Dict[str, deque] = {
-            symbol: deque(maxlen=100) 
-            for symbol in getattr(trading_app, 'symbols', ['EURUSD', 'XAUUSD'])
+            symbol: deque(maxlen=100)
+            for symbol in getattr(trading_app, "symbols", ["EURUSD", "XAUUSD"])
         }
         self._trade_history: deque = deque(maxlen=50)
         self._performance_metrics: Dict[str, Any] = {}
-    
+
     async def get_dashboard_data(self) -> Dict:
         """Compile all dashboard data"""
         try:
@@ -126,40 +130,49 @@ class DashboardDataSource:
                     account = await self.app.broker.get_account_info()
                 except Exception as e:
                     logger.error(f"Error getting account: {e}")
-            
+
             # Positions
             positions = []
             if self.app.broker:
                 try:
                     positions = await self.app.broker.get_positions()
-                    positions = [p.to_dict() if hasattr(p, 'to_dict') else {
-                        'id': getattr(p, 'id', 'unknown'),
-                        'symbol': getattr(p, 'symbol', 'unknown'),
-                        'side': getattr(p, 'side', 'unknown'),
-                        'quantity': getattr(p, 'quantity', 0),
-                        'entry_price': getattr(p, 'entry_price', 0),
-                        'current_price': getattr(p, 'current_price', 0),
-                        'unrealized_pnl': getattr(p, 'unrealized_pnl', 0)
-                    } for p in positions]
+                    positions = [
+                        p.to_dict()
+                        if hasattr(p, "to_dict")
+                        else {
+                            "id": getattr(p, "id", "unknown"),
+                            "symbol": getattr(p, "symbol", "unknown"),
+                            "side": getattr(p, "side", "unknown"),
+                            "quantity": getattr(p, "quantity", 0),
+                            "entry_price": getattr(p, "entry_price", 0),
+                            "current_price": getattr(p, "current_price", 0),
+                            "unrealized_pnl": getattr(p, "unrealized_pnl", 0),
+                        }
+                        for p in positions
+                    ]
                 except Exception as e:
                     logger.error(f"Error getting positions: {e}")
-            
+
             # Brain state
             brain_state = {}
             if self.app.brain:
                 try:
                     state = self.app.brain.get_state()
                     brain_state = {
-                        'system_state': state.system_state.value if hasattr(state.system_state, 'value') else str(state.system_state),
-                        'equity': state.equity,
-                        'open_trades': state.open_trades_count,
-                        'daily_pnl': state.daily_pnl,
-                        'market_regime': {k: v.value if hasattr(v, 'value') else str(v) 
-                                        for k, v in state.market_regime.items()}
+                        "system_state": state.system_state.value
+                        if hasattr(state.system_state, "value")
+                        else str(state.system_state),
+                        "equity": state.equity,
+                        "open_trades": state.open_trades_count,
+                        "daily_pnl": state.daily_pnl,
+                        "market_regime": {
+                            k: v.value if hasattr(v, "value") else str(v)
+                            for k, v in state.market_regime.items()
+                        },
                     }
                 except Exception as e:
                     logger.error(f"Error getting brain state: {e}")
-            
+
             # Price data
             price_data = {}
             if self.app.price_engine:
@@ -167,36 +180,35 @@ class DashboardDataSource:
                     tick = self.app.price_engine.get_last_price(symbol)
                     if tick:
                         price_data[symbol] = {
-                            'bid': tick.bid,
-                            'ask': tick.ask,
-                            'spread': tick.spread,
-                            'timestamp': tick.timestamp
+                            "bid": tick.bid,
+                            "ask": tick.ask,
+                            "spread": tick.spread,
+                            "timestamp": tick.timestamp,
                         }
-            
+
             # Recent signals
             recent_signals = []
             if self.app.brain:
                 recent_signals = self.app.brain.get_decision_history(10)
-            
+
             return {
-                'account': account,
-                'positions': positions,
-                'brain_state': brain_state,
-                'prices': price_data,
-                'recent_signals': recent_signals,
-                'timestamp': datetime.now(timezone.utc).isoformat()
+                "account": account,
+                "positions": positions,
+                "brain_state": brain_state,
+                "prices": price_data,
+                "recent_signals": recent_signals,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            
+
         except Exception as e:
             logger.error(f"Error compiling dashboard data: {e}")
-            return {'error': str(e)}
-    
+            return {"error": str(e)}
+
     def record_trade(self, trade: Dict):
         """Record trade for history"""
-        self._trade_history.append({
-            **trade,
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        })
+        self._trade_history.append(
+            {**trade, "timestamp": datetime.now(timezone.utc).isoformat()}
+        )
 
 
 def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):
@@ -204,43 +216,43 @@ def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):
     if not AIOHTTP_AVAILABLE:
         logger.error("aiohttp required for dashboard")
         return None
-    
+
     app = web.Application()
-    
+
     # Setup Jinja2 templates
-    template_loader = jinja2.PackageLoader('dashboard', 'templates')
+    template_loader = jinja2.PackageLoader("dashboard", "templates")
     aiohttp_jinja2.setup(app, loader=template_loader)
-    
+
     # WebSocket manager
     ws_manager = DashboardWebSocketManager()
     data_source = DashboardDataSource(trading_app)
-    
+
     # Store in app
-    app['trading_app'] = trading_app
-    app['ws_manager'] = ws_manager
-    app['data_source'] = data_source
-    
+    app["trading_app"] = trading_app
+    app["ws_manager"] = ws_manager
+    app["data_source"] = data_source
+
     # Routes
-    app.router.add_get('/', index_handler)
-    app.router.add_get('/ws', websocket_handler)
-    app.router.add_get('/api/data', api_data_handler)
-    app.router.add_get('/api/chart/{symbol}', chart_data_handler)
-    app.router.add_static('/static', path='dashboard/static', name='static')
-    
+    app.router.add_get("/", index_handler)
+    app.router.add_get("/ws", websocket_handler)
+    app.router.add_get("/api/data", api_data_handler)
+    app.router.add_get("/api/chart/{symbol}", chart_data_handler)
+    app.router.add_static("/static", path="dashboard/static", name="static")
+
     # Start background broadcasting
     async def on_startup(app):
-        app['broadcast_task'] = asyncio.create_task(
+        app["broadcast_task"] = asyncio.create_task(
             ws_manager.start_broadcasting(data_source, interval=1.0)
         )
-    
+
     async def on_cleanup(app):
         ws_manager.stop()
-        if 'broadcast_task' in app:
-            app['broadcast_task'].cancel()
-    
+        if "broadcast_task" in app:
+            app["broadcast_task"].cancel()
+
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
-    
+
     return app, host, port
 
 
@@ -257,20 +269,20 @@ async def index_handler(request):
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
+        body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0a0e27;
             color: #fff;
             min-height: 100vh;
         }
-        .header { 
+        .header {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             padding: 20px;
             text-align: center;
             border-bottom: 3px solid #00d4ff;
         }
-        .header h1 { 
-            font-size: 2.5em; 
+        .header h1 {
+            font-size: 2.5em;
             text-transform: uppercase;
             letter-spacing: 3px;
             text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
@@ -327,8 +339,8 @@ async def index_handler(request):
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         .metric-label { color: #8892b0; }
-        .metric-value { 
-            font-weight: bold; 
+        .metric-value {
+            font-weight: bold;
             font-family: 'Courier New', monospace;
         }
         .positive { color: #00ff88; }
@@ -568,7 +580,7 @@ async def index_handler(request):
                 document.getElementById('balance').textContent = formatCurrency(data.account.balance);
                 document.getElementById('equity').textContent = formatCurrency(data.account.equity);
                 document.getElementById('free-margin').textContent = formatCurrency(data.account.free_margin);
-                
+
                 const dailyPnl = data.account.realized_pnl || 0;
                 const pnlElement = document.getElementById('daily-pnl');
                 pnlElement.textContent = formatCurrency(dailyPnl);
@@ -579,7 +591,7 @@ async def index_handler(request):
             if (data.brain_state) {
                 document.getElementById('brain-state').textContent = data.brain_state.system_state;
                 document.getElementById('open-positions').textContent = data.brain_state.open_trades;
-                
+
                 const drawdown = (data.brain_state.daily_pnl / (data.account?.balance || 1)) * 100;
                 document.getElementById('drawdown').textContent = drawdown.toFixed(2) + '%';
                 document.getElementById('drawdown').className = 'metric-value ' + (drawdown > 10 ? 'negative' : 'positive');
@@ -624,13 +636,13 @@ async def index_handler(request):
                 div.appendChild(label);
                 div.appendChild(value);
                 container.appendChild(div);
-                
+
                 // Update price history for chart
                 if (!priceHistory[symbol]) priceHistory[symbol] = [];
                 priceHistory[symbol].push({ x: new Date(), y: (data.bid + data.ask) / 2 });
                 if (priceHistory[symbol].length > 50) priceHistory[symbol].shift();
             });
-            
+
             updatePriceChart();
         }
 
@@ -642,7 +654,7 @@ async def index_handler(request):
                 name: symbol,
                 line: { width: 2 }
             }));
-            
+
             Plotly.newPlot('price-chart', traces, {
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 plot_bgcolor: 'rgba(0,0,0,0)',
@@ -783,64 +795,66 @@ async def index_handler(request):
             const hours = Math.floor(uptimeSeconds / 3600);
             const minutes = Math.floor((uptimeSeconds % 3600) / 60);
             const seconds = uptimeSeconds % 60;
-            document.getElementById('uptime').textContent = 
+            document.getElementById('uptime').textContent =
                 `Uptime: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }, 1000);
     </script>
 </body>
 </html>
     """
-    return web.Response(text=html_content, content_type='text/html')
+    return web.Response(text=html_content, content_type="text/html")
 
 
 async def websocket_handler(request):
     """WebSocket endpoint for real-time updates"""
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    
-    ws_manager = request.app['ws_manager']
+
+    ws_manager = request.app["ws_manager"]
     await ws_manager.register(ws)
-    
+
     try:
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
                 # Handle client messages if needed
                 data = json.loads(msg.data)
-                if data.get('action') == 'ping':
-                    await ws.send_str(json.dumps({'type': 'pong'}))
+                if data.get("action") == "ping":
+                    await ws.send_str(json.dumps({"type": "pong"}))
             elif msg.type == WSMsgType.ERROR:
                 logger.error(f"WebSocket error: {ws.exception()}")
     finally:
         await ws_manager.unregister(ws)
-    
+
     return ws
 
 
 async def api_data_handler(request):
     """REST API for dashboard data"""
-    data_source = request.app['data_source']
+    data_source = request.app["data_source"]
     data = await data_source.get_dashboard_data()
     return web.json_response(data)
 
 
 async def chart_data_handler(request):
     """Get historical chart data"""
-    symbol = request.match_info['symbol']
+    symbol = request.match_info["symbol"]
     # Return historical data for charting
-    return web.json_response({
-        'symbol': symbol,
-        'data': []  # Would fetch from database
-    })
+    return web.json_response(
+        {
+            "symbol": symbol,
+            "data": [],  # Would fetch from database
+        }
+    )
 
 
 async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):
     """Start dashboard server"""
     app, host, port = create_dashboard_app(trading_app, host, port)
-    
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)
     await site.start()
-    
+
     logger.info(f"🎛️ Dashboard started at http://{host}:{port}")
     return runner

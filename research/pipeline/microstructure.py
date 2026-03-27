@@ -79,8 +79,10 @@ logger = logging.getLogger(__name__)
 try:
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel
+    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
+
     OB_AVAILABLE = True
 except ImportError:
     OB_AVAILABLE = False
@@ -91,6 +93,7 @@ except ImportError:
 # Low-level helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _obi(bid_vols: np.ndarray, ask_vols: np.ndarray) -> float:
     """Order-book imbalance in [-1, +1]. +1 = all bids, -1 = all asks."""
     total = bid_vols.sum() + ask_vols.sum()
@@ -99,8 +102,12 @@ def _obi(bid_vols: np.ndarray, ask_vols: np.ndarray) -> float:
     return float((bid_vols.sum() - ask_vols.sum()) / total)
 
 
-def _weighted_mid(bid_prices: np.ndarray, bid_vols: np.ndarray,
-                  ask_prices: np.ndarray, ask_vols: np.ndarray) -> float:
+def _weighted_mid(
+    bid_prices: np.ndarray,
+    bid_vols: np.ndarray,
+    ask_prices: np.ndarray,
+    ask_vols: np.ndarray,
+) -> float:
     """
     Volume-weighted mid-price.
     Weights the best bid by ask-side volume and best ask by bid-side volume
@@ -116,9 +123,13 @@ def _weighted_mid(bid_prices: np.ndarray, bid_vols: np.ndarray,
     return float((bid_prices[0] * ask_v + ask_prices[0] * bid_v) / total)
 
 
-def _price_impact(bid_prices: np.ndarray, bid_vols: np.ndarray,
-                  ask_prices: np.ndarray, ask_vols: np.ndarray,
-                  target_vol: float) -> float:
+def _price_impact(
+    bid_prices: np.ndarray,
+    bid_vols: np.ndarray,
+    ask_prices: np.ndarray,
+    ask_vols: np.ndarray,
+    target_vol: float,
+) -> float:
     """
     Estimate the price impact of consuming `target_vol` units on the ask side.
     Returns the average execution price minus best ask (slippage).
@@ -142,6 +153,7 @@ def _price_impact(bid_prices: np.ndarray, bid_vols: np.ndarray,
 # ─────────────────────────────────────────────────────────────────────────────
 # Snapshot-based feature computer (live mode)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MicrostructureFeatures:
     """
@@ -193,14 +205,16 @@ class MicrostructureFeatures:
         else:
             bids, asks = [], []
 
-        self._records.append({
-            "timestamp": ts,
-            "bids": bids,
-            "asks": asks,
-            "last_price": last_price,
-            "trade_volume": trade_volume,
-            "is_buy": is_buy,
-        })
+        self._records.append(
+            {
+                "timestamp": ts,
+                "bids": bids,
+                "asks": asks,
+                "last_price": last_price,
+                "trade_volume": trade_volume,
+                "is_buy": is_buy,
+            }
+        )
 
     def to_dataframe(self) -> pd.DataFrame:
         """Compute all microstructure features from accumulated snapshots."""
@@ -212,6 +226,7 @@ class MicrostructureFeatures:
 # ─────────────────────────────────────────────────────────────────────────────
 # Core computation (works on both live records and historical DataFrames)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFrame:
     """Convert a list of snapshot dicts to a feature DataFrame."""
@@ -227,7 +242,11 @@ def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFra
 
         best_bid = bid_p[0] if len(bid_p) > 0 else np.nan
         best_ask = ask_p[0] if len(ask_p) > 0 else np.nan
-        mid = (best_bid + best_ask) / 2 if (not np.isnan(best_bid) and not np.isnan(best_ask)) else np.nan
+        mid = (
+            (best_bid + best_ask) / 2
+            if (not np.isnan(best_bid) and not np.isnan(best_ask))
+            else np.nan
+        )
         spread = (best_ask - best_bid) if not np.isnan(mid) else np.nan
         spread_pct = spread / mid if (mid and mid != 0) else np.nan
 
@@ -253,34 +272,37 @@ def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFra
         trade_vol = rec.get("trade_volume", 0.0)
         is_buy = rec.get("is_buy")
 
-        rows.append({
-            "timestamp": rec["timestamp"],
-            "ms_spread": spread,
-            "ms_spread_pct": spread_pct,
-            "ms_mid": mid,
-            "ms_wmid": wmid,
-            "ms_wmid_dev": (wmid - mid) / mid if (mid and mid != 0) else 0.0,
-            "ms_obi_1": obi1,
-            "ms_obi_5": obi5,
-            "ms_obi_10": obi10,
-            "ms_bid_depth5": bid_depth5,
-            "ms_ask_depth5": ask_depth5,
-            "ms_depth_ratio": depth_ratio,
-            "ms_price_impact": impact,
-            "ms_last_price": last_price,
-            "ms_trade_vol": trade_vol,
-            "ms_is_buy": 1.0 if is_buy is True else (-1.0 if is_buy is False else 0.0),
-        })
+        rows.append(
+            {
+                "timestamp": rec["timestamp"],
+                "ms_spread": spread,
+                "ms_spread_pct": spread_pct,
+                "ms_mid": mid,
+                "ms_wmid": wmid,
+                "ms_wmid_dev": (wmid - mid) / mid if (mid and mid != 0) else 0.0,
+                "ms_obi_1": obi1,
+                "ms_obi_5": obi5,
+                "ms_obi_10": obi10,
+                "ms_bid_depth5": bid_depth5,
+                "ms_ask_depth5": ask_depth5,
+                "ms_depth_ratio": depth_ratio,
+                "ms_price_impact": impact,
+                "ms_last_price": last_price,
+                "ms_trade_vol": trade_vol,
+                "ms_is_buy": 1.0
+                if is_buy is True
+                else (-1.0 if is_buy is False else 0.0),
+            }
+        )
 
     df = pd.DataFrame(rows).set_index("timestamp")
     df.index = pd.to_datetime(df.index, utc=True)
 
     # ── Derived rolling features ───────────────────────────────────────────
     # Spread z-score (20 snapshots)
-    df["ms_spread_z20"] = (
-        (df["ms_spread"] - df["ms_spread"].rolling(20).mean())
-        / df["ms_spread"].rolling(20).std().replace(0, np.nan)
-    )
+    df["ms_spread_z20"] = (df["ms_spread"] - df["ms_spread"].rolling(20).mean()) / df[
+        "ms_spread"
+    ].rolling(20).std().replace(0, np.nan)
 
     # OBI EMA(5)
     df["ms_obi_ema5"] = df["ms_obi_5"].ewm(span=5, adjust=False).mean()
@@ -312,7 +334,9 @@ def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFra
     cum_pv = (df["ms_last_price"] * df["ms_trade_vol"]).groupby(dates).cumsum()
     cum_v = df["ms_trade_vol"].groupby(dates).cumsum().replace(0, np.nan)
     session_vwap = cum_pv / cum_v
-    df["ms_vwap_dev"] = (df["ms_last_price"] - session_vwap) / session_vwap.replace(0, np.nan)
+    df["ms_vwap_dev"] = (df["ms_last_price"] - session_vwap) / session_vwap.replace(
+        0, np.nan
+    )
 
     return df.drop(columns=["ms_last_price", "ms_trade_vol", "ms_is_buy"])
 
@@ -321,7 +345,10 @@ def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFra
 # Historical snapshot DataFrame → features (batch mode)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def compute_microstructure_features(snapshot_df: pd.DataFrame, n_levels: int = 10) -> pd.DataFrame:
+
+def compute_microstructure_features(
+    snapshot_df: pd.DataFrame, n_levels: int = 10
+) -> pd.DataFrame:
     """
     Compute microstructure features from a historical snapshot DataFrame.
 
@@ -355,14 +382,16 @@ def compute_microstructure_features(snapshot_df: pd.DataFrame, n_levels: int = 1
         is_buy_raw = row.get("is_buy", 0)
         is_buy = True if is_buy_raw == 1 else (False if is_buy_raw == -1 else None)
 
-        records.append({
-            "timestamp": ts,
-            "bids": bids,
-            "asks": asks,
-            "last_price": float(row.get("last_price", 0.0)),
-            "trade_volume": float(row.get("volume", 0.0)),
-            "is_buy": is_buy,
-        })
+        records.append(
+            {
+                "timestamp": ts,
+                "bids": bids,
+                "asks": asks,
+                "last_price": float(row.get("last_price", 0.0)),
+                "trade_volume": float(row.get("volume", 0.0)),
+                "is_buy": is_buy,
+            }
+        )
 
     return _compute_from_records(records, n_levels=n_levels)
 
@@ -370,6 +399,7 @@ def compute_microstructure_features(snapshot_df: pd.DataFrame, n_levels: int = 1
 # ─────────────────────────────────────────────────────────────────────────────
 # Attach microstructure features to an OHLCV price DataFrame
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def attach_microstructure(
     price_df: pd.DataFrame,

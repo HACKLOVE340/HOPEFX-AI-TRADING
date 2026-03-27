@@ -22,6 +22,7 @@ The user is created with:
 
 Safe to run multiple times — updates the user if it already exists.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,13 +40,14 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "dev_secret_for_admin_seed_script_3
 os.environ.setdefault("DATABASE_URL", "sqlite:///hopefx.db")
 
 # ── Imports ───────────────────────────────────────────────────────────────────
-from database.models import Base
-from database.user_models import User, UserRole, UserStatus
+from database.models import Base  # noqa: E402
+from database.user_models import User, UserRole, UserStatus  # noqa: E402
+
 # Use the same hash_password as AuthService (auth.service uses pbkdf2_sha256 via passlib).
 # auth.jwt uses bcrypt — a different scheme. Using the wrong one causes
 # "hash could not be identified" at login time.
-from auth.service import hash_password
-from sqlalchemy import create_engine
+from auth.service import hash_password  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
 
 
 def _get_engine():
@@ -54,19 +56,22 @@ def _get_engine():
     return create_engine(db_url, connect_args=connect_args)
 
 
-def create_or_update_admin(email: str, username: str, password: str, reset: bool) -> None:
+def create_or_update_admin(
+    email: str, username: str, password: str, reset: bool
+) -> None:
     engine = _get_engine()
     Base.metadata.create_all(engine)
 
     from sqlalchemy.orm import sessionmaker
+
     Session = sessionmaker(bind=engine)
     session = Session()
 
     try:
         existing = (
-            session.query(User).filter(
-                (User.email == email.lower()) | (User.username == username)
-            ).first()
+            session.query(User)
+            .filter((User.email == email.lower()) | (User.username == username))
+            .first()
         )
 
         if existing and not reset:
@@ -105,8 +110,8 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
         print(f"  Email    : {email}")
         print(f"  Username : {username}")
         print(f"  Password : {password}")
-        print(f"  Role     : admin")
-        print(f"  Status   : active (email pre-verified)")
+        print("  Role     : admin")
+        print("  Status   : active (email pre-verified)")
         print("─" * 50)
         print("\n  Login endpoint: POST /api/auth/login")
         print('  Body: {"username": "<email or username>", "password": "<password>"}')
@@ -119,14 +124,20 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
 
 def main():
     parser = argparse.ArgumentParser(description="Create or reset HOPEFX admin user")
-    parser.add_argument("--email",    default="admin@hopefx.io",  help="Admin email")
-    parser.add_argument("--username", default="admin",             help="Admin username")
-    parser.add_argument("--password", default=None,                help="Password (auto-generated if omitted)")
-    parser.add_argument("--reset",    action="store_true",         help="Reset password if user exists")
+    parser.add_argument("--email", default="admin@hopefx.io", help="Admin email")
+    parser.add_argument("--username", default="admin", help="Admin username")
+    parser.add_argument(
+        "--password", default=None, help="Password (auto-generated if omitted)"
+    )
+    parser.add_argument(
+        "--reset", action="store_true", help="Reset password if user exists"
+    )
     args = parser.parse_args()
 
     if args.password is None:
-        import secrets, string
+        import secrets
+        import string
+
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         args.password = "".join(secrets.choice(alphabet) for _ in range(16))
         print(f"[INFO] Auto-generated password: {args.password}")

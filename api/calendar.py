@@ -221,7 +221,8 @@ def _event_to_out(event: Any) -> EventOut:
 async def get_upcoming(
     hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
     importance: Optional[str] = Query(
-        None, description="Filter: low|medium|high|critical",
+        None,
+        description="Filter: low|medium|high|critical",
     ),
 ) -> List[EventOut]:
     """Return upcoming economic events within the specified window."""
@@ -385,7 +386,8 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
         from fastapi import HTTPException
 
         raise HTTPException(
-            status_code=400, detail="outcome must be hawkish | dovish | neutral",
+            status_code=400,
+            detail="outcome must be hawkish | dovish | neutral",
         )
 
     now = datetime.now(timezone.utc)

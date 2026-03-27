@@ -22,19 +22,19 @@ leaderboard_manager = LeaderboardManager()
 performance_tracker = PerformanceTracker()
 
 __all__ = [
-    'CopyTradingEngine',
-    'StrategyMarketplace',
-    'ProfileManager',
-    'LeaderboardManager',
-    'PerformanceTracker',
-    'copy_trading_engine',
-    'marketplace',
-    'profile_manager',
-    'leaderboard_manager',
-    'performance_tracker',
+    "CopyTradingEngine",
+    "StrategyMarketplace",
+    "ProfileManager",
+    "LeaderboardManager",
+    "PerformanceTracker",
+    "copy_trading_engine",
+    "marketplace",
+    "profile_manager",
+    "leaderboard_manager",
+    "performance_tracker",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Social trading with copy trading, marketplace, and leaderboards'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Development Team"
+__description__ = "Social trading with copy trading, marketplace, and leaderboards"

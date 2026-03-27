@@ -60,25 +60,32 @@ class ComplianceManager:
         if self._session_factory:
             try:
                 from database.models import KYCRecord
+
                 with self._session_factory() as session:
-                    existing = session.query(KYCRecord).filter_by(user_id=user_id).first()
+                    existing = (
+                        session.query(KYCRecord).filter_by(user_id=user_id).first()
+                    )
                     if existing:
                         existing.status = KYCStatus.PENDING.value
                         existing.document_type = document_type
                         existing.submitted_at = now
                         existing.updated_at = now
                     else:
-                        session.add(KYCRecord(
-                            user_id=user_id,
-                            status=KYCStatus.PENDING.value,
-                            document_type=document_type,
-                            submitted_at=now,
-                        ))
+                        session.add(
+                            KYCRecord(
+                                user_id=user_id,
+                                status=KYCStatus.PENDING.value,
+                                document_type=document_type,
+                                submitted_at=now,
+                            )
+                        )
                     session.commit()
             except Exception as exc:
                 logger.error("KYC DB write failed: %s", exc)
 
-        self._log_audit("KYC", user_id, "kyc_submitted", {"document_type": document_type})
+        self._log_audit(
+            "KYC", user_id, "kyc_submitted", {"document_type": document_type}
+        )
         return record
 
     def approve_kyc(self, user_id: str) -> bool:
@@ -90,6 +97,7 @@ class ComplianceManager:
         if self._session_factory:
             try:
                 from database.models import KYCRecord
+
                 with self._session_factory() as session:
                     rec = session.query(KYCRecord).filter_by(user_id=user_id).first()
                     if rec:
@@ -111,6 +119,7 @@ class ComplianceManager:
         if self._session_factory:
             try:
                 from database.models import KYCRecord
+
                 with self._session_factory() as session:
                     rec = session.query(KYCRecord).filter_by(user_id=user_id).first()
                     if rec:
@@ -122,13 +131,16 @@ class ComplianceManager:
             except Exception as exc:
                 logger.error("KYC reject DB write failed: %s", exc)
 
-        self._log_audit("KYC", "system", "kyc_rejected", {"user_id": user_id, "reason": reason})
+        self._log_audit(
+            "KYC", "system", "kyc_rejected", {"user_id": user_id, "reason": reason}
+        )
         return True
 
     def get_kyc_status(self, user_id: str) -> KYCStatus:
         if self._session_factory:
             try:
                 from database.models import KYCRecord
+
                 with self._session_factory() as session:
                     rec = session.query(KYCRecord).filter_by(user_id=user_id).first()
                     if rec:
@@ -151,12 +163,16 @@ class ComplianceManager:
 
     def _log_audit(self, category: str, actor: str, action: str, data: Dict):
         self._sequence += 1
-        record_str = json.dumps({
-            "seq": self._sequence,
-            "prev": self._last_hash,
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "data": data,
-        }, sort_keys=True, default=str)
+        record_str = json.dumps(
+            {
+                "seq": self._sequence,
+                "prev": self._last_hash,
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "data": data,
+            },
+            sort_keys=True,
+            default=str,
+        )
         chain_hash = hashlib.sha256(record_str.encode()).hexdigest()
         self._last_hash = chain_hash
 
@@ -175,16 +191,19 @@ class ComplianceManager:
         if self._session_factory:
             try:
                 from database.models import AuditLogEntry
+
                 with self._session_factory() as session:
-                    session.add(AuditLogEntry(
-                        sequence_number=self._sequence,
-                        level="COMPLIANCE",
-                        category=category,
-                        actor=actor,
-                        action=action,
-                        data_json=json.dumps(data, default=str),
-                        hash_chain=chain_hash,
-                    ))
+                    session.add(
+                        AuditLogEntry(
+                            sequence_number=self._sequence,
+                            level="COMPLIANCE",
+                            category=category,
+                            actor=actor,
+                            action=action,
+                            data_json=json.dumps(data, default=str),
+                            hash_chain=chain_hash,
+                        )
+                    )
                     session.commit()
             except Exception as exc:
                 logger.error("Audit log DB write failed: %s", exc)
@@ -193,6 +212,7 @@ class ComplianceManager:
         if self._session_factory:
             try:
                 from database.models import AuditLogEntry
+
                 with self._session_factory() as session:
                     rows = (
                         session.query(AuditLogEntry)
@@ -203,7 +223,9 @@ class ComplianceManager:
                     return [
                         {
                             "sequence_number": r.sequence_number,
-                            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                            "timestamp": r.timestamp.isoformat()
+                            if r.timestamp
+                            else None,
                             "level": r.level,
                             "category": r.category,
                             "actor": r.actor,

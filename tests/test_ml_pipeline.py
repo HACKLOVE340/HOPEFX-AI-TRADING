@@ -13,7 +13,6 @@ walk-forward validation, XGBoost predictor.
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import patch
 
 from ml.pipeline import (
     FeatureEngineer,
@@ -40,18 +39,21 @@ def _make_ohlcv(n: int = 500) -> pd.DataFrame:
     low = close - np.abs(RNG.normal(0, 3, n))
     open_ = close + RNG.normal(0, 2, n)
     volume = np.abs(RNG.normal(1000, 200, n))
-    return pd.DataFrame({
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # FeatureEngineer
 # ---------------------------------------------------------------------------
+
 
 class TestFeatureEngineer:
     def setup_method(self):
@@ -110,6 +112,7 @@ class TestFeatureEngineer:
 # StationarityTester
 # ---------------------------------------------------------------------------
 
+
 class TestStationarityTester:
     def setup_method(self):
         self.tester = StationarityTester()
@@ -141,10 +144,12 @@ class TestStationarityTester:
         assert hasattr(result, "is_stationary")
 
     def test_test_dataframe(self):
-        df = pd.DataFrame({
-            "ret": RNG.normal(0, 0.01, 200),
-            "rw": np.cumsum(RNG.normal(0, 1, 200)),
-        })
+        df = pd.DataFrame(
+            {
+                "ret": RNG.normal(0, 0.01, 200),
+                "rw": np.cumsum(RNG.normal(0, 1, 200)),
+            }
+        )
         results = self.tester.test_dataframe(df, ["ret", "rw"])
         assert "ret" in results
         assert "rw" in results
@@ -155,6 +160,7 @@ class TestStationarityTester:
 # ---------------------------------------------------------------------------
 # WalkForwardValidator
 # ---------------------------------------------------------------------------
+
 
 class TestWalkForwardValidator:
     def test_correct_number_of_folds(self):
@@ -191,6 +197,7 @@ class TestWalkForwardValidator:
 # ---------------------------------------------------------------------------
 # XGBoostPredictor
 # ---------------------------------------------------------------------------
+
 
 class TestXGBoostPredictor:
     def setup_method(self):
@@ -243,6 +250,7 @@ class TestXGBoostPredictor:
 # MLPipeline (integration — uses real XGBoost)
 # ---------------------------------------------------------------------------
 
+
 class TestMLPipeline:
     def test_run_returns_validation_report(self, tmp_path):
         df = _make_ohlcv(600)
@@ -276,6 +284,7 @@ class TestMLPipeline:
 
     def test_to_dict_serialisable(self, tmp_path):
         import json
+
         df = _make_ohlcv(600)
         pipeline = MLPipeline(model_dir=str(tmp_path), n_folds=3)
         report = pipeline.run(df)

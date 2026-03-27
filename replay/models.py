@@ -13,8 +13,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ReplaySpeed(Enum):
     """Replay speed options"""
+
     PAUSED = 0
     SPEED_1X = 1
     SPEED_2X = 2
@@ -26,6 +28,7 @@ class ReplaySpeed(Enum):
 
 class ReplayState(Enum):
     """Replay state"""
+
     IDLE = "idle"
     PLAYING = "playing"
     PAUSED = "paused"
@@ -35,6 +38,7 @@ class ReplayState(Enum):
 @dataclass
 class ReplaySession:
     """Replay session configuration"""
+
     session_id: str
     symbol: str
     timeframe: str
@@ -53,11 +57,10 @@ class ReplaySession:
 @dataclass
 class ReplayBar:
     """Single bar of replay data"""
+
     timestamp: datetime
     open: float
     high: float
     low: float
     close: float
     volume: float
-
-

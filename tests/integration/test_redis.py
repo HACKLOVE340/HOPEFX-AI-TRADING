@@ -31,6 +31,7 @@ import pytest
 try:
     import redis as redis_lib
     from redis.exceptions import ConnectionError as RedisConnectionError
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -38,6 +39,7 @@ except ImportError:
 
 try:
     from cache.market_data_cache import MarketDataCache
+
     CACHE_AVAILABLE = True
 except Exception:
     CACHE_AVAILABLE = False
@@ -75,6 +77,7 @@ requires_redis = pytest.mark.skipif(
 # Tests that only need the redis package (no live server)
 # ===========================================================================
 
+
 class TestRedisPackage:
     """Smoke tests that exercise the redis package without a live server."""
 
@@ -85,6 +88,7 @@ class TestRedisPackage:
     def test_redis_exceptions_importable(self) -> None:
         """Verify common exception types are accessible."""
         from redis.exceptions import ConnectionError, TimeoutError, AuthenticationError
+
         assert ConnectionError
         assert TimeoutError
         assert AuthenticationError
@@ -99,6 +103,7 @@ class TestRedisPackage:
 # ===========================================================================
 # Tests that need a live Redis instance
 # ===========================================================================
+
 
 @requires_redis
 class TestRedisLive:
@@ -145,7 +150,9 @@ class TestRedisLive:
 
     def test_hash_operations(self) -> None:
         key = "hopefx_test:tick"
-        self.r.hset(key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"})
+        self.r.hset(
+            key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"}
+        )
         self.r.expire(key, 30)
         assert self.r.hget(key, "symbol") == "XAUUSD"
         assert float(self.r.hget(key, "bid")) == pytest.approx(2345.50)
@@ -203,6 +210,7 @@ class TestRedisLive:
 # ===========================================================================
 # MarketDataCache integration tests (need live Redis + cache module)
 # ===========================================================================
+
 
 @requires_redis
 @pytest.mark.skipif(not CACHE_AVAILABLE, reason="MarketDataCache not importable")

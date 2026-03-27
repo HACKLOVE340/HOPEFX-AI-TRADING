@@ -75,21 +75,23 @@ _ib_stub.StopOrder = MagicMock
 sys.modules.setdefault("ib_insync", _ib_stub)
 
 # Now import brokers (stubs are already in sys.modules)
-from brokers.alpaca import AlpacaConnector
-from brokers.binance import BinanceConnector
-from brokers.oanda import OANDAConnector
-from brokers.mt5 import MT5Connector
-from brokers.interactive_brokers import InteractiveBrokersConnector
+from brokers.alpaca import AlpacaConnector  # noqa: E402
+from brokers.binance import BinanceConnector  # noqa: E402
+from brokers.oanda import OANDAConnector  # noqa: E402
+from brokers.mt5 import MT5Connector  # noqa: E402
+from brokers.interactive_brokers import InteractiveBrokersConnector  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Override module-level availability flags so connectors are constructable
 # even though the real packages aren't installed in this environment.
 # ---------------------------------------------------------------------------
-import brokers.mt5 as _mt5_module
+import brokers.mt5 as _mt5_module  # noqa: E402
+
 _mt5_module.MT5_AVAILABLE = True
 _mt5_module.mt5 = _mt5_stub
 
-import brokers.interactive_brokers as _ib_module
+import brokers.interactive_brokers as _ib_module  # noqa: E402
+
 _ib_module.IB_AVAILABLE = True
 _ib_module.IB = MagicMock
 _ib_module.Stock = MagicMock
@@ -99,18 +101,18 @@ _ib_module.Option = MagicMock
 _ib_module.MarketOrder = MagicMock
 _ib_module.LimitOrder = MagicMock
 _ib_module.StopOrder = MagicMock
-from brokers.advanced_orders import (
+from brokers.advanced_orders import (  # noqa: E402
     AdvancedOrderManager,
     OrderSide as AdvOrderSide,
     OrderType as AdvOrderType,
     OrderStatus as AdvOrderStatus,
 )
-from brokers.factory import BrokerFactory
-from brokers.prop_firms.ftmo import FTMOConnector
-from brokers.prop_firms.myforexfunds import MyForexFundsConnector
-from brokers.prop_firms.the5ers import The5ersConnector
-from brokers.prop_firms.topstep import TopstepTraderConnector
-from brokers.base import OrderType, OrderSide, OrderStatus
+from brokers.factory import BrokerFactory  # noqa: E402
+from brokers.prop_firms.ftmo import FTMOConnector  # noqa: E402
+from brokers.prop_firms.myforexfunds import MyForexFundsConnector  # noqa: E402
+from brokers.prop_firms.the5ers import The5ersConnector  # noqa: E402
+from brokers.prop_firms.topstep import TopstepTraderConnector  # noqa: E402
+from brokers.base import OrderType, OrderSide, OrderStatus  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +121,11 @@ from brokers.base import OrderType, OrderSide, OrderStatus
 
 ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": True}
 BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}
-OANDA_CONFIG = {"api_key": "test_token", "account_id": "test_account", "environment": "practice"}
+OANDA_CONFIG = {
+    "api_key": "test_token",
+    "account_id": "test_account",
+    "environment": "practice",
+}
 MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}
 IB_CONFIG = {"host": "127.0.0.1", "port": 7497, "client_id": 1, "paper": True}
 
@@ -139,6 +145,7 @@ def _mock_response(json_data=None, status_code=200, raise_for_status=None):
 # ---------------------------------------------------------------------------
 # AlpacaConnector Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestAlpacaConnector:
@@ -197,16 +204,18 @@ class TestAlpacaConnector:
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
         mock_sess.get.return_value = _mock_response()
-        mock_sess.post.return_value = _mock_response({
-            "id": "order-1",
-            "symbol": "AAPL",
-            "side": "buy",
-            "type": "market",
-            "qty": "10",
-            "status": "new",
-            "filled_qty": "0",
-            "created_at": "2024-01-01T00:00:00Z",
-        })
+        mock_sess.post.return_value = _mock_response(
+            {
+                "id": "order-1",
+                "symbol": "AAPL",
+                "side": "buy",
+                "type": "market",
+                "qty": "10",
+                "status": "new",
+                "filled_qty": "0",
+                "created_at": "2024-01-01T00:00:00Z",
+            }
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connect()
@@ -222,21 +231,25 @@ class TestAlpacaConnector:
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
         mock_sess.get.return_value = _mock_response()
-        mock_sess.post.return_value = _mock_response({
-            "id": "order-2",
-            "symbol": "AAPL",
-            "side": "sell",
-            "type": "limit",
-            "qty": "5",
-            "limit_price": "200.00",
-            "status": "new",
-            "filled_qty": "0",
-            "created_at": "2024-01-01T00:00:00Z",
-        })
+        mock_sess.post.return_value = _mock_response(
+            {
+                "id": "order-2",
+                "symbol": "AAPL",
+                "side": "sell",
+                "type": "limit",
+                "qty": "5",
+                "limit_price": "200.00",
+                "status": "new",
+                "filled_qty": "0",
+                "created_at": "2024-01-01T00:00:00Z",
+            }
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connect()
-        order = broker.place_order("AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=200.0)
+        order = broker.place_order(
+            "AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=200.0
+        )
 
         assert order is not None
         assert order.side == OrderSide.SELL
@@ -267,15 +280,17 @@ class TestAlpacaConnector:
     def test_get_positions(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response([
-            {
-                "symbol": "AAPL",
-                "qty": "10",
-                "avg_entry_price": "150.00",
-                "current_price": "155.00",
-                "unrealized_pl": "50.00",
-            }
-        ])
+        mock_sess.get.return_value = _mock_response(
+            [
+                {
+                    "symbol": "AAPL",
+                    "qty": "10",
+                    "avg_entry_price": "150.00",
+                    "current_price": "155.00",
+                    "unrealized_pl": "50.00",
+                }
+            ]
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connected = True
@@ -295,13 +310,15 @@ class TestAlpacaConnector:
     def test_get_account_info(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "cash": "10000",
-            "equity": "11000",
-            "initial_margin": "500",
-            "buying_power": "20000",
-            "position_count": "1",
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "cash": "10000",
+                "equity": "11000",
+                "initial_margin": "500",
+                "buying_power": "20000",
+                "position_count": "1",
+            }
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connected = True
@@ -332,11 +349,20 @@ class TestAlpacaConnector:
     def test_get_market_data(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "bars": [
-                {"t": "2024-01-01T00:00:00Z", "o": 100.0, "h": 110.0, "l": 99.0, "c": 105.0, "v": 1000}
-            ]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "bars": [
+                    {
+                        "t": "2024-01-01T00:00:00Z",
+                        "o": 100.0,
+                        "h": 110.0,
+                        "l": 99.0,
+                        "c": 105.0,
+                        "v": 1000,
+                    }
+                ]
+            }
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connected = True
@@ -351,9 +377,17 @@ class TestAlpacaConnector:
     def test_get_quote(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "quote": {"bp": 149.0, "ap": 149.1, "bs": 100, "as": 200, "t": "2024-01-01T00:00:00Z"}
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "quote": {
+                    "bp": 149.0,
+                    "ap": 149.1,
+                    "bs": 100,
+                    "as": 200,
+                    "t": "2024-01-01T00:00:00Z",
+                }
+            }
+        )
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connected = True
@@ -383,6 +417,7 @@ class TestAlpacaConnector:
 # BinanceConnector Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestBinanceConnector:
     """Tests for BinanceConnector."""
@@ -406,9 +441,9 @@ class TestBinanceConnector:
     def test_connect_success(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "balances": [{"asset": "USDT", "free": "1000", "locked": "0"}]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {"balances": [{"asset": "USDT", "free": "1000", "locked": "0"}]}
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         assert broker.connect() is True
@@ -437,17 +472,19 @@ class TestBinanceConnector:
     def test_place_market_buy(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.post.return_value = _mock_response({
-            "orderId": 12345,
-            "symbol": "BTCUSDT",
-            "side": "BUY",
-            "type": "MARKET",
-            "origQty": "0.001",
-            "executedQty": "0.001",
-            "status": "FILLED",
-            "price": "50000",
-            "transactTime": 1704067200000,
-        })
+        mock_sess.post.return_value = _mock_response(
+            {
+                "orderId": 12345,
+                "symbol": "BTCUSDT",
+                "side": "BUY",
+                "type": "MARKET",
+                "origQty": "0.001",
+                "executedQty": "0.001",
+                "status": "FILLED",
+                "price": "50000",
+                "transactTime": 1704067200000,
+            }
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
@@ -462,22 +499,26 @@ class TestBinanceConnector:
     def test_place_limit_sell(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.post.return_value = _mock_response({
-            "orderId": 67890,
-            "symbol": "BTCUSDT",
-            "side": "SELL",
-            "type": "LIMIT",
-            "origQty": "0.001",
-            "executedQty": "0",
-            "status": "NEW",
-            "price": "55000",
-            "transactTime": 1704067200000,
-        })
+        mock_sess.post.return_value = _mock_response(
+            {
+                "orderId": 67890,
+                "symbol": "BTCUSDT",
+                "side": "SELL",
+                "type": "LIMIT",
+                "origQty": "0.001",
+                "executedQty": "0",
+                "status": "NEW",
+                "price": "55000",
+                "transactTime": 1704067200000,
+            }
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
         broker.session = mock_sess
-        order = broker.place_order("BTCUSDT", OrderSide.SELL, 0.001, OrderType.LIMIT, price=55000)
+        order = broker.place_order(
+            "BTCUSDT", OrderSide.SELL, 0.001, OrderType.LIMIT, price=55000
+        )
 
         assert order is not None
         assert order.status == OrderStatus.OPEN
@@ -508,13 +549,15 @@ class TestBinanceConnector:
     def test_get_positions(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "balances": [
-                {"asset": "BTC", "free": "0.5", "locked": "0"},
-                {"asset": "USDT", "free": "1000", "locked": "50"},
-                {"asset": "ETH", "free": "0", "locked": "0"},
-            ]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "balances": [
+                    {"asset": "BTC", "free": "0.5", "locked": "0"},
+                    {"asset": "USDT", "free": "1000", "locked": "50"},
+                    {"asset": "ETH", "free": "0", "locked": "0"},
+                ]
+            }
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
@@ -528,12 +571,14 @@ class TestBinanceConnector:
     def test_get_account_info(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "balances": [
-                {"asset": "USDT", "free": "5000", "locked": "0"},
-                {"asset": "BTC", "free": "0.1", "locked": "0"},
-            ]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "balances": [
+                    {"asset": "USDT", "free": "5000", "locked": "0"},
+                    {"asset": "BTC", "free": "0.1", "locked": "0"},
+                ]
+            }
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
@@ -547,10 +592,24 @@ class TestBinanceConnector:
     def test_get_market_data(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response([
-            [1704067200000, "50000", "51000", "49000", "50500", "10.5",
-             1704067259000, "525000", 100, "5.5", "275000", "0"]
-        ])
+        mock_sess.get.return_value = _mock_response(
+            [
+                [
+                    1704067200000,
+                    "50000",
+                    "51000",
+                    "49000",
+                    "50500",
+                    "10.5",
+                    1704067259000,
+                    "525000",
+                    100,
+                    "5.5",
+                    "275000",
+                    "0",
+                ]
+            ]
+        )
 
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
@@ -578,6 +637,7 @@ class TestBinanceConnector:
 # ---------------------------------------------------------------------------
 # OANDAConnector Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestOANDAConnector:
@@ -632,13 +692,15 @@ class TestOANDAConnector:
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
         mock_sess.get.return_value = _mock_response({"account": {}})
-        mock_sess.post.return_value = _mock_response({
-            "orderFillTransaction": {
-                "id": "txn-1",
-                "units": "10000",
-                "price": "1.1050",
+        mock_sess.post.return_value = _mock_response(
+            {
+                "orderFillTransaction": {
+                    "id": "txn-1",
+                    "units": "10000",
+                    "price": "1.1050",
+                }
             }
-        })
+        )
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connect()
@@ -653,17 +715,21 @@ class TestOANDAConnector:
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
         mock_sess.get.return_value = _mock_response({"account": {}})
-        mock_sess.post.return_value = _mock_response({
-            "orderCreateTransaction": {
-                "id": "txn-2",
-                "units": "5000",
-                "price": "1.0950",
+        mock_sess.post.return_value = _mock_response(
+            {
+                "orderCreateTransaction": {
+                    "id": "txn-2",
+                    "units": "5000",
+                    "price": "1.0950",
+                }
             }
-        })
+        )
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connect()
-        order = broker.place_order("EUR_USD", OrderSide.BUY, 5000, OrderType.LIMIT, price=1.0950)
+        order = broker.place_order(
+            "EUR_USD", OrderSide.BUY, 5000, OrderType.LIMIT, price=1.0950
+        )
 
         assert order is not None
         assert order.status == OrderStatus.OPEN
@@ -688,15 +754,26 @@ class TestOANDAConnector:
     def test_get_positions(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "positions": [
-                {
-                    "instrument": "EUR_USD",
-                    "long": {"units": "10000", "averagePrice": "1.1050", "unrealizedPL": "50", "realizedPL": "0"},
-                    "short": {"units": "0", "averagePrice": "0", "unrealizedPL": "0"},
-                }
-            ]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "positions": [
+                    {
+                        "instrument": "EUR_USD",
+                        "long": {
+                            "units": "10000",
+                            "averagePrice": "1.1050",
+                            "unrealizedPL": "50",
+                            "realizedPL": "0",
+                        },
+                        "short": {
+                            "units": "0",
+                            "averagePrice": "0",
+                            "unrealizedPL": "0",
+                        },
+                    }
+                ]
+            }
+        )
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connected = True
@@ -711,15 +788,17 @@ class TestOANDAConnector:
     def test_get_account_info(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "account": {
-                "balance": "50000",
-                "NAV": "51000",
-                "marginUsed": "1000",
-                "marginAvailable": "49000",
-                "openPositionCount": "2",
+        mock_sess.get.return_value = _mock_response(
+            {
+                "account": {
+                    "balance": "50000",
+                    "NAV": "51000",
+                    "marginUsed": "1000",
+                    "marginAvailable": "49000",
+                    "openPositionCount": "2",
+                }
             }
-        })
+        )
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connected = True
@@ -745,16 +824,23 @@ class TestOANDAConnector:
     def test_get_market_data(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response({
-            "candles": [
-                {
-                    "time": "2024-01-01T00:00:00Z",
-                    "mid": {"o": "1.1000", "h": "1.1050", "l": "1.0980", "c": "1.1030"},
-                    "volume": 5000,
-                    "complete": True,
-                }
-            ]
-        })
+        mock_sess.get.return_value = _mock_response(
+            {
+                "candles": [
+                    {
+                        "time": "2024-01-01T00:00:00Z",
+                        "mid": {
+                            "o": "1.1000",
+                            "h": "1.1050",
+                            "l": "1.0980",
+                            "c": "1.1030",
+                        },
+                        "volume": 5000,
+                        "complete": True,
+                    }
+                ]
+            }
+        )
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connected = True
@@ -775,6 +861,7 @@ class TestOANDAConnector:
 # ---------------------------------------------------------------------------
 # MT5Connector Tests  (MetaTrader5 is stubbed via sys.modules)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestMT5Connector:
@@ -957,7 +1044,14 @@ class TestMT5Connector:
 
     def test_get_market_data(self):
         rates = [
-            {"time": 1704067200, "open": 1950.0, "high": 1960.0, "low": 1940.0, "close": 1955.0, "tick_volume": 500}
+            {
+                "time": 1704067200,
+                "open": 1950.0,
+                "high": 1960.0,
+                "low": 1940.0,
+                "close": 1955.0,
+                "tick_volume": 500,
+            }
         ]
         _mt5_stub.copy_rates_from_pos.return_value = rates
 
@@ -989,6 +1083,7 @@ class TestMT5Connector:
 # ---------------------------------------------------------------------------
 # InteractiveBrokersConnector Tests  (ib_insync is stubbed)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestInteractiveBrokersConnector:
@@ -1048,7 +1143,9 @@ class TestInteractiveBrokersConnector:
         mock_trade.order.orderId = 55
         broker.ib.placeOrder.return_value = mock_trade
 
-        order = broker.place_order("AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=190.0)
+        order = broker.place_order(
+            "AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=190.0
+        )
 
         assert order is not None
         assert order.price == 190.0
@@ -1167,6 +1264,7 @@ class TestInteractiveBrokersConnector:
 # AdvancedOrderManager Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAdvancedOrderManager:
     """Tests for AdvancedOrderManager."""
@@ -1207,8 +1305,7 @@ class TestAdvancedOrderManager:
     def test_create_oco_order(self):
         mgr = AdvancedOrderManager()
         oco = mgr.create_oco_order(
-            "EURUSD", AdvOrderSide.SELL, 10000,
-            limit_price=1.1100, stop_price=1.0900
+            "EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900
         )
         assert oco.order1.price == 1.1100
         assert oco.order2.stop_price == 1.0900
@@ -1219,8 +1316,7 @@ class TestAdvancedOrderManager:
     def test_oco_order_fill_cancels_other(self):
         mgr = AdvancedOrderManager()
         oco = mgr.create_oco_order(
-            "EURUSD", AdvOrderSide.SELL, 10000,
-            limit_price=1.1100, stop_price=1.0900
+            "EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900
         )
         # Simulate order1 fill
         mgr.handle_order_fill(oco.order1.id, 1.1100, 10000)
@@ -1249,8 +1345,7 @@ class TestAdvancedOrderManager:
     def test_bracket_entry_fill_activates_sl_tp(self):
         mgr = AdvancedOrderManager()
         bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0,
-            AdvOrderType.MARKET, None, 1920.0, 2000.0
+            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
         )
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         assert bracket.position_filled is True
@@ -1260,8 +1355,7 @@ class TestAdvancedOrderManager:
     def test_bracket_tp_fill_cancels_sl(self):
         mgr = AdvancedOrderManager()
         bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0,
-            AdvOrderType.MARKET, None, 1920.0, 2000.0
+            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
         )
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         mgr.handle_order_fill(bracket.take_profit_order.id, 2000.0, 1.0)
@@ -1272,8 +1366,7 @@ class TestAdvancedOrderManager:
     def test_bracket_sl_fill_cancels_tp(self):
         mgr = AdvancedOrderManager()
         bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0,
-            AdvOrderType.MARKET, None, 1920.0, 2000.0
+            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
         )
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         mgr.handle_order_fill(bracket.stop_loss_order.id, 1920.0, 1.0)
@@ -1312,14 +1405,18 @@ class TestAdvancedOrderManager:
 
     def test_create_conditional_order(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
+        base_order = mgr.create_order(
+            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
+        )
         conditions = [{"type": "price_above", "value": 1.1000}]
         cond_order = mgr.create_conditional_order(base_order, conditions)
         assert cond_order.id in mgr.conditional_orders
 
     def test_evaluate_conditional_order_price_above_true(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
+        base_order = mgr.create_order(
+            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
+        )
         conditions = [{"type": "price_above", "value": 1.1000}]
         cond = mgr.create_conditional_order(base_order, conditions)
         result = mgr.evaluate_conditional_order(cond.id, {"price": 1.1100})
@@ -1327,7 +1424,9 @@ class TestAdvancedOrderManager:
 
     def test_evaluate_conditional_order_price_below_false(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
+        base_order = mgr.create_order(
+            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
+        )
         conditions = [{"type": "price_below", "value": 1.0900}]
         cond = mgr.create_conditional_order(base_order, conditions)
         result = mgr.evaluate_conditional_order(cond.id, {"price": 1.1000})
@@ -1340,7 +1439,9 @@ class TestAdvancedOrderManager:
         )
         assert len(scaled.levels) == 4
         assert len(scaled.child_orders) == 4
-        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(10000, rel=1e-5)
+        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(  # noqa: E741
+            10000, rel=1e-5
+        )
 
     def test_get_open_orders(self):
         mgr = AdvancedOrderManager()
@@ -1375,7 +1476,9 @@ class TestAdvancedOrderManager:
 
     def test_order_to_dict(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000, price=1.10)
+        order = mgr.create_order(
+            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000, price=1.10
+        )
         d = order.to_dict()
         assert d["symbol"] == "EURUSD"
         assert d["price"] == 1.10
@@ -1402,6 +1505,7 @@ class TestAdvancedOrderManager:
 # ---------------------------------------------------------------------------
 # BrokerFactory Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestBrokerFactory:
@@ -1491,15 +1595,32 @@ class TestBrokerFactory:
         from brokers.base import BrokerConnector
 
         class CustomBroker(BrokerConnector):
-            def connect(self): return True
-            def disconnect(self): return True
-            def place_order(self, *a, **kw): return None
-            def cancel_order(self, *a, **kw): return False
-            def get_order(self, *a, **kw): return None
-            def get_positions(self, *a, **kw): return []
-            def close_position(self, *a, **kw): return False
-            def get_account_info(self, *a, **kw): return None
-            def get_market_data(self, *a, **kw): return None
+            def connect(self):
+                return True
+
+            def disconnect(self):
+                return True
+
+            def place_order(self, *a, **kw):
+                return None
+
+            def cancel_order(self, *a, **kw):
+                return False
+
+            def get_order(self, *a, **kw):
+                return None
+
+            def get_positions(self, *a, **kw):
+                return []
+
+            def close_position(self, *a, **kw):
+                return False
+
+            def get_account_info(self, *a, **kw):
+                return None
+
+            def get_market_data(self, *a, **kw):
+                return None
 
         BrokerFactory.register_broker("custom_test", CustomBroker)
         broker = BrokerFactory.create_broker("custom_test", {})
@@ -1513,6 +1634,7 @@ class TestBrokerFactory:
 # ---------------------------------------------------------------------------
 # Prop Firm Connector Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestFTMOConnector:
@@ -1554,8 +1676,10 @@ class TestFTMOConnector:
         broker = FTMOConnector(cfg)
         broker.connected = True
         _mt5_stub.account_info.return_value = MagicMock(
-            balance=100000.0, equity=99000.0,
-            margin=500.0, margin_free=98500.0,
+            balance=100000.0,
+            equity=99000.0,
+            margin=500.0,
+            margin_free=98500.0,
         )
         _mt5_stub.positions_get.return_value = []
         compliance = broker.check_ftmo_compliance()
@@ -1581,7 +1705,12 @@ class TestMyForexFundsConnector:
         assert broker.account_size == 100000
 
     def test_initialization_explicit_server(self):
-        cfg = {"login": 12345, "password": "pass", "server": "MyForexFunds-Live", "account_size": 50000}
+        cfg = {
+            "login": 12345,
+            "password": "pass",
+            "server": "MyForexFunds-Live",
+            "account_size": 50000,
+        }
         broker = MyForexFundsConnector(cfg)
         assert broker.server == "MyForexFunds-Live"
         assert broker.account_size == 50000

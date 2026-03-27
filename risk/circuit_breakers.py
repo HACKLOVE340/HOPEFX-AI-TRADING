@@ -173,7 +173,8 @@ class CircuitBreaker:
 
         if recent_minute >= self.limits.max_orders_per_minute:
             await self._trigger_circuit_breaker(
-                "ORDER_RATE", f"Order rate limit: {recent_minute} orders/minute",
+                "ORDER_RATE",
+                f"Order rate limit: {recent_minute} orders/minute",
             )
             return
 
@@ -190,7 +191,10 @@ class CircuitBreaker:
                 return
 
     async def _trigger_circuit_breaker(
-        self, reason: str, message: str, severity: str = "HIGH",
+        self,
+        reason: str,
+        message: str,
+        severity: str = "HIGH",
     ):
         """Trigger circuit breaker and halt trading"""
         with self.state_lock:

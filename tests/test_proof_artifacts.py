@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import math
-import pickle
 from pathlib import Path
 
 import pytest
@@ -38,25 +37,34 @@ MODELS = ROOT / "ml" / "saved_models"
 
 # ── performance.json ──────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def perf():
     path = RESULTS / "performance.json"
     if not path.exists():
-        pytest.skip("performance.json not generated yet — run examples/generate_proof_artifacts.py")
+        pytest.skip(
+            "performance.json not generated yet — run examples/generate_proof_artifacts.py"
+        )
     with open(path) as f:
         return json.load(f)
 
 
 def test_performance_json_exists():
-    assert (RESULTS / "performance.json").exists(), (
-        "Run: python examples/generate_proof_artifacts.py"
-    )
+    assert (
+        RESULTS / "performance.json"
+    ).exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_performance_has_required_keys(perf):
     required = [
-        "n_trades", "win_rate_pct", "sharpe_ratio", "total_return_pct",
-        "max_drawdown_pct", "profit_factor", "real_data", "data_source",
+        "n_trades",
+        "win_rate_pct",
+        "sharpe_ratio",
+        "total_return_pct",
+        "max_drawdown_pct",
+        "profit_factor",
+        "real_data",
+        "data_source",
     ]
     for key in required:
         assert key in perf, f"Missing key in performance.json: {key}"
@@ -95,47 +103,51 @@ def test_real_data_used(perf):
 
 def test_data_source_is_yahoo(perf):
     src = perf.get("data_source", "")
-    assert "Yahoo" in src or "GC=F" in src or "yfinance" in src.lower(), (
-        f"Unexpected data source: {src}"
-    )
+    assert (
+        "Yahoo" in src or "GC=F" in src or "yfinance" in src.lower()
+    ), f"Unexpected data source: {src}"
 
 
 # ── trades.csv ────────────────────────────────────────────────────────────────
 
+
 def test_trades_csv_exists():
-    assert (RESULTS / "trades.csv").exists(), (
-        "Run: python examples/generate_proof_artifacts.py"
-    )
+    assert (
+        RESULTS / "trades.csv"
+    ).exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_trades_csv_has_correct_columns():
     import pandas as pd
+
     df = pd.read_csv(RESULTS / "trades.csv")
     # Core columns always present; 'side' may be 'result' depending on generator version
     required_cols = {"entry_date", "exit_date", "net_pnl"}
     missing = required_cols - set(df.columns)
     assert not missing, f"trades.csv missing columns: {missing}"
     # At least one of side/result must be present
-    assert "side" in df.columns or "result" in df.columns, (
-        "trades.csv must have either 'side' or 'result' column"
-    )
+    assert (
+        "side" in df.columns or "result" in df.columns
+    ), "trades.csv must have either 'side' or 'result' column"
 
 
 def test_trades_csv_row_count(perf):
     import pandas as pd
+
     df = pd.read_csv(RESULTS / "trades.csv")
     expected = int(perf["n_trades"])
-    assert len(df) == expected, (
-        f"trades.csv has {len(df)} rows but performance.json says {expected} trades"
-    )
+    assert (
+        len(df) == expected
+    ), f"trades.csv has {len(df)} rows but performance.json says {expected} trades"
 
 
 # ── equity_curve.png ──────────────────────────────────────────────────────────
 
+
 def test_equity_curve_exists():
-    assert (RESULTS / "equity_curve.png").exists(), (
-        "Run: python examples/generate_proof_artifacts.py"
-    )
+    assert (
+        RESULTS / "equity_curve.png"
+    ).exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_equity_curve_nonempty():
@@ -145,20 +157,23 @@ def test_equity_curve_nonempty():
 
 # ── rf_xauusd.pkl ─────────────────────────────────────────────────────────────
 
+
 def test_model_pkl_exists():
-    assert (MODELS / "rf_xauusd.pkl").exists(), (
-        "Run: python examples/generate_proof_artifacts.py"
-    )
+    assert (
+        MODELS / "rf_xauusd.pkl"
+    ).exists(), "Run: python examples/generate_proof_artifacts.py"
 
 
 def test_model_pkl_loads():
     import joblib
+
     bundle = joblib.load(MODELS / "rf_xauusd.pkl")
     assert isinstance(bundle, dict), "rf_xauusd.pkl should be a dict bundle"
 
 
 def test_model_bundle_has_required_keys():
     import joblib
+
     bundle = joblib.load(MODELS / "rf_xauusd.pkl")
     for key in ("model", "scaler", "features"):
         assert key in bundle, f"rf_xauusd.pkl missing key: {key}"
@@ -167,6 +182,7 @@ def test_model_bundle_has_required_keys():
 def test_model_can_predict():
     import joblib
     import numpy as np
+
     bundle = joblib.load(MODELS / "rf_xauusd.pkl")
     model = bundle["model"]
     scaler = bundle["scaler"]
@@ -180,9 +196,11 @@ def test_model_can_predict():
 
 # ── script importability ──────────────────────────────────────────────────────
 
+
 def test_generate_proof_artifacts_importable():
     """Script has no syntax errors."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "generate_proof_artifacts",
         ROOT / "examples" / "generate_proof_artifacts.py",

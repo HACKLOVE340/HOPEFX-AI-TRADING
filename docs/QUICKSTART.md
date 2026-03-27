@@ -47,7 +47,7 @@ Get your API key from **OANDA fxTrade Practice → Manage API Access**.
 python main.py
 ```
 
-The API server starts on `http://localhost:8000`.  
+The API server starts on `http://localhost:8000`.
 Visit `http://localhost:8000/` for the landing page or `http://localhost:8000/docs` for the interactive API explorer.
 
 ---
@@ -80,7 +80,7 @@ curl http://localhost:8000/api/backtest/{run_id}/report.pdf -o report.pdf
 python scripts/validate_oanda.py
 ```
 
-This validates your OANDA credentials and starts a 30-day paper trading session.  
+This validates your OANDA credentials and starts a 30-day paper trading session.
 After 30 days of validated results, run:
 
 ```bash

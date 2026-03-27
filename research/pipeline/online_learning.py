@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import xgboost as xgb
+
     XGB_AVAILABLE = True
 except ImportError:
     XGB_AVAILABLE = False
@@ -71,6 +72,7 @@ except ImportError:
 try:
     import sys
     from pathlib import Path as _P
+
     sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
     DEEP_ONLINE_AVAILABLE = True
 except Exception:
@@ -80,6 +82,7 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────────
 # Page-Hinkley drift detector
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class DriftDetector:
     """
@@ -95,7 +98,9 @@ class DriftDetector:
     alpha     : Forgetting factor for running mean (0 = no forgetting)
     """
 
-    def __init__(self, delta: float = 0.005, threshold: float = 50.0, alpha: float = 0.01):
+    def __init__(
+        self, delta: float = 0.005, threshold: float = 50.0, alpha: float = 0.01
+    ):
         self.delta = delta
         self.threshold = threshold
         self.alpha = alpha
@@ -137,7 +142,9 @@ class DriftDetector:
             self._reset_stat()
             logger.warning(
                 "Concept drift detected (count=%d)  PH=%.2f  mean_error=%.4f",
-                self.drift_count, ph_stat, mean_error,
+                self.drift_count,
+                ph_stat,
+                mean_error,
             )
             return True
         return False
@@ -163,6 +170,7 @@ class DriftDetector:
 # ─────────────────────────────────────────────────────────────────────────────
 # ADWIN drift detector
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ADWINDriftDetector:
     """
@@ -242,7 +250,9 @@ class ADWINDriftDetector:
                     self._n -= 1
                 logger.warning(
                     "ADWIN drift detected (count=%d): |μ₀-μ₁|=%.4f ε=%.4f",
-                    self.drift_count, abs(mu0 - mu1), epsilon_cut,
+                    self.drift_count,
+                    abs(mu0 - mu1),
+                    epsilon_cut,
                 )
                 return True
         return False
@@ -267,6 +277,7 @@ class ADWINDriftDetector:
 # ─────────────────────────────────────────────────────────────────────────────
 # Adaptive blend weights
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class AdaptiveBlendWeights:
     """
@@ -301,7 +312,7 @@ class AdaptiveBlendWeights:
         self.min_primary = min_primary
         self.max_primary = max_primary
         self._primary_correct: Deque[float] = deque(maxlen=window)
-        self._online_correct:  Deque[float] = deque(maxlen=window)
+        self._online_correct: Deque[float] = deque(maxlen=window)
 
     def update(
         self,
@@ -319,7 +330,7 @@ class AdaptiveBlendWeights:
         online_prob  : Online learner probability.
         """
         primary_correct = float(int(round(primary_prob)) == label)
-        online_correct  = float(int(round(online_prob))  == label)
+        online_correct = float(int(round(online_prob)) == label)
 
         self._primary_correct.append(primary_correct)
         self._online_correct.append(online_correct)
@@ -328,15 +339,21 @@ class AdaptiveBlendWeights:
             return  # not enough data yet
 
         primary_acc = float(np.mean(self._primary_correct))
-        online_acc  = float(np.mean(self._online_correct))
+        online_acc = float(np.mean(self._online_correct))
 
         # Shift weight toward the better model
         if primary_acc > online_acc:
-            target = self._primary_weight + self.learning_rate * (primary_acc - online_acc)
+            target = self._primary_weight + self.learning_rate * (
+                primary_acc - online_acc
+            )
         else:
-            target = self._primary_weight - self.learning_rate * (online_acc - primary_acc)
+            target = self._primary_weight - self.learning_rate * (
+                online_acc - primary_acc
+            )
 
-        self._primary_weight = float(np.clip(target, self.min_primary, self.max_primary))
+        self._primary_weight = float(
+            np.clip(target, self.min_primary, self.max_primary)
+        )
 
     @property
     def primary_weight(self) -> float:
@@ -350,8 +367,13 @@ class AdaptiveBlendWeights:
         return {
             "primary_weight": round(self._primary_weight, 4),
             "online_weight": round(self.online_weight, 4),
-            "primary_acc": round(float(np.mean(self._primary_correct)) if self._primary_correct else 0.0, 4),
-            "online_acc":  round(float(np.mean(self._online_correct))  if self._online_correct  else 0.0, 4),
+            "primary_acc": round(
+                float(np.mean(self._primary_correct)) if self._primary_correct else 0.0,
+                4,
+            ),
+            "online_acc": round(
+                float(np.mean(self._online_correct)) if self._online_correct else 0.0, 4
+            ),
             "n_samples": len(self._primary_correct),
         }
 
@@ -359,6 +381,7 @@ class AdaptiveBlendWeights:
 # ─────────────────────────────────────────────────────────────────────────────
 # Incremental XGBoost
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class IncrementalXGBoost:
     """
@@ -428,7 +451,11 @@ class IncrementalXGBoost:
             self._replay_X.append(X_sc[i])
             self._replay_y.append(float(y[i]))
 
-        logger.info("IncrementalXGBoost initial fit: %d samples, %d trees", len(y), self.n_base_rounds)
+        logger.info(
+            "IncrementalXGBoost initial fit: %d samples, %d trees",
+            len(y),
+            self.n_base_rounds,
+        )
         return self
 
     # ── Incremental update ────────────────────────────────────────────────────
@@ -461,12 +488,14 @@ class IncrementalXGBoost:
         X_combined = np.vstack([X_sc, X_replay])
         y_combined = np.concatenate([y, y_replay])
 
-        dtrain = xgb.DMatrix(X_combined, label=y_combined, feature_names=self._feature_cols)
+        dtrain = xgb.DMatrix(
+            X_combined, label=y_combined, feature_names=self._feature_cols
+        )
         self._booster = xgb.train(
             self.xgb_params,
             dtrain,
             num_boost_round=self.n_new_rounds,
-            xgb_model=self._booster,   # warm-start: append trees
+            xgb_model=self._booster,  # warm-start: append trees
             verbose_eval=False,
         )
 
@@ -498,7 +527,9 @@ class IncrementalXGBoost:
         Full re-train on a recent window (called after drift detection).
         Preserves the scaler fit from the original training data.
         """
-        logger.info("IncrementalXGBoost: full re-train on %d samples after drift", len(y))
+        logger.info(
+            "IncrementalXGBoost: full re-train on %d samples after drift", len(y)
+        )
         X_sc = self._scaler.transform(X[self._feature_cols])
         dtrain = xgb.DMatrix(X_sc, label=y, feature_names=self._feature_cols)
         self._booster = xgb.train(
@@ -535,6 +566,7 @@ class IncrementalXGBoost:
 # Online ensemble: incremental XGB + deep EWC model
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class OnlineEnsemble:
     """
     Live-updating ensemble combining IncrementalXGBoost and the EWC deep model.
@@ -570,6 +602,7 @@ class OnlineEnsemble:
         if self.deep is not None:
             try:
                 import torch
+
                 X_arr = X.values.astype(np.float32)
                 # Deep model expects (batch, seq, features) — use last bar only
                 X_t = torch.tensor(X_arr).unsqueeze(1)
@@ -609,7 +642,9 @@ class OnlineEnsemble:
         # Update blend weights based on recent accuracy
         xgb_prob = self.xgb.predict_proba(X)
         xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())
-        self._xgb_acc_ema = (1 - self.ema_alpha) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
+        self._xgb_acc_ema = (
+            1 - self.ema_alpha
+        ) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
 
         total = self._xgb_acc_ema + self._deep_acc_ema
         self.w_xgb = self._xgb_acc_ema / total if total > 0 else 0.5
@@ -621,6 +656,7 @@ class OnlineEnsemble:
 # ─────────────────────────────────────────────────────────────────────────────
 # OnlineLearnerStore — production live-inference store for signal engine
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class OnlineLearnerStore:
     """
@@ -657,7 +693,7 @@ class OnlineLearnerStore:
     """
 
     PRIMARY_WEIGHT: float = 0.7
-    ONLINE_WEIGHT:  float = 0.3
+    ONLINE_WEIGHT: float = 0.3
 
     def __init__(
         self,
@@ -672,21 +708,25 @@ class OnlineLearnerStore:
         # Normalise weights to sum to 1
         total = primary_weight + online_weight
         self.primary_weight = primary_weight / total
-        self.online_weight  = online_weight  / total
+        self.online_weight = online_weight / total
 
-        self.min_fills       = min_fills
+        self.min_fills = min_fills
         self.adaptive_weights = adaptive_weights
-        self.persist_path    = Path(persist_path) if persist_path else None
+        self.persist_path = Path(persist_path) if persist_path else None
 
         self._model: Optional[IncrementalXGBoost] = None
-        self._ph_detector   = DriftDetector()
+        self._ph_detector = DriftDetector()
         self._adwin_detector = ADWINDriftDetector() if use_adwin else None
-        self._blend_weights  = AdaptiveBlendWeights(
-            initial_primary=self.primary_weight,
-        ) if adaptive_weights else None
+        self._blend_weights = (
+            AdaptiveBlendWeights(
+                initial_primary=self.primary_weight,
+            )
+            if adaptive_weights
+            else None
+        )
 
         self._fill_buffer_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
-        self._fill_buffer_y: Deque[float]       = deque(maxlen=buffer_size)
+        self._fill_buffer_y: Deque[float] = deque(maxlen=buffer_size)
         self._fill_count: int = 0
         self._ready: bool = False
         self._lock = threading.Lock()
@@ -871,7 +911,11 @@ class OnlineLearnerStore:
             blended = pw * advanced_prob + ow * online_prob
             logger.debug(
                 "OnlineLearner blend: adv=%.4f online=%.4f w=[%.2f,%.2f] → %.4f",
-                advanced_prob, online_prob, pw, ow, blended,
+                advanced_prob,
+                online_prob,
+                pw,
+                ow,
+                blended,
             )
             return float(np.clip(blended, 0.0, 1.0))
         except Exception as exc:
@@ -896,9 +940,7 @@ class OnlineLearnerStore:
         try:
             self._model = IncrementalXGBoost.load(self.persist_path)
             self._ready = True
-            logger.info(
-                "OnlineLearnerStore: warm-started from %s", self.persist_path
-            )
+            logger.info("OnlineLearnerStore: warm-started from %s", self.persist_path)
         except Exception as exc:
             logger.debug("OnlineLearnerStore warm-start failed: %s", exc)
 
@@ -920,11 +962,15 @@ class OnlineLearnerStore:
             "ready": self.is_ready,
             "fill_count": self._fill_count,
             "ph_drift_count": self._ph_detector.drift_count,
-            "adwin_drift_count": self._adwin_detector.drift_count if self._adwin_detector else 0,
+            "adwin_drift_count": self._adwin_detector.drift_count
+            if self._adwin_detector
+            else 0,
             "recent_error": self._ph_detector.recent_error,
             "primary_weight": round(self._effective_primary_weight, 4),
             "online_weight": round(self._effective_online_weight, 4),
             "adaptive_weights": self.adaptive_weights,
             "blend_weights": blend_status,
-            "adwin_window": self._adwin_detector.window_size if self._adwin_detector else 0,
+            "adwin_window": self._adwin_detector.window_size
+            if self._adwin_detector
+            else 0,
         }

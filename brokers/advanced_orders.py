@@ -425,7 +425,10 @@ class AdvancedOrderManager:
         )
 
         oco = OCOOrder(
-            id=str(uuid.uuid4()), symbol=symbol, order1=limit_order, order2=stop_order,
+            id=str(uuid.uuid4()),
+            symbol=symbol,
+            order1=limit_order,
+            order2=stop_order,
         )
 
         # Link orders
@@ -658,7 +661,9 @@ class AdvancedOrderManager:
         return scaled
 
     def update_trailing_stop(
-        self, order_id: str, current_price: float,
+        self,
+        order_id: str,
+        current_price: float,
     ) -> Optional[float]:
         """
         Update trailing stop price based on current price.
@@ -726,7 +731,9 @@ class AdvancedOrderManager:
         return None
 
     def evaluate_conditional_order(
-        self, order_id: str, market_data: Dict[str, Any],
+        self,
+        order_id: str,
+        market_data: Dict[str, Any],
     ) -> bool:
         """
         Evaluate conditions for a conditional order.

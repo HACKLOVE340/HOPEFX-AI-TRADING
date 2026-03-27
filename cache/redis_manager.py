@@ -21,12 +21,14 @@ logger = logging.getLogger(__name__)
 
 try:
     import redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
 
 try:
     import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
@@ -57,11 +59,13 @@ def _deserialize(raw: bytes) -> Any:
 class RedisCacheManager:
     """Production-ready Redis cache with JSON serialization."""
 
-    def __init__(self, host='localhost', port=6379, db=0):
+    def __init__(self, host="localhost", port=6379, db=0):
         if not REDIS_AVAILABLE:
             raise ImportError("redis package required: pip install redis")
         self.client = redis.Redis(
-            host=host, port=port, db=db,
+            host=host,
+            port=port,
+            db=db,
             decode_responses=False,
             socket_connect_timeout=5,
             socket_timeout=5,
@@ -89,23 +93,23 @@ class RedisCacheManager:
         except Exception as e:
             logger.warning("Redis set failed for key=%s: %s", key, e)
             return False
-    
+
     def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
         """Get cached market data."""
         key = f"ohlcv:{symbol}:{timeframe}"
         return self.get(key)
-    
+
     def set_market_data(
         self,
         symbol: str,
         timeframe: str,
         data: pd.DataFrame,
-        ttl: Optional[timedelta] = None
+        ttl: Optional[timedelta] = None,
     ):
         """Cache market data."""
         key = f"ohlcv:{symbol}:{timeframe}"
         self.set(key, data, ttl or timedelta(minutes=5))
-    
+
     def invalidate_pattern(self, pattern: str):
         """Invalidate all keys matching pattern."""
         for key in self.client.scan_iter(match=pattern):

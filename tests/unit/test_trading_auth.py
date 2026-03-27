@@ -50,6 +50,7 @@ def _load_module(name: str, path: pathlib.Path):
 # Register a minimal 'api' package stub so submodule dotted names resolve
 if "api" not in sys.modules:
     import types
+
     _api_pkg = types.ModuleType("api")
     _api_pkg.__path__ = [str(_API_DIR)]
     _api_pkg.__package__ = "api"
@@ -59,7 +60,8 @@ if "api" not in sys.modules:
 auth_module = _load_module("api.auth", _API_DIR / "auth.py")
 trading_module = _load_module("api.trading", _API_DIR / "trading.py")
 
-from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity
+from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity  # noqa: E402
+
 router = trading_module.router
 
 
@@ -70,7 +72,9 @@ router = trading_module.router
 _SECRET = os.environ["SECURITY_JWT_SECRET"]
 
 
-def _make_token(role: str = "trader", expired: bool = False, sub: str = "user-123") -> str:
+def _make_token(
+    role: str = "trader", expired: bool = False, sub: str = "user-123"
+) -> str:
     now = int(time.time())
     payload = {
         "sub": sub,
@@ -89,6 +93,7 @@ def _auth(role: str = "trader") -> Dict[str, str]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_broker():
     broker = MagicMock()
@@ -102,7 +107,9 @@ def mock_broker():
     broker.get_positions = AsyncMock(return_value=[])
     broker.close_position = AsyncMock(return_value=True)
     broker.close_all_positions = AsyncMock(return_value=2)
-    broker.get_account_info = AsyncMock(return_value={"balance": 10000.0, "equity": 10050.0})
+    broker.get_account_info = AsyncMock(
+        return_value={"balance": 10000.0, "equity": 10050.0}
+    )
     return broker
 
 
@@ -145,10 +152,14 @@ def client(app):
 # Authentication: missing / invalid / expired tokens
 # ---------------------------------------------------------------------------
 
+
 class TestAuthRejection:
     def test_place_order_no_token(self, client):
         # HTTPBearer(auto_error=True) returns 403 when Authorization header is absent
-        resp = client.post("/api/trading/order", json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0})
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
+        )
         assert resp.status_code in (401, 403)
 
     def test_place_order_invalid_token(self, client):
@@ -184,6 +195,7 @@ class TestAuthRejection:
 # ---------------------------------------------------------------------------
 # Role-based access control
 # ---------------------------------------------------------------------------
+
 
 class TestRoleEnforcement:
     def test_place_order_user_role_rejected(self, client):
@@ -249,6 +261,7 @@ class TestRoleEnforcement:
 # Input validation: symbol allowlist
 # ---------------------------------------------------------------------------
 
+
 class TestSymbolValidation:
     def test_disallowed_symbol_rejected(self, client):
         # validate_order_symbol raises HTTPException(400); FastAPI surfaces it as 400
@@ -284,6 +297,7 @@ class TestSymbolValidation:
 # ---------------------------------------------------------------------------
 # Input validation: quantity bounds
 # ---------------------------------------------------------------------------
+
 
 class TestQuantityValidation:
     def test_zero_quantity_rejected(self, client):
@@ -324,6 +338,7 @@ class TestQuantityValidation:
 # Input validation: order side / type
 # ---------------------------------------------------------------------------
 
+
 class TestOrderFieldValidation:
     def test_invalid_side_rejected(self, client):
         resp = client.post(
@@ -336,7 +351,12 @@ class TestOrderFieldValidation:
     def test_invalid_order_type_rejected(self, client):
         resp = client.post(
             "/api/trading/order",
-            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0, "order_type": "iceberg"},
+            json={
+                "symbol": "XAUUSD",
+                "side": "buy",
+                "quantity": 1.0,
+                "order_type": "iceberg",
+            },
             headers=_auth("trader"),
         )
         assert resp.status_code == 422
@@ -354,6 +374,7 @@ class TestOrderFieldValidation:
 # Unit tests for auth helpers
 # ---------------------------------------------------------------------------
 
+
 class TestAuthHelpers:
     def test_role_rank_ordering(self):
         assert _ROLE_RANK["user"] < _ROLE_RANK["trader"]
@@ -365,17 +386,20 @@ class TestAuthHelpers:
 
     def test_validate_order_symbol_rejects_unknown(self):
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException) as exc_info:
             validate_order_symbol("TSLA")
         assert exc_info.value.status_code == 400
 
     def test_validate_order_quantity_rejects_zero(self):
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException):
             validate_order_quantity(0.0)
 
     def test_validate_order_quantity_rejects_over_max(self):
         from fastapi import HTTPException
+
         with pytest.raises(HTTPException):
             validate_order_quantity(999.0)
 

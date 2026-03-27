@@ -47,7 +47,7 @@ import json
 import logging
 import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, time as dtime, timezone
 from enum import Enum, auto
 from pathlib import Path
@@ -61,29 +61,31 @@ _DEFAULT_CONFIG = Path(__file__).parent.parent.parent / "prop_firm_mode.json"
 
 # ── enums ─────────────────────────────────────────────────────────────────────
 
+
 class BreachType(Enum):
-    DAILY_DD    = auto()
-    TOTAL_DD    = auto()
+    DAILY_DD = auto()
+    TOTAL_DD = auto()
     NEWS_WINDOW = auto()
-    WEEKEND     = auto()
+    WEEKEND = auto()
     KILL_SWITCH = auto()
 
 
 class BreachAction(Enum):
-    PAUSE     = "pause"
+    PAUSE = "pause"
     LIQUIDATE = "liquidate"
 
 
 # ── config dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class PropConfig:
-    daily_dd:       float = 0.05   # 5 % daily drawdown limit
-    max_dd:         float = 0.10   # 10 % total drawdown limit
-    news_blackout:  int   = 300    # seconds (5 min) around high-impact news
-    weekend_close:  bool  = True   # close before Friday 21:00 UTC
-    breach_action:  str   = "pause"
-    telegram_token: str   = ""
+    daily_dd: float = 0.05  # 5 % daily drawdown limit
+    max_dd: float = 0.10  # 10 % total drawdown limit
+    news_blackout: int = 300  # seconds (5 min) around high-impact news
+    weekend_close: bool = True  # close before Friday 21:00 UTC
+    breach_action: str = "pause"
+    telegram_token: str = ""
     telegram_chat_id: str = ""
 
     @classmethod
@@ -118,12 +120,18 @@ class PropConfig:
             )
             news_blackout = int(
                 raw.get("news_blackout")
-                or firm_cfg.get("news_trading", {}).get("blackout_minutes_before_news", 5) * 60
+                or firm_cfg.get("news_trading", {}).get(
+                    "blackout_minutes_before_news", 5
+                )
+                * 60
                 or 300,
             )
             weekend_close = bool(
                 raw.get("weekend_close", True)
-                or firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", False) is False,
+                or firm_cfg.get("overnight_holding", {}).get(
+                    "weekend_holding_allowed", False
+                )
+                is False,
             )
             return cls(
                 daily_dd=float(daily_dd),
@@ -131,24 +139,32 @@ class PropConfig:
                 news_blackout=news_blackout,
                 weekend_close=weekend_close,
                 breach_action=raw.get("breach_action", "pause"),
-                telegram_token=raw.get("telegram_token", os.environ.get("TELEGRAM_BOT_TOKEN", "")),
-                telegram_chat_id=raw.get("telegram_chat_id", os.environ.get("TELEGRAM_CHAT_ID", "")),
+                telegram_token=raw.get(
+                    "telegram_token", os.environ.get("TELEGRAM_BOT_TOKEN", "")
+                ),
+                telegram_chat_id=raw.get(
+                    "telegram_chat_id", os.environ.get("TELEGRAM_CHAT_ID", "")
+                ),
             )
         except Exception as exc:
-            logger.error("Failed to parse prop_firm_mode.json: %s — using defaults", exc)
+            logger.error(
+                "Failed to parse prop_firm_mode.json: %s — using defaults", exc
+            )
             return cls()
 
 
 # ── breach record ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class BreachRecord:
     breach_type: BreachType
-    timestamp:   str
-    detail:      str
+    timestamp: str
+    detail: str
 
 
 # ── PropEnforcer ──────────────────────────────────────────────────────────────
+
 
 class PropEnforcer:
     """
@@ -172,16 +188,16 @@ class PropEnforcer:
         self._lock = threading.Lock()
 
         # Balances
-        self._start_balance:      float = 0.0   # set on first update_balance call
-        self._high_water_mark:    float = 0.0   # trailing peak equity
-        self._sod_equity:         float = 0.0   # start-of-day equity (reset at UTC 00:00)
-        self._current_equity:     float = 0.0
+        self._start_balance: float = 0.0  # set on first update_balance call
+        self._high_water_mark: float = 0.0  # trailing peak equity
+        self._sod_equity: float = 0.0  # start-of-day equity (reset at UTC 00:00)
+        self._current_equity: float = 0.0
 
         # State
-        self._halted:             bool  = False
-        self._halt_reason:        str   = ""
-        self._breach_log:         List[BreachRecord] = []
-        self._news_events:        List[float] = []  # UTC timestamps of upcoming news
+        self._halted: bool = False
+        self._halt_reason: str = ""
+        self._breach_log: List[BreachRecord] = []
+        self._news_events: List[float] = []  # UTC timestamps of upcoming news
 
         # External kill-switch callback (e.g. KillSwitch.activate)
         self._kill_switch_fn = kill_switch_fn
@@ -191,13 +207,17 @@ class PropEnforcer:
 
         logger.info(
             "PropEnforcer loaded — daily_dd=%.1f%% max_dd=%.1f%% news_blackout=%ds weekend_close=%s",
-            self.cfg.daily_dd * 100, self.cfg.max_dd * 100,
-            self.cfg.news_blackout, self.cfg.weekend_close,
+            self.cfg.daily_dd * 100,
+            self.cfg.max_dd * 100,
+            self.cfg.news_blackout,
+            self.cfg.weekend_close,
         )
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def update_balance(self, current_equity: float, start_of_day_equity: Optional[float] = None) -> None:
+    def update_balance(
+        self, current_equity: float, start_of_day_equity: Optional[float] = None
+    ) -> None:
         """
         Update equity state. Call on every account snapshot.
 
@@ -210,9 +230,9 @@ class PropEnforcer:
         with self._lock:
             self._current_equity = current_equity
             if self._start_balance == 0:
-                self._start_balance   = current_equity
+                self._start_balance = current_equity
                 self._high_water_mark = current_equity
-                self._sod_equity      = current_equity
+                self._sod_equity = current_equity
             if start_of_day_equity is not None:
                 self._sod_equity = start_of_day_equity
             if current_equity > self._high_water_mark:
@@ -232,8 +252,11 @@ class PropEnforcer:
                 self._halted = False
                 self._halt_reason = ""
                 logger.info("Daily reset — daily-DD halt cleared")
-        logger.info("PropEnforcer daily reset | SOD equity=%.2f HWM=%.2f",
-                    new_equity, self._high_water_mark)
+        logger.info(
+            "PropEnforcer daily reset | SOD equity=%.2f HWM=%.2f",
+            new_equity,
+            self._high_water_mark,
+        )
 
     def register_news_event(self, utc_timestamp: float) -> None:
         """Register a high-impact news event (Unix UTC timestamp)."""
@@ -285,7 +308,9 @@ class PropEnforcer:
 
             # 5. Total drawdown check (from high-water mark)
             if self._high_water_mark > 0:
-                total_dd = (self._high_water_mark - self._current_equity) / self._high_water_mark
+                total_dd = (
+                    self._high_water_mark - self._current_equity
+                ) / self._high_water_mark
                 if total_dd >= self.cfg.max_dd:
                     reason = (
                         f"TOTAL_DD breach: {total_dd*100:.2f}% >= {self.cfg.max_dd*100:.1f}% limit "
@@ -301,24 +326,28 @@ class PropEnforcer:
         with self._lock:
             daily_dd = (
                 (self._sod_equity - self._current_equity) / self._sod_equity
-                if self._sod_equity > 0 else 0.0
+                if self._sod_equity > 0
+                else 0.0
             )
             total_dd = (
                 (self._high_water_mark - self._current_equity) / self._high_water_mark
-                if self._high_water_mark > 0 else 0.0
+                if self._high_water_mark > 0
+                else 0.0
             )
             return {
-                "halted":           self._halted,
-                "halt_reason":      self._halt_reason,
-                "current_equity":   self._current_equity,
-                "high_water_mark":  self._high_water_mark,
-                "sod_equity":       self._sod_equity,
-                "daily_dd_pct":     round(daily_dd * 100, 4),
-                "total_dd_pct":     round(total_dd * 100, 4),
-                "daily_dd_limit":   self.cfg.daily_dd * 100,
-                "total_dd_limit":   self.cfg.max_dd * 100,
-                "breach_count":     len(self._breach_log),
-                "last_breach":      self._breach_log[-1].__dict__ if self._breach_log else None,
+                "halted": self._halted,
+                "halt_reason": self._halt_reason,
+                "current_equity": self._current_equity,
+                "high_water_mark": self._high_water_mark,
+                "sod_equity": self._sod_equity,
+                "daily_dd_pct": round(daily_dd * 100, 4),
+                "total_dd_pct": round(total_dd * 100, 4),
+                "daily_dd_limit": self.cfg.daily_dd * 100,
+                "total_dd_limit": self.cfg.max_dd * 100,
+                "breach_count": len(self._breach_log),
+                "last_breach": self._breach_log[-1].__dict__
+                if self._breach_log
+                else None,
             }
 
     # ── internal helpers ──────────────────────────────────────────────────────
@@ -327,11 +356,11 @@ class PropEnforcer:
         """True between Friday 21:00 UTC and Monday 00:00 UTC."""
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
-        if weekday == 4 and t >= dtime(21, 0):   # Friday after 21:00
+        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00
             return True
-        if weekday == 5:                           # Saturday
+        if weekday == 5:  # Saturday
             return True
-        if weekday == 6 and t < dtime(0, 1):      # Sunday before 00:01
+        if weekday == 6 and t < dtime(0, 1):  # Sunday before 00:01
             return True
         return False
 
@@ -376,14 +405,21 @@ class PropEnforcer:
         self._send_telegram_alert(breach_type, detail)
 
     def _send_telegram_alert(self, breach_type: BreachType, detail: str) -> None:
-        token    = self.cfg.telegram_token
-        chat_id  = self.cfg.telegram_chat_id
+        token = self.cfg.telegram_token
+        chat_id = self.cfg.telegram_chat_id
         if not token or not chat_id:
             return
         try:
-            import urllib.request, urllib.parse
-            emoji = {"DAILY_DD": "🔴", "TOTAL_DD": "🚨", "NEWS_WINDOW": "📰",
-                     "WEEKEND": "🌙", "KILL_SWITCH": "⛔"}.get(breach_type.name, "⚠️")
+            import urllib.request
+            import urllib.parse
+
+            emoji = {
+                "DAILY_DD": "🔴",
+                "TOTAL_DD": "🚨",
+                "NEWS_WINDOW": "📰",
+                "WEEKEND": "🌙",
+                "KILL_SWITCH": "⛔",
+            }.get(breach_type.name, "⚠️")
             text = (
                 f"{emoji} <b>HOPEFX PropEnforcer — {breach_type.name}</b>\n"
                 f"{detail}\n"
@@ -394,7 +430,8 @@ class PropEnforcer:
             ).encode()
             req = urllib.request.Request(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                data=data, method="POST",
+                data=data,
+                method="POST",
             )
             urllib.request.urlopen(req, timeout=8)
         except Exception as exc:

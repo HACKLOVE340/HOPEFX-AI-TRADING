@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 class EventType(Enum):
     """Types of events in backtesting."""
+
     MARKET = "MARKET"
     SIGNAL = "SIGNAL"
     ORDER = "ORDER"
@@ -40,7 +41,13 @@ class MarketEvent(Event):
 class SignalEvent(Event):
     """Trading signal from strategy."""
 
-    def __init__(self, symbol: str, signal_type: str, strength: float = 1.0, metadata: dict = None):
+    def __init__(
+        self,
+        symbol: str,
+        signal_type: str,
+        strength: float = 1.0,
+        metadata: dict = None,
+    ):
         """
         Initialize signal event.
 
@@ -60,8 +67,14 @@ class SignalEvent(Event):
 class OrderEvent(Event):
     """Order to be executed."""
 
-    def __init__(self, symbol: str, order_type: str, quantity: float, direction: str,
-                 price: Optional[float] = None):
+    def __init__(
+        self,
+        symbol: str,
+        order_type: str,
+        quantity: float,
+        direction: str,
+        price: Optional[float] = None,
+    ):
         """
         Initialize order event.
 
@@ -83,8 +96,14 @@ class OrderEvent(Event):
 class FillEvent(Event):
     """Order fill confirmation."""
 
-    def __init__(self, symbol: str, quantity: float, direction: str, fill_price: float,
-                 commission: float = 0.0):
+    def __init__(
+        self,
+        symbol: str,
+        quantity: float,
+        direction: str,
+        fill_price: float,
+        commission: float = 0.0,
+    ):
         """
         Initialize fill event.
 

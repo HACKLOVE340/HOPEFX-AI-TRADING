@@ -42,8 +42,8 @@ export function RecentTrades() {
                 <td className="py-3 text-slate-400">{trade.time}</td>
                 <td className="py-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    trade.side === 'buy' 
-                      ? 'bg-green-500/10 text-green-400' 
+                    trade.side === 'buy'
+                      ? 'bg-green-500/10 text-green-400'
                       : 'bg-red-500/10 text-red-400'
                   }`}>
                     {trade.side.toUpperCase()}
@@ -53,15 +53,15 @@ export function RecentTrades() {
                 <td className="py-3">{trade.entry.toFixed(2)}</td>
                 <td className="py-3">{trade.exit?.toFixed(2) || '-'}</td>
                 <td className={`py-3 text-right font-medium ${
-                  trade.pnl && trade.pnl > 0 ? 'text-green-400' : 
+                  trade.pnl && trade.pnl > 0 ? 'text-green-400' :
                   trade.pnl && trade.pnl < 0 ? 'text-red-400' : 'text-slate-400'
                 }`}>
                   {trade.pnl ? (trade.pnl > 0 ? '+' : '') + trade.pnl.toFixed(2) : '-'}
                 </td>
                 <td className="py-3 text-center">
                   <span className={`px-2 py-1 rounded text-xs ${
-                    trade.status === 'open' 
-                      ? 'bg-amber-500/10 text-amber-400' 
+                    trade.status === 'open'
+                      ? 'bg-amber-500/10 text-amber-400'
                       : 'bg-slate-700 text-slate-300'
                   }`}>
                     {trade.status}

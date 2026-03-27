@@ -71,13 +71,15 @@ def _get_oanda_cb():
         # Circuit breaker unavailable — log so operators know protection is off.
         # Do not raise: the broker must still be usable without the CB module.
         import logging as _log
+
         _log.getLogger(__name__).warning(
-            "OANDA circuit breaker unavailable — broker calls unprotected: %s", _cb_exc,
+            "OANDA circuit breaker unavailable — broker calls unprotected: %s",
+            _cb_exc,
         )
         return None
 
 
-from brokers.base import (
+from brokers.base import (  # noqa: E402
     AccountInfo,
     BrokerConnector,
     Order,
@@ -95,24 +97,24 @@ logger = logging.getLogger(__name__)
 # clusters per region.
 _REGION_ENDPOINTS: Dict[str, Dict[str, str]] = {
     "us": {
-        "practice_rest":   "https://api-fxpractice.oanda.com",
-        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_rest": "https://api-fxpractice.oanda.com",
+        "live_rest": "https://api-fxtrade.oanda.com",
         "practice_stream": "https://stream-fxpractice.oanda.com",
-        "live_stream":     "https://stream-fxtrade.oanda.com",
+        "live_stream": "https://stream-fxtrade.oanda.com",
     },
     "eu": {
         # EU/UK: same REST endpoint, dedicated streaming cluster
-        "practice_rest":   "https://api-fxpractice.oanda.com",
-        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_rest": "https://api-fxpractice.oanda.com",
+        "live_rest": "https://api-fxtrade.oanda.com",
         "practice_stream": "https://stream-fxpractice.oanda.com",
-        "live_stream":     "https://stream-fxtrade.oanda.com",
+        "live_stream": "https://stream-fxtrade.oanda.com",
     },
     "sg": {
         # Singapore/APAC: same REST endpoint, dedicated streaming cluster
-        "practice_rest":   "https://api-fxpractice.oanda.com",
-        "live_rest":       "https://api-fxtrade.oanda.com",
+        "practice_rest": "https://api-fxpractice.oanda.com",
+        "live_rest": "https://api-fxtrade.oanda.com",
         "practice_stream": "https://stream-fxpractice.oanda.com",
-        "live_stream":     "https://stream-fxtrade.oanda.com",
+        "live_stream": "https://stream-fxtrade.oanda.com",
     },
 }
 
@@ -138,8 +140,7 @@ def resolve_oanda_urls(
     r = (region or _DEFAULT_REGION).lower()
     if r not in _REGION_ENDPOINTS:
         logger.warning(
-            "Unknown OANDA region %r — falling back to 'us'. "
-            "Valid regions: %s",
+            "Unknown OANDA region %r — falling back to 'us'. " "Valid regions: %s",
             r,
             list(_REGION_ENDPOINTS),
         )
@@ -148,7 +149,7 @@ def resolve_oanda_urls(
     env_key = "practice" if practice else "live"
     endpoints = _REGION_ENDPOINTS[r]
     resolved = {
-        "rest":   endpoints[f"{env_key}_rest"],
+        "rest": endpoints[f"{env_key}_rest"],
         "stream": endpoints[f"{env_key}_stream"],
         "region": r,
         "environment": env_key,
@@ -194,7 +195,10 @@ _STATUS_MAP: Dict[str, OrderStatus] = {
 
 
 def _parse_order_response(
-    data: Dict, symbol: str, side: OrderSide, qty: float,
+    data: Dict,
+    symbol: str,
+    side: OrderSide,
+    qty: float,
 ) -> Order:
     fill = data.get("orderFillTransaction")
     create = data.get("orderCreateTransaction")
@@ -356,13 +360,15 @@ class OANDAConnector(BrokerConnector):
                 },
             )
             r = self.session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}", timeout=10,
+                f"{self.base_url}/v3/accounts/{self.account_id}",
+                timeout=10,
             )
             r.raise_for_status()
             self.connected = True
             # Start the 30-day paper trading clock on first successful connection
             try:
                 from brokers.oanda_paper_clock import get_clock
+
                 env = "live" if "api-fxtrade" in self.base_url else "practice"
                 get_clock().maybe_start(
                     account_id=self.account_id,
@@ -480,7 +486,8 @@ class OANDAConnector(BrokerConnector):
             return None
         try:
             r = self.session.get(
-                f"{self.base_url}/v3/accounts/{self.account_id}/summary", timeout=10,
+                f"{self.base_url}/v3/accounts/{self.account_id}/summary",
+                timeout=10,
             )
             r.raise_for_status()
             a = r.json().get("account", {})
@@ -501,7 +508,10 @@ class OANDAConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "H1", limit: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "H1",
+        limit: int = 100,
     ) -> List[Dict]:
         if not self.connected or not self.session:
             return []
@@ -645,6 +655,7 @@ class AsyncOANDAConnector:
             # Start the 30-day paper trading clock on first successful connection
             try:
                 from brokers.oanda_paper_clock import get_clock
+
                 env = "live" if "api-fxtrade" in self.base_url else "practice"
                 get_clock().maybe_start(
                     account_id=self.account_id,
@@ -707,7 +718,8 @@ class AsyncOANDAConnector:
                         data = await resp.json()
             else:
                 async with session.post(
-                    f"{self.base_url}/v3/accounts/{self.account_id}/orders", json=body,
+                    f"{self.base_url}/v3/accounts/{self.account_id}/orders",
+                    json=body,
                 ) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
@@ -793,7 +805,10 @@ class AsyncOANDAConnector:
             return None
 
     async def get_market_data(
-        self, symbol: str, timeframe: str = "H1", limit: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "H1",
+        limit: int = 100,
     ) -> List[Dict]:
         session = self._require_session()
         gran = _TF_MAP.get(timeframe, timeframe)

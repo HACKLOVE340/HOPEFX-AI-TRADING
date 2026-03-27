@@ -54,10 +54,12 @@ class StrategyBrain:
         self.min_strategies_required = self.config.get("min_strategies_required", 2)
         self.consensus_threshold = self.config.get("consensus_threshold", 0.6)  # 60%
         self.performance_weight = self.config.get(
-            "performance_weight", 0.4,
+            "performance_weight",
+            0.4,
         )  # 40% weight to performance
         self.confidence_weight = self.config.get(
-            "confidence_weight", 0.6,
+            "confidence_weight",
+            0.6,
         )  # 60% weight to signal confidence
 
         # Strategy tracking
@@ -202,7 +204,9 @@ class StrategyBrain:
             }
 
     def _calculate_consensus(
-        self, strategy_signals: Dict[str, Signal], data: Dict[str, Any],
+        self,
+        strategy_signals: Dict[str, Signal],
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Calculate consensus from multiple strategy signals.
@@ -221,7 +225,8 @@ class StrategyBrain:
 
             for strategy_name, signal in strategy_signals.items():
                 weight = self.strategy_weights.get(
-                    strategy_name, 1.0 / len(self.strategies),
+                    strategy_name,
+                    1.0 / len(self.strategies),
                 )
 
                 # Weight the signal by strategy performance and confidence
@@ -369,7 +374,10 @@ class StrategyBrain:
             }
 
     def update_strategy_performance(
-        self, strategy_name: str, signal_correct: bool, pnl: float,
+        self,
+        strategy_name: str,
+        signal_correct: bool,
+        pnl: float,
     ):
         """
         Update performance metrics for a strategy.

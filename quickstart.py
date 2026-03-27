@@ -22,7 +22,7 @@ def run_command(cmd, description):
     print(f"📦 {description}")
     print(f"{'='*60}")
     print(f"$ {' '.join(cmd)}\\n")
-    
+
     result = subprocess.run(cmd, capture_output=False)
     if result.returncode != 0:
         print(f"❌ Failed: {description}")
@@ -39,16 +39,16 @@ def main():
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
     """)
-    
+
     # Check Python version
     if sys.version_info < (3, 8):
         print("❌ Python 3.8+ required")
         return 1
-    
+
     # Setup paths
     base_dir = Path(__file__).parent
     os.chdir(base_dir)
-    
+
     # Step 1: Create virtual environment (optional but recommended)
     venv_path = base_dir / "venv"
     if not venv_path.exists():
@@ -57,12 +57,12 @@ def main():
         print("✅ Virtual environment created")
         print("   Activate with: source venv/bin/activate (Linux/Mac)")
         print("                  venv\\Scripts\\activate (Windows)")
-    
+
     # Step 2: Install dependencies
-    if not run_command([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], 
+    if not run_command([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"],
                       "Installing dependencies"):
         print("⚠️  Some dependencies may have failed (optional packages)")
-    
+
     # Step 3: Setup environment
     env_file = base_dir / ".env"
     if not env_file.exists():
@@ -88,13 +88,13 @@ def main():
             print("⚠️  .env.example not found, skipping")
     else:
         print("✅ .env file already exists")
-    
+
     # Step 4: Create directories
     print("\\n📁 Creating directories...")
     for dir_name in ["logs", "data", "results", "credentials"]:
         Path(dir_name).mkdir(exist_ok=True)
     print("✅ Directories ready")
-    
+
     # Step 5: Run tests
     print("\\n🧪 Running tests...")
     test_result = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"])
@@ -102,7 +102,7 @@ def main():
         print("✅ Tests passed")
     else:
         print("⚠️  Some tests failed (non-critical for demo)")
-    
+
     # Step 6: Run paper trading demo
     print("""
 ╔══════════════════════════════════════════════════════════════╗
@@ -119,7 +119,7 @@ def main():
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
     """)
-    
+
     demo_result = subprocess.run([
         sys.executable, "scripts/xauusd_bot.py",
         "--mode", "paper",
@@ -127,7 +127,7 @@ def main():
         "--duration", "1",
         "--capital", "10000"
     ])
-    
+
     if demo_result.returncode == 0:
         print("""
 ╔══════════════════════════════════════════════════════════════╗
@@ -145,14 +145,14 @@ def main():
     else:
         print("❌ Demo failed")
         return 1
-    
+
     return 0
 
 if __name__ == "__main__":
     sys.exit(main())
 '''
 
-with open('/mnt/kimi/output/hopefx_upgrade/quickstart.py', 'w') as f:
+with open("/mnt/kimi/output/hopefx_upgrade/quickstart.py", "w") as f:
     f.write(quickstart_content)
 
 print("✅ quickstart.py created - One-command setup and demo")

@@ -14,10 +14,10 @@ from analysis.patterns.candlestick import CandlestickPatternDetector, Candlestic
 from analysis.patterns.support_resistance import SupportResistanceDetector, PriceLevel
 
 __all__ = [
-    'ChartPatternDetector',
-    'ChartPattern',
-    'CandlestickPatternDetector',
-    'CandlestickPattern',
-    'SupportResistanceDetector',
-    'PriceLevel',
+    "ChartPatternDetector",
+    "ChartPattern",
+    "CandlestickPatternDetector",
+    "CandlestickPattern",
+    "SupportResistanceDetector",
+    "PriceLevel",
 ]

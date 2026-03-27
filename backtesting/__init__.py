@@ -22,24 +22,26 @@ from backtesting.reports import ReportGenerator
 from backtesting.plots import PerformancePlotter
 
 __all__ = [
-    'DataHandler',
-    'YahooFinanceSource',
-    'CSVDataSource',
-    'BacktestEngine',
-    'MarketEvent',
-    'SignalEvent',
-    'OrderEvent',
-    'FillEvent',
-    'SimulatedExecutionHandler',
-    'PerformanceMetrics',
-    'Portfolio',
-    'ParameterOptimizer',
-    'WalkForwardAnalysis',
-    'ReportGenerator',
-    'PerformancePlotter',
+    "DataHandler",
+    "YahooFinanceSource",
+    "CSVDataSource",
+    "BacktestEngine",
+    "MarketEvent",
+    "SignalEvent",
+    "OrderEvent",
+    "FillEvent",
+    "SimulatedExecutionHandler",
+    "PerformanceMetrics",
+    "Portfolio",
+    "ParameterOptimizer",
+    "WalkForwardAnalysis",
+    "ReportGenerator",
+    "PerformancePlotter",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Comprehensive backtesting engine with optimization and walk-forward analysis'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Development Team"
+__description__ = (
+    "Comprehensive backtesting engine with optimization and walk-forward analysis"
+)

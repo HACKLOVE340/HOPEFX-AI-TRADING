@@ -39,26 +39,26 @@ from .models import (
 )
 
 __all__ = [
-    'Base',
+    "Base",
     # Market Data
-    'MarketData',
-    'TickData',
-    'OrderBook',
+    "MarketData",
+    "TickData",
+    "OrderBook",
     # Trading
-    'Trade',
-    'Order',
-    'Position',
-    'Account',
+    "Trade",
+    "Order",
+    "Position",
+    "Account",
     # Signals
-    'AISignal',
-    'Prediction',
+    "AISignal",
+    "Prediction",
     # News
-    'NewsData',
+    "NewsData",
     # Backtesting
-    'PerformanceMetrics',
+    "PerformanceMetrics",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'SQLAlchemy ORM models for trading data'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Development Team"
+__description__ = "SQLAlchemy ORM models for trading data"

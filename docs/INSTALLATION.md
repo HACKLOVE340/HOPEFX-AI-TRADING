@@ -320,7 +320,7 @@ export CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_he
 
 #### 3. Redis connection failed
 
-**Solution:** 
+**Solution:**
 - Check if Redis is running: `redis-cli ping`
 - Start Redis: `sudo systemctl start redis-server`
 - Or run without cache (will use fallback mode)
@@ -333,7 +333,7 @@ export CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_he
 
 #### 5. Permission denied errors
 
-**Solution:** 
+**Solution:**
 ```bash
 # Fix directory permissions
 chmod 755 logs data credentials

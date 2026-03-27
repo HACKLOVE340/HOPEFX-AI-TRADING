@@ -7,6 +7,7 @@
 Root conftest.py — ensures both the project root and src/ are on sys.path
 so that namespace packages (hopefx, src/hopefx) merge correctly.
 """
+
 import sys
 import os
 

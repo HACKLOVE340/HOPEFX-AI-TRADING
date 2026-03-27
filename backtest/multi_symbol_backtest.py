@@ -36,6 +36,7 @@ Usage
     python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
     python backtest/multi_symbol_backtest.py --smoke   # fast CI run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,7 +63,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Symbol config: (yfinance_ticker, display_name, pip_size)
 SYMBOLS = [
-    ("GC=F",    "XAU/USD", 0.01),
+    ("GC=F", "XAU/USD", 0.01),
     ("BTC-USD", "BTC/USD", 1.0),
     ("ETH-USD", "ETH/USD", 0.1),
 ]
@@ -72,9 +73,12 @@ SYMBOLS = [
 # Data fetching
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
     """Fetch daily OHLCV from yfinance with CSV cache fallback."""
-    cache_path = ROOT / "data" / f"{ticker.replace('=','_').replace('-','_')}_{years}Y.csv"
+    cache_path = (
+        ROOT / "data" / f"{ticker.replace('=','_').replace('-','_')}_{years}Y.csv"
+    )
 
     if cache_path.exists():
         try:
@@ -88,11 +92,18 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
 
     try:
         import yfinance as yf
+
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=years * 365)
         interval = "1d"
-        df = yf.download(ticker, start=start, end=end, interval=interval,
-                         auto_adjust=True, progress=False)
+        df = yf.download(
+            ticker,
+            start=start,
+            end=end,
+            interval=interval,
+            auto_adjust=True,
+            progress=False,
+        )
         if df.empty:
             raise ValueError(f"No data returned for {ticker}")
         df.columns = [c.lower() for c in df.columns]
@@ -105,7 +116,9 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         logger.info("Downloaded %s: %d bars", ticker, len(df))
         return df
     except Exception as exc:
-        logger.warning("Could not fetch %s: %s — generating synthetic data", ticker, exc)
+        logger.warning(
+            "Could not fetch %s: %s — generating synthetic data", ticker, exc
+        )
         return _synthetic_ohlcv(ticker, years, smoke)
 
 
@@ -116,14 +129,19 @@ def _synthetic_ohlcv(ticker: str, years: int, smoke: bool) -> pd.DataFrame:
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
     returns = np.random.randn(n) * 0.015
     close = base * np.exp(np.cumsum(returns))
-    idx = pd.date_range(end=datetime.now(timezone.utc).date(), periods=n, freq="B", tz="UTC")
-    df = pd.DataFrame({
-        "open":   close * (1 + np.random.randn(n) * 0.002),
-        "high":   close * (1 + abs(np.random.randn(n)) * 0.008),
-        "low":    close * (1 - abs(np.random.randn(n)) * 0.008),
-        "close":  close,
-        "volume": abs(np.random.randn(n)) * 1e6 + 1e5,
-    }, index=idx)
+    idx = pd.date_range(
+        end=datetime.now(timezone.utc).date(), periods=n, freq="B", tz="UTC"
+    )
+    df = pd.DataFrame(
+        {
+            "open": close * (1 + np.random.randn(n) * 0.002),
+            "high": close * (1 + abs(np.random.randn(n)) * 0.008),
+            "low": close * (1 - abs(np.random.randn(n)) * 0.008),
+            "close": close,
+            "volume": abs(np.random.randn(n)) * 1e6 + 1e5,
+        },
+        index=idx,
+    )
     return df
 
 
@@ -131,10 +149,14 @@ def _synthetic_ohlcv(ticker: str, years: int, smoke: bool) -> pd.DataFrame:
 # Feature building
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_features(ohlcv: pd.DataFrame, smoke: bool = False) -> Tuple[pd.DataFrame, pd.Series]:
+
+def build_features(
+    ohlcv: pd.DataFrame, smoke: bool = False
+) -> Tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix using extended 200+ feature builder."""
     try:
         from ml.features_extended import build_extended_features
+
         return build_extended_features(
             ohlcv,
             macro_df=None,
@@ -145,15 +167,20 @@ def build_features(ohlcv: pd.DataFrame, smoke: bool = False) -> Tuple[pd.DataFra
     except Exception as exc:
         logger.warning("Extended features failed, using base: %s", exc)
         from ml.advanced_features import build_advanced_features
+
         return build_advanced_features(
-            ohlcv, macro_df=None, horizon=1,
-            use_filtered_target=not smoke, min_move_atr=0.15,
+            ohlcv,
+            macro_df=None,
+            horizon=1,
+            use_filtered_target=not smoke,
+            min_move_atr=0.15,
         )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-symbol backtest
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def backtest_symbol(
     ticker: str,
@@ -188,7 +215,7 @@ def backtest_symbol(
     # OOS split
     oos_n = max(30, int(len(X) * oos_frac))
     X_train, y_train = X.iloc[:-oos_n], y.iloc[:-oos_n]
-    X_oos,   y_oos   = X.iloc[-oos_n:], y.iloc[-oos_n:]
+    X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
 
     if len(X_train) < 30:
         return {"symbol": display_name, "error": "train set too small", "n_trades": 0}
@@ -196,10 +223,16 @@ def backtest_symbol(
     # Train calibrated XGBoost
     n_est = 100 if smoke else 400
     base = xgb.XGBClassifier(
-        n_estimators=n_est, max_depth=4, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
+        n_estimators=n_est,
+        max_depth=4,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=3,
         scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
-        eval_metric="logloss", random_state=42, n_jobs=-1,
+        eval_metric="logloss",
+        random_state=42,
+        n_jobs=-1,
     )
     cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
     model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
@@ -207,7 +240,7 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
+    preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal  # noqa: F841
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
@@ -215,16 +248,20 @@ def backtest_symbol(
     # Simulate trades: enter on signal, exit next bar
     trades = []
     for i in range(len(X_oos) - 1):
-        if proba[i] >= 0.58:   # long signal
+        if proba[i] >= 0.58:  # long signal
             entry = float(oos_close.iloc[i])
-            exit_  = float(oos_close.iloc[i + 1])
+            exit_ = float(oos_close.iloc[i + 1])
             pnl_pct = (exit_ - entry) / entry
-            trades.append({"direction": "long",  "pnl_pct": pnl_pct, "prob": float(proba[i])})
+            trades.append(
+                {"direction": "long", "pnl_pct": pnl_pct, "prob": float(proba[i])}
+            )
         elif proba[i] <= 0.42:  # short signal
             entry = float(oos_close.iloc[i])
-            exit_  = float(oos_close.iloc[i + 1])
+            exit_ = float(oos_close.iloc[i + 1])
             pnl_pct = (entry - exit_) / entry
-            trades.append({"direction": "short", "pnl_pct": pnl_pct, "prob": float(proba[i])})
+            trades.append(
+                {"direction": "short", "pnl_pct": pnl_pct, "prob": float(proba[i])}
+            )
 
     n_trades = len(trades)
     if n_trades == 0:
@@ -234,13 +271,13 @@ def backtest_symbol(
     wins = (pnls > 0).sum()
     win_rate = wins / n_trades
     mean_pnl = pnls.mean()
-    std_pnl  = pnls.std(ddof=1) if n_trades > 1 else 1e-6
-    sharpe   = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
-    max_dd   = _max_drawdown(pnls)
+    std_pnl = pnls.std(ddof=1) if n_trades > 1 else 1e-6
+    sharpe = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
+    max_dd = _max_drawdown(pnls)
 
     # Classification metrics
     acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
-    f1  = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
+    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
     except Exception:
@@ -248,7 +285,12 @@ def backtest_symbol(
 
     logger.info(
         "%s: N=%d trades | Sharpe=%.2f | WinRate=%.1f%% | Acc=%.3f | MaxDD=%.1f%%",
-        display_name, n_trades, sharpe, win_rate * 100, acc, max_dd * 100,
+        display_name,
+        n_trades,
+        sharpe,
+        win_rate * 100,
+        acc,
+        max_dd * 100,
     )
 
     return {
@@ -257,7 +299,7 @@ def backtest_symbol(
         "n_trades": n_trades,
         "win_rate": round(win_rate, 4),
         "mean_pnl_pct": round(float(mean_pnl), 6),
-        "std_pnl_pct":  round(float(std_pnl), 6),
+        "std_pnl_pct": round(float(std_pnl), 6),
         "sharpe": round(sharpe, 4),
         "max_drawdown": round(float(max_dd), 4),
         "accuracy": round(acc, 4),
@@ -281,6 +323,7 @@ def _max_drawdown(pnls: np.ndarray) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 # Pooled Sharpe + SE gate
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> Dict:
     """
@@ -308,38 +351,43 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
 
     pnls = np.array(all_pnls)
     mean_pnl = pnls.mean()
-    std_pnl  = pnls.std(ddof=1) if len(pnls) > 1 else 1e-6
+    std_pnl = pnls.std(ddof=1) if len(pnls) > 1 else 1e-6
     pooled_sharpe = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
 
     # Sharpe SE: sqrt((1 + 0.5*SR²) / T)
     sr = abs(pooled_sharpe)
-    se = float(np.sqrt((1 + 0.5 * sr ** 2) / max(n_total, 1)))
+    se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
 
     gate_passed = n_total >= target_n
-    credible    = se <= 0.10
+    credible = se <= 0.10
 
     if gate_passed and credible:
         msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}, SE={se:.3f} <= 0.10"
     else:
-        n_required = int(np.ceil((1 + 0.5 * sr ** 2) / 0.01))
+        n_required = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
         msg = (
             f"Sharpe gate BLOCKED: N={n_total} trades, SE={se:.3f}. "
             f"Need N>={target_n} (SE<=0.10 requires N>={n_required})."
         )
 
-    logger.info("Pooled: N=%d | Sharpe=%.2f | SE=%.3f | Gate=%s",
-                n_total, pooled_sharpe, se, "PASSED" if gate_passed else "BLOCKED")
+    logger.info(
+        "Pooled: N=%d | Sharpe=%.2f | SE=%.3f | Gate=%s",
+        n_total,
+        pooled_sharpe,
+        se,
+        "PASSED" if gate_passed else "BLOCKED",
+    )
 
     return {
         "n_total_trades": n_total,
         "pooled_sharpe": round(pooled_sharpe, 4),
         "pooled_sharpe_se": round(se, 4),
         "pooled_mean_pnl": round(float(mean_pnl), 6),
-        "pooled_std_pnl":  round(float(std_pnl), 6),
+        "pooled_std_pnl": round(float(std_pnl), 6),
         "sharpe_gate_passed": gate_passed,
         "sharpe_credible": credible,
         "target_n": target_n,
-        "n_required_for_se_010": int(np.ceil((1 + 0.5 * sr ** 2) / 0.01)),
+        "n_required_for_se_010": int(np.ceil((1 + 0.5 * sr**2) / 0.01)),
         "message": msg,
     }
 
@@ -347,6 +395,7 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_backtest(
     years: int = 10,
@@ -367,13 +416,19 @@ def run_backtest(
     for ticker, display_name, pip_size in syms:
         try:
             result = backtest_symbol(
-                ticker, display_name, pip_size,
-                years=years, oos_frac=oos_frac, smoke=smoke,
+                ticker,
+                display_name,
+                pip_size,
+                years=years,
+                oos_frac=oos_frac,
+                smoke=smoke,
             )
             symbol_results.append(result)
         except Exception as exc:
             logger.error("Backtest failed for %s: %s", display_name, exc)
-            symbol_results.append({"symbol": display_name, "error": str(exc), "n_trades": 0})
+            symbol_results.append(
+                {"symbol": display_name, "error": str(exc), "n_trades": 0}
+            )
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)
 
@@ -392,8 +447,7 @@ def run_backtest(
     report_slim = {
         **report,
         "symbols": [
-            {k: v for k, v in r.items() if k != "trades"}
-            for r in symbol_results
+            {k: v for k, v in r.items() if k != "trades"} for r in symbol_results
         ],
     }
     report_path.write_text(json.dumps(report_slim, indent=2))
@@ -428,12 +482,19 @@ def run_backtest(
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-symbol backtest engine")
-    parser.add_argument("--years",    type=int,   default=10,  help="Years of history")
-    parser.add_argument("--oos-frac", type=float, default=0.3, help="OOS fraction (default 0.3)")
-    parser.add_argument("--target-n", type=int,   default=600, help="Target N trades for Sharpe gate")
-    parser.add_argument("--smoke",    action="store_true",     help="Fast smoke test (3 years)")
-    parser.add_argument("--symbols",  nargs="+",  default=None,
-                        help="Override symbols: e.g. GC=F BTC-USD")
+    parser.add_argument("--years", type=int, default=10, help="Years of history")
+    parser.add_argument(
+        "--oos-frac", type=float, default=0.3, help="OOS fraction (default 0.3)"
+    )
+    parser.add_argument(
+        "--target-n", type=int, default=600, help="Target N trades for Sharpe gate"
+    )
+    parser.add_argument(
+        "--smoke", action="store_true", help="Fast smoke test (3 years)"
+    )
+    parser.add_argument(
+        "--symbols", nargs="+", default=None, help="Override symbols: e.g. GC=F BTC-USD"
+    )
     args = parser.parse_args()
 
     syms = None

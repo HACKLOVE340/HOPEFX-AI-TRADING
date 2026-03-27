@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -83,9 +84,7 @@ class MarketDataCache:
             self._log_error("get_recent_ticks", exc)
             return []
 
-    def get_ticks_since(
-        self, symbol: str, since_ts: float
-    ) -> List[Dict[str, Any]]:
+    def get_ticks_since(self, symbol: str, since_ts: float) -> List[Dict[str, Any]]:
         """Return all ticks with timestamp >= *since_ts*."""
         try:
             key = f"{self._prefix}tick_cache:{symbol}"
@@ -145,9 +144,7 @@ class MarketDataCache:
             self._log_error("get_bars_since", exc)
             return []
 
-    def get_latest_bar(
-        self, symbol: str, timeframe: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
         """Return the most recently closed bar."""
         try:
             key = f"{self._prefix}latest_bar:{symbol}:{timeframe}"
@@ -184,9 +181,7 @@ class MarketDataCache:
 
     def _log_error(self, operation: str, exc: Exception) -> None:
         tb = traceback.format_exc()
-        logger.error(
-            "MarketDataCache.%s error: %s\n%s", operation, exc, tb
-        )
+        logger.error("MarketDataCache.%s error: %s\n%s", operation, exc, tb)
         if _SENTRY:
             try:
                 sentry_sdk.capture_exception(exc)

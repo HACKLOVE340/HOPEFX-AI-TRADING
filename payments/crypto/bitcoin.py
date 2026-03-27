@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BitcoinAddress:
     """Bitcoin address information"""
+
     address: str
     user_id: str
     derivation_path: str
@@ -33,6 +34,7 @@ class BitcoinAddress:
 @dataclass
 class BitcoinTransaction:
     """Bitcoin transaction"""
+
     tx_hash: str
     address: str
     amount: Decimal
@@ -45,8 +47,8 @@ class BitcoinClient:
     """Bitcoin payment client with HD wallet support"""
 
     REQUIRED_CONFIRMATIONS = 3
-    MIN_DEPOSIT = Decimal('0.001')  # BTC
-    NETWORK_FEE = Decimal('0.0005')  # BTC
+    MIN_DEPOSIT = Decimal("0.001")  # BTC
+    NETWORK_FEE = Decimal("0.0005")  # BTC
 
     def __init__(self):
         self.addresses: Dict[str, BitcoinAddress] = {}
@@ -82,7 +84,7 @@ class BitcoinClient:
                 address=address,
                 user_id=user_id,
                 derivation_path=derivation_path,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(timezone.utc),
             )
 
             self.addresses[address] = btc_address
@@ -94,11 +96,11 @@ class BitcoinClient:
             logger.info(f"Generated Bitcoin address for user {user_id}: {address}")
 
             return {
-                'address': address,
-                'qr_code': f"bitcoin:{address}",  # QR code data
-                'network': 'bitcoin',
-                'min_deposit': float(self.MIN_DEPOSIT),
-                'confirmations_required': self.REQUIRED_CONFIRMATIONS
+                "address": address,
+                "qr_code": f"bitcoin:{address}",  # QR code data
+                "network": "bitcoin",
+                "min_deposit": float(self.MIN_DEPOSIT),
+                "confirmations_required": self.REQUIRED_CONFIRMATIONS,
             }
 
         except Exception as e:
@@ -106,11 +108,7 @@ class BitcoinClient:
             raise
 
     def process_deposit(
-        self,
-        user_id: str,
-        amount: Decimal,
-        tx_hash: str,
-        confirmations: int = 0
+        self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0
     ) -> Optional[BitcoinTransaction]:
         """
         Process Bitcoin deposit
@@ -146,7 +144,11 @@ class BitcoinClient:
             address = user_addrs[-1]
 
             # Determine status
-            status = 'confirmed' if confirmations >= self.REQUIRED_CONFIRMATIONS else 'pending'
+            status = (
+                "confirmed"
+                if confirmations >= self.REQUIRED_CONFIRMATIONS
+                else "pending"
+            )
 
             # Create transaction
             transaction = BitcoinTransaction(
@@ -155,7 +157,7 @@ class BitcoinClient:
                 amount=amount,
                 confirmations=confirmations,
                 status=status,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(timezone.utc),
             )
 
             self.transactions[tx_hash] = transaction
@@ -164,7 +166,9 @@ class BitcoinClient:
             if address in self.addresses:
                 self.addresses[address].last_used = datetime.now(timezone.utc)
 
-            logger.info(f"Bitcoin deposit processed: {tx_hash} - {amount} BTC - {confirmations} confirmations")
+            logger.info(
+                f"Bitcoin deposit processed: {tx_hash} - {amount} BTC - {confirmations} confirmations"
+            )
 
             return transaction
 
@@ -173,10 +177,7 @@ class BitcoinClient:
             return None
 
     def process_withdrawal(
-        self,
-        user_id: str,
-        amount: Decimal,
-        destination_address: str
+        self, user_id: str, amount: Decimal, destination_address: str
     ) -> Dict:
         """
         Process Bitcoin withdrawal
@@ -207,17 +208,19 @@ class BitcoinClient:
             ).hexdigest()
 
             withdrawal = {
-                'tx_hash': tx_hash,
-                'user_id': user_id,
-                'amount': float(amount),
-                'fee': float(total_fee),
-                'net_amount': float(net_amount),
-                'destination': destination_address,
-                'status': 'broadcasting',
-                'created_at': datetime.now(timezone.utc).isoformat()
+                "tx_hash": tx_hash,
+                "user_id": user_id,
+                "amount": float(amount),
+                "fee": float(total_fee),
+                "net_amount": float(net_amount),
+                "destination": destination_address,
+                "status": "broadcasting",
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
 
-            logger.info(f"Bitcoin withdrawal processed: {tx_hash} - {amount} BTC to {destination_address}")
+            logger.info(
+                f"Bitcoin withdrawal processed: {tx_hash} - {amount} BTC to {destination_address}"
+            )
 
             return withdrawal
 
@@ -228,9 +231,9 @@ class BitcoinClient:
     def _validate_address(self, address: str) -> bool:
         """Validate Bitcoin address format"""
         # Simplified validation (in production use proper validation)
-        if address.startswith('bc1'):  # Bech32
+        if address.startswith("bc1"):  # Bech32
             return len(address) >= 42 and len(address) <= 62
-        elif address.startswith('1') or address.startswith('3'):  # Legacy/P2SH
+        elif address.startswith("1") or address.startswith("3"):  # Legacy/P2SH
             return len(address) >= 26 and len(address) <= 35
         return False
 
@@ -241,12 +244,12 @@ class BitcoinClient:
             return None
 
         return {
-            'tx_hash': transaction.tx_hash,
-            'address': transaction.address,
-            'amount': float(transaction.amount),
-            'confirmations': transaction.confirmations,
-            'status': transaction.status,
-            'created_at': transaction.created_at.isoformat()
+            "tx_hash": transaction.tx_hash,
+            "address": transaction.address,
+            "amount": float(transaction.amount),
+            "confirmations": transaction.confirmations,
+            "status": transaction.status,
+            "created_at": transaction.created_at.isoformat(),
         }
 
     def get_user_transactions(self, user_id: str) -> List[Dict]:
@@ -255,18 +258,18 @@ class BitcoinClient:
 
         transactions = [
             {
-                'tx_hash': tx.tx_hash,
-                'amount': float(tx.amount),
-                'confirmations': tx.confirmations,
-                'status': tx.status,
-                'created_at': tx.created_at.isoformat()
+                "tx_hash": tx.tx_hash,
+                "amount": float(tx.amount),
+                "confirmations": tx.confirmations,
+                "status": tx.status,
+                "created_at": tx.created_at.isoformat(),
             }
             for tx in self.transactions.values()
             if tx.address in user_addrs
         ]
 
         # Sort by created_at descending
-        transactions.sort(key=lambda x: x['created_at'], reverse=True)
+        transactions.sort(key=lambda x: x["created_at"], reverse=True)
 
         return transactions
 

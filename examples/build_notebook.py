@@ -8,53 +8,73 @@
 Build examples/end_to_end.ipynb with all cells executed and outputs embedded.
 Run once; the resulting .ipynb renders on GitHub without needing a kernel.
 """
+
 import base64
 import json
 from pathlib import Path
 import nbformat
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell, new_output
 
-ROOT    = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 NB_PATH = ROOT / "examples" / "end_to_end.ipynb"
-PERF    = json.loads((ROOT / "examples" / "results" / "performance.json").read_text())
-IMG     = (ROOT / "examples" / "results" / "equity_curve.png").read_bytes()
+PERF = json.loads((ROOT / "examples" / "results" / "performance.json").read_text())
+IMG = (ROOT / "examples" / "results" / "equity_curve.png").read_bytes()
 IMG_B64 = base64.b64encode(IMG).decode()
-TRADES  = (ROOT / "examples" / "results" / "trades.csv").read_text()
+TRADES = (ROOT / "examples" / "results" / "trades.csv").read_text()
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-def md(src):  return new_markdown_cell(src)
-def code(src, outputs=None): 
+def md(src):
+    return new_markdown_cell(src)
+
+
+def code(src, outputs=None):
     c = new_code_cell(src)
     c.outputs = outputs or []
     return c
-def stdout(text): return new_output("stream", name="stdout", text=text)
-def display_img(b64): 
-    return new_output("display_data", data={"image/png": b64, "text/plain": ["<Figure>"]})
+
+
+def stdout(text):
+    return new_output("stream", name="stdout", text=text)
+
+
+def display_img(b64):
+    return new_output(
+        "display_data", data={"image/png": b64, "text/plain": ["<Figure>"]}
+    )
+
+
 def display_html(html):
-    return new_output("display_data", data={"text/html": [html], "text/plain": ["<HTML>"]})
+    return new_output(
+        "display_data", data={"text/html": [html], "text/plain": ["<HTML>"]}
+    )
+
 
 # ── cells ─────────────────────────────────────────────────────────────────────
 cells = []
 
 # Title
-cells.append(md("""# HOPEFX AI Trading — End-to-End Walkthrough
+cells.append(
+    md("""# HOPEFX AI Trading — End-to-End Walkthrough
 
 This notebook demonstrates the complete pipeline:
 
-1. **Load** the synthetic XAUUSD dataset  
-2. **Engineer** technical features  
-3. **Train** a RandomForest direction classifier  
-4. **Backtest** with ATR-based position sizing  
-5. **Evaluate** — equity curve, drawdown, trade log  
+1. **Load** the synthetic XAUUSD dataset
+2. **Engineer** technical features
+3. **Train** a RandomForest direction classifier
+4. **Backtest** with ATR-based position sizing
+5. **Evaluate** — equity curve, drawdown, trade log
 
-> **Data**: `data/XAUUSD_2Y.csv` — 730 daily bars, Jan 2022 – Dec 2023 (synthetic GBM + OU)  
-> **Model**: `ml/saved_models/rf_xauusd.pkl` — pre-trained, load and run in seconds  
+> **Data**: `data/XAUUSD_2Y.csv` — 730 daily bars, Jan 2022 – Dec 2023 (synthetic GBM + OU)
+> **Model**: `ml/saved_models/rf_xauusd.pkl` — pre-trained, load and run in seconds
 > **Results**: `examples/results/` — equity_curve.png, trades.csv, performance.json
-"""))
+""")
+)
 
 # Imports
-cells.append(code(
-    """\
+cells.append(
+    code(
+        """\
 import json, warnings
 warnings.filterwarnings("ignore")
 from pathlib import Path
@@ -68,36 +88,47 @@ from sklearn.metrics import classification_report
 
 ROOT = Path("..").resolve()
 print("Project root:", ROOT)""",
-    [stdout(f"Project root: {ROOT}\n")]
-))
+        [stdout(f"Project root: {ROOT}\n")],
+    )
+)
 
 # Load data
 head_html = ""
 try:
     import pandas as pd
+
     df = pd.read_csv(ROOT / "data" / "XAUUSD_2Y.csv", index_col=0, parse_dates=True)
     head_html = df.head().to_html(classes="dataframe", border=0)
 except Exception:
     head_html = "<pre>see data/XAUUSD_2Y.csv</pre>"
 
 cells.append(md("## 1 · Load Dataset"))
-cells.append(code(
-    """\
+cells.append(
+    code(
+        """\
 df = pd.read_csv(ROOT / "data" / "XAUUSD_2Y.csv", index_col=0, parse_dates=True)
 print(f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}")
 print(f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}")
 df.head()""",
-    [
-        stdout(f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}\n"
-               f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}\n"),
-        display_html(head_html),
-    ]
-))
+        [
+            stdout(
+                f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}\n"
+                f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}\n"
+            ),
+            display_html(head_html),
+        ],
+    )
+)
 
 # Feature engineering
-cells.append(md("## 2 · Feature Engineering\n\n19 features: SMA/EMA (5/10/20/50), RSI-14, ROC-5/20, ATR-14, Bollinger width, MACD histogram, price-vs-MA ratios, volume ratio."))
-cells.append(code(
-    """\
+cells.append(
+    md(
+        "## 2 · Feature Engineering\n\n19 features: SMA/EMA (5/10/20/50), RSI-14, ROC-5/20, ATR-14, Bollinger width, MACD histogram, price-vs-MA ratios, volume ratio."
+    )
+)
+cells.append(
+    code(
+        """\
 def add_features(df):
     d = df.copy()
     for n in [5, 10, 20, 50]:
@@ -132,13 +163,19 @@ FEATURES = [
 ]
 dff = add_features(df)
 print(f"Feature matrix: {dff[FEATURES].shape}  |  up-days: {dff['target'].mean():.1%}")""",
-    [stdout(f"Feature matrix: ({len(df)-50}, 17)  |  up-days: 48.0%\n")]
-))
+        [stdout(f"Feature matrix: ({len(df)-50}, 17)  |  up-days: 48.0%\n")],
+    )
+)
 
 # Load model
-cells.append(md("## 3 · Load Pre-Trained Model\n\nThe model was trained on the first 70% of bars (walk-forward split) and saved to `ml/saved_models/rf_xauusd.pkl`."))
-cells.append(code(
-    """\
+cells.append(
+    md(
+        "## 3 · Load Pre-Trained Model\n\nThe model was trained on the first 70% of bars (walk-forward split) and saved to `ml/saved_models/rf_xauusd.pkl`."
+    )
+)
+cells.append(
+    code(
+        """\
 bundle  = joblib.load(ROOT / "ml" / "saved_models" / "rf_xauusd.pkl")
 clf     = bundle["model"]
 scaler  = bundle["scaler"]
@@ -153,31 +190,37 @@ y_prob  = clf.predict_proba(X_test)[:, 1]
 print(classification_report(y_test, y_pred, target_names=["Down", "Up"]))
 print(f"Note: ~48% accuracy is expected for a direction classifier on financial data.")
 print(f"Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.")""",
-    [stdout(
-        "              precision    recall  f1-score   support\n\n"
-        "        Down       0.54      0.54      0.54       107\n"
-        "          Up       0.45      0.42      0.43        97\n\n"
-        "    accuracy                           0.48       204\n"
-        "   macro avg       0.49      0.48      0.49       204\n"
-        "weighted avg       0.50      0.48      0.49       204\n\n"
-        "Note: ~48% accuracy is expected for a direction classifier on financial data.\n"
-        "Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.\n"
-    )]
-))
+        [
+            stdout(
+                "              precision    recall  f1-score   support\n\n"
+                "        Down       0.54      0.54      0.54       107\n"
+                "          Up       0.45      0.42      0.43        97\n\n"
+                "    accuracy                           0.48       204\n"
+                "   macro avg       0.49      0.48      0.49       204\n"
+                "weighted avg       0.50      0.48      0.49       204\n\n"
+                "Note: ~48% accuracy is expected for a direction classifier on financial data.\n"
+                "Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.\n"
+            )
+        ],
+    )
+)
 
 # Backtest
-cells.append(md("""\
+cells.append(
+    md("""\
 ## 4 · Backtest
 
 **Rules:**
-- Enter long when model confidence > 52%  
-- Stop loss: 1.5 × ATR below entry  
-- Take profit: 2.5 × ATR above entry  
-- Position size: 10% of equity per trade  
-- Commission: 2 bps round-trip  
-"""))
-cells.append(code(
-    """\
+- Enter long when model confidence > 52%
+- Stop loss: 1.5 × ATR below entry
+- Take profit: 2.5 × ATR above entry
+- Position size: 10% of equity per trade
+- Commission: 2 bps round-trip
+""")
+)
+cells.append(
+    code(
+        """\
 perf = json.loads((ROOT / "examples" / "results" / "performance.json").read_text())
 trades_df = pd.read_csv(ROOT / "examples" / "results" / "trades.csv")
 
@@ -191,41 +234,45 @@ print(f"  Max drawdown:    {perf['max_drawdown_pct']:.1f}%")
 print(f"  Sharpe ratio:    {perf['sharpe_ratio']:.3f}")
 print(f"  Calmar ratio:    {perf['calmar_ratio']:.3f}")
 print("=" * 45)""",
-    [stdout(
-        "=" * 45 + "\n"
-        f"  Period:          {PERF['backtest_period']}\n"
-        f"  Trades:          {PERF['n_trades']}\n"
-        f"  Win rate:        {PERF['win_rate_pct']:.1f}%\n"
-        f"  Profit factor:   {PERF['profit_factor']:.3f}\n"
-        f"  Total return:    {PERF['total_return_pct']:+.2f}%\n"
-        f"  Max drawdown:    {PERF['max_drawdown_pct']:.1f}%\n"
-        f"  Sharpe ratio:    {PERF['sharpe_ratio']:.3f}\n"
-        f"  Calmar ratio:    {PERF['calmar_ratio']:.3f}\n"
-        + "=" * 45 + "\n"
-    )]
-))
+        [
+            stdout(
+                "=" * 45 + "\n"
+                f"  Period:          {PERF['backtest_period']}\n"
+                f"  Trades:          {PERF['n_trades']}\n"
+                f"  Win rate:        {PERF['win_rate_pct']:.1f}%\n"
+                f"  Profit factor:   {PERF['profit_factor']:.3f}\n"
+                f"  Total return:    {PERF['total_return_pct']:+.2f}%\n"
+                f"  Max drawdown:    {PERF['max_drawdown_pct']:.1f}%\n"
+                f"  Sharpe ratio:    {PERF['sharpe_ratio']:.3f}\n"
+                f"  Calmar ratio:    {PERF['calmar_ratio']:.3f}\n" + "=" * 45 + "\n"
+            )
+        ],
+    )
+)
 
 # Trade log
 cells.append(md("### Trade Log (first 10)"))
 try:
-    trades_html = pd.read_csv(ROOT / "examples" / "results" / "trades.csv").head(10).to_html(
-        classes="dataframe", border=0, index=False)
+    trades_html = (
+        pd.read_csv(ROOT / "examples" / "results" / "trades.csv")
+        .head(10)
+        .to_html(classes="dataframe", border=0, index=False)
+    )
 except Exception:
     trades_html = "<pre>" + TRADES + "</pre>"
 
-cells.append(code(
-    "trades_df.head(10)",
-    [display_html(trades_html)]
-))
+cells.append(code("trades_df.head(10)", [display_html(trades_html)]))
 
 # Equity curve
 cells.append(md("## 5 · Equity Curve"))
-cells.append(code(
-    """\
+cells.append(
+    code(
+        """\
 from IPython.display import Image
 Image(ROOT / "examples" / "results" / "equity_curve.png", width=900)""",
-    [display_img(IMG_B64)]
-))
+        [display_img(IMG_B64)],
+    )
+)
 
 # Feature importance
 cells.append(md("## 6 · Feature Importance"))
@@ -236,18 +283,21 @@ try:
 except Exception:
     fi_lines = "  (load model to see importances)"
 
-cells.append(code(
-    """\
+cells.append(
+    code(
+        """\
 fi = sorted(zip(bundle["features"], clf.feature_importances_), key=lambda x: -x[1])
 print("Top-10 features by importance:")
 for name, imp in fi[:10]:
     bar = "█" * int(imp * 200)
     print(f"  {name:<22} {imp:.4f}  {bar}")""",
-    [stdout("Top-10 features by importance:\n" + fi_lines + "\n")]
-))
+        [stdout("Top-10 features by importance:\n" + fi_lines + "\n")],
+    )
+)
 
 # Next steps
-cells.append(md("""\
+cells.append(
+    md("""\
 ## 7 · Next Steps
 
 | Step | How |
@@ -259,10 +309,11 @@ cells.append(md("""\
 | Run full backtest engine | `from backtesting import BacktestEngine` |
 
 ### Caveats
-- Dataset is **synthetic** — real gold has fat tails, gaps, and macro regime shifts not captured here  
-- Model accuracy (~48%) is below random; the positive backtest result is driven by the **2.5:1.5 TP:SL ratio**, not prediction skill  
-- Walk-forward split avoids lookahead bias but a proper out-of-sample test requires live data  
-"""))
+- Dataset is **synthetic** — real gold has fat tails, gaps, and macro regime shifts not captured here
+- Model accuracy (~48%) is below random; the positive backtest result is driven by the **2.5:1.5 TP:SL ratio**, not prediction skill
+- Walk-forward split avoids lookahead bias but a proper out-of-sample test requires live data
+""")
+)
 
 # ── assemble & write ──────────────────────────────────────────────────────────
 nb = new_notebook(cells=cells)

@@ -254,9 +254,7 @@ class InstitutionalFlowDetector:
             sell_vol = total_vol - buy_vol
             direction = "bullish" if buy_vol >= sell_vol else "bearish"
             strength = (
-                "strong"
-                if len(group) >= self._iceberg_min_fills * 2
-                else "moderate"
+                "strong" if len(group) >= self._iceberg_min_fills * 2 else "moderate"
             )
 
             signals.append(
@@ -336,21 +334,13 @@ class InstitutionalFlowDetector:
         for epoch, data in sorted(windows.items()):
             if data["volume"] >= avg_vol * self._spike_multiplier:
                 ts = datetime.utcfromtimestamp(epoch * window_seconds)
-                direction = (
-                    "bullish"
-                    if data["buy"] >= data["sell"]
-                    else "bearish"
-                )
+                direction = "bullish" if data["buy"] >= data["sell"] else "bearish"
                 ratio = data["volume"] / avg_vol
                 strength = (
-                    "strong"
-                    if ratio >= self._spike_multiplier * 2
-                    else "moderate"
+                    "strong" if ratio >= self._spike_multiplier * 2 else "moderate"
                 )
                 avg_price = (
-                    sum(data["prices"]) / len(data["prices"])
-                    if data["prices"]
-                    else 0.0
+                    sum(data["prices"]) / len(data["prices"]) if data["prices"] else 0.0
                 )
                 signals.append(
                     FlowSignal(
@@ -417,9 +407,7 @@ class InstitutionalFlowDetector:
             prices = [t[1] for t in group]
             avg_price = sum(prices) / len(prices)
             price_range = max(prices) - min(prices)
-            price_range_pct = (
-                price_range / avg_price * 100 if avg_price > 0 else 0.0
-            )
+            price_range_pct = price_range / avg_price * 100 if avg_price > 0 else 0.0
             total_vol = sum(t[2] for t in group)
 
             # High volume, low price movement
@@ -431,11 +419,7 @@ class InstitutionalFlowDetector:
                 sell_vol = total_vol - buy_vol
                 # Buyers absorbing selling = bullish; sellers absorbing buying = bearish
                 direction = "bullish" if sell_vol > buy_vol else "bearish"
-                strength = (
-                    "strong"
-                    if total_vol >= avg_vol * 3
-                    else "moderate"
-                )
+                strength = "strong" if total_vol >= avg_vol * 3 else "moderate"
                 ts = datetime.utcfromtimestamp(epoch * window_seconds)
 
                 signals.append(

@@ -128,6 +128,7 @@ class PositionResponse(BaseModel):
 
 class OrderResponse(BaseModel):
     """Response returned after a successful order fill."""
+
     status: str
     order_id: str
     filled_price: Optional[float] = None
@@ -176,6 +177,7 @@ def set_state(state) -> None:
 # Async-compat broker call helper
 # ---------------------------------------------------------------------------
 
+
 async def _broker_call(method_name: str, *args, **kwargs):
     """
     Call a broker method whether it is sync or async.
@@ -183,6 +185,7 @@ async def _broker_call(method_name: str, *args, **kwargs):
     This wrapper handles both transparently.
     """
     import asyncio
+
     broker = app_state.broker
     method = getattr(broker, method_name)
     if asyncio.iscoroutinefunction(method):
@@ -271,7 +274,9 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
         if not cvar_allowed:
             logger.warning(
-                "Order blocked by CVaR gate: user=%s reason=%s", user_id, cvar_reason,
+                "Order blocked by CVaR gate: user=%s reason=%s",
+                user_id,
+                cvar_reason,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -321,9 +326,12 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     Raises HTTP 400 on broker rejection or unexpected error.
     """
     try:
-        result = await _broker_call("place_market_order", symbol=order.symbol,
+        result = await _broker_call(
+            "place_market_order",
+            symbol=order.symbol,
             side=order.side,
-            quantity=order.quantity)
+            quantity=order.quantity,
+        )
         return result
     except HTTPException:
         raise
@@ -331,14 +339,19 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         logger.error("Broker order submission failed: %s", exc, exc_info=True)
         try:
             from core.metrics import ORDERS_TOTAL
-            ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
+
+            ORDERS_TOTAL.labels(
+                symbol=order.symbol, side=order.side, status="error"
+            ).inc()
         except Exception:
             pass
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 async def _record_fill(
-    order: "OrderRequest", result: Any, user_id: str,
+    order: "OrderRequest",
+    result: Any,
+    user_id: str,
 ) -> Dict[str, Any]:
     """
     Broadcast the fill over WebSocket, send FCM push, send email, update
@@ -372,6 +385,7 @@ async def _record_fill(
     # FCM push notification
     try:
         from mobile.push_notifications import push_manager
+
         push_manager.send_trade_filled(
             user_id=user_id,
             symbol=order.symbol,
@@ -391,12 +405,15 @@ async def _record_fill(
         user_email: str = ""
         try:
             from auth.service import AuthService  # noqa: PLC0415
+
             _auth_svc = AuthService()
             _db_user = _auth_svc.get_user_by_id(user_id)
             if _db_user and getattr(_db_user, "email", None):
                 user_email = _db_user.email
         except Exception as _ue_exc:
-            logger.debug("Could not resolve user email for fill notification: %s", _ue_exc)
+            logger.debug(
+                "Could not resolve user email for fill notification: %s", _ue_exc
+            )
 
         send_trade_fill_email(
             symbol=order.symbol,
@@ -409,7 +426,9 @@ async def _record_fill(
         )
         logger.debug(
             "Trade fill email queued: user=%s symbol=%s side=%s",
-            user_id, order.symbol, order.side,
+            user_id,
+            order.symbol,
+            order.side,
         )
     except Exception as email_exc:
         logger.debug("Trade fill email skipped: %s", email_exc)
@@ -417,6 +436,7 @@ async def _record_fill(
     # Prometheus metric
     try:
         from core.metrics import ORDERS_TOTAL
+
         ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
     except Exception:
         pass
@@ -508,7 +528,8 @@ async def close_position(
     success = await _broker_call("close_position", position_id)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Position not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Position not found",
         )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
@@ -831,7 +852,7 @@ class PositionSizeResponse(BaseModel):
 
 
 # ── In-memory strategy store for test endpoints ───────────────────────────────
-import uuid as _uuid
+import uuid as _uuid  # noqa: E402
 
 _strategy_store: Dict[str, dict] = {}
 
@@ -922,7 +943,8 @@ def _make_strategy_router():
 
             if _fomc_regime_override.get("active"):
                 fomc_multiplier = _fomc_regime_override.get(
-                    "position_size_multiplier", 1.0,
+                    "position_size_multiplier",
+                    1.0,
                 )
         except Exception as exc:
             logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
@@ -1009,7 +1031,9 @@ except Exception as exc:
 # ── Regime status endpoint ────────────────────────────────────────────────────
 
 
-@router.get("/regime", response_model=None, summary="Current market regime and active strategy")
+@router.get(
+    "/regime", response_model=None, summary="Current market regime and active strategy"
+)
 async def get_regime_status():
     """
     Return the current detected market regime, confidence score, and the
@@ -1056,7 +1080,9 @@ async def get_regime_status():
         }
 
 
-@router.get("/regime/history", response_model=None, summary="Recent regime transition history")
+@router.get(
+    "/regime/history", response_model=None, summary="Recent regime transition history"
+)
 async def get_regime_history(limit: int = 20):
     """Return the last N regime transitions with timestamps."""
     try:
@@ -1072,7 +1098,12 @@ async def get_regime_history(limit: int = 20):
 
 # ── Stress test endpoint ──────────────────────────────────────────────────────
 
-@router.get("/stress-test", response_model=None, summary="Run historical stress scenarios on current position")
+
+@router.get(
+    "/stress-test",
+    response_model=None,
+    summary="Run historical stress scenarios on current position",
+)
 async def run_stress_test(
     position_value: float = 10000.0,
     equity: float = 100000.0,
@@ -1095,9 +1126,11 @@ async def run_stress_test(
                      of equity marks gate_passed=False.
     """
     import logging as _log
+
     _logger = _log.getLogger(__name__)
     try:
         from risk.stress_test import run_all_scenarios
+
         return run_all_scenarios(
             position_value=position_value,
             equity=equity,
@@ -1107,4 +1140,5 @@ async def run_stress_test(
     except Exception as exc:
         _logger.error("Stress test failed: %s", exc, exc_info=True)
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=f"Stress test error: {exc}")

@@ -70,6 +70,6 @@ Integrating rate limiting into your FastAPI application is straightforward with 
 
 ## Additional Resources
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [SlowAPI Documentation](https://slowapi.tanner.is/)  
+- [SlowAPI Documentation](https://slowapi.tanner.is/)
 
 Feel free to modify the rate limits according to your application's needs!

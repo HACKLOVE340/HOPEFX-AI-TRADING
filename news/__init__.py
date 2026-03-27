@@ -32,26 +32,14 @@ from .providers import (
     NewsAPIProvider,
     AlphaVantageNewsProvider,
     RSSFeedProvider,
-    MultiSourceAggregator
+    MultiSourceAggregator,
 )
 
-from .sentiment import (
-    SentimentAnalyzer,
-    FinancialSentimentAnalyzer,
-    SentimentScore
-)
+from .sentiment import SentimentAnalyzer, FinancialSentimentAnalyzer, SentimentScore
 
-from .impact_predictor import (
-    ImpactPredictor,
-    ImpactLevel,
-    MarketImpact
-)
+from .impact_predictor import ImpactPredictor, ImpactLevel, MarketImpact
 
-from .economic_calendar import (
-    EconomicCalendar,
-    EconomicEvent,
-    EventImportance
-)
+from .economic_calendar import EconomicCalendar, EconomicEvent, EventImportance
 
 from .geopolitical_risk import (
     # Core Classes
@@ -62,13 +50,11 @@ from .geopolitical_risk import (
     RiskSeverity,
     GoldImpact,
     CountryRisk,
-
     # World Monitor Integration
     WorldMonitorIntegration,
     WorldMonitorAPIClient,
     WorldMonitorSelfHostConfig,
     CustomDataLayerConfig,
-
     # Convenience Functions
     get_geopolitical_provider,
     get_gold_geopolitical_signal,
@@ -98,6 +84,7 @@ def _get_risk_provider() -> GeopoliticalRiskProvider:
 # FastAPI Router factory
 # ---------------------------------------------------------------------------
 
+
 def create_news_router():
     """
     Build and return a FastAPI APIRouter with news, sentiment, and
@@ -123,7 +110,9 @@ def create_news_router():
         logger.warning("FastAPI not available; news router not created.")
         return None
 
-    news_router = APIRouter(prefix="/api/news", tags=["News & Geopolitical Intelligence"])
+    news_router = APIRouter(
+        prefix="/api/news", tags=["News & Geopolitical Intelligence"]
+    )
 
     # ── Geopolitical endpoints ──────────────────────────────────────────────
 
@@ -147,7 +136,9 @@ def create_news_router():
             return signal
         except Exception as exc:
             logger.error(f"Geopolitical signal error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Geopolitical signal unavailable: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"Geopolitical signal unavailable: {exc}"
+            )
 
     @news_router.get("/geopolitical/events")
     async def get_geopolitical_events(force_refresh: bool = Query(False)):
@@ -184,7 +175,9 @@ def create_news_router():
             return assessment.to_dict()
         except Exception as exc:
             logger.error(f"Risk assessment error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Assessment unavailable: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"Assessment unavailable: {exc}"
+            )
 
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
@@ -201,7 +194,9 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error(f"World Monitor URLs error: {exc}")
-            raise HTTPException(status_code=500, detail=f"World Monitor integration error: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"World Monitor integration error: {exc}"
+            )
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 
@@ -214,6 +209,7 @@ def create_news_router():
         """
         try:
             from datetime import datetime, timezone, timedelta
+
             calendar = EconomicCalendar()
             now = datetime.now(timezone.utc)
             cutoff = now + timedelta(hours=hours_ahead)
@@ -225,20 +221,30 @@ def create_news_router():
                     if evt_time.tzinfo is None:
                         evt_time = evt_time.replace(tzinfo=timezone.utc)
                     if now <= evt_time <= cutoff:
-                        upcoming.append({
-                            "title": evt.title,
-                            "time": evt_time.isoformat(),
-                            "country": evt.country,
-                            "importance": evt.importance.value if hasattr(evt.importance, "value") else str(evt.importance),
-                            "forecast": evt.forecast,
-                            "previous": evt.previous,
-                        })
+                        upcoming.append(
+                            {
+                                "title": evt.title,
+                                "time": evt_time.isoformat(),
+                                "country": evt.country,
+                                "importance": evt.importance.value
+                                if hasattr(evt.importance, "value")
+                                else str(evt.importance),
+                                "forecast": evt.forecast,
+                                "previous": evt.previous,
+                            }
+                        )
                 except Exception:
                     pass
-            return {"events": upcoming, "count": len(upcoming), "hours_ahead": hours_ahead}
+            return {
+                "events": upcoming,
+                "count": len(upcoming),
+                "hours_ahead": hours_ahead,
+            }
         except Exception as exc:
             logger.error(f"Economic calendar error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Economic calendar unavailable: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"Economic calendar unavailable: {exc}"
+            )
 
     # ── Sentiment endpoint ──────────────────────────────────────────────────
 
@@ -264,8 +270,14 @@ def create_news_router():
             score = analyzer.analyze_batch(terms)
             return {
                 "symbol": symbol.upper(),
-                "sentiment_score": score.score if hasattr(score, "score") else float(score),
-                "label": score.label if hasattr(score, "label") else ("bullish" if score > 0 else "bearish" if score < 0 else "neutral"),
+                "sentiment_score": score.score
+                if hasattr(score, "score")
+                else float(score),
+                "label": score.label
+                if hasattr(score, "label")
+                else (
+                    "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
+                ),
             }
         except Exception as exc:
             logger.error(f"Sentiment analysis error for {symbol}: {exc}")
@@ -276,51 +288,45 @@ def create_news_router():
 
 __all__ = [
     # Providers
-    'NewsProvider',
-    'NewsAPIProvider',
-    'AlphaVantageNewsProvider',
-    'RSSFeedProvider',
-    'MultiSourceAggregator',
-
+    "NewsProvider",
+    "NewsAPIProvider",
+    "AlphaVantageNewsProvider",
+    "RSSFeedProvider",
+    "MultiSourceAggregator",
     # Sentiment
-    'SentimentAnalyzer',
-    'FinancialSentimentAnalyzer',
-    'SentimentScore',
-
+    "SentimentAnalyzer",
+    "FinancialSentimentAnalyzer",
+    "SentimentScore",
     # Impact Prediction
-    'ImpactPredictor',
-    'ImpactLevel',
-    'MarketImpact',
-
+    "ImpactPredictor",
+    "ImpactLevel",
+    "MarketImpact",
     # Economic Calendar
-    'EconomicCalendar',
-    'EconomicEvent',
-    'EventImportance',
-
+    "EconomicCalendar",
+    "EconomicEvent",
+    "EventImportance",
     # Geopolitical Risk (World Monitor Integration)
-    'GeopoliticalRiskProvider',
-    'GeopoliticalEvent',
-    'GeopoliticalRiskAssessment',
-    'GeopoliticalEventType',
-    'RiskSeverity',
-    'GoldImpact',
-    'CountryRisk',
-    'WorldMonitorIntegration',
-    'WorldMonitorAPIClient',
-    'WorldMonitorSelfHostConfig',
-    'CustomDataLayerConfig',
-    'get_geopolitical_provider',
-    'get_gold_geopolitical_signal',
-    'get_api_client',
-    'get_gold_signal_from_api',
-    'create_self_hosted_setup',
-    'get_custom_layer_config',
-
+    "GeopoliticalRiskProvider",
+    "GeopoliticalEvent",
+    "GeopoliticalRiskAssessment",
+    "GeopoliticalEventType",
+    "RiskSeverity",
+    "GoldImpact",
+    "CountryRisk",
+    "WorldMonitorIntegration",
+    "WorldMonitorAPIClient",
+    "WorldMonitorSelfHostConfig",
+    "CustomDataLayerConfig",
+    "get_geopolitical_provider",
+    "get_gold_geopolitical_signal",
+    "get_api_client",
+    "get_gold_signal_from_api",
+    "create_self_hosted_setup",
+    "get_custom_layer_config",
     # Router factory
-    'create_news_router',
+    "create_news_router",
 ]
 
 # Module metadata
-__version__ = '1.2.0'
-__author__ = 'HOPEFX Development Team'
-
+__version__ = "1.2.0"
+__author__ = "HOPEFX Development Team"

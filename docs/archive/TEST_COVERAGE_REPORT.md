@@ -1,7 +1,7 @@
 # Test Coverage Report
 
-**Generated:** February 14, 2026  
-**Platform:** Linux, Python 3.12.3  
+**Generated:** February 14, 2026
+**Platform:** Linux, Python 3.12.3
 **Test Framework:** pytest 7.4.3 with pytest-cov 4.1.0
 
 ---
@@ -362,11 +362,11 @@
 
 ### Current Setup
 
-✅ **Testing Framework:** pytest 7.4.3  
-✅ **Coverage Tool:** pytest-cov 4.1.0  
-✅ **Async Support:** pytest-asyncio 0.23.2  
-✅ **HTTP Testing:** httpx 0.25.2  
-✅ **Configuration:** pytest.ini properly configured  
+✅ **Testing Framework:** pytest 7.4.3
+✅ **Coverage Tool:** pytest-cov 4.1.0
+✅ **Async Support:** pytest-asyncio 0.23.2
+✅ **HTTP Testing:** httpx 0.25.2
+✅ **Configuration:** pytest.ini properly configured
 
 ### Test Organization
 
@@ -527,7 +527,7 @@ Need to create:
 
 ---
 
-**Report Generated:** February 14, 2026  
-**Tool:** pytest-cov 4.1.0  
-**HTML Report:** `htmlcov/index.html`  
+**Report Generated:** February 14, 2026
+**Tool:** pytest-cov 4.1.0
+**HTML Report:** `htmlcov/index.html`
 **XML Report:** `coverage.xml`

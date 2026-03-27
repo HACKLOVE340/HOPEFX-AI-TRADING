@@ -33,6 +33,7 @@ _SECRET = _TEST_SECRET
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
 
+
 def _make_token(sub: str = "user-int-001", role: str = "trader") -> str:
     now = int(time.time())
     return jwt.encode(
@@ -47,6 +48,7 @@ def _auth(sub: str = "user-int-001", role: str = "trader") -> Dict[str, str]:
 
 
 # ── App fixtures ──────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def _pin_jwt_secret(monkeypatch):
@@ -84,6 +86,7 @@ def signals_client() -> TestClient:
 
 
 # ── Watchlist: API → in-memory DB → response ─────────────────────────────────
+
 
 class TestWatchlistFlow:
     """Full HTTP flow: auth → write → read → delete → verify."""
@@ -162,6 +165,7 @@ class TestWatchlistFlow:
 
 # ── Trading: API → strategy store → response ─────────────────────────────────
 
+
 class TestTradingFlow:
     """Strategy CRUD: create → read → start → stop → delete."""
 
@@ -202,6 +206,7 @@ class TestTradingFlow:
 
 
 # ── Signals: read-only public endpoints ──────────────────────────────────────
+
 
 class TestSignalsFlow:
     """Signal endpoints return well-formed responses."""

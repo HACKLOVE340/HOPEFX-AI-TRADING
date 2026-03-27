@@ -7,7 +7,7 @@ version: "1.0"
 enable:
   - vulnerabilities
   - open-source
-  
+
 # Define the target files or directory to scan
 project:
   name: "HOPEFX-AI-TRADING"
@@ -15,4 +15,4 @@ project:
 
 action:
   strategy: "monitor"  # Defines the scanning strategy
-  frequency: "daily"  # Adjust frequency as per requirement  
+  frequency: "daily"  # Adjust frequency as per requirement

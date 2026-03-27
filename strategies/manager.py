@@ -74,7 +74,10 @@ class BaseStrategy:
         }
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str,
+        self,
+        symbol: str,
+        price_data: Any,
+        market_regime: str,
     ) -> List[Signal]:
         """Generate trading signals - implement in subclass"""
         raise NotImplementedError
@@ -95,7 +98,10 @@ class TrendFollowingStrategy(BaseStrategy):
         self.trend_strength_threshold = config.get("trend_strength_threshold", 0.3)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str,
+        self,
+        symbol: str,
+        price_data: Any,
+        market_regime: str,
     ) -> List[Signal]:
         """Generate trend following signals"""
         if market_regime not in ["trending_up", "trending_down"]:
@@ -179,7 +185,10 @@ class MeanReversionStrategy(BaseStrategy):
         self.overbought_threshold = config.get("overbought_threshold", 2.0)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str,
+        self,
+        symbol: str,
+        price_data: Any,
+        market_regime: str,
     ) -> List[Signal]:
         """Generate mean reversion signals"""
         if market_regime != "ranging":
@@ -262,7 +271,10 @@ class BreakoutStrategy(BaseStrategy):
         self.breakout_threshold = config.get("breakout_threshold", 0.001)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str,
+        self,
+        symbol: str,
+        price_data: Any,
+        market_regime: str,
     ) -> List[Signal]:
         """Generate breakout signals"""
         if market_regime != "ranging":
@@ -429,7 +441,9 @@ class StrategyManager:
             logger.info(f"Disabled strategy: {name}")
 
     async def generate_signals(
-        self, market_regimes: Dict[str, Any], price_engine: Any,
+        self,
+        market_regimes: Dict[str, Any],
+        price_engine: Any,
     ) -> List[Dict]:
         """
         Generate signals from all enabled strategies
@@ -459,7 +473,9 @@ class StrategyManager:
 
                 try:
                     signals = await strategy.generate_signals(
-                        symbol=symbol, price_data=ohlcv, market_regime=regime_value,
+                        symbol=symbol,
+                        price_data=ohlcv,
+                        market_regime=regime_value,
                     )
 
                     for signal in signals:

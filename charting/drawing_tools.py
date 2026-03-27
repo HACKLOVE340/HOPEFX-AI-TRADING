@@ -25,6 +25,7 @@ _VALID_ARROW_DIRECTIONS = ("up", "down")
 # Drawing type constants
 # ---------------------------------------------------------------------------
 
+
 class DrawingType:
     """String constants for drawing type identifiers."""
 
@@ -47,6 +48,7 @@ class DrawingType:
 # ---------------------------------------------------------------------------
 # Drawing object
 # ---------------------------------------------------------------------------
+
 
 class Drawing:
     """A single chart annotation stored in the toolkit."""
@@ -102,6 +104,7 @@ class Drawing:
 # ---------------------------------------------------------------------------
 # Toolkit
 # ---------------------------------------------------------------------------
+
 
 class DrawingToolkit:
     """
@@ -293,11 +296,7 @@ class DrawingToolkit:
         drawing.properties = {
             "upper_price": upper_price,
             "lower_price": lower_price,
-            "label": (
-                label
-                if label is not None
-                else f"{lower_price}-{upper_price}"
-            ),
+            "label": (label if label is not None else f"{lower_price}-{upper_price}"),
         }
         drawing.drawing_id = f"HB_{lower_price}_{upper_price}"
         return self._store(drawing)

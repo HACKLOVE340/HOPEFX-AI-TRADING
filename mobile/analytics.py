@@ -18,20 +18,17 @@ class MobileAnalytics:
         self.events = []
 
     def track_event(
-        self,
-        user_id: str,
-        event_type: str,
-        properties: Dict[str, Any] = None
+        self, user_id: str, event_type: str, properties: Dict[str, Any] = None
     ) -> None:
         """Track analytics event"""
         event = {
-            'user_id': user_id,
-            'event_type': event_type,
-            'properties': properties or {},
-            'timestamp': datetime.now(timezone.utc)
+            "user_id": user_id,
+            "event_type": event_type,
+            "properties": properties or {},
+            "timestamp": datetime.now(timezone.utc),
         }
         self.events.append(event)
 
     def track_screen_view(self, user_id: str, screen_name: str) -> None:
         """Track screen view"""
-        self.track_event(user_id, 'screen_view', {'screen': screen_name})
+        self.track_event(user_id, "screen_view", {"screen": screen_name})

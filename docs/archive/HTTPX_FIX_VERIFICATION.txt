@@ -8,7 +8,7 @@ Status: ✅ RESOLVED
 PROBLEM
 -------
 Error Message:
-  "ERROR tests/integration/test_api.py - RuntimeError: 
+  "ERROR tests/integration/test_api.py - RuntimeError:
    The starlette.testclient module requires the httpx package to be installed."
 
 Exit Code: 2

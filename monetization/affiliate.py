@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class AffiliateStatus(str, Enum):
     """Affiliate status enumeration"""
+
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
@@ -38,14 +39,16 @@ class AffiliateStatus(str, Enum):
 
 class AffiliateLevel(str, Enum):
     """Affiliate tier levels"""
-    BRONZE = "bronze"      # 10% commission
-    SILVER = "silver"      # 15% commission
-    GOLD = "gold"          # 20% commission
+
+    BRONZE = "bronze"  # 10% commission
+    SILVER = "silver"  # 15% commission
+    GOLD = "gold"  # 20% commission
     PLATINUM = "platinum"  # 25% commission
 
 
 class ReferralStatus(str, Enum):
     """Referral status enumeration"""
+
     PENDING = "pending"
     CONVERTED = "converted"
     PAID = "paid"
@@ -54,6 +57,7 @@ class ReferralStatus(str, Enum):
 
 class PayoutStatus(str, Enum):
     """Payout status enumeration"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -62,24 +66,25 @@ class PayoutStatus(str, Enum):
 
 # Commission rates by affiliate level
 AFFILIATE_COMMISSION_RATES = {
-    AffiliateLevel.BRONZE: Decimal("0.10"),    # 10%
-    AffiliateLevel.SILVER: Decimal("0.15"),    # 15%
-    AffiliateLevel.GOLD: Decimal("0.20"),      # 20%
+    AffiliateLevel.BRONZE: Decimal("0.10"),  # 10%
+    AffiliateLevel.SILVER: Decimal("0.15"),  # 15%
+    AffiliateLevel.GOLD: Decimal("0.20"),  # 20%
     AffiliateLevel.PLATINUM: Decimal("0.25"),  # 25%
 }
 
 # Requirements to upgrade affiliate level
 LEVEL_REQUIREMENTS = {
-    AffiliateLevel.BRONZE: {'referrals': 0, 'revenue': Decimal("0")},
-    AffiliateLevel.SILVER: {'referrals': 10, 'revenue': Decimal("18000")},
-    AffiliateLevel.GOLD: {'referrals': 25, 'revenue': Decimal("50000")},
-    AffiliateLevel.PLATINUM: {'referrals': 50, 'revenue': Decimal("100000")},
+    AffiliateLevel.BRONZE: {"referrals": 0, "revenue": Decimal("0")},
+    AffiliateLevel.SILVER: {"referrals": 10, "revenue": Decimal("18000")},
+    AffiliateLevel.GOLD: {"referrals": 25, "revenue": Decimal("50000")},
+    AffiliateLevel.PLATINUM: {"referrals": 50, "revenue": Decimal("100000")},
 }
 
 
 @dataclass
 class AffiliateMetrics:
     """Affiliate performance metrics"""
+
     total_referrals: int
     converted_referrals: int
     total_revenue: Decimal
@@ -100,7 +105,7 @@ class Affiliate:
         code: str,
         level: AffiliateLevel = AffiliateLevel.BRONZE,
         status: AffiliateStatus = AffiliateStatus.PENDING,
-        payment_details: Optional[Dict[str, Any]] = None
+        payment_details: Optional[Dict[str, Any]] = None,
     ):
         self.affiliate_id = affiliate_id
         self.user_id = user_id
@@ -136,17 +141,21 @@ class Affiliate:
     def check_level_upgrade(self) -> Optional[AffiliateLevel]:
         """Check if affiliate qualifies for level upgrade"""
         current_level_idx = list(AffiliateLevel).index(self.level)
-        
-        for level in list(AffiliateLevel)[current_level_idx + 1:]:
+
+        for level in list(AffiliateLevel)[current_level_idx + 1 :]:
             req = LEVEL_REQUIREMENTS[level]
-            if (self.total_referrals >= req['referrals'] and 
-                self.total_revenue >= req['revenue']):
+            if (
+                self.total_referrals >= req["referrals"]
+                and self.total_revenue >= req["revenue"]
+            ):
                 return level
         return None
 
     def upgrade_level(self, new_level: AffiliateLevel) -> bool:
         """Upgrade affiliate level"""
-        if list(AffiliateLevel).index(new_level) > list(AffiliateLevel).index(self.level):
+        if list(AffiliateLevel).index(new_level) > list(AffiliateLevel).index(
+            self.level
+        ):
             old_level = self.level
             self.level = new_level
             logger.info(
@@ -159,17 +168,17 @@ class Affiliate:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'affiliate_id': self.affiliate_id,
-            'user_id': self.user_id,
-            'code': self.code,
-            'level': self.level.value,
-            'status': self.status.value,
-            'commission_rate': float(self.get_commission_rate()),
-            'total_referrals': self.total_referrals,
-            'total_revenue': float(self.total_revenue),
-            'total_commissions': float(self.total_commissions),
-            'created_at': self.created_at.isoformat(),
-            'approved_at': self.approved_at.isoformat() if self.approved_at else None
+            "affiliate_id": self.affiliate_id,
+            "user_id": self.user_id,
+            "code": self.code,
+            "level": self.level.value,
+            "status": self.status.value,
+            "commission_rate": float(self.get_commission_rate()),
+            "total_referrals": self.total_referrals,
+            "total_revenue": float(self.total_revenue),
+            "total_commissions": float(self.total_commissions),
+            "created_at": self.created_at.isoformat(),
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
         }
 
 
@@ -182,7 +191,7 @@ class Referral:
         affiliate_id: str,
         referred_user_id: str,
         status: ReferralStatus = ReferralStatus.PENDING,
-        tier: Optional[SubscriptionTier] = None
+        tier: Optional[SubscriptionTier] = None,
     ):
         self.referral_id = referral_id
         self.affiliate_id = affiliate_id
@@ -191,7 +200,9 @@ class Referral:
         self.tier = tier
         self.created_at = datetime.now(timezone.utc)
         self.converted_at: Optional[datetime] = None
-        self.expires_at = datetime.now(timezone.utc) + timedelta(days=90)  # 90-day cookie
+        self.expires_at = datetime.now(timezone.utc) + timedelta(
+            days=90
+        )  # 90-day cookie
         self.subscription_amount: Optional[Decimal] = None
         self.commission_amount: Optional[Decimal] = None
 
@@ -203,7 +214,7 @@ class Referral:
         self,
         tier: SubscriptionTier,
         subscription_amount: Decimal,
-        commission_rate: Decimal
+        commission_rate: Decimal,
     ) -> Decimal:
         """Mark referral as converted and calculate commission"""
         self.status = ReferralStatus.CONVERTED
@@ -211,7 +222,7 @@ class Referral:
         self.tier = tier
         self.subscription_amount = subscription_amount
         self.commission_amount = subscription_amount * commission_rate
-        
+
         logger.info(
             f"Referral {self.referral_id} converted: ${subscription_amount} -> "
             f"${self.commission_amount} commission"
@@ -225,16 +236,22 @@ class Referral:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'referral_id': self.referral_id,
-            'affiliate_id': self.affiliate_id,
-            'referred_user_id': self.referred_user_id,
-            'status': self.status.value,
-            'tier': self.tier.value if self.tier else None,
-            'subscription_amount': float(self.subscription_amount) if self.subscription_amount else None,
-            'commission_amount': float(self.commission_amount) if self.commission_amount else None,
-            'created_at': self.created_at.isoformat(),
-            'converted_at': self.converted_at.isoformat() if self.converted_at else None,
-            'expires_at': self.expires_at.isoformat()
+            "referral_id": self.referral_id,
+            "affiliate_id": self.affiliate_id,
+            "referred_user_id": self.referred_user_id,
+            "status": self.status.value,
+            "tier": self.tier.value if self.tier else None,
+            "subscription_amount": float(self.subscription_amount)
+            if self.subscription_amount
+            else None,
+            "commission_amount": float(self.commission_amount)
+            if self.commission_amount
+            else None,
+            "created_at": self.created_at.isoformat(),
+            "converted_at": self.converted_at.isoformat()
+            if self.converted_at
+            else None,
+            "expires_at": self.expires_at.isoformat(),
         }
 
 
@@ -247,7 +264,7 @@ class Payout:
         affiliate_id: str,
         amount: Decimal,
         payment_method: str,
-        status: PayoutStatus = PayoutStatus.PENDING
+        status: PayoutStatus = PayoutStatus.PENDING,
     ):
         self.payout_id = payout_id
         self.affiliate_id = affiliate_id
@@ -280,15 +297,17 @@ class Payout:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
-            'payout_id': self.payout_id,
-            'affiliate_id': self.affiliate_id,
-            'amount': float(self.amount),
-            'payment_method': self.payment_method,
-            'status': self.status.value,
-            'created_at': self.created_at.isoformat(),
-            'processed_at': self.processed_at.isoformat() if self.processed_at else None,
-            'transaction_id': self.transaction_id,
-            'notes': self.notes
+            "payout_id": self.payout_id,
+            "affiliate_id": self.affiliate_id,
+            "amount": float(self.amount),
+            "payment_method": self.payment_method,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "processed_at": self.processed_at.isoformat()
+            if self.processed_at
+            else None,
+            "transaction_id": self.transaction_id,
+            "notes": self.notes,
         }
 
 
@@ -309,7 +328,7 @@ class AffiliateManager:
         """Generate unique affiliate code"""
         chars = string.ascii_uppercase + string.digits
         while True:
-            code = ''.join(secrets.choice(chars) for _ in range(length))
+            code = "".join(secrets.choice(chars) for _ in range(length))
             if code not in self._affiliate_codes:
                 return code
 
@@ -317,7 +336,7 @@ class AffiliateManager:
         self,
         user_id: str,
         payment_details: Optional[Dict[str, Any]] = None,
-        custom_code: Optional[str] = None
+        custom_code: Optional[str] = None,
     ) -> Affiliate:
         """Create a new affiliate account"""
         import uuid
@@ -340,7 +359,7 @@ class AffiliateManager:
             code=code,
             level=AffiliateLevel.BRONZE,
             status=AffiliateStatus.PENDING,
-            payment_details=payment_details
+            payment_details=payment_details,
         )
 
         self._affiliates[affiliate_id] = affiliate
@@ -369,7 +388,7 @@ class AffiliateManager:
         affiliate = self.get_affiliate(affiliate_id)
         if not affiliate:
             return False
-        
+
         affiliate.approve()
         return True
 
@@ -378,14 +397,12 @@ class AffiliateManager:
         affiliate = self.get_affiliate(affiliate_id)
         if not affiliate:
             return False
-        
+
         affiliate.suspend()
         return True
 
     def create_referral(
-        self,
-        affiliate_code: str,
-        referred_user_id: str
+        self, affiliate_code: str, referred_user_id: str
     ) -> Optional[Referral]:
         """Create a referral tracking record"""
         import uuid
@@ -406,27 +423,31 @@ class AffiliateManager:
             referral_id=referral_id,
             affiliate_id=affiliate.affiliate_id,
             referred_user_id=referred_user_id,
-            status=ReferralStatus.PENDING
+            status=ReferralStatus.PENDING,
         )
 
         self._referrals[referral_id] = referral
-        logger.info(f"Created referral {referral_id} for affiliate {affiliate.affiliate_id}")
-        
+        logger.info(
+            f"Created referral {referral_id} for affiliate {affiliate.affiliate_id}"
+        )
+
         return referral
 
     def convert_referral(
         self,
         referred_user_id: str,
         tier: SubscriptionTier,
-        subscription_amount: Decimal
+        subscription_amount: Decimal,
     ) -> Optional[Decimal]:
         """Convert a referral when user subscribes"""
         # Find active referral for user
         referral = None
         for ref in self._referrals.values():
-            if (ref.referred_user_id == referred_user_id and 
-                ref.status == ReferralStatus.PENDING and
-                not ref.is_expired()):
+            if (
+                ref.referred_user_id == referred_user_id
+                and ref.status == ReferralStatus.PENDING
+                and not ref.is_expired()
+            ):
                 referral = ref
                 break
 
@@ -443,7 +464,7 @@ class AffiliateManager:
         commission = referral.convert(
             tier=tier,
             subscription_amount=subscription_amount,
-            commission_rate=affiliate.get_commission_rate()
+            commission_rate=affiliate.get_commission_rate(),
         )
 
         # Update affiliate stats
@@ -463,23 +484,18 @@ class AffiliateManager:
         return self._referrals.get(referral_id)
 
     def get_affiliate_referrals(
-        self,
-        affiliate_id: str,
-        status: Optional[ReferralStatus] = None
+        self, affiliate_id: str, status: Optional[ReferralStatus] = None
     ) -> List[Referral]:
         """Get all referrals for an affiliate"""
         referrals = [
-            ref for ref in self._referrals.values()
-            if ref.affiliate_id == affiliate_id
+            ref for ref in self._referrals.values() if ref.affiliate_id == affiliate_id
         ]
         if status:
             referrals = [ref for ref in referrals if ref.status == status]
         return referrals
 
     def request_payout(
-        self,
-        affiliate_id: str,
-        payment_method: str
+        self, affiliate_id: str, payment_method: str
     ) -> Optional[Payout]:
         """Request affiliate payout"""
         import uuid
@@ -490,11 +506,9 @@ class AffiliateManager:
 
         # Calculate pending commissions
         pending = self._calculate_pending_commission(affiliate_id)
-        
+
         if pending < self.MIN_PAYOUT:
-            logger.warning(
-                f"Payout below minimum: ${pending} < ${self.MIN_PAYOUT}"
-            )
+            logger.warning(f"Payout below minimum: ${pending} < ${self.MIN_PAYOUT}")
             return None
 
         payout_id = f"PAY-{uuid.uuid4().hex[:12].upper()}"
@@ -503,11 +517,11 @@ class AffiliateManager:
             affiliate_id=affiliate_id,
             amount=pending,
             payment_method=payment_method,
-            status=PayoutStatus.PENDING
+            status=PayoutStatus.PENDING,
         )
 
         self._payouts[payout_id] = payout
-        
+
         # Mark referrals as paid
         for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
             ref.mark_paid()
@@ -523,11 +537,7 @@ class AffiliateManager:
                 total += ref.commission_amount
         return total
 
-    def process_payout(
-        self,
-        payout_id: str,
-        transaction_id: str
-    ) -> bool:
+    def process_payout(self, payout_id: str, transaction_id: str) -> bool:
         """Process a payout request"""
         payout = self._payouts.get(payout_id)
         if not payout:
@@ -561,23 +571,23 @@ class AffiliateManager:
             return None
 
         referrals = self.get_affiliate_referrals(affiliate_id)
-        converted = [r for r in referrals if r.status in [ReferralStatus.CONVERTED, ReferralStatus.PAID]]
-        
+        converted = [
+            r
+            for r in referrals
+            if r.status in [ReferralStatus.CONVERTED, ReferralStatus.PAID]
+        ]
+
         pending_commission = self._calculate_pending_commission(affiliate_id)
         paid_commission = sum(
             ref.commission_amount or Decimal("0")
             for ref in referrals
             if ref.status == ReferralStatus.PAID
         )
-        
-        conversion_rate = (
-            len(converted) / len(referrals) * 100 
-            if referrals else 0.0
-        )
-        
+
+        conversion_rate = len(converted) / len(referrals) * 100 if referrals else 0.0
+
         avg_commission = (
-            affiliate.total_commissions / len(converted) 
-            if converted else Decimal("0")
+            affiliate.total_commissions / len(converted) if converted else Decimal("0")
         )
 
         return AffiliateMetrics(
@@ -588,26 +598,20 @@ class AffiliateManager:
             pending_commissions=pending_commission,
             paid_commissions=paid_commission,
             conversion_rate=conversion_rate,
-            avg_commission=avg_commission
+            avg_commission=avg_commission,
         )
 
     def get_affiliate_payouts(
-        self,
-        affiliate_id: str,
-        status: Optional[PayoutStatus] = None
+        self, affiliate_id: str, status: Optional[PayoutStatus] = None
     ) -> List[Payout]:
         """Get all payouts for an affiliate"""
-        payouts = [
-            p for p in self._payouts.values()
-            if p.affiliate_id == affiliate_id
-        ]
+        payouts = [p for p in self._payouts.values() if p.affiliate_id == affiliate_id]
         if status:
             payouts = [p for p in payouts if p.status == status]
         return payouts
 
     def get_all_affiliates(
-        self,
-        status: Optional[AffiliateStatus] = None
+        self, status: Optional[AffiliateStatus] = None
     ) -> List[Affiliate]:
         """Get all affiliates"""
         affiliates = list(self._affiliates.values())
@@ -619,20 +623,18 @@ class AffiliateManager:
         """Get top affiliates leaderboard"""
         active = self.get_all_affiliates(AffiliateStatus.ACTIVE)
         sorted_affiliates = sorted(
-            active,
-            key=lambda a: (a.total_revenue, a.total_referrals),
-            reverse=True
+            active, key=lambda a: (a.total_revenue, a.total_referrals), reverse=True
         )
-        
+
         return [
             {
-                'rank': idx + 1,
-                'affiliate_id': a.affiliate_id,
-                'code': a.code,
-                'level': a.level.value,
-                'total_referrals': a.total_referrals,
-                'total_revenue': float(a.total_revenue),
-                'total_commissions': float(a.total_commissions)
+                "rank": idx + 1,
+                "affiliate_id": a.affiliate_id,
+                "code": a.code,
+                "level": a.level.value,
+                "total_referrals": a.total_referrals,
+                "total_revenue": float(a.total_revenue),
+                "total_commissions": float(a.total_commissions),
             }
             for idx, a in enumerate(sorted_affiliates[:limit])
         ]
@@ -646,23 +648,30 @@ class AffiliateManager:
         total_revenue = sum(a.total_revenue for a in affiliates)
         total_commissions = sum(a.total_commissions for a in affiliates)
         total_payouts = sum(
-            p.amount for p in payouts 
-            if p.status == PayoutStatus.COMPLETED
+            p.amount for p in payouts if p.status == PayoutStatus.COMPLETED
         )
 
         return {
-            'total_affiliates': len(affiliates),
-            'active_affiliates': len([a for a in affiliates if a.is_active()]),
-            'pending_affiliates': len([a for a in affiliates if a.status == AffiliateStatus.PENDING]),
-            'total_referrals': len(referrals),
-            'converted_referrals': len([r for r in referrals if r.status in [ReferralStatus.CONVERTED, ReferralStatus.PAID]]),
-            'total_revenue_generated': float(total_revenue),
-            'total_commissions_earned': float(total_commissions),
-            'total_payouts_processed': float(total_payouts),
-            'level_breakdown': {
+            "total_affiliates": len(affiliates),
+            "active_affiliates": len([a for a in affiliates if a.is_active()]),
+            "pending_affiliates": len(
+                [a for a in affiliates if a.status == AffiliateStatus.PENDING]
+            ),
+            "total_referrals": len(referrals),
+            "converted_referrals": len(
+                [
+                    r
+                    for r in referrals
+                    if r.status in [ReferralStatus.CONVERTED, ReferralStatus.PAID]
+                ]
+            ),
+            "total_revenue_generated": float(total_revenue),
+            "total_commissions_earned": float(total_commissions),
+            "total_payouts_processed": float(total_payouts),
+            "level_breakdown": {
                 level.value: len([a for a in affiliates if a.level == level])
                 for level in AffiliateLevel
-            }
+            },
         }
 
 

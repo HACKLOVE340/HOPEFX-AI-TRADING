@@ -58,6 +58,7 @@ _FRED_KEY = os.getenv("FRED_API_KEY", "")
 
 # ── low-level FRED fetch ──────────────────────────────────────────────────────
 
+
 def _fred_url(series_id: str, limit: int = 30) -> str:
     """Build a FRED observations URL."""
     params = f"series_id={series_id}&sort_order=desc&limit={limit}&file_type=json"
@@ -88,6 +89,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
     url = _fred_url(series_id, limit)
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -97,6 +99,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
 
     # Fallback: run blocking requests in thread pool
     import requests
+
     loop = asyncio.get_event_loop()
 
     def _sync():
@@ -110,6 +113,7 @@ async def _fetch_fred_async(series_id: str, limit: int = 30) -> pd.DataFrame:
 def _fetch_fred_sync(series_id: str, limit: int = 30) -> pd.DataFrame:
     """Synchronous FRED fetch (for use outside async context)."""
     import requests
+
     url = _fred_url(series_id, limit)
     try:
         r = requests.get(url, timeout=15)
@@ -121,6 +125,7 @@ def _fetch_fred_sync(series_id: str, limit: int = 30) -> pd.DataFrame:
 
 
 # ── public async API ──────────────────────────────────────────────────────────
+
 
 async def fetch_dxy(limit: int = 30) -> pd.DataFrame:
     """
@@ -187,6 +192,7 @@ async def fetch_yield_spread(limit: int = 30) -> pd.DataFrame:
 
 
 # ── MacroFeed class ───────────────────────────────────────────────────────────
+
 
 class MacroFeed:
     """
@@ -262,7 +268,11 @@ class MacroFeed:
             except Exception as exc:
                 logger.warning("MacroFeed refresh failed: %s", exc)
                 if not self._cache:
-                    return {"error": str(exc), "macro_regime_score": 50, "macro_stance": "neutral"}
+                    return {
+                        "error": str(exc),
+                        "macro_regime_score": 50,
+                        "macro_stance": "neutral",
+                    }
         return self._cache
 
     def as_ml_features(self) -> Dict[str, float]:
@@ -330,6 +340,7 @@ class MacroFeed:
 
 
 # ── regime scoring ────────────────────────────────────────────────────────────
+
 
 def _macro_regime_score(
     dxy: Optional[float],

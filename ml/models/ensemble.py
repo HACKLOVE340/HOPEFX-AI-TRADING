@@ -187,7 +187,9 @@ class EnsemblePredictor(BaseMLModel):
             model = Sequential(
                 [
                     LSTM(
-                        64, return_sequences=True, input_shape=(self.sequence_length, 1),
+                        64,
+                        return_sequences=True,
+                        input_shape=(self.sequence_length, 1),
                     ),
                     Dropout(0.2),
                     BatchNormalization(),
@@ -199,7 +201,9 @@ class EnsemblePredictor(BaseMLModel):
             )
 
             model.compile(
-                optimizer=Adam(learning_rate=0.001), loss="huber", metrics=["mae"],
+                optimizer=Adam(learning_rate=0.001),
+                loss="huber",
+                metrics=["mae"],
             )
 
             self.models["lstm"] = model
@@ -309,7 +313,8 @@ class EnsemblePredictor(BaseMLModel):
         return np.array(features), np.array(targets)
 
     def _prepare_lstm_sequences(
-        self, data: np.ndarray,
+        self,
+        data: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare sequences for LSTM."""
         X, y = [], []
@@ -460,11 +465,14 @@ class EnsemblePredictor(BaseMLModel):
                 # Get LSTM prediction
                 if "lstm" in self.models:
                     lstm_seq = data_scaled[i : i + self.sequence_length].reshape(
-                        1, self.sequence_length, 1,
+                        1,
+                        self.sequence_length,
+                        1,
                     )
                     if lstm_seq.shape[1] == self.sequence_length:
                         lstm_pred_scaled = self.models["lstm"].predict(
-                            lstm_seq, verbose=0,
+                            lstm_seq,
+                            verbose=0,
                         )[0][0]
                         lstm_pred = self.scaler_y.inverse_transform(
                             [[lstm_pred_scaled]],
@@ -528,7 +536,8 @@ class EnsemblePredictor(BaseMLModel):
             raise
 
     def _combine_predictions(
-        self, model_predictions: Dict[str, ModelPrediction],
+        self,
+        model_predictions: Dict[str, ModelPrediction],
     ) -> EnsemblePrediction:
         """Combine individual model predictions into ensemble prediction."""
 

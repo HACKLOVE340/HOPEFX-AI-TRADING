@@ -12,7 +12,7 @@ ExecutionRequest validation.
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 from execution.engine import (
     EngineCircuitBreaker,
@@ -28,6 +28,7 @@ from brokers.base import Order, OrderSide, OrderStatus, OrderType
 # ExecutionRequest validation
 # ---------------------------------------------------------------------------
 
+
 class TestExecutionRequest:
     def test_valid_buy_market(self):
         req = ExecutionRequest(
@@ -38,8 +39,7 @@ class TestExecutionRequest:
 
     def test_valid_sell_limit(self):
         req = ExecutionRequest(
-            symbol="XAUUSD", side="SELL", quantity=1.0,
-            order_type="LIMIT", price=1950.0
+            symbol="XAUUSD", side="SELL", quantity=1.0, order_type="LIMIT", price=1950.0
         )
         assert req.price == 1950.0
 
@@ -58,15 +58,21 @@ class TestExecutionRequest:
     def test_limit_without_price_raises(self):
         with pytest.raises(ValueError, match="price"):
             ExecutionRequest(
-                symbol="XAUUSD", side="BUY", quantity=1.0,
-                order_type="LIMIT", price=None
+                symbol="XAUUSD",
+                side="BUY",
+                quantity=1.0,
+                order_type="LIMIT",
+                price=None,
             )
 
     def test_stop_without_stop_price_raises(self):
         with pytest.raises(ValueError, match="stop_price"):
             ExecutionRequest(
-                symbol="XAUUSD", side="BUY", quantity=1.0,
-                order_type="STOP", stop_price=None
+                symbol="XAUUSD",
+                side="BUY",
+                quantity=1.0,
+                order_type="STOP",
+                stop_price=None,
             )
 
     def test_invalid_order_type_raises(self):
@@ -79,6 +85,7 @@ class TestExecutionRequest:
 # ---------------------------------------------------------------------------
 # EngineCircuitBreaker
 # ---------------------------------------------------------------------------
+
 
 class TestEngineCircuitBreaker:
     @pytest.mark.asyncio
@@ -112,7 +119,6 @@ class TestEngineCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_failures_outside_window_not_counted(self):
-        import time
         cb = EngineCircuitBreaker(max_failures=3, window_sec=0.1, reset_sec=9999.0)
         await cb.record_failure()
         await cb.record_failure()
@@ -124,6 +130,7 @@ class TestEngineCircuitBreaker:
 # ---------------------------------------------------------------------------
 # ExecutionEngine
 # ---------------------------------------------------------------------------
+
 
 def _make_broker_manager(order_status=OrderStatus.FILLED):
     mgr = MagicMock()

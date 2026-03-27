@@ -27,7 +27,12 @@ class MeanReversionStrategy(BaseStrategy):
     """
 
     def __init__(
-        self, name: str, symbol: str, config, period: int = 20, std_dev: float = 2.0,
+        self,
+        name: str,
+        symbol: str,
+        config,
+        period: int = 20,
+        std_dev: float = 2.0,
     ):
         """
         Initialize mean reversion strategy.

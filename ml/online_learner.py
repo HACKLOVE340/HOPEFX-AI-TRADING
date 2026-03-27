@@ -103,7 +103,9 @@ class OnlineLearner:
         self.model = model
         if model is not None:
             self.optimizer = torch.optim.AdamW(
-                model.parameters(), lr=learning_rate, weight_decay=0.01,
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=0.01,
             )
             self.ewc = EWCRegularizer(model)
         else:
@@ -117,7 +119,10 @@ class OnlineLearner:
         # Learning rate scheduler
         if self.optimizer is not None and torch is not None:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode="max", factor=0.5, patience=10,
+                self.optimizer,
+                mode="max",
+                factor=0.5,
+                patience=10,
             )
         else:
             self.scheduler = None
@@ -146,7 +151,9 @@ class OnlineLearner:
         # Sample from replay buffer (experience replay)
         if len(self.replay_buffer) >= self.batch_size:
             indices = np.random.choice(
-                len(self.replay_buffer), self.batch_size, replace=False,
+                len(self.replay_buffer),
+                self.batch_size,
+                replace=False,
             )
             batch = [self.replay_buffer[i] for i in indices]
 
@@ -211,7 +218,9 @@ class OnlineLearner:
         """Get diagnostics about learning process"""
         return {
             "train_loss_trend": np.polyfit(
-                range(len(self.train_losses)), self.train_losses, 1,
+                range(len(self.train_losses)),
+                self.train_losses,
+                1,
             )[0]
             if len(self.train_losses) > 10
             else 0,

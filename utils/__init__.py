@@ -12,30 +12,30 @@ import asyncio
 import functools
 import hashlib
 import inspect
-import json
+import json  # noqa: F401
 import logging
 import secrets
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone  # noqa: F401
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class RateLimiter:
     """Token bucket rate limiter"""
-    
+
     def __init__(self, rate: float, burst: int = 1):
         self.rate = rate  # tokens per second
         self.burst = burst  # max tokens
         self.tokens = burst
         self.last_update = time.monotonic()
         self._lock = asyncio.Lock()
-    
+
     async def acquire(self):
         """Acquire a token"""
         async with self._lock:
@@ -43,7 +43,7 @@ class RateLimiter:
             elapsed = now - self.last_update
             self.tokens = min(self.burst, self.tokens + elapsed * self.rate)
             self.last_update = now
-            
+
             if self.tokens < 1:
                 sleep_time = (1 - self.tokens) / self.rate
                 await asyncio.sleep(sleep_time)
@@ -54,14 +54,19 @@ class RateLimiter:
 
 class RetryWithExponentialBackoff:
     """Decorator for retry with exponential backoff"""
-    
-    def __init__(self, max_retries: int = 3, base_delay: float = 1.0, 
-                 exceptions: tuple = (Exception,), on_retry: Optional[Callable] = None):
+
+    def __init__(
+        self,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        exceptions: tuple = (Exception,),
+        on_retry: Optional[Callable] = None,
+    ):
         self.max_retries = max_retries
         self.base_delay = base_delay
         self.exceptions = exceptions
         self.on_retry = on_retry
-    
+
     def __call__(self, func):
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -71,17 +76,19 @@ class RetryWithExponentialBackoff:
                 except self.exceptions as e:
                     if attempt == self.max_retries - 1:
                         raise
-                    
-                    delay = self.base_delay * (2 ** attempt)
-                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
-                    
+
+                    delay = self.base_delay * (2**attempt)
+                    logger.warning(
+                        f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}"
+                    )
+
                     if self.on_retry:
                         self.on_retry(attempt, e)
-                    
+
                     await asyncio.sleep(delay)
-            
+
             return None  # Should never reach here
-        
+
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
             for attempt in range(self.max_retries):
@@ -90,23 +97,25 @@ class RetryWithExponentialBackoff:
                 except self.exceptions as e:
                     if attempt == self.max_retries - 1:
                         raise
-                    
-                    delay = self.base_delay * (2 ** attempt)
-                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
-                    
+
+                    delay = self.base_delay * (2**attempt)
+                    logger.warning(
+                        f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}"
+                    )
+
                     if self.on_retry:
                         self.on_retry(attempt, e)
-                    
+
                     time.sleep(delay)
-            
+
             return None
-        
+
         return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
 
 class CircuitBreaker:
     """Circuit breaker pattern"""
-    
+
     def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0):
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -114,7 +123,7 @@ class CircuitBreaker:
         self.last_failure_time: Optional[float] = None
         self.is_open = False
         self._half_open = False
-    
+
     def record_success(self):
         """Record successful call"""
         self.failure_count = max(0, self.failure_count - 1)
@@ -122,28 +131,32 @@ class CircuitBreaker:
             self.is_open = False
             self._half_open = False
             logger.info("Circuit breaker closed (recovered)")
-    
+
     def record_failure(self) -> bool:
         """Record failed call, returns True if circuit opened"""
         self.failure_count += 1
         self.last_failure_time = time.monotonic()
-        
+
         if self.failure_count >= self.failure_threshold:
             self.is_open = True
-            logger.critical(f"Circuit breaker OPENED after {self.failure_count} failures")
+            logger.critical(
+                f"Circuit breaker OPENED after {self.failure_count} failures"
+            )
             return True
         return False
-    
+
     def can_execute(self) -> bool:
         """Check if execution allowed"""
         if not self.is_open:
             return True
-        
+
         # Check if recovery timeout passed
-        if self.last_failure_time and (time.monotonic() - self.last_failure_time > self.recovery_timeout):
+        if self.last_failure_time and (
+            time.monotonic() - self.last_failure_time > self.recovery_timeout
+        ):
             self._half_open = True
             return True
-        
+
         return False
 
 
@@ -183,11 +196,12 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
 
 def chunk_list(lst: List[T], chunk_size: int) -> List[List[T]]:
     """Split list into chunks"""
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+    return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def timeit(func: Callable) -> Callable:
     """Decorator to time function execution"""
+
     @functools.wraps(func)
     async def async_wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -196,7 +210,7 @@ def timeit(func: Callable) -> Callable:
         finally:
             elapsed = time.perf_counter() - start
             logger.debug(f"{func.__name__} took {elapsed*1000:.2f}ms")
-    
+
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -205,7 +219,7 @@ def timeit(func: Callable) -> Callable:
         finally:
             elapsed = time.perf_counter() - start
             logger.debug(f"{func.__name__} took {elapsed*1000:.2f}ms")
-    
+
     return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
 
@@ -224,7 +238,7 @@ def parse_timestamp(timestamp: Any) -> datetime:
             timestamp = timestamp / 1000
         return datetime.fromtimestamp(timestamp, tz=timezone.utc)
     if isinstance(timestamp, str):
-        return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     raise ValueError(f"Cannot parse timestamp: {timestamp}")
 
 
@@ -243,7 +257,7 @@ def truncate_string(s: str, max_length: int, suffix: str = "...") -> str:
     """Truncate string with suffix"""
     if len(s) <= max_length:
         return s
-    return s[:max_length - len(suffix)] + suffix
+    return s[: max_length - len(suffix)] + suffix
 
 
 def validate_symbol(symbol: str) -> bool:
@@ -251,10 +265,10 @@ def validate_symbol(symbol: str) -> bool:
     # Basic validation: 6 chars for forex (EURUSD), or contains /
     if len(symbol) == 6 and symbol.isalpha():
         return True
-    if '/' in symbol and len(symbol) <= 10:
+    if "/" in symbol and len(symbol) <= 10:
         return True
     # XAUUSD, etc.
-    if len(symbol) <= 10 and symbol.replace('/', '').isalnum():
+    if len(symbol) <= 10 and symbol.replace("/", "").isalnum():
         return True
     return False
 
@@ -263,38 +277,38 @@ def calculate_correlation(x: List[float], y: List[float]) -> float:
     """Calculate Pearson correlation"""
     if len(x) != len(y) or len(x) < 2:
         return 0.0
-    
+
     n = len(x)
     sum_x = sum(x)
     sum_y = sum(y)
-    sum_x_sq = sum(xi ** 2 for xi in x)
-    sum_y_sq = sum(yi ** 2 for yi in y)
+    sum_x_sq = sum(xi**2 for xi in x)
+    sum_y_sq = sum(yi**2 for yi in y)
     sum_xy = sum(xi * yi for xi, yi in zip(x, y))
-    
+
     numerator = sum_xy - (sum_x * sum_y / n)
-    denominator = ((sum_x_sq - sum_x ** 2 / n) * (sum_y_sq - sum_y ** 2 / n)) ** 0.5
-    
+    denominator = ((sum_x_sq - sum_x**2 / n) * (sum_y_sq - sum_y**2 / n)) ** 0.5
+
     return numerator / denominator if denominator != 0 else 0.0
 
 
 class MovingAverage:
     """Efficient moving average calculation"""
-    
+
     def __init__(self, window: int):
         self.window = window
         self.values: deque = deque(maxlen=window)
         self.sum = 0.0
-    
+
     def update(self, value: float) -> float:
         """Add value and return new average"""
         if len(self.values) == self.window:
             self.sum -= self.values[0]
-        
+
         self.values.append(value)
         self.sum += value
-        
+
         return self.sum / len(self.values)
-    
+
     @property
     def average(self) -> float:
         """Current average"""
@@ -303,18 +317,18 @@ class MovingAverage:
 
 class ExponentialMovingAverage:
     """Exponential moving average"""
-    
+
     def __init__(self, alpha: float):
         self.alpha = alpha
         self.value: Optional[float] = None
-    
+
     def update(self, new_value: float) -> float:
         """Update EMA"""
         if self.value is None:
             self.value = new_value
         else:
             self.value = self.alpha * new_value + (1 - self.alpha) * self.value
-        
+
         return self.value
 
 
@@ -326,40 +340,44 @@ def get_framework_version() -> str:
 def get_all_component_statuses(app=None) -> Dict[str, Any]:
     """Get status of all components"""
     statuses = {
-        'framework_version': get_framework_version(),
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'components': {}
+        "framework_version": get_framework_version(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "components": {},
     }
-    
+
     if app:
-        statuses['components']['brain'] = app.brain.get_health() if app.brain else None
-        statuses['components']['broker'] = {'connected': app.broker.connected if app.broker else False}
-        statuses['components']['price_engine'] = app.price_engine.get_status() if app.price_engine else None
-    
+        statuses["components"]["brain"] = app.brain.get_health() if app.brain else None
+        statuses["components"]["broker"] = {
+            "connected": app.broker.connected if app.broker else False
+        }
+        statuses["components"]["price_engine"] = (
+            app.price_engine.get_status() if app.price_engine else None
+        )
+
     return statuses
 
 
 # Export all utilities
 __all__ = [
-    'RateLimiter',
-    'RetryWithExponentialBackoff',
-    'CircuitBreaker',
-    'generate_id',
-    'hash_sensitive',
-    'format_currency',
-    'format_percentage',
-    'round_decimal',
-    'safe_divide',
-    'chunk_list',
-    'timeit',
-    'get_timestamp_ms',
-    'parse_timestamp',
-    'deep_merge',
-    'truncate_string',
-    'validate_symbol',
-    'calculate_correlation',
-    'MovingAverage',
-    'ExponentialMovingAverage',
-    'get_framework_version',
-    'get_all_component_statuses'
+    "RateLimiter",
+    "RetryWithExponentialBackoff",
+    "CircuitBreaker",
+    "generate_id",
+    "hash_sensitive",
+    "format_currency",
+    "format_percentage",
+    "round_decimal",
+    "safe_divide",
+    "chunk_list",
+    "timeit",
+    "get_timestamp_ms",
+    "parse_timestamp",
+    "deep_merge",
+    "truncate_string",
+    "validate_symbol",
+    "calculate_correlation",
+    "MovingAverage",
+    "ExponentialMovingAverage",
+    "get_framework_version",
+    "get_all_component_statuses",
 ]

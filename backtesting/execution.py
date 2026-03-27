@@ -20,6 +20,7 @@ from backtesting.engine import Order
 
 class OrderResult:
     """Simple result wrapper for audit log compatibility."""
+
     def __init__(self, success: bool, fill_price: float = 0.0, message: str = ""):
         self.success = success
         self.fill_price = fill_price
@@ -35,6 +36,7 @@ def create_audit_log(order: Order, result: OrderResult) -> dict:
         "compliance_version": "1.0",
     }
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +47,9 @@ class SimulatedExecutionHandler:
     Models market orders, limit orders, slippage, and commissions.
     """
 
-    def __init__(self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005):
+    def __init__(
+        self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005
+    ):
         """
         Initialize execution handler.
 
@@ -58,7 +62,9 @@ class SimulatedExecutionHandler:
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
 
-        logger.info(f"Initialized execution handler (commission: {commission_pct*100}%, slippage: {slippage_pct*100}%)")
+        logger.info(
+            f"Initialized execution handler (commission: {commission_pct*100}%, slippage: {slippage_pct*100}%)"
+        )
 
     def execute_order(self, order: OrderEvent) -> Optional[FillEvent]:
         """
@@ -74,39 +80,41 @@ class SimulatedExecutionHandler:
         bar = self.data_handler.get_latest_bar(order.symbol)
 
         if bar is None:
-            logger.warning(f"No data available for {order.symbol}, cannot execute order")
+            logger.warning(
+                f"No data available for {order.symbol}, cannot execute order"
+            )
             return None
 
         # Determine fill price based on order type
-        if order.order_type == 'MARKET':
+        if order.order_type == "MARKET":
             # Market orders fill at next open (assuming bar-by-bar)
             # In reality, might use close or a slippage model
-            fill_price = bar['close']
+            fill_price = bar["close"]
 
             # Apply slippage
-            if order.direction == 'BUY':
-                fill_price *= (1 + self.slippage_pct)
+            if order.direction == "BUY":
+                fill_price *= 1 + self.slippage_pct
             else:
-                fill_price *= (1 - self.slippage_pct)
+                fill_price *= 1 - self.slippage_pct
 
-        elif order.order_type == 'LIMIT':
+        elif order.order_type == "LIMIT":
             # Check if limit price was reached
-            if order.direction == 'BUY' and order.price >= bar['low']:
-                fill_price = min(order.price, bar['high'])
-            elif order.direction == 'SELL' and order.price <= bar['high']:
-                fill_price = max(order.price, bar['low'])
+            if order.direction == "BUY" and order.price >= bar["low"]:
+                fill_price = min(order.price, bar["high"])
+            elif order.direction == "SELL" and order.price <= bar["high"]:
+                fill_price = max(order.price, bar["low"])
             else:
                 # Limit not reached
                 return None
 
-        elif order.order_type == 'STOP':
+        elif order.order_type == "STOP":
             # Check if stop was triggered
-            if order.direction == 'BUY' and order.price <= bar['high']:
-                fill_price = max(order.price, bar['low'])
-                fill_price *= (1 + self.slippage_pct)  # Add slippage
-            elif order.direction == 'SELL' and order.price >= bar['low']:
-                fill_price = min(order.price, bar['high'])
-                fill_price *= (1 - self.slippage_pct)  # Add slippage
+            if order.direction == "BUY" and order.price <= bar["high"]:
+                fill_price = max(order.price, bar["low"])
+                fill_price *= 1 + self.slippage_pct  # Add slippage
+            elif order.direction == "SELL" and order.price >= bar["low"]:
+                fill_price = min(order.price, bar["high"])
+                fill_price *= 1 - self.slippage_pct  # Add slippage
             else:
                 # Stop not triggered
                 return None
@@ -123,9 +131,11 @@ class SimulatedExecutionHandler:
             quantity=order.quantity,
             direction=order.direction,
             fill_price=fill_price,
-            commission=commission
+            commission=commission,
         )
 
-        logger.debug(f"Filled {order.direction} {order.quantity} {order.symbol} @ {fill_price:.4f}")
+        logger.debug(
+            f"Filled {order.direction} {order.quantity} {order.symbol} @ {fill_price:.4f}"
+        )
 
         return fill

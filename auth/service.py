@@ -178,7 +178,7 @@ def decrypt_totp_secret(stored: str) -> str:
 # A single implementation ensures the hash written at registration is always
 # the same scheme verified at login — previously this module used pbkdf2_sha256
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
-from auth.jwt import hash_password, verify_password  # noqa: F401
+from auth.jwt import hash_password, verify_password  # noqa: E402, F401
 
 
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
@@ -403,7 +403,10 @@ class AuthService:
             # Issue tokens
             access_token = self._create_access_token(user)
             raw_refresh, session_row = self._create_refresh_session(
-                user, ip_address, device_info, session,
+                user,
+                ip_address,
+                device_info,
+                session,
             )
 
             # Update last login
@@ -433,7 +436,9 @@ class AuthService:
     # ── Token refresh ─────────────────────────────────────────────────────────
 
     def refresh(
-        self, raw_refresh_token: str, ip_address: str = "unknown",
+        self,
+        raw_refresh_token: str,
+        ip_address: str = "unknown",
     ) -> Tuple[bool, str, Optional[dict]]:
         """
         Rotate refresh token. Old token is revoked, new pair issued.
@@ -465,7 +470,10 @@ class AuthService:
             # Issue new pair
             access_token = self._create_access_token(user)
             raw_new, _ = self._create_refresh_session(
-                user, ip_address, sess_row.device_info or "", session,
+                user,
+                ip_address,
+                sess_row.device_info or "",
+                session,
             )
             session.commit()
 
@@ -483,7 +491,9 @@ class AuthService:
     # ── Logout ────────────────────────────────────────────────────────────────
 
     def logout(
-        self, raw_refresh_token: str, access_token: Optional[str] = None,
+        self,
+        raw_refresh_token: str,
+        access_token: Optional[str] = None,
     ) -> Tuple[bool, str]:
         from database.user_models import UserSession
 
@@ -504,7 +514,9 @@ class AuthService:
         if access_token:
             try:
                 payload = jwt.decode(
-                    access_token, _get_secret(), algorithms=[ALGORITHM],
+                    access_token,
+                    _get_secret(),
+                    algorithms=[ALGORITHM],
                 )
                 jti = payload.get("jti")
                 exp = payload.get("exp", 0)
@@ -522,7 +534,8 @@ class AuthService:
 
         with self._sf() as session:
             session.query(UserSession).filter_by(
-                user_id=user_id, is_revoked=False,
+                user_id=user_id,
+                is_revoked=False,
             ).update({"is_revoked": True, "revoked_at": _now()})
             session.commit()
         return True, "All sessions revoked"
@@ -638,7 +651,11 @@ class AuthService:
         return jwt.encode(payload, _get_secret(), algorithm=ALGORITHM)
 
     def _create_refresh_session(
-        self, user, ip_address: str, device_info: str, session,
+        self,
+        user,
+        ip_address: str,
+        device_info: str,
+        session,
     ) -> Tuple[str, object]:
         from database.user_models import UserSession
 

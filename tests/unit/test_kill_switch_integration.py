@@ -27,6 +27,7 @@ from risk.manager import RiskManager, RiskConfig
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_rm(tmp_path: Path, **config_kwargs) -> RiskManager:
     """Create a RiskManager with an isolated halt-state file."""
     cfg = RiskConfig(**config_kwargs)
@@ -37,6 +38,7 @@ def _make_rm(tmp_path: Path, **config_kwargs) -> RiskManager:
 # ---------------------------------------------------------------------------
 # Test 1: drawdown breach triggers halt
 # ---------------------------------------------------------------------------
+
 
 def test_drawdown_breach_triggers_halt(tmp_path):
     rm = _make_rm(tmp_path, max_drawdown_pct=0.10)
@@ -55,6 +57,7 @@ def test_drawdown_breach_triggers_halt(tmp_path):
 # Test 2: halt persists to disk
 # ---------------------------------------------------------------------------
 
+
 def test_halt_persists_to_disk(tmp_path):
     rm = _make_rm(tmp_path, max_drawdown_pct=0.10)
     halt_file = rm._halt_state_file
@@ -71,15 +74,20 @@ def test_halt_persists_to_disk(tmp_path):
 # Test 3: restart restores halt from disk
 # ---------------------------------------------------------------------------
 
+
 def test_restart_restores_halt_from_disk(tmp_path):
     halt_file = tmp_path / "halt_state.json"
     future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
-    halt_file.write_text(json.dumps({
-        "halted": True,
-        "reason": "restored halt",
-        "halt_until": future,
-        "persisted_at": datetime.now(timezone.utc).isoformat(),
-    }))
+    halt_file.write_text(
+        json.dumps(
+            {
+                "halted": True,
+                "reason": "restored halt",
+                "halt_until": future,
+                "persisted_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+    )
 
     rm = RiskManager(
         config=RiskConfig(),
@@ -94,6 +102,7 @@ def test_restart_restores_halt_from_disk(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 4: authenticated deactivation resumes trading
 # ---------------------------------------------------------------------------
+
 
 def test_authenticated_deactivation_resumes_trading(tmp_path):
     rm = _make_rm(tmp_path)
@@ -111,6 +120,7 @@ def test_authenticated_deactivation_resumes_trading(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 5: wrong token is rejected (HMAC validation)
 # ---------------------------------------------------------------------------
+
 
 def test_wrong_token_rejected():
     """
@@ -131,17 +141,19 @@ def test_wrong_token_rejected():
         wrong_secret.encode(), message.encode(), hashlib.sha256
     ).hexdigest()
 
-    assert not hmac.compare_digest(correct_sig, wrong_sig), (
-        "Wrong token must not match the correct HMAC signature"
-    )
+    assert not hmac.compare_digest(
+        correct_sig, wrong_sig
+    ), "Wrong token must not match the correct HMAC signature"
 
 
 # ---------------------------------------------------------------------------
 # Test 6: amber warning fires before full halt
 # ---------------------------------------------------------------------------
 
+
 def test_amber_warning_fires_before_halt(tmp_path, caplog):
     import logging
+
     rm = _make_rm(tmp_path, max_drawdown_pct=0.10)
     rm.peak_equity = 100_000.0
 
@@ -154,6 +166,6 @@ def test_amber_warning_fires_before_halt(tmp_path, caplog):
 
     assert rm._amber_warned is True, "Amber flag should be set"
     assert rm._trading_halted is False, "Trading should NOT be halted at amber level"
-    assert any("AMBER" in r.message for r in caplog.records), (
-        "Expected AMBER warning in log"
-    )
+    assert any(
+        "AMBER" in r.message for r in caplog.records
+    ), "Expected AMBER warning in log"

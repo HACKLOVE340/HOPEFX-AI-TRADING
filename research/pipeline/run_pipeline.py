@@ -36,7 +36,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from research.pipeline.orchestrator import PipelineConfig, PipelineOrchestrator
+from research.pipeline.orchestrator import PipelineConfig, PipelineOrchestrator  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,15 +48,28 @@ logger = logging.getLogger("pipeline.cli")
 # ── Multi-asset batch universe ────────────────────────────────────────────────
 BATCH_UNIVERSE = [
     # Equities
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM",
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "NVDA",
+    "META",
+    "TSLA",
+    "JPM",
     # ETFs
-    "SPY", "QQQ", "GLD", "TLT",
+    "SPY",
+    "QQQ",
+    "GLD",
+    "TLT",
     # Crypto
-    "BTC-USD", "ETH-USD",
+    "BTC-USD",
+    "ETH-USD",
     # FX
-    "EURUSD=X", "GBPUSD=X",
+    "EURUSD=X",
+    "GBPUSD=X",
     # Commodities
-    "GC=F", "CL=F",
+    "GC=F",
+    "CL=F",
 ]
 
 
@@ -65,27 +78,43 @@ def _parse_args() -> argparse.Namespace:
         description="HOPEFX Deep Prediction Pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--ticker",    default="AAPL",  help="Yahoo Finance ticker")
-    p.add_argument("--interval",  default="1d",    help="Bar interval: 1d | 5m | 15m | 1h")
-    p.add_argument("--start",     default="2000-01-01", help="Start date (daily only)")
-    p.add_argument("--lookback",  type=int, default=730, help="Lookback days (intraday)")
-    p.add_argument("--horizon",   type=int, default=1,   help="Bars ahead to predict")
-    p.add_argument("--threshold", type=float, default=0.001, help="Min return for directional label")
-    p.add_argument("--seq-len",   type=int, default=60,  help="LSTM/Transformer sequence length")
-    p.add_argument("--arch",      default="lstm",
-                   choices=["lstm", "transformer", "tcn"],
-                   help="Deep model architecture")
-    p.add_argument("--epochs",    type=int, default=100, help="Max training epochs")
-    p.add_argument("--patience",  type=int, default=15,  help="Early stopping patience")
-    p.add_argument("--trials",    type=int, default=30,  help="Optuna hyperparameter trials")
-    p.add_argument("--device",    default="auto",        help="'cuda' | 'cpu' | 'auto'")
-    p.add_argument("--no-mtf",    action="store_true",   help="Disable multi-timeframe fusion")
+    p.add_argument("--ticker", default="AAPL", help="Yahoo Finance ticker")
+    p.add_argument("--interval", default="1d", help="Bar interval: 1d | 5m | 15m | 1h")
+    p.add_argument("--start", default="2000-01-01", help="Start date (daily only)")
+    p.add_argument("--lookback", type=int, default=730, help="Lookback days (intraday)")
+    p.add_argument("--horizon", type=int, default=1, help="Bars ahead to predict")
+    p.add_argument(
+        "--threshold",
+        type=float,
+        default=0.001,
+        help="Min return for directional label",
+    )
+    p.add_argument(
+        "--seq-len", type=int, default=60, help="LSTM/Transformer sequence length"
+    )
+    p.add_argument(
+        "--arch",
+        default="lstm",
+        choices=["lstm", "transformer", "tcn"],
+        help="Deep model architecture",
+    )
+    p.add_argument("--epochs", type=int, default=100, help="Max training epochs")
+    p.add_argument("--patience", type=int, default=15, help="Early stopping patience")
+    p.add_argument(
+        "--trials", type=int, default=30, help="Optuna hyperparameter trials"
+    )
+    p.add_argument("--device", default="auto", help="'cuda' | 'cpu' | 'auto'")
+    p.add_argument(
+        "--no-mtf", action="store_true", help="Disable multi-timeframe fusion"
+    )
     p.add_argument("--no-sentiment", action="store_true", help="Disable RSS sentiment")
-    p.add_argument("--no-cache",  action="store_true",   help="Bypass Parquet cache")
-    p.add_argument("--batch",     action="store_true",   help="Run on full BATCH_UNIVERSE")
-    p.add_argument("--infer",     action="store_true",   help="Inference mode (requires --run-id)")
-    p.add_argument("--run-id",    default=None,          help="Artefact run ID for inference")
-    p.add_argument("--output",    default=None,          help="Path to write JSON report")
+    p.add_argument("--no-cache", action="store_true", help="Bypass Parquet cache")
+    p.add_argument("--batch", action="store_true", help="Run on full BATCH_UNIVERSE")
+    p.add_argument(
+        "--infer", action="store_true", help="Inference mode (requires --run-id)"
+    )
+    p.add_argument("--run-id", default=None, help="Artefact run ID for inference")
+    p.add_argument("--output", default=None, help="Path to write JSON report")
     return p.parse_args()
 
 
@@ -125,7 +154,9 @@ def _print_report(report: dict, ticker: str) -> None:
     print(f"  Max Drawdown : {test.get('strategy_max_drawdown', 0)*100:.1f}%")
     print(f"  Total Return : {test.get('strategy_total_return', 0)*100:.1f}%")
     print(f"  Hit Rate     : {test.get('hit_rate', 0):.4f}")
-    print(f"  Meta-weight  : deep={report['meta_weight']:.2f}  ens={1-report['meta_weight']:.2f}")
+    print(
+        f"  Meta-weight  : deep={report['meta_weight']:.2f}  ens={1-report['meta_weight']:.2f}"
+    )
     print(f"  Artefacts    : {report['artefact_dir']}")
     print(f"{'─'*60}\n")
 

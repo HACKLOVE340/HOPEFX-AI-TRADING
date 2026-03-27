@@ -39,9 +39,7 @@ def _make_cache(ttl: int = 60):
 
 
 def _make_features(n_cols: int = 5) -> pd.DataFrame:
-    return pd.DataFrame(
-        {f"f{i}": [float(i)] for i in range(n_cols)}
-    )
+    return pd.DataFrame({f"f{i}": [float(i)] for i in range(n_cols)})
 
 
 # ── In-memory path ────────────────────────────────────────────────────────────

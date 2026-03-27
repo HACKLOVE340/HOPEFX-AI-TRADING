@@ -126,7 +126,10 @@ class LSTMPricePredictor(BaseMLModel):
         return np.array(X), np.array(y)
 
     def _scale_data(
-        self, X: np.ndarray, y: np.ndarray, fit: bool = True,
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        fit: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Scale data using MinMaxScaler.
@@ -182,7 +185,9 @@ class LSTMPricePredictor(BaseMLModel):
 
             # Scale data
             X_train_scaled, y_train_scaled = self._scale_data(
-                X_train, y_train, fit=True,
+                X_train,
+                y_train,
+                fit=True,
             )
 
             # Prepare sequences

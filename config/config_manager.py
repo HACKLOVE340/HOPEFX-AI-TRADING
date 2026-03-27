@@ -238,7 +238,9 @@ class AppConfig:
         db_d = d.get("database", {})
         if db_d:
             cfg.database = DatabaseConfig(
-                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d},
+                **{
+                    k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d
+                },
             )
         tr_d = d.get("trading", {})
         if tr_d:
@@ -271,13 +273,16 @@ class ConfigManager:
     """Secure configuration manager with encryption and hash-based change detection."""
 
     def __init__(
-        self, config_dir: str = "config", encryption_key: Optional[str] = None,
+        self,
+        config_dir: str = "config",
+        encryption_key: Optional[str] = None,
     ):
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         self._encryption_key = encryption_key or os.environ.get(
-            "CONFIG_ENCRYPTION_KEY", "",
+            "CONFIG_ENCRYPTION_KEY",
+            "",
         )
         self._enc: Optional[EncryptionManager] = None
         if self._encryption_key:
@@ -372,7 +377,10 @@ class ConfigManager:
         return self.config.api_configs.get(provider)
 
     def update_api_credential(
-        self, provider: str, api_key: str, api_secret: str,
+        self,
+        provider: str,
+        api_key: str,
+        api_secret: str,
     ) -> None:
         if self.config is None:
             raise RuntimeError("Config not loaded; call load_config() first")
@@ -381,7 +389,9 @@ class ConfigManager:
             self.config.api_configs[provider].api_secret = api_secret
         else:
             self.config.api_configs[provider] = APIConfig(
-                provider=provider, api_key=api_key, api_secret=api_secret,
+                provider=provider,
+                api_key=api_key,
+                api_secret=api_secret,
             )
 
     def is_config_modified(self) -> bool:

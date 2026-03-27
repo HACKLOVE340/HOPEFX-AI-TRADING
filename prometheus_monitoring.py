@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 try:
-    import prometheus_client as prom
+    import prometheus_client as prom  # noqa: F401
     from prometheus_client import (
         Counter as PromCounter,
         Gauge as PromGauge,
@@ -44,6 +44,7 @@ try:
         generate_latest,
         CONTENT_TYPE_LATEST,
     )
+
     _PROM_AVAILABLE = True
 except ImportError:
     _PROM_AVAILABLE = False
@@ -129,6 +130,7 @@ def setup_prometheus_monitoring(app: "FastAPI") -> None:
 
         existing_paths = {r.path for r in app.routes if isinstance(r, APIRoute)}
         if "/metrics" not in existing_paths:
+
             @app.get("/metrics", include_in_schema=False)
             async def metrics_endpoint() -> Response:
                 """Prometheus scrape endpoint."""
@@ -149,9 +151,11 @@ def setup_prometheus_monitoring(app: "FastAPI") -> None:
 
         existing_paths = {r.path for r in app.routes}
         if "/metrics" not in existing_paths:
+
             @app.get("/metrics", include_in_schema=False)
             async def metrics_endpoint_fallback() -> Response:
                 from infrastructure.metrics import get_metrics_registry
+
                 body = get_metrics_registry().export_prometheus()
                 return Response(content=body, media_type="text/plain; version=0.0.4")
 

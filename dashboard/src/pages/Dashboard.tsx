@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
   Activity,
   Target,
   Shield
@@ -88,7 +88,7 @@ export function Dashboard() {
 
           {/* Macro intelligence — DXY, yields, CPI, regime score */}
           <MacroPanel />
-          
+
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <h3 className="font-semibold mb-4">Risk Metrics</h3>
             <div className="space-y-3">
@@ -165,7 +165,7 @@ function RiskBar({ label, current, max, color }: any) {
         <span>{current} / {max}</span>
       </div>
       <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-        <div 
+        <div
           className={`h-full ${colors[color]} transition-all duration-500`}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />

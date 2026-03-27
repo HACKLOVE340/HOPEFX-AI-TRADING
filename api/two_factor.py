@@ -133,7 +133,8 @@ async def verify_2fa(req: VerifyRequest) -> VerifyResponse:
     secret = _secrets.get(req.user_id)
     if not secret:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="2FA not set up for this user",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="2FA not set up for this user",
         )
 
     if _verify_totp(secret, req.code):
@@ -150,7 +151,8 @@ async def disable_2fa(req: DisableRequest) -> VerifyResponse:
     secret = _secrets.get(req.user_id)
     if not secret or not _enabled.get(req.user_id):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA is not enabled",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is not enabled",
         )
 
     if _verify_totp(secret, req.code):
@@ -168,7 +170,8 @@ async def get_backup_codes(user_id: str) -> BackupCodesResponse:
     """Generate 8 one-time backup codes for account recovery."""
     if not _enabled.get(user_id):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="2FA must be enabled first",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA must be enabled first",
         )
 
     codes = [secrets.token_hex(4).upper() for _ in range(8)]

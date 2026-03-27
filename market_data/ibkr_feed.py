@@ -34,7 +34,6 @@ import time
 import traceback
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -43,13 +42,15 @@ logger = logging.getLogger(__name__)
 # Optional Sentry
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
 
 # Optional Redis
 try:
-    import redis  # type: ignore[import]
+    import redis  # type: ignore[import]  # noqa: F401
+
     _REDIS_AVAILABLE = True
 except ImportError:
     _REDIS_AVAILABLE = False
@@ -60,14 +61,16 @@ except ImportError:
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Tick:
     """Normalised market tick."""
+
     symbol: str
     bid: float
     ask: float
     last: float
-    timestamp: float          # Unix epoch seconds
+    timestamp: float  # Unix epoch seconds
     source: str = "ibkr"
     bid_size: float = 0.0
     ask_size: float = 0.0
@@ -106,16 +109,17 @@ class Tick:
 @dataclass
 class OHLCVBar:
     """OHLCV bar for a given timeframe."""
+
     symbol: str
-    timeframe: str            # "1m", "5m", "1h"
+    timeframe: str  # "1m", "5m", "1h"
     open: float
     high: float
     low: float
     close: float
     volume: float
     tick_count: int
-    bar_open_ts: float        # Unix epoch of bar open
-    bar_close_ts: float       # Unix epoch of bar close (expected)
+    bar_open_ts: float  # Unix epoch of bar open
+    bar_close_ts: float  # Unix epoch of bar close (expected)
     is_closed: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
@@ -138,7 +142,7 @@ class FeedStatus(Enum):
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     LIVE = "live"
-    STALE = "stale"           # connected but no tick in >5s
+    STALE = "stale"  # connected but no tick in >5s
     ERROR = "error"
 
 
@@ -168,6 +172,7 @@ class FeedHealth:
 # Tick validation
 # ---------------------------------------------------------------------------
 
+
 class TickValidator:
     """
     Validates incoming ticks against reasonability constraints.
@@ -181,9 +186,9 @@ class TickValidator:
 
     def __init__(
         self,
-        max_jump_pct: float = 0.02,    # 2% max single-tick price move
-        max_age_sec: float = 30.0,     # reject ticks older than 30s
-        max_spread_bps: float = 500.0, # reject spreads > 500bps (5%)
+        max_jump_pct: float = 0.02,  # 2% max single-tick price move
+        max_age_sec: float = 30.0,  # reject ticks older than 30s
+        max_spread_bps: float = 500.0,  # reject spreads > 500bps (5%)
     ) -> None:
         self._max_jump_pct = max_jump_pct
         self._max_age_sec = max_age_sec
@@ -288,7 +293,8 @@ class OHLCVAggregator:
                                 self._on_bar_closed(bar)
                             except Exception as exc:
                                 logger.error(
-                                    "OHLCVAggregator: on_bar_closed callback error: %s", exc
+                                    "OHLCVAggregator: on_bar_closed callback error: %s",
+                                    exc,
                                 )
 
                     # Open new bar
@@ -320,6 +326,7 @@ class OHLCVAggregator:
 # ---------------------------------------------------------------------------
 # Redis publisher
 # ---------------------------------------------------------------------------
+
 
 class RedisTickPublisher:
     """
@@ -393,6 +400,7 @@ class RedisTickPublisher:
 # Main feed
 # ---------------------------------------------------------------------------
 
+
 class IBKRMarketDataFeed:
     """
     IBKR real-time market data feed for XAUUSD.
@@ -453,7 +461,8 @@ class IBKRMarketDataFeed:
 
         logger.info(
             "IBKRMarketDataFeed initialised | symbol=%s timeframes=%s",
-            symbol, self._timeframes,
+            symbol,
+            self._timeframes,
         )
 
     # ------------------------------------------------------------------
@@ -464,7 +473,9 @@ class IBKRMarketDataFeed:
         """Subscribe to IBKR ticks and start health monitor."""
         with self._lock:
             if self._running:
-                logger.warning("IBKRMarketDataFeed.start() called while running — ignored.")
+                logger.warning(
+                    "IBKRMarketDataFeed.start() called while running — ignored."
+                )
                 return
             self._running = True
             self._status = FeedStatus.CONNECTING
@@ -518,7 +529,8 @@ class IBKRMarketDataFeed:
         except Exception as exc:
             logger.error(
                 "IBKRMarketDataFeed: tick normalisation error: %s | raw=%r",
-                exc, str(raw)[:200],
+                exc,
+                str(raw)[:200],
             )
             with self._lock:
                 self._ticks_rejected += 1
@@ -530,7 +542,8 @@ class IBKRMarketDataFeed:
         if not valid:
             logger.warning(
                 "IBKRMarketDataFeed: tick rejected | symbol=%s reason=%s",
-                tick.symbol, reason,
+                tick.symbol,
+                reason,
             )
             with self._lock:
                 self._ticks_rejected += 1
@@ -565,8 +578,13 @@ class IBKRMarketDataFeed:
         """Called by OHLCVAggregator when a bar closes."""
         logger.debug(
             "IBKRMarketDataFeed: bar closed | %s %s O=%.4f H=%.4f L=%.4f C=%.4f ticks=%d",
-            bar.symbol, bar.timeframe,
-            bar.open, bar.high, bar.low, bar.close, bar.tick_count,
+            bar.symbol,
+            bar.timeframe,
+            bar.open,
+            bar.high,
+            bar.low,
+            bar.close,
+            bar.tick_count,
         )
         self._publisher.publish_bar(bar)
 
@@ -629,7 +647,8 @@ class IBKRMarketDataFeed:
                         self._status = FeedStatus.STALE
                     logger.warning(
                         "IBKRMarketDataFeed: STALE — no tick for %.1fs (symbol=%s)",
-                        age, self._symbol,
+                        age,
+                        self._symbol,
                     )
                     if _SENTRY:
                         try:

@@ -70,7 +70,9 @@ def _load_firebase_admin() -> Optional[Any]:
                 cred = credentials.Certificate(cred_dict)
                 logger.info("FCM: using base64-encoded service-account credentials")
             except Exception as exc:
-                logger.warning("FCM: failed to decode FIREBASE_CREDENTIALS_BASE64: %s", exc)
+                logger.warning(
+                    "FCM: failed to decode FIREBASE_CREDENTIALS_BASE64: %s", exc
+                )
 
         # Option 2: path to service-account JSON file
         if cred is None:
@@ -237,11 +239,13 @@ class PushNotificationManager:
 
             results = []
             for token in tokens:
-                fcm_payload = json.dumps({
-                    "to": token,
-                    "notification": {"title": title, "body": body},
-                    "data": data,
-                }).encode()
+                fcm_payload = json.dumps(
+                    {
+                        "to": token,
+                        "notification": {"title": title, "body": body},
+                        "data": data,
+                    }
+                ).encode()
 
                 req = urllib.request.Request(
                     "https://fcm.googleapis.com/fcm/send",
@@ -285,7 +289,11 @@ class PushNotificationManager:
             title=f"New Signal: {symbol}",
             body=f"{direction} signal with {confidence:.0f}% confidence",
             category="signal",
-            data={"symbol": symbol, "direction": direction, "confidence": str(confidence)},
+            data={
+                "symbol": symbol,
+                "direction": direction,
+                "confidence": str(confidence),
+            },
         )
 
     def send_drawdown_warning(
@@ -356,7 +364,10 @@ class PushNotificationManager:
         if notified:
             logger.info(
                 "FCM signal broadcast: %s %s conf=%.2f notified=%d users",
-                symbol, direction, confidence, notified,
+                symbol,
+                direction,
+                confidence,
+                notified,
             )
         return notified
 

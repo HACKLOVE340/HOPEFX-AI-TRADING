@@ -31,7 +31,8 @@ _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
 
 ALLOWED_SYMBOLS = frozenset(
     os.getenv(
-        "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
+        "ALLOWED_SYMBOLS",
+        "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
     ).split(","),
 )
 MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
@@ -83,7 +84,8 @@ def _decode_token(token: str) -> TokenPayload:
                 raise
             except Exception as exc:
                 logger.warning(
-                    "Token blacklist check failed, allowing token (fail-open): %s", exc,
+                    "Token blacklist check failed, allowing token (fail-open): %s",
+                    exc,
                 )
 
         return TokenPayload(**payload)
