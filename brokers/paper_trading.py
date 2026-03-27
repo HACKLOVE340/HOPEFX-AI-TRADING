@@ -70,39 +70,41 @@ class PaperTradingBroker(BrokerConnector):
         self.positions: Dict[str, Position] = {}
 
         # Simulated market prices - Multi-asset support
+        # Last updated: 2025-Q2. These are fallback prices used only when
+        # no live feed is available. Update periodically or wire a live feed.
         self.market_prices = {
             # Precious Metals
-            "XAUUSD": 2050.0,  # Gold
-            "XAGUSD": 23.50,  # Silver
-            "XPTUSD": 900.0,  # Platinum
+            "XAUUSD": 3300.0,  # Gold (~Mar 2025)
+            "XAGUSD": 33.50,   # Silver
+            "XPTUSD": 980.0,   # Platinum
             # Major Forex Pairs
-            "EURUSD": 1.0850,
-            "GBPUSD": 1.2650,
-            "USDJPY": 150.50,
-            "USDCHF": 0.8800,
-            "AUDUSD": 0.6550,
-            "USDCAD": 1.3550,
-            "NZDUSD": 0.6100,
+            "EURUSD": 1.0820,
+            "GBPUSD": 1.2940,
+            "USDJPY": 149.50,
+            "USDCHF": 0.8820,
+            "AUDUSD": 0.6290,
+            "USDCAD": 1.3850,
+            "NZDUSD": 0.5720,
             # Cross Pairs
-            "EURGBP": 0.8580,
-            "EURJPY": 163.30,
-            "GBPJPY": 190.40,
+            "EURGBP": 0.8360,
+            "EURJPY": 161.80,
+            "GBPJPY": 193.60,
             # Crypto
-            "BTC/USD": 52000.0,
-            "ETH/USD": 2800.0,
-            "SOL/USD": 110.0,
-            "XRP/USD": 0.55,
+            "BTC/USD": 85000.0,
+            "ETH/USD": 1900.0,
+            "SOL/USD": 130.0,
+            "XRP/USD": 2.10,
             # US Stocks/ETFs (for reference)
-            "SPY": 510.0,
-            "QQQ": 440.0,
-            "AAPL": 185.0,
-            "MSFT": 415.0,
-            "TSLA": 175.0,
-            "NVDA": 720.0,
+            "SPY": 555.0,
+            "QQQ": 470.0,
+            "AAPL": 210.0,
+            "MSFT": 390.0,
+            "TSLA": 250.0,
+            "NVDA": 880.0,
             # Indices
-            "US30": 38500.0,  # Dow Jones
-            "US500": 5100.0,  # S&P 500
-            "NAS100": 18200.0,  # Nasdaq 100
+            "US30": 41500.0,   # Dow Jones
+            "US500": 5600.0,   # S&P 500
+            "NAS100": 19500.0, # Nasdaq 100
         }
 
     async def __aenter__(self):
