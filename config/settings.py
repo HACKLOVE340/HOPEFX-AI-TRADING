@@ -91,14 +91,23 @@ class RiskSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
 
-    jwt_secret: SecretStr = Field(
-        default_factory=lambda: SecretStr(os.urandom(32).hex()),
-    )
+    jwt_secret: SecretStr = Field(default=...)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     rate_limit_requests: int = 100
     rate_limit_window: int = 60
+
+    @field_validator("jwt_secret", mode="before")
+    @classmethod
+    def require_jwt_secret(cls, v: Any) -> Any:
+        raw = v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
+        if not raw or raw == "CHANGE_ME":
+            raise ValueError(
+                "SECURITY_JWT_SECRET must be set to a strong random value. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        return v
 
 
 class Settings(BaseSettings):
