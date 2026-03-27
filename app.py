@@ -589,6 +589,7 @@ async def startup_event():
         .register("broker",               F.init_broker,                 required=False, deps=["database"])
         .register("price_engine",         F.init_price_engine,           required=False, deps=["broker"])
         .register("compliance_manager",   F.init_compliance,             required=False, deps=["database"])
+        .register("prop_enforcer",        F.init_prop_enforcer,          required=False, deps=["compliance_manager"])
         .register("aml",                  F.init_aml,                    required=False, deps=["database"])
         .register("strategy_brain",       F.init_strategy_brain,         required=False, deps=["config"])
         .register("event_store",          F.init_event_store,            required=False, deps=["config"])
@@ -718,6 +719,12 @@ async def health_check():
 
     # Compliance manager
     components["compliance"] = "healthy" if getattr(app_state, "compliance_manager", None) else "unavailable"
+    _pe = getattr(app_state, "prop_enforcer", None)
+    if _pe is not None:
+        _pe_status = _pe.status()
+        components["prop_enforcer"] = "halted" if _pe_status.get("halted") else "healthy"
+    else:
+        components["prop_enforcer"] = "unavailable"
 
     # Strategy brain
     components["strategy_brain"] = "healthy" if getattr(app_state, "strategy_brain", None) else "unavailable"

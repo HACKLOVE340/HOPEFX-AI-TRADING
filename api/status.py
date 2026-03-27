@@ -360,31 +360,54 @@ def _fmt_uptime(seconds: float) -> str:
 )
 async def paper_trading_status():
     """
-    Returns the status of the 30-day OANDA paper trading run clock.
+    Returns the status of the 30-day OANDA paper trading run.
 
-    The clock starts when OANDA_API_KEY (or BROKER_OANDA_TOKEN) is set and
-    the broker connects successfully for the first time.  The start timestamp
-    is persisted in ``data/oanda_paper_start.json`` and survives restarts.
+    Merges two sources (both survive restarts):
+    - data/paper_trading_status.json  — written by scripts/paper_trading_starter.py
+      (trade count, balance, drawdown, elapsed days, complete flag)
+    - data/oanda_paper_start.json     — written by brokers/oanda_paper_clock
+      (start timestamp, account_id, environment)
 
     For full phase-gate status (Phase 2 / Phase 3 readiness), use
     GET /api/status/paper-trading/gate.
     """
+    import json as _json
+    from pathlib import Path as _Path
+
+    # Source 1: paper_trading_starter.py status file
+    starter_status: dict = {}
+    _starter_path = _Path("data/paper_trading_status.json")
+    if _starter_path.exists():
+        try:
+            starter_status = _json.loads(_starter_path.read_text())
+        except Exception as _e:
+            logger.warning("paper_trading_status: could not read starter status: %s", _e)
+
+    # Source 2: oanda_paper_clock (legacy clock)
+    clock_status: dict = {}
     try:
         from brokers.oanda_paper_clock import get_clock
-        return get_clock().status()
+        clock_status = get_clock().status()
     except Exception as exc:
         logger.warning("paper_trading_status: clock unavailable: %s", exc)
-        return {
-            "started": False,
-            "started_utc": None,
-            "elapsed_days": 0.0,
-            "remaining_days": 30.0,
-            "target_days": 30,
-            "complete": False,
-            "environment": None,
-            "account_id": None,
-            "note": f"Clock unavailable: {exc}",
-        }
+
+    # Merge — starter_status takes precedence for overlapping keys
+    merged = {
+        "started":          clock_status.get("started", bool(starter_status)),
+        "started_utc":      clock_status.get("started_utc"),
+        "elapsed_days":     starter_status.get("elapsed_days", clock_status.get("elapsed_days", 0.0)),
+        "remaining_days":   max(0.0, 30.0 - float(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0)))),
+        "target_days":      30,
+        "complete":         starter_status.get("complete", clock_status.get("complete", False)),
+        "environment":      clock_status.get("environment"),
+        "account_id":       clock_status.get("account_id"),
+        "current_balance":  starter_status.get("current_balance"),
+        "start_balance":    starter_status.get("start_balance"),
+        "drawdown_pct":     starter_status.get("drawdown_pct"),
+        "trade_count":      starter_status.get("trade_count"),
+        "updated_at":       starter_status.get("updated_at"),
+    }
+    return merged
 
 
 @router.get(
