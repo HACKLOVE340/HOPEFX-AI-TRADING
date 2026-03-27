@@ -262,7 +262,11 @@ class FeatureFlags:
         "FEATURE_DARK_POOL_DETECTION",
         default=True,
         status=FeatureStatus.BETA,
-        description="Heuristic detection of dark-pool / off-exchange block trades.",
+        description="Intraday volume anomaly detection — flags bars where volume "
+        "deviates significantly from the rolling baseline (z-score threshold). "
+        "Labelled 'dark pool detection' historically; on retail feeds (OANDA, "
+        "yfinance) there is no off-exchange tape, so this is a volume-spike "
+        "heuristic only. True dark-pool flow requires FINRA ATS data.",
     )
 
     # ── Data feeds ────────────────────────────────────────────────────────
