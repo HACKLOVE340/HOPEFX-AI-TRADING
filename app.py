@@ -115,6 +115,9 @@ from api.platform import router as platform_router, setup_rate_limiting, init_se
 from api.advanced_trading import router as advanced_router  # noqa: E402
 from api.ml import router as ml_router  # noqa: E402
 from api.alerts import router as alerts_router  # noqa: E402
+from api.signals import create_signals_router as _create_signals_router  # noqa: E402
+
+_signals_router = _create_signals_router()
 
 # GraphQL — strawberry-graphql (api/graphql_schema.py avoids shadowing graphql-core)
 try:
@@ -210,6 +213,9 @@ app.include_router(platform_router)
 app.include_router(advanced_router)
 app.include_router(ml_router)
 app.include_router(alerts_router)
+if _signals_router is not None:
+    app.include_router(_signals_router)
+    logger.info("Signals router registered (/api/signals)")
 
 # Mount GraphQL at /graphql — GraphiQL playground available at GET /graphql
 if _graphql_available and _graphql_router is not None:
