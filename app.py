@@ -767,6 +767,16 @@ async def startup_event():
             required=False,
             deps=["data_scheduler"],
         )
+        # ── Phase 3: Online learner store (ADWIN drift + incremental XGBoost) ─
+        # Gate: FEATURE_ONLINE_LEARNING=true + 90-day paper run with ≥500 fills.
+        # Wired here so the signal engine picks it up at inference time without
+        # a restart.  Off by default — see config/feature_flags.py ONLINE_LEARNING.
+        .register(
+            "online_learner_store",
+            F.init_online_learner_store,
+            required=False,
+            deps=["signal_engine", "hourly_trainer"],
+        )
         .register(
             "reconciler", F.init_reconciler, required=False, deps=["database", "broker"]
         )
