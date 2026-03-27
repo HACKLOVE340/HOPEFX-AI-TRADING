@@ -1,3 +1,6 @@
+# FIX session config with live credentials — never commit
+fix.cfg.local
+
 # Python
 __pycache__/
 *.py[cod]
