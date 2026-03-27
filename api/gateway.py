@@ -41,7 +41,12 @@ class APIGateway:
         self.orchestra = orchestra
         self.pms = pms
         self.auth_secret = auth_secret
-        self.app = FastAPI(title="HOPEFX Ultimate API", version="3.0")
+        self.app = FastAPI(
+            title="HOPEFX Ultimate API",
+            version="3.0",
+            docs_url=None if os.getenv("APP_ENV") == "production" else "/docs",
+            redoc_url=None if os.getenv("APP_ENV") == "production" else "/redoc",
+        )
 
         # Security
         self.security = HTTPBearer()
