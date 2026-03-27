@@ -152,8 +152,8 @@ app = FastAPI(
         "`RegimeResponse`, `SystemStatusResponse`, `SignalOut`, and `BrokerStatusResponse`."
     ),
     version="11.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if os.getenv("APP_ENV") == "production" else "/docs",
+    redoc_url=None if os.getenv("APP_ENV") == "production" else "/redoc",
     openapi_tags=[
         {"name": "Auth", "description": "Login, logout, token refresh, 2FA"},
         {"name": "Trading", "description": "Orders, positions, account, prices"},
