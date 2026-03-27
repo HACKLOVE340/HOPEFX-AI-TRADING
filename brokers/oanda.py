@@ -907,7 +907,10 @@ class OandaBroker:
         if self.api and hasattr(self.api, "place_order"):
             result = self.api.place_order(**od)
             return result
-        return {"id": "mock", "status": "filled"}
+        raise RuntimeError(
+            "OandaBroker.place_order called but no API client is connected. "
+            "Call connect() with valid credentials before placing orders."
+        )
 
 
 OandaAPI = OANDAConnector
