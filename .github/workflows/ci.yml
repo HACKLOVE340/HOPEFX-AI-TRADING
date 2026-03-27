@@ -57,7 +57,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hopefx
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
