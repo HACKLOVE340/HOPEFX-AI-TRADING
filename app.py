@@ -638,6 +638,28 @@ async def startup_event():
     try:
         await _registry.start_all(app_state)
         _registry.print_table()
+
+        # Push app_state into every API module that holds a local reference.
+        # These modules use a module-level `app_state = None` pattern and
+        # expose a set_state() function to receive the live state object.
+        _state_receivers = []
+        try:
+            from api.trading import set_state as _trading_set_state
+            _state_receivers.append(("api.trading", _trading_set_state))
+        except ImportError:
+            pass
+        try:
+            from api.admin import set_state as _admin_set_state
+            _state_receivers.append(("api.admin", _admin_set_state))
+        except ImportError:
+            pass
+        for _mod_name, _fn in _state_receivers:
+            try:
+                _fn(app_state)
+                logger.info("State pushed → %s", _mod_name)
+            except Exception as _e:
+                logger.warning("Failed to push state to %s: %s", _mod_name, _e)
+
         apply_persisted_risk_settings()
         app_state.initialized = True
         log_activity("API server ready")
