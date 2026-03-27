@@ -3,11 +3,26 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import random
-import time
+"""
+execution/order_gateway.py
+==========================
+OrderGateway is a placeholder class retained for import compatibility.
+It is NOT connected to any broker and must NOT be used for live or paper
+trading. All real order execution goes through TradeExecutor → BrokerConnector.
+
+Any call to send_order() raises NotImplementedError immediately so
+accidental usage is caught at development time rather than silently
+producing fake fills.
+"""
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Order:
+    """Minimal order record used by OrderGateway."""
+
     def __init__(self, order_id, quantity, price, commission_rate):
         self.order_id = order_id
         self.quantity = quantity
@@ -27,8 +42,20 @@ class Order:
 
 
 class OrderGateway:
+    """
+    Stub gateway — NOT connected to any broker.
+
+    Use TradeExecutor (execution/trade_executor.py) for all real order
+    routing. This class exists only to avoid import errors in code that
+    references it by name.
+    """
+
     def __init__(self):
         self.orders = {}
+        logger.warning(
+            "OrderGateway instantiated — this class is a stub and does not "
+            "route orders to any broker. Use TradeExecutor instead."
+        )
 
     def create_order(self, order_id, quantity, price, commission_rate):
         order = Order(order_id, quantity, price, commission_rate)
@@ -36,29 +63,17 @@ class OrderGateway:
         return order
 
     def send_order(self, order):
-        # Simulating order processing
-        print(f"Sending order {order.order_id}...")
-        time.sleep(random.uniform(0.1, 0.5))  # Simulate network delay
-
-        # Simulating random slippage
-        slippage = random.uniform(-0.05, 0.05) * order.price
-        final_price = order.price + slippage
-
-        # Simulating order fill
-        filled_quantity = min(order.quantity, random.randint(0, order.quantity + 5))
-        order.fill(filled_quantity)
-        print(
-            f"Order {order.order_id} filled with quantity {filled_quantity} at price {final_price:.2f} (slippage: {slippage:.2f})",
+        raise NotImplementedError(
+            "OrderGateway.send_order() is not implemented. "
+            "Route orders through TradeExecutor → BrokerConnector instead."
         )
 
-        if order.is_filled:
-            print(f"Order {order.order_id} completely filled.")
-        else:
-            print(f"Order {order.order_id} partially filled.")
-
     def handle_rejection(self, order_id):
-        print(f"Order {order_id} has been rejected.")
+        raise NotImplementedError(
+            "OrderGateway.handle_rejection() is not implemented. "
+            "Use TradeExecutor for real order lifecycle management."
+        )
 
     def track_commissions(self):
         total_commissions = sum(order.commission_paid for order in self.orders.values())
-        print(f"Total commissions paid: {total_commissions:.2f}")
+        return total_commissions
