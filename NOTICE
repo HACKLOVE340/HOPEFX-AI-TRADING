@@ -1,0 +1,48 @@
+HOPEFX AI Trading
+Copyright (c) 2025-2026 Opeyemi (HACKLOVE340). All rights reserved.
+
+Licensed under the GNU Affero General Public License v3.0 (AGPLv3).
+See LICENSE for the full license text.
+
+────────────────────────────────────────────────────────────────────────────────
+NO AI TRAINING
+────────────────────────────────────────────────────────────────────────────────
+
+This codebase, its documentation, and all associated files are explicitly
+excluded from use as training data for any machine learning model, large
+language model (LLM), neural network, or AI system — whether commercial,
+academic, or personal — without prior written permission from the copyright
+holder.
+
+This prohibition covers:
+  • Scraping, crawling, or bulk-downloading this repository for dataset
+    construction or model pre-training.
+  • Fine-tuning any model on this code or its derivatives.
+  • Including this code in any dataset used to train, evaluate, or benchmark
+    AI systems.
+  • Generating synthetic variants of this code for AI training purposes.
+
+Violation of this restriction constitutes a breach of the AGPLv3 license
+terms and may give rise to legal liability.
+
+To request a training-data license, contact: hacklove340@hopefx.io
+
+────────────────────────────────────────────────────────────────────────────────
+COMMERCIAL USE
+────────────────────────────────────────────────────────────────────────────────
+
+Commercial use of this software — including but not limited to SaaS products,
+white-label deployments, prop-firm tooling, and brokerage integrations — is
+not permitted under the AGPLv3 without a separate commercial license.
+
+Contact hacklove340@hopefx.io to obtain a commercial license.
+
+────────────────────────────────────────────────────────────────────────────────
+THIRD-PARTY COMPONENTS
+────────────────────────────────────────────────────────────────────────────────
+
+This project uses open-source libraries listed in requirements.txt.
+Each library retains its own license. This NOTICE does not supersede
+the licenses of those dependencies.
+
+────────────────────────────────────────────────────────────────────────────────

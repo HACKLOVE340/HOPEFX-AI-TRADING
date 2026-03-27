@@ -1,3 +1,4 @@
+# Copyright (c) 2025-2026 Opeyemi. AGPLv3 — all mods must share source. No commercial use without permission.
 """
 core/startup_factories.py
 =========================
@@ -438,6 +439,27 @@ async def init_compliance(s: Any) -> Any:
     from compliance.compliance_manager import ComplianceManager
 
     return ComplianceManager(session_factory=s.db_session_factory)
+
+
+async def init_prop_enforcer(s: Any) -> Any:
+    """
+    Initialise PropEnforcer from prop_firm_mode.json.
+    Wires the KillSwitch callback so a breach immediately halts trading.
+    """
+    from risk.compliance.prop_enforcer import PropEnforcer
+
+    kill_fn = None
+    try:
+        ks = getattr(s, "kill_switch", None)
+        if ks is not None:
+            kill_fn = lambda reason: ks.activate(reason)  # noqa: E731
+    except Exception:
+        pass
+
+    enforcer = PropEnforcer(kill_switch_fn=kill_fn)
+    # Expose on app_state so brokers and signal engine can access it
+    s.prop_enforcer = enforcer
+    return enforcer
 
 
 async def init_aml(s: Any) -> bool:
