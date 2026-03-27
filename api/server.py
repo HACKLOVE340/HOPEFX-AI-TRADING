@@ -58,6 +58,18 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     # ── Config resolved before app construction ───────────────────────────────
     _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
     _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+    # Hard-fail in production if ALLOWED_ORIGINS is still localhost — the
+    # frontend can never reach the API from a real domain in that state.
+    if os.getenv("APP_ENV") == "production" and all(
+        "localhost" in o or "127." in o for o in _allowed_origins
+    ):
+        import sys as _sys
+        logger.critical(
+            "STARTUP BLOCKED: ALLOWED_ORIGINS is localhost-only in production. "
+            "Set ALLOWED_ORIGINS=https://app.yourdomain.com before deploying."
+        )
+        _sys.exit(1)
     _ALLOWED_SYMBOLS = frozenset(
         os.getenv(
             "ALLOWED_SYMBOLS",
