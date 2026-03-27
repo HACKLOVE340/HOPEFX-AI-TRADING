@@ -131,6 +131,31 @@ def verify_token(token: str, credentials_exception):
         raise credentials_exception
 
 
+def decode_access_token(token: str) -> dict:
+    """
+    Decode and validate an access token. Returns the full payload dict.
+
+    Raises jwt.InvalidTokenError (or subclass) on any failure:
+      - jwt.ExpiredSignatureError  — token has expired
+      - jwt.InvalidTokenError      — bad signature, malformed, wrong type
+
+    Used by GraphQL context auth and WebSocket auth gate.
+    """
+    payload = jwt.decode(token, _get_secret(), algorithms=[ALGORITHM])
+    if payload.get("type") != "access":
+        raise jwt.InvalidTokenError("Not an access token")
+    # Check revocation list (Redis-backed blacklist)
+    jti = payload.get("jti")
+    if jti:
+        try:
+            from auth.service import is_access_token_revoked
+            if is_access_token_revoked(jti):
+                raise jwt.InvalidTokenError("Token has been revoked")
+        except ImportError:
+            pass
+    return payload
+
+
 def hash_password(password: str) -> str:
     """Hash a password with bcrypt (SHA-256 pre-hash, cost factor 12)."""
     prepared = _prepare_password(password)
