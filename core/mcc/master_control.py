@@ -98,7 +98,7 @@ class MasterControlCore:
         self.heatmap_data: Dict[str, Any] = {}
 
     def initialize(
-        self, config_manager: ConfigManager, cache: MarketDataCache, db_session=None
+        self, config_manager: ConfigManager, cache: MarketDataCache, db_session=None,
     ):
         """
         Initialize with your existing HOPEFX components.
@@ -124,16 +124,16 @@ class MasterControlCore:
             if self.config_manager:
                 mcc_settings = self.config_manager.get("mcc", {})
                 self.config.max_strategies_active = mcc_settings.get(
-                    "max_strategies", 5
+                    "max_strategies", 5,
                 )
                 self.config.emergency_drawdown_pct = Decimal(
-                    str(mcc_settings.get("max_drawdown", 0.10))
+                    str(mcc_settings.get("max_drawdown", 0.10)),
                 )
         except Exception:
             pass  # Use defaults
 
     def register_strategy(
-        self, strategy: EnhancedStrategy, max_allocation: Decimal = Decimal("0.20")
+        self, strategy: EnhancedStrategy, max_allocation: Decimal = Decimal("0.20"),
     ):
         """
         Register a strategy with MCC.
@@ -181,7 +181,7 @@ class MasterControlCore:
         # Log signal
         print(
             f"📡 [{strategy_name}] Signal: {signal.action} "
-            f"(strength: {signal.strength:.2f}, conf: {signal.confidence:.2f})"
+            f"(strength: {signal.strength:.2f}, conf: {signal.confidence:.2f})",
         )
 
         # Risk check
@@ -243,7 +243,7 @@ class MasterControlCore:
         """Send to execution"""
         print(
             f"🚀 EXECUTING: {composite['action']} "
-            f"(confidence: {composite['confidence']:.2f})"
+            f"(confidence: {composite['confidence']:.2f})",
         )
         # Connect to your existing broker execution here
 

@@ -64,7 +64,7 @@ class FTMOBroker:
     BASE_URL = "https://api.ftmo.com/v1"
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False
+        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False,
     ):
         """
         Initialize FTMO broker
@@ -97,7 +97,7 @@ class FTMOBroker:
             await self.session.close()
 
     def _generate_signature(
-        self, method: str, endpoint: str, params: Optional[Dict] = None
+        self, method: str, endpoint: str, params: Optional[Dict] = None,
     ) -> Dict[str, str]:
         """Generate FTMO API signature"""
         timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
@@ -112,7 +112,7 @@ class FTMOBroker:
 
         # Create HMAC-SHA256 signature
         signature = hmac.new(
-            self.secret_key.encode(), sig_string.encode(), hashlib.sha256
+            self.secret_key.encode(), sig_string.encode(), hashlib.sha256,
         ).hexdigest()
 
         return {
@@ -153,11 +153,11 @@ class FTMOBroker:
                 # Update rate limit info
                 self._rate_limit_remaining = int(
                     resp.headers.get(
-                        "X-RateLimit-Remaining", self._rate_limit_remaining
-                    )
+                        "X-RateLimit-Remaining", self._rate_limit_remaining,
+                    ),
                 )
                 self._rate_limit_reset = int(
-                    resp.headers.get("X-RateLimit-Reset", self._rate_limit_reset)
+                    resp.headers.get("X-RateLimit-Reset", self._rate_limit_reset),
                 )
 
                 return FTMOMetrics(
@@ -223,7 +223,7 @@ class FTMOBroker:
         if potential_loss > metrics.remaining_daily_loss:
             raise ValueError(
                 f"Order size would exceed daily loss limit. "
-                f"Max allowed loss: {metrics.remaining_daily_loss}"
+                f"Max allowed loss: {metrics.remaining_daily_loss}",
             )
 
         endpoint = f"/accounts/{self.account_id}/orders"
@@ -258,7 +258,7 @@ class FTMOBroker:
             raise
 
     async def get_trade_history(
-        self, limit: int = 100, offset: int = 0
+        self, limit: int = 100, offset: int = 0,
     ) -> pd.DataFrame:
         """Get closed trades history"""
         if not self.session:
@@ -270,7 +270,7 @@ class FTMOBroker:
 
         try:
             async with self.session.get(
-                f"{self.BASE_URL}{endpoint}", headers=headers, params=params
+                f"{self.BASE_URL}{endpoint}", headers=headers, params=params,
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -315,7 +315,7 @@ class FTMOBroker:
 
         try:
             async with self.session.post(
-                f"{self.BASE_URL}{endpoint}", headers=headers, json=payload
+                f"{self.BASE_URL}{endpoint}", headers=headers, json=payload,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -348,12 +348,12 @@ try:
             self.challenge_type = cfg.get("challenge_type", "demo")
             if "server" not in cfg:
                 servers = self.FTMO_SERVERS.get(
-                    self.challenge_type, self.FTMO_SERVERS["demo"]
+                    self.challenge_type, self.FTMO_SERVERS["demo"],
                 )
                 cfg["server"] = servers[0]
             super().__init__(cfg)
             logger.info(
-                f"FTMOConnector initialized: {self.challenge_type} / {self.server}"
+                f"FTMOConnector initialized: {self.challenge_type} / {self.server}",
             )
 
         def get_ftmo_rules(self) -> _Dict[str, _Any]:

@@ -251,7 +251,7 @@ def _build_base_models():
                     n_jobs=-1,
                     verbose=-1,
                 ),
-            )
+            ),
         )
         logger.info("LightGBM available — added to ensemble")
     except ImportError:
@@ -298,7 +298,7 @@ def build_stacking_ensemble():
         [
             ("scaler", StandardScaler()),
             ("model", calibrated),
-        ]
+        ],
     )
 
     return pipeline
@@ -374,7 +374,7 @@ def walk_forward_eval(
                 "accuracy": round(acc, 4),
                 "f1": round(f1, 4),
                 "auc": round(auc, 4),
-            }
+            },
         )
         logger.info(
             "Fold %d/%d  acc=%.3f  f1=%.3f  auc=%.3f  train=%d  test=%d",
@@ -761,7 +761,7 @@ def main():
         help="Years of history to download (default: 50)",
     )
     parser.add_argument(
-        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)"
+        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)",
     )
     parser.add_argument(
         "--no-macro",
@@ -769,10 +769,10 @@ def main():
         help="Skip macro features (DXY, VIX, yields, SPX)",
     )
     parser.add_argument(
-        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)"
+        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)",
     )
     parser.add_argument(
-        "--splits", type=int, default=8, help="Walk-forward CV splits (default: 8)"
+        "--splits", type=int, default=8, help="Walk-forward CV splits (default: 8)",
     )
     parser.add_argument(
         "--min-move",
@@ -918,7 +918,7 @@ def main():
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
     logger.info(
-        "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits
+        "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits,
     )
     wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits)
 
@@ -936,7 +936,7 @@ def main():
     mode = "stacking ensemble" if args.stacking else "calibrated XGBoost"
     logger.info("\n=== Training final model (%s) ===", mode)
     final_model, final_metrics = train_final_model(
-        X_cv, y_cv, use_stacking=args.stacking
+        X_cv, y_cv, use_stacking=args.stacking,
     )
 
     # Feature importance
@@ -988,13 +988,13 @@ def main():
     print()
     print(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f}"
-        f" ± {wf.get('std_accuracy', 0):.3f}"
+        f" ± {wf.get('std_accuracy', 0):.3f}",
     )
     print(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
     print(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
     print(
         f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
-        f"{'✓ significant' if wf.get('significant') else '✗ not significant'}"
+        f"{'✓ significant' if wf.get('significant') else '✗ not significant'}",
     )
     print()
     print(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
@@ -1009,7 +1009,7 @@ def main():
         print(f"  OOS period            : {oos_period}")
         print(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}"
-            f" ± {acc_se:.3f}  (n={oos_metrics['oos_size']})"
+            f" ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
         print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
         print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")

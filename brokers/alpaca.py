@@ -88,7 +88,7 @@ class AlpacaConnector(BrokerConnector):
                 {
                     "APCA-API-KEY-ID": self.api_key,
                     "APCA-API-SECRET-KEY": self.api_secret,
-                }
+                },
             )
 
             # Test connection by fetching account
@@ -202,7 +202,7 @@ class AlpacaConnector(BrokerConnector):
                 if result.get("filled_avg_price")
                 else None,
                 timestamp=datetime.fromisoformat(
-                    result["created_at"].replace("Z", "+00:00")
+                    result["created_at"].replace("Z", "+00:00"),
                 ),
                 metadata=result,
             )
@@ -278,7 +278,7 @@ class AlpacaConnector(BrokerConnector):
                 if result.get("filled_avg_price")
                 else None,
                 timestamp=datetime.fromisoformat(
-                    result["created_at"].replace("Z", "+00:00")
+                    result["created_at"].replace("Z", "+00:00"),
                 ),
                 metadata=result,
             )
@@ -363,7 +363,7 @@ class AlpacaConnector(BrokerConnector):
             else:
                 # Close entire position
                 response = self.session.delete(
-                    f"{self.base_url}/v2/positions/{symbol.upper()}"
+                    f"{self.base_url}/v2/positions/{symbol.upper()}",
                 )
                 response.raise_for_status()
 
@@ -407,7 +407,7 @@ class AlpacaConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "1Min", limit: int = 100
+        self, symbol: str, timeframe: str = "1Min", limit: int = 100,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data (bars).
@@ -440,14 +440,14 @@ class AlpacaConnector(BrokerConnector):
                     candles.append(
                         {
                             "timestamp": datetime.fromisoformat(
-                                bar["t"].replace("Z", "+00:00")
+                                bar["t"].replace("Z", "+00:00"),
                             ),
                             "open": float(bar["o"]),
                             "high": float(bar["h"]),
                             "low": float(bar["l"]),
                             "close": float(bar["c"]),
                             "volume": int(bar["v"]),
-                        }
+                        },
                     )
 
             return candles
@@ -472,7 +472,7 @@ class AlpacaConnector(BrokerConnector):
 
         try:
             response = self.session.get(
-                f"{self.DATA_URL}/v2/stocks/{symbol.upper()}/quotes/latest"
+                f"{self.DATA_URL}/v2/stocks/{symbol.upper()}/quotes/latest",
             )
             response.raise_for_status()
 
@@ -486,7 +486,7 @@ class AlpacaConnector(BrokerConnector):
                     "bid_size": int(quote.get("bs", 0)),
                     "ask_size": int(quote.get("as", 0)),
                     "timestamp": datetime.fromisoformat(
-                        quote["t"].replace("Z", "+00:00")
+                        quote["t"].replace("Z", "+00:00"),
                     ),
                 }
 

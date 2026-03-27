@@ -173,7 +173,7 @@ class BaseBroker:
         raise NotImplementedError
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float
+        self, symbol: str, side: str, quantity: float,
     ) -> Order:
         raise NotImplementedError
 
@@ -290,7 +290,7 @@ class PaperTradingBroker(BaseBroker):
         logger.info(
             f"PaperTradingBroker initialized | "
             f"Balance: ${initial_balance:,.2f} | "
-            f"Commission: ${commission_per_lot}/lot"
+            f"Commission: ${commission_per_lot}/lot",
         )
 
     def set_price_feed(self, price_engine):
@@ -341,7 +341,7 @@ class PaperTradingBroker(BaseBroker):
             }
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float
+        self, symbol: str, side: str, quantity: float,
     ) -> Order:
         """
         Place market order with realistic simulation
@@ -424,7 +424,7 @@ class PaperTradingBroker(BaseBroker):
         logger.info(
             f"Order Executed | {side.upper()} {fill_quantity:.0f}/{quantity:.0f} {symbol} | "
             f"Price: {fill_price:.5f} | Slippage: {slippage_pips:.1f}pips | "
-            f"Commission: ${commission:.2f} | ID: {order_id}"
+            f"Commission: ${commission:.2f} | ID: {order_id}",
         )
 
         return order
@@ -492,7 +492,7 @@ class PaperTradingBroker(BaseBroker):
             pos.updated_at = time.time()
 
             logger.debug(
-                f"Updated position {position_key}: Qty={total_qty:.0f}, AvgPrice={pos.entry_price:.5f}"
+                f"Updated position {position_key}: Qty={total_qty:.0f}, AvgPrice={pos.entry_price:.5f}",
             )
         else:
             # Create new position
@@ -561,7 +561,7 @@ class PaperTradingBroker(BaseBroker):
             try:
                 # Place closing order
                 order = await self.place_market_order(
-                    pos.symbol, close_side, pos.quantity
+                    pos.symbol, close_side, pos.quantity,
                 )
 
                 # Calculate realized P&L
@@ -595,7 +595,7 @@ class PaperTradingBroker(BaseBroker):
                     f"Position Closed | {position_id} | "
                     f"P&L: ${realized_pnl:,.2f} | "
                     f"Duration: {(time.time() - pos.opened_at) / 3600:.1f}h | "
-                    f"Commission: ${order.commission + pos.total_commission:.2f}"
+                    f"Commission: ${order.commission + pos.total_commission:.2f}",
                 )
 
                 return True
@@ -655,7 +655,7 @@ class PaperTradingBroker(BaseBroker):
                 session.add(trade)
                 session.commit()
             logger.debug(
-                "Trade persisted to DB: %s pnl=%.2f", record.get("symbol"), realized_pnl
+                "Trade persisted to DB: %s pnl=%.2f", record.get("symbol"), realized_pnl,
             )
         except Exception as exc:
             logger.warning("Failed to persist paper trade to DB: %s", exc)
@@ -724,7 +724,7 @@ class PaperTradingBroker(BaseBroker):
         cost = fill_price * quantity
         if side == _OS.BUY and cost > self.balance:
             raise ValueError(
-                f"Insufficient balance: need {cost:.2f}, have {self.balance:.2f}"
+                f"Insufficient balance: need {cost:.2f}, have {self.balance:.2f}",
             )
 
         order = Order(
@@ -898,7 +898,7 @@ class OANDABroker(BaseBroker):
                 # Verify connection
                 async with self._rate_limiter:
                     async with self._session.get(
-                        f"{self.base_url}/v3/accounts/{self.account_id}"
+                        f"{self.base_url}/v3/accounts/{self.account_id}",
                     ) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -908,7 +908,7 @@ class OANDABroker(BaseBroker):
                                 f"OANDA Connected | "
                                 f"Balance: ${float(account.get('balance', 0)):,.2f} | "
                                 f"Currency: {account.get('currency', 'USD')} | "
-                                f"Practice: {self.practice}"
+                                f"Practice: {self.practice}",
                             )
 
                             self.connected = True
@@ -916,7 +916,7 @@ class OANDABroker(BaseBroker):
                         else:
                             error_data = await resp.text()
                             raise ConnectionError(
-                                f"OANDA error {resp.status}: {error_data}"
+                                f"OANDA error {resp.status}: {error_data}",
                             )
 
             except Exception as e:
@@ -931,7 +931,7 @@ class OANDABroker(BaseBroker):
                     await asyncio.sleep(wait_time)
                 else:
                     raise ConnectionError(
-                        f"Failed to connect after {self.max_retries} attempts"
+                        f"Failed to connect after {self.max_retries} attempts",
                     )
 
         return False
@@ -969,7 +969,7 @@ class OANDABroker(BaseBroker):
                         else:
                             error_text = await resp.text()
                             raise ValueError(
-                                f"OANDA API error {resp.status}: {error_text}"
+                                f"OANDA API error {resp.status}: {error_text}",
                             )
 
                 except asyncio.TimeoutError:
@@ -1004,7 +1004,7 @@ class OANDABroker(BaseBroker):
         }
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float
+        self, symbol: str, side: str, quantity: float,
     ) -> Order:
         """Place market order"""
         # Convert symbol to OANDA format
@@ -1018,11 +1018,11 @@ class OANDABroker(BaseBroker):
                 "type": "MARKET",
                 "instrument": instrument,
                 "units": str(int(units)),
-            }
+            },
         }
 
         data = await self._make_request(
-            "POST", f"/accounts/{self.account_id}/orders", json=body
+            "POST", f"/accounts/{self.account_id}/orders", json=body,
         )
 
         # Parse response
@@ -1121,7 +1121,7 @@ class OANDABroker(BaseBroker):
         """Cancel pending order"""
         try:
             await self._make_request(
-                "PUT", f"/accounts/{self.account_id}/orders/{order_id}/cancel"
+                "PUT", f"/accounts/{self.account_id}/orders/{order_id}/cancel",
             )
             logger.info(f"Order cancelled: {order_id}")
             return True
@@ -1132,7 +1132,7 @@ class OANDABroker(BaseBroker):
     async def get_pending_orders(self) -> List[Order]:
         """Get pending orders"""
         data = await self._make_request(
-            "GET", f"/accounts/{self.account_id}/pendingOrders"
+            "GET", f"/accounts/{self.account_id}/pendingOrders",
         )
 
         orders = []
@@ -1148,7 +1148,7 @@ class OANDABroker(BaseBroker):
                     if order_data.get("price")
                     else None,
                     status=OrderStatus.PENDING,
-                )
+                ),
             )
 
         return orders
@@ -1167,7 +1167,7 @@ def create_broker(broker_type: str, config: Dict) -> BaseBroker:
     elif broker_type == "oanda":
         if not AIOHTTP_AVAILABLE:
             raise ImportError(
-                "aiohttp required for OANDA broker. Install: pip install aiohttp"
+                "aiohttp required for OANDA broker. Install: pip install aiohttp",
             )
         return OANDABroker(
             api_key=config["api_key"],
@@ -1182,7 +1182,7 @@ def create_broker(broker_type: str, config: Dict) -> BaseBroker:
         return CCXTConnector(config)
     else:
         raise ValueError(
-            f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt"
+            f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
         )
 
 

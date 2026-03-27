@@ -281,13 +281,13 @@ class RealTimeSignalService:
         # Validate
         if confidence < self.min_confidence:
             logger.debug(
-                f"Signal rejected: confidence {confidence} < {self.min_confidence}"
+                f"Signal rejected: confidence {confidence} < {self.min_confidence}",
             )
             return None
 
         if len(strategies_agreeing) < self.min_strategies:
             logger.debug(
-                f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}"
+                f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}",
             )
             return None
 
@@ -303,7 +303,7 @@ class RealTimeSignalService:
 
         # Determine strength
         strength = self._calculate_strength(
-            confidence, len(strategies_agreeing), total_strategies, rr_ratio
+            confidence, len(strategies_agreeing), total_strategies, rr_ratio,
         )
 
         # Create signal
@@ -346,7 +346,7 @@ class RealTimeSignalService:
             self._push_fcm_to_all_users(signal)
 
         logger.info(
-            f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}"
+            f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}",
         )
         return signal
 
@@ -396,7 +396,7 @@ class RealTimeSignalService:
             logger.debug("FCM signal push skipped: %s", exc)
 
     def _calculate_strength(
-        self, confidence: float, agreeing: int, total: int, rr_ratio: float
+        self, confidence: float, agreeing: int, total: int, rr_ratio: float,
     ) -> SignalStrength:
         """Calculate signal strength based on multiple factors."""
 
@@ -550,7 +550,7 @@ class RealTimeSignalService:
             alert.last_triggered = datetime.now(timezone.utc)
 
             self._publish_event(
-                "alert_triggered", {"alert": asdict(alert), "signal": signal.to_dict()}
+                "alert_triggered", {"alert": asdict(alert), "signal": signal.to_dict()},
             )
 
             logger.info(f"Alert triggered: {alert.id} by signal {signal.id}")
@@ -605,7 +605,7 @@ class RealTimeSignalService:
     # ============================================================
 
     def get_signal_history(
-        self, symbol: str = None, hours: int = 24
+        self, symbol: str = None, hours: int = 24,
     ) -> List[TradingSignal]:
         """Get signal history."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -630,7 +630,7 @@ class RealTimeSignalService:
                         s
                         for s in self.signal_history
                         if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
-                    ]
+                    ],
                 ),
                 "signals_last_24h": len(
                     [
@@ -638,11 +638,11 @@ class RealTimeSignalService:
                         for s in self.signal_history
                         if s.timestamp
                         > datetime.now(timezone.utc) - timedelta(hours=24)
-                    ]
+                    ],
                 ),
                 "active_alerts": len([a for a in self.alerts.values() if a.active]),
                 "symbols_with_signals": list(
-                    set(s.symbol for s in self.active_signals.values())
+                    set(s.symbol for s in self.active_signals.values()),
                 ),
                 "direction_distribution": {
                     "buy": len(
@@ -650,14 +650,14 @@ class RealTimeSignalService:
                             s
                             for s in self.active_signals.values()
                             if s.direction == SignalDirection.BUY
-                        ]
+                        ],
                     ),
                     "sell": len(
                         [
                             s
                             for s in self.active_signals.values()
                             if s.direction == SignalDirection.SELL
-                        ]
+                        ],
                     ),
                 },
                 "avg_active_confidence": (
@@ -679,7 +679,7 @@ class RealTimeSignalService:
                 "event": "signal",
                 "channel": f"signals:{signal.symbol}",
                 "data": signal.to_dict(),
-            }
+            },
         )
 
     def get_websocket_channels(self) -> List[str]:
@@ -828,7 +828,7 @@ def create_signals_router():
             raise
         except Exception as e:
             raise HTTPException(
-                status_code=500, detail=f"Signal generation failed: {e}"
+                status_code=500, detail=f"Signal generation failed: {e}",
             )
 
     @signals_router.get("/analytics")

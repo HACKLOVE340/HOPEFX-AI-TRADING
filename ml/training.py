@@ -167,7 +167,7 @@ class FeatureEngineer:
             ema_slow = data[target_col].ewm(span=26, adjust=False).mean()
             macd_raw = ema_fast - ema_slow
             data["macd_norm"] = (macd_raw / data[target_col].replace(0, np.nan)).fillna(
-                0.0
+                0.0,
             )
             macd_sig = macd_raw.ewm(span=9, adjust=False).mean()
             data["macd_hist_norm"] = (
@@ -214,7 +214,7 @@ class FeatureEngineer:
                     data["volume"] / vol_ma20.replace(0, np.nan)
                 ).fillna(1.0)
                 data["volume_z20"] = ((data["volume"] - vol_ma20) / vol_std20).fillna(
-                    0.0
+                    0.0,
                 )
                 # OBV momentum (rate of change — stationary)
                 obv = (np.sign(data[target_col].diff()) * data["volume"]).cumsum()
@@ -244,7 +244,7 @@ class FeatureEngineer:
                 import logging as _log
 
                 _log.getLogger(__name__).warning(
-                    "Regime feature injection failed (continuing without): %s", _reg_exc
+                    "Regime feature injection failed (continuing without): %s", _reg_exc,
                 )
 
         # Target variable - future returns
@@ -282,7 +282,7 @@ class FeatureEngineer:
         return X, y_class, y_reg, data
 
     def scale_features(
-        self, X_train: pd.DataFrame, X_test: Optional[pd.DataFrame] = None
+        self, X_train: pd.DataFrame, X_test: Optional[pd.DataFrame] = None,
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Scale features using StandardScaler"""
         X_train_scaled = self.scaler.fit_transform(X_train)
@@ -381,7 +381,7 @@ class LSTMModel:
                 self.lstm_units[0],
                 return_sequences=len(self.lstm_units) > 1,
                 input_shape=(self.sequence_length, self.n_features),
-            )
+            ),
         )
         model.add(Dropout(self.dropout_rate))
 
@@ -403,7 +403,7 @@ class LSTMModel:
         return model
 
     def prepare_sequences(
-        self, data: np.ndarray, target: Optional[np.ndarray] = None
+        self, data: np.ndarray, target: Optional[np.ndarray] = None,
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Create sequences for LSTM input"""
         X, y = [], []
@@ -511,7 +511,7 @@ class LSTMModel:
         }
 
         config_path = filepath.replace(".h5", "_config.json").replace(
-            ".keras", "_config.json"
+            ".keras", "_config.json",
         )
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
@@ -525,13 +525,13 @@ class LSTMModel:
 
         # Load config if exists
         config_path = filepath.replace(".h5", "_config.json").replace(
-            ".keras", "_config.json"
+            ".keras", "_config.json",
         )
         if Path(config_path).exists():
             with open(config_path, "r") as f:
                 config = json.load(f)
                 self.sequence_length = config.get(
-                    "sequence_length", self.sequence_length
+                    "sequence_length", self.sequence_length,
                 )
                 self.n_features = config.get("n_features", self.n_features)
                 self.lstm_units = config.get("lstm_units", self.lstm_units)
@@ -661,7 +661,7 @@ class XGBoostModel:
                     f"f{i}" for i in range(len(self.model.feature_importances_))
                 ]
             self.feature_importance = pd.DataFrame(
-                {"feature": feat_names, "importance": self.model.feature_importances_}
+                {"feature": feat_names, "importance": self.model.feature_importances_},
             ).sort_values("importance", ascending=False)
 
         return {
@@ -711,7 +711,7 @@ class XGBoostModel:
         }
 
         config_path = filepath.replace(".json", "_config.json").replace(
-            ".pkl", "_config.json"
+            ".pkl", "_config.json",
         )
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
@@ -719,7 +719,7 @@ class XGBoostModel:
         # Save feature importance if available
         if self.feature_importance is not None:
             importance_path = filepath.replace(".json", "_importance.csv").replace(
-                ".pkl", "_importance.csv"
+                ".pkl", "_importance.csv",
             )
             self.feature_importance.to_csv(importance_path, index=False)
 
@@ -829,7 +829,7 @@ class RandomForestModel:
                     f"f{i}" for i in range(len(self.model.feature_importances_))
                 ]
             self.feature_importance = pd.DataFrame(
-                {"feature": feat_names, "importance": self.model.feature_importances_}
+                {"feature": feat_names, "importance": self.model.feature_importances_},
             ).sort_values("importance", ascending=False)
 
         # Return named importances so callers can log/inspect without a
@@ -840,7 +840,7 @@ class RandomForestModel:
                 zip(
                     self.feature_importance["feature"],
                     self.feature_importance["importance"],
-                )
+                ),
             )
         return {
             "n_estimators": self.n_estimators,
@@ -1037,7 +1037,7 @@ class HyperparameterTuner:
         )
 
         grid_search = GridSearchCV(
-            model, param_grid, cv=tscv, scoring=scoring, n_jobs=-1, verbose=1
+            model, param_grid, cv=tscv, scoring=scoring, n_jobs=-1, verbose=1,
         )
 
         grid_search.fit(X, y)
@@ -1107,7 +1107,7 @@ class HyperparameterTuner:
         # Save CV results
         if self.cv_results is not None:
             self.cv_results.to_csv(
-                f"{output_dir}/cv_results_{self.model_type}.csv", index=False
+                f"{output_dir}/cv_results_{self.model_type}.csv", index=False,
             )
 
         print(f"Tuning results saved to {output_dir}/")
@@ -1247,14 +1247,14 @@ def train_ml_pipeline(
 
     print("Creating training features (fit)...")
     X_train, y_train_class, y_train_reg, _ = fe.create_features(
-        df_train_raw, prediction_horizon=prediction_horizon
+        df_train_raw, prediction_horizon=prediction_horizon,
     )
 
     print("Creating test features (transform only)...")
     # Re-use the same FeatureEngineer instance so lag/window parameters are
     # identical; the scaler is fitted only on training data below.
     X_test, y_test_class, y_test_reg, _ = fe.create_features(
-        df_test_raw, prediction_horizon=prediction_horizon
+        df_test_raw, prediction_horizon=prediction_horizon,
     )
 
     # ── Macro features (DXY, VIX, yields, SPX cross-asset) ───────────────────
@@ -1304,18 +1304,18 @@ def train_ml_pipeline(
                     macro_df=macro_hist,
                 )
                 X_train, y_train_class, y_train_reg, _ = fe_macro.create_features(
-                    df_train_raw, prediction_horizon=prediction_horizon
+                    df_train_raw, prediction_horizon=prediction_horizon,
                 )
                 X_test, y_test_class, y_test_reg, _ = fe_macro.create_features(
-                    df_test_raw, prediction_horizon=prediction_horizon
+                    df_test_raw, prediction_horizon=prediction_horizon,
                 )
                 print(
                     f"Historical macro features merged: {macro_hist.shape[1]} series, "
-                    f"{len(macro_hist)} bars"
+                    f"{len(macro_hist)} bars",
                 )
             else:
                 _macro_logger.warning(
-                    "Historical macro fetch returned empty — skipping macro features"
+                    "Historical macro fetch returned empty — skipping macro features",
                 )
         except Exception as _macro_exc:
             print(f"Historical macro features unavailable: {_macro_exc} — skipping")
@@ -1339,11 +1339,11 @@ def train_ml_pipeline(
                     X_test[col] = float(val) if val is not None else 0.0
                 print(
                     f"Point-in-time macro features merged (look-ahead bias warning): "
-                    f"{list(macro_features.keys())}"
+                    f"{list(macro_features.keys())}",
                 )
         except Exception as _macro_exc:
             print(
-                f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping"
+                f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping",
             )
 
     # Scale: fit on train, transform both — never fit on test data
@@ -1351,7 +1351,7 @@ def train_ml_pipeline(
 
     print(
         f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | "
-        f"Features: {X_train.shape[1]}"
+        f"Features: {X_train.shape[1]}",
     )
 
     evaluator = MLEvaluationReport()
@@ -1363,10 +1363,10 @@ def train_ml_pipeline(
         # Prepare sequences
         lstm_model = LSTMModel(sequence_length=60, n_features=X_train_scaled.shape[1])
         X_lstm_train, y_lstm_train = lstm_model.prepare_sequences(
-            X_train_scaled, y_train_reg.values
+            X_train_scaled, y_train_reg.values,
         )
         X_lstm_test, y_lstm_test = lstm_model.prepare_sequences(
-            X_test_scaled, y_test_reg.values
+            X_test_scaled, y_test_reg.values,
         )
 
         # Build and train
@@ -1389,7 +1389,7 @@ def train_ml_pipeline(
 
         # Report
         report_path = evaluator.generate_report(
-            "LSTM", metrics, y_lstm_test, predictions.flatten()
+            "LSTM", metrics, y_lstm_test, predictions.flatten(),
         )
 
         results["lstm"] = {
@@ -1407,7 +1407,7 @@ def train_ml_pipeline(
 
         xgb_model = XGBoostModel(model_type="classifier")
         xgb_model.fit(
-            X_train_scaled, y_train_class.values, X_test_scaled, y_test_class.values
+            X_train_scaled, y_train_class.values, X_test_scaled, y_test_class.values,
         )
 
         # Evaluate
@@ -1463,7 +1463,7 @@ def train_ml_pipeline(
 
         if rf_model.feature_importance is not None:
             evaluator.plot_feature_importance(
-                rf_model.feature_importance, "RandomForest"
+                rf_model.feature_importance, "RandomForest",
             )
 
         results["random_forest"] = {
@@ -1474,7 +1474,7 @@ def train_ml_pipeline(
         }
 
         print(
-            f"Random Forest Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}"
+            f"Random Forest Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}",
         )
 
     # Save feature engineer
@@ -1523,7 +1523,7 @@ def walk_forward_validate(
         raise ValueError(
             f"Not enough data for {n_splits} folds with min_train={min_train} "
             f"and gap={gap}. Need at least {min_train + gap + n_splits} bars, "
-            f"got {n}."
+            f"got {n}.",
         )
 
     fold_results: List[Dict[str, Any]] = []
@@ -1543,10 +1543,10 @@ def walk_forward_validate(
         # Fresh FeatureEngineer per fold — prevents scaler contamination
         fe_fold = FeatureEngineer()
         X_train, y_train_cls, _, _ = fe_fold.create_features(
-            df_train, prediction_horizon=prediction_horizon
+            df_train, prediction_horizon=prediction_horizon,
         )
         X_test, y_test_cls, _, _ = fe_fold.create_features(
-            df_test, prediction_horizon=prediction_horizon
+            df_test, prediction_horizon=prediction_horizon,
         )
 
         if len(X_train) < 10 or len(X_test) < 5:
@@ -1586,7 +1586,7 @@ def walk_forward_validate(
             f"Fold {fold + 1}/{n_splits} | "
             f"train={len(X_train)} test={len(X_test)} | "
             f"accuracy={metrics.get('accuracy', 0):.3f} | "
-            f"f1={metrics.get('f1', 0):.3f}"
+            f"f1={metrics.get('f1', 0):.3f}",
         )
 
     if not fold_results:
@@ -1615,7 +1615,7 @@ def walk_forward_validate(
     print(
         f"\nWalk-forward summary ({len(fold_results)} folds): "
         f"accuracy={summary['mean_accuracy']:.3f} ± {summary['std_accuracy']:.3f} | "
-        f"f1={summary['mean_f1']:.3f} ± {summary['std_f1']:.3f}"
+        f"f1={summary['mean_f1']:.3f} ± {summary['std_f1']:.3f}",
     )
     return summary
 
@@ -1627,8 +1627,8 @@ if __name__ == "__main__":
     print("\nUsage:")
     print("  from ml.training import train_ml_pipeline, walk_forward_validate")
     print(
-        "  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_forest'])"
+        "  results = train_ml_pipeline(df, model_types=['lstm', 'xgboost', 'random_forest'])",
     )
     print(
-        "  wf = walk_forward_validate(df, model_type='random_forest', n_splits=5, gap=20)"
+        "  wf = walk_forward_validate(df, model_type='random_forest', n_splits=5, gap=20)",
     )

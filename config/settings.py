@@ -92,7 +92,7 @@ class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
 
     jwt_secret: SecretStr = Field(
-        default_factory=lambda: SecretStr(os.urandom(32).hex())
+        default_factory=lambda: SecretStr(os.urandom(32).hex()),
     )
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30

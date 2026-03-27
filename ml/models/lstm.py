@@ -75,7 +75,7 @@ class LSTMPricePredictor(BaseMLModel):
                     units=self.lstm_units[0],
                     return_sequences=len(self.lstm_units) > 1,
                     input_shape=(self.sequence_length, 1),
-                )
+                ),
             )
             model.add(Dropout(self.dropout))
 
@@ -100,7 +100,7 @@ class LSTMPricePredictor(BaseMLModel):
 
         except ImportError:
             self.logger.error(
-                "TensorFlow not installed. Please install: pip install tensorflow"
+                "TensorFlow not installed. Please install: pip install tensorflow",
             )
             raise
         except Exception as e:
@@ -126,7 +126,7 @@ class LSTMPricePredictor(BaseMLModel):
         return np.array(X), np.array(y)
 
     def _scale_data(
-        self, X: np.ndarray, y: np.ndarray, fit: bool = True
+        self, X: np.ndarray, y: np.ndarray, fit: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Scale data using MinMaxScaler.
@@ -182,12 +182,12 @@ class LSTMPricePredictor(BaseMLModel):
 
             # Scale data
             X_train_scaled, y_train_scaled = self._scale_data(
-                X_train, y_train, fit=True
+                X_train, y_train, fit=True,
             )
 
             # Prepare sequences
             X_seq, y_seq = self._prepare_sequences(
-                np.concatenate([X_train_scaled, y_train_scaled.reshape(-1, 1)], axis=1)
+                np.concatenate([X_train_scaled, y_train_scaled.reshape(-1, 1)], axis=1),
             )
 
             # Reshape for LSTM [samples, time steps, features]
@@ -198,7 +198,7 @@ class LSTMPricePredictor(BaseMLModel):
             if X_val is not None and y_val is not None:
                 X_val_scaled, y_val_scaled = self._scale_data(X_val, y_val, fit=False)
                 X_val_seq, y_val_seq = self._prepare_sequences(
-                    np.concatenate([X_val_scaled, y_val_scaled.reshape(-1, 1)], axis=1)
+                    np.concatenate([X_val_scaled, y_val_scaled.reshape(-1, 1)], axis=1),
                 )
                 X_val_seq = X_val_seq.reshape(X_val_seq.shape[0], X_val_seq.shape[1], 1)
                 validation_data = (X_val_seq, y_val_seq)
@@ -231,11 +231,11 @@ class LSTMPricePredictor(BaseMLModel):
                     "final_val_loss": float(history.history["val_loss"][-1])
                     if validation_data
                     else None,
-                }
+                },
             )
 
             self.logger.info(
-                f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}"
+                f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}",
             )
 
             return {

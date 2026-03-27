@@ -27,7 +27,7 @@ class MeanReversionStrategy(BaseStrategy):
     """
 
     def __init__(
-        self, name: str, symbol: str, config, period: int = 20, std_dev: float = 2.0
+        self, name: str, symbol: str, config, period: int = 20, std_dev: float = 2.0,
     ):
         """
         Initialize mean reversion strategy.
@@ -43,7 +43,7 @@ class MeanReversionStrategy(BaseStrategy):
         self.period = period
         self.std_dev = std_dev
         self.logger.info(
-            f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}"
+            f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
         )
 
     def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:

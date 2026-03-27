@@ -168,7 +168,7 @@ class EngineCircuitBreaker:
             elapsed = time.monotonic() - (self._opened_at or 0)
             if elapsed >= self._reset_sec:
                 logger.info(
-                    "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.", elapsed
+                    "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.", elapsed,
                 )
                 self._open = False
                 self._opened_at = None
@@ -176,7 +176,7 @@ class EngineCircuitBreaker:
             raise RuntimeError(
                 f"Execution engine circuit breaker is OPEN "
                 f"({len(self._failures)} failures in {self._window_sec}s window). "
-                f"Auto-reset in {self._reset_sec - elapsed:.0f}s."
+                f"Auto-reset in {self._reset_sec - elapsed:.0f}s.",
             )
 
     @property
@@ -245,7 +245,7 @@ class ExecutionEngine:
         self._lock = asyncio.Lock()
 
         logger.info(
-            "ExecutionEngine initialised | max_latency=%.0fms", max_latency_ms
+            "ExecutionEngine initialised | max_latency=%.0fms", max_latency_ms,
         )
 
     # ------------------------------------------------------------------
@@ -294,7 +294,7 @@ class ExecutionEngine:
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
             self._total_blocks += 1
             return self._blocked_report(
-                request, f"[KILL_SWITCH] {reason}", t0
+                request, f"[KILL_SWITCH] {reason}", t0,
             )
 
         # ── 2. Engine not running ─────────────────────────────────────────────
@@ -321,7 +321,7 @@ class ExecutionEngine:
             )
             self._capture_sentry(exc)
             return self._blocked_report(
-                request, f"[GATE_ERROR] {exc}", t0
+                request, f"[GATE_ERROR] {exc}", t0,
             )
 
         if gate_result is not None:
@@ -418,7 +418,7 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     async def _submit_to_broker(
-        self, request: ExecutionRequest, t0: float
+        self, request: ExecutionRequest, t0: float,
     ) -> ExecutionReport:
         """Submit order to broker and return ExecutionReport."""
         from brokers.base import OrderSide, OrderType
@@ -495,7 +495,7 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     async def _persist_to_redis(
-        self, request: ExecutionRequest, report: ExecutionReport
+        self, request: ExecutionRequest, report: ExecutionReport,
     ) -> None:
         """Persist order state to Redis for crash recovery."""
         if self._redis is None:
@@ -518,7 +518,7 @@ class ExecutionEngine:
             })
             # TTL: 7 days
             await asyncio.get_event_loop().run_in_executor(
-                None, lambda: self._redis.setex(key, 604800, payload)
+                None, lambda: self._redis.setex(key, 604800, payload),
             )
         except Exception as exc:
             # Redis failure must not block execution
@@ -526,7 +526,7 @@ class ExecutionEngine:
             self._capture_sentry(exc)
 
     async def _record_tca(
-        self, request: ExecutionRequest, report: ExecutionReport
+        self, request: ExecutionRequest, report: ExecutionReport,
     ) -> None:
         """Record transaction cost analysis."""
         if self._tca is None:
@@ -561,7 +561,7 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     def _blocked_report(
-        self, request: ExecutionRequest, reason: str, t0: float
+        self, request: ExecutionRequest, reason: str, t0: float,
     ) -> ExecutionReport:
         latency_ms = (time.monotonic() - t0) * 1000.0
         logger.warning(

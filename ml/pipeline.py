@@ -112,7 +112,7 @@ class ValidationReport:
     folds: List[WalkForwardFold] = field(default_factory=list)
     feature_importances: Dict[str, float] = field(default_factory=dict)
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
     )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -317,7 +317,7 @@ class StationarityTester:
         )
 
     def test_dataframe(
-        self, df: pd.DataFrame, feature_cols: List[str]
+        self, df: pd.DataFrame, feature_cols: List[str],
     ) -> Dict[str, StationarityResult]:
         results = {}
         for col in feature_cols:
@@ -353,7 +353,7 @@ class WalkForwardValidator:
         self._min_train_size = min_train_size
 
     def split(
-        self, n: int
+        self, n: int,
     ) -> List[Tuple[range, range]]:
         """
         Generate (train_indices, test_indices) for each fold.
@@ -364,7 +364,7 @@ class WalkForwardValidator:
         if remaining < self._n_folds:
             raise ValueError(
                 f"Insufficient data for {self._n_folds} folds: "
-                f"n={n}, min_train={min_train}, remaining={remaining}"
+                f"n={n}, min_train={min_train}, remaining={remaining}",
             )
 
         fold_size = remaining // self._n_folds
@@ -599,7 +599,7 @@ class MLPipeline:
             self._save_report(report)
         else:
             logger.warning(
-                "MLPipeline: one or more gates failed — final model NOT saved."
+                "MLPipeline: one or more gates failed — final model NOT saved.",
             )
 
         return report

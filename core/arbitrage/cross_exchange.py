@@ -125,7 +125,7 @@ class ArbitrageDetector:
         # Check profitability
         if best_bid["price"] > best_ask["price"]:
             gross_profit_bps = float(
-                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000
+                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000,
             )
 
             if gross_profit_bps > self.min_profit_bps:
@@ -170,17 +170,17 @@ class ArbitrageExecutor:
         self.max_slippage_bps = 50
 
     async def execute(
-        self, opportunity: ArbitrageOpportunity, exchanges: Dict[str, ExchangeConnector]
+        self, opportunity: ArbitrageOpportunity, exchanges: Dict[str, ExchangeConnector],
     ) -> bool:
         """
         Execute both legs simultaneously with protection.
         If one leg fails, immediately hedge the other.
         """
         print(
-            f"⚡ Executing: {opportunity.buy_exchange} -> {opportunity.sell_exchange}"
+            f"⚡ Executing: {opportunity.buy_exchange} -> {opportunity.sell_exchange}",
         )
         print(
-            f"   Profit: {opportunity.net_profit:.2f} ({opportunity.profit_bps:.1f} bps)"
+            f"   Profit: {opportunity.net_profit:.2f} ({opportunity.profit_bps:.1f} bps)",
         )
 
         buy_ex = exchanges[opportunity.buy_exchange]
@@ -194,7 +194,7 @@ class ArbitrageExecutor:
                 "buy",
                 opportunity.size,
                 opportunity.buy_price * Decimal("1.001"),
-            )
+            ),
         )
         sell_task = asyncio.create_task(
             self._place_limit_order(
@@ -203,7 +203,7 @@ class ArbitrageExecutor:
                 "sell",
                 opportunity.size,
                 opportunity.sell_price * Decimal("0.999"),
-            )
+            ),
         )
 
         # Wait for both with timeout
@@ -234,14 +234,14 @@ class ArbitrageExecutor:
         if buy_result and buy_result["filled"] and not sell_result:
             print("   ⚠️ Buy filled, sell failed. Emergency hedging...")
             await self._emergency_hedge(
-                buy_ex, opportunity.symbol, opportunity.size, "sell"
+                buy_ex, opportunity.symbol, opportunity.size, "sell",
             )
             return False
 
         if sell_result and sell_result["filled"] and not buy_result:
             print("   ⚠️ Sell filled, buy failed. Emergency hedging...")
             await self._emergency_hedge(
-                sell_ex, opportunity.symbol, opportunity.size, "buy"
+                sell_ex, opportunity.symbol, opportunity.size, "buy",
             )
             return False
 
@@ -251,7 +251,7 @@ class ArbitrageExecutor:
     async def _place_limit_order(self, exchange, symbol, side, size, price):
         """Place IOC limit order"""
         return await exchange.place_order(
-            symbol=symbol, side=side, size=size, price=price, order_type="limit"
+            symbol=symbol, side=side, size=size, price=price, order_type="limit",
         )
 
     async def _emergency_hedge(self, exchange, symbol, size, side):
@@ -298,7 +298,7 @@ class CrossExchangeEngine:
 
                         # Execute
                         success = await self.executor.execute(
-                            opp, self.detector.exchanges
+                            opp, self.detector.exchanges,
                         )
 
                         if success:

@@ -154,7 +154,7 @@ class CCXTConnector(BrokerConnector):
             params["stopPrice"] = stop_price
 
         raw = self._exchange.create_order(
-            symbol, ccxt_type, ccxt_side, quantity, price, params
+            symbol, ccxt_type, ccxt_side, quantity, price, params,
         )
         return self._parse_order(raw)
 
@@ -203,7 +203,7 @@ class CCXTConnector(BrokerConnector):
                         current_price=0.0,
                         unrealized_pnl=0.0,
                         timestamp=datetime.now(timezone.utc),
-                    )
+                    ),
                 )
             return positions
         except Exception as exc:

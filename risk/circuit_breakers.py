@@ -173,7 +173,7 @@ class CircuitBreaker:
 
         if recent_minute >= self.limits.max_orders_per_minute:
             await self._trigger_circuit_breaker(
-                "ORDER_RATE", f"Order rate limit: {recent_minute} orders/minute"
+                "ORDER_RATE", f"Order rate limit: {recent_minute} orders/minute",
             )
             return
 
@@ -190,7 +190,7 @@ class CircuitBreaker:
                 return
 
     async def _trigger_circuit_breaker(
-        self, reason: str, message: str, severity: str = "HIGH"
+        self, reason: str, message: str, severity: str = "HIGH",
     ):
         """Trigger circuit breaker and halt trading"""
         with self.state_lock:
@@ -262,7 +262,7 @@ class CircuitBreaker:
                     break
                 else:
                     logger.warning(
-                        f"⚠️ {len(remaining)} positions still open, retrying..."
+                        f"⚠️ {len(remaining)} positions still open, retrying...",
                     )
 
             except Exception as e:
@@ -273,11 +273,11 @@ class CircuitBreaker:
         final_positions = self.broker.get_positions()
         if final_positions:
             logger.critical(
-                f"🚨 FAILED TO CLOSE {len(final_positions)} POSITIONS - MANUAL INTERVENTION REQUIRED"
+                f"🚨 FAILED TO CLOSE {len(final_positions)} POSITIONS - MANUAL INTERVENTION REQUIRED",
             )
             # Send emergency notification
             self._send_emergency_alert(
-                f"Kill switch partial failure: {len(final_positions)} positions remain"
+                f"Kill switch partial failure: {len(final_positions)} positions remain",
             )
 
     async def _schedule_recovery(self):
@@ -285,7 +285,7 @@ class CircuitBreaker:
         cooldown = self.limits.circuit_breaker_cooldown_minutes * 60
 
         logger.info(
-            f"⏱️ Circuit breaker active. Recovery attempt in {self.limits.circuit_breaker_cooldown_minutes} minutes"
+            f"⏱️ Circuit breaker active. Recovery attempt in {self.limits.circuit_breaker_cooldown_minutes} minutes",
         )
 
         await asyncio.sleep(cooldown)
@@ -297,7 +297,7 @@ class CircuitBreaker:
 
             self.state = CircuitState.HALF_OPEN
             logger.info(
-                "🟡 Circuit breaker entering HALF_OPEN state - testing with reduced size"
+                "🟡 Circuit breaker entering HALF_OPEN state - testing with reduced size",
             )
 
             # Reduce position sizes for testing

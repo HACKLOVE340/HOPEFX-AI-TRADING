@@ -26,16 +26,16 @@ def _load_secret() -> str:
     if not val:
         raise RuntimeError(
             "SECURITY_JWT_SECRET is not set. "
-            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
     if len(val) < 32:
         raise RuntimeError(
-            f"SECURITY_JWT_SECRET is too short ({len(val)} chars). Must be >=32 characters."
+            f"SECURITY_JWT_SECRET is too short ({len(val)} chars). Must be >=32 characters.",
         )
     if val.startswith("CHANGE_ME"):
         raise RuntimeError(
             "SECURITY_JWT_SECRET contains a placeholder value. "
-            "Replace it with a real random secret before deploying."
+            "Replace it with a real random secret before deploying.",
         )
     return val
 

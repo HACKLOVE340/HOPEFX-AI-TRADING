@@ -79,7 +79,7 @@ async def stripe_webhook(request: Request):
     except RuntimeError as exc:
         # stripe package not installed — log and ack to avoid Stripe retries
         logger.warning(
-            "Stripe webhook received but stripe package unavailable: %s", exc
+            "Stripe webhook received but stripe package unavailable: %s", exc,
         )
         return {"received": True, "note": "stripe package not installed"}
     except Exception as exc:

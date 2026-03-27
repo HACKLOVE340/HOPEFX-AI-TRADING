@@ -26,7 +26,7 @@ class RandomForestModel:
     """Random Forest classifier for trade direction prediction."""
 
     def __init__(
-        self, n_estimators: int = 100, max_depth: int = 10, random_state: int = 42
+        self, n_estimators: int = 100, max_depth: int = 10, random_state: int = 42,
     ):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -120,14 +120,14 @@ class EnsembleModel:
                 k: v
                 for k, v in kwargs.items()
                 if k in ("n_estimators", "max_depth", "random_state")
-            }
+            },
         )
         self.gb = GradientBoostingModel(
             **{
                 k: v
                 for k, v in kwargs.items()
                 if k in ("n_estimators", "learning_rate", "max_depth", "random_state")
-            }
+            },
         )
         self.is_fitted = False
 

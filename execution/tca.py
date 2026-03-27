@@ -119,7 +119,7 @@ class TCAEngine:
     """Real-time execution quality tracking with I-Star model."""
 
     def __init__(
-        self, impact_model: MarketImpactModel | None = None, window_size: int = 1000
+        self, impact_model: MarketImpactModel | None = None, window_size: int = 1000,
     ) -> None:
         self.impact_model = impact_model or MarketImpactModel()
         self.window_size = window_size
@@ -267,7 +267,7 @@ class TCAEngine:
             implementation_shortfall_bps=isf_bps,
             market_impact_bps=temp_impact,
             timing_cost_bps=Decimal(
-                str(max(0, exec_time_ms - 100) * 0.01)
+                str(max(0, exec_time_ms - 100) * 0.01),
             ),  # Cost of delay
             opportunity_cost_bps=opp_cost,
             fill_rate=fill_rate,
@@ -291,13 +291,13 @@ class TCAEngine:
             logger.error(
                 f"Costs exceed expected alpha: "
                 f"cost={metrics.total_cost_bps:.2f}bps, "
-                f"expected={expected:.2f}bps"
+                f"expected={expected:.2f}bps",
             )
 
         return metrics
 
     async def _get_benchmark_price(
-        self, symbol: str, benchmark: BenchmarkType, start: datetime, end: datetime
+        self, symbol: str, benchmark: BenchmarkType, start: datetime, end: datetime,
     ) -> Decimal:
         """Get benchmark price."""
         if benchmark == BenchmarkType.ARRIVAL:
@@ -341,7 +341,7 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append(
-            (datetime.now(timezone.utc), tick.mid, tick.volume)
+            (datetime.now(timezone.utc), tick.mid, tick.volume),
         )
         if len(self._vwap_cache[symbol]) > 10000:
             self._vwap_cache[symbol].pop(0)

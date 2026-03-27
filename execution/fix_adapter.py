@@ -62,7 +62,7 @@ if _FIX_BACKEND == "none":
         FixMessage = None  # type: ignore
         logger.warning(
             "fix_adapter: no FIX library found. "
-            "Install quickfix or pyfixmsg for live execution."
+            "Install quickfix or pyfixmsg for live execution.",
         )
 
 
@@ -132,7 +132,7 @@ class CircuitBreaker:
     """
 
     def __init__(
-        self, threshold_ms: float = 100.0, reset_after_sec: float = 30.0
+        self, threshold_ms: float = 100.0, reset_after_sec: float = 30.0,
     ) -> None:
         self.threshold_ms = threshold_ms
         self.reset_after_sec = reset_after_sec
@@ -157,7 +157,7 @@ class CircuitBreaker:
                     if elapsed >= self.reset_after_sec:
                         self._open = False
                         logger.info(
-                            "circuit_breaker.CLOSED latency=%.1f ms", latency_ms
+                            "circuit_breaker.CLOSED latency=%.1f ms", latency_ms,
                         )
 
     @property
@@ -170,7 +170,7 @@ class CircuitBreaker:
         if self.is_open:
             raise RuntimeError(
                 f"FIX circuit breaker is OPEN (latency > {self.threshold_ms} ms). "
-                "Order flow suspended."
+                "Order flow suspended.",
             )
 
 
@@ -281,7 +281,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
                     reason = reason_f.getString()
                 except Exception as _e:
                     logger.debug(
-                        "fix.fromAdmin: Reject SessionRejectReason field absent: %s", _e
+                        "fix.fromAdmin: Reject SessionRejectReason field absent: %s", _e,
                     )
                 try:
                     message.getField(text_f)
@@ -364,7 +364,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
 
         except Exception as exc:
             logger.exception(
-                "fix_adapter._handle_exec_report error cl_ord_id=%s: %s", cl_ord_id, exc
+                "fix_adapter._handle_exec_report error cl_ord_id=%s: %s", cl_ord_id, exc,
             )
             # Resolve the pending future with an error so the caller gets an
             # immediate exception instead of hanging for 30 s then timing out.
@@ -396,7 +396,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             except Exception as _e:
                 # CxlRejReason is optional
                 logger.debug(
-                    "fix_adapter.OrderCancelReject: CxlRejReason field absent: %s", _e
+                    "fix_adapter.OrderCancelReject: CxlRejReason field absent: %s", _e,
                 )
 
             logger.error(
@@ -407,7 +407,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             )
             exc = RuntimeError(
                 f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
-                f"reason={reason_code} text={text!r}"
+                f"reason={reason_code} text={text!r}",
             )
             self._reject_pending(cl_ord_id, exc)
 
@@ -526,12 +526,12 @@ class FIXAdapter:
             self._start_pyfixmsg()
         else:
             logger.warning(
-                "fix_adapter.start: no FIX backend available — running in simulation mode"
+                "fix_adapter.start: no FIX backend available — running in simulation mode",
             )
 
         self._running = True
         self._hb_thread = threading.Thread(
-            target=self._heartbeat_loop, daemon=True, name="FIXHeartbeat"
+            target=self._heartbeat_loop, daemon=True, name="FIXHeartbeat",
         )
         self._hb_thread.start()
         logger.info("fix_adapter.started backend=%s", _FIX_BACKEND)
@@ -592,7 +592,7 @@ class FIXAdapter:
         store_factory = fix.FileStoreFactory(settings)
         log_factory = fix.FileLogFactory(settings)
         self._initiator = fix.SocketInitiator(
-            self._app, store_factory, settings, log_factory
+            self._app, store_factory, settings, log_factory,
         )
         self._initiator.start()
 
@@ -628,7 +628,7 @@ class FIXAdapter:
         except OSError as exc:
             raise RuntimeError(
                 f"fix_adapter._start_pyfixmsg: cannot connect to "
-                f"{self.host}:{self.port} — {exc}"
+                f"{self.host}:{self.port} — {exc}",
             ) from exc
 
         sock.settimeout(None)  # switch to blocking for the reader thread
@@ -697,7 +697,7 @@ class FIXAdapter:
                 chunk = sock.recv(4096)
                 if not chunk:
                     logger.warning(
-                        "fix_adapter._pyfixmsg_reader_loop: connection closed by peer"
+                        "fix_adapter._pyfixmsg_reader_loop: connection closed by peer",
                     )
                     break
                 buf += chunk
@@ -712,7 +712,7 @@ class FIXAdapter:
             except OSError as exc:
                 if self._running:
                     logger.error(
-                        "fix_adapter._pyfixmsg_reader_loop: socket error: %s", exc
+                        "fix_adapter._pyfixmsg_reader_loop: socket error: %s", exc,
                     )
                 break
 
@@ -763,7 +763,7 @@ class FIXAdapter:
                 )
         except Exception as exc:
             logger.exception(
-                "fix_adapter._handle_pyfixmsg_message: parse error: %s", exc
+                "fix_adapter._handle_pyfixmsg_message: parse error: %s", exc,
             )
 
     # ------------------------------------------------------------------
@@ -816,7 +816,7 @@ class FIXAdapter:
             with self._pending_lock:
                 self._pending.pop(order.cl_ord_id, None)
             raise TimeoutError(
-                f"FIX ExecutionReport not received within 30 s for {order.cl_ord_id}"
+                f"FIX ExecutionReport not received within 30 s for {order.cl_ord_id}",
             )
 
     def _send_quickfix(self, order: FIXOrder) -> None:
@@ -861,7 +861,7 @@ class FIXAdapter:
         sock = getattr(self, "_pyfixmsg_sock", None)
         if sock is None:
             raise RuntimeError(
-                "fix_adapter._send_pyfixmsg: socket not connected — call start() first"
+                "fix_adapter._send_pyfixmsg: socket not connected — call start() first",
             )
 
         import time as _time
@@ -908,7 +908,7 @@ class FIXAdapter:
             sock.sendall(raw.encode())
         except OSError as exc:
             raise RuntimeError(
-                f"fix_adapter._send_pyfixmsg: send failed for {order.cl_ord_id}: {exc}"
+                f"fix_adapter._send_pyfixmsg: send failed for {order.cl_ord_id}: {exc}",
             ) from exc
 
         logger.info(
@@ -951,7 +951,7 @@ class FIXAdapter:
 
         if future is None:
             logger.debug(
-                "fix_adapter: unsolicited exec report cl_ord_id=%s", report.cl_ord_id
+                "fix_adapter: unsolicited exec report cl_ord_id=%s", report.cl_ord_id,
             )
             return
 
@@ -965,7 +965,7 @@ class FIXAdapter:
                 if report.exec_type == FIXExecType.REJECTED:
                     exc = RuntimeError(
                         f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} "
-                        f"text={report.text!r}"
+                        f"text={report.text!r}",
                     )
                     loop.call_soon_threadsafe(future.set_exception, exc)
                 else:

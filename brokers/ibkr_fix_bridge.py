@@ -82,16 +82,16 @@ class IBKRFIXConfig:
     TargetCompID: "IBFX" for FIX Gateway
     """
     sender_comp_id: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_SENDER_COMP_ID", "HOPEFX")
+        default_factory=lambda: os.environ.get("IBKR_FIX_SENDER_COMP_ID", "HOPEFX"),
     )
     target_comp_id: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_TARGET_COMP_ID", "IBFX")
+        default_factory=lambda: os.environ.get("IBKR_FIX_TARGET_COMP_ID", "IBFX"),
     )
     host: str = field(
-        default_factory=lambda: os.environ.get("IBKR_HOST", "127.0.0.1")
+        default_factory=lambda: os.environ.get("IBKR_HOST", "127.0.0.1"),
     )
     port: int = field(
-        default_factory=lambda: int(os.environ.get("IBKR_FIX_PORT", "4002"))
+        default_factory=lambda: int(os.environ.get("IBKR_FIX_PORT", "4002")),
     )
     heartbeat_interval: int = 30          # seconds — IBKR default
     reset_on_logon: bool = True
@@ -100,17 +100,17 @@ class IBKRFIXConfig:
     reconnect_interval: int = 10          # seconds between reconnect attempts
     latency_threshold_ms: float = 100.0   # circuit breaker threshold
     username: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_USERNAME", "")
+        default_factory=lambda: os.environ.get("IBKR_FIX_USERNAME", ""),
     )
     password: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_PASSWORD", "")
+        default_factory=lambda: os.environ.get("IBKR_FIX_PASSWORD", ""),
     )
     # Path for FIX session store (sequence numbers)
     store_path: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store")
+        default_factory=lambda: os.environ.get("IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"),
     )
     log_path: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs")
+        default_factory=lambda: os.environ.get("IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"),
     )
 
     @property
@@ -278,7 +278,7 @@ class IBKRFIXBridge:
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
             raise RuntimeError(
-                f"IBKRFIXBridge.place_order blocked by kill switch: {reason}"
+                f"IBKRFIXBridge.place_order blocked by kill switch: {reason}",
             )
 
         # Circuit breaker check

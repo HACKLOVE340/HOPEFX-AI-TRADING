@@ -140,7 +140,7 @@ class BasePropFirmBroker(ABC):
     """
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, firm_type: PropFirmType
+        self, api_key: str, secret_key: str, account_id: str, firm_type: PropFirmType,
     ):
         self.api_key = api_key
         self.secret_key = secret_key
@@ -214,7 +214,7 @@ class FTMOBroker(BasePropFirmBroker):
     SANDBOX_URL = "https://sandbox.ftmo.com/v1"
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False
+        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False,
     ):
         super().__init__(api_key, secret_key, account_id, PropFirmType.FTMO)
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
@@ -222,7 +222,7 @@ class FTMOBroker(BasePropFirmBroker):
         self._rate_limit_remaining = 1000
 
     def _generate_signature(
-        self, method: str, endpoint: str, data: Optional[Dict] = None
+        self, method: str, endpoint: str, data: Optional[Dict] = None,
     ) -> Dict[str, str]:
         """Generate FTMO API signature"""
         timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
@@ -233,7 +233,7 @@ class FTMOBroker(BasePropFirmBroker):
             sig_string += json.dumps(data, sort_keys=True)
 
         signature = hmac.new(
-            self.secret_key.encode(), sig_string.encode(), hashlib.sha256
+            self.secret_key.encode(), sig_string.encode(), hashlib.sha256,
         ).hexdigest()
 
         return {
@@ -266,8 +266,8 @@ class FTMOBroker(BasePropFirmBroker):
                 # Update rate limit
                 self._rate_limit_remaining = int(
                     resp.headers.get(
-                        "X-RateLimit-Remaining", self._rate_limit_remaining
-                    )
+                        "X-RateLimit-Remaining", self._rate_limit_remaining,
+                    ),
                 )
 
                 return PropFirmMetrics(
@@ -281,11 +281,11 @@ class FTMOBroker(BasePropFirmBroker):
                     profit_loss_percentage=float(data.get("profitLossPercentage", 0)),
                     daily_drawdown=float(data.get("dailyDrawdown", 0)),
                     daily_drawdown_percentage=float(
-                        data.get("dailyDrawdownPercentage", 0)
+                        data.get("dailyDrawdownPercentage", 0),
                     ),
                     monthly_drawdown=float(data.get("monthlyDrawdown", 0)),
                     monthly_drawdown_percentage=float(
-                        data.get("monthlyDrawdownPercentage", 0)
+                        data.get("monthlyDrawdownPercentage", 0),
                     ),
                     remaining_days=int(data.get("remainingDays", 0)),
                     trading_phase=TradingPhase(data.get("phase", "challenge")),
@@ -336,7 +336,7 @@ class FTMOBroker(BasePropFirmBroker):
             if potential_loss > metrics.remaining_daily_loss:
                 raise ValueError(
                     f"Order size exceeds daily loss limit. "
-                    f"Max allowed: {metrics.remaining_daily_loss}"
+                    f"Max allowed: {metrics.remaining_daily_loss}",
                 )
 
         endpoint = f"/accounts/{self.account_id}/orders"
@@ -379,7 +379,7 @@ class FTMOBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -415,7 +415,7 @@ class FTMOBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -436,7 +436,7 @@ class FTMOBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit}
+                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit},
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -479,7 +479,7 @@ class The5ersBroker(BasePropFirmBroker):
     SANDBOX_URL = "https://sandbox.the5ers.com/v1"
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False
+        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False,
     ):
         super().__init__(api_key, secret_key, account_id, PropFirmType.THE5ERS)
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
@@ -575,7 +575,7 @@ class The5ersBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers, json=payload
+                f"{self.base_url}{endpoint}", headers=headers, json=payload,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -599,7 +599,7 @@ class The5ersBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -638,7 +638,7 @@ class The5ersBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -662,7 +662,7 @@ class The5ersBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit}
+                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit},
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -704,7 +704,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
     SANDBOX_URL = "https://sandbox.myforexfunds.com/v1"
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False
+        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False,
     ):
         super().__init__(api_key, secret_key, account_id, PropFirmType.MYFOREXFUNDS)
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
@@ -750,7 +750,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                     daily_drawdown_percentage=float(data.get("dailyLossPercent", 0)),
                     monthly_drawdown=float(data.get("monthlyLoss", 0)),
                     monthly_drawdown_percentage=float(
-                        data.get("monthlyLossPercent", 0)
+                        data.get("monthlyLossPercent", 0),
                     ),
                     remaining_days=int(data.get("daysLeft", 0)),
                     trading_phase=TradingPhase(data.get("level", "challenge")),
@@ -805,7 +805,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers, json=payload
+                f"{self.base_url}{endpoint}", headers=headers, json=payload,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -826,7 +826,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -862,7 +862,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -883,7 +883,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit}
+                f"{self.base_url}{endpoint}", headers=headers, params={"limit": limit},
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -926,7 +926,7 @@ class TopStepBroker(BasePropFirmBroker):
     SANDBOX_URL = "https://sandbox.topsteptrader.com/v2"
 
     def __init__(
-        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False
+        self, api_key: str, secret_key: str, account_id: str, sandbox: bool = False,
     ):
         super().__init__(api_key, secret_key, account_id, PropFirmType.TOPSTEP)
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
@@ -971,11 +971,11 @@ class TopStepBroker(BasePropFirmBroker):
                     profit_loss_percentage=float(data.get("returnPercent", 0)),
                     daily_drawdown=float(data.get("dailyDrawdown", 0)),
                     daily_drawdown_percentage=float(
-                        data.get("dailyDrawdownPercent", 0)
+                        data.get("dailyDrawdownPercent", 0),
                     ),
                     monthly_drawdown=float(data.get("monthDrawdown", 0)),
                     monthly_drawdown_percentage=float(
-                        data.get("monthDrawdownPercent", 0)
+                        data.get("monthDrawdownPercent", 0),
                     ),
                     remaining_days=int(data.get("daysRemaining", 0)),
                     trading_phase=TradingPhase(data.get("phase", "challenge")),
@@ -1030,7 +1030,7 @@ class TopStepBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers, json=payload
+                f"{self.base_url}{endpoint}", headers=headers, json=payload,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())
@@ -1051,7 +1051,7 @@ class TopStepBroker(BasePropFirmBroker):
 
         try:
             async with self.session.get(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status != 200:
                     raise RuntimeError(await resp.json())
@@ -1087,7 +1087,7 @@ class TopStepBroker(BasePropFirmBroker):
 
         try:
             async with self.session.post(
-                f"{self.base_url}{endpoint}", headers=headers
+                f"{self.base_url}{endpoint}", headers=headers,
             ) as resp:
                 if resp.status not in [200, 201]:
                     raise RuntimeError(await resp.json())

@@ -50,7 +50,7 @@ class RegimeDetector:
     """Hidden Markov Model for regime detection."""
 
     def __init__(
-        self, n_regimes: int = 5, lookback: int = 100, model_path: Path | None = None
+        self, n_regimes: int = 5, lookback: int = 100, model_path: Path | None = None,
     ) -> None:
         self.n_regimes = n_regimes
         self.lookback = lookback
@@ -58,7 +58,7 @@ class RegimeDetector:
 
         # HMM for sequence modeling
         self.hmm = GaussianHMM(
-            n_components=n_regimes, covariance_type="full", n_iter=100, random_state=42
+            n_components=n_regimes, covariance_type="full", n_iter=100, random_state=42,
         )
 
         # GMM for volatility clustering
@@ -96,7 +96,7 @@ class RegimeDetector:
                 features.macd,
                 features.bid_ask_ratio,
                 features.hawkes_intensity,
-            ]
+            ],
         ).reshape(1, -1)
 
         if not self._is_fitted:

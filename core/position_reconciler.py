@@ -157,7 +157,7 @@ class PositionReconciler:
                     broker_qty = float(
                         broker_pos.get("quantity", broker_pos.get("qty", 0))
                         if isinstance(broker_pos, dict)
-                        else getattr(broker_pos, "quantity", 0)
+                        else getattr(broker_pos, "quantity", 0),
                     )
                     db_qty = float(pos.quantity or 0)
                     qty_diff = abs(db_qty - broker_qty)
@@ -193,7 +193,7 @@ class PositionReconciler:
                         "type": "positions_updated",
                         "count": updated,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
+                    },
                 )
             except Exception:
                 pass
@@ -245,7 +245,7 @@ class PositionReconciler:
                 EventEnvelope.wrap(
                     source="position_reconciler",
                     payload=drift_event,
-                )
+                ),
             )
             halt_event = RiskHaltEvent(
                 reason=reason,
@@ -255,7 +255,7 @@ class PositionReconciler:
                 EventEnvelope.wrap(
                     source="position_reconciler",
                     payload=halt_event,
-                )
+                ),
             )
         except Exception as ev_exc:
             logger.warning("Could not publish drift events: %s", ev_exc)
@@ -314,7 +314,7 @@ class PositionReconciler:
 
 
 def start_reconciler(
-    session_factory, broker=None, ws_manager=None, interval_seconds: int = 10
+    session_factory, broker=None, ws_manager=None, interval_seconds: int = 10,
 ) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
     global _reconciler_task

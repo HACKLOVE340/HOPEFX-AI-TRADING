@@ -101,11 +101,11 @@ async def generate_strategy(
             if result.backtest:
                 bt = BacktestSummary(
                     total_return_pct=float(
-                        getattr(result.backtest, "total_return_pct", 0)
+                        getattr(result.backtest, "total_return_pct", 0),
                     ),
                     sharpe_ratio=float(getattr(result.backtest, "sharpe_ratio", 0)),
                     max_drawdown_pct=float(
-                        getattr(result.backtest, "max_drawdown_pct", 0)
+                        getattr(result.backtest, "max_drawdown_pct", 0),
                     ),
                     win_rate=float(getattr(result.backtest, "win_rate", 0)),
                     total_trades=int(getattr(result.backtest, "total_trades", 0)),
@@ -183,7 +183,7 @@ async def deploy_strategy(
     """
     if not req.strategy_code.strip():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty",
         )
 
     try:

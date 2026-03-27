@@ -123,7 +123,7 @@ class ComponentRegistry:
                     d
                     for d in comp.deps
                     if self._components.get(
-                        d, Component(name=d, factory=lambda s: None)
+                        d, Component(name=d, factory=lambda s: None),
                     ).status
                     in ("failed", "skipped")
                 ),
@@ -155,10 +155,10 @@ class ComponentRegistry:
 
                 if comp.required:
                     logger.critical(
-                        "✗ %-30s REQUIRED — aborting startup: %s", name, exc
+                        "✗ %-30s REQUIRED — aborting startup: %s", name, exc,
                     )
                     raise RuntimeError(
-                        f"Required component '{name}' failed: {exc}"
+                        f"Required component '{name}' failed: {exc}",
                     ) from exc
                 else:
                     logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
@@ -172,7 +172,7 @@ class ComponentRegistry:
         lines = ["", "┌─ Startup Summary " + "─" * 52 + "┐"]
         for comp in self._components.values():
             icon = {"ok": "✓", "failed": "✗", "skipped": "⊘", "pending": "?"}.get(
-                comp.status, "?"
+                comp.status, "?",
             )
             req = "REQ" if comp.required else "opt"
             detail = comp.error or f"{comp.elapsed_ms:.0f} ms"

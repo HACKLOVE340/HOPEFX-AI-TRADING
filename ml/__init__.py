@@ -217,7 +217,7 @@ def _load_models() -> None:
             _ml_logger.info(
                 "Active ML model: advanced_oos.pkl — "
                 "68.0%% OOS accuracy, p=0.0000, 122 stationary features "
-                "(no metadata sidecar — retrain to generate advanced_oos_meta.json)"
+                "(no metadata sidecar — retrain to generate advanced_oos_meta.json)",
             )
         return
 
@@ -283,13 +283,13 @@ def _load_models() -> None:
         _ml_logger.warning(
             "FALLBACK MODEL ACTIVE: xgb_macro.pkl (65 stationary features, "
             "~50%% OOS accuracy, p>0.05 — no demonstrated edge). "
-            "Signals are strategy-only quality. Do not trade live capital."
+            "Signals are strategy-only quality. Do not trade live capital.",
         )
     elif _baseline_xgb is not None:
         _model_version = "baseline_xgb_v1"
         _ml_logger.warning(
             "FALLBACK MODEL ACTIVE: xgb_xauusd.pkl (baseline, no macro features, "
-            "~49%% OOS accuracy). Signals are strategy-only quality."
+            "~49%% OOS accuracy). Signals are strategy-only quality.",
         )
     else:
         _model_version = "none"
@@ -325,7 +325,7 @@ try:
     from ml.live_inference import get_advanced_predictor
 except Exception as _live_inf_exc:
     _ml_logger.warning(
-        "ml.live_inference unavailable — advanced predictor disabled: %s", _live_inf_exc
+        "ml.live_inference unavailable — advanced predictor disabled: %s", _live_inf_exc,
     )
 
     def get_advanced_predictor():  # type: ignore[misc]
@@ -460,7 +460,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
             except Exception as _report_exc:
                 import logging as _log
                 _log.getLogger(__name__).warning(
-                    "Failed to read training report: %s", _report_exc
+                    "Failed to read training report: %s", _report_exc,
                 )
 
         # No trained model yet — return honest untrained state.
@@ -503,7 +503,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
             except Exception as _pred_exc:
                 import logging as _log
                 _log.getLogger(__name__).warning(
-                    "Failed to read training report for predict: %s", _pred_exc
+                    "Failed to read training report for predict: %s", _pred_exc,
                 )
 
         return {

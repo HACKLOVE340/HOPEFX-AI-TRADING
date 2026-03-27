@@ -88,7 +88,7 @@ class SmartOrderRouter:
 
         # Rank brokers
         ranked = sorted(
-            self.scores.values(), key=lambda x: x.overall_score, reverse=True
+            self.scores.values(), key=lambda x: x.overall_score, reverse=True,
         )
 
         # Select best available
@@ -127,10 +127,10 @@ class SmartOrderRouter:
                 recent_fills = await connector.get_recent_fills(hours=1)
                 if recent_fills:
                     score.fill_rate = len(
-                        [f for f in recent_fills if f["filled"]]
+                        [f for f in recent_fills if f["filled"]],
                     ) / len(recent_fills)
                     score.avg_slippage_bps = np.mean(
-                        [f.get("slippage_bps", 0) for f in recent_fills]
+                        [f.get("slippage_bps", 0) for f in recent_fills],
                     )
 
             except Exception as e:
@@ -168,7 +168,7 @@ class SmartOrderRouter:
 
         except Exception as e:
             logger.error(
-                "Primary broker %s failed: %s", primary_broker, e, exc_info=True
+                "Primary broker %s failed: %s", primary_broker, e, exc_info=True,
             )
 
             # Try alternatives
@@ -197,11 +197,11 @@ class SmartOrderRouter:
             raise Exception("All brokers failed to execute order")
 
     async def _execute_with_timeout(
-        self, broker_id: str, order: Dict, timeout_ms: int = 5000
+        self, broker_id: str, order: Dict, timeout_ms: int = 5000,
     ):
         """Execute with strict timeout"""
         return await asyncio.wait_for(
-            self.brokers[broker_id].place_order(order), timeout=timeout_ms / 1000
+            self.brokers[broker_id].place_order(order), timeout=timeout_ms / 1000,
         )
 
 
@@ -268,6 +268,6 @@ class BrokerConnector:
     async def get_recent_fills(self, hours: int = 1) -> List[Dict]:
         """Get recent fill history"""
         cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(
-            hours=hours
+            hours=hours,
         )
         return [f for f in self.fill_history if f["timestamp"] > cutoff]

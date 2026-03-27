@@ -499,7 +499,7 @@ class BrokerManager:
         if self._fix_bridge and self._fix_bridge._started:
             return await self._fix_bridge.place_order(order)
         raise RuntimeError(
-            "FIX bridge not started. Set BROKER_ENABLE_FIX=true and call connect_all()."
+            "FIX bridge not started. Set BROKER_ENABLE_FIX=true and call connect_all().",
         )
 
     # ------------------------------------------------------------------
@@ -517,12 +517,12 @@ class BrokerManager:
         broker = self._get_active_broker()
         if broker is None:
             raise RuntimeError(
-                "BrokerManager: no active broker. Call register() and set_active()."
+                "BrokerManager: no active broker. Call register() and set_active().",
             )
         if not broker.is_connected():
             raise RuntimeError(
                 f"BrokerManager: active broker '{self._active_name}' is not connected. "
-                "Call connect_primary() or connect_all() first."
+                "Call connect_primary() or connect_all() first.",
             )
         return broker
 
@@ -531,7 +531,7 @@ class BrokerManager:
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
             raise RuntimeError(
-                f"BrokerManager.{operation} blocked by kill switch: {reason}"
+                f"BrokerManager.{operation} blocked by kill switch: {reason}",
             )
 
     def _record_failure(self, exc: Exception) -> None:

@@ -730,11 +730,11 @@ def check_phase4_gate(
     reasons = []
     if oos_accuracy < oos_accuracy_gate:
         reasons.append(
-            f"OOS accuracy {oos_accuracy:.1%} < gate {oos_accuracy_gate:.1%}"
+            f"OOS accuracy {oos_accuracy:.1%} < gate {oos_accuracy_gate:.1%}",
         )
     if p_value >= p_value_gate:
         reasons.append(
-            f"p-value {p_value:.4f} >= gate {p_value_gate:.4f}"
+            f"p-value {p_value:.4f} >= gate {p_value_gate:.4f}",
         )
     if reasons:
         return False, "Phase 4 gate failed: " + "; ".join(reasons)

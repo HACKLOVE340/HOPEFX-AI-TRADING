@@ -127,13 +127,13 @@ class BaseMLModel(ABC):
             try:
                 metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
                 metrics["precision"] = precision_score(
-                    y_test, np.round(predictions), average="weighted"
+                    y_test, np.round(predictions), average="weighted",
                 )
                 metrics["recall"] = recall_score(
-                    y_test, np.round(predictions), average="weighted"
+                    y_test, np.round(predictions), average="weighted",
                 )
                 metrics["f1"] = f1_score(
-                    y_test, np.round(predictions), average="weighted"
+                    y_test, np.round(predictions), average="weighted",
                 )
             except Exception:
                 pass  # Skip if not applicable
@@ -183,14 +183,14 @@ class BaseMLModel(ABC):
         resolved = Path(filepath).resolve()
         # Skip path check when MODEL_BASE_DIR env var is set or in test mode
         if not os.environ.get("MODEL_BASE_DIR") and not os.environ.get(
-            "PYTEST_CURRENT_TEST"
+            "PYTEST_CURRENT_TEST",
         ):
             try:
                 resolved.relative_to(self._MODEL_BASE_DIR)
             except ValueError:
                 raise ValueError(
                     f"Model path '{resolved}' is outside the allowed model directory "
-                    f"'{self._MODEL_BASE_DIR}'. Refusing to load."
+                    f"'{self._MODEL_BASE_DIR}'. Refusing to load.",
                 )
 
         with open(resolved, "rb") as f:

@@ -532,7 +532,7 @@ def generate_pre_trade_report(
     var_pct = var_result.var / (mid_price + 1e-10)
     if var_pct > max_var_pct:
         block_reasons.append(
-            f"VaR {var_pct:.2%} > limit {max_var_pct:.2%}"
+            f"VaR {var_pct:.2%} > limit {max_var_pct:.2%}",
         )
 
     # ES (99%)
@@ -540,7 +540,7 @@ def generate_pre_trade_report(
     es_pct = es_result.es / (mid_price + 1e-10)
     if es_pct > max_es_pct:
         block_reasons.append(
-            f"ES/CVaR {es_pct:.2%} > limit {max_es_pct:.2%}"
+            f"ES/CVaR {es_pct:.2%} > limit {max_es_pct:.2%}",
         )
 
     # Monte Carlo slippage
@@ -554,7 +554,7 @@ def generate_pre_trade_report(
     )
     if slip_result.p99_slippage_bps > max_slippage_bps:
         block_reasons.append(
-            f"Slippage p99 {slip_result.p99_slippage_bps:.1f}bps > limit {max_slippage_bps:.0f}bps"
+            f"Slippage p99 {slip_result.p99_slippage_bps:.1f}bps > limit {max_slippage_bps:.0f}bps",
         )
 
     # Regime drift
@@ -563,14 +563,14 @@ def generate_pre_trade_report(
     regime = compute_regime_drift(ref, recent)
     if regime.drift_score > max_drift_score:
         block_reasons.append(
-            f"Regime drift score {regime.drift_score:.2f} > limit {max_drift_score:.1f}"
+            f"Regime drift score {regime.drift_score:.2f} > limit {max_drift_score:.1f}",
         )
 
     # Sharpe
     sharpe = compute_sharpe(returns)
     if sharpe.sharpe < min_sharpe:
         block_reasons.append(
-            f"Sharpe {sharpe.sharpe:.2f} < minimum {min_sharpe:.1f}"
+            f"Sharpe {sharpe.sharpe:.2f} < minimum {min_sharpe:.1f}",
         )
 
     # Max drawdown
@@ -583,7 +583,7 @@ def generate_pre_trade_report(
 
     if mdd > max_drawdown_limit:
         block_reasons.append(
-            f"Max drawdown {mdd:.2%} > limit {max_drawdown_limit:.2%}"
+            f"Max drawdown {mdd:.2%} > limit {max_drawdown_limit:.2%}",
         )
 
     approved = len(block_reasons) == 0

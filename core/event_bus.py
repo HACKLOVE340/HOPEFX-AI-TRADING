@@ -65,7 +65,7 @@ class MemoryMappedEventStore:
     """Persistent event store with 1M+ events/sec throughput"""
 
     def __init__(
-        self, base_path: str = "data/events/", max_file_size: int = 1_073_741_824
+        self, base_path: str = "data/events/", max_file_size: int = 1_073_741_824,
     ):
         self.base_path = base_path
         self.max_file_size = max_file_size
@@ -99,7 +99,7 @@ class MemoryMappedEventStore:
             # Header layout: sequence(Q=uint64) | timestamp(Q=uint64) | event_type(H=uint16)
             # timestamp is nanoseconds since epoch — requires uint64, not uint32.
             header = struct.pack(
-                ">QQH", self._sequence, event.timestamp, event.event_type
+                ">QQH", self._sequence, event.timestamp, event.event_type,
             )
             header += struct.pack("B", len(src_bytes)) + src_bytes
             header += struct.pack(">I", len(event.payload))
@@ -113,7 +113,7 @@ class MemoryMappedEventStore:
             ] = record
             self.current_offset += len(record)
             self._index[event.source].append(
-                (self.file_counter - 1, self.current_offset - len(record))
+                (self.file_counter - 1, self.current_offset - len(record)),
             )
             return self._sequence
 
@@ -148,7 +148,7 @@ class MemoryMappedEventStore:
             payload_len = struct.unpack(">I", f.read(4))[0]
             payload = f.read(payload_len)
             return DomainEvent(
-                timestamp=ts, event_type=evt_type, source=src, payload=payload
+                timestamp=ts, event_type=evt_type, source=src, payload=payload,
             )
 
 
@@ -188,7 +188,7 @@ class EventBus:
         while self._running:
             try:
                 priority, ts, event = await asyncio.wait_for(
-                    self._queue.get(), timeout=1.0
+                    self._queue.get(), timeout=1.0,
                 )
                 for handler in self.subscribers.get(event.event_type, []):
                     try:

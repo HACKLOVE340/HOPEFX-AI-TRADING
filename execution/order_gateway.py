@@ -48,7 +48,7 @@ class OrderGateway:
         filled_quantity = min(order.quantity, random.randint(0, order.quantity + 5))
         order.fill(filled_quantity)
         print(
-            f"Order {order.order_id} filled with quantity {filled_quantity} at price {final_price:.2f} (slippage: {slippage:.2f})"
+            f"Order {order.order_id} filled with quantity {filled_quantity} at price {final_price:.2f} (slippage: {slippage:.2f})",
         )
 
         if order.is_filled:

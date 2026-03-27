@@ -93,7 +93,7 @@ def _seed_audit():
                 "detail": detail,
                 "ip_address": "127.0.0.1",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            }
+            },
         )
 
 
@@ -109,7 +109,7 @@ def _log_audit(user_id: str, event_type: str, detail: str, ip: str = ""):
             "detail": detail,
             "ip_address": ip,
             "created_at": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     )
 
 
@@ -131,7 +131,7 @@ async def list_sessions(user: TokenPayload = Depends(get_current_user)):
 
 @router.delete("/api/auth/sessions/{session_id}")
 async def revoke_session(
-    session_id: str, user: TokenPayload = Depends(get_current_user)
+    session_id: str, user: TokenPayload = Depends(get_current_user),
 ):
     """Revoke a specific session (log out that device)."""
     session = _sessions.get(session_id)
@@ -236,14 +236,14 @@ async def unban_user(user_id: str, admin: TokenPayload = Depends(get_current_use
 async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current_user)):
     """Trigger a password reset email for a user."""
     _log_audit(
-        admin.sub, "user.password_reset", f"Password reset triggered for {user_id}"
+        admin.sub, "user.password_reset", f"Password reset triggered for {user_id}",
     )
     return {"reset_triggered": True, "user_id": user_id, "note": "Reset email queued"}
 
 
 @router.get("/api/admin/users/{user_id}/trades")
 async def get_user_trades(
-    user_id: str, admin: TokenPayload = Depends(get_current_user)
+    user_id: str, admin: TokenPayload = Depends(get_current_user),
 ):
     """View a user's trade history (demo data)."""
     import random
@@ -265,7 +265,7 @@ async def get_user_trades(
 
 @router.post("/api/admin/users/{user_id}/impersonate")
 async def impersonate_user(
-    user_id: str, admin: TokenPayload = Depends(get_current_user)
+    user_id: str, admin: TokenPayload = Depends(get_current_user),
 ):
     """Generate a short-lived impersonation token for support purposes."""
     _log_audit(admin.sub, "user.impersonated", f"Admin impersonating {user_id}")
@@ -419,7 +419,7 @@ async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
                 "description": info.get("description", ""),
                 "env_var": info.get("env_var", ""),
                 "overrides": _flag_overrides.get(name, {}),
-            }
+            },
         )
     return {"flags": result, "total": len(result)}
 
@@ -507,7 +507,7 @@ def setup_rate_limiting(app):
         return limiter
     except ImportError:
         logger.warning(
-            "slowapi not installed — rate limiting disabled. Run: pip install slowapi"
+            "slowapi not installed — rate limiting disabled. Run: pip install slowapi",
         )
         return None
 

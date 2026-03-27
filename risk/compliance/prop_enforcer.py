@@ -119,11 +119,11 @@ class PropConfig:
             news_blackout = int(
                 raw.get("news_blackout")
                 or firm_cfg.get("news_trading", {}).get("blackout_minutes_before_news", 5) * 60
-                or 300
+                or 300,
             )
             weekend_close = bool(
                 raw.get("weekend_close", True)
-                or firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", False) is False
+                or firm_cfg.get("overnight_holding", {}).get("weekend_holding_allowed", False) is False,
             )
             return cls(
                 daily_dd=float(daily_dd),
@@ -390,7 +390,7 @@ class PropEnforcer:
                 f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
             )
             data = urllib.parse.urlencode(
-                {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+                {"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
             ).encode()
             req = urllib.request.Request(
                 f"https://api.telegram.org/bot{token}/sendMessage",

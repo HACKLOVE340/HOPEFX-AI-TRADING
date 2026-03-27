@@ -77,7 +77,7 @@ def _smtp_config() -> Optional[dict]:
         "user": os.getenv("SMTP_USER", ""),
         "password": os.getenv("SMTP_PASSWORD", ""),
         "from_email": os.getenv(
-            "FROM_EMAIL", os.getenv("SMTP_USER", "noreply@hopefx.io")
+            "FROM_EMAIL", os.getenv("SMTP_USER", "noreply@hopefx.io"),
         ),
         "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
     }

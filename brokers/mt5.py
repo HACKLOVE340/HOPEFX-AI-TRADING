@@ -87,7 +87,7 @@ class MT5Connector(BrokerConnector):
         if not MT5_AVAILABLE:
             raise ImportError(
                 "MetaTrader5 package not installed. "
-                "Install with: pip install MetaTrader5"
+                "Install with: pip install MetaTrader5",
             )
 
         self.server = config.get("server")
@@ -444,7 +444,7 @@ class MT5Connector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "H1", count: int = 100
+        self, symbol: str, timeframe: str = "H1", count: int = 100,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data.
@@ -491,7 +491,7 @@ class MT5Connector(BrokerConnector):
                         "low": rate["low"],
                         "close": rate["close"],
                         "volume": rate["tick_volume"],
-                    }
+                    },
                 )
 
             return candles

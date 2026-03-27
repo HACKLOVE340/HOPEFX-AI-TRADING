@@ -40,7 +40,7 @@ class Signal:
     take_profit: float
     timeframe: str
     timestamp: float = field(
-        default_factory=lambda: datetime.now(timezone.utc).timestamp()
+        default_factory=lambda: datetime.now(timezone.utc).timestamp(),
     )
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -74,7 +74,7 @@ class BaseStrategy:
         }
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str
+        self, symbol: str, price_data: Any, market_regime: str,
     ) -> List[Signal]:
         """Generate trading signals - implement in subclass"""
         raise NotImplementedError
@@ -95,7 +95,7 @@ class TrendFollowingStrategy(BaseStrategy):
         self.trend_strength_threshold = config.get("trend_strength_threshold", 0.3)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str
+        self, symbol: str, price_data: Any, market_regime: str,
     ) -> List[Signal]:
         """Generate trend following signals"""
         if market_regime not in ["trending_up", "trending_down"]:
@@ -139,7 +139,7 @@ class TrendFollowingStrategy(BaseStrategy):
                             "slow_ma": slow_ma,
                             "trend_strength": trend_strength,
                         },
-                    )
+                    ),
                 ]
 
             elif fast_ma < slow_ma and market_regime == "trending_down":
@@ -158,7 +158,7 @@ class TrendFollowingStrategy(BaseStrategy):
                             "slow_ma": slow_ma,
                             "trend_strength": trend_strength,
                         },
-                    )
+                    ),
                 ]
 
             return []
@@ -179,7 +179,7 @@ class MeanReversionStrategy(BaseStrategy):
         self.overbought_threshold = config.get("overbought_threshold", 2.0)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str
+        self, symbol: str, price_data: Any, market_regime: str,
     ) -> List[Signal]:
         """Generate mean reversion signals"""
         if market_regime != "ranging":
@@ -222,7 +222,7 @@ class MeanReversionStrategy(BaseStrategy):
                             "upper_band": upper_band,
                             "sma": sma,
                         },
-                    )
+                    ),
                 )
 
             # Overbought - sell signal
@@ -243,7 +243,7 @@ class MeanReversionStrategy(BaseStrategy):
                             "upper_band": upper_band,
                             "sma": sma,
                         },
-                    )
+                    ),
                 )
 
             return signals
@@ -262,7 +262,7 @@ class BreakoutStrategy(BaseStrategy):
         self.breakout_threshold = config.get("breakout_threshold", 0.001)
 
     async def generate_signals(
-        self, symbol: str, price_data: Any, market_regime: str
+        self, symbol: str, price_data: Any, market_regime: str,
     ) -> List[Signal]:
         """Generate breakout signals"""
         if market_regime != "ranging":
@@ -297,7 +297,7 @@ class BreakoutStrategy(BaseStrategy):
                             "support": support,
                             "breakout_type": "resistance",
                         },
-                    )
+                    ),
                 ]
 
             elif current_price < support * (1 - self.breakout_threshold):
@@ -316,7 +316,7 @@ class BreakoutStrategy(BaseStrategy):
                             "support": support,
                             "breakout_type": "support",
                         },
-                    )
+                    ),
                 ]
 
             return []
@@ -345,7 +345,7 @@ class StrategyManager:
     def _initialize_default_strategies(self):
         """Initialize default strategies"""
         self.register_strategy(
-            TrendFollowingStrategy({"fast_period": 20, "slow_period": 50})
+            TrendFollowingStrategy({"fast_period": 20, "slow_period": 50}),
         )
 
         self.register_strategy(MeanReversionStrategy({"period": 20, "std_dev": 2.0}))
@@ -429,7 +429,7 @@ class StrategyManager:
             logger.info(f"Disabled strategy: {name}")
 
     async def generate_signals(
-        self, market_regimes: Dict[str, Any], price_engine: Any
+        self, market_regimes: Dict[str, Any], price_engine: Any,
     ) -> List[Dict]:
         """
         Generate signals from all enabled strategies
@@ -459,7 +459,7 @@ class StrategyManager:
 
                 try:
                     signals = await strategy.generate_signals(
-                        symbol=symbol, price_data=ohlcv, market_regime=regime_value
+                        symbol=symbol, price_data=ohlcv, market_regime=regime_value,
                     )
 
                     for signal in signals:

@@ -50,7 +50,7 @@ class MACDStrategy(BaseStrategy):
         self.signal_period = signal_period
         logger.info(
             f"MACD Strategy initialized: fast={fast_period}, "
-            f"slow={slow_period}, signal={signal_period}"
+            f"slow={slow_period}, signal={signal_period}",
         )
 
     def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:

@@ -161,13 +161,13 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
+                url, timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 data = await r.json()
                 bal = data.get("account", {}).get("balance", "?")
                 logger.info(
-                    "OANDA connected — account %s balance %s", self.account_id, bal
+                    "OANDA connected — account %s balance %s", self.account_id, bal,
                 )
                 return True
         except Exception as exc:
@@ -216,7 +216,7 @@ class OANDAStream:
                 if not self._running:
                     return
                 logger.warning(
-                    "Stream error (%s) — reconnecting in %.0fs", exc, backoff
+                    "Stream error (%s) — reconnecting in %.0fs", exc, backoff,
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
@@ -226,7 +226,7 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
+                url, timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 a = (await r.json()).get("account", {})
@@ -238,7 +238,7 @@ class OANDAStream:
                     margin_used=float(a.get("marginUsed", 0)),
                     margin_available=float(a.get("marginAvailable", nav)),
                     positions_count=int(
-                        a.get("openPositionCount", a.get("openTradeCount", 0))
+                        a.get("openPositionCount", a.get("openTradeCount", 0)),
                     ),
                     timestamp=datetime.now(timezone.utc),
                 )
@@ -251,7 +251,7 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
+                url, timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 out = []
@@ -280,7 +280,7 @@ class OANDAStream:
                             unrealized_pnl=upnl,
                             realized_pnl=rpnl,
                             timestamp=datetime.now(timezone.utc),
-                        )
+                        ),
                     )
                 return out
         except Exception as exc:
@@ -305,7 +305,7 @@ class OANDAStream:
                 "units": str(int(signed_units)),
                 "type": "MARKET" if order_type == OrderType.MARKET else "LIMIT",
                 "timeInForce": "FOK" if order_type == OrderType.MARKET else "GTC",
-            }
+            },
         }
         if price and order_type != OrderType.MARKET:
             body["order"]["price"] = str(price)
@@ -317,7 +317,7 @@ class OANDAStream:
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/orders"
             async with self._session.post(
-                url, json=body, timeout=aiohttp.ClientTimeout(total=10)
+                url, json=body, timeout=aiohttp.ClientTimeout(total=10),
             ) as r:
                 r.raise_for_status()
                 return self._parse_order_response(await r.json(), symbol, side, units)

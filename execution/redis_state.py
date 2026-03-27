@@ -84,7 +84,7 @@ class RedisStateStore:
             order_ids = self._r.smembers(_ORDER_INDEX)
             for oid in order_ids:
                 raw = self._r.get(
-                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}"
+                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}",
                 )
                 if raw:
                     orders.append(json.loads(raw))
@@ -101,7 +101,7 @@ class RedisStateStore:
         symbol = str(position.get("symbol", ""))
         if not symbol:
             logger.warning(
-                "RedisStateStore.save_position: position has no symbol, skipping"
+                "RedisStateStore.save_position: position has no symbol, skipping",
             )
             return
         key = f"{_POSITION_KEY_PREFIX}{symbol}"
@@ -129,7 +129,7 @@ class RedisStateStore:
             symbols = self._r.smembers(_POSITION_INDEX)
             for sym in symbols:
                 raw = self._r.get(
-                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}"
+                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}",
                 )
                 if raw:
                     positions.append(json.loads(raw))
@@ -152,7 +152,7 @@ class RedisStateStore:
         positions = self.load_positions()
         if orders:
             logger.info(
-                "RedisStateStore: restored %d open order(s) from Redis", len(orders)
+                "RedisStateStore: restored %d open order(s) from Redis", len(orders),
             )
         if positions:
             logger.info(
@@ -196,7 +196,7 @@ class AsyncRedisStateStore:
             order_ids = await self._r.smembers(_ORDER_INDEX)
             for oid in order_ids:
                 raw = await self._r.get(
-                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}"
+                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}",
                 )
                 if raw:
                     orders.append(json.loads(raw))
@@ -208,7 +208,7 @@ class AsyncRedisStateStore:
         symbol = str(position.get("symbol", ""))
         if not symbol:
             logger.warning(
-                "AsyncRedisStateStore.save_position: position has no symbol, skipping"
+                "AsyncRedisStateStore.save_position: position has no symbol, skipping",
             )
             return
         key = f"{_POSITION_KEY_PREFIX}{symbol}"
@@ -232,7 +232,7 @@ class AsyncRedisStateStore:
             symbols = await self._r.smembers(_POSITION_INDEX)
             for sym in symbols:
                 raw = await self._r.get(
-                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}"
+                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}",
                 )
                 if raw:
                     positions.append(json.loads(raw))
