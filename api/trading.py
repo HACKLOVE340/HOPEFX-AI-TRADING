@@ -632,7 +632,7 @@ async def get_ohlcv(
             detail="Price engine not available",
         )
 
-    data = app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
+    data = await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
     return [
         {
             "timestamp": d.timestamp,
@@ -1058,9 +1058,14 @@ async def get_regime_status():
 
         # Try to detect regime from live price data
         if broker is not None and hasattr(broker, "get_ohlcv"):
+            import asyncio
             import pandas as pd
 
-            ohlcv = broker.get_ohlcv("XAUUSD", limit=100)
+            _get = broker.get_ohlcv("XAUUSD", limit=100)
+            if asyncio.iscoroutine(_get):
+                ohlcv = await _get
+            else:
+                ohlcv = _get
             if ohlcv:
                 df = pd.DataFrame(ohlcv)
                 regime_router.route(df)
