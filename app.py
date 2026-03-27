@@ -4,6 +4,14 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+
+# Load .env before any other imports so all env vars are available at module load
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(override=False)  # override=False: real env vars take precedence
+except ImportError:
+    pass
+
 """
 HOPEFX AI Trading Framework - API Server
 
