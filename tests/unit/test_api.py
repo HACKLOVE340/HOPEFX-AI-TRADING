@@ -332,7 +332,7 @@ class TestAdminEndpoints:
         self.client = _make_admin_client()
 
     def test_get_system_info(self):
-        resp = self.client.get("/api/admin/api/system-info")
+        resp = self.client.get("/api/admin/system-info")
         assert resp.status_code == 200
         body = resp.json()
         assert body["version"] == "1.0.0"
@@ -340,7 +340,7 @@ class TestAdminEndpoints:
         assert "uptime" in body
 
     def test_get_settings(self):
-        resp = self.client.get("/api/admin/api/settings")
+        resp = self.client.get("/api/admin/settings")
         assert resp.status_code == 200
         body = resp.json()
         assert "max_risk_per_trade" in body
@@ -349,7 +349,7 @@ class TestAdminEndpoints:
 
     def test_get_activity_empty(self):
         _activity_log.clear()
-        resp = self.client.get("/api/admin/api/activity")
+        resp = self.client.get("/api/admin/activity")
         assert resp.status_code == 200
         body = resp.json()
         assert "events" in body
@@ -358,14 +358,14 @@ class TestAdminEndpoints:
     def test_get_activity_with_events(self):
         _activity_log.clear()
         log_activity("unit test event")
-        resp = self.client.get("/api/admin/api/activity")
+        resp = self.client.get("/api/admin/activity")
         assert resp.status_code == 200
         events = resp.json()["events"]
         assert len(events) >= 1
         assert events[0]["message"] == "unit test event"
 
     def test_get_dashboard_data(self):
-        resp = self.client.get("/api/admin/api/dashboard-data")
+        resp = self.client.get("/api/admin/dashboard-data")
         assert resp.status_code == 200
         body = resp.json()
         assert "system_health" in body
@@ -375,15 +375,16 @@ class TestAdminEndpoints:
 
     def test_save_settings(self):
         resp = self.client.post(
-            "/api/admin/api/settings",
+            "/api/admin/settings",
             json={"max_risk_per_trade": 1.0, "max_open_positions": 5},
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] in ("ok", "error")
+        assert body["status"] == "ok"
+        assert "saved" in body
 
     def test_get_system_metrics(self):
-        resp = self.client.get("/api/admin/api/system-metrics")
+        resp = self.client.get("/api/admin/system-metrics")
         assert resp.status_code == 200
         body = resp.json()
         assert "uptime" in body

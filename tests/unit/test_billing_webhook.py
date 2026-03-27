@@ -40,7 +40,7 @@ class TestStripeWebhook:
     def test_webhook_missing_signature_returns_400_or_200(self, client):
         """Webhook without stripe-signature should return 400 (invalid sig) or 200 (no stripe pkg)."""
         res = client.post(
-            "/api/webhook/stripe",
+            "/api/billing/webhook/stripe",
             content=b'{"type":"checkout.session.completed"}',
             headers={"Content-Type": "application/json"},
         )
@@ -55,7 +55,7 @@ class TestStripeWebhook:
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
-                "/api/webhook/stripe",
+                "/api/billing/webhook/stripe",
                 content=b'{"type":"test"}',
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
@@ -70,7 +70,7 @@ class TestStripeWebhook:
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
-                "/api/webhook/stripe",
+                "/api/billing/webhook/stripe",
                 content=b'{"type":"checkout.session.completed","data":{}}',
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
@@ -203,7 +203,7 @@ class TestFreeTierActivation:
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
-                "/api/auth/activate-free-tier",
+                "/api/billing/auth/activate-free-tier",
                 json={"user_id": "brand-new-user"},
             )
             assert res.status_code in (200, 201)
@@ -217,7 +217,7 @@ class TestFreeTierActivation:
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
-                "/api/auth/activate-free-tier",
+                "/api/billing/auth/activate-free-tier",
                 json={"user_id": "existing-user"},
             )
             assert res.status_code in (200, 201)
