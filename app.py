@@ -1050,6 +1050,27 @@ async def health_check():
     else:
         components["email"] = "unavailable"
 
+    # Broker (IBKR) — probe the live connector if present
+    _broker = getattr(app_state, "broker", None)
+    if _broker is not None:
+        try:
+            # IBKRConnector exposes .connected; paper broker has no such attr
+            if hasattr(_broker, "connected"):
+                components["broker"] = "healthy" if _broker.connected else "degraded"
+            elif hasattr(_broker, "health_check"):
+                components["broker"] = "healthy" if _broker.health_check() else "degraded"
+            else:
+                components["broker"] = "healthy"
+        except Exception as _be:
+            logger.warning("Broker health probe failed: %s", _be)
+            components["broker"] = "degraded"
+    else:
+        components["broker"] = "unavailable"
+
+    # Kill switch — always report its state so monitoring can alert on it
+    _ks = kill_switch
+    components["kill_switch"] = "active" if _ks.is_active() else "healthy"
+
     # Overall: degraded if any critical component is not healthy
     critical = ["api", "config", "database"]
     overall_status = (
@@ -1057,6 +1078,9 @@ async def health_check():
         if all(components.get(c) == "healthy" for c in critical)
         else "degraded"
     )
+    # Kill switch active → degraded regardless of other components
+    if _ks.is_active():
+        overall_status = "degraded"
 
     return HealthResponse(
         status=overall_status,
