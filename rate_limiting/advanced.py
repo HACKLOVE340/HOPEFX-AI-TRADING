@@ -55,4 +55,5 @@ def some_endpoint():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # debug=False — never run with debug=True in production (B201)
+    app.run(debug=False)

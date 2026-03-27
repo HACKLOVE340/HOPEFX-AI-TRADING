@@ -313,7 +313,7 @@ async def get_leaderboard(
     for i, (name, ret, sharpe, followers, wr, trades, prize) in enumerate(
         demo_traders[:limit], 1
     ):
-        uid = _hashlib.md5(name.encode()).hexdigest()[:8]
+        uid = _hashlib.md5(name.encode(), usedforsecurity=False).hexdigest()[:8]  # noqa: S324
         result.append(
             {
                 "id": uid,
