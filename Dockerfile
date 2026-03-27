@@ -6,10 +6,18 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+# libquickfix-dev: required to compile the quickfix C-extension (FIX protocol).
+#   Without it `pip install quickfix` silently falls back to a stub or fails
+#   at import time on first order submission.
+# libpq-dev: required to compile psycopg2 against PostgreSQL.
+# curl: used by the HEALTHCHECK command below.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    libquickfix-dev \
+    libpq-dev \
     redis-tools \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
@@ -38,8 +46,8 @@ ENV APP_ENV=production
 ENV API_PORT=8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${API_PORT}/health || exit 1
 
 # Run the application
 CMD ["python", "app.py"]
