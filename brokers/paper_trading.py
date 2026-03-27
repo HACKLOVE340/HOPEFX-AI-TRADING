@@ -10,6 +10,7 @@ Simulated broker for testing strategies without real money.
 """
 
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -387,18 +388,25 @@ class PaperTradingBroker(BrokerConnector):
         """
         current_price = self.market_prices.get(symbol, 1000.0)
 
-        # Generate dummy OHLCV data
+        # Timeframe → seconds mapping for realistic bar timestamps
+        _tf_seconds = {
+            "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+            "1h": 3600, "4h": 14400, "1d": 86400,
+        }
+        bar_seconds = _tf_seconds.get(timeframe, 3600)
+        now_ts = time.time()
+
         data = []
         for i in range(limit):
-            # Simple price variation
-            price = current_price * (1 + (i % 10 - 5) / 100)
+            bar_ts = now_ts - (limit - i) * bar_seconds
+            price = current_price * (1 + (i % 10 - 5) / 1000)
             data.append(
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "open": price,
-                    "high": price * 1.01,
-                    "low": price * 0.99,
-                    "close": price,
+                    "timestamp": bar_ts,
+                    "open": round(price, 5),
+                    "high": round(price * 1.001, 5),
+                    "low": round(price * 0.999, 5),
+                    "close": round(price, 5),
                     "volume": 1000.0,
                 },
             )
