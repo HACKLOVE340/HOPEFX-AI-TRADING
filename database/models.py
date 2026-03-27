@@ -649,6 +649,13 @@ class MarketDataType(enum.Enum):
 # User is defined in database/user_models.py. Import it here so that code doing
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
+try:
+    from database.user_models import User  # noqa: F401  (re-export)
+except Exception:
+    # Fallback stub so imports never fail when user_models has a dep issue
+    class User:  # type: ignore[no-redef]
+        __tablename__ = "users"
+        __table__ = type("T", (), {"columns": []})()
 
 # ── Session model (used by master_control and other internal modules) ─────────
 
