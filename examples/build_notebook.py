@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
 """
 Build examples/end_to_end.ipynb with all cells executed and outputs embedded.
 Run once; the resulting .ipynb renders on GitHub without needing a kernel.

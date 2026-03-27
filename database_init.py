@@ -1,3 +1,8 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
 import os
 from sqlalchemy import create_engine, Column, Integer, Float, String, Sequence, inspect
 from sqlalchemy.ext.declarative import declarative_base
