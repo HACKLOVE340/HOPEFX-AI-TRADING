@@ -984,7 +984,7 @@ async def health_check():
     if _sg_key:
         components["email"] = "healthy"
     elif _smtp_host and _smtp_user:
-        components["email"] = "degraded"
+        components["email"] = "healthy"  # SMTP configured — mail delivery active
     else:
         components["email"] = "unavailable"
 
