@@ -784,6 +784,11 @@ class HOPEFXBrain:
                     self.risk_manager.filter_signals(signals, self.state), timeout=5.0
                 )
 
+            # Publish signals to RealTimeSignalService so /api/signals/active
+            # reflects live brain activity.
+            for sig in signals[:5]:
+                self._publish_to_signal_service(sig)
+
             # Execute signals with concurrency limit
             semaphore = asyncio.Semaphore(3)  # Max 3 concurrent orders
 
@@ -800,6 +805,57 @@ class HOPEFXBrain:
             logger.warning("Strategy decision timeout")
         except Exception as e:
             logger.error(f"Strategy decision error: {e}")
+
+    def _publish_to_signal_service(self, signal: Dict) -> None:
+        """
+        Push a brain strategy signal into RealTimeSignalService.
+
+        Translates the brain's internal signal dict (action/symbol/size/…)
+        into the SignalService schema so the signal appears on
+        /api/signals/active and triggers alerts/social-feed publishing.
+        Non-blocking — failures are logged and swallowed.
+        """
+        try:
+            from api.signals import SignalDirection, _get_signal_service  # noqa: PLC0415
+
+            action = signal.get("action", "")
+            symbol = signal.get("symbol", "")
+            confidence = float(signal.get("confidence", 0.5))
+            strategy_name = signal.get("strategy", "brain")
+            price = float(signal.get("price", 0.0))
+
+            if not symbol or action not in ("buy", "sell"):
+                return
+
+            direction = (
+                SignalDirection.BUY if action == "buy" else SignalDirection.SELL
+            )
+
+            # Derive SL/TP from signal dict or use conservative defaults
+            entry = float(signal.get("entry_price", price) or price)
+            sl = float(signal.get("stop_loss", entry * (0.995 if action == "buy" else 1.005)))
+            tp = float(signal.get("take_profit", entry * (1.015 if action == "buy" else 0.985)))
+
+            svc = _get_signal_service()
+            svc.generate_signal(
+                symbol=symbol,
+                direction=direction,
+                confidence=confidence,
+                price=price or entry,
+                entry_price=entry,
+                stop_loss=sl,
+                take_profit=tp,
+                timeframe=signal.get("timeframe", "1h"),
+                strategies_agreeing=[strategy_name],
+                total_strategies=1,
+                regime=str(
+                    self.state.market_regime.get(symbol, "unknown")
+                ),
+                session="brain",
+                metadata={"source": "brain", "size": signal.get("size", 0)},
+            )
+        except Exception as exc:
+            logger.debug("Signal service publish failed (non-fatal): %s", exc)
 
     async def _execute_signal(self, signal: Dict):
         """Execute a trading signal - SAFE VERSION"""
