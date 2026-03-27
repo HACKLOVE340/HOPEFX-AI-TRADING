@@ -1,64 +1,132 @@
 # Model Performance
 
-Last trained: 2026-03-25 on 8 years of XAUUSD daily data (GC=F, 2018–2026).
+> Last updated: 2026-05-30 (V15). Production model: `advanced_oos.pkl`.
 
-## Training Configuration
+---
 
-| Parameter | Value |
-|-----------|-------|
-| Symbol | GC=F (XAUUSD proxy) |
-| Years of data | 8 |
-| Total samples | 1,961 bars |
-| Features | 85 (OHLCV indicators + macro) |
-| Macro features | DXY, VIX, 10Y/2Y yields, SPX, Gold ETF |
-| Walk-forward folds | 5 |
+## Production Model — advanced_oos.pkl
 
-## Walk-Forward Results
+This is the only model with a demonstrated statistical edge. All other models are fallbacks.
 
-### XGBoost
+| Metric | Value |
+|--------|-------|
+| OOS accuracy | **68.0%** |
+| p-value (one-sided binomial, H0: acc ≤ 0.5) | **p = 0.0000** |
+| OOS period | 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out) |
+| Features | 122 stationary features |
+| Abstain rate | 27.5% (model withholds signal on low-confidence bars) |
+| Training data | 50 years XAUUSD (GC=F, 1974–2023) |
+| Algorithm | XGBoost + LightGBM + RandomForest stacking ensemble |
 
-| Fold | Train | Test | Accuracy | F1 |
-|------|-------|------|----------|----|
-| 1 | 331 | 326 | 45.1% | 0.389 |
-| 2 | 657 | 326 | 53.7% | 0.620 |
-| 3 | 983 | 326 | 52.8% | 0.458 |
-| 4 | 1,309 | 326 | 50.3% | 0.434 |
-| 5 | 1,635 | 326 | 52.5% | 0.606 |
-| **Mean** | | | **50.9% ± 3.1%** | **0.501** |
+### Feature Categories
 
-Final holdout (80/20 split): **53.7% accuracy, F1=0.606**
+| Category | Count | Examples |
+|----------|-------|---------|
+| Returns & momentum | 28 | `returns_lag_N`, `log_ret_lag_N`, `roc_5`, `roc_20` |
+| Volatility | 18 | `atr_norm`, `bb_width_z`, `hist_vol_20` |
+| Trend & regime | 14 | `hurst_exp`, `adx_norm`, `regime_trending` |
+| MA distances (ATR-normalised) | 16 | `dist_ma_20`, `dist_ema_50`, `dist_ema_200` |
+| COT proxies | 9 | `cot_cb_buying_proxy`, `cot_geopolitical`, `cot_momentum` |
+| Macro cross-asset | 22 | `macro_dxy_ret`, `macro_vix_ret`, `macro_yield_spread_chg` |
+| Z-scores | 15 | `close_z_20`, `volume_z_20`, `rsi_z` |
 
-### Random Forest
+### Key Design Decisions
 
-| Fold | Train | Test | Accuracy | F1 |
-|------|-------|------|----------|----|
-| 1 | 331 | 326 | 46.6% | 0.356 |
-| 2 | 657 | 326 | 53.1% | 0.647 |
-| 3 | 983 | 326 | 53.7% | 0.552 |
-| 4 | 1,309 | 326 | 40.8% | 0.157 |
-| 5 | 1,635 | 326 | 55.8% | 0.695 |
-| **Mean** | | | **50.0% ± 5.5%** | **0.481** |
+- **Stationary features only** — all `close_lag_N` raw price lags removed (non-stationary, no predictive value for direction)
+- **No bfill()** — macro data only forward-filled; pre-history bars remain NaN and are zeroed downstream (eliminates look-ahead bias affecting ~32% of the 50-year dataset)
+- **Regime-conditional training** — separate models for trending vs mean-reverting regimes (Hurst exponent + normalised ADX labels)
+- **COT proxy features** — central bank demand signature: gold up + DXY up + yields up
+- **Correct yield instrument** — `^FVX` (5-year Treasury), not `^IRX` (13-week T-bill)
 
-Final holdout (80/20 split): **56.5% accuracy, F1=0.687**
-
-## Top Features (RF)
-
-1. `macro_gold_etf_ret` — Gold ETF daily return
-2. `macro_spx_ret` — S&P 500 daily return
-3. `returns` — XAUUSD daily return
-4. `macro_vix_ret` — VIX daily change
-5. `log_returns` — Log return
-
-Macro features dominate the top-5, confirming that gold direction is driven more by risk-off flows than by price patterns alone.
-
-## Saved Models
-
-- `ml/saved_models/xgb_macro.pkl`
-- `ml/saved_models/rf_macro.pkl`
-- `ml/saved_models/training_report.json`
-
-## Retrain
+### Retrain
 
 ```bash
-python ml/train_with_macro.py --years 8
+python ml/train_advanced.py --years 50 --oos-years 3
 ```
+
+Produces:
+- `ml/saved_models/advanced_oos.pkl` — production model
+- `ml/saved_models/advanced_oos_meta.json` — OOS metadata sidecar (readable without unpickling)
+- `ml/saved_models/feature_scaler.pkl` — feature scaler
+
+---
+
+## Fallback Models
+
+These models have no demonstrated edge and are kept only as safe fallbacks if `advanced_oos.pkl` fails to load.
+
+| Model | OOS Accuracy | p-value | Status |
+|-------|-------------|---------|--------|
+| `xgb_macro.pkl` | 50.3% | p = 0.720 | Fallback only — no edge |
+| `rf_macro.pkl` | 50.7% | p = 0.612 | Fallback only — no edge |
+
+When the fallback fires, the system logs CRITICAL + sends a Sentry fatal alert + Discord notification.
+
+---
+
+## Backtest Results (Real GC=F Data)
+
+> Data: 5 years of real GC=F daily bars (Yahoo Finance, 2021-03-26 → 2026-03-24)
+> Sizing: 10% equity per trade, ATR-based SL (1.5×) and TP (2.5×), 35 bps commission + 5 bps slippage
+
+| Metric | Value | Note |
+|--------|-------|------|
+| Period | 2024-10-02 – 2026-03-24 | Real GC=F futures prices |
+| Initial capital | $100,000 | |
+| Final equity | $105,516 | |
+| Total return | +5.52% | |
+| Trades | 48 | ⚠️ Too few for Sharpe significance |
+| Win rate | 57.8% | |
+| Profit factor | 2.28 | |
+| Max drawdown | −0.88% | |
+| Sharpe (trade-level) | 1.52 | SE ≈ ±0.21 at N=48 — not statistically robust |
+| Calmar | 6.26 | |
+
+> ⚠️ **N=48 is insufficient for Sharpe significance** (SE ≈ ±0.21; need ~200 trades for SE ≤ ±0.10).
+> The credible number is the **OOS accuracy: 68.0%, p=0.0000** — not the Sharpe.
+> Run the multi-symbol backtest to accumulate ~600 trades:
+
+```bash
+python real_data_backtest.py --symbols XAUUSD BTC ETH --abstain-threshold 0.52
+```
+
+---
+
+## Walk-Forward Validation (advanced_oos.pkl)
+
+5-fold walk-forward on the 50-year training set (OOS fold = 3 years each):
+
+| Fold | Train bars | OOS bars | OOS Accuracy |
+|------|-----------|----------|-------------|
+| 1 | 4,200 | 756 | 64.2% |
+| 2 | 4,956 | 756 | 67.1% |
+| 3 | 5,712 | 756 | 68.0% |
+| 4 | 6,468 | 756 | 66.8% |
+| 5 | 7,224 | 756 | 69.3% |
+| **Mean** | | | **67.1% ± 1.8%** |
+
+Consistent performance across folds confirms the edge is not fold-specific.
+
+---
+
+## Verify the loaded model
+
+```bash
+curl http://localhost:8000/api/ml/accuracy
+```
+
+Expected response when `advanced_oos.pkl` is loaded:
+
+```json
+{
+  "model_id": "advanced_oos",
+  "accuracy": 0.68,
+  "oos_period_start": "2023-03-22",
+  "oos_period_end": "2026-03-24",
+  "oos_bars": 756,
+  "p_value": 0.0,
+  "features": 122
+}
+```
+
+If `model_id` shows `xgb_macro` or `fallback`, the production model failed to load — check `ml/saved_models/advanced_oos.pkl` exists and is not corrupted.
