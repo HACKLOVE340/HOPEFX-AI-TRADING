@@ -217,8 +217,49 @@ async def run() -> None:
         format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%SZ",
     )
+
+    # Validate required environment variables before starting any sub-system
+    _validate_startup_env()
+
     loop = MainLoop()
     await loop.run()
+
+
+def _validate_startup_env() -> None:
+    """
+    Check that all connector hub secrets are present.
+
+    Logs a WARNING for each missing optional var and exits with a clear
+    error message if any hard-required var is absent.
+    """
+    hard_required = [
+        ("OANDA_API_KEY",    "OANDA v20 API key — get from https://www.oanda.com/"),
+        ("OANDA_ACCOUNT_ID", "OANDA account ID — found in your OANDA dashboard"),
+    ]
+    soft_required = [
+        ("REDIS_URL",           "Redis event bus URL (default: redis://localhost:6379/0)"),
+        ("TELEGRAM_BOT_TOKEN",  "Telegram bot token for alerts (optional but recommended)"),
+        ("TELEGRAM_CHAT_ID",    "Telegram chat ID for alerts (optional but recommended)"),
+        ("INITIAL_BALANCE",     "Starting balance for drawdown tracking (default: 100000)"),
+    ]
+
+    missing_hard = []
+    for key, desc in hard_required:
+        if not os.environ.get(key, "").strip():
+            missing_hard.append(f"  {key}: {desc}")
+
+    for key, desc in soft_required:
+        if not os.environ.get(key, "").strip():
+            logger.warning("Missing optional env var %s — %s", key, desc)
+
+    if missing_hard:
+        msg = (
+            "MainLoop: cannot start — missing required environment variables:\n"
+            + "\n".join(missing_hard)
+            + "\n\nCopy .env.example → .env and fill in the missing values."
+        )
+        logger.critical(msg)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

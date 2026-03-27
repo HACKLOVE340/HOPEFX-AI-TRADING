@@ -112,6 +112,85 @@ RECOMMENDED_VARS: List[EnvVar] = [
         required=False,
         description="Sender address for system emails",
     ),
+
+    # ── Connector hub — live trading pipeline ─────────────────────────────────
+    EnvVar(
+        "OANDA_API_KEY",
+        required=False,
+        description="OANDA v20 API key — required for live/paper trading",
+    ),
+    EnvVar(
+        "OANDA_ACCOUNT_ID",
+        required=False,
+        description="OANDA account ID — required for live/paper trading",
+    ),
+    EnvVar(
+        "OANDA_PRACTICE",
+        required=False,
+        description="'true' = paper (practice) account, 'false' = live money",
+        default="true",
+    ),
+    EnvVar(
+        "REDIS_URL",
+        required=False,
+        description="Full Redis URL used by EventBus (default: redis://localhost:6379/0)",
+        default="redis://localhost:6379/0",
+    ),
+    EnvVar(
+        "TELEGRAM_BOT_TOKEN",
+        required=False,
+        description="Telegram bot token for daily P&L alerts and DD breach notifications",
+    ),
+    EnvVar(
+        "TELEGRAM_CHAT_ID",
+        required=False,
+        description="Telegram chat/channel ID to receive alerts",
+    ),
+    EnvVar(
+        "INITIAL_BALANCE",
+        required=False,
+        description="Starting account balance for drawdown calculations (default: 100000)",
+        default="100000",
+    ),
+    EnvVar(
+        "ML_MIN_TRADE_PROB",
+        required=False,
+        description="Minimum ML confidence to generate a signal (default: 0.58)",
+        default="0.58",
+    ),
+    EnvVar(
+        "FIX_CONFIG_FILE",
+        required=False,
+        description="Path to FIX 4.4 session config (copy fix.cfg → fix.cfg.local and fill in)",
+        default="fix.cfg",
+    ),
+    EnvVar(
+        "FIX_SENDER_COMP_ID",
+        required=False,
+        description="FIX SenderCompID assigned by your broker",
+    ),
+    EnvVar(
+        "FIX_TARGET_COMP_ID",
+        required=False,
+        description="FIX TargetCompID (broker identifier)",
+    ),
+    EnvVar(
+        "NEWS_BLACKOUT_BEFORE_MIN",
+        required=False,
+        description="Minutes before a high-impact news event to pause trading (default: 5)",
+        default="5",
+    ),
+    EnvVar(
+        "NEWS_BLACKOUT_AFTER_MIN",
+        required=False,
+        description="Minutes after a high-impact news event to resume trading (default: 5)",
+        default="5",
+    ),
+    EnvVar(
+        "HOPEFX_KILL_SWITCH_TOKEN",
+        required=False,
+        description="HMAC token to deactivate a trading halt via the API",
+    ),
 ]
 
 
