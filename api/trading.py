@@ -39,6 +39,46 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trading", tags=["Trading"])
 
 # ---------------------------------------------------------------------------
+# Kill switch guard
+# Imported lazily so the trading router can be loaded without app.py being
+# fully initialised (e.g. in tests).  The live instance is the module-level
+# `kill_switch` object created in app.py; tests can inject a replacement via
+# the `_set_kill_switch` helper below.
+# ---------------------------------------------------------------------------
+_kill_switch_instance = None
+
+
+def _set_kill_switch(ks) -> None:
+    """Inject a KillSwitch instance (used by tests and app startup)."""
+    global _kill_switch_instance
+    _kill_switch_instance = ks
+
+
+def _get_kill_switch():
+    """Return the active KillSwitch, falling back to the app.py singleton."""
+    global _kill_switch_instance
+    if _kill_switch_instance is not None:
+        return _kill_switch_instance
+    try:
+        from app import kill_switch as _app_ks  # noqa: PLC0415
+
+        _kill_switch_instance = _app_ks
+        return _kill_switch_instance
+    except Exception:
+        return None
+
+
+def _check_kill_switch() -> None:
+    """Raise HTTP 503 immediately if the kill switch is active."""
+    ks = _get_kill_switch()
+    if ks is not None and ks.is_active():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Trading halted — kill switch active: {ks.reason}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Per-user order rate limiting (sliding window, Redis-backed with in-memory fallback)
 # Default: 10 orders per 60 seconds per authenticated user.
 # Override via env: ORDER_RATE_LIMIT and ORDER_RATE_WINDOW.
@@ -492,6 +532,7 @@ async def place_order(
       _route_to_broker()  — broker submission
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
+    _check_kill_switch()          # hard block — must be first
     _check_order_rate_limit(user.sub)
     await _validate_order(order)
     await _apply_risk_checks(order, user.sub)
