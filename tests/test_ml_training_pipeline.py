@@ -223,6 +223,7 @@ def test_advanced_training_report_feature_count(monkeypatch):
 # ── retrain_model.py --smoke ──────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_retrain_model_smoke_exits_zero():
     """retrain_model.py --smoke --advanced completes without error."""
     result = subprocess.run(
