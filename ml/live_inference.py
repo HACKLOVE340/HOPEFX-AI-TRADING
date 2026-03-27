@@ -338,6 +338,30 @@ class AdvancedModelPredictor:
                 logger.debug("MTF feature append failed (non-fatal): %s", mtf_exc)
 
         try:
+            # Align feature columns to what the model was trained on.
+            # Missing features (e.g. macro columns when no FRED key is set)
+            # are filled with 0 (neutral/unknown) so the model still runs.
+            if hasattr(self._model, "feature_names_in_"):
+                expected = list(self._model.feature_names_in_)
+            elif hasattr(self._model, "steps") and hasattr(
+                self._model.steps[0][1], "feature_names_in_"
+            ):
+                expected = list(self._model.steps[0][1].feature_names_in_)
+            else:
+                expected = None
+
+            if expected is not None:
+                missing = [c for c in expected if c not in X.columns]
+                if missing:
+                    logger.debug(
+                        "Filling %d missing features with 0 for %s",
+                        len(missing),
+                        symbol,
+                    )
+                    for col in missing:
+                        X[col] = 0.0
+                X = X[expected]  # enforce column order
+
             # Replace any inf/nan that slipped through
             X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
             proba = self._model.predict_proba(X)
