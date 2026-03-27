@@ -174,11 +174,7 @@ class HeartbeatMonitor:
 
     def critical_alive(self) -> bool:
         """Return True only when every *critical* component is alive."""
-        return all(
-            not s.is_overdue()
-            for s in self._components.values()
-            if s.critical
-        )
+        return all(not s.is_overdue() for s in self._components.values() if s.critical)
 
     # ---------------------------------------------------------------------- #
     # Lifecycle                                                                #
@@ -189,9 +185,7 @@ class HeartbeatMonitor:
         if self._running:
             return
         self._running = True
-        self._task = asyncio.create_task(
-            self._monitor_loop(), name="heartbeat_monitor"
-        )
+        self._task = asyncio.create_task(self._monitor_loop(), name="heartbeat_monitor")
         logger.info(
             "HeartbeatMonitor started (check interval: %.1fs, components: %d)",
             self._check_interval,
@@ -274,6 +268,4 @@ class HeartbeatMonitor:
                 if not status.alive:
                     status.alive = True
                     status.missed_beats = 0
-                    logger.info(
-                        "🟢 Component '%s' heartbeat restored", status.name
-                    )
+                    logger.info("🟢 Component '%s' heartbeat restored", status.name)

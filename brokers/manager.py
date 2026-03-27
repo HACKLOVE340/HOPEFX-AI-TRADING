@@ -42,7 +42,6 @@ from brokers.base import (
     BrokerConnector,
     Order,
     OrderSide,
-    OrderStatus,
     OrderType,
     Position,
 )
@@ -52,6 +51,7 @@ logger = logging.getLogger(__name__)
 # Optional Sentry
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -59,7 +59,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-_MAX_CONSECUTIVE_FAILURES = 5   # before auto-failover to paper
+_MAX_CONSECUTIVE_FAILURES = 5  # before auto-failover to paper
 _PRIMARY_BROKER_ENV = "BROKER_PRIMARY"
 _ENABLE_FIX_ENV = "BROKER_ENABLE_FIX"
 
@@ -133,7 +133,8 @@ class BrokerManager:
 
         logger.info(
             "BrokerManager initialised | primary=%s fix=%s",
-            self._primary_name, enable_fix,
+            self._primary_name,
+            enable_fix,
         )
 
     # ------------------------------------------------------------------
@@ -149,6 +150,7 @@ class BrokerManager:
         BROKER_ENABLE_FIX: "true" to enable FIX 4.4 bridge
         """
         import os
+
         primary = os.environ.get(_PRIMARY_BROKER_ENV, "ibkr").lower()
         enable_fix = os.environ.get(_ENABLE_FIX_ENV, "false").lower() == "true"
         mgr = cls(
@@ -164,6 +166,7 @@ class BrokerManager:
         # Always register paper trading (no external deps)
         try:
             from brokers.paper_trading import PaperTradingBroker
+
             self.register("paper", PaperTradingBroker({}))
         except Exception as exc:
             logger.warning("PaperTradingBroker unavailable: %s", exc)
@@ -171,6 +174,7 @@ class BrokerManager:
         # Register IBKR connector
         try:
             from brokers.ibkr_connector import IBKRConfig, IBKRConnector
+
             cfg = IBKRConfig()
             connector = IBKRConnector(config=cfg, kill_switch=self._kill_switch)
             self.register("ibkr", connector)
@@ -181,6 +185,7 @@ class BrokerManager:
         if self._enable_fix:
             try:
                 from brokers.ibkr_fix_bridge import IBKRFIXBridge
+
                 self._fix_bridge = IBKRFIXBridge.from_env(kill_switch=self._kill_switch)
             except Exception as exc:
                 logger.warning("IBKRFIXBridge unavailable: %s", exc)
@@ -192,7 +197,8 @@ class BrokerManager:
             self._active_name = next(iter(self._brokers))
             logger.warning(
                 "Primary broker '%s' not registered; falling back to '%s'.",
-                self._primary_name, self._active_name,
+                self._primary_name,
+                self._active_name,
             )
         else:
             logger.critical("BrokerManager: no brokers registered.")
@@ -203,13 +209,17 @@ class BrokerManager:
             self._brokers[name.lower()] = broker
             self._consecutive_failures[name.lower()] = 0
             self._last_errors[name.lower()] = None
-        logger.info("BrokerManager: registered broker '%s' (%s)", name, type(broker).__name__)
+        logger.info(
+            "BrokerManager: registered broker '%s' (%s)", name, type(broker).__name__
+        )
 
     def set_active(self, name: str) -> None:
         """Switch the active broker by name."""
         with self._lock:
             if name.lower() not in self._brokers:
-                raise ValueError(f"Broker '{name}' not registered. Available: {list(self._brokers)}")
+                raise ValueError(
+                    f"Broker '{name}' not registered. Available: {list(self._brokers)}"
+                )
             self._active_name = name.lower()
         logger.info("BrokerManager: active broker set to '%s'.", name)
 
@@ -272,7 +282,9 @@ class BrokerManager:
         try:
             ok = broker.connect()
             if ok:
-                logger.info("BrokerManager: primary broker '%s' connected.", self._active_name)
+                logger.info(
+                    "BrokerManager: primary broker '%s' connected.", self._active_name
+                )
             return ok
         except Exception as exc:
             logger.error("BrokerManager: primary connect failed: %s", exc)
@@ -378,7 +390,9 @@ class BrokerManager:
         try:
             positions = broker.get_positions()
         except Exception as exc:
-            logger.error("BrokerManager.close_all_positions: get_positions failed: %s", exc)
+            logger.error(
+                "BrokerManager.close_all_positions: get_positions failed: %s", exc
+            )
             self._capture_sentry(exc)
             return {}
 
@@ -389,7 +403,8 @@ class BrokerManager:
             except Exception as exc:
                 logger.error(
                     "BrokerManager.close_all_positions: close %s failed: %s",
-                    pos.symbol, exc,
+                    pos.symbol,
+                    exc,
                 )
                 self._capture_sentry(exc)
                 results[pos.symbol] = False
@@ -450,7 +465,9 @@ class BrokerManager:
             try:
                 connected = broker.is_connected()
             except Exception as exc:
-                logger.error("BrokerManager.heartbeat: '%s' is_connected() raised: %s", name, exc)
+                logger.error(
+                    "BrokerManager.heartbeat: '%s' is_connected() raised: %s", name, exc
+                )
                 connected = False
 
             # Detect mode (paper vs live)
@@ -538,14 +555,19 @@ class BrokerManager:
         """Increment failure counter for active broker and log."""
         with self._lock:
             name = self._active_name or "unknown"
-            self._consecutive_failures[name] = self._consecutive_failures.get(name, 0) + 1
+            self._consecutive_failures[name] = (
+                self._consecutive_failures.get(name, 0) + 1
+            )
             self._last_errors[name] = str(exc)
             failures = self._consecutive_failures[name]
 
         tb = traceback.format_exc()
         logger.error(
             "BrokerManager: broker '%s' failure #%d: %s\n%s",
-            name, failures, exc, tb,
+            name,
+            failures,
+            exc,
+            tb,
         )
         self._capture_sentry(exc)
 
@@ -556,7 +578,8 @@ class BrokerManager:
                     logger.critical(
                         "BrokerManager: %d consecutive failures on '%s'. "
                         "Auto-failing over to paper trading.",
-                        failures, name,
+                        failures,
+                        name,
                     )
                     self._active_name = "paper"
                     if _SENTRY:
@@ -576,7 +599,8 @@ class BrokerManager:
             if self._consecutive_failures.get(name, 0) > 0:
                 logger.info(
                     "BrokerManager: '%s' recovered after %d failures.",
-                    name, self._consecutive_failures[name],
+                    name,
+                    self._consecutive_failures[name],
                 )
             self._consecutive_failures[name] = 0
             self._last_errors[name] = None

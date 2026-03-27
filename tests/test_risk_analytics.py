@@ -34,14 +34,15 @@ from risk.analytics import (
 # ---------------------------------------------------------------------------
 
 RNG = np.random.default_rng(42)
-RETURNS_NORMAL = RNG.normal(0.0005, 0.01, 500)   # 500 daily returns, ~10% annual vol
-RETURNS_FAT    = RNG.standard_t(df=3, size=500) * 0.01  # fat-tailed
-EQUITY_CURVE   = np.cumprod(1 + RETURNS_NORMAL) * 100_000
+RETURNS_NORMAL = RNG.normal(0.0005, 0.01, 500)  # 500 daily returns, ~10% annual vol
+RETURNS_FAT = RNG.standard_t(df=3, size=500) * 0.01  # fat-tailed
+EQUITY_CURVE = np.cumprod(1 + RETURNS_NORMAL) * 100_000
 
 
 # ---------------------------------------------------------------------------
 # VaR
 # ---------------------------------------------------------------------------
+
 
 class TestComputeVaR:
     def test_returns_var_result(self):
@@ -91,6 +92,7 @@ class TestComputeVaR:
 # Expected Shortfall
 # ---------------------------------------------------------------------------
 
+
 class TestComputeES:
     def test_returns_es_result(self):
         result = compute_es(RETURNS_NORMAL, confidence=0.99)
@@ -120,11 +122,15 @@ class TestComputeES:
 # Monte Carlo slippage
 # ---------------------------------------------------------------------------
 
+
 class TestSimulateSlippage:
     def test_returns_slip_result(self):
         result = simulate_slippage(
-            symbol="XAUUSD", quantity=1.0, side="BUY",
-            mid_price=1950.0, bid_ask_spread_bps=5.0,
+            symbol="XAUUSD",
+            quantity=1.0,
+            side="BUY",
+            mid_price=1950.0,
+            bid_ask_spread_bps=5.0,
         )
         assert isinstance(result, SlippageSimResult)
 
@@ -147,7 +153,7 @@ class TestSimulateSlippage:
 
     def test_wider_spread_higher_slippage(self):
         tight = simulate_slippage("XAUUSD", 1.0, "BUY", 1950.0, bid_ask_spread_bps=2.0)
-        wide  = simulate_slippage("XAUUSD", 1.0, "BUY", 1950.0, bid_ask_spread_bps=20.0)
+        wide = simulate_slippage("XAUUSD", 1.0, "BUY", 1950.0, bid_ask_spread_bps=20.0)
         assert wide.mean_slippage_bps > tight.mean_slippage_bps
 
     def test_expected_cost_positive(self):
@@ -165,6 +171,7 @@ class TestSimulateSlippage:
 # Regime drift
 # ---------------------------------------------------------------------------
 
+
 class TestComputeRegimeDrift:
     def test_stable_regime_low_score(self):
         ref = RNG.normal(0.0005, 0.01, 252)
@@ -174,8 +181,8 @@ class TestComputeRegimeDrift:
         assert not result.regime_changed  # same distribution
 
     def test_volatile_regime_detected(self):
-        ref = RNG.normal(0.0005, 0.005, 252)   # low vol
-        cur = RNG.normal(0.0005, 0.05, 20)     # 10x higher vol
+        ref = RNG.normal(0.0005, 0.005, 252)  # low vol
+        cur = RNG.normal(0.0005, 0.05, 20)  # 10x higher vol
         result = compute_regime_drift(ref, cur, drift_threshold=1.0)
         assert result.regime_changed
         assert result.vol_ratio > 5.0
@@ -196,6 +203,7 @@ class TestComputeRegimeDrift:
 # ---------------------------------------------------------------------------
 # Sharpe ratio
 # ---------------------------------------------------------------------------
+
 
 class TestComputeSharpe:
     def test_returns_sharpe_result(self):
@@ -238,6 +246,7 @@ class TestComputeSharpe:
 # Max drawdown
 # ---------------------------------------------------------------------------
 
+
 class TestComputeMaxDrawdown:
     def test_monotone_increasing_zero_drawdown(self):
         eq = np.linspace(100, 200, 100)
@@ -261,11 +270,15 @@ class TestComputeMaxDrawdown:
 # Pre-trade risk report
 # ---------------------------------------------------------------------------
 
+
 class TestGeneratePreTradeReport:
     def test_returns_report(self):
         report = generate_pre_trade_report(
-            symbol="XAUUSD", side="BUY", quantity=1.0,
-            mid_price=1950.0, returns=RETURNS_NORMAL,
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=1.0,
+            mid_price=1950.0,
+            returns=RETURNS_NORMAL,
             equity_curve=EQUITY_CURVE,
         )
         assert isinstance(report, PreTradeRiskReport)
@@ -273,8 +286,11 @@ class TestGeneratePreTradeReport:
     def test_approved_for_normal_conditions(self):
         # Use very permissive limits to ensure approval
         report = generate_pre_trade_report(
-            symbol="XAUUSD", side="BUY", quantity=0.01,
-            mid_price=1950.0, returns=RETURNS_NORMAL,
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=0.01,
+            mid_price=1950.0,
+            returns=RETURNS_NORMAL,
             equity_curve=EQUITY_CURVE,
             max_var_pct=0.99,
             max_es_pct=0.99,
@@ -288,8 +304,11 @@ class TestGeneratePreTradeReport:
 
     def test_blocked_on_high_slippage_limit(self):
         report = generate_pre_trade_report(
-            symbol="XAUUSD", side="BUY", quantity=1000.0,  # huge qty → high impact
-            mid_price=1950.0, returns=RETURNS_NORMAL,
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=1000.0,  # huge qty → high impact
+            mid_price=1950.0,
+            returns=RETURNS_NORMAL,
             max_slippage_bps=0.001,  # impossibly tight limit
         )
         assert not report.approved
@@ -297,21 +316,35 @@ class TestGeneratePreTradeReport:
 
     def test_to_dict_contains_required_keys(self):
         report = generate_pre_trade_report(
-            symbol="XAUUSD", side="BUY", quantity=1.0,
-            mid_price=1950.0, returns=RETURNS_NORMAL,
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=1.0,
+            mid_price=1950.0,
+            returns=RETURNS_NORMAL,
         )
         d = report.to_dict()
         required = {
-            "symbol", "side", "quantity", "notional_usd",
-            "var_95_conservative", "es_99_conservative",
-            "slippage_p99_bps", "regime_drift_score",
-            "sharpe", "max_drawdown_pct", "approved", "block_reasons",
+            "symbol",
+            "side",
+            "quantity",
+            "notional_usd",
+            "var_95_conservative",
+            "es_99_conservative",
+            "slippage_p99_bps",
+            "regime_drift_score",
+            "sharpe",
+            "max_drawdown_pct",
+            "approved",
+            "block_reasons",
         }
         assert required.issubset(d.keys())
 
     def test_notional_correct(self):
         report = generate_pre_trade_report(
-            symbol="XAUUSD", side="BUY", quantity=2.0,
-            mid_price=1950.0, returns=RETURNS_NORMAL,
+            symbol="XAUUSD",
+            side="BUY",
+            quantity=2.0,
+            mid_price=1950.0,
+            returns=RETURNS_NORMAL,
         )
         assert report.notional_usd == pytest.approx(3900.0, rel=1e-6)

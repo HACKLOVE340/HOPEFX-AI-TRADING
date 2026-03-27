@@ -23,6 +23,7 @@ import pandas as pd
 
 try:
     from scipy import stats as _scipy_stats
+
     SCIPY_AVAILABLE = True
 except ImportError:
     _scipy_stats = None  # type: ignore[assignment]
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BacktestConfig:
     """Backtest configuration"""
+
     start_date: datetime
     end_date: datetime
     symbols: List[str]
@@ -62,6 +64,7 @@ class BacktestConfig:
 @dataclass
 class BacktestResult:
     """Backtest results"""
+
     total_return: float
     total_trades: int
     winning_trades: int
@@ -102,30 +105,27 @@ class BacktestResult:
 
 class HistoricalDataLoader:
     """Load historical data for backtesting"""
-    
+
     def __init__(self, data_source: str = "database"):
         self.data_source = data_source
         self._cache: Dict[str, pd.DataFrame] = {}
-    
+
     async def load_data(
-        self,
-        symbol: str,
-        timeframe: str,
-        start: datetime,
-        end: datetime
+        self, symbol: str, timeframe: str, start: datetime, end: datetime
     ) -> Optional[pd.DataFrame]:
         """Load historical OHLCV data"""
         cache_key = f"{symbol}_{timeframe}_{start}_{end}"
-        
+
         if cache_key in self._cache:
             return self._cache[cache_key]
-        
+
         try:
             # Try database first
             if self.data_source == "database":
                 from database.connection import get_db_manager
+
                 db = get_db_manager()
-                
+
                 if db:
                     # Query database
                     query = """
@@ -136,64 +136,67 @@ class HistoricalDataLoader:
                         AND timestamp BETWEEN :start AND :end
                         ORDER BY timestamp
                     """
-                    
+
                     with db._engine.connect() as conn:
                         df = pd.read_sql(
                             query,
                             conn,
                             params={
-                                'symbol': symbol,
-                                'timeframe': timeframe,
-                                'start': start,
-                                'end': end
-                            }
+                                "symbol": symbol,
+                                "timeframe": timeframe,
+                                "start": start,
+                                "end": end,
+                            },
                         )
-                        
+
                         self._cache[cache_key] = df
                         return df
-            
+
             # Fallback: generate synthetic data for testing
             logger.warning(f"Using synthetic data for {symbol}")
             return self._generate_synthetic_data(symbol, start, end)
-            
+
         except Exception as e:
             logger.error(f"Failed to load data for {symbol}: {e}")
             return None
-    
+
     def _generate_synthetic_data(
-        self,
-        symbol: str,
-        start: datetime,
-        end: datetime
+        self, symbol: str, start: datetime, end: datetime
     ) -> pd.DataFrame:
         """Generate synthetic price data for testing"""
         periods = int((end - start).total_seconds() / 3600)  # Hourly bars
-        
+
         np.random.seed(42)  # Reproducible
-        
+
         # Generate random walk
         returns = np.random.normal(0.0001, 0.001, periods)
         prices = 100 * np.exp(np.cumsum(returns))
-        
+
         # Generate OHLC from close
-        df = pd.DataFrame({
-            'timestamp': pd.date_range(start, periods=periods, freq='H'),
-            'close': prices
-        })
-        
-        df['open'] = df['close'].shift(1)
-        df['high'] = df[['open', 'close']].max(axis=1) * (1 + abs(np.random.normal(0, 0.001, periods)))
-        df['low'] = df[['open', 'close']].min(axis=1) * (1 - abs(np.random.normal(0, 0.001, periods)))
-        df['volume'] = np.random.randint(1000, 10000, periods)
-        
-        df = df.fillna(method='bfill')
-        
+        df = pd.DataFrame(
+            {
+                "timestamp": pd.date_range(start, periods=periods, freq="H"),
+                "close": prices,
+            }
+        )
+
+        df["open"] = df["close"].shift(1)
+        df["high"] = df[["open", "close"]].max(axis=1) * (
+            1 + abs(np.random.normal(0, 0.001, periods))
+        )
+        df["low"] = df[["open", "close"]].min(axis=1) * (
+            1 - abs(np.random.normal(0, 0.001, periods))
+        )
+        df["volume"] = np.random.randint(1000, 10000, periods)
+
+        df = df.fillna(method="bfill")
+
         return df
 
 
 class SimulatedBroker:
     """Broker simulation for backtesting"""
-    
+
     def __init__(self, config: BacktestConfig):
         self.config = config
         self.cash = config.initial_capital
@@ -223,21 +226,22 @@ class SimulatedBroker:
 
         # Record equity
         equity = self.get_equity()
-        self.equity_curve.append({
-            'timestamp': timestamp.isoformat(),
-            'equity': equity,
-            'cash': self.cash,
-            'positions_value': equity - self.cash
-        })
-    
+        self.equity_curve.append(
+            {
+                "timestamp": timestamp.isoformat(),
+                "equity": equity,
+                "cash": self.cash,
+                "positions_value": equity - self.cash,
+            }
+        )
+
     def get_equity(self) -> float:
         """Calculate total equity"""
         positions_value = sum(
-            pos['quantity'] * pos['current_price']
-            for pos in self.positions.values()
+            pos["quantity"] * pos["current_price"] for pos in self.positions.values()
         )
         return self.cash + positions_value
-    
+
     def place_market_order(
         self,
         symbol: str,
@@ -250,77 +254,85 @@ class SimulatedBroker:
         """Simulate market order execution"""
         # Apply slippage (variable model uses bar range)
         slippage = self._calculate_slippage(current_price, bar_high, bar_low)
-        
-        if side == 'buy':
+
+        if side == "buy":
             fill_price = current_price * (1 + slippage)
         else:
             fill_price = current_price * (1 - slippage)
-        
+
         # Calculate cost
         cost = quantity * fill_price
         commission = self.config.commission_per_trade
-        
+
         # Check funds
-        if side == 'buy' and cost + commission > self.cash:
-            return {
-                'success': False,
-                'error': 'Insufficient funds'
-            }
-        
+        if side == "buy" and cost + commission > self.cash:
+            return {"success": False, "error": "Insufficient funds"}
+
         # Execute
-        if side == 'buy':
-            self.cash -= (cost + commission)
-            
+        if side == "buy":
+            self.cash -= cost + commission
+
             if symbol in self.positions:
                 # Add to existing position
                 pos = self.positions[symbol]
-                total_qty = pos['quantity'] + quantity
-                avg_price = (pos['avg_price'] * pos['quantity'] + fill_price * quantity) / total_qty
-                pos['quantity'] = total_qty
-                pos['avg_price'] = avg_price
+                total_qty = pos["quantity"] + quantity
+                avg_price = (
+                    pos["avg_price"] * pos["quantity"] + fill_price * quantity
+                ) / total_qty
+                pos["quantity"] = total_qty
+                pos["avg_price"] = avg_price
             else:
                 # New position
                 self.positions[symbol] = {
-                    'quantity': quantity,
-                    'avg_price': fill_price,
-                    'current_price': current_price,
-                    'side': 'long'
+                    "quantity": quantity,
+                    "avg_price": fill_price,
+                    "current_price": current_price,
+                    "side": "long",
                 }
         else:
             # Sell
-            self.cash += (cost - commission)
-            
+            self.cash += cost - commission
+
             if symbol in self.positions:
                 pos = self.positions[symbol]
-                if pos['quantity'] <= quantity:
+                if pos["quantity"] <= quantity:
                     # Close position
-                    realized_pnl = (fill_price - pos['avg_price']) * pos['quantity']
-                    if pos['side'] == 'short':
+                    realized_pnl = (fill_price - pos["avg_price"]) * pos["quantity"]
+                    if pos["side"] == "short":
                         realized_pnl = -realized_pnl
-                    
-                    self._record_trade(symbol, 'close', pos['quantity'], 
-                                     pos['avg_price'], fill_price, realized_pnl, commission)
+
+                    self._record_trade(
+                        symbol,
+                        "close",
+                        pos["quantity"],
+                        pos["avg_price"],
+                        fill_price,
+                        realized_pnl,
+                        commission,
+                    )
                     del self.positions[symbol]
                 else:
                     # Partial close
-                    pos['quantity'] -= quantity
+                    pos["quantity"] -= quantity
             else:
                 # Short sell
                 self.positions[symbol] = {
-                    'quantity': quantity,
-                    'avg_price': fill_price,
-                    'current_price': current_price,
-                    'side': 'short'
+                    "quantity": quantity,
+                    "avg_price": fill_price,
+                    "current_price": current_price,
+                    "side": "short",
                 }
-        
+
         return {
-            'success': True,
-            'fill_price': fill_price,
-            'quantity': quantity,
-            'commission': commission
+            "success": True,
+            "fill_price": fill_price,
+            "quantity": quantity,
+            "commission": commission,
         }
-    
-    def _calculate_slippage(self, price: float, bar_high: float = 0.0, bar_low: float = 0.0) -> float:
+
+    def _calculate_slippage(
+        self, price: float, bar_high: float = 0.0, bar_low: float = 0.0
+    ) -> float:
         """
         Calculate execution slippage as a fraction of price.
 
@@ -332,16 +344,16 @@ class SimulatedBroker:
         volatility) produce up to 3× the base slippage; narrow bars produce as
         little as 0.5×.
         """
-        if self.config.slippage_model == 'none':
+        if self.config.slippage_model == "none":
             return 0.0
 
-        if self.config.slippage_model == 'fixed':
+        if self.config.slippage_model == "fixed":
             # Gold pip = $0.10; forex pip = $0.0001.
             # Detect gold by price > $100 (gold trades ~$1500–$3000).
             pip = 0.10 if price > 100 else 0.0001
             return (self.config.slippage_pips * pip) / price
 
-        if self.config.slippage_model == 'variable':
+        if self.config.slippage_model == "variable":
             # Base spread: 0.015% (~$0.30 at $2000 gold) — realistic for gold CFD.
             base_slippage = 0.00015
             if price > 0 and bar_high > bar_low:
@@ -359,104 +371,114 @@ class SimulatedBroker:
         # Legacy random fallback — use gold pip
         pip = 0.10 if price > 100 else 0.0001
         return abs(np.random.normal(0, self.config.slippage_pips * pip / price))
-    
-    def _record_trade(self, symbol: str, action: str, quantity: float,
-                     entry_price: float, exit_price: float, 
-                     pnl: float, commission: float):
+
+    def _record_trade(
+        self,
+        symbol: str,
+        action: str,
+        quantity: float,
+        entry_price: float,
+        exit_price: float,
+        pnl: float,
+        commission: float,
+    ):
         """Record completed trade"""
-        self.trades.append({
-            'timestamp': self.current_time.isoformat() if self.current_time else None,
-            'symbol': symbol,
-            'action': action,
-            'quantity': quantity,
-            'entry_price': entry_price,
-            'exit_price': exit_price,
-            'pnl': pnl,
-            'commission': commission,
-            'net_pnl': pnl - commission
-        })
-    
+        self.trades.append(
+            {
+                "timestamp": self.current_time.isoformat()
+                if self.current_time
+                else None,
+                "symbol": symbol,
+                "action": action,
+                "quantity": quantity,
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "pnl": pnl,
+                "commission": commission,
+                "net_pnl": pnl - commission,
+            }
+        )
+
     def update_prices(self, prices: Dict[str, float]):
         """Update position prices for P&L calculation"""
         for symbol, price in prices.items():
             if symbol in self.positions:
-                self.positions[symbol]['current_price'] = price
+                self.positions[symbol]["current_price"] = price
 
 
 class BacktestEngine:
     """
     Event-driven backtesting engine
-    
+
     Features:
     - Realistic execution simulation
     - Multiple strategy support
     - Performance analytics
     - Walk-forward analysis ready
     """
-    
+
     def __init__(self, config: BacktestConfig):
         self.config = config
         self.data_loader = HistoricalDataLoader()
         self.broker = SimulatedBroker(config)
         self.strategies: List[Any] = []
         self.results: Optional[BacktestResult] = None
-        
+
         # Event log
         self.events: List[Dict] = []
-    
+
     def add_strategy(self, strategy: Any):
         """Add strategy to backtest"""
         self.strategies.append(strategy)
-    
+
     async def run(self, progress_callback: Optional[Callable] = None) -> BacktestResult:
         """
         Run backtest
-        
+
         Args:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
-        logger.info(f"Starting backtest: {self.config.start_date} to {self.config.end_date}")
-        
+        logger.info(
+            f"Starting backtest: {self.config.start_date} to {self.config.end_date}"
+        )
+
         # Load data for all symbols
         all_data: Dict[str, pd.DataFrame] = {}
         for symbol in self.config.symbols:
             df = await self.data_loader.load_data(
-                symbol, '1h', 
-                self.config.start_date, 
-                self.config.end_date
+                symbol, "1h", self.config.start_date, self.config.end_date
             )
             if df is not None:
                 all_data[symbol] = df
                 logger.info(f"Loaded {len(df)} bars for {symbol}")
-        
+
         if not all_data:
             raise ValueError("No data loaded for backtest")
-        
+
         # Combine timestamps
-        all_timestamps = sorted(set(
-            ts for df in all_data.values() 
-            for ts in df['timestamp']
-        ))
-        
+        all_timestamps = sorted(
+            set(ts for df in all_data.values() for ts in df["timestamp"])
+        )
+
         total_steps = len(all_timestamps)
-        
+
         # Main backtest loop
         for i, timestamp in enumerate(all_timestamps):
             self.broker.update_time(timestamp)
-            
+
             # Build current price snapshot and bar data for variable slippage
             current_prices: Dict[str, float] = {}
             current_bars: Dict[str, Dict] = {}
             for symbol, df in all_data.items():
-                mask = df['timestamp'] <= timestamp
+                mask = df["timestamp"] <= timestamp
                 if mask.any():
                     row = df[mask].iloc[-1]
-                    current_prices[symbol] = float(row['close'])
+                    current_prices[symbol] = float(row["close"])
                     current_bars[symbol] = {
-                        'high': float(row.get('high', row['close'])),
-                        'low': float(row.get('low', row['close'])),
-                        'open': float(row.get('open', row['close'])),
-                        'close': float(row['close']),
+                        "high": float(row.get("high", row["close"])),
+                        "low": float(row.get("low", row["close"])),
+                        "open": float(row.get("open", row["close"])),
+                        "close": float(row["close"]),
                     }
 
             # Update broker prices
@@ -466,28 +488,28 @@ class BacktestEngine:
             for strategy in self.strategies:
                 try:
                     signals = strategy.generate_signals(
-                        timestamp=timestamp,
-                        prices=current_prices,
-                        data=all_data
+                        timestamp=timestamp, prices=current_prices, data=all_data
                     )
 
                     for signal in signals:
-                        self._process_signal(signal, timestamp, current_prices, current_bars)
+                        self._process_signal(
+                            signal, timestamp, current_prices, current_bars
+                        )
 
                 except Exception as e:
                     logger.error(f"Strategy error at {timestamp}: {e}")
-            
+
             # Progress callback
             if progress_callback and i % 100 == 0:
                 progress_callback(i, total_steps, timestamp)
-        
+
         # Calculate results
         self.results = self._calculate_results()
-        
+
         logger.info(f"Backtest complete: {self.results.total_trades} trades")
-        
+
         return self.results
-    
+
     def _kelly_position_size(
         self,
         signal: Dict,
@@ -504,7 +526,7 @@ class BacktestEngine:
         Falls back to signal['size'] when kelly_fraction=0 or price=0.
         """
         if self.config.kelly_fraction <= 0 or current_price <= 0:
-            return float(signal.get('size', 1.0))
+            return float(signal.get("size", 1.0))
 
         equity = self.broker.get_equity()
         available_cash = self.broker.cash
@@ -512,24 +534,24 @@ class BacktestEngine:
         trades = self.broker.trades
         if len(trades) < 20:
             # Not enough history — use fixed risk_per_trade with ATR stop
-            stop_distance = signal.get('stop_distance', current_price * 0.01)
+            stop_distance = signal.get("stop_distance", current_price * 0.01)
             if stop_distance > 0:
                 risk_dollars = equity * self.config.risk_per_trade
                 qty = risk_dollars / stop_distance
             else:
-                qty = float(signal.get('size', 1.0))
+                qty = float(signal.get("size", 1.0))
         else:
-            wins = [t['net_pnl'] for t in trades if t['net_pnl'] > 0]
-            losses = [abs(t['net_pnl']) for t in trades if t['net_pnl'] <= 0]
+            wins = [t["net_pnl"] for t in trades if t["net_pnl"] > 0]
+            losses = [abs(t["net_pnl"]) for t in trades if t["net_pnl"] <= 0]
             if not wins or not losses:
-                return float(signal.get('size', 1.0))
+                return float(signal.get("size", 1.0))
 
             win_rate = len(wins) / len(trades)
             avg_win = float(np.mean(wins))
             avg_loss = float(np.mean(losses))
 
             if avg_win <= 0:
-                return float(signal.get('size', 1.0))
+                return float(signal.get("size", 1.0))
 
             # Full Kelly → fractional Kelly
             kelly_f = (win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win
@@ -537,7 +559,7 @@ class BacktestEngine:
 
             risk_dollars = equity * min(kelly_f, self.config.risk_per_trade * 2)
 
-            stop_distance = signal.get('stop_distance', current_price * 0.01)
+            stop_distance = signal.get("stop_distance", current_price * 0.01)
             if stop_distance > 0:
                 qty = risk_dollars / stop_distance
             else:
@@ -564,8 +586,8 @@ class BacktestEngine:
         - Kelly-based position sizing (config.kelly_fraction)
         - Realistic slippage using bar high/low
         """
-        symbol = signal.get('symbol')
-        action = signal.get('action')
+        symbol = signal.get("symbol")
+        action = signal.get("action")
 
         if symbol not in prices:
             return
@@ -574,14 +596,16 @@ class BacktestEngine:
 
         # ── R:R filter ────────────────────────────────────────────────────────
         if self.config.min_rr_ratio > 0:
-            stop_dist = signal.get('stop_distance', 0.0)
-            tp_dist = signal.get('tp_distance', 0.0)
+            stop_dist = signal.get("stop_distance", 0.0)
+            tp_dist = signal.get("tp_distance", 0.0)
             if stop_dist > 0 and tp_dist > 0:
                 rr = tp_dist / stop_dist
                 if rr < self.config.min_rr_ratio:
                     logger.debug(
                         "Signal rejected: R:R %.2f < min %.2f for %s",
-                        rr, self.config.min_rr_ratio, symbol,
+                        rr,
+                        self.config.min_rr_ratio,
+                        symbol,
                     )
                     return
 
@@ -591,28 +615,35 @@ class BacktestEngine:
         # ── Bar high/low for variable slippage ────────────────────────────────
         bar_high = bar_low = 0.0
         if bar_data and symbol in bar_data:
-            bar_high = bar_data[symbol].get('high', 0.0)
-            bar_low = bar_data[symbol].get('low', 0.0)
+            bar_high = bar_data[symbol].get("high", 0.0)
+            bar_low = bar_data[symbol].get("low", 0.0)
 
         result = self.broker.place_market_order(
-            symbol, action, quantity, current_price,
-            bar_high=bar_high, bar_low=bar_low,
+            symbol,
+            action,
+            quantity,
+            current_price,
+            bar_high=bar_high,
+            bar_low=bar_low,
         )
 
-        if result['success']:
-            self.events.append({
-                'timestamp': timestamp.isoformat(),
-                'type': 'order_filled',
-                'symbol': symbol,
-                'action': action,
-                'price': result['fill_price'],
-                'quantity': quantity,
-                'rr_ratio': (
-                    signal.get('tp_distance', 0) / signal.get('stop_distance', 1)
-                    if signal.get('stop_distance', 0) > 0 else None
-                ),
-            })
-    
+        if result["success"]:
+            self.events.append(
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "type": "order_filled",
+                    "symbol": symbol,
+                    "action": action,
+                    "price": result["fill_price"],
+                    "quantity": quantity,
+                    "rr_ratio": (
+                        signal.get("tp_distance", 0) / signal.get("stop_distance", 1)
+                        if signal.get("stop_distance", 0) > 0
+                        else None
+                    ),
+                }
+            )
+
     # ------------------------------------------------------------------
     # Monte Carlo simulation
     # ------------------------------------------------------------------
@@ -636,10 +667,10 @@ class BacktestEngine:
         """
         if len(trade_returns) == 0:
             return {
-                'mc_median_final': 1.0,
-                'mc_p5_final': 1.0,
-                'mc_p95_final': 1.0,
-                'mc_ruin_probability': 0.0,
+                "mc_median_final": 1.0,
+                "mc_p5_final": 1.0,
+                "mc_p95_final": 1.0,
+                "mc_ruin_probability": 0.0,
             }
 
         n_trades = len(trade_returns)
@@ -652,7 +683,7 @@ class BacktestEngine:
             equity = 1.0
             ruined = False
             for r in sampled:
-                equity *= (1.0 + r)
+                equity *= 1.0 + r
                 if equity <= ruin_threshold:
                     ruined = True
                     break
@@ -664,10 +695,10 @@ class BacktestEngine:
 
         arr = np.array(final_equities)
         return {
-            'mc_median_final': float(np.median(arr)),
-            'mc_p5_final': float(np.percentile(arr, 5)),
-            'mc_p95_final': float(np.percentile(arr, 95)),
-            'mc_ruin_probability': ruin_count / n_simulations,
+            "mc_median_final": float(np.median(arr)),
+            "mc_p5_final": float(np.percentile(arr, 5)),
+            "mc_p95_final": float(np.percentile(arr, 95)),
+            "mc_ruin_probability": ruin_count / n_simulations,
         }
 
     # ------------------------------------------------------------------
@@ -690,26 +721,26 @@ class BacktestEngine:
           ranging        — low trend, low volatility
         """
         start = max(0, entry_idx - lookback)
-        window = equity_curve[start:entry_idx + 1]
+        window = equity_curve[start : entry_idx + 1]
         if len(window) < 2:
-            return 'ranging'
+            return "ranging"
 
-        prices = np.array([e['equity'] for e in window])
+        prices = np.array([e["equity"] for e in window])
         returns = np.diff(prices) / prices[:-1]
         if len(returns) == 0:
-            return 'ranging'
+            return "ranging"
 
         trend = float(np.mean(returns))
         vol = float(np.std(returns))
         vol_threshold = 0.005  # 0.5% per bar
 
         if vol > vol_threshold:
-            return 'high_vol'
+            return "high_vol"
         if trend > 0.001:
-            return 'trending_bull'
+            return "trending_bull"
         if trend < -0.001:
-            return 'trending_bear'
-        return 'ranging'
+            return "trending_bear"
+        return "ranging"
 
     def _compute_regime_breakdown(
         self,
@@ -721,15 +752,15 @@ class BacktestEngine:
         Each trade's entry regime is classified using the equity curve index.
         """
         regime_trades: Dict[str, List[float]] = {
-            'trending_bull': [],
-            'trending_bear': [],
-            'ranging': [],
-            'high_vol': [],
+            "trending_bull": [],
+            "trending_bear": [],
+            "ranging": [],
+            "high_vol": [],
         }
 
         for i, trade in enumerate(trades):
             regime = self._classify_regime(equity_curve, i)
-            regime_trades[regime].append(trade.get('net_pnl', 0.0))
+            regime_trades[regime].append(trade.get("net_pnl", 0.0))
 
         breakdown: Dict[str, Any] = {}
         for regime, pnls in regime_trades.items():
@@ -737,9 +768,9 @@ class BacktestEngine:
                 continue
             arr = np.array(pnls)
             breakdown[regime] = {
-                'count': len(arr),
-                'win_rate': float(np.mean(arr > 0)),
-                'avg_pnl': float(np.mean(arr)),
+                "count": len(arr),
+                "win_rate": float(np.mean(arr > 0)),
+                "avg_pnl": float(np.mean(arr)),
             }
         return breakdown
 
@@ -768,21 +799,23 @@ class BacktestEngine:
 
         # ── Basic stats ───────────────────────────────────────────────
         total_trades = len(trades)
-        winning_trades = sum(1 for t in trades if t['net_pnl'] > 0)
+        winning_trades = sum(1 for t in trades if t["net_pnl"] > 0)
         losing_trades = total_trades - winning_trades
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
 
-        total_pnl = sum(t['net_pnl'] for t in trades)
-        gross_profit = sum(t['net_pnl'] for t in trades if t['net_pnl'] > 0)
-        gross_loss = sum(t['net_pnl'] for t in trades if t['net_pnl'] < 0)
-        profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else float('inf')
+        total_pnl = sum(t["net_pnl"] for t in trades)
+        gross_profit = sum(t["net_pnl"] for t in trades if t["net_pnl"] > 0)
+        gross_loss = sum(t["net_pnl"] for t in trades if t["net_pnl"] < 0)
+        profit_factor = (
+            abs(gross_profit / gross_loss) if gross_loss != 0 else float("inf")
+        )
 
         initial_equity = self.config.initial_capital
         final_equity = self.broker.get_equity()
         total_return = (final_equity - initial_equity) / initial_equity
 
         # ── Drawdown ──────────────────────────────────────────────────
-        equity_values = [e['equity'] for e in self.broker.equity_curve]
+        equity_values = [e["equity"] for e in self.broker.equity_curve]
         peak = initial_equity
         max_drawdown = 0.0
         for equity in equity_values:
@@ -810,7 +843,7 @@ class BacktestEngine:
         # flat no-trade days suppressing the return std.
         sharpe = 0.0
         sharpe_se = 0.0
-        trade_pnls = np.array([t['net_pnl'] for t in trades], dtype=float)
+        trade_pnls = np.array([t["net_pnl"] for t in trades], dtype=float)
         if len(trade_pnls) >= 2 and np.std(trade_pnls) > 0:
             # Estimate average hold time in days from equity curve length
             n_bars = len(equity_values)
@@ -839,7 +872,11 @@ class BacktestEngine:
         threshold = 0.0
         gains = bar_returns[bar_returns > threshold] - threshold
         losses = threshold - bar_returns[bar_returns <= threshold]
-        omega = float(np.sum(gains) / np.sum(losses)) if np.sum(losses) > 0 else float('inf')
+        omega = (
+            float(np.sum(gains) / np.sum(losses))
+            if np.sum(losses) > 0
+            else float("inf")
+        )
 
         # ── Tail ratio ────────────────────────────────────────────────
         tail_ratio = 0.0
@@ -865,7 +902,7 @@ class BacktestEngine:
         avg_mfe = gross_profit / winning_trades if winning_trades > 0 else 0.0
 
         # ── Statistical significance (t-test vs 0) ────────────────────
-        trade_returns_arr = np.array([t['net_pnl'] for t in trades])
+        trade_returns_arr = np.array([t["net_pnl"] for t in trades])
         t_stat = p_val = 0.0
         is_significant = False
         sample_size = len(trade_returns_arr)
@@ -894,38 +931,45 @@ class BacktestEngine:
         mc = self.run_monte_carlo_simulation(trade_return_fracs)
 
         # ── Regime breakdown ──────────────────────────────────────────
-        regime_breakdown = self._compute_regime_breakdown(trades, self.broker.equity_curve)
+        regime_breakdown = self._compute_regime_breakdown(
+            trades, self.broker.equity_curve
+        )
 
         # ── Aggregate metrics dict ────────────────────────────────────
         metrics: Dict[str, Any] = {
-            'avg_trade_pnl': total_pnl / total_trades,
-            'avg_winning_trade': gross_profit / winning_trades if winning_trades > 0 else 0,
-            'avg_losing_trade': gross_loss / losing_trades if losing_trades > 0 else 0,
-            'max_consecutive_wins': self._max_consecutive(trades, 'win'),
-            'max_consecutive_losses': self._max_consecutive(trades, 'loss'),
-            'recovery_factor': total_return / max_drawdown if max_drawdown > 0 else 0,
-            'sortino_ratio': sortino,
-            'calmar_ratio': calmar,
-            'omega_ratio': omega,
-            'tail_ratio': tail_ratio,
-            'skewness': skewness,
-            'kurtosis': kurtosis,
-            'avg_mae': avg_mae,
-            'avg_mfe': avg_mfe,
-            't_statistic': t_stat,
-            'p_value': p_val,
-            'is_significant': is_significant,
-            'sample_size': sample_size,
+            "avg_trade_pnl": total_pnl / total_trades,
+            "avg_winning_trade": gross_profit / winning_trades
+            if winning_trades > 0
+            else 0,
+            "avg_losing_trade": gross_loss / losing_trades if losing_trades > 0 else 0,
+            "max_consecutive_wins": self._max_consecutive(trades, "win"),
+            "max_consecutive_losses": self._max_consecutive(trades, "loss"),
+            "recovery_factor": total_return / max_drawdown if max_drawdown > 0 else 0,
+            "sortino_ratio": sortino,
+            "calmar_ratio": calmar,
+            "omega_ratio": omega,
+            "tail_ratio": tail_ratio,
+            "skewness": skewness,
+            "kurtosis": kurtosis,
+            "avg_mae": avg_mae,
+            "avg_mfe": avg_mfe,
+            "t_statistic": t_stat,
+            "p_value": p_val,
+            "is_significant": is_significant,
+            "sample_size": sample_size,
             # Trade-level Sharpe metadata
-            'sharpe_trade_level': sharpe,
-            'sharpe_se': sharpe_se,
-            'sharpe_note': (
+            "sharpe_trade_level": sharpe,
+            "sharpe_se": sharpe_se,
+            "sharpe_note": (
                 f"Trade-level Sharpe: mean(net_pnl)/std(net_pnl)*sqrt(252/avg_hold_days). "
                 f"N={total_trades} — SE≈±{sharpe_se:.2f}. "
-                + ("Statistically robust (N≥250)." if total_trades >= 250
-                   else "Not statistically robust — use OOS accuracy as credible number.")
+                + (
+                    "Statistically robust (N≥250)."
+                    if total_trades >= 250
+                    else "Not statistically robust — use OOS accuracy as credible number."
+                )
             ),
-            **{f'mc_{k}': v for k, v in mc.items()},
+            **{f"mc_{k}": v for k, v in mc.items()},
         }
 
         return BacktestResult(
@@ -953,38 +997,44 @@ class BacktestEngine:
             p_value=p_val,
             is_significant=is_significant,
             sample_size=sample_size,
-            mc_median_final=mc['mc_median_final'],
-            mc_p5_final=mc['mc_p5_final'],
-            mc_p95_final=mc['mc_p95_final'],
-            mc_ruin_probability=mc['mc_ruin_probability'],
+            mc_median_final=mc["mc_median_final"],
+            mc_p5_final=mc["mc_p5_final"],
+            mc_p95_final=mc["mc_p95_final"],
+            mc_ruin_probability=mc["mc_ruin_probability"],
             regime_breakdown=regime_breakdown,
         )
-    
+
     def _max_consecutive(self, trades: List[Dict], trade_type: str) -> int:
         """Calculate max consecutive wins or losses"""
         max_streak = 0
         current_streak = 0
-        
+
         for trade in trades:
-            is_win = trade['net_pnl'] > 0
-            
-            if (trade_type == 'win' and is_win) or (trade_type == 'loss' and not is_win):
+            is_win = trade["net_pnl"] > 0
+
+            if (trade_type == "win" and is_win) or (
+                trade_type == "loss" and not is_win
+            ):
                 current_streak += 1
                 max_streak = max(max_streak, current_streak)
             else:
                 current_streak = 0
-        
+
         return max_streak
-    
+
     def generate_report(self) -> str:
         """Generate human-readable backtest report"""
         if not self.results:
             return "No backtest results available"
-        
+
         r = self.results
-        
+
         se_str = f"±{r.sharpe_se:.2f}" if r.sharpe_se > 0 else "n/a"
-        robust_str = "✅ robust" if r.total_trades >= 250 else f"⚠️  N={r.total_trades} (need ≥250)"
+        robust_str = (
+            "✅ robust"
+            if r.total_trades >= 250
+            else f"⚠️  N={r.total_trades} (need ≥250)"
+        )
         report = f"""
 ╔════════════════════════════════════════════════════════════════╗
 ║                    HOPEFX BACKTEST REPORT                       ║
@@ -1021,37 +1071,37 @@ class BacktestEngine:
 NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
       by flat no-trade days and is NOT reported here.
         """
-        
+
         return report
-    
+
     def export_to_json(self, filepath: str):
         """Export results to JSON"""
         if not self.results:
             raise ValueError("No results to export")
-        
+
         data = {
-            'config': {
-                'start_date': self.config.start_date.isoformat(),
-                'end_date': self.config.end_date.isoformat(),
-                'symbols': self.config.symbols,
-                'initial_capital': self.config.initial_capital
+            "config": {
+                "start_date": self.config.start_date.isoformat(),
+                "end_date": self.config.end_date.isoformat(),
+                "symbols": self.config.symbols,
+                "initial_capital": self.config.initial_capital,
             },
-            'results': {
-                'total_return': self.results.total_return,
-                'total_trades': self.results.total_trades,
-                'win_rate': self.results.win_rate,
-                'profit_factor': self.results.profit_factor,
-                'max_drawdown': self.results.max_drawdown,
-                'sharpe_ratio': self.results.sharpe_ratio,
-                'metrics': self.results.metrics
+            "results": {
+                "total_return": self.results.total_return,
+                "total_trades": self.results.total_trades,
+                "win_rate": self.results.win_rate,
+                "profit_factor": self.results.profit_factor,
+                "max_drawdown": self.results.max_drawdown,
+                "sharpe_ratio": self.results.sharpe_ratio,
+                "metrics": self.results.metrics,
             },
-            'equity_curve': self.results.equity_curve,
-            'trades': self.results.trades
+            "equity_curve": self.results.equity_curve,
+            "trades": self.results.trades,
         }
-        
-        with open(filepath, 'w') as f:
+
+        with open(filepath, "w") as f:
             json.dump(data, f, indent=2, default=str)
-        
+
         logger.info(f"Backtest results exported to {filepath}")
 
 
@@ -1061,18 +1111,17 @@ async def run_backtest(
     symbols: List[str],
     start_date: datetime,
     end_date: datetime,
-    initial_capital: float = 100000.0
+    initial_capital: float = 100000.0,
 ) -> BacktestResult:
     """Quick backtest function"""
     config = BacktestConfig(
         start_date=start_date,
         end_date=end_date,
         symbols=symbols,
-        initial_capital=initial_capital
+        initial_capital=initial_capital,
     )
-    
+
     engine = BacktestEngine(config)
     engine.add_strategy(strategy)
-    
-    return await engine.run()
 
+    return await engine.run()

@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 try:
     import pandas as pd  # type: ignore[import]
+
     HAS_PANDAS = True
 except ImportError:
     pd = None  # type: ignore[assignment]
@@ -33,9 +34,9 @@ logger = logging.getLogger(__name__)
 class ChartPattern:
     """Detected chart pattern."""
 
-    pattern_type: str        # e.g. 'head_and_shoulders', 'double_top', etc.
-    direction: str           # 'bullish', 'bearish', 'neutral'
-    confidence: float        # 0.0 – 1.0
+    pattern_type: str  # e.g. 'head_and_shoulders', 'double_top', etc.
+    direction: str  # 'bullish', 'bearish', 'neutral'
+    confidence: float  # 0.0 – 1.0
     start_index: int
     end_index: int
     key_levels: Dict = field(default_factory=dict)
@@ -58,11 +59,12 @@ class ChartPattern:
 # Utility helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_peaks(prices: List[float], window: int = 3) -> List[int]:
     """Return indices of local highs within *window* on each side."""
     peaks = []
     for i in range(window, len(prices) - window):
-        price_window = prices[i - window: i + window + 1]
+        price_window = prices[i - window : i + window + 1]
         if prices[i] == max(price_window):
             peaks.append(i)
     return peaks
@@ -72,7 +74,7 @@ def _find_troughs(prices: List[float], window: int = 3) -> List[int]:
     """Return indices of local lows within *window* on each side."""
     troughs = []
     for i in range(window, len(prices) - window):
-        price_window = prices[i - window: i + window + 1]
+        price_window = prices[i - window : i + window + 1]
         if prices[i] == min(price_window):
             troughs.append(i)
     return troughs
@@ -106,6 +108,7 @@ def _price_symmetry(a: float, b: float, tolerance: float = 0.02) -> bool:
 # Head and Shoulders
 # ---------------------------------------------------------------------------
 
+
 def _detect_head_and_shoulders(
     prices: List[float],
     peaks: List[int],
@@ -131,7 +134,9 @@ def _detect_head_and_shoulders(
         head_h = prices[head_idx]
         right_h = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(left_h, right_h, tolerance=symmetry_tolerance)
+        shoulders_similar = _price_symmetry(
+            left_h, right_h, tolerance=symmetry_tolerance
+        )
         head_higher = head_h > left_h and head_h > right_h
 
         if not (shoulders_similar and head_higher):
@@ -191,7 +196,9 @@ def _detect_inverse_head_and_shoulders(
         head_l = prices[head_idx]
         right_l = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(left_l, right_l, tolerance=symmetry_tolerance)
+        shoulders_similar = _price_symmetry(
+            left_l, right_l, tolerance=symmetry_tolerance
+        )
         head_lower = head_l < left_l and head_l < right_l
 
         if not (shoulders_similar and head_lower):
@@ -230,6 +237,7 @@ def _detect_inverse_head_and_shoulders(
 # Double / Triple Top & Bottom
 # ---------------------------------------------------------------------------
 
+
 def _detect_double_top(
     prices: List[float],
     peaks: List[int],
@@ -248,10 +256,12 @@ def _detect_double_top(
         idx1 = peaks[k]
         idx2 = peaks[k + 1]
 
-        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
+        if not _price_symmetry(
+            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
+        ):
             continue
 
-        trough_prices = prices[idx1: idx2 + 1]
+        trough_prices = prices[idx1 : idx2 + 1]
         support = min(trough_prices)
         height = prices[idx1] - support
         target = support - height
@@ -292,10 +302,12 @@ def _detect_double_bottom(
         idx1 = troughs[k]
         idx2 = troughs[k + 1]
 
-        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
+        if not _price_symmetry(
+            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
+        ):
             continue
 
-        peak_prices = prices[idx1: idx2 + 1]
+        peak_prices = prices[idx1 : idx2 + 1]
         resistance = max(peak_prices)
         height = resistance - prices[idx1]
         target = resistance + height
@@ -321,6 +333,7 @@ def _detect_double_bottom(
 # ---------------------------------------------------------------------------
 # Triangle patterns
 # ---------------------------------------------------------------------------
+
 
 def _classify_triangle(
     high_slope: float,
@@ -399,6 +412,7 @@ def _detect_triangle(
 # Wedge patterns
 # ---------------------------------------------------------------------------
 
+
 def _detect_wedge(
     prices: List[float],
     peaks: List[int],
@@ -453,6 +467,7 @@ def _detect_wedge(
 # ---------------------------------------------------------------------------
 # Channel patterns
 # ---------------------------------------------------------------------------
+
 
 def _compute_channel_params(
     prices: List[float],
@@ -516,6 +531,7 @@ def _detect_channel(
 # Detector class
 # ---------------------------------------------------------------------------
 
+
 class ChartPatternDetector:
     """
     Detects chart patterns in a price series.
@@ -559,9 +575,7 @@ class ChartPatternDetector:
             return None
         return df[cols["close"]].tolist()
 
-    def _peaks_and_troughs(
-        self, closes: List[float]
-    ) -> Tuple[List[int], List[int]]:
+    def _peaks_and_troughs(self, closes: List[float]) -> Tuple[List[int], List[int]]:
         return _find_peaks(closes, self.swing_window), _find_troughs(
             closes, self.swing_window
         )
@@ -610,9 +624,7 @@ class ChartPatternDetector:
         patterns.sort(key=lambda p: p.confidence, reverse=True)
         return patterns
 
-    def detect_head_and_shoulders(
-        self, df: "pd.DataFrame"
-    ) -> List[ChartPattern]:
+    def detect_head_and_shoulders(self, df: "pd.DataFrame") -> List[ChartPattern]:
         """
         Detect Head and Shoulders and Inverse Head and Shoulders patterns.
 
@@ -627,19 +639,19 @@ class ChartPatternDetector:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
         results = []
-        p = _detect_head_and_shoulders(closes, peaks, troughs,
-                                          symmetry_tolerance=self.sensitivity)
+        p = _detect_head_and_shoulders(
+            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
+        )
         if p:
             results.append(p)
-        p = _detect_inverse_head_and_shoulders(closes, peaks, troughs,
-                                               symmetry_tolerance=self.sensitivity)
+        p = _detect_inverse_head_and_shoulders(
+            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
+        )
         if p:
             results.append(p)
         return results
 
-    def detect_double_tops_bottoms(
-        self, df: "pd.DataFrame"
-    ) -> List[ChartPattern]:
+    def detect_double_tops_bottoms(self, df: "pd.DataFrame") -> List[ChartPattern]:
         """
         Detect Double Top and Double Bottom patterns.
 

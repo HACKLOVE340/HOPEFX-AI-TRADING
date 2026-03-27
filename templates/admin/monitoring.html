@@ -67,7 +67,7 @@ async function loadRiskMetrics() {
         const response = await fetch('/api/trading/risk-metrics');
         const metrics = await response.json();
         const el = document.getElementById('risk-metrics');
-        
+
         el.innerHTML = `
             <table>
                 <tr><td>Current Balance:</td><td>$${metrics.current_balance || 0}</td></tr>

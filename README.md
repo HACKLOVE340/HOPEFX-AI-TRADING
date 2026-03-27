@@ -24,7 +24,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 <br/>
 
-> **Institutional-grade AI gold/forex trading platform.**  
+> **Institutional-grade AI gold/forex trading platform.**
 > Event-driven core · 68% OOS ML edge · Macro-aware inference · FIX low-latency · TCA/VaR analytics · One-command Helm deploy · 100% MIT
 
 </div>
@@ -41,8 +41,8 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 | xgb_macro.pkl (fallback) | 50.3% | p=0.720 | 65 stationary | ⚠️ Fallback only |
 | rf_macro.pkl (fallback) | 50.7% | p=0.612 | 65 stationary | ⚠️ Fallback only |
 
-**OOS period**: 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out, never seen during training)  
-**Abstain rate**: 27.5% of bars filtered (model only signals on high-confidence bars)  
+**OOS period**: 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out, never seen during training)
+**Abstain rate**: 27.5% of bars filtered (model only signals on high-confidence bars)
 **Significance**: p=0.0000 — the null hypothesis (accuracy ≤ 50%) is rejected at any conventional threshold
 
 The 68% result is the only number that matters for live deployment decisions. The basic model at 50.3% has no demonstrated edge and is kept only as a safe fallback if the advanced model fails to load.
@@ -51,7 +51,7 @@ The 68% result is the only number that matters for live deployment decisions. Th
 
 ## Backtest Results — XAUUSD (Real GC=F Data)
 
-> **Data**: 5 years of real GC=F daily bars (Yahoo Finance, 2021-03-26 → 2026-03-24)  
+> **Data**: 5 years of real GC=F daily bars (Yahoo Finance, 2021-03-26 → 2026-03-24)
 > **Sizing**: 10% equity per trade, ATR-based stop (1.5×) and take-profit (2.5×), 35 bps commission + 5 bps slippage
 
 ![Equity Curve](examples/results/equity_curve.png)
@@ -70,8 +70,8 @@ The 68% result is the only number that matters for live deployment decisions. Th
 | Calmar ratio | 6.26 | |
 | ML accuracy (test set) | 53.9% | |
 
-> ⚠️ **N=45 trades is insufficient for Sharpe significance** (SE ≈ ±0.54, need ~170 trades for SE ≤ ±0.3).  
-> The credible performance number is the **OOS accuracy: 68.0%, p=0.0000** — not the Sharpe.  
+> ⚠️ **N=45 trades is insufficient for Sharpe significance** (SE ≈ ±0.54, need ~170 trades for SE ≤ ±0.3).
+> The credible performance number is the **OOS accuracy: 68.0%, p=0.0000** — not the Sharpe.
 > Do not commit live capital until 30+ days of OANDA paper trading is complete.
 
 **Reproduce:**

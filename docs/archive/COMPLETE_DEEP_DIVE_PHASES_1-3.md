@@ -229,7 +229,7 @@ host = os.getenv('API_HOST', '0.0.0.0')
 host = os.getenv('API_HOST', '127.0.0.1')
 ```
 
-**Impact:** 
+**Impact:**
 - Development: localhost only (secure)
 - Production: set API_HOST=0.0.0.0 explicitly
 - Follows security best practices

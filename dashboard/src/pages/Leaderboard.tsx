@@ -29,11 +29,11 @@ export function Leaderboard() {
       {/* Top 3 Podium */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {RANKINGS.slice(0, 3).map((trader, idx) => (
-          <div 
+          <div
             key={trader.rank}
             className={`relative bg-slate-900 rounded-lg border p-6 text-center ${
-              idx === 0 ? 'border-yellow-500/50 order-2' : 
-              idx === 1 ? 'border-slate-400/50 order-1' : 
+              idx === 0 ? 'border-yellow-500/50 order-2' :
+              idx === 1 ? 'border-slate-400/50 order-1' :
               'border-amber-700/50 order-3'
             }`}
           >

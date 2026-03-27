@@ -64,7 +64,7 @@ TypeError: RiskConfig.__init__() got an unexpected keyword argument 'max_positio
 
 ## Test Results
 
-**Before:** 14+ test failures  
+**Before:** 14+ test failures
 **After:** All 9 strategy tests passing ✅
 
 ```

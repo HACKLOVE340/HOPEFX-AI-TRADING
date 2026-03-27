@@ -186,13 +186,13 @@ from typing import Optional, Dict
 
 class MeanReversionStrategy(BaseStrategy):
     """Mean reversion trading strategy."""
-    
-    def __init__(self, symbol: str, timeframe: str, 
+
+    def __init__(self, symbol: str, timeframe: str,
                  lookback: int = 20, std_dev: float = 2.0):
         super().__init__(symbol, timeframe)
         self.lookback = lookback
         self.std_dev = std_dev
-    
+
     def generate_signal(self, data: Dict) -> Optional[Dict]:
         # Implementation here
         pass
@@ -209,11 +209,11 @@ from typing import Any
 
 class BaseMLModel(ABC):
     """Base class for ML models."""
-    
+
     @abstractmethod
     def train(self, X, y):
         pass
-    
+
     @abstractmethod
     def predict(self, X):
         pass
@@ -225,7 +225,7 @@ EOF
 Choose your path and let me know:
 
 **A.** "Let's add testing" → I'll create complete test suite
-**B.** "Let's add strategies" → I'll create 5+ new strategies  
+**B.** "Let's add strategies" → I'll create 5+ new strategies
 **C.** "Let's add ML" → I'll implement ML infrastructure
 **D.** "Let's add brokers" → I'll integrate real brokers
 **E.** "Let's add backtesting" → I'll build backtesting engine

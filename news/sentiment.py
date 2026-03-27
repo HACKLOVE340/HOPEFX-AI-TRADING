@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Try importing sentiment libraries
 try:
     from textblob import TextBlob
+
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
@@ -32,6 +33,7 @@ except ImportError:
 
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
     VADER_AVAILABLE = True
 except ImportError:
     VADER_AVAILABLE = False
@@ -40,6 +42,7 @@ except ImportError:
 
 class SentimentLabel(Enum):
     """Sentiment classification labels"""
+
     VERY_NEGATIVE = "very_negative"
     NEGATIVE = "negative"
     NEUTRAL = "neutral"
@@ -52,6 +55,7 @@ class SentimentScore:
     """
     Represents sentiment analysis results
     """
+
     polarity: float  # -1 (negative) to +1 (positive)
     subjectivity: float  # 0 (objective) to 1 (subjective)
     confidence: float  # 0 to 1
@@ -61,11 +65,11 @@ class SentimentScore:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'polarity': self.polarity,
-            'subjectivity': self.subjectivity,
-            'confidence': self.confidence,
-            'label': self.label.value,
-            'compound_score': self.compound_score
+            "polarity": self.polarity,
+            "subjectivity": self.subjectivity,
+            "confidence": self.confidence,
+            "label": self.label.value,
+            "compound_score": self.compound_score,
         }
 
     def is_bullish(self, threshold: float = 0.1) -> bool:
@@ -88,7 +92,9 @@ class SentimentAnalyzer:
 
     def __init__(self):
         if not TEXTBLOB_AVAILABLE:
-            raise ImportError("TextBlob is required. Install with: pip install textblob")
+            raise ImportError(
+                "TextBlob is required. Install with: pip install textblob"
+            )
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def analyze(self, text: str) -> SentimentScore:
@@ -119,7 +125,7 @@ class SentimentAnalyzer:
                 polarity=polarity,
                 subjectivity=subjectivity,
                 confidence=confidence,
-                label=label
+                label=label,
             )
 
         except Exception as e:
@@ -129,7 +135,7 @@ class SentimentAnalyzer:
                 polarity=0.0,
                 subjectivity=0.5,
                 confidence=0.0,
-                label=SentimentLabel.NEUTRAL
+                label=SentimentLabel.NEUTRAL,
             )
 
     def _get_label(self, polarity: float) -> SentimentLabel:
@@ -161,7 +167,7 @@ class SentimentAnalyzer:
             polarity=avg_polarity,
             subjectivity=avg_subjectivity,
             confidence=avg_confidence,
-            label=self._get_label(avg_polarity)
+            label=self._get_label(avg_polarity),
         )
 
 
@@ -172,15 +178,42 @@ class FinancialSentimentAnalyzer:
 
     # Financial keywords and their sentiment weights
     BULLISH_KEYWORDS = {
-        'surge', 'soar', 'rally', 'gain', 'profit', 'growth', 'bullish',
-        'upgrade', 'breakthrough', 'record', 'outperform', 'beat',
-        'strong', 'robust', 'solid', 'positive', 'optimistic'
+        "surge",
+        "soar",
+        "rally",
+        "gain",
+        "profit",
+        "growth",
+        "bullish",
+        "upgrade",
+        "breakthrough",
+        "record",
+        "outperform",
+        "beat",
+        "strong",
+        "robust",
+        "solid",
+        "positive",
+        "optimistic",
     }
 
     BEARISH_KEYWORDS = {
-        'plunge', 'crash', 'fall', 'loss', 'decline', 'bearish',
-        'downgrade', 'miss', 'underperform', 'weak', 'disappointing',
-        'negative', 'pessimistic', 'concern', 'risk', 'warning'
+        "plunge",
+        "crash",
+        "fall",
+        "loss",
+        "decline",
+        "bearish",
+        "downgrade",
+        "miss",
+        "underperform",
+        "weak",
+        "disappointing",
+        "negative",
+        "pessimistic",
+        "concern",
+        "risk",
+        "warning",
     }
 
     def __init__(self, use_vader: bool = True):
@@ -213,20 +246,20 @@ class FinancialSentimentAnalyzer:
             # Get VADER sentiment if available
             if self.vader:
                 scores = self.vader.polarity_scores(combined_text)
-                polarity = scores['compound']  # -1 to 1
+                polarity = scores["compound"]  # -1 to 1
 
                 # Calculate confidence from positive, negative, neutral scores
-                confidence = max(scores['pos'], scores['neg'], scores['neu'])
+                confidence = max(scores["pos"], scores["neg"], scores["neu"])
 
                 # Subjectivity estimation (higher when strong pos/neg)
-                subjectivity = 1 - scores['neu']
+                subjectivity = 1 - scores["neu"]
 
                 return SentimentScore(
                     polarity=polarity,
                     subjectivity=subjectivity,
                     confidence=confidence,
                     label=self._get_label(polarity),
-                    compound_score=polarity
+                    compound_score=polarity,
                 )
             else:
                 # Fallback to keyword-based analysis
@@ -238,7 +271,7 @@ class FinancialSentimentAnalyzer:
                 polarity=0.0,
                 subjectivity=0.5,
                 confidence=0.0,
-                label=SentimentLabel.NEUTRAL
+                label=SentimentLabel.NEUTRAL,
             )
 
     def _keyword_analysis(self, text: str) -> SentimentScore:
@@ -265,7 +298,7 @@ class FinancialSentimentAnalyzer:
             polarity=polarity,
             subjectivity=subjectivity,
             confidence=confidence,
-            label=self._get_label(polarity)
+            label=self._get_label(polarity),
         )
 
     def _get_label(self, polarity: float) -> SentimentLabel:
@@ -291,25 +324,23 @@ class FinancialSentimentAnalyzer:
         # Simple regex-based entity extraction
         # In production, use spaCy or similar NLP library
 
-        entities = {
-            'companies': [],
-            'currencies': [],
-            'instruments': []
-        }
+        entities = {"companies": [], "currencies": [], "instruments": []}
 
         # Common currency pairs
-        currency_pattern = r'\b([A-Z]{3}/[A-Z]{3}|[A-Z]{6})\b'
+        currency_pattern = r"\b([A-Z]{3}/[A-Z]{3}|[A-Z]{6})\b"
         currencies = re.findall(currency_pattern, text)
-        entities['currencies'] = list(set(currencies))
+        entities["currencies"] = list(set(currencies))
 
         # Stock symbols (simplified)
-        symbol_pattern = r'\b[A-Z]{1,5}\b(?=\s+(?:stock|shares|equity))'
+        symbol_pattern = r"\b[A-Z]{1,5}\b(?=\s+(?:stock|shares|equity))"
         symbols = re.findall(symbol_pattern, text)
-        entities['instruments'] = list(set(symbols))
+        entities["instruments"] = list(set(symbols))
 
         return entities
 
-    def analyze_with_entities(self, text: str, title: str = "") -> Tuple[SentimentScore, Dict]:
+    def analyze_with_entities(
+        self, text: str, title: str = ""
+    ) -> Tuple[SentimentScore, Dict]:
         """Analyze sentiment and extract entities"""
         sentiment = self.analyze(text, title)
         entities = self.extract_entities(f"{title} {text}")

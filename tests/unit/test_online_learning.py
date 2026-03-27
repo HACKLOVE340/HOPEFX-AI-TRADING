@@ -29,6 +29,7 @@ import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _make_features(n: int = 1, n_cols: int = 10) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     data = rng.normal(0, 1, (n, n_cols))
@@ -42,9 +43,11 @@ def _make_labels(n: int, seed: int = 0) -> np.ndarray:
 
 # ── DriftDetector ─────────────────────────────────────────────────────────────
 
+
 class TestDriftDetector:
     def setup_method(self):
         from research.pipeline.online_learning import DriftDetector
+
         self._cls = DriftDetector
 
     def test_no_drift_on_stable_errors(self):
@@ -52,7 +55,7 @@ class TestDriftDetector:
         det = self._cls(delta=0.005, threshold=200.0)
         rng = np.random.default_rng(1)
         for _ in range(50):
-            y    = rng.integers(0, 2, 10).astype(float)
+            y = rng.integers(0, 2, 10).astype(float)
             prob = np.clip(rng.normal(0.5, 0.05, 10), 0.01, 0.99)
             det.update(y, prob)
         assert det.drift_count == 0
@@ -62,12 +65,12 @@ class TestDriftDetector:
         rng = np.random.default_rng(2)
         # Feed stable errors first
         for _ in range(50):
-            y    = rng.integers(0, 2, 10).astype(float)
+            y = rng.integers(0, 2, 10).astype(float)
             prob = np.clip(rng.normal(0.5, 0.02, 10), 0.01, 0.99)
             det.update(y, prob)
         # Inject catastrophic errors (all wrong)
         for _ in range(30):
-            y    = np.ones(10)
+            y = np.ones(10)
             prob = np.full(10, 0.01)  # predicts 0 when truth is 1 → high loss
             det.update(y, prob)
         assert det.drift_count >= 1
@@ -87,10 +90,12 @@ class TestDriftDetector:
 
 # ── IncrementalXGBoost ────────────────────────────────────────────────────────
 
+
 class TestIncrementalXGBoost:
     def setup_method(self):
         try:
             from research.pipeline.online_learning import IncrementalXGBoost
+
             self._cls = IncrementalXGBoost
         except ImportError:
             pytest.skip("xgboost not available")
@@ -134,10 +139,12 @@ class TestIncrementalXGBoost:
 
 # ── OnlineLearnerStore ────────────────────────────────────────────────────────
 
+
 class TestOnlineLearnerStore:
     def setup_method(self):
         try:
             from research.pipeline.online_learning import OnlineLearnerStore
+
             self._cls = OnlineLearnerStore
         except ImportError:
             pytest.skip("xgboost not available")
@@ -207,10 +214,12 @@ class TestOnlineLearnerStore:
 
 # ── Signal engine integration ─────────────────────────────────────────────────
 
+
 class TestOnlineLearningSignalEngine:
     def test_flag_off_returns_none_store(self, monkeypatch):
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import core.signal_engine as se
+
         se._online_learner_store = None
         store = se._get_online_learner_store()
         assert store is None
@@ -218,6 +227,7 @@ class TestOnlineLearningSignalEngine:
     def test_flag_on_returns_store_instance(self, monkeypatch):
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "true")
         import core.signal_engine as se
+
         se._online_learner_store = None
         store = se._get_online_learner_store()
         assert store is not None
@@ -226,6 +236,7 @@ class TestOnlineLearningSignalEngine:
     def test_notify_fill_noop_when_flag_off(self, monkeypatch):
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "false")
         import core.signal_engine as se
+
         se._online_learner_store = None
         X = _make_features(1, 8)
         # Must not raise
@@ -234,9 +245,11 @@ class TestOnlineLearningSignalEngine:
     def test_notify_fill_calls_on_fill_when_flag_on(self, monkeypatch):
         monkeypatch.setenv("FEATURE_ONLINE_LEARNING", "true")
         import core.signal_engine as se
+
         se._online_learner_store = None
 
         from unittest.mock import MagicMock
+
         mock_store = MagicMock()
         mock_store.on_fill.return_value = False
         se._online_learner_store = mock_store
@@ -252,15 +265,15 @@ class TestOnlineLearningSignalEngine:
 
     def test_blend_formula_correctness(self):
         """0.7 * 0.8 + 0.3 * 0.6 = 0.74"""
-        adv_prob    = 0.8
+        adv_prob = 0.8
         online_prob = 0.6
-        expected    = 0.7 * adv_prob + 0.3 * online_prob
+        expected = 0.7 * adv_prob + 0.3 * online_prob
         assert abs(expected - 0.74) < 1e-9
 
     def test_blend_neutral_when_online_is_neutral(self):
         """When online_prob=0.5, blend should be closer to advanced_prob."""
-        adv_prob    = 0.8
+        adv_prob = 0.8
         online_prob = 0.5
-        blended     = 0.7 * adv_prob + 0.3 * online_prob
+        blended = 0.7 * adv_prob + 0.3 * online_prob
         assert blended > 0.5
         assert blended < adv_prob

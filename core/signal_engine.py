@@ -31,15 +31,18 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+
 # ── MacroStore (populated at startup by init_macro_store) ─────────────────────
 # Imported lazily so the signal engine can start even if ml is unavailable.
 def _get_macro_store() -> Optional[Any]:
     """Return the module-level MacroStore singleton, or None if unavailable."""
     try:
         from ml.macro_store import macro_store
+
         return macro_store
     except Exception:
         return None
+
 
 # ── Advanced ML predictor (122-feature, 68% OOS accuracy) ────────────────────
 try:
@@ -58,11 +61,13 @@ _online_learner_store: Optional[Any] = None
 # ── Deep ensemble store (Phase 4 — LSTM/Transformer/TCN stacking) ────────────
 _deep_ensemble_store: Optional[Any] = None
 
+
 def _get_deep_ensemble_store() -> Optional[Any]:
     """Return the module-level DeepEnsembleStore singleton, loading on first call."""
     global _deep_ensemble_store
     try:
         from config.feature_flags import flags
+
         if not flags.DEEP_ENSEMBLE:
             return None
     except Exception:
@@ -70,12 +75,14 @@ def _get_deep_ensemble_store() -> Optional[Any]:
     if _deep_ensemble_store is None:
         try:
             from research.pipeline.models_ensemble import DeepEnsembleStore
+
             store = DeepEnsembleStore()
             if store.load():
                 _deep_ensemble_store = store
                 logger.info(
                     "DeepEnsembleStore active (OOS=%.1f%%, p=%.4f)",
-                    store.oos_accuracy * 100, store.p_value,
+                    store.oos_accuracy * 100,
+                    store.p_value,
                 )
             else:
                 # Store a sentinel so we don't retry on every tick
@@ -86,11 +93,13 @@ def _get_deep_ensemble_store() -> Optional[Any]:
     # Return None for the sentinel (False) so callers get a clean None
     return _deep_ensemble_store if _deep_ensemble_store else None
 
+
 def _get_online_learner_store() -> Optional[Any]:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
     try:
         from config.feature_flags import flags
+
         if not flags.ONLINE_LEARNING:
             return None
     except Exception:
@@ -98,17 +107,20 @@ def _get_online_learner_store() -> Optional[Any]:
     if _online_learner_store is None:
         try:
             from research.pipeline.online_learning import OnlineLearnerStore
+
             _online_learner_store = OnlineLearnerStore()
             logger.info("OnlineLearnerStore initialised (Phase 3)")
         except Exception as exc:
             logger.debug("OnlineLearnerStore init failed: %s", exc)
     return _online_learner_store
 
+
 def _get_anomaly_store() -> Optional[Any]:
     """Return the module-level AnomalyWeightStore singleton, creating it on first call."""
     global _anomaly_store
     try:
         from config.feature_flags import flags
+
         if not flags.ANOMALY_WEIGHTING:
             return None
     except Exception:
@@ -116,6 +128,7 @@ def _get_anomaly_store() -> Optional[Any]:
     if _anomaly_store is None:
         try:
             from research.pipeline.anomaly import AnomalyWeightStore
+
             _anomaly_store = AnomalyWeightStore()
             logger.info("AnomalyWeightStore initialised (Phase 2)")
         except Exception as exc:
@@ -143,7 +156,8 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 
 
 async def _fetch_market_data(
-    symbol: str, app_state: Any = None,
+    symbol: str,
+    app_state: Any = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Fetch latest OHLCV data for a symbol.
@@ -233,7 +247,9 @@ async def run_signal_engine(app_state: Any) -> None:
 
 
 def _compute_signal(
-    brain: Any, data: Dict[str, Any], symbol: str,
+    brain: Any,
+    data: Dict[str, Any],
+    symbol: str,
 ) -> Optional[Dict[str, Any]]:
     """
     Run StrategyBrain and return a signal dict, or None if no consensus.
@@ -297,7 +313,8 @@ def _build_ohlcv_df(data: Dict[str, Any]) -> "pd.DataFrame":
 
 
 def _fetch_macro_df(
-    ohlcv_df: "pd.DataFrame", symbol: str,
+    ohlcv_df: "pd.DataFrame",
+    symbol: str,
 ) -> Optional["pd.DataFrame"]:
     """
     Align MacroStore series to the OHLCV hourly index.
@@ -352,7 +369,8 @@ def _fetch_macro_df(
 
 
 def _fetch_mtf_df(
-    ohlcv_df: "pd.DataFrame", app_state: Any = None,
+    ohlcv_df: "pd.DataFrame",
+    app_state: Any = None,
 ) -> Optional[Any]:
     """
     Fetch MTF regime features from MTFFusionStore if available and enabled.
@@ -362,6 +380,7 @@ def _fetch_mtf_df(
     """
     try:
         from config.feature_flags import flags
+
         if not flags.MTF_FUSION:
             return None
     except Exception:
@@ -373,6 +392,7 @@ def _fetch_mtf_df(
         # Module-level singleton fallback
         try:
             from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+
             store = _MTF_STORE_SINGLETON
         except ImportError:
             return None
@@ -388,7 +408,9 @@ def _fetch_mtf_df(
 
 
 def _compute_ml_probability(
-    data: Dict[str, Any], symbol: str, base_confidence: float,
+    data: Dict[str, Any],
+    symbol: str,
+    base_confidence: float,
     app_state: Any = None,
 ) -> tuple:
     """
@@ -411,9 +433,11 @@ def _compute_ml_probability(
         if adv_predictor is not None and adv_predictor.is_available:
             ohlcv_df = _build_ohlcv_df(data)
             macro_df = _fetch_macro_df(ohlcv_df, symbol)
-            mtf_df   = _fetch_mtf_df(ohlcv_df, app_state=app_state)
+            mtf_df = _fetch_mtf_df(ohlcv_df, app_state=app_state)
             prob = adv_predictor.predict_proba(
-                ohlcv_df, macro_df=macro_df, symbol=symbol,
+                ohlcv_df,
+                macro_df=macro_df,
+                symbol=symbol,
                 mtf_df=mtf_df,
             )
 
@@ -429,7 +453,10 @@ def _compute_ml_probability(
                         prob = 0.5 + (prob - 0.5) * anomaly_weight
                         logger.debug(
                             "Phase2 anomaly: weight=%.2f %s %.4f→%.4f",
-                            anomaly_weight, symbol, prob_before, prob,
+                            anomaly_weight,
+                            symbol,
+                            prob_before,
+                            prob,
                         )
                 except Exception as aw_exc:
                     logger.debug("Anomaly weighting failed (non-fatal): %s", aw_exc)
@@ -442,7 +469,9 @@ def _compute_ml_probability(
                 try:
                     prob = online_store.blend(prob, ohlcv_df)
                     logger.debug(
-                        "Phase3 online blend: %s → %.4f", symbol, prob,
+                        "Phase3 online blend: %s → %.4f",
+                        symbol,
+                        prob,
                     )
                 except Exception as ol_exc:
                     logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
@@ -453,15 +482,18 @@ def _compute_ml_probability(
                 try:
                     prob = deep_store.blend(prob, ohlcv_df)
                     logger.debug(
-                        "Phase4 deep blend: %s → %.4f", symbol, prob,
+                        "Phase4 deep blend: %s → %.4f",
+                        symbol,
+                        prob,
                     )
                 except Exception as de_exc:
                     logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
 
             logger.debug(
-                "ML chain (%s) %s: final=%.4f "
-                "[macro=%s mtf=%s anomaly_w=%.2f]",
-                adv_predictor.version, symbol, prob,
+                "ML chain (%s) %s: final=%.4f " "[macro=%s mtf=%s anomaly_w=%.2f]",
+                adv_predictor.version,
+                symbol,
+                prob,
                 "yes" if macro_df is not None else "no",
                 "yes" if mtf_df is not None else "no",
                 anomaly_weight,
@@ -552,12 +584,14 @@ def get_signal_engine_status() -> Dict[str, Any]:
     # Phase 1: MTF
     try:
         from config.feature_flags import flags
+
         status["phase1_mtf_enabled"] = getattr(flags, "MTF_FUSION", True)
     except Exception:
         status["phase1_mtf_enabled"] = None
 
     try:
         from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+
         if _MTF_STORE_SINGLETON is not None:
             status["phase1_mtf"] = _MTF_STORE_SINGLETON.status()
         else:
@@ -648,6 +682,7 @@ async def _publish_and_broadcast(
     # Discord community bot — post signal embed to configured channel
     try:
         from notifications.discord_bot import discord_signal_bot
+
         await discord_signal_bot.post_signal(signal_payload)
     except Exception as discord_exc:
         logger.debug("Discord signal post failed: %s", discord_exc)
@@ -672,16 +707,19 @@ async def _execute_if_approved(
     # execution engine's PreTradeGate is also active.
     try:
         from core.live_trading_gate import get_gate
+
         gate_result = get_gate().check()
         if not gate_result.allowed:
             logger.warning(
-                "Auto-trade blocked by LiveTradingGate: %s", gate_result.reason,
+                "Auto-trade blocked by LiveTradingGate: %s",
+                gate_result.reason,
             )
             return
     except Exception as _gate_exc:
         # Gate unavailable → fail safe: block the trade.
         logger.error(
-            "LiveTradingGate check raised an exception — blocking trade: %s", _gate_exc,
+            "LiveTradingGate check raised an exception — blocking trade: %s",
+            _gate_exc,
         )
         return
 
@@ -712,7 +750,8 @@ async def _execute_if_approved(
             assessment: Any = risk_manager.assess_risk(account_info, positions_dicts)
             if not assessment.can_trade:
                 logger.info(
-                    "Auto-trade blocked by risk manager: %s", assessment.messages,
+                    "Auto-trade blocked by risk manager: %s",
+                    assessment.messages,
                 )
                 return
 
@@ -728,7 +767,9 @@ async def _execute_if_approved(
             if ml_prob < _ML_MIN_PROB:
                 logger.info(
                     "Auto-trade skipped: ML prob %.3f < threshold %.3f (%s)",
-                    ml_prob, _ML_MIN_PROB, symbol,
+                    ml_prob,
+                    _ML_MIN_PROB,
+                    symbol,
                 )
                 return
 
@@ -745,17 +786,19 @@ async def _execute_if_approved(
             if sl_price is None or tp_price is None:
                 # Compute ATR from recent highs/lows if available in data
                 try:
-                    highs = data.get("highs", [])
-                    lows  = data.get("lows",  [])
-                    closes_list = data.get("prices", [entry])
+                    highs = data.get("highs", [])  # noqa: F821
+                    lows = data.get("lows", [])  # noqa: F821
+                    closes_list = data.get("prices", [entry])  # noqa: F821
                     if len(highs) >= 14 and len(lows) >= 14:
                         import numpy as _np
+
                         h = _np.array(highs[-15:], dtype=float)
-                        l = _np.array(lows[-15:],  dtype=float)
+                        l = _np.array(lows[-15:], dtype=float)  # noqa: E741
                         c = _np.array(closes_list[-15:], dtype=float)
-                        tr = _np.maximum(h[1:] - l[1:],
-                             _np.maximum(abs(h[1:] - c[:-1]),
-                                         abs(l[1:] - c[:-1])))
+                        tr = _np.maximum(
+                            h[1:] - l[1:],
+                            _np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
+                        )
                         atr = float(_np.mean(tr[-14:]))
                     else:
                         # Fallback: 0.8% of price (typical gold daily range)
@@ -770,12 +813,21 @@ async def _execute_if_approved(
                         tp_price = entry - atr * tp_atr_mult
                     logger.debug(
                         "ATR-based SL/TP: entry=%.2f atr=%.2f sl=%.2f tp=%.2f",
-                        entry, atr, sl_price, tp_price,
+                        entry,
+                        atr,
+                        sl_price,
+                        tp_price,
                     )
                 except Exception as _atr_exc:
-                    logger.debug("ATR SL/TP calc failed, using pct fallback: %s", _atr_exc)
-                    sl_price = sl_price or (entry * 0.985 if direction.upper() == "BUY" else entry * 1.015)
-                    tp_price = tp_price or (entry * 1.03  if direction.upper() == "BUY" else entry * 0.97)
+                    logger.debug(
+                        "ATR SL/TP calc failed, using pct fallback: %s", _atr_exc
+                    )
+                    sl_price = sl_price or (
+                        entry * 0.985 if direction.upper() == "BUY" else entry * 1.015
+                    )
+                    tp_price = tp_price or (
+                        entry * 1.03 if direction.upper() == "BUY" else entry * 0.97
+                    )
 
             # ── ML-scaled signal strength ─────────────────────────────────────
             # Pass ML probability as signal_strength so Kelly sizing scales up
@@ -785,10 +837,11 @@ async def _execute_if_approved(
             # ── Volatility estimate from recent returns ────────────────────────
             try:
                 import numpy as _np2
-                _prices = data.get("prices", [entry])
+
+                _prices = data.get("prices", [entry])  # noqa: F821
                 if len(_prices) >= 20:
                     _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
-                    _vol = float(_np2.std(_rets)) * (252 ** 0.5)
+                    _vol = float(_np2.std(_rets)) * (252**0.5)
                 else:
                     _vol = 0.15  # gold annualised vol baseline
             except Exception:
@@ -878,7 +931,8 @@ async def _tick(app_state: Any) -> None:
 
         # 1. Fetch OHLCV
         data: Optional[Dict[str, Any]] = await _fetch_market_data(
-            symbol, app_state=app_state,
+            symbol,
+            app_state=app_state,
         )
         if not data:
             continue
@@ -894,7 +948,10 @@ async def _tick(app_state: Any) -> None:
 
         # 3. ML probability enrichment (advanced model with macro + MTF features)
         ml_probability, model_ver = _compute_ml_probability(
-            data, symbol, base_confidence, app_state=app_state,
+            data,
+            symbol,
+            base_confidence,
+            app_state=app_state,
         )
 
         # 4. Build signal payload

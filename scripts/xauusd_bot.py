@@ -33,14 +33,14 @@ logger = logging.getLogger('xauusd_bot')
 
 class PaperBroker:
     """Simple paper broker for testing - no real money."""
-    
+
     def __init__(self, initial_balance=10000.0):
         self.balance = initial_balance
         self.equity = initial_balance
         self.positions = {}
         self.trades = []
         self.price = 2000.0  # Starting XAUUSD price
-        
+
     def get_price(self, symbol):
         """Simulate realistic XAUUSD price movement."""
         # Random walk with mean reversion around 2000
@@ -52,12 +52,12 @@ class PaperBroker:
             'mid': self.price,
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
-    
+
     def place_order(self, symbol, side, qty, order_type='market'):
         """Simulate order execution."""
         price_data = self.get_price(symbol)
         fill_price = price_data['ask'] if side == 'buy' else price_data['bid']
-        
+
         trade = {
             'id': f"trade_{len(self.trades)}",
             'symbol': symbol,
@@ -67,7 +67,7 @@ class PaperBroker:
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'pnl': 0.0
         }
-        
+
         if side == 'buy':
             cost = fill_price * qty
             if cost > self.balance:
@@ -86,15 +86,15 @@ class PaperBroker:
             else:
                 logger.warning("No position to close")
                 return None
-        
+
         self.trades.append(trade)
         logger.info(f"Order filled: {side} {qty} {symbol} @ {fill_price:.2f}")
         return trade
-    
+
     def get_position(self, symbol):
         """Get current position."""
         return self.positions.get(symbol)
-    
+
     def get_unrealized_pnl(self, symbol):
         """Calculate unrealized P&L."""
         if symbol not in self.positions:
@@ -106,21 +106,21 @@ class PaperBroker:
 
 class SimpleMLModel:
     """Dummy ML model for demonstration - replace with real LSTM/XGBoost."""
-    
+
     def __init__(self):
         self.price_history = []
         self.prediction_history = []
-        
+
     def predict(self, price_data):
         """Generate simple prediction based on momentum."""
         self.price_history.append(price_data['mid'])
         if len(self.price_history) < 5:
             return {'signal': 'neutral', 'confidence': 0.5, 'target': price_data['mid']}
-        
+
         # Simple momentum: if price rising for 3 ticks, predict up
         recent = self.price_history[-5:]
         momentum = sum(1 for i in range(1, len(recent)) if recent[i] > recent[i-1])
-        
+
         if momentum >= 3:
             signal = 'buy'
             confidence = 0.6 + (momentum - 3) * 0.1
@@ -133,7 +133,7 @@ class SimpleMLModel:
             signal = 'neutral'
             confidence = 0.5
             target = price_data['mid']
-            
+
         prediction = {
             'signal': signal,
             'confidence': min(0.95, confidence),
@@ -146,7 +146,7 @@ class SimpleMLModel:
 
 class XAUUSDBot:
     """Working XAUUSD paper trading bot."""
-    
+
     def __init__(self, mode='paper', capital=10000.0, duration_minutes=60):
         self.mode = mode
         self.capital = capital
@@ -162,37 +162,37 @@ class XAUUSDBot:
             'max_drawdown': 0.0,
             'peak_equity': capital
         }
-        
+
     def run(self):
         """Main trading loop."""
         logger.info(f"Starting XAUUSD Bot - Mode: {self.mode}, Capital: ${self.capital:.2f}")
         logger.info(f"Running for {self.duration} minutes...")
-        
+
         self.running = True
         start_time = time.time()
         end_time = start_time + (self.duration * 60)
-        
+
         try:
             while self.running and time.time() < end_time:
                 self._tick()
                 time.sleep(5)  # 5-second ticks for demo
-                
+
         except KeyboardInterrupt:
             logger.info("Shutdown requested")
         finally:
             self._shutdown()
-            
+
     def _tick(self):
         """Process one tick."""
         # Get price
         price_data = self.broker.get_price('XAUUSD')
-        
+
         # Get ML prediction
         pred = self.model.predict(price_data)
-        
+
         # Get current position
         position = self.broker.get_position('XAUUSD')
-        
+
         # Trading logic
         if position is None and pred['signal'] == 'buy' and pred['confidence'] > 0.6:
             # Enter long
@@ -200,7 +200,7 @@ class XAUUSDBot:
             self.broker.place_order('XAUUSD', 'buy', qty)
             self.stats['trades'] += 1
             logger.info(f"🔵 BUY signal (conf: {pred['confidence']:.2f}) @ {price_data['mid']:.2f}")
-            
+
         elif position and position['side'] == 'long' and pred['signal'] == 'sell':
             # Exit long
             qty = position['qty']
@@ -212,22 +212,22 @@ class XAUUSDBot:
                 else:
                     self.stats['losses'] += 1
             logger.info(f"🔴 SELL signal @ {price_data['mid']:.2f} (P&L: ${trade.get('pnl', 0):.2f})")
-        
+
         # Update equity tracking
         unrealized = self.broker.get_unrealized_pnl('XAUUSD')
         current_equity = self.broker.balance + unrealized
-        
+
         if current_equity > self.stats['peak_equity']:
             self.stats['peak_equity'] = current_equity
-        
+
         drawdown = (self.stats['peak_equity'] - current_equity) / self.stats['peak_equity']
         if drawdown > self.stats['max_drawdown']:
             self.stats['max_drawdown'] = drawdown
-        
+
         # Log status every 30 seconds
         if int(time.time()) % 30 == 0:
             self._log_status(price_data, pred, position, current_equity)
-            
+
     def _log_status(self, price, pred, position, equity):
         """Log current status."""
         pos_str = f"Position: {position['side']} {position['qty']} @ {position['entry']:.2f}" if position else "Position: None"
@@ -238,13 +238,13 @@ class XAUUSDBot:
             f"Equity: ${equity:.2f} | "
             f"P&L: ${self.stats['total_pnl']:.2f}"
         )
-        
+
     def _shutdown(self):
         """Graceful shutdown."""
         logger.info("=" * 60)
         logger.info("SHUTDOWN COMPLETE - FINAL RESULTS")
         logger.info("=" * 60)
-        
+
         # Close any open position
         position = self.broker.get_position('XAUUSD')
         if position:
@@ -252,17 +252,17 @@ class XAUUSDBot:
             trade = self.broker.place_order('XAUUSD', 'sell', position['qty'])
             if trade:
                 self.stats['total_pnl'] += trade['pnl']
-        
+
         # Print stats
         win_rate = (self.stats['wins'] / self.stats['trades'] * 100) if self.stats['trades'] > 0 else 0
-        
+
         logger.info(f"Total Trades: {self.stats['trades']}")
         logger.info(f"Wins: {self.stats['wins']} | Losses: {self.stats['losses']}")
         logger.info(f"Win Rate: {win_rate:.1f}%")
         logger.info(f"Total P&L: ${self.stats['total_pnl']:.2f}")
         logger.info(f"Max Drawdown: {self.stats['max_drawdown']*100:.2f}%")
         logger.info(f"Final Equity: ${self.broker.equity:.2f}")
-        
+
         # Save results
         results = {
             'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -272,7 +272,7 @@ class XAUUSDBot:
             'final_equity': self.broker.equity,
             'trades': self.broker.trades
         }
-        
+
         results_file = Path('results/xauusd_paper_results.json')
         results_file.parent.mkdir(exist_ok=True)
         with open(results_file, 'w') as f:
@@ -285,36 +285,36 @@ def main():
         description='HOPEFX XAUUSD Paper Trading Bot - Alpha Prototype'
     )
     parser.add_argument(
-        '--mode', 
-        choices=['paper'], 
+        '--mode',
+        choices=['paper'],
         default='paper',
         help='Trading mode (paper only for now)'
     )
     parser.add_argument(
-        '--symbol', 
+        '--symbol',
         default='XAUUSD',
         help='Trading symbol (default: XAUUSD)'
     )
     parser.add_argument(
-        '--capital', 
-        type=float, 
+        '--capital',
+        type=float,
         default=10000.0,
         help='Initial capital (default: 10000)'
     )
     parser.add_argument(
-        '--duration', 
-        type=int, 
+        '--duration',
+        type=int,
         default=60,
         help='Duration in minutes (default: 60)'
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.mode != 'paper':
         print("⚠️  WARNING: Only paper mode is implemented!")
         print("Live trading is NOT available in this alpha version.")
         return 1
-    
+
     print("=" * 60)
     print("HOPEFX XAUUSD Paper Trading Bot")
     print("Alpha Prototype - Educational Use Only")
@@ -326,13 +326,13 @@ def main():
     print("-" * 60)
     print("Press Ctrl+C to stop")
     print("=" * 60)
-    
+
     bot = XAUUSDBot(
         mode=args.mode,
         capital=args.capital,
         duration_minutes=args.duration
     )
-    
+
     bot.run()
     return 0
 
@@ -341,7 +341,7 @@ if __name__ == '__main__':
     sys.exit(main())
 '''
 
-with open('/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py', 'w') as f:
+with open("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py", "w") as f:
     f.write(xauusd_bot_content)
 
 print("✅ scripts/xauusd_bot.py created - REAL working paper trading bot")

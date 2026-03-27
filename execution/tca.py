@@ -119,7 +119,9 @@ class TCAEngine:
     """Real-time execution quality tracking with I-Star model."""
 
     def __init__(
-        self, impact_model: MarketImpactModel | None = None, window_size: int = 1000,
+        self,
+        impact_model: MarketImpactModel | None = None,
+        window_size: int = 1000,
     ) -> None:
         self.impact_model = impact_model or MarketImpactModel()
         self.window_size = window_size
@@ -297,7 +299,11 @@ class TCAEngine:
         return metrics
 
     async def _get_benchmark_price(
-        self, symbol: str, benchmark: BenchmarkType, start: datetime, end: datetime,
+        self,
+        symbol: str,
+        benchmark: BenchmarkType,
+        start: datetime,
+        end: datetime,
     ) -> Decimal:
         """Get benchmark price."""
         if benchmark == BenchmarkType.ARRIVAL:

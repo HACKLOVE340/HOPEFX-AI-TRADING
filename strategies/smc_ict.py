@@ -52,7 +52,8 @@ class SMCICTStrategy(BaseStrategy):
         self.liquidity_threshold = params.get("liquidity_threshold", 0.002)  # 0.2%
         self.structure_lookback = params.get("structure_lookback", 50)
         self.ote_fibonacci = params.get(
-            "ote_fibonacci", [0.62, 0.705, 0.79],
+            "ote_fibonacci",
+            [0.62, 0.705, 0.79],
         )  # OTE levels
 
         # State tracking
@@ -153,12 +154,14 @@ class SMCICTStrategy(BaseStrategy):
             if market_structure.get("trend") == "bullish":
                 # Check for bullish order block support
                 bullish_ob = self._price_near_level(
-                    current_price, order_blocks.get("bullish", []),
+                    current_price,
+                    order_blocks.get("bullish", []),
                 )
 
                 # Check for bullish FVG fill
                 bullish_fvg = self._price_in_fvg(
-                    current_price, fair_value_gaps.get("bullish", []),
+                    current_price,
+                    fair_value_gaps.get("bullish", []),
                 )
 
                 # Check if in discount zone (good for longs)
@@ -166,7 +169,8 @@ class SMCICTStrategy(BaseStrategy):
 
                 # Check if at OTE level
                 at_ote = self._price_near_level(
-                    current_price, ote_levels.get("bullish", []),
+                    current_price,
+                    ote_levels.get("bullish", []),
                 )
 
                 # Liquidity swept below
@@ -201,12 +205,14 @@ class SMCICTStrategy(BaseStrategy):
             elif market_structure.get("trend") == "bearish":
                 # Check for bearish order block resistance
                 bearish_ob = self._price_near_level(
-                    current_price, order_blocks.get("bearish", []),
+                    current_price,
+                    order_blocks.get("bearish", []),
                 )
 
                 # Check for bearish FVG fill
                 bearish_fvg = self._price_in_fvg(
-                    current_price, fair_value_gaps.get("bearish", []),
+                    current_price,
+                    fair_value_gaps.get("bearish", []),
                 )
 
                 # Check if in premium zone (good for shorts)
@@ -214,7 +220,8 @@ class SMCICTStrategy(BaseStrategy):
 
                 # Check if at OTE level
                 at_ote = self._price_near_level(
-                    current_price, ote_levels.get("bearish", []),
+                    current_price,
+                    ote_levels.get("bearish", []),
                 )
 
                 # Liquidity swept above
@@ -452,7 +459,9 @@ class SMCICTStrategy(BaseStrategy):
             return {"zone": "neutral", "level": 0}
 
     def _calculate_ote_levels(
-        self, prices: List[Dict], structure: Dict,
+        self,
+        prices: List[Dict],
+        structure: Dict,
     ) -> Dict[str, List[float]]:
         """Calculate Optimal Trade Entry levels (Fibonacci retracement)"""
         try:
@@ -485,7 +494,10 @@ class SMCICTStrategy(BaseStrategy):
             return {"bullish": [], "bearish": []}
 
     def _price_near_level(
-        self, price: float, levels: List[float], threshold: float = 0.001,
+        self,
+        price: float,
+        levels: List[float],
+        threshold: float = 0.001,
     ) -> bool:
         """Check if price is near any of the given levels"""
         for level in levels:

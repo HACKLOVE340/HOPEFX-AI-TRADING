@@ -15,6 +15,7 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
+
 # JWT signing secret — read from SECURITY_JWT_SECRET (preferred) or JWT_SECRET_KEY.
 # No hardcoded fallback: a missing or placeholder secret raises RuntimeError at
 # token-creation time so the failure is loud and immediate.
@@ -68,6 +69,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
 # runs.  We bypass passlib entirely and call bcrypt directly.
 try:
     import bcrypt as _bcrypt_lib
+
     _BCRYPT_DIRECT = True
 except ImportError:
     _BCRYPT_DIRECT = False
@@ -112,7 +114,9 @@ def hash_password(password: str) -> str:
     """Hash a password with bcrypt (SHA-256 pre-hash, cost factor 12)."""
     prepared = _prepare_password(password)
     if _BCRYPT_DIRECT:
-        return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
+        return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode(
+            "utf-8"
+        )
     # passlib fallback (older bcrypt versions)
     return pwd_context.hash(prepared.decode("ascii"))
 

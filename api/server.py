@@ -60,7 +60,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
     _ALLOWED_SYMBOLS = frozenset(
         os.getenv(
-            "ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
+            "ALLOWED_SYMBOLS",
+            "XAUUSD,EURUSD,GBPUSD,USDJPY,BTCUSD,AUDUSD,USDCHF",
         ).split(","),
     )
     _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
@@ -184,7 +185,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         """Prometheus metrics"""
         registry = get_metrics_registry()
         return PlainTextResponse(
-            content=registry.export_prometheus(), media_type="text/plain",
+            content=registry.export_prometheus(),
+            media_type="text/plain",
         )
 
     # Trading endpoints
@@ -242,7 +244,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         # Server-side quantity validation
         if request.quantity <= 0 or request.quantity > _MAX_QTY:
             raise HTTPException(
-                status_code=400, detail=f"Quantity must be > 0 and <= {_MAX_QTY}",
+                status_code=400,
+                detail=f"Quantity must be > 0 and <= {_MAX_QTY}",
             )
 
         # Side validation
@@ -336,7 +339,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     # System control
     @app.post("/api/v1/system/shutdown")
     async def shutdown_system(
-        background_tasks: BackgroundTasks, user=Depends(_require_admin),
+        background_tasks: BackgroundTasks,
+        user=Depends(_require_admin),
     ):
         """Shutdown the trading system. Requires: role >= 'admin'."""
         if not trading_app:
@@ -364,7 +368,11 @@ async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=
         return
 
     config = uvicorn.Config(
-        app, host=host, port=port, log_level="info", access_log=True,
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        access_log=True,
     )
 
     server = uvicorn.Server(config)

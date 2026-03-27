@@ -354,7 +354,10 @@ class BrokerConnector(ABC):
 
     @abstractmethod
     def get_market_data(
-        self, symbol: str, timeframe: str = "1h", limit: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Get market data (OHLCV).

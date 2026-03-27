@@ -272,12 +272,16 @@ class RandomForestTradingClassifier(BaseMLModel):
         """
         importance_dict = self.get_feature_importance_dict()
         sorted_features = sorted(
-            importance_dict.items(), key=lambda x: x[1], reverse=True,
+            importance_dict.items(),
+            key=lambda x: x[1],
+            reverse=True,
         )
         return sorted_features[:n]
 
     def evaluate_detailed(
-        self, X_test: np.ndarray, y_test: np.ndarray,
+        self,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
     ) -> Dict[str, Any]:
         """
         Detailed evaluation with classification report.
@@ -308,7 +312,9 @@ class RandomForestTradingClassifier(BaseMLModel):
         # Calculate metrics
         accuracy = accuracy_score(y_test_encoded, predictions)
         precision, recall, f1, support = precision_recall_fscore_support(
-            y_test_encoded, predictions, average="weighted",
+            y_test_encoded,
+            predictions,
+            average="weighted",
         )
 
         # Confusion matrix
@@ -321,7 +327,10 @@ class RandomForestTradingClassifier(BaseMLModel):
             target_names = [str(i) for i in np.unique(y_test)]
 
         class_report = classification_report(
-            y_test_encoded, predictions, target_names=target_names, output_dict=True,
+            y_test_encoded,
+            predictions,
+            target_names=target_names,
+            output_dict=True,
         )
 
         return {
@@ -368,7 +377,12 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         # Grid search
         grid_search = GridSearchCV(
-            self.model, param_grid, cv=cv, scoring="accuracy", n_jobs=-1, verbose=1,
+            self.model,
+            param_grid,
+            cv=cv,
+            scoring="accuracy",
+            n_jobs=-1,
+            verbose=1,
         )
 
         grid_search.fit(X_train, y_train)

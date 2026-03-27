@@ -41,7 +41,8 @@ _results: Dict[str, dict] = {}
 
 class BacktestRequest(BaseModel):
     strategy: str = Field(
-        ..., description="Strategy name (e.g. 'MovingAverageCrossover')",
+        ...,
+        description="Strategy name (e.g. 'MovingAverageCrossover')",
     )
     symbol: str = Field(..., min_length=1, max_length=20)
     start_date: str = Field(..., description="ISO date string, e.g. '2023-01-01'")
@@ -222,7 +223,8 @@ _wf_results: Dict[str, dict] = {}
 
 
 def _generate_mock_walk_forward(
-    strategy: str = "MovingAverageCrossover", symbol: str = "XAU/USD",
+    strategy: str = "MovingAverageCrossover",
+    symbol: str = "XAU/USD",
 ) -> dict:
     """Generate demo walk-forward data when no real results exist."""
     import math
@@ -289,7 +291,9 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
     """Return the most recent walk-forward result, or demo data if none exist."""
     if _wf_results:
         latest = sorted(
-            _wf_results.values(), key=lambda r: r.get("created_at", ""), reverse=True,
+            _wf_results.values(),
+            key=lambda r: r.get("created_at", ""),
+            reverse=True,
         )[0]
         return latest
     return _generate_mock_walk_forward()

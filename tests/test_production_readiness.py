@@ -40,18 +40,21 @@ def _jwt(monkeypatch, val: str = "z" * 48) -> None:
 
 # ── 1. App imports with only JWT secret ──────────────────────────────────────
 
+
 def test_app_imports_with_only_jwt_secret(monkeypatch):
     """App must import and register routes with only SECURITY_JWT_SECRET."""
     _jwt(monkeypatch)
     import importlib
     import app as _app
+
     importlib.reload(_app)  # re-run module-level code with patched env
-    assert len(_app.app.routes) > 100, (
-        f"Expected >100 routes, got {len(_app.app.routes)}"
-    )
+    assert (
+        len(_app.app.routes) > 100
+    ), f"Expected >100 routes, got {len(_app.app.routes)}"
 
 
 # ── 2-3. SQLite vs PostgreSQL engine kwargs ───────────────────────────────────
+
 
 def test_sqlite_engine_no_pool_kwargs(monkeypatch, tmp_path):
     """SQLite engine must not receive pool_size/max_overflow."""
@@ -87,49 +90,60 @@ def test_postgres_engine_gets_pool_kwargs():
 
 # ── 4. All critical routers have /api/* prefix ────────────────────────────────
 
-@pytest.mark.parametrize("module,expected_prefix", [
-    ("api.ml",          "/api/ml/"),
-    ("api.admin",       "/api/admin/"),
-    ("api.trading",     "/api/trading/"),
-    ("api.macro",       "/api/macro/"),
-    ("api.watchlist",   "/api/watchlist/"),
-    ("api.calendar",    "/api/calendar/"),
-    ("api.alerts",      "/api/alerts/"),
-    ("api.performance", "/api/performance/"),
-    ("api.broker",      "/api/broker/"),
-    ("api.profiles",    "/api/profiles/"),
-])
+
+@pytest.mark.parametrize(
+    "module,expected_prefix",
+    [
+        ("api.ml", "/api/ml/"),
+        ("api.admin", "/api/admin/"),
+        ("api.trading", "/api/trading/"),
+        ("api.macro", "/api/macro/"),
+        ("api.watchlist", "/api/watchlist/"),
+        ("api.calendar", "/api/calendar/"),
+        ("api.alerts", "/api/alerts/"),
+        ("api.performance", "/api/performance/"),
+        ("api.broker", "/api/broker/"),
+        ("api.profiles", "/api/profiles/"),
+    ],
+)
 def test_router_has_api_prefix(module, expected_prefix, monkeypatch):
     """Each critical router must have routes starting with /api/."""
     _jwt(monkeypatch)
     import importlib
+
     mod = importlib.import_module(module)
     paths = [r.path for r in mod.router.routes if hasattr(r, "path")]
-    assert any(p.startswith(expected_prefix) for p in paths), (
-        f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
-    )
+    assert any(
+        p.startswith(expected_prefix) for p in paths
+    ), f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
 
 
 # ── 5. Auth router prefix ─────────────────────────────────────────────────────
+
 
 def test_auth_router_prefix(monkeypatch):
     """Auth router must be at /api/auth/* to match frontend baseURL=/api."""
     _jwt(monkeypatch)
     from auth.router import router
+
     paths = [r.path for r in router.routes if hasattr(r, "path")]
-    assert all(p.startswith("/api/auth/") for p in paths), (
-        f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
-    )
+    assert all(
+        p.startswith("/api/auth/") for p in paths
+    ), f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
 
 
 # ── 6-8. Startup validator edge cases ────────────────────────────────────────
 
+
 def test_change_me_placeholder_rejected_in_dev(monkeypatch):
     """CHANGE_ME placeholder rejected even in development mode."""
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
+    monkeypatch.setenv(
+        "SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret"
+    )
 
     from config.startup_validator import validate_environment, StartupValidationError
+
     with pytest.raises(StartupValidationError):
         validate_environment(strict=False)
 
@@ -140,6 +154,7 @@ def test_short_secret_rejected(monkeypatch):
     monkeypatch.setenv("SECURITY_JWT_SECRET", "tooshort")
 
     from config.startup_validator import validate_environment, StartupValidationError
+
     with pytest.raises(StartupValidationError) as exc_info:
         validate_environment(strict=False)
     assert "32" in str(exc_info.value) or "TOO_SHORT" in str(exc_info.value)
@@ -155,6 +170,7 @@ def test_production_redis_url_required_not_redis_host(monkeypatch):
     monkeypatch.delenv("REDIS_URL", raising=False)
 
     from config.startup_validator import validate_environment, StartupValidationError
+
     with pytest.raises(StartupValidationError) as exc_info:
         validate_environment(strict=False)
     msg = str(exc_info.value)
@@ -165,9 +181,11 @@ def test_production_redis_url_required_not_redis_host(monkeypatch):
 
 # ── 9. MacroStore singleton ───────────────────────────────────────────────────
 
+
 def test_macro_store_singleton_importable():
     """ml.macro_store.macro_store singleton must be importable and functional."""
     from ml.macro_store import macro_store, MacroStore
+
     assert isinstance(macro_store, MacroStore)
     # Must accept updates without error
     macro_store.update("test_series", "2026-01-02", 1.0)
@@ -177,11 +195,13 @@ def test_macro_store_singleton_importable():
 
 # ── 10. Leaderboard router wired into app ────────────────────────────────────
 
+
 def test_leaderboard_route_in_app(monkeypatch):
     """GET /api/social/leaderboard must be registered in the main app."""
     _jwt(monkeypatch)
     import importlib
     import app as _app
+
     importlib.reload(_app)
 
     all_paths = []

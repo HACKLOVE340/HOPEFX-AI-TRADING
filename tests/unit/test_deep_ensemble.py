@@ -34,13 +34,14 @@ from unittest.mock import MagicMock, patch
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _make_ohlcv(n: int = 200) -> pd.DataFrame:
     rng = np.random.default_rng(42)
     close = 2000.0 + np.cumsum(rng.normal(0, 3, n))
-    high  = close + rng.uniform(0, 8, n)
-    low   = close - rng.uniform(0, 8, n)
-    vol   = rng.uniform(1000, 5000, n)
-    idx   = pd.date_range("2023-01-01", periods=n, freq="1h", tz="UTC")
+    high = close + rng.uniform(0, 8, n)
+    low = close - rng.uniform(0, 8, n)
+    vol = rng.uniform(1000, 5000, n)
+    idx = pd.date_range("2023-01-01", periods=n, freq="1h", tz="UTC")
     return pd.DataFrame(
         {"open": close, "high": high, "low": low, "close": close, "volume": vol},
         index=idx,
@@ -53,9 +54,11 @@ def _write_meta(path: Path, oos_accuracy: float, p_value: float) -> None:
 
 # ── DeepEnsembleStore ─────────────────────────────────────────────────────────
 
+
 class TestDeepEnsembleStore:
     def setup_method(self):
         from research.pipeline.models_ensemble import DeepEnsembleStore
+
         self._cls = DeepEnsembleStore
 
     def test_inactive_when_model_file_missing(self, tmp_path):
@@ -156,7 +159,9 @@ class TestDeepEnsembleStore:
         store._active = True
         store._predictor = MagicMock()
         df = _make_ohlcv(100)
-        with patch.object(self._cls, "_extract_features", side_effect=RuntimeError("boom")):
+        with patch.object(
+            self._cls, "_extract_features", side_effect=RuntimeError("boom")
+        ):
             result = store.blend(0.65, df)
         assert result == 0.65
 
@@ -181,8 +186,15 @@ class TestDeepEnsembleStore:
     def test_status_returns_expected_keys(self):
         store = self._cls()
         s = store.status()
-        for key in ("active", "model_path", "oos_accuracy", "p_value",
-                    "deep_weight", "oos_accuracy_gate", "p_value_gate"):
+        for key in (
+            "active",
+            "model_path",
+            "oos_accuracy",
+            "p_value",
+            "deep_weight",
+            "oos_accuracy_gate",
+            "p_value_gate",
+        ):
             assert key in s
 
     def test_oos_accuracy_property(self, tmp_path):
@@ -206,10 +218,12 @@ class TestDeepEnsembleStore:
 
 # ── Signal engine integration ─────────────────────────────────────────────────
 
+
 class TestDeepEnsembleSignalEngine:
     def test_flag_off_returns_none(self, monkeypatch):
         monkeypatch.setenv("FEATURE_DEEP_ENSEMBLE", "false")
         import core.signal_engine as se
+
         se._deep_ensemble_store = None
         result = se._get_deep_ensemble_store()
         assert result is None
@@ -218,6 +232,7 @@ class TestDeepEnsembleSignalEngine:
         """When flag is on but model file doesn't exist, store is None."""
         monkeypatch.setenv("FEATURE_DEEP_ENSEMBLE", "true")
         import core.signal_engine as se
+
         se._deep_ensemble_store = None
         result = se._get_deep_ensemble_store()
         # Model file doesn't exist in test env → returns None
@@ -226,49 +241,54 @@ class TestDeepEnsembleSignalEngine:
 
     def test_blend_weight_formula(self):
         """(1-0.2)*0.8 + 0.2*0.6 = 0.76"""
-        adv   = 0.8
-        deep  = 0.6
-        w     = 0.2
+        adv = 0.8
+        deep = 0.6
+        w = 0.2
         blend = (1 - w) * adv + w * deep
         assert abs(blend - 0.76) < 1e-9
 
     def test_blend_weight_zero_leaves_prob_unchanged(self):
-        adv  = 0.75
+        adv = 0.75
         deep = 0.3
-        w    = 0.0
+        w = 0.0
         blend = (1 - w) * adv + w * deep
         assert abs(blend - adv) < 1e-9
 
     def test_blend_weight_one_returns_deep_prob(self):
-        adv  = 0.75
+        adv = 0.75
         deep = 0.3
-        w    = 1.0
+        w = 1.0
         blend = (1 - w) * adv + w * deep
         assert abs(blend - deep) < 1e-9
 
 
 # ── DeepPredictor architecture validation ─────────────────────────────────────
 
+
 class TestDeepPredictorArchitectures:
     """Verify DeepPredictor accepts valid architectures and rejects invalid ones."""
 
     def test_valid_architectures_accepted(self):
         from research.pipeline.models_deep import DeepPredictor
+
         for arch in ("lstm", "transformer", "tcn"):
             dp = DeepPredictor(architecture=arch, n_features=6, seq_len=20)
             assert dp.architecture == arch
 
     def test_invalid_architecture_raises(self):
         from research.pipeline.models_deep import DeepPredictor
+
         with pytest.raises((ValueError, KeyError, Exception)):
             DeepPredictor(architecture="invalid_arch", n_features=6, seq_len=20)
 
     def test_n_features_stored(self):
         from research.pipeline.models_deep import DeepPredictor
+
         dp = DeepPredictor(architecture="lstm", n_features=10, seq_len=30)
         assert dp.n_features == 10
 
     def test_seq_len_stored(self):
         from research.pipeline.models_deep import DeepPredictor
+
         dp = DeepPredictor(architecture="lstm", n_features=6, seq_len=45)
         assert dp.seq_len == 45

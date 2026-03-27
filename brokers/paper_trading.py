@@ -210,7 +210,8 @@ class PaperTradingBroker(BrokerConnector):
         positions = []
         for position in self.positions.values():
             current_price = self.market_prices.get(
-                position.symbol, position.entry_price,
+                position.symbol,
+                position.entry_price,
             )
             if position.side == "LONG":
                 unrealized_pnl = (
@@ -272,7 +273,10 @@ class PaperTradingBroker(BrokerConnector):
         return True
 
     def _persist_trade(
-        self, position: "Position", exit_price: float, realized_pnl: float,
+        self,
+        position: "Position",
+        exit_price: float,
+        realized_pnl: float,
     ) -> None:
         """Write a closed trade record to the DB trades table."""
         if not self._session_factory:
@@ -351,7 +355,10 @@ class PaperTradingBroker(BrokerConnector):
 
         side_enum = _OS.BUY if str(side).lower() in ("buy", "long") else _OS.SELL
         return self.place_order(
-            symbol=symbol, side=side_enum, order_type=_OT.MARKET, quantity=quantity,
+            symbol=symbol,
+            side=side_enum,
+            order_type=_OT.MARKET,
+            quantity=quantity,
         )
 
     async def close_all_positions(self) -> int:
@@ -366,7 +373,10 @@ class PaperTradingBroker(BrokerConnector):
         return closed
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "1h", limit: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """
         Get simulated market data.
@@ -417,7 +427,11 @@ class PaperTradingBroker(BrokerConnector):
         logger.debug(f"Updated {symbol} price to ${price}")
 
     def _update_position(
-        self, symbol: str, side: OrderSide, quantity: float, price: float,
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: float,
+        price: float,
     ):
         """Update or create position"""
         position_side = "LONG" if side == OrderSide.BUY else "SHORT"

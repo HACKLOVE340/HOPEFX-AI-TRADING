@@ -353,7 +353,10 @@ class WebSocketManager:
         self._sequence += 1
 
         message = WebSocketMessage(
-            event=event, channel=channel, data=data, sequence=self._sequence,
+            event=event,
+            channel=channel,
+            data=data,
+            sequence=self._sequence,
         )
 
         # Send to all subscribers
@@ -373,14 +376,20 @@ class WebSocketManager:
         self._sequence += 1
 
         message = WebSocketMessage(
-            event=event, channel="global", data=data, sequence=self._sequence,
+            event=event,
+            channel="global",
+            data=data,
+            sequence=self._sequence,
         )
 
         for conn_id in self._connections:
             await self._send_to_connection(conn_id, message)
 
     async def send_to_user(
-        self, user_id: str, data: Dict[str, Any], event: str = "message",
+        self,
+        user_id: str,
+        data: Dict[str, Any],
+        event: str = "message",
     ):
         """
         Send a message to all connections for a specific user.
@@ -393,7 +402,10 @@ class WebSocketManager:
         self._sequence += 1
 
         message = WebSocketMessage(
-            event=event, channel=f"user:{user_id}", data=data, sequence=self._sequence,
+            event=event,
+            channel=f"user:{user_id}",
+            data=data,
+            sequence=self._sequence,
         )
 
         for conn_id, info in self._connection_info.items():
@@ -548,7 +560,8 @@ class WebSocketManager:
 
             # Send ping to all active connections
             await self.broadcast_to_all(
-                {"type": "heartbeat", "timestamp": now.isoformat()}, event="ping",
+                {"type": "heartbeat", "timestamp": now.isoformat()},
+                event="ping",
             )
 
     # ================================================================

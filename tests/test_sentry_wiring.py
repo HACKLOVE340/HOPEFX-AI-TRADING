@@ -21,10 +21,10 @@ import sys
 from unittest.mock import MagicMock, patch
 
 
-
 # ---------------------------------------------------------------------------
 # Helpers — build a minimal sentry_sdk mock
 # ---------------------------------------------------------------------------
+
 
 def _make_sentry_mock() -> MagicMock:
     """Return a MagicMock that looks like sentry_sdk."""
@@ -65,16 +65,19 @@ def _make_sentry_mock() -> MagicMock:
 # init_sentry — no DSN
 # ---------------------------------------------------------------------------
 
+
 class TestInitSentryNoDSN:
     def test_returns_false_when_dsn_unset(self, monkeypatch):
         monkeypatch.delenv("SENTRY_DSN", raising=False)
         from monitoring.sentry_config import init_sentry
+
         result = init_sentry()
         assert result is False
 
     def test_returns_false_when_dsn_empty_string(self, monkeypatch):
         monkeypatch.setenv("SENTRY_DSN", "")
         from monitoring.sentry_config import init_sentry
+
         result = init_sentry()
         assert result is False
 
@@ -83,6 +86,7 @@ class TestInitSentryNoDSN:
         sdk_mock = _make_sentry_mock()
         with patch.dict(sys.modules, {"sentry_sdk": sdk_mock}):
             from monitoring.sentry_config import init_sentry
+
             init_sentry()
         sdk_mock.init.assert_not_called()
 
@@ -91,36 +95,41 @@ class TestInitSentryNoDSN:
 # init_sentry — with DSN
 # ---------------------------------------------------------------------------
 
+
 class TestInitSentryWithDSN:
     def test_returns_true_when_dsn_set(self, monkeypatch):
         monkeypatch.setenv("SENTRY_DSN", "https://abc123@sentry.io/12345")
         sdk_mock = _make_sentry_mock()
 
         # Patch integrations imports inside sentry_config
-        with patch.dict(sys.modules, {
-            "sentry_sdk": sdk_mock,
-            "sentry_sdk.integrations": MagicMock(),
-            "sentry_sdk.integrations.logging": MagicMock(
-                LoggingIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.fastapi": MagicMock(
-                FastApiIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.starlette": MagicMock(
-                StarletteIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.sqlalchemy": MagicMock(
-                SqlalchemyIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.redis": MagicMock(
-                RedisIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.aiohttp": MagicMock(
-                AioHttpIntegration=MagicMock(return_value=MagicMock())
-            ),
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "sentry_sdk": sdk_mock,
+                "sentry_sdk.integrations": MagicMock(),
+                "sentry_sdk.integrations.logging": MagicMock(
+                    LoggingIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.fastapi": MagicMock(
+                    FastApiIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.starlette": MagicMock(
+                    StarletteIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.sqlalchemy": MagicMock(
+                    SqlalchemyIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.redis": MagicMock(
+                    RedisIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.aiohttp": MagicMock(
+                    AioHttpIntegration=MagicMock(return_value=MagicMock())
+                ),
+            },
+        ):
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             result = sc.init_sentry()
 
@@ -156,6 +165,7 @@ class TestInitSentryWithDSN:
         with patch.dict(sys.modules, integration_mocks):
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             sc.init_sentry()
 
@@ -172,29 +182,33 @@ class TestInitSentryWithDSN:
         monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")
 
         sdk_mock = _make_sentry_mock()
-        with patch.dict(sys.modules, {
-            "sentry_sdk": sdk_mock,
-            "sentry_sdk.integrations.logging": MagicMock(
-                LoggingIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.fastapi": MagicMock(
-                FastApiIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.starlette": MagicMock(
-                StarletteIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.sqlalchemy": MagicMock(
-                SqlalchemyIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.redis": MagicMock(
-                RedisIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.aiohttp": MagicMock(
-                AioHttpIntegration=MagicMock(return_value=MagicMock())
-            ),
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "sentry_sdk": sdk_mock,
+                "sentry_sdk.integrations.logging": MagicMock(
+                    LoggingIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.fastapi": MagicMock(
+                    FastApiIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.starlette": MagicMock(
+                    StarletteIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.sqlalchemy": MagicMock(
+                    SqlalchemyIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.redis": MagicMock(
+                    RedisIntegration=MagicMock(return_value=MagicMock())
+                ),
+                "sentry_sdk.integrations.aiohttp": MagicMock(
+                    AioHttpIntegration=MagicMock(return_value=MagicMock())
+                ),
+            },
+        ):
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             sc.init_sentry()
 
@@ -206,10 +220,12 @@ class TestInitSentryWithDSN:
 # _scrub_dict
 # ---------------------------------------------------------------------------
 
+
 class TestScrubDict:
     def setup_method(self):
         import importlib
         import monitoring.sentry_config as sc
+
         importlib.reload(sc)
         self.scrub = sc._scrub_dict
 
@@ -251,6 +267,7 @@ class TestScrubDict:
 
     def test_non_dict_input_returned_unchanged(self):
         import monitoring.sentry_config as sc
+
         assert sc._scrub_dict("string") == "string"
         assert sc._scrub_dict(42) == 42
 
@@ -259,10 +276,12 @@ class TestScrubDict:
 # _before_send
 # ---------------------------------------------------------------------------
 
+
 class TestBeforeSend:
     def setup_method(self):
         import importlib
         import monitoring.sentry_config as sc
+
         importlib.reload(sc)
         self.before_send = sc._before_send
 
@@ -293,7 +312,12 @@ class TestBeforeSend:
     def test_scrubs_request_headers(self):
         event = {
             "transaction": "/api/trading/order",
-            "request": {"headers": {"Authorization": "Bearer token123", "Content-Type": "application/json"}},
+            "request": {
+                "headers": {
+                    "Authorization": "Bearer token123",
+                    "Content-Type": "application/json",
+                }
+            },
         }
         result = self.before_send(event, {})
         assert result["request"]["headers"]["Authorization"] == "[Filtered]"
@@ -313,10 +337,12 @@ class TestBeforeSend:
 # _before_send_transaction
 # ---------------------------------------------------------------------------
 
+
 class TestBeforeSendTransaction:
     def setup_method(self):
         import importlib
         import monitoring.sentry_config as sc
+
         importlib.reload(sc)
         self.hook = sc._before_send_transaction
 
@@ -335,12 +361,14 @@ class TestBeforeSendTransaction:
 # capture_ml_fallback_event
 # ---------------------------------------------------------------------------
 
+
 class TestCaptureMLFallbackEvent:
     def test_calls_capture_message_at_fatal_level(self, monkeypatch):
         sdk_mock = _make_sentry_mock()
         with patch.dict(sys.modules, {"sentry_sdk": sdk_mock}):
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             sc.capture_ml_fallback_event(
                 reason="advanced_oos.pkl not found",
@@ -363,6 +391,7 @@ class TestCaptureMLFallbackEvent:
         try:
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             # Should not raise
             sc.capture_ml_fallback_event(

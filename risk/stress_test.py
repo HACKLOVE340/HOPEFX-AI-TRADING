@@ -28,7 +28,7 @@ Usage
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -36,15 +36,17 @@ logger = logging.getLogger(__name__)
 
 # ── Scenario definitions ──────────────────────────────────────────────────────
 
+
 @dataclass
 class StressScenario:
     """A single stress scenario definition."""
+
     name: str
     description: str
-    gold_shock_pct: float        # % change in gold price (negative = drop)
-    dxy_shock_pct: float = 0.0   # % change in DXY (informational)
-    vix_shock_pct: float = 0.0   # % change in VIX (informational)
-    source: str = ""             # historical reference
+    gold_shock_pct: float  # % change in gold price (negative = drop)
+    dxy_shock_pct: float = 0.0  # % change in DXY (informational)
+    vix_shock_pct: float = 0.0  # % change in VIX (informational)
+    source: str = ""  # historical reference
 
 
 # Historical and hypothetical scenarios calibrated to XAUUSD
@@ -118,15 +120,17 @@ SCENARIOS: List[StressScenario] = [
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class StressResult:
     """Result of applying one scenario to a position."""
+
     scenario: StressScenario
-    position_value: float       # USD value before shock
-    pnl_usd: float              # USD P&L after shock (negative = loss)
-    pnl_pct: float              # P&L as % of position value
-    equity_impact_pct: float    # P&L as % of total equity
-    breaches_gate: bool         # True if loss exceeds max_loss_pct of equity
+    position_value: float  # USD value before shock
+    pnl_usd: float  # USD P&L after shock (negative = loss)
+    pnl_pct: float  # P&L as % of position value
+    equity_impact_pct: float  # P&L as % of total equity
+    breaches_gate: bool  # True if loss exceeds max_loss_pct of equity
 
     @property
     def name(self) -> str:
@@ -138,6 +142,7 @@ class StressResult:
 
 
 # ── Stress tester ─────────────────────────────────────────────────────────────
+
 
 class StressTester:
     """
@@ -191,7 +196,9 @@ class StressTester:
         results.sort(key=lambda r: r.pnl_usd)
         logger.debug(
             "StressTester: ran %d scenarios on position_value=%.0f leverage=%.1fx",
-            len(results), self.position_value, self.leverage,
+            len(results),
+            self.position_value,
+            self.leverage,
         )
         return results
 
@@ -220,9 +227,7 @@ class StressTester:
         _max = max_loss_pct or self.max_loss_pct
 
         breaching = [
-            res for res in r
-            if res.pnl_usd < 0
-            and abs(res.pnl_usd / _equity) > _max
+            res for res in r if res.pnl_usd < 0 and abs(res.pnl_usd / _equity) > _max
         ]
         if breaching:
             logger.warning(
@@ -247,7 +252,9 @@ class StressTester:
             "worst_case": {
                 "name": self.worst_case(r).name,
                 "pnl_usd": round(self.worst_case(r).pnl_usd, 2),
-                "equity_impact_pct": round(self.worst_case(r).equity_impact_pct * 100, 2),
+                "equity_impact_pct": round(
+                    self.worst_case(r).equity_impact_pct * 100, 2
+                ),
             },
             "results": [
                 {
@@ -265,6 +272,7 @@ class StressTester:
 
 
 # ── Convenience function ──────────────────────────────────────────────────────
+
 
 def run_all_scenarios(
     position_value: float,

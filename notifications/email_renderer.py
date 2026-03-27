@@ -23,6 +23,7 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 try:
     from jinja2 import Environment, FileSystemLoader, select_autoescape
+
     _env = Environment(
         loader=FileSystemLoader(str(_TEMPLATES_DIR)),
         autoescape=select_autoescape(["html"]),

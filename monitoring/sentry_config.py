@@ -58,42 +58,88 @@ logger = logging.getLogger(__name__)
 _SCRUB_FIELDS = frozenset(
     {
         # Auth / credentials
-        "password", "passwd", "pwd",
-        "api_key", "api_secret", "api_token",
-        "token", "access_token", "refresh_token", "id_token",
-        "authorization", "auth", "bearer",
-        "secret", "secret_key", "private_key", "signing_key",
-        "broker_token", "oanda_token", "oanda_api_key",
-        "broker_oanda_token", "broker_alpaca_key", "broker_alpaca_secret",
-        "jwt", "session_token", "cookie",
+        "password",
+        "passwd",
+        "pwd",
+        "api_key",
+        "api_secret",
+        "api_token",
+        "token",
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "authorization",
+        "auth",
+        "bearer",
+        "secret",
+        "secret_key",
+        "private_key",
+        "signing_key",
+        "broker_token",
+        "oanda_token",
+        "oanda_api_key",
+        "broker_oanda_token",
+        "broker_alpaca_key",
+        "broker_alpaca_secret",
+        "jwt",
+        "session_token",
+        "cookie",
         # Financial PII
-        "credit_card", "card_number", "cvv", "cvc", "expiry",
-        "bank_account", "routing_number", "iban", "swift",
-        "stripe_key", "stripe_secret", "paypal_secret",
+        "credit_card",
+        "card_number",
+        "cvv",
+        "cvc",
+        "expiry",
+        "bank_account",
+        "routing_number",
+        "iban",
+        "swift",
+        "stripe_key",
+        "stripe_secret",
+        "paypal_secret",
         # Personal PII
-        "ssn", "social_security", "dob", "date_of_birth",
-        "email", "phone", "address", "ip_address", "ip",
-        "account_id", "user_id",  # scrub account IDs from payloads
+        "ssn",
+        "social_security",
+        "dob",
+        "date_of_birth",
+        "email",
+        "phone",
+        "address",
+        "ip_address",
+        "ip",
+        "account_id",
+        "user_id",  # scrub account IDs from payloads
         # Database / infra
-        "database_url", "db_url", "redis_url", "postgres_url",
-        "smtp_password", "smtp_user",
+        "database_url",
+        "db_url",
+        "redis_url",
+        "postgres_url",
+        "smtp_password",
+        "smtp_user",
         "sentry_dsn",  # never leak the DSN itself
     }
 )
 
 # ── Regex patterns for PII in string values ───────────────────────────────────
-import re as _re
+import re as _re  # noqa: E402
+
 _PII_PATTERNS = [
     # Bearer tokens
     (_re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", _re.I), "Bearer [Filtered]"),
     # JWT tokens (3 base64 segments)
-    (_re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), "[JWT Filtered]"),
+    (
+        _re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),
+        "[JWT Filtered]",
+    ),
     # OANDA API keys (32-char hex-like)
     (_re.compile(r"\b[0-9a-f]{32}\b"), "[Key Filtered]"),
     # IPv4 addresses
     (_re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"), "[IP Filtered]"),
     # Email addresses
-    (_re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"), "[Email Filtered]"),
+    (
+        _re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"),
+        "[Email Filtered]",
+    ),
 ]
 
 
@@ -115,7 +161,12 @@ def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, dict):
             out[k] = _scrub_dict(v)
         elif isinstance(v, list):
-            out[k] = [_scrub_dict(i) if isinstance(i, dict) else (_scrub_string(i) if isinstance(i, str) else i) for i in v]
+            out[k] = [
+                _scrub_dict(i)
+                if isinstance(i, dict)
+                else (_scrub_string(i) if isinstance(i, str) else i)
+                for i in v
+            ]
         elif isinstance(v, str):
             out[k] = _scrub_string(v)
         else:
@@ -123,7 +174,9 @@ def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _before_send(
+    event: Dict[str, Any], hint: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     """
     Sentry before_send hook.
 
@@ -150,6 +203,7 @@ def _before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[s
     # Add trading context
     try:
         from ml import get_model_version
+
         event.setdefault("tags", {})["model_version"] = get_model_version()
     except Exception:
         pass
@@ -203,7 +257,7 @@ def init_sentry() -> bool:
         # Logging: capture ERROR+ as Sentry issues, WARNING+ as breadcrumbs
         integrations.append(
             LoggingIntegration(
-                level=logging.WARNING,   # breadcrumb level
+                level=logging.WARNING,  # breadcrumb level
                 event_level=logging.ERROR,  # issue level
             )
         )
@@ -212,6 +266,7 @@ def init_sentry() -> bool:
         try:
             from sentry_sdk.integrations.fastapi import FastApiIntegration
             from sentry_sdk.integrations.starlette import StarletteIntegration
+
             integrations.append(StarletteIntegration(transaction_style="endpoint"))
             integrations.append(FastApiIntegration())
             logger.debug("Sentry: FastAPI integration enabled")
@@ -221,6 +276,7 @@ def init_sentry() -> bool:
         # SQLAlchemy integration
         try:
             from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
             integrations.append(SqlalchemyIntegration())
             logger.debug("Sentry: SQLAlchemy integration enabled")
         except ImportError:
@@ -229,6 +285,7 @@ def init_sentry() -> bool:
         # Redis integration
         try:
             from sentry_sdk.integrations.redis import RedisIntegration
+
             integrations.append(RedisIntegration())
             logger.debug("Sentry: Redis integration enabled")
         except ImportError:
@@ -237,6 +294,7 @@ def init_sentry() -> bool:
         # aiohttp integration (used by AsyncOANDAConnector)
         try:
             from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+
             integrations.append(AioHttpIntegration())
             logger.debug("Sentry: aiohttp integration enabled")
         except ImportError:
@@ -249,9 +307,11 @@ def init_sentry() -> bool:
         )
 
         # Sample rates
-        traces_rate   = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE",   "0.1"))
+        traces_rate = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
         profiles_rate = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.05"))
-        environment   = os.getenv("SENTRY_ENVIRONMENT", os.getenv("APP_ENV", "development"))
+        environment = os.getenv(
+            "SENTRY_ENVIRONMENT", os.getenv("APP_ENV", "development")
+        )
 
         sentry_sdk.init(
             dsn=dsn,
@@ -285,6 +345,7 @@ def init_sentry() -> bool:
             scope.set_tag("release", release)
             try:
                 from ml import get_model_version
+
                 scope.set_tag("model_version", get_model_version())
             except Exception:
                 pass
@@ -377,6 +438,7 @@ def capture_paper_clock_alert(
     """
     try:
         import sentry_sdk
+
         with sentry_sdk.push_scope() as scope:
             scope.set_level("warning")
             scope.set_tag("alert_type", "paper_clock_gate")
@@ -412,6 +474,7 @@ def capture_sharpe_gate_alert(
     """
     try:
         import sentry_sdk
+
         with sentry_sdk.push_scope() as scope:
             scope.set_level("warning")
             scope.set_tag("alert_type", "sharpe_gate_blocked")
@@ -447,6 +510,7 @@ def capture_kill_switch_alert(
     """
     try:
         import sentry_sdk
+
         with sentry_sdk.push_scope() as scope:
             scope.set_level("fatal")
             scope.set_tag("alert_type", "kill_switch_triggered")
@@ -485,6 +549,7 @@ def start_transaction(name: str, op: str = "task") -> Any:
     """
     try:
         import sentry_sdk
+
         return sentry_sdk.start_transaction(name=name, op=op)
     except Exception:
         import contextlib

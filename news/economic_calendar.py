@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class EventImportance(Enum):
     """Event importance levels"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -34,6 +35,7 @@ class EventImportance(Enum):
 
 class EventType(Enum):
     """Economic event types"""
+
     INTEREST_RATE = "interest_rate"
     GDP = "gdp"
     EMPLOYMENT = "employment"
@@ -49,6 +51,7 @@ class EventType(Enum):
 @dataclass
 class EconomicEvent:
     """Represents an economic calendar event"""
+
     title: str
     event_type: EventType
     importance: EventImportance
@@ -63,16 +66,16 @@ class EconomicEvent:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'title': self.title,
-            'event_type': self.event_type.value,
-            'importance': self.importance.value,
-            'scheduled_time': self.scheduled_time.isoformat(),
-            'country': self.country,
-            'actual': self.actual,
-            'forecast': self.forecast,
-            'previous': self.previous,
-            'currency': self.currency,
-            'description': self.description
+            "title": self.title,
+            "event_type": self.event_type.value,
+            "importance": self.importance.value,
+            "scheduled_time": self.scheduled_time.isoformat(),
+            "country": self.country,
+            "actual": self.actual,
+            "forecast": self.forecast,
+            "previous": self.previous,
+            "currency": self.currency,
+            "description": self.description,
         }
 
     def is_surprise(self, threshold: float = 0.1) -> bool:
@@ -94,11 +97,11 @@ class EconomicEvent:
 
         # For most economic indicators, higher than expected is bullish
         if self.actual > self.forecast:
-            return 'bullish'
+            return "bullish"
         elif self.actual < self.forecast:
-            return 'bearish'
+            return "bearish"
         else:
-            return 'neutral'
+            return "neutral"
 
 
 class EconomicCalendar:
@@ -108,9 +111,16 @@ class EconomicCalendar:
 
     # High-impact event keywords
     HIGH_IMPACT_EVENTS = {
-        'interest rate', 'fomc', 'ecb rate', 'boj rate',
-        'nonfarm payrolls', 'employment', 'gdp',
-        'cpi', 'inflation', 'retail sales'
+        "interest rate",
+        "fomc",
+        "ecb rate",
+        "boj rate",
+        "nonfarm payrolls",
+        "employment",
+        "gdp",
+        "cpi",
+        "inflation",
+        "retail sales",
     }
 
     def __init__(self):
@@ -123,9 +133,7 @@ class EconomicCalendar:
         self.events.sort(key=lambda x: x.scheduled_time)
 
     def get_upcoming_events(
-        self,
-        hours_ahead: int = 24,
-        min_importance: Optional[EventImportance] = None
+        self, hours_ahead: int = 24, min_importance: Optional[EventImportance] = None
     ) -> List[EconomicEvent]:
         """
         Get upcoming events
@@ -141,8 +149,7 @@ class EconomicCalendar:
         cutoff = now + timedelta(hours=hours_ahead)
 
         upcoming = [
-            event for event in self.events
-            if now <= event.scheduled_time <= cutoff
+            event for event in self.events if now <= event.scheduled_time <= cutoff
         ]
 
         # Filter by importance if specified
@@ -151,78 +158,70 @@ class EconomicCalendar:
                 EventImportance.LOW: 1,
                 EventImportance.MEDIUM: 2,
                 EventImportance.HIGH: 3,
-                EventImportance.CRITICAL: 4
+                EventImportance.CRITICAL: 4,
             }
             min_value = importance_values[min_importance]
             upcoming = [
-                event for event in upcoming
+                event
+                for event in upcoming
                 if importance_values[event.importance] >= min_value
             ]
 
         return upcoming
 
     def get_events_by_currency(
-        self,
-        currency: str,
-        days_ahead: int = 7
+        self, currency: str, days_ahead: int = 7
     ) -> List[EconomicEvent]:
         """Get events for a specific currency"""
         now = datetime.now(timezone.utc)
         cutoff = now + timedelta(days=days_ahead)
 
         return [
-            event for event in self.events
-            if event.currency == currency
-            and now <= event.scheduled_time <= cutoff
+            event
+            for event in self.events
+            if event.currency == currency and now <= event.scheduled_time <= cutoff
         ]
 
-    def get_high_impact_events(
-        self,
-        hours_ahead: int = 24
-    ) -> List[EconomicEvent]:
+    def get_high_impact_events(self, hours_ahead: int = 24) -> List[EconomicEvent]:
         """Get high and critical importance events"""
         return self.get_upcoming_events(
-            hours_ahead=hours_ahead,
-            min_importance=EventImportance.HIGH
+            hours_ahead=hours_ahead, min_importance=EventImportance.HIGH
         )
 
-    def check_upcoming_events(
-        self,
-        warning_hours: int = 2
-    ) -> Dict:
+    def check_upcoming_events(self, warning_hours: int = 2) -> Dict:
         """
         Check for upcoming high-impact events
 
         Returns dictionary with warnings
         """
         warnings = {
-            'has_upcoming_events': False,
-            'events': [],
-            'max_importance': None,
-            'earliest_event': None
+            "has_upcoming_events": False,
+            "events": [],
+            "max_importance": None,
+            "earliest_event": None,
         }
 
         upcoming = self.get_high_impact_events(hours_ahead=warning_hours)
 
         if upcoming:
-            warnings['has_upcoming_events'] = True
-            warnings['events'] = [e.to_dict() for e in upcoming]
+            warnings["has_upcoming_events"] = True
+            warnings["events"] = [e.to_dict() for e in upcoming]
 
             # Find highest importance
             importance_order = [
                 EventImportance.CRITICAL,
                 EventImportance.HIGH,
                 EventImportance.MEDIUM,
-                EventImportance.LOW
+                EventImportance.LOW,
             ]
 
             for importance in importance_order:
                 if any(e.importance == importance for e in upcoming):
-                    warnings['max_importance'] = importance.value
+                    warnings["max_importance"] = importance.value
                     break
 
             # Earliest event
-            warnings['earliest_event'] = upcoming[0].to_dict()
+            warnings["earliest_event"] = upcoming[0].to_dict()
 
         return warnings
 
@@ -242,7 +241,7 @@ class EconomicCalendar:
                 forecast=200000,
                 previous=185000,
                 currency="USD",
-                description="Monthly employment report"
+                description="Monthly employment report",
             ),
             EconomicEvent(
                 title="FOMC Interest Rate Decision",
@@ -253,7 +252,7 @@ class EconomicCalendar:
                 forecast=5.25,
                 previous=5.00,
                 currency="USD",
-                description="Federal Reserve interest rate decision"
+                description="Federal Reserve interest rate decision",
             ),
             EconomicEvent(
                 title="ECB Interest Rate Decision",
@@ -264,7 +263,7 @@ class EconomicCalendar:
                 forecast=4.00,
                 previous=4.00,
                 currency="EUR",
-                description="European Central Bank rate decision"
+                description="European Central Bank rate decision",
             ),
             EconomicEvent(
                 title="US CPI",
@@ -275,7 +274,7 @@ class EconomicCalendar:
                 forecast=3.2,
                 previous=3.1,
                 currency="USD",
-                description="Consumer Price Index"
+                description="Consumer Price Index",
             ),
             EconomicEvent(
                 title="UK GDP",
@@ -286,8 +285,8 @@ class EconomicCalendar:
                 forecast=0.3,
                 previous=0.2,
                 currency="GBP",
-                description="Gross Domestic Product"
-            )
+                description="Gross Domestic Product",
+            ),
         ]
 
         for event in sample_events:
@@ -297,10 +296,7 @@ class EconomicCalendar:
         return sample_events
 
     def update_event_actual(
-        self,
-        title: str,
-        actual: float,
-        scheduled_time: Optional[datetime] = None
+        self, title: str, actual: float, scheduled_time: Optional[datetime] = None
     ):
         """Update actual value for an event after it occurs"""
         for event in self.events:
@@ -326,21 +322,26 @@ class EconomicCalendar:
         # Count by type
         type_counts = {}
         for event in upcoming:
-            type_counts[event.event_type.value] = type_counts.get(event.event_type.value, 0) + 1
+            type_counts[event.event_type.value] = (
+                type_counts.get(event.event_type.value, 0) + 1
+            )
 
         # Count by currency
         currency_counts = {}
         for event in upcoming:
             if event.currency:
-                currency_counts[event.currency] = currency_counts.get(event.currency, 0) + 1
+                currency_counts[event.currency] = (
+                    currency_counts.get(event.currency, 0) + 1
+                )
 
         return {
-            'total_events': len(upcoming),
-            'by_importance': {k.value: v for k, v in importance_counts.items()},
-            'by_type': type_counts,
-            'by_currency': currency_counts,
-            'critical_events': importance_counts[EventImportance.CRITICAL],
-            'high_impact_events': importance_counts[EventImportance.HIGH] + importance_counts[EventImportance.CRITICAL]
+            "total_events": len(upcoming),
+            "by_importance": {k.value: v for k, v in importance_counts.items()},
+            "by_type": type_counts,
+            "by_currency": currency_counts,
+            "critical_events": importance_counts[EventImportance.CRITICAL],
+            "high_impact_events": importance_counts[EventImportance.HIGH]
+            + importance_counts[EventImportance.CRITICAL],
         }
 
 

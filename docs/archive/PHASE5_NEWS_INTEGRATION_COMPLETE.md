@@ -304,14 +304,14 @@ total_impact = 0
 for article in articles:
     # Sentiment
     sentiment = analyzer.analyze(article.description, article.title)
-    
+
     # Impact
     impact = predictor.predict_impact(
         title=article.title,
         description=article.description,
         sentiment_score=sentiment.polarity
     )
-    
+
     # Count signals
     if impact.level.value in ['high', 'very_high']:
         total_impact += 1
@@ -346,7 +346,7 @@ if warnings['has_upcoming_events']:
     print("⚠️ WARNING: High-impact event in next hour!")
     print(f"Event: {warnings['earliest_event']['title']}")
     print("Consider reducing position size or waiting")
-    
+
     # Reduce position size by 50%
     position_size *= 0.5
 else:
@@ -364,17 +364,17 @@ class SentimentEnhancedStrategy(MovingAverageCrossover):
         super().__init__(config)
         self.sentiment_analyzer = get_financial_analyzer()
         self.news_aggregator = MultiSourceAggregator()
-    
+
     def generate_signals(self, data):
         # Get base technical signals
         technical_signals = super().generate_signals(data)
-        
+
         # Get news sentiment
         articles = self.news_aggregator.get_aggregated_news(
             query=self.config.symbol,
             hours_back=4
         )
-        
+
         avg_sentiment = 0
         if articles:
             sentiments = [
@@ -382,7 +382,7 @@ class SentimentEnhancedStrategy(MovingAverageCrossover):
                 for a in articles
             ]
             avg_sentiment = sum(s.polarity for s in sentiments) / len(sentiments)
-        
+
         # Combine signals
         if technical_signals == 'BUY' and avg_sentiment > 0.2:
             return 'STRONG_BUY'
@@ -458,7 +458,7 @@ class SentimentScore:
     confidence: float  # 0 to 1
     label: SentimentLabel
     compound_score: Optional[float]
-    
+
     def is_bullish(threshold: float = 0.1) -> bool
     def is_bearish(threshold: float = -0.1) -> bool
     def is_neutral(threshold: float = 0.1) -> bool
@@ -522,7 +522,7 @@ warnings = calendar.check_upcoming_events(
 
 ### News Fetching
 - **NewsAPI:** 100 articles/request, ~1-2 seconds
-- **Alpha Vantage:** 50 articles/request, ~1-2 seconds  
+- **Alpha Vantage:** 50 articles/request, ~1-2 seconds
 - **RSS Feeds:** ~10-50 articles/feed, <1 second
 - **Aggregation:** Parallel fetching, deduplication
 
@@ -604,19 +604,19 @@ export CUSTOM_RSS_FEEDS='feed1_url,feed2_url,feed3_url'
 ## Integration with Framework
 
 ### Works With:
-✅ All 11 trading strategies  
-✅ ML models (LSTM, Random Forest)  
-✅ Pattern recognition (chart, candlestick)  
-✅ Risk management system  
-✅ Multi-broker execution  
-✅ Backtesting engine  
+✅ All 11 trading strategies
+✅ ML models (LSTM, Random Forest)
+✅ Pattern recognition (chart, candlestick)
+✅ Risk management system
+✅ Multi-broker execution
+✅ Backtesting engine
 
 ### Enhances:
-✅ Signal generation  
-✅ Trade timing  
-✅ Risk assessment  
-✅ Position sizing  
-✅ Exit strategies  
+✅ Signal generation
+✅ Trade timing
+✅ Risk assessment
+✅ Position sizing
+✅ Exit strategies
 
 ---
 
@@ -635,11 +635,11 @@ def test_news_provider():
 # Test sentiment analysis
 def test_sentiment_analyzer():
     analyzer = FinancialSentimentAnalyzer()
-    
+
     bullish_text = "Stocks surge on strong earnings beat"
     sentiment = analyzer.analyze(bullish_text)
     assert sentiment.is_bullish()
-    
+
     bearish_text = "Market crashes on disappointing data"
     sentiment = analyzer.analyze(bearish_text)
     assert sentiment.is_bearish()
@@ -647,7 +647,7 @@ def test_sentiment_analyzer():
 # Test impact prediction
 def test_impact_predictor():
     predictor = ImpactPredictor()
-    
+
     high_impact_title = "Fed raises interest rates by 50 basis points"
     impact = predictor.predict_impact(high_impact_title, "")
     assert impact.level in [ImpactLevel.HIGH, ImpactLevel.VERY_HIGH]
@@ -719,17 +719,17 @@ numpy>=1.24.0
 
 Phase 5 delivers a **production-ready news integration system** with:
 
-✅ **Multi-source news aggregation** from 4+ providers  
-✅ **Advanced sentiment analysis** with 3 methods  
-✅ **Market impact prediction** with AI  
-✅ **Economic calendar** tracking  
-✅ **Real-time analysis** capabilities  
-✅ **Easy integration** with trading strategies  
+✅ **Multi-source news aggregation** from 4+ providers
+✅ **Advanced sentiment analysis** with 3 methods
+✅ **Market impact prediction** with AI
+✅ **Economic calendar** tracking
+✅ **Real-time analysis** capabilities
+✅ **Easy integration** with trading strategies
 
-**Status:** COMPLETE  
-**Quality:** Production-ready  
-**Testing:** Comprehensive examples  
-**Documentation:** Complete  
+**Status:** COMPLETE
+**Quality:** Production-ready
+**Testing:** Comprehensive examples
+**Documentation:** Complete
 
 ---
 

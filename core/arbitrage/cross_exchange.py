@@ -170,7 +170,9 @@ class ArbitrageExecutor:
         self.max_slippage_bps = 50
 
     async def execute(
-        self, opportunity: ArbitrageOpportunity, exchanges: Dict[str, ExchangeConnector],
+        self,
+        opportunity: ArbitrageOpportunity,
+        exchanges: Dict[str, ExchangeConnector],
     ) -> bool:
         """
         Execute both legs simultaneously with protection.
@@ -234,14 +236,20 @@ class ArbitrageExecutor:
         if buy_result and buy_result["filled"] and not sell_result:
             print("   ⚠️ Buy filled, sell failed. Emergency hedging...")
             await self._emergency_hedge(
-                buy_ex, opportunity.symbol, opportunity.size, "sell",
+                buy_ex,
+                opportunity.symbol,
+                opportunity.size,
+                "sell",
             )
             return False
 
         if sell_result and sell_result["filled"] and not buy_result:
             print("   ⚠️ Sell filled, buy failed. Emergency hedging...")
             await self._emergency_hedge(
-                sell_ex, opportunity.symbol, opportunity.size, "buy",
+                sell_ex,
+                opportunity.symbol,
+                opportunity.size,
+                "buy",
             )
             return False
 
@@ -251,7 +259,11 @@ class ArbitrageExecutor:
     async def _place_limit_order(self, exchange, symbol, side, size, price):
         """Place IOC limit order"""
         return await exchange.place_order(
-            symbol=symbol, side=side, size=size, price=price, order_type="limit",
+            symbol=symbol,
+            side=side,
+            size=size,
+            price=price,
+            order_type="limit",
         )
 
     async def _emergency_hedge(self, exchange, symbol, size, side):
@@ -298,7 +310,8 @@ class CrossExchangeEngine:
 
                         # Execute
                         success = await self.executor.execute(
-                            opp, self.detector.exchanges,
+                            opp,
+                            self.detector.exchanges,
                         )
 
                         if success:

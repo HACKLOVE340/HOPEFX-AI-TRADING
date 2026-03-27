@@ -68,11 +68,11 @@ export function CopyTrading() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {LEADERS.map((leader) => (
-          <div 
+          <div
             key={leader.id}
             className={`bg-slate-900 rounded-lg border p-4 cursor-pointer transition-all ${
-              selectedLeader === leader.id 
-                ? 'border-amber-500 ring-1 ring-amber-500' 
+              selectedLeader === leader.id
+                ? 'border-amber-500 ring-1 ring-amber-500'
                 : 'border-slate-800 hover:border-slate-700'
             }`}
             onClick={() => setSelectedLeader(leader.id)}
@@ -127,7 +127,7 @@ export function CopyTrading() {
       {selectedLeader && (
         <div className="bg-slate-900 rounded-lg border border-amber-500/50 p-6">
           <h3 className="text-lg font-semibold mb-4">Start Copying</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
               <label className="block text-sm text-slate-400 mb-2">
@@ -156,7 +156,7 @@ export function CopyTrading() {
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Estimated Monthly Fee</span>
@@ -177,7 +177,7 @@ export function CopyTrading() {
             <button className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-lg">
               Start Copy Trading
             </button>
-            <button 
+            <button
               className="px-6 py-3 border border-slate-700 rounded-lg hover:bg-slate-800"
               onClick={() => setSelectedLeader(null)}
             >

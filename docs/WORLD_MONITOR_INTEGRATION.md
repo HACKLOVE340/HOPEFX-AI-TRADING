@@ -279,7 +279,7 @@ GEOPOLITICAL_CONFIG = {
     'cache_ttl': 300,         # Cache TTL in seconds
     'data_layers': [          # Layers to monitor
         'conflicts',
-        'hotspots', 
+        'hotspots',
         'sanctions',
         'weather',
         'outages',

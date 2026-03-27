@@ -20,6 +20,7 @@ from decimal import Decimal
 
 # ── Stripe webhook ────────────────────────────────────────────────────────────
 
+
 class TestStripeWebhook:
     """Tests for POST /api/webhook/stripe."""
 
@@ -48,7 +49,9 @@ class TestStripeWebhook:
     def test_webhook_acks_when_stripe_unavailable(self, client):
         """When stripe package is missing, webhook must still return 200 (ack to avoid retries)."""
         mock_mgr = MagicMock()
-        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError("stripe not installed")
+        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError(
+            "stripe not installed"
+        )
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
@@ -77,6 +80,7 @@ class TestStripeWebhook:
 
 # ── Referral link generation ──────────────────────────────────────────────────
 
+
 class TestReferralLink:
     """Tests for POST /api/affiliate/generate-link."""
 
@@ -91,6 +95,7 @@ class TestReferralLink:
 
         with patch("api.billing._get_affiliate_manager", return_value=mock_aff_mgr):
             import os
+
             os.environ.setdefault("APP_BASE_URL", "https://hopefx.io")
             code = mock_affiliate.code
             url = f"https://hopefx.io/signup?ref={code}"
@@ -119,6 +124,7 @@ class TestReferralLink:
 
 
 # ── Flutterwave ───────────────────────────────────────────────────────────────
+
 
 class TestFlutterwave:
     """Tests for Flutterwave payment init and verify."""
@@ -169,6 +175,7 @@ class TestFlutterwave:
 
 
 # ── Free tier activation ──────────────────────────────────────────────────────
+
 
 class TestFreeTierActivation:
     """Tests for POST /api/auth/activate-free-tier."""

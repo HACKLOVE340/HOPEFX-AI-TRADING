@@ -49,12 +49,12 @@ _HISTORY_YEARS = int(os.getenv("MACRO_HISTORY_YEARS", "5"))
 
 # yfinance ticker → MacroStore series name → CSV filename
 _SERIES_MAP: Dict[str, Dict[str, str]] = {
-    "DX-Y.NYB": {"name": "dxy",    "file": "dxy_daily.csv"},
-    "^VIX":     {"name": "vix",    "file": "vix_daily.csv"},
-    "^TNX":     {"name": "us10y",  "file": "us10y_daily.csv"},
-    "^FVX":     {"name": "us2y",   "file": "us2y_daily.csv"},
-    "^GSPC":    {"name": "spx",    "file": "spx_daily.csv"},
-    "GLD":      {"name": "gold_etf_flow", "file": "gold_etf_flow.csv"},
+    "DX-Y.NYB": {"name": "dxy", "file": "dxy_daily.csv"},
+    "^VIX": {"name": "vix", "file": "vix_daily.csv"},
+    "^TNX": {"name": "us10y", "file": "us10y_daily.csv"},
+    "^FVX": {"name": "us2y", "file": "us2y_daily.csv"},
+    "^GSPC": {"name": "spx", "file": "spx_daily.csv"},
+    "GLD": {"name": "gold_etf_flow", "file": "gold_etf_flow.csv"},
 }
 
 
@@ -113,9 +113,7 @@ def bootstrap(force: bool = False) -> int:
 
         # Skip if file is fresh (< 24 h) and force=False
         if not force and csv_path.exists():
-            age_hours = (
-                datetime.now().timestamp() - csv_path.stat().st_mtime
-            ) / 3600
+            age_hours = (datetime.now().timestamp() - csv_path.stat().st_mtime) / 3600
             if age_hours < 24:
                 logger.debug(
                     "MacroBootstrap: %s is %.1f h old — skipping (use force=True to refresh)",

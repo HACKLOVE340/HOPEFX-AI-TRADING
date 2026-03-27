@@ -310,8 +310,12 @@ class OrderFlowDashboard:
         if self._ts is not None:
             try:
                 self._ts.add_trade(
-                    symbol, price, volume, side,
-                    timestamp=timestamp, trade_id=trade_id,
+                    symbol,
+                    price,
+                    volume,
+                    side,
+                    timestamp=timestamp,
+                    trade_id=trade_id,
                 )
             except Exception as exc:
                 logger.warning("Time & Sales add_trade error for %s: %s", symbol, exc)
@@ -319,8 +323,12 @@ class OrderFlowDashboard:
         if self._ofa is not None:
             try:
                 self._ofa.add_trade(
-                    symbol, price, volume, side,
-                    timestamp=timestamp, trade_id=trade_id,
+                    symbol,
+                    price,
+                    volume,
+                    side,
+                    timestamp=timestamp,
+                    trade_id=trade_id,
                 )
             except Exception as exc:
                 logger.warning("Order flow add_trade error for %s: %s", symbol, exc)
@@ -355,7 +363,11 @@ class OrderFlowDashboard:
             try:
                 dom_analysis = self._dom.get_order_book_analysis(symbol)
                 if dom_analysis:
-                    dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
+                    dom_dict = (
+                        dom_analysis.to_dict()
+                        if hasattr(dom_analysis, "to_dict")
+                        else {}
+                    )
                     result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
                     result["spread"] = dom_dict.get("spread")
             except Exception as exc:
@@ -364,9 +376,13 @@ class OrderFlowDashboard:
         # Order flow data
         if self._ofa is not None:
             try:
-                of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
+                of_analysis = self._ofa.analyze(
+                    symbol, lookback_minutes=lookback_minutes
+                )
                 if of_analysis:
-                    of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
+                    of_dict = (
+                        of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
+                    )
                     result["cumulative_delta"] = of_dict.get("cumulative_delta")
                     result["buy_pressure"] = of_dict.get("buy_volume")
                     result["sell_pressure"] = of_dict.get("sell_volume")

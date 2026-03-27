@@ -7,6 +7,7 @@ import requests
 import psutil
 import json
 
+
 class HealthCheckService:
     def __init__(self):
         self.alerts = []
@@ -52,25 +53,22 @@ class HealthCheckService:
     def monitor_system_resources(self):
         cpu = psutil.cpu_percent()
         memory = psutil.virtual_memory().percent
-        disk = psutil.disk_usage('/').percent
-        return {
-            "cpu": cpu,
-            "memory": memory,
-            "disk": disk
-        }
+        disk = psutil.disk_usage("/").percent
+        return {"cpu": cpu, "memory": memory, "disk": disk}
 
     def aggregate_health_status(self):
         # Connections are injected at runtime; use None as safe default
         status = {
-            "api": self.check_api('http://localhost:8000'),
+            "api": self.check_api("http://localhost:8000"),
             "db": self.check_database(None),
             "cache": self.check_cache(None),
             "broker": self.check_broker_connections(None),
-            "market_data": self.check_market_data_feed('http://localhost:8000'),
+            "market_data": self.check_market_data_feed("http://localhost:8000"),
             "system_resources": self.monitor_system_resources(),
         }
-        status['alerts'] = self.alerts
+        status["alerts"] = self.alerts
         return status
+
 
 if __name__ == "__main__":
     service = HealthCheckService()

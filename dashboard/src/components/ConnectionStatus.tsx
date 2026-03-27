@@ -18,7 +18,7 @@ export function ConnectionStatus({ connected, latency }: Props) {
             </div>
           </div>
           <Activity className={`w-4 h-4 ${
-            latency < 50 ? 'text-green-400' : 
+            latency < 50 ? 'text-green-400' :
             latency < 100 ? 'text-amber-400' : 'text-red-400'
           }`} />
         </>

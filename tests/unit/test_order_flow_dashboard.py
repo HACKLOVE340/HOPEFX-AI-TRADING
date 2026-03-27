@@ -91,9 +91,15 @@ class TestOrderFlowDashboard:
 
         # Check top-level keys
         expected_keys = [
-            "symbol", "timestamp", "lookback_minutes",
-            "order_flow", "institutional", "advanced",
-            "time_and_sales", "dom", "summary",
+            "symbol",
+            "timestamp",
+            "lookback_minutes",
+            "order_flow",
+            "institutional",
+            "advanced",
+            "time_and_sales",
+            "dom",
+            "summary",
         ]
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
@@ -189,7 +195,11 @@ class TestOrderFlowDashboard:
 
         broken = MagicMock()
         broken.analyze.side_effect = RuntimeError("boom")
-        broken.get_key_levels.return_value = {"support": [], "resistance": [], "poc": None}
+        broken.get_key_levels.return_value = {
+            "support": [],
+            "resistance": [],
+            "poc": None,
+        }
 
         from analysis.institutional_flow import InstitutionalFlowDetector
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer

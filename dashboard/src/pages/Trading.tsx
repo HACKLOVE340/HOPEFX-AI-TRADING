@@ -101,16 +101,16 @@ export function Trading() {
           </div>
           <div ref={chartContainerRef} className="h-[500px]" />
         </div>
-        
+
         <PositionTable />
 
         {/* Multi-timeframe synchronized chart panels */}
         <MultiTimeframeChart symbol="XAUUSD" />
       </div>
-      
+
       <div className="space-y-6">
         <OrderPanel />
-        
+
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
           <h3 className="font-semibold mb-3">Risk Metrics</h3>
           <div className="space-y-2 text-sm">

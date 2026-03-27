@@ -162,7 +162,8 @@ class OANDAStreamAdapter:
                 await self._rest_fallback_burst()
 
             logger.warning(
-                "OANDAStreamAdapter reconnecting in %.1fs…", self._reconnect_delay,
+                "OANDAStreamAdapter reconnecting in %.1fs…",
+                self._reconnect_delay,
             )
             await asyncio.sleep(self._reconnect_delay)
             self._reconnect_delay = min(self._reconnect_delay * _MULTIPLIER, _MAX_DELAY)
@@ -185,7 +186,9 @@ class OANDAStreamAdapter:
 
         try:
             timeout = aiohttp.ClientTimeout(
-                total=None, connect=self._connect_timeout, sock_read=60,
+                total=None,
+                connect=self._connect_timeout,
+                sock_read=60,
             )
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -262,7 +265,8 @@ class OANDAStreamAdapter:
                         self._on_tick(price)
                     except Exception as exc:
                         logger.error(
-                            "OANDAStreamAdapter REST fallback callback error: %s", exc,
+                            "OANDAStreamAdapter REST fallback callback error: %s",
+                            exc,
                         )
             await asyncio.sleep(interval)
             elapsed += interval

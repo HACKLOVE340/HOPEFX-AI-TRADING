@@ -20,8 +20,12 @@ from datetime import datetime, timezone, timedelta
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_jwt(sub: str = "user123", role: str = "trader", secret: str = "test-secret") -> str:
+
+def _make_jwt(
+    sub: str = "user123", role: str = "trader", secret: str = "test-secret"
+) -> str:
     import jwt
+
     payload = {
         "sub": sub,
         "role": role,
@@ -33,6 +37,7 @@ def _make_jwt(sub: str = "user123", role: str = "trader", secret: str = "test-se
 
 # ── Auth service unit tests ───────────────────────────────────────────────────
 
+
 class TestAuthService:
     """Tests for auth/service.py AuthService."""
 
@@ -42,6 +47,7 @@ class TestAuthService:
         # passlib.CryptContext directly — passlib 1.7.x + bcrypt 4.x raises
         # ValueError during backend detection on this Python/bcrypt version.
         from auth.jwt import hash_password, verify_password
+
         hashed = hash_password("MySecurePass123!")
         assert hashed != "MySecurePass123!"
         assert verify_password("MySecurePass123!", hashed)
@@ -50,6 +56,7 @@ class TestAuthService:
     def test_jwt_encode_decode_roundtrip(self):
         """JWT encode → decode must preserve sub and role."""
         import jwt
+
         secret = "test-secret-key"
         token = _make_jwt("alice", "admin", secret)
         payload = jwt.decode(token, secret, algorithms=["HS256"])
@@ -59,6 +66,7 @@ class TestAuthService:
     def test_jwt_expired_raises(self):
         """Expired JWT must raise DecodeError / ExpiredSignatureError."""
         import jwt
+
         secret = "test-secret-key"
         payload = {
             "sub": "bob",
@@ -71,6 +79,7 @@ class TestAuthService:
     def test_jwt_wrong_secret_raises(self):
         """JWT signed with wrong secret must fail verification."""
         import jwt
+
         token = _make_jwt("carol", secret="correct-secret")
         with pytest.raises(jwt.InvalidSignatureError):
             jwt.decode(token, "wrong-secret", algorithms=["HS256"])
@@ -78,6 +87,7 @@ class TestAuthService:
     def test_username_validation_pattern(self):
         """Username must match ^[a-zA-Z0-9_-]+$ and be 3-50 chars."""
         import re
+
         pattern = re.compile(r"^[a-zA-Z0-9_-]{3,50}$")
         assert pattern.match("valid_user-99")
         assert not pattern.match("bad user!")
@@ -96,6 +106,7 @@ class TestAuthService:
 
 # ── Free tier assignment ──────────────────────────────────────────────────────
 
+
 class TestFreeTierAssignment:
     """Tests for the free-tier auto-assign on registration."""
 
@@ -113,11 +124,14 @@ class TestFreeTierAssignment:
 
         with patch("monetization.subscription.subscription_manager", mock_mgr):
             from monetization.subscription import SubscriptionTier
+
             existing = mock_mgr.get_user_subscription("new_user")
             assert existing is None
             sub = mock_mgr.create_subscription("new_user", SubscriptionTier.FREE)
             assert sub.tier.value == "free"
-            mock_mgr.create_subscription.assert_called_once_with("new_user", SubscriptionTier.FREE)
+            mock_mgr.create_subscription.assert_called_once_with(
+                "new_user", SubscriptionTier.FREE
+            )
 
     def test_activate_free_tier_idempotent(self):
         """
@@ -142,6 +156,7 @@ class TestFreeTierAssignment:
 
         with patch("monetization.affiliate.affiliate_manager", mock_aff):
             from decimal import Decimal
+
             mock_aff.track_referral(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
@@ -156,6 +171,7 @@ class TestFreeTierAssignment:
 
 # ── API auth endpoint tests ───────────────────────────────────────────────────
 
+
 class TestAuthApiEndpoints:
     """Tests for auth/router.py endpoints using FastAPI TestClient."""
 
@@ -169,11 +185,22 @@ class TestAuthApiEndpoints:
 
             # Mock auth service
             mock_svc = MagicMock()
-            mock_svc.register.return_value = (True, "Account created", "verify-token-123")
-            mock_svc.login.return_value = (True, "Login successful", {
-                "id": "user-1", "username": "testuser", "email": "test@example.com",
-                "role": "trader", "is_email_verified": True,
-            })
+            mock_svc.register.return_value = (
+                True,
+                "Account created",
+                "verify-token-123",
+            )
+            mock_svc.login.return_value = (
+                True,
+                "Login successful",
+                {
+                    "id": "user-1",
+                    "username": "testuser",
+                    "email": "test@example.com",
+                    "role": "trader",
+                    "is_email_verified": True,
+                },
+            )
             mock_svc.verify_email.return_value = (True, "Email verified")
             set_auth_service(mock_svc)
 
@@ -185,11 +212,14 @@ class TestAuthApiEndpoints:
 
     def test_register_returns_201(self, client):
         # auth router is mounted with prefix /api/auth
-        res = client.post("/api/auth/register", json={
-            "email": "new@example.com",
-            "username": "newtrader",
-            "password": "SecurePass123!",
-        })
+        res = client.post(
+            "/api/auth/register",
+            json={
+                "email": "new@example.com",
+                "username": "newtrader",
+                "password": "SecurePass123!",
+            },
+        )
         assert res.status_code == 201
 
     def test_register_missing_fields_returns_422(self, client):
@@ -197,10 +227,13 @@ class TestAuthApiEndpoints:
         assert res.status_code == 422
 
     def test_login_success(self, client):
-        res = client.post("/api/auth/login", json={
-            "username": "testuser",
-            "password": "SecurePass123!",
-        })
+        res = client.post(
+            "/api/auth/login",
+            json={
+                "username": "testuser",
+                "password": "SecurePass123!",
+            },
+        )
         # 200 or 422 depending on mock wiring — just ensure no 500
         assert res.status_code != 500
 

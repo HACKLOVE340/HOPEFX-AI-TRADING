@@ -74,8 +74,7 @@ class TestAlertCondition:
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
         condition = AlertCondition(
-            type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000.00
+            type=AlertConditionType.PRICE_ABOVE, threshold=2000.00
         )
 
         assert condition.type == AlertConditionType.PRICE_ABOVE
@@ -86,9 +85,7 @@ class TestAlertCondition:
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
         condition = AlertCondition(
-            type=AlertConditionType.INDICATOR_ABOVE,
-            threshold=70.0,
-            indicator="rsi_14"
+            type=AlertConditionType.INDICATOR_ABOVE, threshold=70.0, indicator="rsi_14"
         )
 
         assert condition.indicator == "rsi_14"
@@ -98,13 +95,12 @@ class TestAlertCondition:
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
         condition = AlertCondition(
-            type=AlertConditionType.PRICE_BELOW,
-            threshold=1900.00
+            type=AlertConditionType.PRICE_BELOW, threshold=1900.00
         )
 
         result = condition.to_dict()
-        assert result['type'] == "price_below"
-        assert result['threshold'] == 1900.00
+        assert result["type"] == "price_below"
+        assert result["threshold"] == 1900.00
 
 
 class TestAlert:
@@ -113,13 +109,14 @@ class TestAlert:
     def test_alert_creation(self):
         """Test creating an alert."""
         from notifications.alert_engine import (
-            Alert, AlertCondition, AlertConditionType, 
-            AlertPriority
+            Alert,
+            AlertCondition,
+            AlertConditionType,
+            AlertPriority,
         )
 
         condition = AlertCondition(
-            type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000.00
+            type=AlertConditionType.PRICE_ABOVE, threshold=2000.00
         )
 
         alert = Alert(
@@ -128,7 +125,7 @@ class TestAlert:
             symbol="XAUUSD",
             conditions=[condition],
             priority=AlertPriority.HIGH,
-            notify_channels=['discord', 'email']
+            notify_channels=["discord", "email"],
         )
 
         assert alert.id == "ALERT-001"
@@ -140,8 +137,10 @@ class TestAlert:
     def test_alert_is_active(self):
         """Test alert active status check."""
         from notifications.alert_engine import (
-            Alert, AlertCondition, AlertConditionType, 
-            AlertStatus
+            Alert,
+            AlertCondition,
+            AlertConditionType,
+            AlertStatus,
         )
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
@@ -152,7 +151,7 @@ class TestAlert:
             name="Test",
             symbol="XAUUSD",
             conditions=[condition],
-            status=AlertStatus.ACTIVE
+            status=AlertStatus.ACTIVE,
         )
         assert alert.is_active() is True
 
@@ -162,9 +161,7 @@ class TestAlert:
 
     def test_alert_expiration(self):
         """Test alert expiration check."""
-        from notifications.alert_engine import (
-            Alert, AlertCondition, AlertConditionType
-        )
+        from notifications.alert_engine import Alert, AlertCondition, AlertConditionType
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
 
@@ -174,15 +171,14 @@ class TestAlert:
             name="Test",
             symbol="XAUUSD",
             conditions=[condition],
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1)  # Expired 1 hour ago
+            expires_at=datetime.now(timezone.utc)
+            - timedelta(hours=1),  # Expired 1 hour ago
         )
         assert alert.is_active() is False
 
     def test_alert_cooldown(self):
         """Test alert cooldown check."""
-        from notifications.alert_engine import (
-            Alert, AlertCondition, AlertConditionType
-        )
+        from notifications.alert_engine import Alert, AlertCondition, AlertConditionType
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
 
@@ -192,31 +188,27 @@ class TestAlert:
             symbol="XAUUSD",
             conditions=[condition],
             cooldown_minutes=5,
-            last_triggered_at=datetime.now(timezone.utc) - timedelta(minutes=2)  # 2 min ago
+            last_triggered_at=datetime.now(timezone.utc)
+            - timedelta(minutes=2),  # 2 min ago
         )
 
         assert alert.is_in_cooldown() is True
 
     def test_alert_to_dict(self):
         """Test alert serialization."""
-        from notifications.alert_engine import (
-            Alert, AlertCondition, AlertConditionType
-        )
+        from notifications.alert_engine import Alert, AlertCondition, AlertConditionType
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
 
         alert = Alert(
-            id="ALERT-001",
-            name="Test",
-            symbol="XAUUSD",
-            conditions=[condition]
+            id="ALERT-001", name="Test", symbol="XAUUSD", conditions=[condition]
         )
 
         result = alert.to_dict()
-        assert result['id'] == "ALERT-001"
-        assert result['name'] == "Test"
-        assert result['symbol'] == "XAUUSD"
-        assert 'conditions' in result
+        assert result["id"] == "ALERT-001"
+        assert result["name"] == "Test"
+        assert result["symbol"] == "XAUUSD"
+        assert "conditions" in result
 
 
 class TestAlertEngine:
@@ -228,7 +220,7 @@ class TestAlertEngine:
 
         engine = AlertEngine()
         assert engine is not None
-        assert hasattr(engine, '_alerts')
+        assert hasattr(engine, "_alerts")
 
     def test_create_alert(self):
         """Test creating an alert."""
@@ -239,7 +231,7 @@ class TestAlertEngine:
             name="Gold Above 2000",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000.00
+            threshold=2000.00,
         )
 
         assert alert is not None
@@ -248,7 +240,11 @@ class TestAlertEngine:
 
     def test_create_alert_with_options(self):
         """Test creating alert with all options."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType, AlertPriority
+        from notifications.alert_engine import (
+            AlertEngine,
+            AlertConditionType,
+            AlertPriority,
+        )
 
         engine = AlertEngine()
         alert = engine.create_alert(
@@ -257,10 +253,10 @@ class TestAlertEngine:
             condition_type=AlertConditionType.RSI_OVERSOLD,
             threshold=30.0,
             priority=AlertPriority.HIGH,
-            notify_channels=['discord', 'telegram'],
+            notify_channels=["discord", "telegram"],
             expires_in_hours=24,
             cooldown_minutes=10,
-            max_triggers=5
+            max_triggers=5,
         )
 
         assert alert.priority == AlertPriority.HIGH
@@ -276,7 +272,7 @@ class TestAlertEngine:
             name="Test Alert",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000
+            threshold=2000,
         )
 
         retrieved = engine.get_alert(alert.id)
@@ -301,7 +297,7 @@ class TestAlertEngine:
             name="Test",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000
+            threshold=2000,
         )
 
         result = engine.delete_alert(alert.id)
@@ -310,14 +306,18 @@ class TestAlertEngine:
 
     def test_pause_resume_alert(self):
         """Test pausing and resuming an alert."""
-        from notifications.alert_engine import AlertEngine, AlertConditionType, AlertStatus
+        from notifications.alert_engine import (
+            AlertEngine,
+            AlertConditionType,
+            AlertStatus,
+        )
 
         engine = AlertEngine()
         alert = engine.create_alert(
             name="Test",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000
+            threshold=2000,
         )
 
         # Pause
@@ -353,7 +353,9 @@ class TestAlertEngine:
         engine = AlertEngine()
 
         engine.create_alert("Active", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
-        alert2 = engine.create_alert("Paused", "EURUSD", AlertConditionType.PRICE_BELOW, 1.10)
+        alert2 = engine.create_alert(
+            "Paused", "EURUSD", AlertConditionType.PRICE_BELOW, 1.10
+        )
 
         engine.pause_alert(alert2.id)
 
@@ -370,11 +372,11 @@ class TestAlertEngine:
             name="Gold Above 2000",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000.00
+            threshold=2000.00,
         )
 
         # Price above threshold - should trigger
-        market_data = {'XAUUSD': {'price': 2005.00}}
+        market_data = {"XAUUSD": {"price": 2005.00}}
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) >= 1
@@ -388,11 +390,11 @@ class TestAlertEngine:
             name="Gold Below 1900",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_BELOW,
-            threshold=1900.00
+            threshold=1900.00,
         )
 
         # Price below threshold - should trigger
-        market_data = {'XAUUSD': {'price': 1890.00}}
+        market_data = {"XAUUSD": {"price": 1890.00}}
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) >= 1
@@ -406,11 +408,11 @@ class TestAlertEngine:
             name="Gold Above 2100",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2100.00
+            threshold=2100.00,
         )
 
         # Price below threshold - should NOT trigger
-        market_data = {'XAUUSD': {'price': 2050.00}}
+        market_data = {"XAUUSD": {"price": 2050.00}}
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) == 0
@@ -424,11 +426,13 @@ class TestAlertEngine:
             name="RSI Oversold",
             symbol="XAUUSD",
             condition_type=AlertConditionType.RSI_OVERSOLD,
-            threshold=30.0
+            threshold=30.0,
         )
 
         # RSI oversold - should trigger (using rsi_14 or rsi key)
-        market_data = {'XAUUSD': {'price': 1950, 'indicators': {'rsi': 25, 'rsi_14': 25}}}
+        market_data = {
+            "XAUUSD": {"price": 1950, "indicators": {"rsi": 25, "rsi_14": 25}}
+        }
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) >= 1
@@ -442,11 +446,11 @@ class TestAlertEngine:
             name="Volume Spike",
             symbol="XAUUSD",
             condition_type=AlertConditionType.VOLUME_ABOVE,
-            threshold=1000000
+            threshold=1000000,
         )
 
         # High volume - should trigger
-        market_data = {'XAUUSD': {'price': 1950, 'volume': 1500000}}
+        market_data = {"XAUUSD": {"price": 1950, "volume": 1500000}}
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) >= 1
@@ -460,11 +464,11 @@ class TestAlertEngine:
             name="Test Alert",
             symbol="XAUUSD",
             condition_type=AlertConditionType.PRICE_ABOVE,
-            threshold=2000
+            threshold=2000,
         )
 
         # Trigger alert
-        market_data = {'XAUUSD': {'price': 2010}}
+        market_data = {"XAUUSD": {"price": 2010}}
         engine.check_alerts(market_data)
 
         history = engine.get_trigger_history()
@@ -478,8 +482,8 @@ class TestAlertEngine:
         engine.create_alert("Test", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
 
         stats = engine.get_stats()
-        assert 'total_alerts' in stats
-        assert 'active_alerts' in stats
+        assert "total_alerts" in stats
+        assert "active_alerts" in stats
 
     def test_notification_handler(self):
         """Test notification handler registration."""
@@ -496,7 +500,7 @@ class TestAlertEngine:
         engine.register_notification_handler(test_handler)
 
         engine.create_alert("Test", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
-        engine.check_alerts({'XAUUSD': {'price': 2005}})
+        engine.check_alerts({"XAUUSD": {"price": 2005}})
 
         assert len(handler_called) >= 1
 

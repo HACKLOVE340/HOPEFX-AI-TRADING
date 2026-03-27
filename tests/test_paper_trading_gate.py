@@ -36,16 +36,14 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from research.pipeline.paper_trading_gate import (
-    PHASE2_MAX_SHARPE_DROP,
-    PHASE2_MIN_DAYS,
-    PHASE3_MIN_DAYS,
+from research.pipeline.paper_trading_gate import (  # noqa: E402
     PHASE3_MIN_FILLS,
     PaperTradingGate,
 )
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def gate(tmp_path):
@@ -76,6 +74,7 @@ def gate_phase3_ready(tmp_path):
 
 # ── unit: state persistence ───────────────────────────────────────────────────
 
+
 def test_state_persists_across_instances(tmp_path):
     path = str(tmp_path / "gate.json")
     g1 = PaperTradingGate(state_path=path)
@@ -98,6 +97,7 @@ def test_state_file_created_on_save(tmp_path):
 
 # ── unit: set_run_start ───────────────────────────────────────────────────────
 
+
 def test_set_run_start_defaults_to_now(gate):
     before = datetime.now(timezone.utc)
     gate.set_run_start()
@@ -114,6 +114,7 @@ def test_set_run_start_accepts_explicit_datetime(gate):
 
 # ── unit: elapsed_days ────────────────────────────────────────────────────────
 
+
 def test_elapsed_days_zero_when_not_started(gate):
     assert gate.elapsed_days == 0
 
@@ -125,6 +126,7 @@ def test_elapsed_days_correct(gate):
 
 
 # ── unit: record_fill ─────────────────────────────────────────────────────────
+
 
 def test_record_fill_increments_counter(gate):
     gate.set_run_start()
@@ -145,6 +147,7 @@ def test_record_fill_persists(tmp_path):
 
 
 # ── unit: phase2_ready ────────────────────────────────────────────────────────
+
 
 def test_phase2_not_ready_when_not_started(gate):
     ok, reason = gate.phase2_ready()
@@ -179,6 +182,7 @@ def test_phase2_sharpe_gate_passes_on_small_drop(gate_started):
 
 # ── unit: phase3_ready ────────────────────────────────────────────────────────
 
+
 def test_phase3_not_ready_insufficient_fills(gate_started):
     ok, reason = gate_started.phase3_ready()
     assert not ok
@@ -202,20 +206,28 @@ def test_phase3_ready_when_all_gates_pass(gate_phase3_ready):
 
 # ── unit: status dict ─────────────────────────────────────────────────────────
 
+
 def test_status_contains_all_keys(gate_started):
     s = gate_started.status()
     required_keys = [
-        "run_start_utc", "elapsed_days", "fill_count",
-        "phase2_ready", "phase2_reason",
-        "phase3_ready", "phase3_reason",
-        "phase2_min_days", "phase3_min_days",
-        "phase3_min_fills", "phase2_max_sharpe_drop",
+        "run_start_utc",
+        "elapsed_days",
+        "fill_count",
+        "phase2_ready",
+        "phase2_reason",
+        "phase3_ready",
+        "phase3_reason",
+        "phase2_min_days",
+        "phase3_min_days",
+        "phase3_min_fills",
+        "phase2_max_sharpe_drop",
     ]
     for key in required_keys:
         assert key in s, f"Missing key: {key}"
 
 
 # ── integration: API endpoints ────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def api_client(tmp_path_factory):
@@ -240,6 +252,7 @@ def test_gate_endpoint_returns_200(api_client):
 def test_gate_fill_endpoint_records_fill(api_client, monkeypatch, tmp_path):
     """POST /api/status/paper-trading/gate/fill increments fill count."""
     from research.pipeline import paper_trading_gate as _ptg
+
     fresh_gate = PaperTradingGate(state_path=str(tmp_path / "api_gate.json"))
     fresh_gate.set_run_start()
     monkeypatch.setattr(_ptg, "_gate", fresh_gate)
@@ -262,9 +275,15 @@ def test_paper_trading_status_endpoint(api_client):
 
 # ── validate_oanda.py --gate flag ─────────────────────────────────────────────
 
+
 def test_validate_oanda_gate_flag_runs(capsys):
     """--gate flag prints gate status without crashing."""
     from scripts.validate_oanda import validate_gate
+
     validate_gate()  # should not raise
     captured = capsys.readouterr()
-    assert "Phase" in captured.out or "Gate" in captured.out or "gate" in captured.out.lower()
+    assert (
+        "Phase" in captured.out
+        or "Gate" in captured.out
+        or "gate" in captured.out.lower()
+    )

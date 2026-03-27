@@ -6,7 +6,7 @@
 
 ## 📋 Overview
 
-HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions. 
+HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions.
 
 > ⚠️ **IMPORTANT: This is NOT a free application.** Payment is required to access the full platform. After the 14-day free trial, you must subscribe to one of our paid plans to continue using HOPEFX.
 
@@ -45,7 +45,7 @@ This guide covers:
 
 ### Starter Tier
 
-**Price:** 
+**Price:**
 - **$2,000/month**
 - **$20,400/year** (save 15% - $3,600 discount)
 
@@ -69,7 +69,7 @@ This guide covers:
 
 ### Professional Tier
 
-**Price:** 
+**Price:**
 - **$5,000/month**
 - **$51,000/year** (save 15% - $9,000 discount)
 
@@ -95,7 +95,7 @@ This guide covers:
 
 ### Enterprise Tier
 
-**Price:** 
+**Price:**
 - **$10,000/month**
 - **$102,000/year** (save 15% - $18,000 discount)
 
@@ -206,7 +206,7 @@ strategies = marketplace.list_strategies(
 
 # Purchase strategy
 strategy = marketplace.purchase(
-    strategy_id='strategy_id', 
+    strategy_id='strategy_id',
     payment_method='card'
 )
 

@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 # SecureConfig
 # ---------------------------------------------------------------------------
 
+
 class SecureConfig:
     """Load trading credentials from environment variables."""
 
@@ -53,7 +54,9 @@ class SecureConfig:
         self.redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
         self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
-        self.symbols: List[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(",")
+        self.symbols: List[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(
+            ","
+        )
         self.initial_balance: float = float(os.getenv("INITIAL_BALANCE", "10000"))
 
     def validate_live(self) -> None:
@@ -69,6 +72,7 @@ class SecureConfig:
 # ---------------------------------------------------------------------------
 # LiveDataPipeline
 # ---------------------------------------------------------------------------
+
 
 class LiveDataPipeline:
     """
@@ -93,6 +97,7 @@ class LiveDataPipeline:
             return
         try:
             from brokers.oanda_ws import OANDAStreamAdapter
+
             self._adapter = OANDAStreamAdapter(
                 api_key=self._config.oanda_api_key,
                 account_id=self._config.oanda_account_id,
@@ -102,7 +107,9 @@ class LiveDataPipeline:
             )
             await self._adapter.start()
             self._running = True
-            logger.info("LiveDataPipeline: OANDA stream started for %s", self._config.symbols)
+            logger.info(
+                "LiveDataPipeline: OANDA stream started for %s", self._config.symbols
+            )
         except Exception as exc:
             logger.error("LiveDataPipeline start failed: %s", exc)
             raise
@@ -121,6 +128,7 @@ class LiveDataPipeline:
 
     async def _synthetic_feed(self) -> None:
         import random
+
         price = 2050.0
         while self._running:
             price += random.gauss(0, 0.5)
@@ -139,6 +147,7 @@ class LiveDataPipeline:
 # OrderGateway
 # ---------------------------------------------------------------------------
 
+
 class OrderGateway:
     """Thin wrapper around a broker connector for order placement."""
 
@@ -155,6 +164,7 @@ class OrderGateway:
     ) -> Optional[Any]:
         try:
             from brokers.base import OrderSide, OrderType
+
             side_enum = OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL
             order = self._broker.place_order(
                 symbol=symbol,
@@ -165,7 +175,10 @@ class OrderGateway:
             if order:
                 logger.info(
                     "OrderGateway: %s %s %.4f @ market | id=%s",
-                    side, symbol, quantity, order.id,
+                    side,
+                    symbol,
+                    quantity,
+                    order.id,
                 )
             return order
         except Exception as exc:
@@ -184,6 +197,7 @@ class OrderGateway:
 # EnsembleStrategy
 # ---------------------------------------------------------------------------
 
+
 class EnsembleStrategy:
     """Delegates to StrategyOrchestra for multi-strategy signal consensus."""
 
@@ -193,6 +207,7 @@ class EnsembleStrategy:
     def setup(self, event_bus) -> None:
         try:
             from core.strategy_orchestra import StrategyOrchestra
+
             self._orchestra = StrategyOrchestra(event_bus)
             logger.info("EnsembleStrategy: StrategyOrchestra initialised")
         except Exception as exc:
@@ -200,7 +215,11 @@ class EnsembleStrategy:
 
     def generate_signal(self, market_data: Dict) -> Dict:
         if self._orchestra is None:
-            return {"direction": "flat", "confidence": 0.0, "reason": "orchestra not ready"}
+            return {
+                "direction": "flat",
+                "confidence": 0.0,
+                "reason": "orchestra not ready",
+            }
         try:
             price = float(market_data.get("close", market_data.get("mid", 0)))
             self._orchestra.distribute_price(price)
@@ -216,6 +235,7 @@ class EnsembleStrategy:
 # MLPredictor
 # ---------------------------------------------------------------------------
 
+
 class MLPredictor:
     """Wraps HopeFXPredictor. Loads a pre-trained model if available."""
 
@@ -226,8 +246,10 @@ class MLPredictor:
     def load(self) -> bool:
         try:
             from enhanced_ml_predictor import HopeFXPredictor
+
             self._predictor = HopeFXPredictor()
             import pathlib
+
             if pathlib.Path(self._model_path).exists():
                 self._predictor.load(self._model_path)
                 logger.info("MLPredictor: model loaded from %s", self._model_path)
@@ -261,6 +283,7 @@ class MLPredictor:
 # RiskManager
 # ---------------------------------------------------------------------------
 
+
 class RiskManager:
     """Delegates to risk.manager.RiskManager for sizing and circuit-breaker logic."""
 
@@ -271,17 +294,23 @@ class RiskManager:
     def setup(self) -> None:
         try:
             from risk.manager import RiskManager as _RM, RiskConfig
+
             self._rm = _RM(config=RiskConfig(), initial_balance=self._balance)
             logger.info("RiskManager: initialised with balance=%.2f", self._balance)
         except Exception as exc:
             logger.warning("RiskManager.setup: %s", exc)
 
-    def approve_trade(self, symbol: str, side: str, price: float, equity: float) -> Dict:
+    def approve_trade(
+        self, symbol: str, side: str, price: float, equity: float
+    ) -> Dict:
         if self._rm is None:
             return {"approved": False, "reason": "risk manager not initialised"}
         try:
             if self._rm._trading_halted:
-                return {"approved": False, "reason": self._rm._halt_reason or "trading halted"}
+                return {
+                    "approved": False,
+                    "reason": self._rm._halt_reason or "trading halted",
+                }
             self._rm.update_equity(equity)
             result = self._rm.calculate_position_size(
                 symbol=symbol,
@@ -303,6 +332,7 @@ class RiskManager:
 # StateManager
 # ---------------------------------------------------------------------------
 
+
 class StateManager:
     """Persists trading state to Redis."""
 
@@ -314,6 +344,7 @@ class StateManager:
     def connect(self) -> None:
         try:
             import redis
+
             self._redis = redis.Redis(
                 host=self._redis_host,
                 port=self._redis_port,
@@ -321,9 +352,15 @@ class StateManager:
                 socket_connect_timeout=3,
             )
             self._redis.ping()
-            logger.info("StateManager: Redis connected at %s:%d", self._redis_host, self._redis_port)
+            logger.info(
+                "StateManager: Redis connected at %s:%d",
+                self._redis_host,
+                self._redis_port,
+            )
         except Exception as exc:
-            logger.warning("StateManager: Redis unavailable (%s) — state will not persist", exc)
+            logger.warning(
+                "StateManager: Redis unavailable (%s) — state will not persist", exc
+            )
             self._redis = None
 
     def save(self, key: str, value: str, ttl: int = 86400) -> None:
@@ -346,6 +383,7 @@ class StateManager:
 # AlertManager
 # ---------------------------------------------------------------------------
 
+
 class AlertManager:
     """Sends alerts via Telegram bot and structured logging."""
 
@@ -360,6 +398,7 @@ class AlertManager:
             return
         try:
             from notifications.telegram_bot import TelegramBot
+
             self._bot = TelegramBot(token=self._token)
             logger.info("AlertManager: Telegram bot ready")
         except Exception as exc:
@@ -380,6 +419,7 @@ class AlertManager:
 # NewsFilter
 # ---------------------------------------------------------------------------
 
+
 class NewsFilter:
     """Pauses trading around high-impact Forex Factory events."""
 
@@ -391,6 +431,7 @@ class NewsFilter:
     def setup(self) -> None:
         try:
             from news_filter_integration import NewsFilterIntegration
+
             self._filter = NewsFilterIntegration(
                 redis_host=self._redis_host,
                 redis_port=self._redis_port,
@@ -411,6 +452,7 @@ class NewsFilter:
 # ---------------------------------------------------------------------------
 # ForwardTestHarness
 # ---------------------------------------------------------------------------
+
 
 class ForwardTestHarness:
     """
@@ -514,6 +556,7 @@ class ForwardTestHarness:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 async def _main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -529,6 +572,7 @@ async def _main() -> None:
     # Build broker
     if cfg.app_env == "live":
         from brokers.oanda import OANDAConnector
+
         broker = OANDAConnector(
             api_key=cfg.oanda_api_key,
             account_id=cfg.oanda_account_id,
@@ -537,11 +581,13 @@ async def _main() -> None:
         broker.connect()
     else:
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=cfg.initial_balance)
         await broker.connect()
 
     # Kill switch — check persisted state on startup
     from kill_switch import KillSwitch
+
     ks = KillSwitch()
     await ks.start()
     if ks.is_active():
@@ -554,16 +600,17 @@ async def _main() -> None:
 
     # Wire components
     pipeline = LiveDataPipeline(cfg)
-    gateway  = OrderGateway(broker)
+    gateway = OrderGateway(broker)
     strategy = EnsembleStrategy()
-    ml       = MLPredictor()
-    risk     = RiskManager(initial_balance=cfg.initial_balance)
-    state    = StateManager(redis_host=cfg.redis_host, redis_port=cfg.redis_port)
-    alerts   = AlertManager(token=cfg.telegram_token, chat_id=cfg.telegram_chat_id)
-    news     = NewsFilter(redis_host=cfg.redis_host, redis_port=cfg.redis_port)
+    ml = MLPredictor()
+    risk = RiskManager(initial_balance=cfg.initial_balance)
+    state = StateManager(redis_host=cfg.redis_host, redis_port=cfg.redis_port)
+    alerts = AlertManager(token=cfg.telegram_token, chat_id=cfg.telegram_chat_id)
+    news = NewsFilter(redis_host=cfg.redis_host, redis_port=cfg.redis_port)
 
     try:
         from core.event_bus import EventBus
+
         event_bus = EventBus()
         strategy.setup(event_bus)
     except Exception as exc:

@@ -38,12 +38,15 @@ from .pricing import SubscriptionTier, pricing_manager
 # ---------------------------------------------------------------------------
 try:
     import stripe as _stripe  # type: ignore
+
     _STRIPE_AVAILABLE = True
 except ImportError:
     _stripe = None  # type: ignore
     _STRIPE_AVAILABLE = False
     logger_init = logging.getLogger(__name__)
-    logger_init.warning("stripe package not installed — payment processing disabled. pip install stripe")
+    logger_init.warning(
+        "stripe package not installed — payment processing disabled. pip install stripe"
+    )
 
 # ---------------------------------------------------------------------------
 # Tier feature gates (mirrors pricing.py, adds RL/live flags)
@@ -82,8 +85,12 @@ _TIER_FEATURES: dict[SubscriptionTier, dict[str, Any]] = {
 
 # Stripe Price IDs — override via environment variables
 _STRIPE_PRICE_IDS: dict[SubscriptionTier, str] = {
-    SubscriptionTier.PROFESSIONAL: os.getenv("STRIPE_PRICE_PROFESSIONAL", "price_professional"),
-    SubscriptionTier.ENTERPRISE: os.getenv("STRIPE_PRICE_ENTERPRISE", "price_enterprise"),
+    SubscriptionTier.PROFESSIONAL: os.getenv(
+        "STRIPE_PRICE_PROFESSIONAL", "price_professional"
+    ),
+    SubscriptionTier.ENTERPRISE: os.getenv(
+        "STRIPE_PRICE_ENTERPRISE", "price_enterprise"
+    ),
 }
 
 
@@ -93,6 +100,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # License key helpers
 # ---------------------------------------------------------------------------
+
 
 def _generate_license_key(user_id: str, tier: SubscriptionTier) -> str:
     """
@@ -113,6 +121,7 @@ def _verify_license_key(license_key: str, user_id: str, tier: SubscriptionTier) 
 
 class SubscriptionStatus(str, Enum):
     """Subscription status enumeration"""
+
     ACTIVE = "active"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
@@ -182,7 +191,9 @@ class Subscription:
         self.end_date = datetime.now(timezone.utc) + timedelta(days=duration_days)
         self.status = SubscriptionStatus.ACTIVE
         self.updated_at = datetime.now(timezone.utc)
-        logger.info(f"Subscription {self.subscription_id} renewed until {self.end_date}")
+        logger.info(
+            f"Subscription {self.subscription_id} renewed until {self.end_date}"
+        )
 
     def cancel(self) -> None:
         """Cancel subscription"""
@@ -209,21 +220,21 @@ class Subscription:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'subscription_id': self.subscription_id,
-            'user_id': self.user_id,
-            'tier': self.tier.value,
-            'status': self.status.value,
-            'start_date': self.start_date.isoformat(),
-            'end_date': self.end_date.isoformat(),
-            'access_code': self.access_code,
-            'auto_renew': self.auto_renew,
-            'stripe_subscription_id': self.stripe_subscription_id,
-            'license_key': self.license_key,
-            'is_active': self.is_active(),
-            'days_remaining': self.days_remaining(),
-            'features': _TIER_FEATURES.get(self.tier, {}),
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            "subscription_id": self.subscription_id,
+            "user_id": self.user_id,
+            "tier": self.tier.value,
+            "status": self.status.value,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
+            "access_code": self.access_code,
+            "auto_renew": self.auto_renew,
+            "stripe_subscription_id": self.stripe_subscription_id,
+            "license_key": self.license_key,
+            "is_active": self.is_active(),
+            "days_remaining": self.days_remaining(),
+            "features": _TIER_FEATURES.get(self.tier, {}),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -293,9 +304,7 @@ class SubscriptionManager:
         return True
 
     def upgrade_subscription(
-        self,
-        subscription_id: str,
-        new_tier: SubscriptionTier
+        self, subscription_id: str, new_tier: SubscriptionTier
     ) -> bool:
         """Upgrade subscription to a higher tier"""
         subscription = self.get_subscription(subscription_id)
@@ -315,9 +324,7 @@ class SubscriptionManager:
         return True
 
     def downgrade_subscription(
-        self,
-        subscription_id: str,
-        new_tier: SubscriptionTier
+        self, subscription_id: str, new_tier: SubscriptionTier
     ) -> bool:
         """Downgrade subscription to a lower tier"""
         subscription = self.get_subscription(subscription_id)
@@ -367,10 +374,10 @@ class SubscriptionManager:
         subscription = self.get_user_subscription(user_id)
         if not subscription or not subscription.is_active():
             return {
-                'max_strategies': 0,
-                'max_brokers': 0,
-                'ml_features': False,
-                'api_access': False
+                "max_strategies": 0,
+                "max_brokers": 0,
+                "ml_features": False,
+                "api_access": False,
             }
 
         tier = pricing_manager.get_tier(subscription.tier)
@@ -378,16 +385,16 @@ class SubscriptionManager:
             return {}
 
         return {
-            'max_strategies': tier.features.max_strategies,
-            'max_brokers': tier.features.max_brokers,
-            'ml_features': tier.features.ml_features,
-            'priority_support': tier.features.priority_support,
-            'api_access': tier.features.api_access,
-            'custom_development': tier.features.custom_development,
-            'dedicated_support': tier.features.dedicated_support,
-            'backtesting_unlimited': tier.features.backtesting_unlimited,
-            'pattern_recognition': tier.features.pattern_recognition,
-            'news_integration': tier.features.news_integration
+            "max_strategies": tier.features.max_strategies,
+            "max_brokers": tier.features.max_brokers,
+            "ml_features": tier.features.ml_features,
+            "priority_support": tier.features.priority_support,
+            "api_access": tier.features.api_access,
+            "custom_development": tier.features.custom_development,
+            "dedicated_support": tier.features.dedicated_support,
+            "backtesting_unlimited": tier.features.backtesting_unlimited,
+            "pattern_recognition": tier.features.pattern_recognition,
+            "news_integration": tier.features.news_integration,
         }
 
     def get_all_subscriptions(self) -> List[Subscription]:
@@ -402,7 +409,6 @@ class SubscriptionManager:
         """Get all expired subscriptions"""
         return [sub for sub in self._subscriptions.values() if sub.is_expired()]
 
-
     def create_subscription(
         self,
         user_id: str,
@@ -412,9 +418,10 @@ class SubscriptionManager:
         auto_renew: bool = True,
         stripe_subscription_id: Optional[str] = None,
         stripe_customer_id: Optional[str] = None,
-    ) -> 'Subscription':
+    ) -> "Subscription":
         """Create a new subscription (overrides base to add Stripe fields)."""
         import uuid as _uuid
+
         subscription_id = f"SUB-{_uuid.uuid4().hex[:12].upper()}"
         start_date = datetime.now(timezone.utc)
         end_date = start_date + timedelta(days=duration_days)
@@ -423,7 +430,9 @@ class SubscriptionManager:
             subscription_id=subscription_id,
             user_id=user_id,
             tier=tier,
-            status=SubscriptionStatus.ACTIVE if tier == SubscriptionTier.FREE else SubscriptionStatus.PENDING,
+            status=SubscriptionStatus.ACTIVE
+            if tier == SubscriptionTier.FREE
+            else SubscriptionStatus.PENDING,
             start_date=start_date,
             end_date=end_date,
             access_code=access_code,
@@ -434,7 +443,12 @@ class SubscriptionManager:
 
         self._subscriptions[subscription_id] = subscription
         self._user_subscriptions[user_id] = subscription_id
-        logger.info("subscription.created id=%s user=%s tier=%s", subscription_id, user_id, tier.value)
+        logger.info(
+            "subscription.created id=%s user=%s tier=%s",
+            subscription_id,
+            user_id,
+            tier.value,
+        )
         return subscription
 
     # ------------------------------------------------------------------
@@ -524,14 +538,18 @@ class SubscriptionManager:
                     stripe_customer_id=stripe_cust_id,
                 )
                 sub.status = SubscriptionStatus.ACTIVE
-            logger.info("stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier_str)
+            logger.info(
+                "stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier_str
+            )
 
         elif event_type == "customer.subscription.deleted":
             stripe_sub_id = data.get("id")
             for sub in self._subscriptions.values():
                 if sub.stripe_subscription_id == stripe_sub_id:
                     sub.cancel()
-                    logger.info("stripe.webhook.subscription_deleted sub=%s", stripe_sub_id)
+                    logger.info(
+                        "stripe.webhook.subscription_deleted sub=%s", stripe_sub_id
+                    )
                     break
 
         elif event_type == "invoice.payment_failed":
@@ -539,7 +557,9 @@ class SubscriptionManager:
             for sub in self._subscriptions.values():
                 if sub.stripe_customer_id == stripe_cust_id:
                     sub.suspend()
-                    logger.warning("stripe.webhook.payment_failed customer=%s", stripe_cust_id)
+                    logger.warning(
+                        "stripe.webhook.payment_failed customer=%s", stripe_cust_id
+                    )
                     break
 
         return {"status": "processed", "event_type": event_type}
@@ -548,6 +568,7 @@ class SubscriptionManager:
 # ---------------------------------------------------------------------------
 # License validator
 # ---------------------------------------------------------------------------
+
 
 class LicenseValidator:
     """
@@ -653,6 +674,7 @@ class LicenseValidator:
 # FastAPI router factory
 # ---------------------------------------------------------------------------
 
+
 def create_subscription_router(manager: Optional[SubscriptionManager] = None):
     """
     Build and return a FastAPI APIRouter with subscription endpoints.
@@ -671,7 +693,9 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
         from fastapi import APIRouter, Header, HTTPException, Request
         from pydantic import BaseModel
     except ImportError:
-        raise ImportError("fastapi and pydantic are required. pip install fastapi pydantic")
+        raise ImportError(
+            "fastapi and pydantic are required. pip install fastapi pydantic"
+        )
 
     _mgr = manager or subscription_manager
     _validator = LicenseValidator(_mgr)
@@ -739,7 +763,9 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
         """Receive and process Stripe webhook events."""
         payload = await request.body()
         if not stripe_signature:
-            raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+            raise HTTPException(
+                status_code=400, detail="Missing Stripe-Signature header"
+            )
 
         try:
             result = _mgr.handle_stripe_webhook(payload, stripe_signature)

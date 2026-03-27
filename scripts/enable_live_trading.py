@@ -39,6 +39,7 @@ sys.path.insert(0, str(_ROOT))
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(_ROOT / ".env")
 except ImportError:
     pass
@@ -65,13 +66,17 @@ def run_checks(force: bool = False) -> dict:
 
     # ── 1. OANDA credentials ──────────────────────────────────────────────────
     api_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN") or ""
-    account_id = os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
+    account_id = (
+        os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
+    )
     results["oanda_key"] = _check(
-        "OANDA_API_KEY set", bool(api_key),
+        "OANDA_API_KEY set",
+        bool(api_key),
         "" if api_key else "Set OANDA_API_KEY in .env",
     )
     results["oanda_account"] = _check(
-        "OANDA_ACCOUNT_ID set", bool(account_id),
+        "OANDA_ACCOUNT_ID set",
+        bool(account_id),
         "" if account_id else "Set OANDA_ACCOUNT_ID in .env",
     )
 
@@ -109,7 +114,11 @@ def run_checks(force: bool = False) -> dict:
             f"Paper trading ≥ {_MIN_PAPER_DAYS} days",
             paper_days >= _MIN_PAPER_DAYS,
             f"Estimated {paper_days} days of paper trading data found"
-            + (f" — need {_MIN_PAPER_DAYS - paper_days} more days" if paper_days < _MIN_PAPER_DAYS else ""),
+            + (
+                f" — need {_MIN_PAPER_DAYS - paper_days} more days"
+                if paper_days < _MIN_PAPER_DAYS
+                else ""
+            ),
         )
 
     # ── 5. No execution errors in logs ────────────────────────────────────────
@@ -186,6 +195,7 @@ def _test_oanda_connection(api_key: str, account_id: str, practice: bool) -> boo
     """Quick connectivity test to OANDA live endpoint."""
     try:
         import requests
+
         base = (
             "https://api-fxpractice.oanda.com"
             if practice
@@ -215,9 +225,13 @@ def enable_live_trading() -> None:
         return
 
     if "FEATURE_LIVE_TRADING=false" in content:
-        content = content.replace("FEATURE_LIVE_TRADING=false", "FEATURE_LIVE_TRADING=true")
+        content = content.replace(
+            "FEATURE_LIVE_TRADING=false", "FEATURE_LIVE_TRADING=true"
+        )
     elif "FEATURE_LIVE_TRADING=" in content:
-        content = re.sub(r"FEATURE_LIVE_TRADING=.*", "FEATURE_LIVE_TRADING=true", content)
+        content = re.sub(
+            r"FEATURE_LIVE_TRADING=.*", "FEATURE_LIVE_TRADING=true", content
+        )
     else:
         content += "\nFEATURE_LIVE_TRADING=true\n"
 
@@ -252,7 +266,9 @@ def main() -> None:
     print()
     if not all_passed:
         failed = [k for k, v in results.items() if not v]
-        print(f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading.")
+        print(
+            f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading."
+        )
         print("\nSee docs/oanda_paper_trading_setup.md for setup instructions.")
         sys.exit(1)
 

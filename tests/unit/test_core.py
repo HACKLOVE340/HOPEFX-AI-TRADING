@@ -20,7 +20,9 @@ async def test_event_bus(tmp_path):
     """Test event bus publish/subscribe."""
     # Use a small max_file_size (1 MB) to avoid pre-allocating the 1 GB default
     # which exhausts /tmp in CI environments.
-    store = MemoryMappedEventStore(base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576)
+    store = MemoryMappedEventStore(
+        base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576
+    )
     bus = EventBus(store=store)
 
     received = []

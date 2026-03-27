@@ -45,6 +45,7 @@ import pandas as pd
 # works without it.  Import lazily inside fetch_ohlcv_paginated and main().
 try:
     import ccxt as _ccxt_module
+
     _CCXT_AVAILABLE = True
 except ImportError:
     _ccxt_module = None  # type: ignore[assignment]
@@ -63,13 +64,13 @@ TIMEFRAME = "1h"
 # Gold: 1 pip = $0.10; 3 pips = $0.30 spread (realistic OANDA practice).
 # Crypto: 1 pip = $0.01; 3 pips = $0.03 (tight exchange spread).
 SLIPPAGE_PIPS = 3.0
-GOLD_PIP_VALUE = 0.10          # USD per pip for XAU
-CRYPTO_PIP_VALUE = 0.01        # USD per pip for BTC/ETH
-COMMISSION_USD = 7.0           # Round-trip commission per trade (was 2 bps)
+GOLD_PIP_VALUE = 0.10  # USD per pip for XAU
+CRYPTO_PIP_VALUE = 0.01  # USD per pip for BTC/ETH
+COMMISSION_USD = 7.0  # Round-trip commission per trade (was 2 bps)
 
 ATR_PERIOD = 14
-ATR_STOP_MULT = 1.5            # Stop = 1.5 × ATR
-ATR_TP_MULT = 2.5              # TP   = 2.5 × ATR  → R:R = 1.67 ≥ 1.5 minimum
+ATR_STOP_MULT = 1.5  # Stop = 1.5 × ATR
+ATR_TP_MULT = 2.5  # TP   = 2.5 × ATR  → R:R = 1.67 ≥ 1.5 minimum
 
 # Signal threshold: only trade when |signal| ≥ ABSTAIN_THRESHOLD.
 # Lower = more trades (needed to reach N=600 for SE ≤ ±0.029).
@@ -77,8 +78,8 @@ ATR_TP_MULT = 2.5              # TP   = 2.5 × ATR  → R:R = 1.67 ≥ 1.5 minim
 ABSTAIN_THRESHOLD = 0.52
 
 TRAIN_RATIO = 0.70
-INITIAL_CAPITAL = 100_000.0   # USD
-POSITION_SIZE = 1.0           # 1 lot — Kelly sizing applied in BacktestEngine
+INITIAL_CAPITAL = 100_000.0  # USD
+POSITION_SIZE = 1.0  # 1 lot — Kelly sizing applied in BacktestEngine
 
 # Target trade count for Sharpe SE ≤ ±0.03
 TARGET_TRADE_COUNT = 600
@@ -87,6 +88,7 @@ TARGET_TRADE_COUNT = 600
 # ---------------------------------------------------------------------------
 # Data fetching
 # ---------------------------------------------------------------------------
+
 
 def fetch_ohlcv_paginated(
     exchange: "Any",
@@ -106,7 +108,9 @@ def fetch_ohlcv_paginated(
     fetch_since = since_ms
 
     while len(all_bars) < max_bars:
-        batch = exchange.fetch_ohlcv(symbol, timeframe, since=fetch_since, limit=batch_size)
+        batch = exchange.fetch_ohlcv(
+            symbol, timeframe, since=fetch_since, limit=batch_size
+        )
         if not batch:
             break
 
@@ -129,7 +133,9 @@ def fetch_ohlcv_paginated(
     if not all_bars:
         raise RuntimeError(f"No OHLCV data returned for {symbol} {timeframe}")
 
-    df = pd.DataFrame(all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df = pd.DataFrame(
+        all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
+    )
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     df.set_index("timestamp", inplace=True)
     df = df[~df.index.duplicated(keep="first")].sort_index()
@@ -139,6 +145,7 @@ def fetch_ohlcv_paginated(
 # ---------------------------------------------------------------------------
 # Indicators
 # ---------------------------------------------------------------------------
+
 
 def compute_atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
     """True Range → EMA-smoothed ATR."""
@@ -218,6 +225,7 @@ def _pip_value_for_price(price: float) -> float:
 # Backtest engine
 # ---------------------------------------------------------------------------
 
+
 def run_backtest(
     df: pd.DataFrame,
     initial_capital: float = INITIAL_CAPITAL,
@@ -238,7 +246,7 @@ def run_backtest(
     df = generate_signals(df).dropna()
 
     equity = initial_capital
-    position = 0          # 0 = flat, 1 = long, -1 = short
+    position = 0  # 0 = flat, 1 = long, -1 = short
     entry_price = 0.0
     stop_price = 0.0
     tp_price = 0.0
@@ -255,10 +263,12 @@ def run_backtest(
 
         # --- Manage open position ---
         if position != 0:
-            stop_hit = (position == 1 and row["low"] <= stop_price) or \
-                       (position == -1 and row["high"] >= stop_price)
-            tp_hit = (position == 1 and row["high"] >= tp_price) or \
-                     (position == -1 and row["low"] <= tp_price)
+            stop_hit = (position == 1 and row["low"] <= stop_price) or (
+                position == -1 and row["high"] >= stop_price
+            )
+            tp_hit = (position == 1 and row["high"] >= tp_price) or (
+                position == -1 and row["low"] <= tp_price
+            )
 
             if stop_hit or tp_hit:
                 exit_price = stop_price if stop_hit else tp_price
@@ -289,33 +299,43 @@ def run_backtest(
             entry_bar_idx = bar_idx
             position = direction
 
-        records.append({
-            "equity": equity,
-            "trade_pnl": trade_pnl,
-            "in_trade": position != 0,
-            "direction": position,
-            "entry_price": entry_price if position != 0 else np.nan,
-            "stop": stop_price if position != 0 else np.nan,
-            "tp": tp_price if position != 0 else np.nan,
-        })
+        records.append(
+            {
+                "equity": equity,
+                "trade_pnl": trade_pnl,
+                "in_trade": position != 0,
+                "direction": position,
+                "entry_price": entry_price if position != 0 else np.nan,
+                "stop": stop_price if position != 0 else np.nan,
+                "tp": tp_price if position != 0 else np.nan,
+            }
+        )
         bar_idx += 1
 
     if not records:
         # No bars survived dropna() — return empty DataFrame with correct columns
         empty = pd.DataFrame(
-            columns=["equity", "trade_pnl", "in_trade", "direction",
-                     "entry_price", "stop", "tp"],
+            columns=[
+                "equity",
+                "trade_pnl",
+                "in_trade",
+                "direction",
+                "entry_price",
+                "stop",
+                "tp",
+            ],
             index=df.index[:0],
         )
         return empty, []
 
-    result = pd.DataFrame(records, index=df.index[:len(records)])
+    result = pd.DataFrame(records, index=df.index[: len(records)])
     return result, trade_pnls
 
 
 # ---------------------------------------------------------------------------
 # Walk-forward wrapper
 # ---------------------------------------------------------------------------
+
 
 def walk_forward_backtest(
     df: pd.DataFrame,
@@ -380,6 +400,7 @@ def walk_forward_backtest(
 # Performance metrics
 # ---------------------------------------------------------------------------
 
+
 def trade_level_sharpe(
     trade_pnls: list[float],
     avg_hold_hours: float = 24.0,
@@ -441,6 +462,7 @@ def max_drawdown(equity: pd.Series) -> float:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def run_multi_symbol_backtest(
     symbols: list[str] | None = None,
     since_iso: str = "2021-01-01T00:00:00Z",
@@ -462,10 +484,12 @@ def run_multi_symbol_backtest(
             "ccxt is required for live data fetching. "
             "Install it with: pip install ccxt"
         )
-    exchange = _ccxt_module.binance({
-        "enableRateLimit": True,
-        "options": {"defaultType": "spot"},
-    })
+    exchange = _ccxt_module.binance(
+        {
+            "enableRateLimit": True,
+            "options": {"defaultType": "spot"},
+        }
+    )
     since_ms = exchange.parse8601(since_iso)
 
     all_test_pnls: list[float] = []
@@ -488,9 +512,11 @@ def run_multi_symbol_backtest(
         all_train_pnls.extend(res["train_pnls"])
         all_test_pnls.extend(res["test_pnls"])
 
-        print(f"  {sym}: train={res['train_trade_count']} trades, "
-              f"test={res['test_trade_count']} trades, "
-              f"test Sharpe={res['test_sharpe']:.3f} ±{res['test_sharpe_se']:.3f}")
+        print(
+            f"  {sym}: train={res['train_trade_count']} trades, "
+            f"test={res['test_trade_count']} trades, "
+            f"test Sharpe={res['test_sharpe']:.3f} ±{res['test_sharpe_se']:.3f}"
+        )
 
     # Pooled trade-level Sharpe across all symbols
     pooled_sharpe, pooled_se = trade_level_sharpe(all_test_pnls)
@@ -505,14 +531,20 @@ def run_multi_symbol_backtest(
     print(f"POOLED RESULTS ({len(symbol_results)} symbols)")
     print(f"{'='*60}")
     print(f"  Train trades total : {total_train_trades}")
-    print(f"  Test  trades total : {total_test_trades}  "
-          f"(target: {TARGET_TRADE_COUNT})")
-    print(f"  Pooled test Sharpe : {pooled_sharpe:.3f}  "
-          f"SE ±{pooled_se:.3f}  "
-          f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})")
+    print(
+        f"  Test  trades total : {total_test_trades}  "
+        f"(target: {TARGET_TRADE_COUNT})"
+    )
+    print(
+        f"  Pooled test Sharpe : {pooled_sharpe:.3f}  "
+        f"SE ±{pooled_se:.3f}  "
+        f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})"
+    )
     print(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
-    print("\nNOTE: Sharpe is trade-level (corrected). "
-          "Bar-level Sharpe is NOT reported here.")
+    print(
+        "\nNOTE: Sharpe is trade-level (corrected). "
+        "Bar-level Sharpe is NOT reported here."
+    )
 
     return {
         "symbol_results": symbol_results,

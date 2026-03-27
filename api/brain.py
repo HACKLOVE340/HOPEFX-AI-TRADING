@@ -183,7 +183,8 @@ async def deploy_strategy(
     """
     if not req.strategy_code.strip():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="strategy_code is empty",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="strategy_code is empty",
         )
 
     try:

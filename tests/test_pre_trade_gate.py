@@ -11,8 +11,7 @@ no-fallback invariant.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from risk.pre_trade_gate import (
     GateOrder,
@@ -25,6 +24,7 @@ from risk.pre_trade_gate import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_risk_manager(**overrides):
     """Build a minimal mock risk manager that passes all checks by default."""
@@ -75,6 +75,7 @@ def _make_order(**overrides):
 # Happy path
 # ---------------------------------------------------------------------------
 
+
 class TestPreTradeGatePass:
     def test_all_checks_pass(self):
         rm = _make_risk_manager()
@@ -94,6 +95,7 @@ class TestPreTradeGatePass:
 # ---------------------------------------------------------------------------
 # Kill switch
 # ---------------------------------------------------------------------------
+
 
 class TestKillSwitch:
     def test_kill_switch_blocks(self):
@@ -121,6 +123,7 @@ class TestKillSwitch:
 # Trading halted
 # ---------------------------------------------------------------------------
 
+
 class TestTradingHalted:
     def test_halted_blocks(self):
         rm = _make_risk_manager(_trading_halted=True, _halt_reason="max drawdown")
@@ -140,6 +143,7 @@ class TestTradingHalted:
 # ---------------------------------------------------------------------------
 # Daily loss limit
 # ---------------------------------------------------------------------------
+
 
 class TestDailyLossLimit:
     def test_daily_loss_exceeded_blocks(self):
@@ -169,6 +173,7 @@ class TestDailyLossLimit:
 # Max drawdown
 # ---------------------------------------------------------------------------
 
+
 class TestMaxDrawdown:
     def test_drawdown_exceeded_blocks(self):
         rm = _make_risk_manager(current_drawdown=0.11, max_drawdown_pct=0.10)
@@ -187,6 +192,7 @@ class TestMaxDrawdown:
 # ---------------------------------------------------------------------------
 # CVaR gate
 # ---------------------------------------------------------------------------
+
 
 class TestCVaRGate:
     def test_cvar_breach_blocks(self):
@@ -208,6 +214,7 @@ class TestCVaRGate:
 # ---------------------------------------------------------------------------
 # Position size
 # ---------------------------------------------------------------------------
+
 
 class TestPositionSize:
     def test_oversized_order_blocks(self):
@@ -231,6 +238,7 @@ class TestPositionSize:
 # ---------------------------------------------------------------------------
 # Max open positions
 # ---------------------------------------------------------------------------
+
 
 class TestMaxOpenPositions:
     def test_max_positions_blocks(self):
@@ -257,6 +265,7 @@ class TestMaxOpenPositions:
 # Risk manager error — no fallback
 # ---------------------------------------------------------------------------
 
+
 class TestRiskManagerError:
     def test_risk_manager_exception_raises_risk_manager_error(self):
         """If risk manager throws unexpectedly, RiskManagerError must propagate."""
@@ -269,7 +278,10 @@ class TestRiskManagerError:
     def test_no_allow_anyway_fallback(self):
         """Verify there is no code path that allows a trade when risk manager errors."""
         from pathlib import Path
-        source = (Path(__file__).parent.parent / "risk" / "pre_trade_gate.py").read_text()
+
+        source = (
+            Path(__file__).parent.parent / "risk" / "pre_trade_gate.py"
+        ).read_text()
         # Check the raw file — not lowercased inspect output
         assert "allow_anyway" not in source
         # The docstring mentions "allow anyway" as a concept to reject — that's fine.
@@ -281,6 +293,7 @@ class TestRiskManagerError:
 # ---------------------------------------------------------------------------
 # GateOrder validation
 # ---------------------------------------------------------------------------
+
 
 class TestGateOrderValidation:
     def test_invalid_side_raises(self):

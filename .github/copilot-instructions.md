@@ -75,14 +75,14 @@ Use Google-style docstrings:
 def function_name(param1: str, param2: int) -> bool:
     """
     Brief description of the function.
-    
+
     Args:
         param1: Description of param1
         param2: Description of param2
-    
+
     Returns:
         Description of return value
-    
+
     Raises:
         ValueError: When invalid input is provided
     """

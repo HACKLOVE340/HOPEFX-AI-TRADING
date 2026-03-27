@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 class ChartTemplate:
     """Chart template"""
+
     def __init__(self, name: str, description: str):
         self.template_id = f"TPL_{name}_{datetime.now(timezone.utc).timestamp()}"
         self.name = name
@@ -28,10 +29,7 @@ class TemplateManager:
         self.templates: Dict[str, ChartTemplate] = {}
 
     def save_template(
-        self,
-        name: str,
-        description: str,
-        config: Dict[str, Any]
+        self, name: str, description: str, config: Dict[str, Any]
     ) -> ChartTemplate:
         """Save a chart template"""
         template = ChartTemplate(name, description)

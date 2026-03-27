@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class AccessCodeStatus(str, Enum):
     """Access code status enumeration"""
+
     ACTIVE = "active"
     USED = "used"
     EXPIRED = "expired"
@@ -43,7 +44,7 @@ class AccessCode:
         duration_days: int = 30,
         user_id: Optional[str] = None,
         subscription_id: Optional[str] = None,
-        status: AccessCodeStatus = AccessCodeStatus.ACTIVE
+        status: AccessCodeStatus = AccessCodeStatus.ACTIVE,
     ):
         self.code = code
         self.tier = tier
@@ -90,17 +91,19 @@ class AccessCode:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'code': self.code,
-            'tier': self.tier.value,
-            'duration_days': self.duration_days,
-            'user_id': self.user_id,
-            'subscription_id': self.subscription_id,
-            'status': self.status.value,
-            'is_valid': self.is_valid(),
-            'created_at': self.created_at.isoformat(),
-            'expires_at': self.expires_at.isoformat(),
-            'activated_at': self.activated_at.isoformat() if self.activated_at else None,
-            'used_at': self.used_at.isoformat() if self.used_at else None
+            "code": self.code,
+            "tier": self.tier.value,
+            "duration_days": self.duration_days,
+            "user_id": self.user_id,
+            "subscription_id": self.subscription_id,
+            "status": self.status.value,
+            "is_valid": self.is_valid(),
+            "created_at": self.created_at.isoformat(),
+            "expires_at": self.expires_at.isoformat(),
+            "activated_at": self.activated_at.isoformat()
+            if self.activated_at
+            else None,
+            "used_at": self.used_at.isoformat() if self.used_at else None,
         }
 
 
@@ -114,13 +117,13 @@ class AccessCodeGenerator:
             SubscriptionTier.STARTER: "STR",
             SubscriptionTier.PROFESSIONAL: "PRO",
             SubscriptionTier.ENTERPRISE: "ENT",
-            SubscriptionTier.ELITE: "ELT"
+            SubscriptionTier.ELITE: "ELT",
         }
 
     def _generate_random_string(self, length: int = 8) -> str:
         """Generate random alphanumeric string"""
         chars = string.ascii_uppercase + string.digits
-        return ''.join(secrets.choice(chars) for _ in range(length))
+        return "".join(secrets.choice(chars) for _ in range(length))
 
     def _calculate_checksum(self, tier_prefix: str, random_part: str) -> str:
         """Calculate checksum for verification"""
@@ -129,9 +132,7 @@ class AccessCodeGenerator:
         return hash_obj.hexdigest()[:4].upper()
 
     def generate_code(
-        self,
-        tier: SubscriptionTier,
-        duration_days: int = 30
+        self, tier: SubscriptionTier, duration_days: int = 30
     ) -> AccessCode:
         """Generate a new access code"""
         tier_prefix = self._tier_prefixes.get(tier, "UNK")
@@ -144,7 +145,7 @@ class AccessCodeGenerator:
             code=code,
             tier=tier,
             duration_days=duration_days,
-            status=AccessCodeStatus.ACTIVE
+            status=AccessCodeStatus.ACTIVE,
         )
 
         self._codes[code] = access_code
@@ -155,7 +156,7 @@ class AccessCodeGenerator:
     def validate_code(self, code: str) -> bool:
         """Validate access code format and checksum"""
         try:
-            parts = code.split('-')
+            parts = code.split("-")
             if len(parts) != 4:
                 return False
 
@@ -177,12 +178,7 @@ class AccessCodeGenerator:
         """Get access code by code string"""
         return self._codes.get(code)
 
-    def activate_code(
-        self,
-        code: str,
-        user_id: str,
-        subscription_id: str
-    ) -> bool:
+    def activate_code(self, code: str, user_id: str, subscription_id: str) -> bool:
         """Activate an access code"""
         if not self.validate_code(code):
             logger.error(f"Invalid code format: {code}")
@@ -207,28 +203,31 @@ class AccessCodeGenerator:
     def get_active_codes(self) -> list:
         """Get all active access codes"""
         return [
-            code for code in self._codes.values()
+            code
+            for code in self._codes.values()
             if code.status == AccessCodeStatus.ACTIVE and code.is_valid()
         ]
 
     def get_used_codes(self) -> list:
         """Get all used access codes"""
         return [
-            code for code in self._codes.values()
+            code
+            for code in self._codes.values()
             if code.status == AccessCodeStatus.USED
         ]
 
     def get_expired_codes(self) -> list:
         """Get all expired access codes"""
         return [
-            code for code in self._codes.values()
+            code
+            for code in self._codes.values()
             if code.status == AccessCodeStatus.EXPIRED or not code.is_valid()
         ]
 
     def get_tier_from_code(self, code: str) -> Optional[SubscriptionTier]:
         """Extract tier from code"""
         try:
-            parts = code.split('-')
+            parts = code.split("-")
             if len(parts) != 4:
                 return None
 
@@ -241,10 +240,7 @@ class AccessCodeGenerator:
             return None
 
     def generate_batch_codes(
-        self,
-        tier: SubscriptionTier,
-        count: int,
-        duration_days: int = 30
+        self, tier: SubscriptionTier, count: int, duration_days: int = 30
     ) -> list:
         """Generate multiple access codes"""
         codes = []
@@ -266,17 +262,21 @@ class AccessCodeGenerator:
         for tier in SubscriptionTier:
             tier_codes = [c for c in self._codes.values() if c.tier == tier]
             tier_breakdown[tier.value] = {
-                'total': len(tier_codes),
-                'active': len([c for c in tier_codes if c.status == AccessCodeStatus.ACTIVE]),
-                'used': len([c for c in tier_codes if c.status == AccessCodeStatus.USED])
+                "total": len(tier_codes),
+                "active": len(
+                    [c for c in tier_codes if c.status == AccessCodeStatus.ACTIVE]
+                ),
+                "used": len(
+                    [c for c in tier_codes if c.status == AccessCodeStatus.USED]
+                ),
             }
 
         return {
-            'total_codes': total,
-            'active_codes': active,
-            'used_codes': used,
-            'expired_codes': expired,
-            'tier_breakdown': tier_breakdown
+            "total_codes": total,
+            "active_codes": active,
+            "used_codes": used,
+            "expired_codes": expired,
+            "tier_breakdown": tier_breakdown,
         }
 
 

@@ -57,7 +57,7 @@ from locust.exception import StopUser
 
 _AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 _THINK_TIME = float(os.getenv("THINK_TIME", "1.0"))
-_SYMBOLS    = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
 _SIGNAL_SYM = os.getenv("SIGNAL_SYMBOL", "XAUUSD")
 
 
@@ -82,6 +82,7 @@ def _check(resp, name: str, allowed=(200,)) -> bool:
 
 # ── Public user ───────────────────────────────────────────────────────────────
 
+
 class PublicUser(HttpUser):
     """Unauthenticated visitor hitting public endpoints."""
 
@@ -95,7 +96,9 @@ class PublicUser(HttpUser):
 
     @task(3)
     def public_status(self):
-        with self.client.get("/api/status", catch_response=True, name="/api/status") as r:
+        with self.client.get(
+            "/api/status", catch_response=True, name="/api/status"
+        ) as r:
             _check(r, "status", (200, 404))
 
     @task(4)
@@ -136,6 +139,7 @@ class PublicUser(HttpUser):
 
 
 # ── ML researcher ─────────────────────────────────────────────────────────────
+
 
 class MLResearcher(HttpUser):
     """User polling ML predictions and signal endpoints."""
@@ -206,6 +210,7 @@ class MLResearcher(HttpUser):
 
 # ── Authenticated trader ──────────────────────────────────────────────────────
 
+
 class AuthenticatedTrader(HttpUser):
     """Authenticated trader placing orders and checking positions."""
 
@@ -239,13 +244,18 @@ class AuthenticatedTrader(HttpUser):
     @task(2)
     def place_order(self):
         symbol = random.choice(_SYMBOLS)
-        side   = random.choice(["buy", "sell"])
-        qty    = round(random.uniform(0.01, 0.1), 2)
+        side = random.choice(["buy", "sell"])
+        qty = round(random.uniform(0.01, 0.1), 2)
 
         with self.client.post(
             "/api/trading/order",
             headers=_auth_headers(),
-            json={"symbol": symbol, "side": side, "quantity": qty, "order_type": "market"},
+            json={
+                "symbol": symbol,
+                "side": side,
+                "quantity": qty,
+                "order_type": "market",
+            },
             catch_response=True,
             name="/api/trading/order",
         ) as r:
@@ -291,6 +301,7 @@ class AuthenticatedTrader(HttpUser):
 
 # ── Event hooks ───────────────────────────────────────────────────────────────
 
+
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     print(f"[locust] Starting load test against {environment.host}")
@@ -305,9 +316,7 @@ def on_test_stop(environment, **kwargs):
     p95 = stats.get_response_time_percentile(0.95) or 0
     p99 = stats.get_response_time_percentile(0.99) or 0
     failure_rate = (
-        stats.num_failures / stats.num_requests * 100
-        if stats.num_requests > 0
-        else 0
+        stats.num_failures / stats.num_requests * 100 if stats.num_requests > 0 else 0
     )
     print(
         f"[locust] Test complete — "

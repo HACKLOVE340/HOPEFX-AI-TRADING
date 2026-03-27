@@ -214,7 +214,9 @@ class Tenant:
 
     def is_active(self) -> bool:
         """Return True if the tenant is currently active or in trial (and not expired)."""
-        if self.expires_at is not None and self.expires_at <= datetime.now(timezone.utc):
+        if self.expires_at is not None and self.expires_at <= datetime.now(
+            timezone.utc
+        ):
             return False
         return self.status in (TenantStatus.ACTIVE, TenantStatus.TRIAL)
 
@@ -325,7 +327,9 @@ class WhiteLabelManager:
         tenant_id = _generate_id("WL")
         if trial_days > 0:
             status = TenantStatus.TRIAL
-            expires_at: Optional[datetime] = datetime.now(timezone.utc) + timedelta(days=trial_days)
+            expires_at: Optional[datetime] = datetime.now(timezone.utc) + timedelta(
+                days=trial_days
+            )
         else:
             status = TenantStatus.ACTIVE
             expires_at = None
@@ -382,9 +386,7 @@ class WhiteLabelManager:
         _logger.info("Tenant %s deleted", tenant_id)
         return True
 
-    def list_tenants(
-        self, status: Optional[TenantStatus] = None
-    ) -> List[Tenant]:
+    def list_tenants(self, status: Optional[TenantStatus] = None) -> List[Tenant]:
         """Return all tenants, optionally filtered by status."""
         tenants = list(self._tenants.values())
         if status is not None:
@@ -541,9 +543,7 @@ class WhiteLabelManager:
             return None
         reseller.tier = best_tier
         reseller.commission_rate = TIER_COMMISSION_RATES[best_tier]
-        _logger.info(
-            "Reseller %s upgraded to %s", reseller_id, best_tier.value
-        )
+        _logger.info("Reseller %s upgraded to %s", reseller_id, best_tier.value)
         return best_tier
 
     # ------------------------------------------------------------------
@@ -573,9 +573,7 @@ class WhiteLabelManager:
 
         Creates a new tenant in this manager instance.
         """
-        features = [
-            FeatureFlag(v) for v in config.get("features", [])
-        ]
+        features = [FeatureFlag(v) for v in config.get("features", [])]
         tenant = self.create_tenant(
             name=config["name"],
             owner_email=config.get("owner_email", ""),
@@ -601,9 +599,7 @@ class WhiteLabelManager:
             "active_tenants": sum(
                 1 for t in tenants if t.status == TenantStatus.ACTIVE
             ),
-            "trial_tenants": sum(
-                1 for t in tenants if t.status == TenantStatus.TRIAL
-            ),
+            "trial_tenants": sum(1 for t in tenants if t.status == TenantStatus.TRIAL),
             "total_resellers": len(self._resellers),
             "total_users": sum(t.user_count for t in tenants),
         }

@@ -49,17 +49,15 @@ logger = logging.getLogger(__name__)
 
 # Re-export FIX types so callers only need to import from this module
 from execution.fix_adapter import (  # noqa: E402
-    CircuitBreaker,
     FIXAdapter,
     FIXFillReport,
-    FIXOrdType,
     FIXOrder,
-    FIXSide,
 )
 
 # Optional Sentry
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -68,6 +66,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # IBKR FIX session configuration
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class IBKRFIXConfig:
@@ -81,6 +80,7 @@ class IBKRFIXConfig:
     SenderCompID: your IBKR username (or assigned FIX comp ID)
     TargetCompID: "IBFX" for FIX Gateway
     """
+
     sender_comp_id: str = field(
         default_factory=lambda: os.environ.get("IBKR_FIX_SENDER_COMP_ID", "HOPEFX"),
     )
@@ -93,12 +93,12 @@ class IBKRFIXConfig:
     port: int = field(
         default_factory=lambda: int(os.environ.get("IBKR_FIX_PORT", "4002")),
     )
-    heartbeat_interval: int = 30          # seconds — IBKR default
+    heartbeat_interval: int = 30  # seconds — IBKR default
     reset_on_logon: bool = True
     reset_on_logout: bool = False
     reset_on_disconnect: bool = False
-    reconnect_interval: int = 10          # seconds between reconnect attempts
-    latency_threshold_ms: float = 100.0   # circuit breaker threshold
+    reconnect_interval: int = 10  # seconds between reconnect attempts
+    latency_threshold_ms: float = 100.0  # circuit breaker threshold
     username: str = field(
         default_factory=lambda: os.environ.get("IBKR_FIX_USERNAME", ""),
     )
@@ -107,10 +107,14 @@ class IBKRFIXConfig:
     )
     # Path for FIX session store (sequence numbers)
     store_path: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"),
+        default_factory=lambda: os.environ.get(
+            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"
+        ),
     )
     log_path: str = field(
-        default_factory=lambda: os.environ.get("IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"),
+        default_factory=lambda: os.environ.get(
+            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"
+        ),
     )
 
     @property
@@ -158,6 +162,7 @@ class IBKRFIXConfig:
 # IBKR FIX Bridge
 # ---------------------------------------------------------------------------
 
+
 class IBKRFIXBridge:
     """
     IBKR FIX 4.4 bridge for XAUUSD low-latency order execution.
@@ -181,8 +186,10 @@ class IBKRFIXBridge:
 
         logger.info(
             "IBKRFIXBridge initialised | host=%s port=%d sender=%s target=%s mode=%s",
-            self._cfg.host, self._cfg.port,
-            self._cfg.sender_comp_id, self._cfg.target_comp_id,
+            self._cfg.host,
+            self._cfg.port,
+            self._cfg.sender_comp_id,
+            self._cfg.target_comp_id,
             "PAPER" if self._cfg.is_paper else "LIVE",
         )
 
@@ -203,7 +210,9 @@ class IBKRFIXBridge:
         and initiates the FIX logon sequence.
         """
         if self._started:
-            logger.warning("IBKRFIXBridge.start() called while already started — ignored.")
+            logger.warning(
+                "IBKRFIXBridge.start() called while already started — ignored."
+            )
             return
 
         cfg_content = self._cfg.generate_quickfix_cfg()
@@ -222,7 +231,8 @@ class IBKRFIXBridge:
 
         logger.info(
             "IBKRFIXBridge: wrote FIX config to %s\n%s",
-            self._cfg_file, cfg_content,
+            self._cfg_file,
+            cfg_content,
         )
 
         self._adapter = FIXAdapter(
@@ -290,8 +300,12 @@ class IBKRFIXBridge:
         logger.info(
             "IBKRFIXBridge: submitting FIX order | symbol=%s side=%s type=%s "
             "qty=%.4f price=%s cl_ord_id=%s",
-            order.symbol, order.side.name, order.ord_type.name,
-            order.quantity, order.price or order.stop_px, order.cl_ord_id,
+            order.symbol,
+            order.side.name,
+            order.ord_type.name,
+            order.quantity,
+            order.price or order.stop_px,
+            order.cl_ord_id,
         )
 
         try:
@@ -299,8 +313,11 @@ class IBKRFIXBridge:
             logger.info(
                 "IBKRFIXBridge: fill report | cl_ord_id=%s exec_type=%s "
                 "filled=%.4f avg_px=%.4f latency=%.2fms",
-                report.cl_ord_id, report.exec_type.name,
-                report.filled_qty, report.avg_px, report.latency_ms,
+                report.cl_ord_id,
+                report.exec_type.name,
+                report.filled_qty,
+                report.avg_px,
+                report.latency_ms,
             )
             return report
         except Exception as exc:
@@ -324,6 +341,7 @@ class IBKRFIXBridge:
         if order.symbol.upper() in aliases:
             # Return a copy with normalised symbol
             from dataclasses import replace
+
             return replace(order, symbol="XAUUSD")
         return order
 

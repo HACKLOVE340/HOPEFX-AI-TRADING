@@ -61,7 +61,8 @@ def _load_model_registry() -> Dict[str, Any]:
                     "file": fname,
                     "size_kb": round(stat.st_size / 1024, 1),
                     "trained_at": datetime.fromtimestamp(
-                        stat.st_mtime, tz=timezone.utc,
+                        stat.st_mtime,
+                        tz=timezone.utc,
                     ).isoformat(),
                     "available": True,
                 }
@@ -85,12 +86,14 @@ def _get_predictor():
     """
     try:
         from ml.inference_engine import get_inference_engine
+
         return get_inference_engine()
     except Exception as exc:
         logger.debug("InferenceEngine unavailable: %s", exc)
 
     try:
         from ml.live_inference import get_advanced_predictor
+
         p = get_advanced_predictor()
         if p.is_available:
             return p
@@ -99,6 +102,7 @@ def _get_predictor():
 
     try:
         from ml.models.ensemble import EnsemblePredictor
+
         return EnsemblePredictor()
     except Exception as exc:
         logger.debug("EnsemblePredictor unavailable: %s", exc)
@@ -106,9 +110,12 @@ def _get_predictor():
     try:
         import pathlib
         import joblib
+
         path = (
             pathlib.Path(__file__).parent.parent
-            / "ml" / "saved_models" / "xgb_macro.pkl"
+            / "ml"
+            / "saved_models"
+            / "xgb_macro.pkl"
         )
         if path.exists():
             return joblib.load(str(path))
@@ -236,7 +243,8 @@ async def get_accuracy():
                     win_rate=float(data.get("win_rate", 0.49)),
                     total_signals=int(data.get("total_signals", 0)),
                     evaluated_at=data.get(
-                        "evaluated_at", datetime.now(timezone.utc).isoformat(),
+                        "evaluated_at",
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                     note=data.get("note", ""),
                 )
@@ -287,6 +295,7 @@ async def predict(symbol: str, body: PredictRequest):
             # Build OHLCV stub (real deployments replace with live feed)
             try:
                 from data.feeds.oanda import get_ohlcv_stub
+
                 ohlcv = get_ohlcv_stub(symbol_upper, body.lookback)
             except Exception:
                 idx = pd.date_range(
@@ -304,7 +313,9 @@ async def predict(symbol: str, body: PredictRequest):
             if hasattr(predictor, "predict") and hasattr(predictor, "health"):
                 result = predictor.predict(ohlcv, symbol=symbol_upper)
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
-                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                direction = direction_map.get(
+                    result.get("direction", "neutral"), "HOLD"
+                )
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
                 return PredictResponse(
                     symbol=symbol_upper,
@@ -320,10 +331,16 @@ async def predict(symbol: str, body: PredictRequest):
 
             # AdvancedModelPredictor path
             if hasattr(predictor, "predict_signal"):
-                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
-                result = predictor.predict_signal(ohlcv, macro_df=macro_df, symbol=symbol_upper)
+                macro_df = _get_macro_df_for_symbol(
+                    symbol_upper, lookback=body.lookback
+                )
+                result = predictor.predict_signal(
+                    ohlcv, macro_df=macro_df, symbol=symbol_upper
+                )
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
-                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
+                direction = direction_map.get(
+                    result.get("direction", "neutral"), "HOLD"
+                )
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
                 return PredictResponse(
                     symbol=symbol_upper,
@@ -339,7 +356,9 @@ async def predict(symbol: str, body: PredictRequest):
 
             # EnsemblePredictor / legacy path
             if hasattr(predictor, "predict_symbol"):
-                result = predictor.predict_symbol(symbol_upper, timeframe=body.timeframe)
+                result = predictor.predict_symbol(
+                    symbol_upper, timeframe=body.timeframe
+                )
                 return PredictResponse(
                     symbol=symbol_upper,
                     direction=result.get("direction", "HOLD"),
@@ -443,7 +462,10 @@ async def trigger_retrain(
             import sys
 
             script = os.path.join(
-                os.path.dirname(__file__), "..", "ml", "train_with_macro.py",
+                os.path.dirname(__file__),
+                "..",
+                "ml",
+                "train_with_macro.py",
             )
             if os.path.exists(script):
                 subprocess.run(

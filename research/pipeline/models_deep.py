@@ -54,6 +54,7 @@ try:
     import torch.nn as nn
     import torch.optim as optim
     from torch.utils.data import DataLoader, TensorDataset
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -61,8 +62,9 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf
-    from tensorflow.keras import layers, Model
+    import tensorflow as tf  # noqa: F401
+    from tensorflow.keras import layers, Model  # noqa: F401
+
     TF_AVAILABLE = True
 except ImportError:
     TF_AVAILABLE = False
@@ -71,6 +73,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sequence dataset builder
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def make_sequences(
     X: np.ndarray,
@@ -92,7 +95,7 @@ def make_sequences(
     y_seq : (n_samples - seq_len,)
     """
     n = len(X) - seq_len
-    X_seq = np.stack([X[i: i + seq_len] for i in range(n)])
+    X_seq = np.stack([X[i : i + seq_len] for i in range(n)])
     y_seq = y[seq_len:]
     return X_seq.astype(np.float32), y_seq.astype(np.float32)
 
@@ -116,16 +119,20 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.n_heads = n_heads
             self.attn = nn.Linear(hidden, n_heads)
-            self.out_proj = nn.Linear(hidden * n_heads, hidden) if n_heads > 1 else nn.Identity()
+            self.out_proj = (
+                nn.Linear(hidden * n_heads, hidden) if n_heads > 1 else nn.Identity()
+            )
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # x: (batch, seq, hidden)
-            scores = self.attn(x)                              # (batch, seq, n_heads)
-            weights = torch.softmax(scores, dim=1)             # (batch, seq, n_heads)
+            scores = self.attn(x)  # (batch, seq, n_heads)
+            weights = torch.softmax(scores, dim=1)  # (batch, seq, n_heads)
             # Weighted sum for each head
-            heads = [(weights[:, :, h:h+1] * x).sum(dim=1) for h in range(self.n_heads)]
-            ctx = torch.cat(heads, dim=-1)                     # (batch, hidden * n_heads)
-            return self.out_proj(ctx)                          # (batch, hidden)
+            heads = [
+                (weights[:, :, h : h + 1] * x).sum(dim=1) for h in range(self.n_heads)
+            ]
+            ctx = torch.cat(heads, dim=-1)  # (batch, hidden * n_heads)
+            return self.out_proj(ctx)  # (batch, hidden)
 
     class _LSTMNet(nn.Module):
         def __init__(
@@ -204,17 +211,25 @@ if TORCH_AVAILABLE:
         def __init__(self, channels: int, kernel: int, dilation: int, dropout: float):
             super().__init__()
             pad = (kernel - 1) * dilation
-            self.conv1 = nn.Conv1d(channels, channels, kernel, padding=pad, dilation=dilation)
-            self.conv2 = nn.Conv1d(channels, channels, kernel, padding=pad, dilation=dilation)
+            self.conv1 = nn.Conv1d(
+                channels, channels, kernel, padding=pad, dilation=dilation
+            )
+            self.conv2 = nn.Conv1d(
+                channels, channels, kernel, padding=pad, dilation=dilation
+            )
             self.drop = nn.Dropout(dropout)
             self.relu = nn.ReLU()
             self._pad = pad
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # Causal: trim right padding
-            out = self.relu(self.conv1(x)[..., : -self._pad] if self._pad else self.conv1(x))
+            out = self.relu(
+                self.conv1(x)[..., : -self._pad] if self._pad else self.conv1(x)
+            )
             out = self.drop(out)
-            out = self.relu(self.conv2(out)[..., : -self._pad] if self._pad else self.conv2(out))
+            out = self.relu(
+                self.conv2(out)[..., : -self._pad] if self._pad else self.conv2(out)
+            )
             out = self.drop(out)
             return self.relu(out + x)
 
@@ -230,7 +245,10 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.input_proj = nn.Conv1d(n_features, channels, 1)
             self.blocks = nn.Sequential(
-                *[_TCNBlock(channels, kernel, dilation=2 ** i, dropout=dropout) for i in range(n_levels)]
+                *[
+                    _TCNBlock(channels, kernel, dilation=2**i, dropout=dropout)
+                    for i in range(n_levels)
+                ]
             )
             self.head = nn.Sequential(
                 nn.AdaptiveAvgPool1d(1),
@@ -280,8 +298,10 @@ if TORCH_AVAILABLE:
             # TCN encoder
             self.input_proj = nn.Conv1d(n_features, tcn_channels, 1)
             self.tcn_blocks = nn.Sequential(
-                *[_TCNBlock(tcn_channels, kernel=3, dilation=2 ** i, dropout=dropout)
-                  for i in range(tcn_levels)]
+                *[
+                    _TCNBlock(tcn_channels, kernel=3, dilation=2**i, dropout=dropout)
+                    for i in range(tcn_levels)
+                ]
             )
             # LSTM refinement (operates on TCN output)
             self.lstm = nn.LSTM(
@@ -341,11 +361,16 @@ if TORCH_AVAILABLE:
             target_smooth = target * (1 - self.smoothing) + 0.5 * self.smoothing
             eps = 1e-7
             pred = pred.clamp(eps, 1 - eps)
-            loss = -(target_smooth * torch.log(pred) + (1 - target_smooth) * torch.log(1 - pred))
+            loss = -(
+                target_smooth * torch.log(pred)
+                + (1 - target_smooth) * torch.log(1 - pred)
+            )
             if self.pos_weight is not None:
-                weight = torch.where(target > 0.5,
-                                     torch.tensor(self.pos_weight, device=pred.device),
-                                     torch.ones_like(pred))
+                weight = torch.where(
+                    target > 0.5,
+                    torch.tensor(self.pos_weight, device=pred.device),
+                    torch.ones_like(pred),
+                )
                 loss = loss * weight
             return loss.mean()
 
@@ -353,6 +378,7 @@ if TORCH_AVAILABLE:
 # ─────────────────────────────────────────────────────────────────────────────
 # Unified trainer wrapper
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class DeepPredictor:
     """
@@ -423,12 +449,18 @@ class DeepPredictor:
         self.use_amp = use_amp and self.device.type == "cuda"
         self._scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
-        self.model = self._build_model(n_features, seq_len, **model_kwargs).to(self.device)
+        self.model = self._build_model(n_features, seq_len, **model_kwargs).to(
+            self.device
+        )
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-4)
 
         # ReduceLROnPlateau: halve LR when val loss stalls for 5 epochs
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
+            self.optimizer,
+            mode="min",
+            factor=0.5,
+            patience=5,
+            min_lr=1e-6,
         )
 
         # Loss function
@@ -440,7 +472,9 @@ class DeepPredictor:
             self.criterion = nn.MSELoss()
 
         self._history: dict = {
-            "train_loss": [], "val_loss": [], "lr": [],
+            "train_loss": [],
+            "val_loss": [],
+            "lr": [],
         }
 
     def _build_model(self, n_features: int, seq_len: int, **kwargs) -> "nn.Module":
@@ -459,9 +493,7 @@ class DeepPredictor:
                 f"Choose from: {list(self.ARCHITECTURES)}"
             )
 
-    def _to_loader(
-        self, X: np.ndarray, y: np.ndarray, shuffle: bool
-    ) -> "DataLoader":
+    def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> "DataLoader":
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32)
         return DataLoader(
@@ -507,8 +539,7 @@ class DeepPredictor:
 
         train_loader = self._to_loader(X_train, y_train, shuffle=True)
         val_loader = (
-            self._to_loader(X_val, y_val, shuffle=False)
-            if X_val is not None else None
+            self._to_loader(X_val, y_val, shuffle=False) if X_val is not None else None
         )
 
         best_val_loss = float("inf")
@@ -564,8 +595,7 @@ class DeepPredictor:
                 if avg_val < best_val_loss:
                     best_val_loss = avg_val
                     best_state = {
-                        k: v.cpu().clone()
-                        for k, v in self.model.state_dict().items()
+                        k: v.cpu().clone() for k, v in self.model.state_dict().items()
                     }
                     patience_counter = 0
                 else:
@@ -574,28 +604,33 @@ class DeepPredictor:
                 if epoch % 10 == 0:
                     logger.info(
                         "Epoch %3d  train=%.4f  val=%.4f  lr=%.2e  patience=%d",
-                        epoch, avg_train, avg_val, current_lr, patience_counter,
+                        epoch,
+                        avg_train,
+                        avg_val,
+                        current_lr,
+                        patience_counter,
                     )
 
                 if patience_counter >= self.patience:
                     logger.info(
                         "Early stopping at epoch %d (best_val=%.4f)",
-                        epoch, best_val_loss,
+                        epoch,
+                        best_val_loss,
                     )
                     break
             else:
                 if epoch % 10 == 0:
                     logger.info(
                         "Epoch %3d  train=%.4f  lr=%.2e",
-                        epoch, avg_train, current_lr,
+                        epoch,
+                        avg_train,
+                        current_lr,
                     )
 
         # Restore best weights
         if best_state is not None:
             self.model.load_state_dict(best_state)
-            logger.info(
-                "Restored best model (val_loss=%.4f)", best_val_loss
-            )
+            logger.info("Restored best model (val_loss=%.4f)", best_val_loss)
 
         return self._history
 
@@ -608,7 +643,7 @@ class DeepPredictor:
         preds = []
         with torch.no_grad():
             for i in range(0, len(X_t), self.batch_size):
-                batch = X_t[i: i + self.batch_size]
+                batch = X_t[i : i + self.batch_size]
                 preds.append(self.model(batch).cpu().numpy())
         return np.concatenate(preds)
 
@@ -628,6 +663,7 @@ class DeepPredictor:
         Returns a dict with keys: accuracy, auc, f1, n_samples.
         """
         from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+
         proba = self.predict(X)
         preds = (proba >= threshold).astype(int)
         result = {

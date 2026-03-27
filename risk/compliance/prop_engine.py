@@ -160,7 +160,9 @@ class PropComplianceEngine:
 
         # Start daily reset thread
         self._reset_thread = threading.Thread(
-            target=self._daily_reset_loop, daemon=True, name="PropDailyReset",
+            target=self._daily_reset_loop,
+            daemon=True,
+            name="PropDailyReset",
         )
         self._reset_thread.start()
 
@@ -242,7 +244,8 @@ class PropComplianceEngine:
             # 3. News blackout
             if self._in_news_blackout(now):
                 self._breach(
-                    BreachType.NEWS_BLACKOUT, "High-impact news blackout window",
+                    BreachType.NEWS_BLACKOUT,
+                    "High-impact news blackout window",
                 )
                 return False, "News blackout window active"
 

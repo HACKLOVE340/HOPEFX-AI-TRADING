@@ -45,7 +45,7 @@ class AppConfig:  # pragma: no cover
     pass
 
 
-from .feature_flags import FeatureFlags, FeatureStatus, flags
+from .feature_flags import FeatureFlags, FeatureStatus, flags  # noqa: E402
 
 __all__ = [
     "ConfigManager",

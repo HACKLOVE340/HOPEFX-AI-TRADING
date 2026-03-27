@@ -22,6 +22,7 @@ from unittest.mock import Mock, patch
 # ECONOMIC CALENDAR TESTS
 # ============================================================
 
+
 class TestEconomicEvent:
     """Tests for EconomicEvent dataclass."""
 
@@ -38,7 +39,7 @@ class TestEconomicEvent:
             actual=5.5,
             forecast=5.25,
             previous=5.0,
-            currency="USD"
+            currency="USD",
         )
 
         assert event.title == "Fed Interest Rate Decision"
@@ -58,14 +59,14 @@ class TestEconomicEvent:
             event_type=EventType.GDP,
             importance=EventImportance.HIGH,
             scheduled_time=now,
-            country="US"
+            country="US",
         )
 
         result = event.to_dict()
-        assert result['title'] == "GDP Release"
-        assert result['event_type'] == "gdp"
-        assert result['importance'] == "high"
-        assert 'scheduled_time' in result
+        assert result["title"] == "GDP Release"
+        assert result["event_type"] == "gdp"
+        assert result["importance"] == "high"
+        assert "scheduled_time" in result
 
     def test_is_surprise_positive(self):
         """Test positive surprise detection."""
@@ -79,7 +80,7 @@ class TestEconomicEvent:
             country="US",
             actual=200000,
             forecast=150000,
-            previous=175000
+            previous=175000,
         )
 
         assert event.is_surprise(threshold=0.1) is True
@@ -96,7 +97,7 @@ class TestEconomicEvent:
             country="EU",
             actual=52.0,
             forecast=52.1,
-            previous=51.8
+            previous=51.8,
         )
 
         assert event.is_surprise(threshold=0.1) is False
@@ -112,7 +113,7 @@ class TestEconomicEvent:
             scheduled_time=datetime.now(timezone.utc),
             country="JP",
             actual=None,
-            forecast=100
+            forecast=100,
         )
 
         assert event.is_surprise() is False
@@ -149,11 +150,16 @@ class TestEconomicCalendar:
 
         calendar = EconomicCalendar()
         assert calendar is not None
-        assert hasattr(calendar, 'events')
+        assert hasattr(calendar, "events")
 
     def test_add_event(self):
         """Test adding event to calendar."""
-        from news.economic_calendar import EconomicCalendar, EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import (
+            EconomicCalendar,
+            EconomicEvent,
+            EventType,
+            EventImportance,
+        )
 
         calendar = EconomicCalendar()
         event = EconomicEvent(
@@ -161,7 +167,7 @@ class TestEconomicCalendar:
             event_type=EventType.OTHER,
             importance=EventImportance.LOW,
             scheduled_time=datetime.now(timezone.utc),
-            country="US"
+            country="US",
         )
 
         calendar.add_event(event)
@@ -169,7 +175,12 @@ class TestEconomicCalendar:
 
     def test_get_upcoming_events(self):
         """Test getting upcoming events."""
-        from news.economic_calendar import EconomicCalendar, EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import (
+            EconomicCalendar,
+            EconomicEvent,
+            EventType,
+            EventImportance,
+        )
 
         calendar = EconomicCalendar()
 
@@ -179,16 +190,21 @@ class TestEconomicCalendar:
             event_type=EventType.GDP,
             importance=EventImportance.HIGH,
             scheduled_time=datetime.now(timezone.utc) + timedelta(days=1),
-            country="US"
+            country="US",
         )
         calendar.add_event(future_event)
 
-        upcoming = calendar.get_upcoming_events(hours_ahead=24*7)  # 7 days ahead
+        upcoming = calendar.get_upcoming_events(hours_ahead=24 * 7)  # 7 days ahead
         assert len(upcoming) >= 1
 
     def test_get_high_impact_events(self):
         """Test filtering high impact events."""
-        from news.economic_calendar import EconomicCalendar, EconomicEvent, EventType, EventImportance
+        from news.economic_calendar import (
+            EconomicCalendar,
+            EconomicEvent,
+            EventType,
+            EventImportance,
+        )
 
         calendar = EconomicCalendar()
 
@@ -198,7 +214,7 @@ class TestEconomicCalendar:
             event_type=EventType.INTEREST_RATE,
             importance=EventImportance.CRITICAL,
             scheduled_time=datetime.now(timezone.utc) + timedelta(hours=1),
-            country="US"
+            country="US",
         )
         calendar.add_event(high_impact)
 
@@ -208,17 +224,21 @@ class TestEconomicCalendar:
             event_type=EventType.OTHER,
             importance=EventImportance.LOW,
             scheduled_time=datetime.now(timezone.utc) + timedelta(hours=2),
-            country="US"
+            country="US",
         )
         calendar.add_event(low_impact)
 
         high_impact_events = calendar.get_high_impact_events()
-        assert all(e.importance in [EventImportance.HIGH, EventImportance.CRITICAL] for e in high_impact_events)
+        assert all(
+            e.importance in [EventImportance.HIGH, EventImportance.CRITICAL]
+            for e in high_impact_events
+        )
 
 
 # ============================================================
 # SENTIMENT ANALYSIS TESTS
 # ============================================================
+
 
 class TestSentimentScore:
     """Tests for SentimentScore dataclass."""
@@ -232,7 +252,7 @@ class TestSentimentScore:
             subjectivity=0.5,
             confidence=0.85,
             label=SentimentLabel.POSITIVE,
-            compound_score=0.75
+            compound_score=0.75,
         )
 
         assert score.polarity == 0.7
@@ -248,12 +268,12 @@ class TestSentimentScore:
             polarity=0.3,
             subjectivity=0.6,
             confidence=0.9,
-            label=SentimentLabel.POSITIVE
+            label=SentimentLabel.POSITIVE,
         )
 
         result = score.to_dict()
-        assert result['polarity'] == 0.3
-        assert result['label'] == 'positive'
+        assert result["polarity"] == 0.3
+        assert result["label"] == "positive"
 
     def test_is_bullish(self):
         """Test bullish detection."""
@@ -263,7 +283,7 @@ class TestSentimentScore:
             polarity=0.5,
             subjectivity=0.5,
             confidence=0.8,
-            label=SentimentLabel.POSITIVE
+            label=SentimentLabel.POSITIVE,
         )
 
         assert bullish_score.is_bullish() is True
@@ -277,7 +297,7 @@ class TestSentimentScore:
             polarity=-0.5,
             subjectivity=0.5,
             confidence=0.8,
-            label=SentimentLabel.NEGATIVE
+            label=SentimentLabel.NEGATIVE,
         )
 
         assert bearish_score.is_bearish() is True
@@ -291,7 +311,7 @@ class TestSentimentScore:
             polarity=0.05,
             subjectivity=0.5,
             confidence=0.8,
-            label=SentimentLabel.NEUTRAL
+            label=SentimentLabel.NEUTRAL,
         )
 
         assert neutral_score.is_neutral() is True
@@ -318,6 +338,7 @@ class TestSentimentAnalyzer:
         """Test analyzer initialization."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             assert analyzer is not None
         except ImportError:
@@ -327,12 +348,13 @@ class TestSentimentAnalyzer:
         """Test analyzing bullish text."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             text = "Gold prices surge to new highs amid strong buying momentum and positive market sentiment."
 
             result = analyzer.analyze(text)
             assert result is not None
-            assert hasattr(result, 'polarity')
+            assert hasattr(result, "polarity")
         except ImportError:
             pytest.skip("TextBlob not installed")
 
@@ -340,6 +362,7 @@ class TestSentimentAnalyzer:
         """Test analyzing bearish text."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             text = "Markets crash as fears of recession grow and economic data disappoints investors."
 
@@ -352,6 +375,7 @@ class TestSentimentAnalyzer:
         """Test analyzing neutral text."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             text = "The market traded sideways today with mixed economic signals."
 
@@ -364,6 +388,7 @@ class TestSentimentAnalyzer:
         """Test analyzer handles financial terms."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             text = "Fed raises interest rates by 25 basis points, hawkish stance on inflation."
 
@@ -376,6 +401,7 @@ class TestSentimentAnalyzer:
         """Test analyzing empty text."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
             result = analyzer.analyze("")
 
@@ -388,15 +414,16 @@ class TestSentimentAnalyzer:
         """Test label determination from polarity."""
         try:
             from news.sentiment import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
 
             # Very positive
             label = analyzer._get_label(0.8)
-            assert label.value in ['positive', 'very_positive']
+            assert label.value in ["positive", "very_positive"]
 
             # Very negative
             label = analyzer._get_label(-0.8)
-            assert label.value in ['negative', 'very_negative']
+            assert label.value in ["negative", "very_negative"]
         except ImportError:
             pytest.skip("TextBlob not installed")
 
@@ -404,6 +431,7 @@ class TestSentimentAnalyzer:
 # ============================================================
 # NEWS PROVIDER TESTS
 # ============================================================
+
 
 class TestNewsArticle:
     """Tests for NewsArticle dataclass."""
@@ -417,7 +445,7 @@ class TestNewsArticle:
             description="XAU/USD surges past $2000",
             source="Financial Times",
             published_at=datetime.now(timezone.utc),
-            url="https://example.com/article"
+            url="https://example.com/article",
         )
 
         assert article.title == "Gold Hits Record High"
@@ -434,13 +462,13 @@ class TestNewsArticle:
             published_at=datetime.now(timezone.utc),
             url="https://example.com",
             author="John Doe",
-            symbols=["XAUUSD", "EURUSD"]
+            symbols=["XAUUSD", "EURUSD"],
         )
 
         result = article.to_dict()
-        assert result['title'] == "Market Update"
-        assert result['source'] == "Reuters"
-        assert result['symbols'] == ["XAUUSD", "EURUSD"]
+        assert result["title"] == "Market Update"
+        assert result["source"] == "Reuters"
+        assert result["symbols"] == ["XAUUSD", "EURUSD"]
 
     def test_article_optional_fields(self):
         """Test article with optional fields."""
@@ -451,7 +479,7 @@ class TestNewsArticle:
             description="No extras",
             source="Unknown",
             published_at=datetime.now(timezone.utc),
-            url="https://example.com"
+            url="https://example.com",
         )
 
         assert article.author is None
@@ -505,7 +533,7 @@ class TestNewsAPIProvider:
         with pytest.raises(ValueError):
             NewsAPIProvider(api_key="")
 
-    @patch('news.providers.requests.get')
+    @patch("news.providers.requests.get")
     def test_get_news_success(self, mock_get):
         """Test successful news fetch."""
         from news.providers import NewsAPIProvider
@@ -513,16 +541,16 @@ class TestNewsAPIProvider:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            'status': 'ok',
-            'articles': [
+            "status": "ok",
+            "articles": [
                 {
-                    'title': 'Test Article',
-                    'description': 'Test Description',
-                    'source': {'name': 'Test Source'},
-                    'publishedAt': '2024-01-01T12:00:00Z',
-                    'url': 'https://example.com'
+                    "title": "Test Article",
+                    "description": "Test Description",
+                    "source": {"name": "Test Source"},
+                    "publishedAt": "2024-01-01T12:00:00Z",
+                    "url": "https://example.com",
                 }
-            ]
+            ],
         }
         mock_get.return_value = mock_response
 
@@ -535,6 +563,7 @@ class TestNewsAPIProvider:
 # ============================================================
 # IMPACT PREDICTOR TESTS
 # ============================================================
+
 
 class TestImpactPredictor:
     """Tests for ImpactPredictor class."""
@@ -554,10 +583,10 @@ class TestImpactPredictor:
 
         prediction = predictor.predict_impact(
             title="Fed Rate Decision",
-            description="Federal Reserve announces interest rate hike of 25 basis points"
+            description="Federal Reserve announces interest rate hike of 25 basis points",
         )
         assert prediction is not None
-        assert hasattr(prediction, 'expected_volatility')
+        assert hasattr(prediction, "expected_volatility")
 
     def test_predict_low_impact_event(self):
         """Test predicting low impact event."""
@@ -567,7 +596,7 @@ class TestImpactPredictor:
 
         prediction = predictor.predict_impact(
             title="Minor Report Released",
-            description="Standard weekly statistics published"
+            description="Standard weekly statistics published",
         )
         assert prediction is not None
 
@@ -580,7 +609,7 @@ class TestImpactPredictor:
         prediction = predictor.predict_impact(
             title="Markets Rally on Strong Data",
             description="Employment data beats expectations",
-            sentiment_score=0.8
+            sentiment_score=0.8,
         )
         assert prediction is not None
 
@@ -593,7 +622,7 @@ class TestImpactPredictor:
         prediction = predictor.predict_impact(
             title="US Employment Report",
             description="Nonfarm payrolls exceed expectations",
-            symbols=["XAUUSD", "EURUSD", "DXY"]
+            symbols=["XAUUSD", "EURUSD", "DXY"],
         )
         assert prediction is not None
         assert prediction.affected_symbols == ["XAUUSD", "EURUSD", "DXY"]
@@ -602,6 +631,7 @@ class TestImpactPredictor:
 # ============================================================
 # NEWS AGGREGATOR TESTS
 # ============================================================
+
 
 class TestNewsAggregator:
     """Tests for MultiSourceAggregator."""
@@ -612,7 +642,7 @@ class TestNewsAggregator:
 
         aggregator = MultiSourceAggregator()
         assert aggregator is not None
-        assert hasattr(aggregator, 'providers')
+        assert hasattr(aggregator, "providers")
 
     def test_aggregator_with_rss_only(self):
         """Test aggregator with RSS only."""
@@ -642,21 +672,21 @@ class TestNewsAggregator:
                 description="Gold rises",
                 source="Source1",
                 published_at=datetime.now(timezone.utc),
-                url="https://example1.com"
+                url="https://example1.com",
             ),
             NewsArticle(
                 title="Gold Price Update",  # Duplicate title
                 description="Gold rises again",
                 source="Source2",
                 published_at=datetime.now(timezone.utc),
-                url="https://example2.com"
+                url="https://example2.com",
             ),
             NewsArticle(
                 title="Different News",
                 description="Other news",
                 source="Source3",
                 published_at=datetime.now(timezone.utc),
-                url="https://example3.com"
+                url="https://example3.com",
             ),
         ]
 
@@ -664,10 +694,10 @@ class TestNewsAggregator:
         assert len(unique) == 2
 
 
-
 # ============================================================
 # WORLD MONITOR INTEGRATION TESTS (news router)
 # ============================================================
+
 
 @pytest.mark.unit
 class TestCreateNewsRouter:
@@ -676,12 +706,14 @@ class TestCreateNewsRouter:
     def test_create_news_router_returns_router(self):
         """create_news_router() returns a non-None FastAPI router."""
         from news import create_news_router
+
         router = create_news_router()
         assert router is not None
 
     def test_news_router_has_all_endpoints(self):
         """Router exposes all 6 expected paths."""
         from news import create_news_router
+
         router = create_news_router()
         paths = [route.path for route in router.routes]
         expected_paths = [
@@ -697,6 +729,7 @@ class TestCreateNewsRouter:
     def test_news_router_has_sentiment_endpoint(self):
         """Router exposes sentiment/{symbol} endpoint."""
         from news import create_news_router
+
         router = create_news_router()
         paths = [route.path for route in router.routes]
         assert any("{symbol}" in p for p in paths), "Missing sentiment/{symbol} route"
@@ -704,6 +737,7 @@ class TestCreateNewsRouter:
     def test_news_router_prefix(self):
         """Router prefix is /api/news."""
         from news import create_news_router
+
         router = create_news_router()
         assert router.prefix == "/api/news"
 
@@ -715,16 +749,19 @@ class TestNewsModuleSingleton:
     def setup_method(self):
         """Reset the singleton before each test to ensure isolation."""
         import news as news_module
+
         news_module._risk_provider = None
 
     def teardown_method(self):
         """Reset the singleton after each test to avoid state leakage."""
         import news as news_module
+
         news_module._risk_provider = None
 
     def test_singleton_returns_same_instance(self):
         """_get_risk_provider returns the same object on repeated calls."""
         from news import _get_risk_provider
+
         p1 = _get_risk_provider()
         p2 = _get_risk_provider()
         assert p1 is p2
@@ -732,6 +769,7 @@ class TestNewsModuleSingleton:
     def test_singleton_is_geopolitical_risk_provider(self):
         """Singleton is an instance of GeopoliticalRiskProvider."""
         from news import _get_risk_provider, GeopoliticalRiskProvider
+
         provider = _get_risk_provider()
         assert isinstance(provider, GeopoliticalRiskProvider)
 
@@ -743,12 +781,14 @@ class TestWorldMonitorIntegration:
     def test_instantiation(self):
         """WorldMonitorIntegration can be instantiated."""
         from news import WorldMonitorIntegration
+
         wm = WorldMonitorIntegration()
         assert wm is not None
 
     def test_get_gold_relevant_views_returns_dict(self):
         """get_gold_relevant_views returns a non-empty dictionary."""
         from news import WorldMonitorIntegration
+
         wm = WorldMonitorIntegration()
         views = wm.get_gold_relevant_views()
         assert isinstance(views, dict)
@@ -757,6 +797,7 @@ class TestWorldMonitorIntegration:
     def test_gold_relevant_views_are_urls(self):
         """All gold relevant view values start with http."""
         from news import WorldMonitorIntegration
+
         wm = WorldMonitorIntegration()
         views = wm.get_gold_relevant_views()
         for key, url in views.items():
@@ -770,12 +811,14 @@ class TestGeopoliticalRiskProvider:
     def test_instantiation(self):
         """GeopoliticalRiskProvider can be instantiated with no args."""
         from news import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         assert provider is not None
 
     def test_get_current_events_returns_list(self):
         """get_current_events returns a list."""
         from news import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         events = provider.get_current_events()
         assert isinstance(events, list)
@@ -783,6 +826,7 @@ class TestGeopoliticalRiskProvider:
     def test_get_risk_assessment_returns_assessment(self):
         """get_risk_assessment returns a GeopoliticalRiskAssessment."""
         from news import GeopoliticalRiskProvider, GeopoliticalRiskAssessment
+
         provider = GeopoliticalRiskProvider()
         assessment = provider.get_risk_assessment()
         assert isinstance(assessment, GeopoliticalRiskAssessment)
@@ -790,6 +834,7 @@ class TestGeopoliticalRiskProvider:
     def test_risk_assessment_has_required_fields(self):
         """Risk assessment has all required fields."""
         from news import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         assessment = provider.get_risk_assessment()
         data = assessment.to_dict()
@@ -799,6 +844,7 @@ class TestGeopoliticalRiskProvider:
     def test_get_gold_trading_signal_structure(self):
         """get_gold_trading_signal returns expected keys."""
         from news import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         signal = provider.get_gold_trading_signal()
         assert isinstance(signal, dict)
@@ -808,6 +854,7 @@ class TestGeopoliticalRiskProvider:
     def test_gold_trading_signal_direction_valid(self):
         """Signal direction is one of the normalized uppercase values: BUY, SELL, HOLD."""
         from news import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         signal = provider.get_gold_trading_signal()
         # The provider always returns uppercase; normalize defensively just in case.
@@ -817,4 +864,5 @@ class TestGeopoliticalRiskProvider:
     def test_create_news_router_in_module_all(self):
         """create_news_router is exported in news.__all__."""
         import news
+
         assert "create_news_router" in news.__all__

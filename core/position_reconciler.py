@@ -314,7 +314,10 @@ class PositionReconciler:
 
 
 def start_reconciler(
-    session_factory, broker=None, ws_manager=None, interval_seconds: int = 10,
+    session_factory,
+    broker=None,
+    ws_manager=None,
+    interval_seconds: int = 10,
 ) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
     global _reconciler_task

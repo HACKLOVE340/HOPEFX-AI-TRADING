@@ -24,14 +24,16 @@ def rm(tmp_path):
         max_drawdown_pct=0.10,
         daily_loss_limit_pct=0.05,
     )
-    manager = RiskManager(cfg, initial_balance=100_000.0,
-                          halt_state_file=tmp_path / "halt.json")
+    manager = RiskManager(
+        cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json"
+    )
     # Set a tight CVaR daily limit so we can trigger it easily
     manager._cvar_daily_limit = 0.01  # 1% CVaR limit
     return manager
 
 
 # ── check_cvar_pre_trade: insufficient history ────────────────────────────────
+
 
 def test_cvar_allowed_when_insufficient_history(rm):
     """Fewer than 10 observations → gate passes (can't compute reliable CVaR)."""
@@ -46,6 +48,7 @@ def test_cvar_allowed_when_insufficient_history(rm):
 
 # ── check_cvar_pre_trade: within limit ───────────────────────────────────────
 
+
 def test_cvar_allowed_when_within_limit(rm):
     """Small losses → CVaR below limit → gate passes."""
     rm._returns_history.clear()
@@ -58,6 +61,7 @@ def test_cvar_allowed_when_within_limit(rm):
 
 
 # ── check_cvar_pre_trade: breach ─────────────────────────────────────────────
+
 
 def test_cvar_blocked_when_limit_breached(rm):
     """Large tail losses → CVaR exceeds limit → gate blocks."""
@@ -76,6 +80,7 @@ def test_cvar_blocked_when_limit_breached(rm):
 
 # ── check_cvar_pre_trade: disabled ───────────────────────────────────────────
 
+
 def test_cvar_gate_disabled_when_limit_zero(rm):
     """CVaR limit = 0 means disabled → always passes."""
     rm._cvar_daily_limit = 0.0
@@ -90,6 +95,7 @@ def test_cvar_gate_disabled_when_limit_zero(rm):
 
 # ── check_cvar_pre_trade: trading halted ─────────────────────────────────────
 
+
 def test_cvar_gate_blocked_when_trading_halted(rm):
     """If trading is already halted, CVaR gate must also block."""
     rm._trading_halted = True
@@ -101,6 +107,7 @@ def test_cvar_gate_blocked_when_trading_halted(rm):
 
 
 # ── CVaR computation correctness ─────────────────────────────────────────────
+
 
 def test_compute_cvar_value(rm):
     """CVaR at 95% confidence should equal mean of worst 5% of returns."""
@@ -119,6 +126,7 @@ def test_compute_cvar_value(rm):
 
 
 # ── Integration: assess_risk also blocks on CVaR ─────────────────────────────
+
 
 def test_assess_risk_blocks_on_cvar_breach(rm):
     """assess_risk() must also return can_trade=False when CVaR is breached."""

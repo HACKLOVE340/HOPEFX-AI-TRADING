@@ -5,13 +5,13 @@
 # No commercial use without explicit permission.
 import unittest
 
-class TestRiskCalculations(unittest.TestCase):
 
+class TestRiskCalculations(unittest.TestCase):
     def test_position_sizing(self):
         # Test with 1-2% risk per trade
         equity = 1000  # Test with $1000 equity
         risk_percent = 0.02  # 2% risk
-        position_size = equity * risk_percent  
+        position_size = equity * risk_percent
         self.assertEqual(position_size, 20)  # Should be $20 position size for this risk
 
     def test_atr_stop_loss(self):
@@ -39,14 +39,17 @@ class TestRiskCalculations(unittest.TestCase):
         equity = 30  # Test with $30 equity
         risk_percent = 0.005  # 0.5% risk
         position_size = equity * risk_percent
-        self.assertEqual(position_size, 0.15)  # Should be $0.15 position size for this risk
+        self.assertEqual(
+            position_size, 0.15
+        )  # Should be $0.15 position size for this risk
 
     def test_edge_cases(self):
         # Tests with zero equity/infinite ATR
         equity = 0  # $0 equity
-        atr = float('inf')  # Infinite ATR
+        atr = float("inf")  # Infinite ATR
         with self.assertRaises(ZeroDivisionError):
             equity / atr  # Should raise an error
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

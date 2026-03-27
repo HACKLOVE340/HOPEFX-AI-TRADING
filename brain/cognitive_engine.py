@@ -11,6 +11,7 @@ Provides analytical building blocks for intelligent trading decisions:
 trend analysis, momentum, volatility assessment, support/resistance detection,
 and (optionally) sentiment analysis.
 """
+
 from __future__ import annotations
 
 import logging
@@ -54,7 +55,9 @@ class CognitiveEngine:
         Returns:
             "uptrend", "downtrend", or "sideways"
         """
-        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        close = (
+            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        )
         ema_short = close.ewm(span=short_window, adjust=False).mean()
         ema_long = close.ewm(span=long_window, adjust=False).mean()
 
@@ -70,8 +73,14 @@ class CognitiveEngine:
             trend = "sideways"
 
         self.trends.append(trend)
-        logger.debug("analyze_trend: %s (ema%d=%.4f, ema%d=%.4f)",
-                     trend, short_window, last_short, long_window, last_long)
+        logger.debug(
+            "analyze_trend: %s (ema%d=%.4f, ema%d=%.4f)",
+            trend,
+            short_window,
+            last_short,
+            long_window,
+            last_long,
+        )
         return trend
 
     def calculate_momentum(self, period: int = 14) -> float:
@@ -81,7 +90,9 @@ class CognitiveEngine:
         Returns:
             RSI value as a float.
         """
-        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        close = (
+            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        )
         delta = close.diff()
         gain = delta.clip(lower=0).rolling(period).mean()
         loss = (-delta.clip(upper=0)).rolling(period).mean()
@@ -98,7 +109,9 @@ class CognitiveEngine:
         Returns:
             Band-width ratio (higher → more volatile).
         """
-        close = self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        close = (
+            self.data["close"] if "close" in self.data.columns else self.data.iloc[:, 3]
+        )
         rolling_mean = close.rolling(period).mean()
         rolling_std = close.rolling(period).std()
         upper = rolling_mean + 2 * rolling_std
@@ -120,11 +133,16 @@ class CognitiveEngine:
         high_col = "high" if "high" in window.columns else window.columns[1]
         self.support = float(window[low_col].min())
         self.resistance = float(window[high_col].max())
-        logger.debug("detect_support_resistance: support=%.4f, resistance=%.4f",
-                     self.support, self.resistance)
+        logger.debug(
+            "detect_support_resistance: support=%.4f, resistance=%.4f",
+            self.support,
+            self.resistance,
+        )
         return self.support, self.resistance
 
-    def perform_sentiment_analysis(self, sentiment_score: Optional[float] = None) -> float:
+    def perform_sentiment_analysis(
+        self, sentiment_score: Optional[float] = None
+    ) -> float:
         """
         Integrate external sentiment score (−1 = very bearish, +1 = very bullish).
 
@@ -173,4 +191,3 @@ class CognitiveEngine:
 
 
 ## Features:
-

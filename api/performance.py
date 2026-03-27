@@ -151,7 +151,9 @@ async def equity_curve():
 
 
 @router.get(
-    "/public", response_model=PublicPerformance, summary="Public performance summary",
+    "/public",
+    response_model=PublicPerformance,
+    summary="Public performance summary",
 )
 async def public_performance():
     """

@@ -29,7 +29,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         assert order is not None
@@ -44,7 +44,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.SELL,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         assert order is not None
@@ -58,7 +58,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.LIMIT,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.0950
+            price=1.0950,
         )
 
         assert order is not None
@@ -73,7 +73,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.LIMIT,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.0950
+            price=1.0950,
         )
 
         order_id = order.id
@@ -93,7 +93,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         positions = paper_broker.get_positions()
@@ -109,7 +109,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         # Close it (using symbol, not position_id)
@@ -128,7 +128,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         # Update market price to higher value and close position
@@ -151,7 +151,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=10000,
-            price=1.1000
+            price=1.1000,
         )
 
         # Update market price to lower value and close position
@@ -168,10 +168,10 @@ class TestPaperTradingBroker:
         info = paper_broker.get_account_info()
 
         # AccountInfo is a dataclass, use attribute access
-        assert hasattr(info, 'balance')
-        assert hasattr(info, 'equity')
-        assert hasattr(info, 'margin_used')
-        assert hasattr(info, 'margin_available')
+        assert hasattr(info, "balance")
+        assert hasattr(info, "equity")
+        assert hasattr(info, "margin_used")
+        assert hasattr(info, "margin_available")
         assert info.balance == 100000
 
     def test_insufficient_balance(self, paper_broker):
@@ -183,7 +183,7 @@ class TestPaperTradingBroker:
             order_type=OrderType.MARKET,
             side=OrderSide.BUY,
             quantity=1000000,  # Large order
-            price=1.1000
+            price=1.1000,
         )
         # Order is placed (no balance validation currently)
         assert order is not None

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class KYCLevel(Enum):
     """KYC verification levels"""
+
     NONE = "none"
     BASIC = "basic"  # $0-$1,000
     INTERMEDIATE = "intermediate"  # $1,000-$10,000
@@ -31,6 +32,7 @@ class KYCLevel(Enum):
 @dataclass
 class KYCInfo:
     """KYC information"""
+
     user_id: str
     level: KYCLevel
     verified_at: Optional[datetime] = None
@@ -44,11 +46,12 @@ class KYCInfo:
 @dataclass
 class TransactionLimit:
     """Transaction limits"""
+
     daily_limit: Decimal
     monthly_limit: Decimal
     per_transaction_limit: Decimal
-    daily_used: Decimal = Decimal('0')
-    monthly_used: Decimal = Decimal('0')
+    daily_used: Decimal = Decimal("0")
+    monthly_used: Decimal = Decimal("0")
     last_reset: datetime = None
 
     def __post_init__(self):
@@ -69,25 +72,25 @@ class SecurityManager:
         # Default limits by KYC level
         self.default_limits = {
             KYCLevel.NONE: {
-                'daily': Decimal('100.00'),
-                'monthly': Decimal('500.00'),
-                'per_transaction': Decimal('100.00')
+                "daily": Decimal("100.00"),
+                "monthly": Decimal("500.00"),
+                "per_transaction": Decimal("100.00"),
             },
             KYCLevel.BASIC: {
-                'daily': Decimal('1000.00'),
-                'monthly': Decimal('5000.00'),
-                'per_transaction': Decimal('1000.00')
+                "daily": Decimal("1000.00"),
+                "monthly": Decimal("5000.00"),
+                "per_transaction": Decimal("1000.00"),
             },
             KYCLevel.INTERMEDIATE: {
-                'daily': Decimal('10000.00'),
-                'monthly': Decimal('50000.00'),
-                'per_transaction': Decimal('10000.00')
+                "daily": Decimal("10000.00"),
+                "monthly": Decimal("50000.00"),
+                "per_transaction": Decimal("10000.00"),
             },
             KYCLevel.ADVANCED: {
-                'daily': Decimal('100000.00'),
-                'monthly': Decimal('500000.00'),
-                'per_transaction': Decimal('100000.00')
-            }
+                "daily": Decimal("100000.00"),
+                "monthly": Decimal("500000.00"),
+                "per_transaction": Decimal("100000.00"),
+            },
         }
 
     def setup_2fa(self, user_id: str) -> str:
@@ -137,10 +140,7 @@ class SecurityManager:
         return is_valid
 
     def set_kyc_level(
-        self,
-        user_id: str,
-        level: KYCLevel,
-        documents: Optional[Dict[str, str]] = None
+        self, user_id: str, level: KYCLevel, documents: Optional[Dict[str, str]] = None
     ) -> None:
         """
         Set KYC level for user
@@ -154,7 +154,7 @@ class SecurityManager:
             user_id=user_id,
             level=level,
             verified_at=datetime.now(timezone.utc) if level != KYCLevel.NONE else None,
-            documents=documents or {}
+            documents=documents or {},
         )
 
         self.kyc_info[user_id] = kyc
@@ -177,15 +177,13 @@ class SecurityManager:
         limits = self.default_limits[level]
 
         self.transaction_limits[user_id] = TransactionLimit(
-            daily_limit=limits['daily'],
-            monthly_limit=limits['monthly'],
-            per_transaction_limit=limits['per_transaction']
+            daily_limit=limits["daily"],
+            monthly_limit=limits["monthly"],
+            per_transaction_limit=limits["per_transaction"],
         )
 
     def check_transaction_limit(
-        self,
-        user_id: str,
-        amount: Decimal
+        self, user_id: str, amount: Decimal
     ) -> Tuple[bool, Optional[str]]:
         """
         Check if transaction is within limits
@@ -209,7 +207,10 @@ class SecurityManager:
 
         # Check per-transaction limit
         if amount > limits.per_transaction_limit:
-            return False, f"Exceeds per-transaction limit of ${limits.per_transaction_limit}"
+            return (
+                False,
+                f"Exceeds per-transaction limit of ${limits.per_transaction_limit}",
+            )
 
         # Check daily limit
         if limits.daily_used + amount > limits.daily_limit:
@@ -240,19 +241,16 @@ class SecurityManager:
 
         # Reset daily if day changed
         if limits.last_reset.date() != now.date():
-            limits.daily_used = Decimal('0')
+            limits.daily_used = Decimal("0")
 
         # Reset monthly if month changed
         if limits.last_reset.month != now.month:
-            limits.monthly_used = Decimal('0')
+            limits.monthly_used = Decimal("0")
 
         limits.last_reset = now
 
     def validate_transaction(
-        self,
-        user_id: str,
-        amount: Decimal,
-        transaction_type: str
+        self, user_id: str, amount: Decimal, transaction_type: str
     ) -> Tuple[bool, Optional[str]]:
         """
         Validate if transaction is allowed
@@ -269,11 +267,14 @@ class SecurityManager:
         kyc = self.get_kyc_info(user_id)
 
         # Require at least BASIC KYC for amounts > $1000
-        if amount > Decimal('1000.00') and kyc.level == KYCLevel.NONE:
+        if amount > Decimal("1000.00") and kyc.level == KYCLevel.NONE:
             return False, "KYC verification required for amounts over $1,000"
 
         # Require INTERMEDIATE for amounts > $10000
-        if amount > Decimal('10000.00') and kyc.level in [KYCLevel.NONE, KYCLevel.BASIC]:
+        if amount > Decimal("10000.00") and kyc.level in [
+            KYCLevel.NONE,
+            KYCLevel.BASIC,
+        ]:
             return False, "Advanced KYC verification required for amounts over $10,000"
 
         # Check transaction limits
@@ -288,10 +289,7 @@ class SecurityManager:
         return True, None
 
     def check_suspicious_activity(
-        self,
-        user_id: str,
-        amount: Decimal,
-        ip_address: Optional[str] = None
+        self, user_id: str, amount: Decimal, ip_address: Optional[str] = None
     ) -> bool:
         """
         Check for suspicious activity
@@ -313,7 +311,9 @@ class SecurityManager:
 
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
-        recent_failed = [f for f in failed if datetime.now(timezone.utc) - f < timedelta(hours=1)]
+        recent_failed = [
+            f for f in failed if datetime.now(timezone.utc) - f < timedelta(hours=1)
+        ]
         if len(recent_failed) > 5:
             logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
             return True
@@ -351,21 +351,21 @@ class SecurityManager:
         limits_info = None
         if limits:
             limits_info = {
-                'daily_limit': float(limits.daily_limit),
-                'daily_used': float(limits.daily_used),
-                'daily_remaining': float(limits.daily_limit - limits.daily_used),
-                'monthly_limit': float(limits.monthly_limit),
-                'monthly_used': float(limits.monthly_used),
-                'monthly_remaining': float(limits.monthly_limit - limits.monthly_used)
+                "daily_limit": float(limits.daily_limit),
+                "daily_used": float(limits.daily_used),
+                "daily_remaining": float(limits.daily_limit - limits.daily_used),
+                "monthly_limit": float(limits.monthly_limit),
+                "monthly_used": float(limits.monthly_used),
+                "monthly_remaining": float(limits.monthly_limit - limits.monthly_used),
             }
 
         return {
-            'user_id': user_id,
-            'kyc_level': kyc.level.value,
-            'kyc_verified': kyc.verified_at is not None,
-            '2fa_enabled': has_2fa,
-            'limits': limits_info,
-            'ip_whitelist': self.ip_whitelist.get(user_id, [])
+            "user_id": user_id,
+            "kyc_level": kyc.level.value,
+            "kyc_verified": kyc.verified_at is not None,
+            "2fa_enabled": has_2fa,
+            "limits": limits_info,
+            "ip_whitelist": self.ip_whitelist.get(user_id, []),
         }
 
 

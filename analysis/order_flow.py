@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Trade:
     """Individual trade record."""
+
     timestamp: datetime
     price: float
     size: float
@@ -39,16 +40,17 @@ class Trade:
 
     @property
     def is_buy(self) -> bool:
-        return self.side.lower() == 'buy'
+        return self.side.lower() == "buy"
 
     @property
     def is_sell(self) -> bool:
-        return self.side.lower() == 'sell'
+        return self.side.lower() == "sell"
 
 
 @dataclass
 class VolumeProfileLevel:
     """Single level in volume profile."""
+
     price: float
     total_volume: float
     buy_volume: float
@@ -77,21 +79,22 @@ class VolumeProfileLevel:
 
     def to_dict(self) -> Dict:
         return {
-            'price': self.price,
-            'total_volume': self.total_volume,
-            'buy_volume': self.buy_volume,
-            'sell_volume': self.sell_volume,
-            'trade_count': self.trade_count,
-            'delta': self.delta,
-            'buy_pct': self.buy_pct,
-            'sell_pct': self.sell_pct,
-            'imbalance': self.imbalance
+            "price": self.price,
+            "total_volume": self.total_volume,
+            "buy_volume": self.buy_volume,
+            "sell_volume": self.sell_volume,
+            "trade_count": self.trade_count,
+            "delta": self.delta,
+            "buy_pct": self.buy_pct,
+            "sell_pct": self.sell_pct,
+            "imbalance": self.imbalance,
         }
 
 
 @dataclass
 class VolumeProfile:
     """Complete volume profile."""
+
     symbol: str
     start_time: datetime
     end_time: datetime
@@ -106,28 +109,29 @@ class VolumeProfile:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'start_time': self.start_time.isoformat(),
-            'end_time': self.end_time.isoformat(),
-            'levels': [level.to_dict() for level in self.levels],
-            'total_volume': self.total_volume,
-            'total_buy_volume': self.total_buy_volume,
-            'total_sell_volume': self.total_sell_volume,
-            'total_delta': self.total_delta,
-            'poc_price': self.poc_price,
-            'vah_price': self.vah_price,
-            'val_price': self.val_price,
-            'value_area': {
-                'high': self.vah_price,
-                'low': self.val_price,
-                'poc': self.poc_price
-            }
+            "symbol": self.symbol,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat(),
+            "levels": [level.to_dict() for level in self.levels],
+            "total_volume": self.total_volume,
+            "total_buy_volume": self.total_buy_volume,
+            "total_sell_volume": self.total_sell_volume,
+            "total_delta": self.total_delta,
+            "poc_price": self.poc_price,
+            "vah_price": self.vah_price,
+            "val_price": self.val_price,
+            "value_area": {
+                "high": self.vah_price,
+                "low": self.val_price,
+                "poc": self.poc_price,
+            },
         }
 
 
 @dataclass
 class OrderFlowAnalysis:
     """Order flow analysis results."""
+
     symbol: str
     timestamp: datetime
 
@@ -155,22 +159,22 @@ class OrderFlowAnalysis:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'timestamp': self.timestamp.isoformat(),
-            'total_volume': self.total_volume,
-            'buy_volume': self.buy_volume,
-            'sell_volume': self.sell_volume,
-            'delta': self.delta,
-            'cumulative_delta': self.cumulative_delta,
-            'imbalance_ratio': self.imbalance_ratio,
-            'dominant_side': self.dominant_side,
-            'imbalance_strength': self.imbalance_strength,
-            'high_volume_nodes': self.high_volume_nodes,
-            'low_volume_nodes': self.low_volume_nodes,
-            'absorption_levels': self.absorption_levels,
-            'buying_pressure': self.buying_pressure,
-            'selling_pressure': self.selling_pressure,
-            'order_flow_signal': self.order_flow_signal
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "total_volume": self.total_volume,
+            "buy_volume": self.buy_volume,
+            "sell_volume": self.sell_volume,
+            "delta": self.delta,
+            "cumulative_delta": self.cumulative_delta,
+            "imbalance_ratio": self.imbalance_ratio,
+            "dominant_side": self.dominant_side,
+            "imbalance_strength": self.imbalance_strength,
+            "high_volume_nodes": self.high_volume_nodes,
+            "low_volume_nodes": self.low_volume_nodes,
+            "absorption_levels": self.absorption_levels,
+            "buying_pressure": self.buying_pressure,
+            "selling_pressure": self.selling_pressure,
+            "order_flow_signal": self.order_flow_signal,
         }
 
 
@@ -180,6 +184,7 @@ class Footprint:
     Footprint chart data for a single bar.
     Shows buy/sell volume at each price level.
     """
+
     symbol: str
     timeframe: str
     timestamp: datetime
@@ -194,19 +199,19 @@ class Footprint:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'timeframe': self.timeframe,
-            'timestamp': self.timestamp.isoformat(),
-            'ohlc': {
-                'open': self.open,
-                'high': self.high,
-                'low': self.low,
-                'close': self.close
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "timestamp": self.timestamp.isoformat(),
+            "ohlc": {
+                "open": self.open,
+                "high": self.high,
+                "low": self.low,
+                "close": self.close,
             },
-            'levels': self.levels,
-            'total_volume': self.total_volume,
-            'delta': self.delta,
-            'cumulative_delta': self.cumulative_delta
+            "levels": self.levels,
+            "total_volume": self.total_volume,
+            "delta": self.delta,
+            "cumulative_delta": self.cumulative_delta,
         }
 
 
@@ -255,10 +260,10 @@ class OrderFlowAnalyzer:
         self._cumulative_delta: Dict[str, float] = defaultdict(float)
 
         # Configuration
-        self._tick_size = self.config.get('tick_size', 0.01)
-        self._value_area_pct = self.config.get('value_area_pct', 0.70)  # 70%
-        self._max_trades = self.config.get('max_trades', 100000)
-        self._imbalance_threshold = self.config.get('imbalance_threshold', 0.30)
+        self._tick_size = self.config.get("tick_size", 0.01)
+        self._value_area_pct = self.config.get("value_area_pct", 0.70)  # 70%
+        self._max_trades = self.config.get("max_trades", 100000)
+        self._imbalance_threshold = self.config.get("imbalance_threshold", 0.30)
 
         logger.info("Order Flow Analyzer initialized")
 
@@ -273,7 +278,7 @@ class OrderFlowAnalyzer:
         size: float,
         side: str,
         timestamp: Optional[datetime] = None,
-        trade_id: Optional[str] = None
+        trade_id: Optional[str] = None,
     ):
         """
         Add a trade for analysis.
@@ -291,7 +296,7 @@ class OrderFlowAnalyzer:
             price=price,
             size=size,
             side=side.lower(),
-            trade_id=trade_id
+            trade_id=trade_id,
         )
 
         self._trades[symbol].append(trade)
@@ -312,18 +317,18 @@ class OrderFlowAnalyzer:
         for t in trades:
             self.add_trade(
                 symbol=symbol,
-                price=t['price'],
-                size=t['size'],
-                side=t['side'],
-                timestamp=t.get('timestamp'),
-                trade_id=t.get('trade_id')
+                price=t["price"],
+                size=t["size"],
+                side=t["side"],
+                timestamp=t.get("timestamp"),
+                trade_id=t.get("trade_id"),
             )
 
     def get_trades(
         self,
         symbol: str,
         start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
+        end_time: Optional[datetime] = None,
     ) -> List[Trade]:
         """Get trades with optional time filter."""
         trades = self._trades.get(symbol, [])
@@ -351,7 +356,7 @@ class OrderFlowAnalyzer:
         symbol: str,
         price_buckets: int = 50,
         start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
+        end_time: Optional[datetime] = None,
     ) -> Optional[VolumeProfile]:
         """
         Calculate volume profile for a symbol.
@@ -381,28 +386,27 @@ class OrderFlowAnalyzer:
             bucket_size = (max_price - min_price) / price_buckets
 
         # Aggregate volume by price level
-        level_data: Dict[float, Dict] = defaultdict(lambda: {
-            'total_volume': 0,
-            'buy_volume': 0,
-            'sell_volume': 0,
-            'trade_count': 0
-        })
+        level_data: Dict[float, Dict] = defaultdict(
+            lambda: {
+                "total_volume": 0,
+                "buy_volume": 0,
+                "sell_volume": 0,
+                "trade_count": 0,
+            }
+        )
 
         for trade in trades:
             # Round to bucket
-            bucket_price = round(
-                math.floor(trade.price / bucket_size) * bucket_size,
-                5
-            )
+            bucket_price = round(math.floor(trade.price / bucket_size) * bucket_size, 5)
 
             data = level_data[bucket_price]
-            data['total_volume'] += trade.size
-            data['trade_count'] += 1
+            data["total_volume"] += trade.size
+            data["trade_count"] += 1
 
             if trade.is_buy:
-                data['buy_volume'] += trade.size
+                data["buy_volume"] += trade.size
             else:
-                data['sell_volume'] += trade.size
+                data["sell_volume"] += trade.size
 
         # Create levels
         levels = []
@@ -411,19 +415,19 @@ class OrderFlowAnalyzer:
         total_sell = 0
 
         for price, data in sorted(level_data.items()):
-            delta = data['buy_volume'] - data['sell_volume']
+            delta = data["buy_volume"] - data["sell_volume"]
             level = VolumeProfileLevel(
                 price=price,
-                total_volume=data['total_volume'],
-                buy_volume=data['buy_volume'],
-                sell_volume=data['sell_volume'],
-                trade_count=data['trade_count'],
-                delta=delta
+                total_volume=data["total_volume"],
+                buy_volume=data["buy_volume"],
+                sell_volume=data["sell_volume"],
+                trade_count=data["trade_count"],
+                delta=delta,
             )
             levels.append(level)
-            total_volume += data['total_volume']
-            total_buy += data['buy_volume']
-            total_sell += data['sell_volume']
+            total_volume += data["total_volume"]
+            total_buy += data["buy_volume"]
+            total_sell += data["sell_volume"]
 
         # Calculate POC and Value Area
         poc_price = self._calculate_poc(levels)
@@ -440,7 +444,7 @@ class OrderFlowAnalyzer:
             total_delta=total_buy - total_sell,
             poc_price=poc_price,
             vah_price=vah_price,
-            val_price=val_price
+            val_price=val_price,
         )
 
     def _calculate_poc(self, levels: List[VolumeProfileLevel]) -> float:
@@ -452,9 +456,7 @@ class OrderFlowAnalyzer:
         return max_level.price
 
     def _calculate_value_area(
-        self,
-        levels: List[VolumeProfileLevel],
-        poc_price: float
+        self, levels: List[VolumeProfileLevel], poc_price: float
     ) -> Tuple[float, float]:
         """
         Calculate Value Area High and Low.
@@ -465,7 +467,7 @@ class OrderFlowAnalyzer:
         if not levels:
             return 0, 0
 
-        total_volume = sum(l.total_volume for l in levels)
+        total_volume = sum(l.total_volume for l in levels)  # noqa: E741
         target_volume = total_volume * self._value_area_pct
 
         # Sort by price
@@ -473,8 +475,8 @@ class OrderFlowAnalyzer:
 
         # Find POC index
         poc_idx = next(
-            (i for i, l in enumerate(sorted_levels) if l.price == poc_price),
-            len(sorted_levels) // 2
+            (i for i, l in enumerate(sorted_levels) if l.price == poc_price),  # noqa: E741
+            len(sorted_levels) // 2,
         )
 
         # Expand from POC
@@ -482,10 +484,16 @@ class OrderFlowAnalyzer:
         low_idx = poc_idx
         high_idx = poc_idx
 
-        while va_volume < target_volume and (low_idx > 0 or high_idx < len(sorted_levels) - 1):
+        while va_volume < target_volume and (
+            low_idx > 0 or high_idx < len(sorted_levels) - 1
+        ):
             # Check which direction has more volume
             low_vol = sorted_levels[low_idx - 1].total_volume if low_idx > 0 else 0
-            high_vol = sorted_levels[high_idx + 1].total_volume if high_idx < len(sorted_levels) - 1 else 0
+            high_vol = (
+                sorted_levels[high_idx + 1].total_volume
+                if high_idx < len(sorted_levels) - 1
+                else 0
+            )
 
             if low_vol >= high_vol and low_idx > 0:
                 low_idx -= 1
@@ -503,9 +511,7 @@ class OrderFlowAnalyzer:
     # ================================================================
 
     def analyze(
-        self,
-        symbol: str,
-        lookback_minutes: int = 60
+        self, symbol: str, lookback_minutes: int = 60
     ) -> Optional[OrderFlowAnalysis]:
         """
         Perform comprehensive order flow analysis.
@@ -533,56 +539,66 @@ class OrderFlowAnalyzer:
         imbalance_ratio = delta / total_volume if total_volume > 0 else 0
 
         if imbalance_ratio > self._imbalance_threshold:
-            dominant_side = 'buyers'
+            dominant_side = "buyers"
         elif imbalance_ratio < -self._imbalance_threshold:
-            dominant_side = 'sellers'
+            dominant_side = "sellers"
         else:
-            dominant_side = 'neutral'
+            dominant_side = "neutral"
 
         abs_imbalance = abs(imbalance_ratio)
         if abs_imbalance > 0.5:
-            imbalance_strength = 'strong'
+            imbalance_strength = "strong"
         elif abs_imbalance > 0.25:
-            imbalance_strength = 'moderate'
+            imbalance_strength = "moderate"
         else:
-            imbalance_strength = 'weak'
+            imbalance_strength = "weak"
 
         # Get volume profile for key levels
-        profile = self.get_volume_profile(symbol, price_buckets=20, start_time=start_time)
+        profile = self.get_volume_profile(
+            symbol, price_buckets=20, start_time=start_time
+        )
 
         # High volume nodes
         high_volume_nodes = []
         low_volume_nodes = []
         if profile:
-            avg_volume = profile.total_volume / len(profile.levels) if profile.levels else 0
+            avg_volume = (
+                profile.total_volume / len(profile.levels) if profile.levels else 0
+            )
             for level in profile.levels:
                 if level.total_volume > avg_volume * 1.5:
-                    high_volume_nodes.append({
-                        'price': level.price,
-                        'volume': level.total_volume,
-                        'type': 'HVN'
-                    })
+                    high_volume_nodes.append(
+                        {
+                            "price": level.price,
+                            "volume": level.total_volume,
+                            "type": "HVN",
+                        }
+                    )
                 elif level.total_volume < avg_volume * 0.5:
-                    low_volume_nodes.append({
-                        'price': level.price,
-                        'volume': level.total_volume,
-                        'type': 'LVN'
-                    })
+                    low_volume_nodes.append(
+                        {
+                            "price": level.price,
+                            "volume": level.total_volume,
+                            "type": "LVN",
+                        }
+                    )
 
         # Detect absorption
         absorption_levels = self._detect_absorption(trades)
 
         # Calculate pressures
         buying_pressure = (buy_volume / total_volume * 100) if total_volume > 0 else 50
-        selling_pressure = (sell_volume / total_volume * 100) if total_volume > 0 else 50
+        selling_pressure = (
+            (sell_volume / total_volume * 100) if total_volume > 0 else 50
+        )
 
         # Signal
         if imbalance_ratio > 0.3:
-            signal = 'bullish'
+            signal = "bullish"
         elif imbalance_ratio < -0.3:
-            signal = 'bearish'
+            signal = "bearish"
         else:
-            signal = 'neutral'
+            signal = "neutral"
 
         return OrderFlowAnalysis(
             symbol=symbol,
@@ -600,7 +616,7 @@ class OrderFlowAnalyzer:
             absorption_levels=absorption_levels[:3],
             buying_pressure=round(buying_pressure, 2),
             selling_pressure=round(selling_pressure, 2),
-            order_flow_signal=signal
+            order_flow_signal=signal,
         )
 
     def _detect_absorption(self, trades: List[Trade]) -> List[Dict]:
@@ -661,13 +677,13 @@ class OrderFlowAnalyzer:
             sell_vol = sum(t.size for t in trades if t.is_sell)
 
             return {
-                'price': round(avg_price, 5),
-                'total_volume': total_volume,
-                'buy_volume': buy_vol,
-                'sell_volume': sell_vol,
-                'price_range': price_range,
-                'side': 'buy_absorption' if sell_vol > buy_vol else 'sell_absorption',
-                'timestamp': trades[0].timestamp.isoformat()
+                "price": round(avg_price, 5),
+                "total_volume": total_volume,
+                "buy_volume": buy_vol,
+                "sell_volume": sell_vol,
+                "price_range": price_range,
+                "side": "buy_absorption" if sell_vol > buy_vol else "sell_absorption",
+                "timestamp": trades[0].timestamp.isoformat(),
             }
 
         return None
@@ -677,10 +693,7 @@ class OrderFlowAnalyzer:
     # ================================================================
 
     def get_footprint(
-        self,
-        symbol: str,
-        timeframe: str = '5m',
-        bars: int = 20
+        self, symbol: str, timeframe: str = "5m", bars: int = 20
     ) -> List[Footprint]:
         """
         Generate footprint chart data.
@@ -719,8 +732,11 @@ class OrderFlowAnalyzer:
                 # Create footprint for previous bar
                 if bar_trades:
                     fp, cumulative_delta = self._create_footprint(
-                        symbol, timeframe, current_bar_start,
-                        bar_trades, cumulative_delta
+                        symbol,
+                        timeframe,
+                        current_bar_start,
+                        bar_trades,
+                        cumulative_delta,
                     )
                     footprints.append(fp)
 
@@ -730,8 +746,7 @@ class OrderFlowAnalyzer:
         # Last bar
         if bar_trades:
             fp, _ = self._create_footprint(
-                symbol, timeframe, current_bar_start,
-                bar_trades, cumulative_delta
+                symbol, timeframe, current_bar_start, bar_trades, cumulative_delta
             )
             footprints.append(fp)
 
@@ -743,7 +758,7 @@ class OrderFlowAnalyzer:
         timeframe: str,
         timestamp: datetime,
         trades: List[Trade],
-        prev_cumulative_delta: float
+        prev_cumulative_delta: float,
     ) -> Tuple[Footprint, float]:
         """Create a single footprint bar."""
         prices = [t.price for t in trades]
@@ -755,22 +770,20 @@ class OrderFlowAnalyzer:
         close_price = trades[-1].price
 
         # Volume by price level
-        levels: Dict[float, Dict] = defaultdict(lambda: {
-            'buy_vol': 0,
-            'sell_vol': 0,
-            'delta': 0
-        })
+        levels: Dict[float, Dict] = defaultdict(
+            lambda: {"buy_vol": 0, "sell_vol": 0, "delta": 0}
+        )
 
         bar_delta = 0
         for trade in trades:
             price = round(trade.price, 2)  # Round to tick
             if trade.is_buy:
-                levels[price]['buy_vol'] += trade.size
-                levels[price]['delta'] += trade.size
+                levels[price]["buy_vol"] += trade.size
+                levels[price]["delta"] += trade.size
                 bar_delta += trade.size
             else:
-                levels[price]['sell_vol'] += trade.size
-                levels[price]['delta'] -= trade.size
+                levels[price]["sell_vol"] += trade.size
+                levels[price]["delta"] -= trade.size
                 bar_delta -= trade.size
 
         total_volume = sum(t.size for t in trades)
@@ -787,23 +800,26 @@ class OrderFlowAnalyzer:
             levels=dict(levels),
             total_volume=total_volume,
             delta=bar_delta,
-            cumulative_delta=cumulative_delta
+            cumulative_delta=cumulative_delta,
         ), cumulative_delta
 
     def _parse_timeframe(self, timeframe: str) -> int:
         """Parse timeframe string to minutes."""
         tf_map = {
-            '1m': 1, '5m': 5, '15m': 15, '30m': 30,
-            '1h': 60, '4h': 240, '1d': 1440
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 60,
+            "4h": 240,
+            "1d": 1440,
         }
         return tf_map.get(timeframe, 5)
 
     def _floor_timestamp(self, ts: datetime, minutes: int) -> datetime:
         """Floor timestamp to timeframe boundary."""
         return ts.replace(
-            minute=(ts.minute // minutes) * minutes,
-            second=0,
-            microsecond=0
+            minute=(ts.minute // minutes) * minutes, second=0, microsecond=0
         )
 
     # ================================================================
@@ -819,15 +835,19 @@ class OrderFlowAnalyzer:
         profile = self.get_volume_profile(symbol, price_buckets=30)
 
         if not profile:
-            return {'support': [], 'resistance': [], 'poc': None}
+            return {"support": [], "resistance": [], "poc": None}
 
         # POC is a key level
         poc = profile.poc_price
 
         # High volume nodes are S/R
         hvns = sorted(
-            [l for l in profile.levels if l.total_volume > profile.total_volume / len(profile.levels) * 1.3],
-            key=lambda x: -x.total_volume
+            [
+                l
+                for l in profile.levels  # noqa: E741
+                if l.total_volume > profile.total_volume / len(profile.levels) * 1.3
+            ],
+            key=lambda x: -x.total_volume,
         )[:5]
 
         # Current price approximation
@@ -835,23 +855,25 @@ class OrderFlowAnalyzer:
         current_price = trades[-1].price if trades else poc
 
         support = [
-            {'price': l.price, 'volume': l.total_volume, 'type': 'HVN'}
-            for l in hvns if l.price < current_price
+            {"price": l.price, "volume": l.total_volume, "type": "HVN"}
+            for l in hvns  # noqa: E741
+            if l.price < current_price
         ]
 
         resistance = [
-            {'price': l.price, 'volume': l.total_volume, 'type': 'HVN'}
-            for l in hvns if l.price > current_price
+            {"price": l.price, "volume": l.total_volume, "type": "HVN"}
+            for l in hvns  # noqa: E741
+            if l.price > current_price
         ]
 
         # Add value area levels
-        support.append({'price': profile.val_price, 'volume': 0, 'type': 'VAL'})
-        resistance.append({'price': profile.vah_price, 'volume': 0, 'type': 'VAH'})
+        support.append({"price": profile.val_price, "volume": 0, "type": "VAL"})
+        resistance.append({"price": profile.vah_price, "volume": 0, "type": "VAH"})
 
         return {
-            'support': sorted(support, key=lambda x: -x['price']),
-            'resistance': sorted(resistance, key=lambda x: x['price']),
-            'poc': {'price': poc, 'type': 'POC'}
+            "support": sorted(support, key=lambda x: -x["price"]),
+            "resistance": sorted(resistance, key=lambda x: x["price"]),
+            "poc": {"price": poc, "type": "POC"},
         }
 
     # ================================================================
@@ -861,18 +883,17 @@ class OrderFlowAnalyzer:
     def get_stats(self) -> Dict:
         """Get analyzer statistics."""
         return {
-            'symbols_tracked': list(self._trades.keys()),
-            'total_trades': sum(len(t) for t in self._trades.values()),
-            'trades_by_symbol': {
-                s: len(t) for s, t in self._trades.items()
-            },
-            'cumulative_delta': dict(self._cumulative_delta)
+            "symbols_tracked": list(self._trades.keys()),
+            "total_trades": sum(len(t) for t in self._trades.values()),
+            "trades_by_symbol": {s: len(t) for s, t in self._trades.items()},
+            "cumulative_delta": dict(self._cumulative_delta),
         }
 
 
 # ================================================================
 # FASTAPI INTEGRATION
 # ================================================================
+
 
 def create_order_flow_router(analyzer: OrderFlowAnalyzer):
     """
@@ -919,8 +940,8 @@ def create_order_flow_router(analyzer: OrderFlowAnalyzer):
     async def get_delta(symbol: str):
         """Get cumulative delta."""
         return {
-            'symbol': symbol,
-            'cumulative_delta': analyzer._cumulative_delta.get(symbol, 0)
+            "symbol": symbol,
+            "cumulative_delta": analyzer._cumulative_delta.get(symbol, 0),
         }
 
     @router.get("/stats")

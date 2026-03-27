@@ -11,7 +11,7 @@
 ✅ Root Package
    __init__.py (564 B)           - Package initialization with exports
 
-✅ Entry Points  
+✅ Entry Points
    main.py (9.4 KB)              - Main application entry point
    app.py (8.1 KB)               - FastAPI server
    cli.py (8.8 KB)               - Command-line interface
@@ -23,10 +23,10 @@
 ✅ Core Modules
    config/__init__.py            - Configuration module
    config/config_manager.py      - Encryption & config (26 KB)
-   
+
    cache/__init__.py             - Cache module
    cache/market_data_cache.py    - Redis cache (25 KB)
-   
+
    database/__init__.py          - Database module
    database/models.py            - SQLAlchemy models (32 KB)
 

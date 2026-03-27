@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class DashboardWidgetType(Enum):
     """Dashboard widget types"""
+
     PORTFOLIO_SUMMARY = "portfolio_summary"
     POSITION_LIST = "position_list"
     TRADE_HISTORY = "trade_history"
@@ -36,6 +37,7 @@ class DashboardWidgetType(Enum):
 @dataclass
 class DashboardWidget:
     """Dashboard widget configuration"""
+
     widget_id: str
     widget_type: DashboardWidgetType
     title: str
@@ -48,6 +50,7 @@ class DashboardWidget:
 @dataclass
 class DashboardLayout:
     """Dashboard layout configuration"""
+
     layout_id: str
     name: str
     widgets: List[DashboardWidget]
@@ -58,21 +61,21 @@ class DashboardLayout:
 class DashboardService:
     """
     Web Dashboard Service
-    
+
     Provides data and configuration for the web dashboard interface.
     """
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """Initialize dashboard service."""
         self.config = config or {}
         self.layouts: Dict[str, DashboardLayout] = {}
         self.active_layout_id: Optional[str] = None
-        
+
         # Initialize default layout
         self._create_default_layout()
-        
+
         logger.info("Dashboard service initialized")
-    
+
     def _create_default_layout(self):
         """Create default dashboard layout."""
         default_widgets = [
@@ -80,66 +83,64 @@ class DashboardService:
                 widget_id="portfolio_summary_1",
                 widget_type=DashboardWidgetType.PORTFOLIO_SUMMARY,
                 title="Portfolio Overview",
-                position={"row": 0, "col": 0, "width": 4, "height": 2}
+                position={"row": 0, "col": 0, "width": 4, "height": 2},
             ),
             DashboardWidget(
                 widget_id="positions_1",
                 widget_type=DashboardWidgetType.POSITION_LIST,
                 title="Open Positions",
-                position={"row": 0, "col": 4, "width": 4, "height": 2}
+                position={"row": 0, "col": 4, "width": 4, "height": 2},
             ),
             DashboardWidget(
                 widget_id="performance_1",
                 widget_type=DashboardWidgetType.PERFORMANCE_CHART,
                 title="Performance",
-                position={"row": 0, "col": 8, "width": 4, "height": 2}
+                position={"row": 0, "col": 8, "width": 4, "height": 2},
             ),
             DashboardWidget(
                 widget_id="strategy_1",
                 widget_type=DashboardWidgetType.STRATEGY_STATUS,
                 title="Active Strategies",
-                position={"row": 2, "col": 0, "width": 6, "height": 2}
+                position={"row": 2, "col": 0, "width": 6, "height": 2},
             ),
             DashboardWidget(
                 widget_id="risk_1",
                 widget_type=DashboardWidgetType.RISK_METRICS,
                 title="Risk Metrics",
-                position={"row": 2, "col": 6, "width": 6, "height": 2}
+                position={"row": 2, "col": 6, "width": 6, "height": 2},
             ),
         ]
-        
+
         default_layout = DashboardLayout(
             layout_id="default",
             name="Default Trading Dashboard",
             widgets=default_widgets,
-            is_default=True
+            is_default=True,
         )
-        
+
         self.layouts["default"] = default_layout
         self.active_layout_id = "default"
-    
+
     def get_layout(self, layout_id: str) -> Optional[DashboardLayout]:
         """Get a dashboard layout by ID."""
         return self.layouts.get(layout_id)
-    
+
     def get_active_layout(self) -> Optional[DashboardLayout]:
         """Get the currently active layout."""
         if self.active_layout_id:
             return self.layouts.get(self.active_layout_id)
         return None
-    
-    def create_layout(self, name: str, widgets: List[DashboardWidget]) -> DashboardLayout:
+
+    def create_layout(
+        self, name: str, widgets: List[DashboardWidget]
+    ) -> DashboardLayout:
         """Create a new dashboard layout."""
         layout_id = f"layout_{len(self.layouts) + 1}"
-        layout = DashboardLayout(
-            layout_id=layout_id,
-            name=name,
-            widgets=widgets
-        )
+        layout = DashboardLayout(layout_id=layout_id, name=name, widgets=widgets)
         self.layouts[layout_id] = layout
         logger.info(f"Created dashboard layout: {name}")
         return layout
-    
+
     def set_active_layout(self, layout_id: str) -> bool:
         """Set the active dashboard layout."""
         if layout_id in self.layouts:
@@ -147,7 +148,7 @@ class DashboardService:
             logger.info(f"Active layout set to: {layout_id}")
             return True
         return False
-    
+
     def get_widget_data(self, widget_type: DashboardWidgetType) -> Dict[str, Any]:
         """Get data for a specific widget type."""
         data_handlers = {
@@ -162,12 +163,12 @@ class DashboardService:
             DashboardWidgetType.TRADE_HISTORY: self._get_trade_history,
             DashboardWidgetType.ORDER_BOOK: self._get_order_book,
         }
-        
+
         handler = data_handlers.get(widget_type)
         if handler:
             return handler()
         return {}
-    
+
     def _get_portfolio_summary(self) -> Dict[str, Any]:
         """Get portfolio summary data."""
         return {
@@ -180,7 +181,7 @@ class DashboardService:
             "open_positions": 3,
             "pending_orders": 2,
         }
-    
+
     def _get_positions(self) -> Dict[str, Any]:
         """Get open positions data."""
         return {
@@ -207,7 +208,7 @@ class DashboardService:
                 },
             ]
         }
-    
+
     def _get_performance_data(self) -> Dict[str, Any]:
         """Get performance chart data."""
         return {
@@ -223,9 +224,9 @@ class DashboardService:
                 "sharpe_ratio": 1.5,
                 "max_drawdown": -2.5,
                 "win_rate": 65.0,
-            }
+            },
         }
-    
+
     def _get_strategy_status(self) -> Dict[str, Any]:
         """Get strategy status data."""
         return {
@@ -246,7 +247,7 @@ class DashboardService:
                 },
             ]
         }
-    
+
     def _get_risk_metrics(self) -> Dict[str, Any]:
         """Get risk metrics data."""
         return {
@@ -258,45 +259,90 @@ class DashboardService:
             "current_drawdown": -1.5,
             "risk_utilization": 45.0,
         }
-    
+
     def _get_market_overview(self) -> Dict[str, Any]:
         """Get market overview data. Prices are fetched via /api/trading/market-price/{symbol}."""
         return {
             "markets": [
-                {"symbol": "XAUUSD", "price": None, "change": None, "source": "/api/trading/market-price/XAUUSD"},
-                {"symbol": "EURUSD", "price": None, "change": None, "source": "/api/trading/market-price/EURUSD"},
-                {"symbol": "BTCUSD", "price": None, "change": None, "source": "/api/trading/market-price/BTCUSD"},
+                {
+                    "symbol": "XAUUSD",
+                    "price": None,
+                    "change": None,
+                    "source": "/api/trading/market-price/XAUUSD",
+                },
+                {
+                    "symbol": "EURUSD",
+                    "price": None,
+                    "change": None,
+                    "source": "/api/trading/market-price/EURUSD",
+                },
+                {
+                    "symbol": "BTCUSD",
+                    "price": None,
+                    "change": None,
+                    "source": "/api/trading/market-price/BTCUSD",
+                },
             ],
             "note": "Live prices are served via /api/trading/market-price/{symbol} (yfinance)",
         }
-    
+
     def _get_alerts(self) -> Dict[str, Any]:
         """Get alerts data."""
         return {
             "alerts": [
-                {"id": 1, "type": "INFO", "message": "Strategy started", "time": "10:30"},
-                {"id": 2, "type": "WARNING", "message": "High volatility detected", "time": "11:15"},
+                {
+                    "id": 1,
+                    "type": "INFO",
+                    "message": "Strategy started",
+                    "time": "10:30",
+                },
+                {
+                    "id": 2,
+                    "type": "WARNING",
+                    "message": "High volatility detected",
+                    "time": "11:15",
+                },
             ]
         }
-    
+
     def _get_news_feed(self) -> Dict[str, Any]:
         """Get news feed data."""
         return {
             "news": [
-                {"title": "Fed announces rate decision", "source": "Reuters", "time": "12:00"},
-                {"title": "Gold prices surge on dollar weakness", "source": "Bloomberg", "time": "11:30"},
+                {
+                    "title": "Fed announces rate decision",
+                    "source": "Reuters",
+                    "time": "12:00",
+                },
+                {
+                    "title": "Gold prices surge on dollar weakness",
+                    "source": "Bloomberg",
+                    "time": "11:30",
+                },
             ]
         }
-    
+
     def _get_trade_history(self) -> Dict[str, Any]:
         """Get trade history data."""
         return {
             "trades": [
-                {"id": 1, "symbol": "XAUUSD", "side": "BUY", "pnl": 150.00, "time": "09:30"},
-                {"id": 2, "symbol": "EURUSD", "side": "SELL", "pnl": -50.00, "time": "10:15"},
+                {
+                    "id": 1,
+                    "symbol": "XAUUSD",
+                    "side": "BUY",
+                    "pnl": 150.00,
+                    "time": "09:30",
+                },
+                {
+                    "id": 2,
+                    "symbol": "EURUSD",
+                    "side": "SELL",
+                    "pnl": -50.00,
+                    "time": "10:15",
+                },
             ]
         }
-    
+
     def _get_order_book(self) -> Dict[str, Any]:
         """Get order book data."""
         return {
@@ -307,14 +353,14 @@ class DashboardService:
             "asks": [
                 {"price": 1955.50, "size": 8.0},
                 {"price": 1956.00, "size": 15.5},
-            ]
+            ],
         }
 
 
 # Module exports
 __all__ = [
-    'DashboardService',
-    'DashboardWidget',
-    'DashboardLayout',
-    'DashboardWidgetType',
+    "DashboardService",
+    "DashboardWidget",
+    "DashboardLayout",
+    "DashboardWidgetType",
 ]

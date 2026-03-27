@@ -65,14 +65,19 @@ class PositionSizer:
         payoff_ratio  : avg_win / avg_loss (required for 'kelly')
         """
         equity = getattr(account, "equity", None) or getattr(
-            account, "balance", Decimal("0"),
+            account,
+            "balance",
+            Decimal("0"),
         )
 
         if self.method == "atr":
             size = self._atr_size(equity, entry_price, atr or Decimal("1"))
         elif self.method == "kelly":
             size = self._kelly_size(
-                equity, entry_price, win_rate or 0.5, payoff_ratio or 1.0,
+                equity,
+                entry_price,
+                win_rate or 0.5,
+                payoff_ratio or 1.0,
             )
         elif self.method == "percent":
             dist = stop_distance or (entry_price * Decimal("0.01"))

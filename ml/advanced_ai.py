@@ -137,7 +137,10 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         # Observation: window returns + atr_norm + position + pnl_norm
         obs_dim = window + 3
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32,
+            low=-np.inf,
+            high=np.inf,
+            shape=(obs_dim,),
+            dtype=np.float32,
         )
         self.action_space = spaces.Discrete(3)  # 0=flat, 1=long, 2=short
 
@@ -248,7 +251,9 @@ class PPORLAgent:
     def train(self, df: pd.DataFrame, window: int = 10) -> None:
         """Train PPO on the supplied OHLCV DataFrame."""
         logger.info(
-            "ppo_agent.train bars=%d timesteps=%d", len(df), self.total_timesteps,
+            "ppo_agent.train bars=%d timesteps=%d",
+            len(df),
+            self.total_timesteps,
         )
 
         def _make_env():
@@ -406,13 +411,17 @@ class VectorRAGNewsSentiment:
             self._stored_scores.extend(scores)
 
         logger.info(
-            "rag.add_items count=%d total=%d", len(items), len(self._stored_headlines),
+            "rag.add_items count=%d total=%d",
+            len(items),
+            len(self._stored_headlines),
         )
 
     def _encode(self, texts: list[str]) -> np.ndarray:
         """Encode texts and L2-normalise for cosine similarity via inner product."""
         emb = self._encoder.encode(
-            texts, convert_to_numpy=True, normalize_embeddings=True,
+            texts,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
         )
         return emb.astype(np.float32)
 
@@ -428,7 +437,9 @@ class VectorRAGNewsSentiment:
         """
         if self._index.ntotal == 0:
             return SentimentResult(
-                headline=item.headline, sentiment_score=0.0, confidence=0.0,
+                headline=item.headline,
+                sentiment_score=0.0,
+                confidence=0.0,
             )
 
         query_emb = self._encode([item.headline])
@@ -472,7 +483,8 @@ class VectorRAGNewsSentiment:
         faiss.write_index(self._index, str(Path(directory) / "news.index"))
         with open(Path(directory) / "metadata.pkl", "wb") as fh:
             pickle.dump(
-                {"headlines": self._stored_headlines, "scores": self._stored_scores}, fh,
+                {"headlines": self._stored_headlines, "scores": self._stored_scores},
+                fh,
             )
         logger.info("rag.saved directory=%s", directory)
 
@@ -487,7 +499,9 @@ class VectorRAGNewsSentiment:
             self._stored_headlines = meta["headlines"]
             self._stored_scores = meta["scores"]
         logger.info(
-            "rag.loaded directory=%s items=%d", directory, len(self._stored_headlines),
+            "rag.loaded directory=%s items=%d",
+            directory,
+            len(self._stored_headlines),
         )
 
 

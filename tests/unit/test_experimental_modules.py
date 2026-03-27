@@ -23,6 +23,7 @@ from unittest.mock import patch
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _route_paths(router) -> list:
     return [r.path for r in router.routes]
 
@@ -31,14 +32,17 @@ def _route_paths(router) -> list:
 # Research module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestResearchModule:
     def test_imports(self):
         from research import create_research_router
+
         assert callable(create_research_router)
 
     def test_router_prefix_and_routes(self):
         from research import ResearchNotebookEngine, create_research_router
+
         engine = ResearchNotebookEngine()
         router = create_research_router(engine)
         assert router.prefix == "/api/research"
@@ -49,15 +53,15 @@ class TestResearchModule:
 
     def test_engine_create_notebook(self):
         from research import ResearchNotebookEngine
+
         engine = ResearchNotebookEngine()
-        nb = engine.create_notebook(
-            title="Test", description="desc", author="tester"
-        )
+        nb = engine.create_notebook(title="Test", description="desc", author="tester")
         assert nb.notebook_id
         assert nb.title == "Test"
 
     def test_engine_search_notebooks(self):
         from research import ResearchNotebookEngine
+
         engine = ResearchNotebookEngine()
         engine.create_notebook(title="My NB", description="x", author="a")
         results = engine.search_notebooks(query="My NB")
@@ -65,6 +69,7 @@ class TestResearchModule:
 
     def test_engine_get_templates(self):
         from research import ResearchNotebookEngine
+
         engine = ResearchNotebookEngine()
         templates = engine.get_templates()
         assert isinstance(templates, list)
@@ -74,14 +79,17 @@ class TestResearchModule:
 # Explainability module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestExplainabilityModule:
     def test_imports(self):
         from explainability import create_explainability_router
+
         assert callable(create_explainability_router)
 
     def test_router_prefix_and_routes(self):
         from explainability import AIExplainer, create_explainability_router
+
         explainer = AIExplainer()
         router = create_explainability_router(explainer)
         assert router.prefix == "/api/explainability"
@@ -92,6 +100,7 @@ class TestExplainabilityModule:
 
     def test_engine_explain_prediction(self):
         from explainability import AIExplainer
+
         explainer = AIExplainer()
         explanation = explainer.explain_prediction(
             model=None,
@@ -104,6 +113,7 @@ class TestExplainabilityModule:
 
     def test_engine_explanation_history(self):
         from explainability import AIExplainer
+
         explainer = AIExplainer()
         explainer.explain_prediction(
             model=None,
@@ -120,14 +130,17 @@ class TestExplainabilityModule:
 # Transparency module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTransparencyModule:
     def test_imports(self):
         from transparency import create_transparency_router
+
         assert callable(create_transparency_router)
 
     def test_router_prefix_and_routes(self):
         from transparency import ExecutionTransparencyEngine, create_transparency_router
+
         engine = ExecutionTransparencyEngine()
         router = create_transparency_router(engine)
         assert router.prefix == "/api/transparency"
@@ -138,6 +151,7 @@ class TestTransparencyModule:
 
     def test_engine_record_execution(self):
         from transparency import ExecutionTransparencyEngine, FOREX_PIP_MULTIPLIER
+
         engine = ExecutionTransparencyEngine()
         requested = 1950.0
         executed = 1950.5
@@ -159,6 +173,7 @@ class TestTransparencyModule:
 
     def test_engine_audit_trail(self):
         from transparency import ExecutionTransparencyEngine
+
         engine = ExecutionTransparencyEngine()
         engine.record_execution(
             order_id="ORD002",
@@ -180,14 +195,17 @@ class TestTransparencyModule:
 # Teams module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestTeamsModule:
     def test_imports(self):
         from teams import create_teams_router
+
         assert callable(create_teams_router)
 
     def test_router_prefix_and_routes(self):
         from teams import TeamManager, create_teams_router
+
         manager = TeamManager()
         router = create_teams_router(manager)
         assert router.prefix == "/api/teams"
@@ -198,6 +216,7 @@ class TestTeamsModule:
 
     def test_engine_create_team(self):
         from teams import TeamManager
+
         manager = TeamManager()
         team = manager.create_team(
             name="Alpha Team",
@@ -209,6 +228,7 @@ class TestTeamsModule:
 
     def test_engine_get_team_summary(self):
         from teams import TeamManager
+
         manager = TeamManager()
         team = manager.create_team(
             name="Beta Team",
@@ -222,6 +242,7 @@ class TestTeamsModule:
 
     def test_engine_has_permission(self):
         from teams import TeamManager, Permission
+
         manager = TeamManager()
         team = manager.create_team(
             name="Gamma Team",
@@ -230,21 +251,26 @@ class TestTeamsModule:
             owner_id="user_003",
         )
         # Owner should have trade execute permission
-        assert manager.has_permission(team.team_id, "user_003", Permission.TRADE_EXECUTE)
+        assert manager.has_permission(
+            team.team_id, "user_003", Permission.TRADE_EXECUTE
+        )
 
 
 # ---------------------------------------------------------------------------
 # No-Code Builder module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestNoCodeModule:
     def test_imports(self):
         from nocode import create_nocode_router
+
         assert callable(create_nocode_router)
 
     def test_router_prefix_and_routes(self):
         from nocode import NoCodeStrategyBuilder, create_nocode_router
+
         builder = NoCodeStrategyBuilder()
         router = create_nocode_router(builder)
         assert router.prefix == "/api/nocode"
@@ -255,6 +281,7 @@ class TestNoCodeModule:
 
     def test_engine_create_strategy(self):
         from nocode import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         strategy = builder.create_strategy(
             name="My RSI Strategy",
@@ -268,6 +295,7 @@ class TestNoCodeModule:
 
     def test_engine_get_available_indicators(self):
         from nocode import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         indicators = builder.get_available_indicators()
         assert isinstance(indicators, list)
@@ -275,12 +303,14 @@ class TestNoCodeModule:
 
     def test_engine_get_templates(self):
         from nocode import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         templates = builder.get_templates()
         assert isinstance(templates, list)
 
     def test_engine_export_to_python(self):
         from nocode import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         strategy = builder.create_strategy(
             name="Export Test",
@@ -297,14 +327,17 @@ class TestNoCodeModule:
 # Replay Engine module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestReplayModule:
     def test_imports(self):
         from replay import create_replay_router
+
         assert callable(create_replay_router)
 
     def test_router_prefix_and_routes(self):
         from replay import ChartReplayEngine, create_replay_router
+
         engine = ChartReplayEngine()
         router = create_replay_router(engine)
         assert router.prefix == "/api/replay"
@@ -317,6 +350,7 @@ class TestReplayModule:
     def test_engine_create_session(self):
         from datetime import datetime
         from replay import ChartReplayEngine
+
         engine = ChartReplayEngine()
         session = engine.create_session(
             symbol="XAUUSD",
@@ -332,6 +366,7 @@ class TestReplayModule:
     def test_engine_play_pause_stop(self):
         from datetime import datetime
         from replay import ChartReplayEngine
+
         engine = ChartReplayEngine()
         session = engine.create_session(
             symbol="EURUSD",
@@ -346,6 +381,7 @@ class TestReplayModule:
     def test_engine_get_session_summary(self):
         from datetime import datetime
         from replay import ChartReplayEngine
+
         engine = ChartReplayEngine()
         session = engine.create_session(
             symbol="XAUUSD",
@@ -362,14 +398,17 @@ class TestReplayModule:
 # ML module
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestMLModule:
     def test_imports(self):
         from ml import create_ml_router
+
         assert callable(create_ml_router)
 
     def test_router_prefix_and_routes(self):
         from ml import TechnicalFeatureEngineer, create_ml_router
+
         engineer = TechnicalFeatureEngineer()
         router = create_ml_router(engineer)
         assert router.prefix == "/api/ml"
@@ -387,27 +426,36 @@ class TestMLModule:
         # Generate synthetic OHLCV data (300 bars to avoid NaN-heavy output)
         n = 300
         close = 1900 + np.cumsum(np.random.randn(n)) * 5
-        df = pd.DataFrame({
-            "open": close - np.random.uniform(1, 5, n),
-            "high": close + np.random.uniform(1, 5, n),
-            "low": close - np.random.uniform(1, 5, n),
-            "close": close,
-            "volume": np.random.uniform(1000, 5000, n),
-        })
+        df = pd.DataFrame(
+            {
+                "open": close - np.random.uniform(1, 5, n),
+                "high": close + np.random.uniform(1, 5, n),
+                "low": close - np.random.uniform(1, 5, n),
+                "close": close,
+                "volume": np.random.uniform(1000, 5000, n),
+            }
+        )
         features_df = engineer.create_features(df)
         assert len(features_df) > 0
         assert len(engineer.feature_names) > 10
 
     def test_feature_engineer_get_feature_groups(self):
         from ml import TechnicalFeatureEngineer
+
         engineer = TechnicalFeatureEngineer()
         groups = engineer.get_feature_groups()
         assert isinstance(groups, dict)
 
     def test_ml_module_exports(self):
         import ml
-        for name in ["BaseMLModel", "LSTMPricePredictor", "RandomForestTradingClassifier",
-                     "TechnicalFeatureEngineer", "create_ml_router"]:
+
+        for name in [
+            "BaseMLModel",
+            "LSTMPricePredictor",
+            "RandomForestTradingClassifier",
+            "TechnicalFeatureEngineer",
+            "create_ml_router",
+        ]:
             assert name in ml.__all__, f"'{name}' missing from ml.__all__"
 
 
@@ -415,12 +463,14 @@ class TestMLModule:
 # Feature flag integration check
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFeatureFlagIntegration:
     """Verify the feature flags for experimental modules exist and are wired."""
 
     def test_all_experimental_flags_exist(self):
         from config.feature_flags import FeatureFlags
+
         ff = FeatureFlags()
         reg = ff.registry()
         expected = {
@@ -437,27 +487,34 @@ class TestFeatureFlagIntegration:
 
     def test_experimental_flags_off_by_default(self):
         from config.feature_flags import FeatureFlags
+
         ff = FeatureFlags()
         # ML_PREDICTIONS was promoted to STABLE/on in V15 — excluded from this check.
         experimental_off = (
-            "RESEARCH_MODULE", "EXPLAINABILITY", "TRANSPARENCY_REPORTS",
-            "TEAMS_MODULE", "NOCODE_BUILDER", "REPLAY_ENGINE",
+            "RESEARCH_MODULE",
+            "EXPLAINABILITY",
+            "TRANSPARENCY_REPORTS",
+            "TEAMS_MODULE",
+            "NOCODE_BUILDER",
+            "REPLAY_ENGINE",
         )
         for name in experimental_off:
-            assert getattr(ff, name) is False, (
-                f"Experimental flag {name} should be off by default"
-            )
+            assert (
+                getattr(ff, name) is False
+            ), f"Experimental flag {name} should be off by default"
         # ML_PREDICTIONS is now STABLE and on by default
         assert ff.ML_PREDICTIONS is True, "ML_PREDICTIONS should be on (STABLE)"
 
     def test_env_var_enables_research(self):
         from config.feature_flags import FeatureFlags
+
         with patch.dict(os.environ, {"FEATURE_RESEARCH": "true"}):
             ff = FeatureFlags()
             assert ff.RESEARCH_MODULE is True
 
     def test_env_var_enables_ml_predictions(self):
         from config.feature_flags import FeatureFlags
+
         with patch.dict(os.environ, {"FEATURE_ML_PREDICTIONS": "true"}):
             ff = FeatureFlags()
             assert ff.ML_PREDICTIONS is True
@@ -466,6 +523,7 @@ class TestFeatureFlagIntegration:
         """app.AppState must declare slots for all experimental engines."""
         import sys
         from unittest.mock import MagicMock, patch
+
         # Stub heavy optional deps so app.py can be imported in a test environment
         stubs = {
             mod: MagicMock()
@@ -474,9 +532,16 @@ class TestFeatureFlagIntegration:
         }
         with patch.dict(sys.modules, stubs):
             from app import AppState
+
             state = AppState()
-            for attr in ("research_engine", "explainer", "transparency_engine",
-                         "teams_manager", "nocode_builder", "replay_engine",
-                         "ml_feature_engineer"):
+            for attr in (
+                "research_engine",
+                "explainer",
+                "transparency_engine",
+                "teams_manager",
+                "nocode_builder",
+                "replay_engine",
+                "ml_feature_engineer",
+            ):
                 assert hasattr(state, attr), f"AppState missing attribute '{attr}'"
                 assert getattr(state, attr) is None  # None until flag is on

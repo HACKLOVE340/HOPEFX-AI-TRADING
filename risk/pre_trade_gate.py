@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 # Optional Sentry — non-fatal if absent
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -52,6 +53,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
+
 
 class TradeBlocked(Exception):
     """
@@ -62,6 +64,7 @@ class TradeBlocked(Exception):
         detail: Human-readable explanation.
         checks_failed: List of individual check names that failed.
     """
+
     def __init__(
         self,
         reason_code: str,
@@ -85,16 +88,18 @@ class RiskManagerError(RuntimeError):
 # Order representation (minimal — gate is broker-agnostic)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class GateOrder:
     """
     Minimal order representation consumed by the pre-trade gate.
     Callers convert their broker-specific order to this before calling check().
     """
+
     symbol: str
-    side: str          # "BUY" | "SELL"
+    side: str  # "BUY" | "SELL"
     quantity: float
-    price: Optional[float] = None          # None = market order
+    price: Optional[float] = None  # None = market order
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     strategy_id: str = "unknown"
@@ -102,7 +107,9 @@ class GateOrder:
 
     def __post_init__(self) -> None:
         if self.side not in ("BUY", "SELL"):
-            raise ValueError(f"GateOrder.side must be 'BUY' or 'SELL', got {self.side!r}")
+            raise ValueError(
+                f"GateOrder.side must be 'BUY' or 'SELL', got {self.side!r}"
+            )
         if self.quantity <= 0:
             raise ValueError(f"GateOrder.quantity must be > 0, got {self.quantity}")
 
@@ -111,9 +118,11 @@ class GateOrder:
 # Gate result (for audit logging — gate.check() still raises on failure)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class GateResult:
     """Returned by gate.check() only when ALL checks pass."""
+
     order: GateOrder
     checks_passed: List[str]
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -124,6 +133,7 @@ class GateResult:
 # ---------------------------------------------------------------------------
 # Pre-trade gate
 # ---------------------------------------------------------------------------
+
 
 class PreTradeGate:
     """
@@ -218,7 +228,10 @@ class PreTradeGate:
         logger.info(
             "PRE-TRADE GATE PASSED | symbol=%s side=%s qty=%.4f strategy=%s "
             "checks=%s cvar=%s dd=%.4f",
-            order.symbol, order.side, order.quantity, order.strategy_id,
+            order.symbol,
+            order.side,
+            order.quantity,
+            order.strategy_id,
             checks_passed,
             f"{cvar:.4f}" if cvar is not None else "n/a",
             drawdown_pct or 0.0,
@@ -386,7 +399,10 @@ class PreTradeGate:
             )
 
         # Extract CVaR value for audit log
-        if hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10:
+        if (
+            hasattr(rm, "_compute_cvar")
+            and len(getattr(rm, "_returns_history", [])) >= 10
+        ):
             try:
                 return rm._compute_cvar()
             except Exception:
@@ -400,7 +416,9 @@ class PreTradeGate:
         if config is None:
             return
 
-        balance = getattr(rm, "current_balance", 0.0) or getattr(rm, "initial_balance", 0.0)
+        balance = getattr(rm, "current_balance", 0.0) or getattr(
+            rm, "initial_balance", 0.0
+        )
         if balance <= 0:
             return  # cannot check — pass
 
@@ -429,9 +447,7 @@ class PreTradeGate:
         max_pos = getattr(config, "max_open_positions", 5) if config else 5
 
         if len(open_positions) >= max_pos:
-            detail = (
-                f"Open positions {len(open_positions)} >= limit {max_pos}"
-            )
+            detail = f"Open positions {len(open_positions)} >= limit {max_pos}"
             logger.warning("PRE-TRADE BLOCKED [MAX_OPEN_POSITIONS] %s", detail)
             raise TradeBlocked(
                 reason_code="MAX_OPEN_POSITIONS",

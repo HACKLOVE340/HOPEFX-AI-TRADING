@@ -48,7 +48,7 @@ export function EquityChart() {
     const data: AreaData[] = []
     let value = 100000
     const now = Date.now() / 1000
-    
+
     for (let i = 100; i >= 0; i--) {
       value = value * (1 + (Math.random() - 0.48) * 0.02)
       data.push({

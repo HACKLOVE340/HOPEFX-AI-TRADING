@@ -26,14 +26,23 @@ from risk.manager import RiskManager, RiskConfig
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_rm(tmp_path: Path, **kwargs) -> RiskManager:
     cfg = RiskConfig(**kwargs)
-    return RiskManager(config=cfg, initial_balance=100_000.0,
-                       halt_state_file=tmp_path / "halt.json")
+    return RiskManager(
+        config=cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json"
+    )
 
 
-def _make_signal(symbol="XAUUSD", action="buy", entry=2000.0,
-                 stop=1980.0, tp=2040.0, strength=0.6, probability=None):
+def _make_signal(
+    symbol="XAUUSD",
+    action="buy",
+    entry=2000.0,
+    stop=1980.0,
+    tp=2040.0,
+    strength=0.6,
+    probability=None,
+):
     sig = {
         "symbol": symbol,
         "action": action,
@@ -51,6 +60,7 @@ def _make_signal(symbol="XAUUSD", action="buy", entry=2000.0,
 # ---------------------------------------------------------------------------
 # Test 1: full signal → paper fill → position tracked
 # ---------------------------------------------------------------------------
+
 
 def test_full_signal_paper_fill_position_tracked(tmp_path):
     rm = _make_rm(tmp_path)
@@ -77,6 +87,7 @@ def test_full_signal_paper_fill_position_tracked(tmp_path):
 # Test 2: P&L computed correctly after close
 # ---------------------------------------------------------------------------
 
+
 def test_pnl_computed_after_close(tmp_path):
     rm = _make_rm(tmp_path)
     entry_price = 2000.0
@@ -94,6 +105,7 @@ def test_pnl_computed_after_close(tmp_path):
 # Test 3: risk rejection blocks trade
 # ---------------------------------------------------------------------------
 
+
 def test_risk_rejection_blocks_trade(tmp_path):
     rm = _make_rm(tmp_path, min_risk_reward=3.0)  # require 3:1 R/R
 
@@ -102,7 +114,7 @@ def test_risk_rejection_blocks_trade(tmp_path):
         symbol="XAUUSD",
         signal_strength=0.6,
         entry_price=2000.0,
-        stop_loss_price=1980.0,   # 20 pts risk
+        stop_loss_price=1980.0,  # 20 pts risk
         take_profit_price=2020.0,  # 20 pts reward → 1:1
         account_equity=100_000.0,
         volatility=0.10,
@@ -110,12 +122,17 @@ def test_risk_rejection_blocks_trade(tmp_path):
     )
 
     assert result.approved is False
-    assert "risk/reward" in result.reason.lower() or "risk_reward" in result.reason.lower() or "too low" in result.reason.lower()
+    assert (
+        "risk/reward" in result.reason.lower()
+        or "risk_reward" in result.reason.lower()
+        or "too low" in result.reason.lower()
+    )
 
 
 # ---------------------------------------------------------------------------
 # Test 4: partial fill reduces position size
 # ---------------------------------------------------------------------------
+
 
 def test_partial_fill_reduces_position(tmp_path):
     rm = _make_rm(tmp_path)
@@ -130,6 +147,7 @@ def test_partial_fill_reduces_position(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 5: stop hit closes position at loss
 # ---------------------------------------------------------------------------
+
 
 def test_stop_hit_closes_at_loss(tmp_path):
     rm = _make_rm(tmp_path)
@@ -148,6 +166,7 @@ def test_stop_hit_closes_at_loss(tmp_path):
 # Test 6: take-profit hit closes position at gain
 # ---------------------------------------------------------------------------
 
+
 def test_take_profit_hit_closes_at_gain(tmp_path):
     rm = _make_rm(tmp_path)
     entry = 2000.0
@@ -164,6 +183,7 @@ def test_take_profit_hit_closes_at_gain(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 7: kill switch blocks new trades
 # ---------------------------------------------------------------------------
+
 
 def test_kill_switch_blocks_trade(tmp_path):
     rm = _make_rm(tmp_path)
@@ -188,27 +208,38 @@ def test_kill_switch_blocks_trade(tmp_path):
 # Test 8: signal with ML probability uses correct Kelly fraction
 # ---------------------------------------------------------------------------
 
+
 def test_ml_probability_used_in_kelly(tmp_path):
     rm = _make_rm(tmp_path)
 
     # High probability (0.70) should produce larger size than low (0.35)
     rm._last_signal_probability = 0.70
     result_high = rm._calculate_position_size_full(
-        symbol="XAUUSD", signal_strength=0.5,
-        entry_price=2000.0, stop_loss_price=1980.0, take_profit_price=2060.0,
-        account_equity=100_000.0, volatility=0.05, existing_positions=[],
+        symbol="XAUUSD",
+        signal_strength=0.5,
+        entry_price=2000.0,
+        stop_loss_price=1980.0,
+        take_profit_price=2060.0,
+        account_equity=100_000.0,
+        volatility=0.05,
+        existing_positions=[],
     )
 
     rm._last_signal_probability = 0.35
     result_low = rm._calculate_position_size_full(
-        symbol="XAUUSD", signal_strength=0.5,
-        entry_price=2000.0, stop_loss_price=1980.0, take_profit_price=2060.0,
-        account_equity=100_000.0, volatility=0.05, existing_positions=[],
+        symbol="XAUUSD",
+        signal_strength=0.5,
+        entry_price=2000.0,
+        stop_loss_price=1980.0,
+        take_profit_price=2060.0,
+        account_equity=100_000.0,
+        volatility=0.05,
+        existing_positions=[],
     )
 
     # Both should be approved; high-probability signal should produce >= size
     assert result_high.approved is True
     assert result_low.approved is True
-    assert result_high.recommended_size >= result_low.recommended_size, (
-        "Higher ML probability should produce equal or larger position size"
-    )
+    assert (
+        result_high.recommended_size >= result_low.recommended_size
+    ), "Higher ML probability should produce equal or larger position size"

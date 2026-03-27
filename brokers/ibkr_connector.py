@@ -24,7 +24,6 @@ Design invariants:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import threading
@@ -32,8 +31,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from brokers.base import (
     AccountInfo,
@@ -50,6 +48,7 @@ logger = logging.getLogger(__name__)
 # Optional Sentry
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -66,8 +65,9 @@ try:
         MarketOrder,
         StopOrder,
         Trade,
-        util,
+        util,  # noqa: F401
     )
+
     IB_AVAILABLE = True
 except ImportError:
     IB_AVAILABLE = False
@@ -82,7 +82,7 @@ _RECONNECT_INITIAL_DELAY: float = 2.0
 _RECONNECT_MAX_DELAY: float = 120.0
 _RECONNECT_MULTIPLIER: float = 2.0
 _MAX_RECONNECT_ATTEMPTS: int = 10
-_ORDER_TIMEOUT_SEC: float = 30.0   # max wait for order acknowledgement
+_ORDER_TIMEOUT_SEC: float = 30.0  # max wait for order acknowledgement
 _HEARTBEAT_INTERVAL: float = 30.0  # seconds between TWS heartbeats
 
 # XAUUSD contract specs on IBKR
@@ -102,10 +102,15 @@ class IBKRConfig:
     Sourced from environment variables with explicit defaults.
     All values validated at construction time — no silent misconfiguration.
     """
+
     host: str = field(default_factory=lambda: os.environ.get("IBKR_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.environ.get("IBKR_PORT", "7497")))
-    client_id: int = field(default_factory=lambda: int(os.environ.get("IBKR_CLIENT_ID", "1")))
-    account: Optional[str] = field(default_factory=lambda: os.environ.get("IBKR_ACCOUNT"))
+    client_id: int = field(
+        default_factory=lambda: int(os.environ.get("IBKR_CLIENT_ID", "1"))
+    )
+    account: Optional[str] = field(
+        default_factory=lambda: os.environ.get("IBKR_ACCOUNT")
+    )
     readonly: bool = False
     timeout_sec: float = 20.0
 
@@ -160,12 +165,14 @@ class IBKRConnector(BrokerConnector):
         self._kill_switch = kill_switch
 
         # Initialise base class with a dict config
-        super().__init__({
-            "host": self._cfg.host,
-            "port": self._cfg.port,
-            "client_id": self._cfg.client_id,
-            "rate_limit_rps": 10.0,
-        })
+        super().__init__(
+            {
+                "host": self._cfg.host,
+                "port": self._cfg.port,
+                "client_id": self._cfg.client_id,
+                "rate_limit_rps": 10.0,
+            }
+        )
 
         self._ib: Optional[IB] = None
         self._account_id: Optional[str] = self._cfg.account
@@ -180,7 +187,10 @@ class IBKRConnector(BrokerConnector):
 
         logger.info(
             "IBKRConnector initialised | host=%s port=%d client_id=%d mode=%s",
-            self._cfg.host, self._cfg.port, self._cfg.client_id, self._cfg.mode_label,
+            self._cfg.host,
+            self._cfg.port,
+            self._cfg.client_id,
+            self._cfg.mode_label,
         )
 
     # ------------------------------------------------------------------
@@ -201,8 +211,11 @@ class IBKRConnector(BrokerConnector):
             try:
                 logger.info(
                     "IBKRConnector connecting (attempt %d/%d) to %s:%d client_id=%d",
-                    attempt, _MAX_RECONNECT_ATTEMPTS,
-                    self._cfg.host, self._cfg.port, self._cfg.client_id,
+                    attempt,
+                    _MAX_RECONNECT_ATTEMPTS,
+                    self._cfg.host,
+                    self._cfg.port,
+                    self._cfg.client_id,
                 )
                 self._ib = IB()
                 self._ib.connect(
@@ -235,7 +248,8 @@ class IBKRConnector(BrokerConnector):
 
                 logger.info(
                     "IBKRConnector connected | account=%s mode=%s",
-                    self._account_id, self._cfg.mode_label,
+                    self._account_id,
+                    self._cfg.mode_label,
                 )
                 return True
 
@@ -243,14 +257,17 @@ class IBKRConnector(BrokerConnector):
                 tb = traceback.format_exc()
                 logger.error(
                     "IBKRConnector connection attempt %d failed: %s\n%s",
-                    attempt, exc, tb,
+                    attempt,
+                    exc,
+                    tb,
                 )
                 self._capture_sentry(exc)
                 self.connected = False
 
                 if attempt < _MAX_RECONNECT_ATTEMPTS:
                     logger.warning(
-                        "Retrying in %.1fs…", self._reconnect_delay,
+                        "Retrying in %.1fs…",
+                        self._reconnect_delay,
                     )
                     time.sleep(self._reconnect_delay)
                     self._reconnect_delay = min(
@@ -306,7 +323,9 @@ class IBKRConnector(BrokerConnector):
                 break
             try:
                 if self._ib and not self._ib.isConnected():
-                    logger.warning("IBKRConnector: heartbeat detected disconnection. Reconnecting…")
+                    logger.warning(
+                        "IBKRConnector: heartbeat detected disconnection. Reconnecting…"
+                    )
                     self.reconnect()
             except Exception as exc:
                 logger.error("IBKRConnector heartbeat error: %s", exc)
@@ -342,6 +361,7 @@ class IBKRConnector(BrokerConnector):
             return self._make_xauusd_contract(instrument)
         # Fallback: treat as stock on SMART
         from ib_insync import Stock  # type: ignore[import]
+
         c = Stock(symbol, "SMART", _XAUUSD_CURRENCY)
         self._ib.qualifyContracts(c)
         return c
@@ -381,12 +401,16 @@ class IBKRConnector(BrokerConnector):
             ValueError: if order parameters are invalid.
         """
         if not self.connected or not self._ib:
-            raise RuntimeError("IBKRConnector.place_order: not connected to TWS/Gateway.")
+            raise RuntimeError(
+                "IBKRConnector.place_order: not connected to TWS/Gateway."
+            )
 
         # Kill-switch check — hard block
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
-            raise RuntimeError(f"IBKRConnector.place_order blocked by kill switch: {reason}")
+            raise RuntimeError(
+                f"IBKRConnector.place_order blocked by kill switch: {reason}"
+            )
 
         if order_type == OrderType.LIMIT and price is None:
             raise ValueError("price is required for LIMIT orders.")
@@ -419,13 +443,21 @@ class IBKRConnector(BrokerConnector):
                 if trade.orderStatus.status not in ("PreSubmitted", ""):
                     break
 
-            order = self._trade_to_order(trade, symbol, side, order_type, quantity, price)
+            order = self._trade_to_order(
+                trade, symbol, side, order_type, quantity, price
+            )
 
             logger.info(
                 "IBKRConnector order placed | symbol=%s side=%s type=%s qty=%.4f "
                 "price=%s order_id=%s status=%s mode=%s",
-                symbol, side.value, order_type.value, quantity,
-                price or stop_price, order.id, order.status.value, self._cfg.mode_label,
+                symbol,
+                side.value,
+                order_type.value,
+                quantity,
+                price or stop_price,
+                order.id,
+                order.status.value,
+                self._cfg.mode_label,
             )
             return order
 
@@ -433,7 +465,11 @@ class IBKRConnector(BrokerConnector):
             tb = traceback.format_exc()
             logger.error(
                 "IBKRConnector.place_order failed | symbol=%s side=%s qty=%.4f: %s\n%s",
-                symbol, side.value if hasattr(side, "value") else side, quantity, exc, tb,
+                symbol,
+                side.value if hasattr(side, "value") else side,
+                quantity,
+                exc,
+                tb,
             )
             self._capture_sentry(exc)
             raise
@@ -466,7 +502,9 @@ class IBKRConnector(BrokerConnector):
                     return self._trade_to_order(
                         trade,
                         symbol=trade.contract.symbol,
-                        side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
+                        side=OrderSide.BUY
+                        if trade.order.action == "BUY"
+                        else OrderSide.SELL,
                         order_type=OrderType.MARKET,
                         quantity=trade.order.totalQuantity,
                     )
@@ -492,26 +530,36 @@ class IBKRConnector(BrokerConnector):
                     continue
                 try:
                     ticker = self._ib.reqTicker(pos.contract)
-                    current_price = float(ticker.marketPrice()) if ticker and ticker.marketPrice() else 0.0
+                    current_price = (
+                        float(ticker.marketPrice())
+                        if ticker and ticker.marketPrice()
+                        else 0.0
+                    )
                 except Exception:
                     current_price = 0.0
 
                 avg_cost = pos.avgCost
                 qty = abs(pos.position)
                 entry_price = avg_cost / qty if qty > 0 else 0.0
-                unrealized_pnl = (current_price - entry_price) * qty * (1 if pos.position > 0 else -1)
+                unrealized_pnl = (
+                    (current_price - entry_price)
+                    * qty
+                    * (1 if pos.position > 0 else -1)
+                )
 
-                result.append(Position(
-                    symbol=pos.contract.symbol,
-                    side="LONG" if pos.position > 0 else "SHORT",
-                    quantity=qty,
-                    entry_price=entry_price,
-                    current_price=current_price,
-                    unrealized_pnl=unrealized_pnl,
-                    realized_pnl=0.0,
-                    timestamp=datetime.now(timezone.utc),
-                    id=str(pos.contract.conId),
-                ))
+                result.append(
+                    Position(
+                        symbol=pos.contract.symbol,
+                        side="LONG" if pos.position > 0 else "SHORT",
+                        quantity=qty,
+                        entry_price=entry_price,
+                        current_price=current_price,
+                        unrealized_pnl=unrealized_pnl,
+                        realized_pnl=0.0,
+                        timestamp=datetime.now(timezone.utc),
+                        id=str(pos.contract.conId),
+                    )
+                )
             return result
         except Exception as exc:
             logger.error("IBKRConnector.get_positions error: %s", exc)
@@ -526,7 +574,9 @@ class IBKRConnector(BrokerConnector):
         try:
             positions = [p for p in self.get_positions() if p.symbol == symbol]
             if not positions:
-                logger.warning("IBKRConnector.close_position: no position for %s.", symbol)
+                logger.warning(
+                    "IBKRConnector.close_position: no position for %s.", symbol
+                )
                 return False
             for pos in positions:
                 close_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
@@ -655,7 +705,7 @@ class IBKRConnector(BrokerConnector):
             raise RuntimeError("IBKRConnector.subscribe_ticks: not connected.")
         try:
             contract = self._make_contract(symbol, instrument)
-            ticker = self._ib.reqMktData(contract, "", False, False)
+            ticker = self._ib.reqMktData(contract, "", False, False)  # noqa: F841
 
             def _on_pending_tickers(tickers):
                 for t in tickers:
@@ -672,13 +722,15 @@ class IBKRConnector(BrokerConnector):
                             callback(tick)
                         except Exception as cb_exc:
                             logger.error(
-                                "IBKRConnector tick callback error: %s", cb_exc,
+                                "IBKRConnector tick callback error: %s",
+                                cb_exc,
                             )
 
             self._ib.pendingTickersEvent += _on_pending_tickers
             logger.info(
                 "IBKRConnector: subscribed to ticks for %s (instrument=%s)",
-                symbol, instrument,
+                symbol,
+                instrument,
             )
         except Exception as exc:
             logger.error("IBKRConnector.subscribe_ticks error: %s", exc)

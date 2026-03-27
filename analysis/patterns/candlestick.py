@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 try:
     import pandas as pd  # type: ignore[import]
+
     HAS_PANDAS = True
 except ImportError:
     pd = None  # type: ignore[assignment]
@@ -28,12 +29,12 @@ logger = logging.getLogger(__name__)
 class CandlestickPattern:
     """Detected candlestick pattern."""
 
-    pattern_name: str          # Name of the pattern (e.g. 'Hammer', 'Doji')
-    pattern_type: str          # 'reversal', 'continuation', 'indecision'
-    direction: str             # 'bullish', 'bearish', 'neutral'
-    confidence: float          # 0.0 – 1.0
-    index: int                 # Bar index where the pattern completes
-    candles_count: int         # Number of candles in pattern (1, 2, or 3)
+    pattern_name: str  # Name of the pattern (e.g. 'Hammer', 'Doji')
+    pattern_type: str  # 'reversal', 'continuation', 'indecision'
+    direction: str  # 'bullish', 'bearish', 'neutral'
+    confidence: float  # 0.0 – 1.0
+    index: int  # Bar index where the pattern completes
+    candles_count: int  # Number of candles in pattern (1, 2, or 3)
     description: str = ""
 
     def to_dict(self) -> Dict:
@@ -52,6 +53,7 @@ class CandlestickPattern:
 # ---------------------------------------------------------------------------
 # Candle helpers
 # ---------------------------------------------------------------------------
+
 
 def _candle_body(open_: float, close: float) -> float:
     """Absolute body size."""
@@ -93,8 +95,10 @@ def _body_ratio(open_: float, close: float, high: float, low: float) -> float:
 # Doji helpers
 # ---------------------------------------------------------------------------
 
-def _is_doji(open_: float, close: float, high: float, low: float,
-             threshold: float = 0.05) -> bool:
+
+def _is_doji(
+    open_: float, close: float, high: float, low: float, threshold: float = 0.05
+) -> bool:
     """Body is less than *threshold* of the total range."""
     return _body_ratio(open_, close, high, low) < threshold
 
@@ -102,6 +106,7 @@ def _is_doji(open_: float, close: float, high: float, low: float,
 # ---------------------------------------------------------------------------
 # Single-candle patterns
 # ---------------------------------------------------------------------------
+
 
 def _detect_hammer(
     opens: List[float],
@@ -306,6 +311,7 @@ def _detect_doji_pattern(
 # Two-candle patterns
 # ---------------------------------------------------------------------------
 
+
 def _detect_engulfing(
     opens: List[float],
     closes: List[float],
@@ -327,8 +333,7 @@ def _detect_engulfing(
     curr_close_above = closes[i] > opens[i - 1]
 
     is_bullish_engulfing = (
-        prev_bearish and curr_bullish
-        and curr_open_below and curr_close_above
+        prev_bearish and curr_bullish and curr_open_below and curr_close_above
     )
     if is_bullish_engulfing:
         return CandlestickPattern(
@@ -347,8 +352,7 @@ def _detect_engulfing(
     curr_close_below = closes[i] < opens[i - 1]
 
     is_bearish_engulfing = (
-        prev_bullish and curr_bearish
-        and curr_open_above and curr_close_below
+        prev_bullish and curr_bearish and curr_open_above and curr_close_below
     )
     if is_bearish_engulfing:
         return CandlestickPattern(
@@ -468,18 +472,15 @@ def _detect_piercing_dark_cloud(
 # Three-candle patterns
 # ---------------------------------------------------------------------------
 
+
 def _three_candle_trend(
     opens: List[float],
     closes: List[float],
     i: int,
 ) -> tuple:
     """Return (all_bullish, all_bearish, rising_closes, falling_closes)."""
-    all_bullish = all(
-        _is_bullish(opens[j], closes[j]) for j in range(i - 2, i + 1)
-    )
-    all_bearish = all(
-        _is_bearish(opens[j], closes[j]) for j in range(i - 2, i + 1)
-    )
+    all_bullish = all(_is_bullish(opens[j], closes[j]) for j in range(i - 2, i + 1))
+    all_bearish = all(_is_bearish(opens[j], closes[j]) for j in range(i - 2, i + 1))
     rising_closes = closes[i - 1] > closes[i - 2] and closes[i] > closes[i - 1]
     falling_closes = closes[i - 1] < closes[i - 2] and closes[i] < closes[i - 1]
     return all_bullish, all_bearish, rising_closes, falling_closes
@@ -494,9 +495,7 @@ def _detect_three_soldiers_crows(
     if i < 2:
         return None
 
-    all_bullish, all_bearish, rising, falling = _three_candle_trend(
-        opens, closes, i
-    )
+    all_bullish, all_bearish, rising, falling = _three_candle_trend(opens, closes, i)
 
     if all_bullish and rising:
         return CandlestickPattern(
@@ -697,32 +696,38 @@ class CandlestickPatternDetector:
         n = len(closes)
 
         for i in range(n):
-            p = _detect_doji_pattern(
-                opens, highs, lows, closes, i, self.doji_threshold
-            )
+            p = _detect_doji_pattern(opens, highs, lows, closes, i, self.doji_threshold)
             if p:
                 patterns.append(p)
                 continue
 
             p = _detect_hammer(
-                opens, highs, lows, closes, i,
-                self.doji_threshold, self.wick_ratio,
+                opens,
+                highs,
+                lows,
+                closes,
+                i,
+                self.doji_threshold,
+                self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
 
             p = _detect_shooting_star(
-                opens, highs, lows, closes, i,
-                self.doji_threshold, self.wick_ratio,
+                opens,
+                highs,
+                lows,
+                closes,
+                i,
+                self.doji_threshold,
+                self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
 
-            p = _detect_marubozu(
-                opens, highs, lows, closes, i, self.marubozu_threshold
-            )
+            p = _detect_marubozu(opens, highs, lows, closes, i, self.marubozu_threshold)
             if p:
                 patterns.append(p)
 
@@ -748,8 +753,11 @@ class CandlestickPatternDetector:
         n = len(closes)
 
         for i in range(1, n):
-            for detector in (_detect_engulfing, _detect_harami,
-                             _detect_piercing_dark_cloud):
+            for detector in (
+                _detect_engulfing,
+                _detect_harami,
+                _detect_piercing_dark_cloud,
+            ):
                 p = detector(opens, closes, i)
                 if p:
                     patterns.append(p)
@@ -777,8 +785,10 @@ class CandlestickPatternDetector:
         n = len(closes)
 
         for i in range(2, n):
-            for detector in (_detect_three_soldiers_crows,
-                             _detect_morning_evening_star):
+            for detector in (
+                _detect_three_soldiers_crows,
+                _detect_morning_evening_star,
+            ):
                 p = detector(opens, closes, i)
                 if p:
                     patterns.append(p)
@@ -835,43 +845,54 @@ class CandlestickPatternDetector:
         patterns: List[CandlestickPattern] = []
 
         for i in range(n):
-            p = _detect_doji_pattern(
-                opens, highs, lows, closes, i, self.doji_threshold
-            )
+            p = _detect_doji_pattern(opens, highs, lows, closes, i, self.doji_threshold)
             if p:
                 patterns.append(p)
                 continue
             p = _detect_hammer(
-                opens, highs, lows, closes, i,
-                self.doji_threshold, self.wick_ratio,
+                opens,
+                highs,
+                lows,
+                closes,
+                i,
+                self.doji_threshold,
+                self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
             p = _detect_shooting_star(
-                opens, highs, lows, closes, i,
-                self.doji_threshold, self.wick_ratio,
+                opens,
+                highs,
+                lows,
+                closes,
+                i,
+                self.doji_threshold,
+                self.wick_ratio,
             )
             if p:
                 patterns.append(p)
                 continue
-            p = _detect_marubozu(
-                opens, highs, lows, closes, i, self.marubozu_threshold
-            )
+            p = _detect_marubozu(opens, highs, lows, closes, i, self.marubozu_threshold)
             if p:
                 patterns.append(p)
 
         for i in range(1, n):
-            for detector in (_detect_engulfing, _detect_harami,
-                             _detect_piercing_dark_cloud):
+            for detector in (
+                _detect_engulfing,
+                _detect_harami,
+                _detect_piercing_dark_cloud,
+            ):
                 p = detector(opens, closes, i)
                 if p:
                     patterns.append(p)
                     break
 
         for i in range(2, n):
-            for detector in (_detect_three_soldiers_crows,
-                             _detect_morning_evening_star):
+            for detector in (
+                _detect_three_soldiers_crows,
+                _detect_morning_evening_star,
+            ):
                 p = detector(opens, closes, i)
                 if p:
                     patterns.append(p)

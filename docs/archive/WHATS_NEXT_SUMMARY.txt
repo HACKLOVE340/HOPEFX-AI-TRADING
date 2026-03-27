@@ -171,7 +171,7 @@ Phase                Time        Complexity    Value       Priority
 4. Real Brokers     5-7 days     Medium       High        🟢 Medium
 5. Backtesting      7-10 days    High         High        🔵 Medium
 --------------------------------------------------------------------------
-TOTAL (1-5):        27-39 days   
+TOTAL (1-5):        27-39 days
 
 Future phases (Monitoring, Advanced): Ongoing
 

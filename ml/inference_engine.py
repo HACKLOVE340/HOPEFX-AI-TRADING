@@ -29,6 +29,7 @@ Usage
     signal = engine.predict(ohlcv_df, symbol="XAU_USD")
     # signal = {"direction": "long", "confidence": 0.72, "probability": 0.86, ...}
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,10 +45,12 @@ logger = logging.getLogger(__name__)
 
 _SAVED = Path(__file__).parent / "saved_models"
 _MIN_BARS = 100
-_THRESHOLD_LONG  = float(os.getenv("SIGNAL_THRESHOLD_LONG",  "0.58"))
+_THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
 _THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
-_ONLINE_LEARNING_ENABLED = os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
-_MTF_FUSION_ENABLED      = os.getenv("FEATURE_MTF_FUSION",      "true").lower()  == "true"
+_ONLINE_LEARNING_ENABLED = (
+    os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
+)
+_MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
 
 
 class InferenceEngine:
@@ -59,9 +62,9 @@ class InferenceEngine:
     """
 
     def __init__(self) -> None:
-        self._predictor = None          # AdvancedModelPredictor (advanced_oos.pkl)
-        self._online_learner = None     # SGD online adapter
-        self._calibrator = None         # isotonic calibrator (fitted on OOS proba)
+        self._predictor = None  # AdvancedModelPredictor (advanced_oos.pkl)
+        self._online_learner = None  # SGD online adapter
+        self._calibrator = None  # isotonic calibrator (fitted on OOS proba)
         self._last_predict_ms: float = 0.0
         self._predict_count: int = 0
         self._fallback_count: int = 0
@@ -72,6 +75,7 @@ class InferenceEngine:
         if self._predictor is None:
             try:
                 from ml.live_inference import get_advanced_predictor
+
                 self._predictor = get_advanced_predictor()
             except Exception as exc:
                 logger.debug("InferenceEngine: predictor unavailable: %s", exc)
@@ -81,6 +85,7 @@ class InferenceEngine:
         """Align MacroStore to the OHLCV index."""
         try:
             from ml.macro_store import macro_store
+
             if len(macro_store) == 0:
                 macro_store.load_defaults()
             return macro_store.align_to_hourly(ohlcv)
@@ -94,6 +99,7 @@ class InferenceEngine:
             return None
         try:
             from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+
             if _MTF_STORE_SINGLETON is None:
                 return None
             return _MTF_STORE_SINGLETON.align_to_h1(ohlcv)
@@ -109,11 +115,13 @@ class InferenceEngine:
             return self._online_learner
         try:
             from research.pipeline.paper_trading_gate import get_gate
+
             gate = get_gate()
             p3_ok, _ = gate.phase3_ready()
             if not p3_ok:
                 return None
             from research.pipeline.online_learning import get_online_learner
+
             self._online_learner = get_online_learner()
             return self._online_learner
         except Exception as exc:
@@ -129,6 +137,7 @@ class InferenceEngine:
             return None
         try:
             import joblib
+
             self._calibrator = joblib.load(cal_path)
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
@@ -148,6 +157,7 @@ class InferenceEngine:
         """Build 200+ feature matrix, appending MTF columns."""
         try:
             from ml.features_extended import build_extended_features
+
             X, _ = build_extended_features(
                 ohlcv,
                 macro_df=macro_df,
@@ -165,7 +175,9 @@ class InferenceEngine:
                     new_cols = [c for c in mtf_aligned.columns if c not in X.columns]
                     if new_cols:
                         X = pd.concat([X, mtf_aligned[new_cols]], axis=1)
-                        logger.debug("MTF: appended %d columns for %s", len(new_cols), symbol)
+                        logger.debug(
+                            "MTF: appended %d columns for %s", len(new_cols), symbol
+                        )
                 except Exception as mtf_exc:
                     logger.debug("MTF append failed: %s", mtf_exc)
 
@@ -283,7 +295,9 @@ class InferenceEngine:
 
         if predictor is not None and predictor.is_available:
             try:
-                raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
+                raw_prob = predictor.predict_proba(
+                    ohlcv, macro_df=macro_df, symbol=symbol
+                )
                 model_version = predictor.version
             except Exception as exc:
                 logger.warning("Predictor failed: %s", exc)
@@ -299,8 +313,12 @@ class InferenceEngine:
                 # Blend: 70% base model, 30% online learner
                 raw_prob = 0.70 * raw_prob + 0.30 * online_prob
                 online_active = True
-                logger.debug("Online learner blended: base=%.3f online=%.3f blend=%.3f",
-                             raw_prob, online_prob, raw_prob)
+                logger.debug(
+                    "Online learner blended: base=%.3f online=%.3f blend=%.3f",
+                    raw_prob,
+                    online_prob,
+                    raw_prob,
+                )
             except Exception as exc:
                 logger.debug("Online learner blend failed: %s", exc)
 

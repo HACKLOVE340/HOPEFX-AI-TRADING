@@ -16,18 +16,15 @@ Verifies the production secrets management script:
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
-import pytest
 
 # Ensure project root is on path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.manage_secrets import (
+from scripts.manage_secrets import (  # noqa: E402
     REQUIRED_SECRETS,
     _generate,
     _is_placeholder,
@@ -42,6 +39,7 @@ from scripts.manage_secrets import (
 
 
 # ── unit: helpers ─────────────────────────────────────────────────────────────
+
 
 def test_generate_token48_length():
     val = _generate("token48")
@@ -96,6 +94,7 @@ def test_write_env_appends_new_key(tmp_path):
 
 # ── integration: generate command ─────────────────────────────────────────────
 
+
 class _FakeArgs:
     key = None
 
@@ -128,6 +127,7 @@ def test_generate_does_not_overwrite_real_value(tmp_path, monkeypatch):
 
 # ── integration: validate command ─────────────────────────────────────────────
 
+
 def test_validate_passes_when_all_set(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     lines = [f"{var}={_generate('token48')}" for var, _, _ in REQUIRED_SECRETS]
@@ -144,7 +144,9 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
 
 def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")
+    env_file.write_text(
+        "SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n"
+    )
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
 
     rc = cmd_validate(_FakeArgs())
@@ -161,6 +163,7 @@ def test_validate_fails_when_missing(tmp_path, monkeypatch):
 
 
 # ── integration: rotate command ───────────────────────────────────────────────
+
 
 def test_rotate_replaces_key(tmp_path, monkeypatch):
     old_val = _generate("token48")
@@ -179,6 +182,7 @@ def test_rotate_replaces_key(tmp_path, monkeypatch):
 
 
 # ── integration: audit command ────────────────────────────────────────────────
+
 
 def test_audit_detects_hardcoded_secret(tmp_path, monkeypatch):
     # Create a fake .py file with a hardcoded secret
@@ -200,6 +204,7 @@ def test_audit_passes_clean_file(tmp_path, monkeypatch):
 
 
 # ── integration: check-env command ───────────────────────────────────────────
+
 
 def test_check_env_detects_missing_key(tmp_path, monkeypatch):
     example = tmp_path / ".env.example"

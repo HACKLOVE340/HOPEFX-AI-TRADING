@@ -130,20 +130,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install pre-commit
           pip install -r requirements.txt
-      
+
       - name: Run pre-commit
         run: pre-commit run --all-files
-      
+
       - name: Upload Codacy coverage
         uses: codacy/codacy-coverage-reporter-action@v1
         with:
@@ -235,7 +235,7 @@ Codacy sends weekly email reports with:
    ```bash
    # Run checks
    pre-commit run --all-files
-   
+
    # Fix any issues
    black . --line-length=120
    isort . --profile black
@@ -353,9 +353,9 @@ The HOPEFX AI Trading Framework is now configured with:
 
 ---
 
-**Status:** ✅ Ready for Codacy  
-**Quality:** Enterprise-grade  
-**Automation:** Fully configured  
-**Documentation:** Complete  
+**Status:** ✅ Ready for Codacy
+**Quality:** Enterprise-grade
+**Automation:** Fully configured
+**Documentation:** Complete
 
 **The codebase is production-ready!** 🎉

@@ -36,7 +36,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import feedparser          # pip install feedparser
+import feedparser  # pip install feedparser
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -49,28 +49,63 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── VADER-lite positive / negative word sets (no NLTK dependency) ─────────────
 _POS_WORDS = {
-    "surge", "rally", "gain", "rise", "jump", "beat", "record", "high",
-    "profit", "growth", "strong", "bullish", "upgrade", "buy", "positive",
-    "outperform", "exceed", "boom", "recover", "rebound",
+    "surge",
+    "rally",
+    "gain",
+    "rise",
+    "jump",
+    "beat",
+    "record",
+    "high",
+    "profit",
+    "growth",
+    "strong",
+    "bullish",
+    "upgrade",
+    "buy",
+    "positive",
+    "outperform",
+    "exceed",
+    "boom",
+    "recover",
+    "rebound",
 }
 _NEG_WORDS = {
-    "fall", "drop", "plunge", "crash", "loss", "miss", "low", "weak",
-    "bearish", "downgrade", "sell", "negative", "underperform", "decline",
-    "recession", "fear", "risk", "warn", "cut", "layoff",
+    "fall",
+    "drop",
+    "plunge",
+    "crash",
+    "loss",
+    "miss",
+    "low",
+    "weak",
+    "bearish",
+    "downgrade",
+    "sell",
+    "negative",
+    "underperform",
+    "decline",
+    "recession",
+    "fear",
+    "risk",
+    "warn",
+    "cut",
+    "layoff",
 }
 
 # ── RSS feeds (no key required) ───────────────────────────────────────────────
 _RSS_FEEDS: Dict[str, str] = {
-    "yahoo_finance":  "https://finance.yahoo.com/news/rssindex",
-    "seeking_alpha":  "https://seekingalpha.com/market_currents.xml",
-    "marketwatch":    "https://feeds.marketwatch.com/marketwatch/topstories/",
-    "investing_com":  "https://www.investing.com/rss/news.rss",
+    "yahoo_finance": "https://finance.yahoo.com/news/rssindex",
+    "seeking_alpha": "https://seekingalpha.com/market_currents.xml",
+    "marketwatch": "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "investing_com": "https://www.investing.com/rss/news.rss",
 }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _cache_key(ticker: str, interval: str, start: str, end: str) -> Path:
     tag = hashlib.md5(f"{ticker}{interval}{start}{end}".encode()).hexdigest()[:10]
@@ -85,8 +120,10 @@ def _backoff_download(ticker: str, **kwargs) -> pd.DataFrame:
             if df is not None and not df.empty:
                 return df
         except Exception as exc:
-            logger.warning("yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc)
-        sleep = (2 ** attempt) + random.uniform(0, 1)
+            logger.warning(
+                "yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc
+            )
+        sleep = (2**attempt) + random.uniform(0, 1)
         time.sleep(sleep)
     return pd.DataFrame()
 
@@ -118,7 +155,9 @@ def _fill_gaps(df: pd.DataFrame) -> pd.DataFrame:
     Forward-fill price columns, zero-fill volume, flag synthetic bars.
     Drops rows where close is still NaN after ffill (leading NaNs).
     """
-    price_cols = [c for c in ["open", "high", "low", "close", "vwap"] if c in df.columns]
+    price_cols = [
+        c for c in ["open", "high", "low", "close", "vwap"] if c in df.columns
+    ]
     df["is_synthetic"] = df["close"].isna()
     df[price_cols] = df[price_cols].ffill()
     if "volume" in df.columns:
@@ -130,6 +169,7 @@ def _fill_gaps(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Daily data (back to 1980s for most US equities)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def fetch_daily(
     ticker: str,
@@ -194,14 +234,14 @@ def fetch_daily(
 # ─────────────────────────────────────────────────────────────────────────────
 
 _INTRADAY_WINDOW_DAYS: Dict[str, int] = {
-    "1m":  7,
-    "2m":  60,
-    "5m":  60,
+    "1m": 7,
+    "2m": 60,
+    "5m": 60,
     "15m": 60,
     "30m": 60,
     "60m": 730,
     "90m": 60,
-    "1h":  730,
+    "1h": 730,
 }
 
 
@@ -298,12 +338,12 @@ def fetch_intraday(
 
 # Curated universe: equities + ETFs + crypto + FX + commodities
 DEFAULT_UNIVERSE: Dict[str, List[str]] = {
-    "equities":    ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "GS"],
-    "etfs":        ["SPY", "QQQ", "IWM", "GLD", "SLV", "TLT", "HYG", "EEM", "XLE"],
-    "crypto":      ["BTC-USD", "ETH-USD", "SOL-USD"],
-    "fx":          ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X"],
+    "equities": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "GS"],
+    "etfs": ["SPY", "QQQ", "IWM", "GLD", "SLV", "TLT", "HYG", "EEM", "XLE"],
+    "crypto": ["BTC-USD", "ETH-USD", "SOL-USD"],
+    "fx": ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X"],
     "commodities": ["GC=F", "SI=F", "CL=F", "NG=F"],
-    "macro":       ["^VIX", "^TNX", "^IRX", "DX-Y.NYB", "^GSPC"],
+    "macro": ["^VIX", "^TNX", "^IRX", "DX-Y.NYB", "^GSPC"],
 }
 
 
@@ -348,6 +388,7 @@ def fetch_universe(
 # Sentiment from free RSS feeds
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _score_headline(text: str) -> float:
     """
     Lightweight VADER-style polarity score in [-1, +1].
@@ -381,7 +422,10 @@ def fetch_rss_sentiment(
             for entry in feed.entries[:max_articles]:
                 title = getattr(entry, "title", "")
                 # Filter loosely by ticker mention
-                if ticker.upper().replace("=X", "").replace("-USD", "") not in title.upper():
+                if (
+                    ticker.upper().replace("=X", "").replace("-USD", "")
+                    not in title.upper()
+                ):
                     # Still include general market news with lower weight
                     score = _score_headline(title) * 0.3
                 else:
@@ -393,7 +437,14 @@ def fetch_rss_sentiment(
                 else:
                     ts = datetime.now(timezone.utc)
 
-                records.append({"published": ts, "title": title, "sentiment_score": score, "source": source})
+                records.append(
+                    {
+                        "published": ts,
+                        "title": title,
+                        "sentiment_score": score,
+                        "source": source,
+                    }
+                )
         except Exception as exc:
             logger.warning("RSS fetch failed (%s): %s", source, exc)
 
@@ -422,12 +473,18 @@ def attach_sentiment(
         price_df["sentiment_count"] = 0
         return price_df
 
-    sent_resampled = sentiment_df["sentiment_score"].resample(window).agg(
-        sentiment_mean="mean",
-        sentiment_std="std",
-        sentiment_count="count",
+    sent_resampled = (
+        sentiment_df["sentiment_score"]
+        .resample(window)
+        .agg(
+            sentiment_mean="mean",
+            sentiment_std="std",
+            sentiment_count="count",
+        )
     )
-    sent_resampled = sent_resampled.fillna({"sentiment_mean": 0.0, "sentiment_std": 0.0, "sentiment_count": 0})
+    sent_resampled = sent_resampled.fillna(
+        {"sentiment_mean": 0.0, "sentiment_std": 0.0, "sentiment_count": 0}
+    )
 
     merged = price_df.join(sent_resampled, how="left")
     merged[["sentiment_mean", "sentiment_std", "sentiment_count"]] = merged[

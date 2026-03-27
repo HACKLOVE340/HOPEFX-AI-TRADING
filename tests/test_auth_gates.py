@@ -44,6 +44,7 @@ def _make_token(role: str = "user", sub: str = "test-user") -> str:
 
 # ── Build a minimal test app with the three routers ──────────────────────────
 
+
 @pytest.fixture(scope="module")
 def client() -> Generator[TestClient, None, None]:
     # Pin the JWT secret for the entire module so tokens signed with _SECRET
@@ -72,6 +73,7 @@ def client() -> Generator[TestClient, None, None]:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def auth(role: str) -> dict:
     return {"Authorization": f"Bearer {_make_token(role)}"}
@@ -151,6 +153,7 @@ def test_admin_settings_post_rejects_user_role(client: TestClient):
 # Brain routes — must reject unauthenticated and non-admin callers
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def test_generate_strategy_rejects_unauthenticated(client: TestClient):
     resp = client.post(
         "/api/brain/generate-strategy",
@@ -184,9 +187,10 @@ def test_generate_strategy_allows_admin(client: TestClient):
         json={"prompt": "RSI crossover strategy"},
         headers=auth("admin"),
     )
-    assert resp.status_code not in (401, 403), (
-        f"Admin was rejected with {resp.status_code}"
-    )
+    assert resp.status_code not in (
+        401,
+        403,
+    ), f"Admin was rejected with {resp.status_code}"
 
 
 def test_deploy_strategy_rejects_unauthenticated(client: TestClient):
@@ -238,11 +242,14 @@ def test_alert_post_rejects_unauthenticated(client: TestClient, path: str):
 
 
 def test_alert_create_rejects_unauthenticated(client: TestClient):
-    resp = client.post("/api/alerts/", json={
-        "name": "Gold spike",
-        "symbol": "XAUUSD",
-        "conditions": [{"type": "price_above", "threshold": 2500.0}],
-    })
+    resp = client.post(
+        "/api/alerts/",
+        json={
+            "name": "Gold spike",
+            "symbol": "XAUUSD",
+            "conditions": [{"type": "price_above", "threshold": 2500.0}],
+        },
+    )
     assert resp.status_code == 401
 
 

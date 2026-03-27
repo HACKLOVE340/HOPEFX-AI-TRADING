@@ -40,6 +40,7 @@ from pathlib import Path
 
 import joblib
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -76,6 +77,7 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     """
     import yfinance as yf
     from datetime import timezone
+
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=years * 365)
     raw = yf.download(
@@ -92,7 +94,9 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = [c[0].lower() for c in raw.columns]
     else:
-        raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
+        raw.columns = [
+            c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns
+        ]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     raw = raw.dropna(subset=["close"])
     return raw
@@ -121,24 +125,26 @@ def generate_xauusd_synthetic(start="2019-01-02", n_days=1260, seed=42) -> pd.Da
     rows = []
     for date in dates:
         gbm = (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rng.standard_normal()
-        ou  = theta * (long_run - price) * dt
+        ou = theta * (long_run - price) * dt
         price *= np.exp(gbm)
         price += ou
         daily_range = price * rng.uniform(0.003, 0.012)
-        direction   = rng.choice([-1, 1])
-        open_  = price + direction * daily_range * rng.uniform(0, 0.3)
-        close  = price
-        high   = max(open_, close) + daily_range * rng.uniform(0.1, 0.5)
-        low    = min(open_, close) - daily_range * rng.uniform(0.1, 0.5)
+        direction = rng.choice([-1, 1])
+        open_ = price + direction * daily_range * rng.uniform(0, 0.3)
+        close = price
+        high = max(open_, close) + daily_range * rng.uniform(0.1, 0.5)
+        low = min(open_, close) - daily_range * rng.uniform(0.1, 0.5)
         volume = int(rng.integers(8_000, 35_000))
-        rows.append({
-            "date":   date.strftime("%Y-%m-%d"),
-            "open":   round(open_, 2),
-            "high":   round(high,  2),
-            "low":    round(low,   2),
-            "close":  round(close, 2),
-            "volume": volume,
-        })
+        rows.append(
+            {
+                "date": date.strftime("%Y-%m-%d"),
+                "open": round(open_, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "close": round(close, 2),
+                "volume": volume,
+            }
+        )
 
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
@@ -155,10 +161,13 @@ try:
     csv_path = DATA_DIR / "XAUUSD_40Y.csv"
     df.to_csv(csv_path)
     actual_years = (df.index[-1] - df.index[0]).days / 365.25
-    print(f"  Real data: {len(df)} bars, {actual_years:.1f} years "
-          f"({df.index[0].date()} → {df.index[-1].date()}) → {csv_path}")
+    print(
+        f"  Real data: {len(df)} bars, {actual_years:.1f} years "
+        f"({df.index[0].date()} → {df.index[-1].date()}) → {csv_path}"
+    )
 except Exception as exc:
     import warnings
+
     warnings.warn(
         f"yfinance unavailable ({exc}). Falling back to SYNTHETIC GBM data. "
         "Results are NOT based on real market data.",
@@ -175,30 +184,32 @@ except Exception as exc:
 
 # ── 2. Feature engineering (stationary — no raw price lags) ──────────────────
 
+
 def _rsi(series, period):
     delta = series.diff()
-    gain  = delta.clip(lower=0).ewm(alpha=1/period, adjust=False).mean()
-    loss  = (-delta.clip(upper=0)).ewm(alpha=1/period, adjust=False).mean()
-    rs    = gain / loss.replace(0, np.nan)
+    gain = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
+    loss = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
+    rs = gain / loss.replace(0, np.nan)
     return 100 - 100 / (1 + rs)
 
 
 def _atr(df, period):
-    hl  = df["high"] - df["low"]
+    hl = df["high"] - df["low"]
     hpc = (df["high"] - df["close"].shift()).abs()
-    lpc = (df["low"]  - df["close"].shift()).abs()
-    tr  = pd.concat([hl, hpc, lpc], axis=1).max(axis=1)
-    return tr.ewm(alpha=1/period, adjust=False).mean()
+    lpc = (df["low"] - df["close"].shift()).abs()
+    tr = pd.concat([hl, hpc, lpc], axis=1).max(axis=1)
+    return tr.ewm(alpha=1 / period, adjust=False).mean()
 
 
 def _zscore(s, w):
-    mu  = s.rolling(w).mean()
+    mu = s.rolling(w).mean()
     sig = s.rolling(w).std().replace(0, np.nan)
     return ((s - mu) / sig).fillna(0.0)
 
 
 def _rolling_hurst(series, window=40):
     """Approximate Hurst exponent via R/S analysis."""
+
     def _h(x):
         if len(x) < 8:
             return 0.5
@@ -206,7 +217,7 @@ def _rolling_hurst(series, window=40):
             lags = range(2, min(len(x) // 2, 12))
             rs_vals = []
             for lag in lags:
-                chunks = [x[i:i+lag] for i in range(0, len(x)-lag, lag)]
+                chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_c = []
                 for c in chunks:
                     if len(c) < 2:
@@ -220,10 +231,11 @@ def _rolling_hurst(series, window=40):
                     rs_vals.append(np.mean(rs_c))
             if len(rs_vals) < 2:
                 return 0.5
-            h = np.polyfit(np.log(list(lags)[:len(rs_vals)]), np.log(rs_vals), 1)[0]
+            h = np.polyfit(np.log(list(lags)[: len(rs_vals)]), np.log(rs_vals), 1)[0]
             return float(np.clip(h, 0.0, 1.0))
         except Exception:
             return 0.5
+
     return series.rolling(window).apply(_h, raw=True).fillna(0.5)
 
 
@@ -233,33 +245,35 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
     atr14 = _atr(d, 14)
 
     # ── Returns (stationary) ──────────────────────────────────────────────────
-    d["ret_1"]  = c.pct_change(1)
-    d["ret_5"]  = c.pct_change(5)
+    d["ret_1"] = c.pct_change(1)
+    d["ret_5"] = c.pct_change(5)
     d["ret_20"] = c.pct_change(20)
     for lag in range(1, 6):
         d[f"ret_lag_{lag}"] = d["ret_1"].shift(lag)
 
     # ── MA distances normalised by ATR (stationary) ───────────────────────────
     for n in [5, 10, 20, 50, 200]:
-        ma  = c.rolling(n).mean()
+        ma = c.rolling(n).mean()
         ema = c.ewm(span=n, adjust=False).mean()
-        d[f"dist_ma_{n}"]  = ((c - ma)  / atr14.replace(0, np.nan)).fillna(0.0)
+        d[f"dist_ma_{n}"] = ((c - ma) / atr14.replace(0, np.nan)).fillna(0.0)
         d[f"dist_ema_{n}"] = ((c - ema) / atr14.replace(0, np.nan)).fillna(0.0)
 
     # ── Oscillators ───────────────────────────────────────────────────────────
     d["rsi_14"] = _rsi(c, 14)
-    d["rsi_7"]  = _rsi(c, 7)
+    d["rsi_7"] = _rsi(c, 7)
 
     ema12 = c.ewm(span=12, adjust=False).mean()
     ema26 = c.ewm(span=26, adjust=False).mean()
-    macd  = ema12 - ema26
-    d["macd_norm"]     = (macd / c.replace(0, np.nan)).fillna(0.0)
-    d["macd_hist_norm"] = ((macd - macd.ewm(span=9, adjust=False).mean()) / c.replace(0, np.nan)).fillna(0.0)
+    macd = ema12 - ema26
+    d["macd_norm"] = (macd / c.replace(0, np.nan)).fillna(0.0)
+    d["macd_hist_norm"] = (
+        (macd - macd.ewm(span=9, adjust=False).mean()) / c.replace(0, np.nan)
+    ).fillna(0.0)
 
     sma20 = c.rolling(20).mean()
     std20 = c.rolling(20).std()
-    bb_w  = (4 * std20).replace(0, np.nan)
-    d["bb_position"] = ((c - (sma20 - 2*std20)) / bb_w).fillna(0.5)
+    bb_w = (4 * std20).replace(0, np.nan)
+    d["bb_position"] = ((c - (sma20 - 2 * std20)) / bb_w).fillna(0.5)
     d["bb_width_pct"] = (bb_w / c.replace(0, np.nan)).fillna(0.0)
 
     lo14 = d["low"].rolling(14).min()
@@ -269,33 +283,40 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
     d["stoch_d"] = stoch_k.rolling(3).mean().fillna(50.0)
 
     # ── Volatility ────────────────────────────────────────────────────────────
-    d["rvol_20"]       = d["ret_1"].rolling(20).std() * np.sqrt(252)
-    d["vol_ratio_5_20"] = (d["ret_1"].rolling(5).std() / d["ret_1"].rolling(20).std().replace(0, np.nan)).fillna(1.0)
-    d["atr_pct"]       = (atr14 / c.replace(0, np.nan)).fillna(0.0)
+    d["rvol_20"] = d["ret_1"].rolling(20).std() * np.sqrt(252)
+    d["vol_ratio_5_20"] = (
+        d["ret_1"].rolling(5).std() / d["ret_1"].rolling(20).std().replace(0, np.nan)
+    ).fillna(1.0)
+    d["atr_pct"] = (atr14 / c.replace(0, np.nan)).fillna(0.0)
 
     # ── Regime features ───────────────────────────────────────────────────────
     d["hurst_40"] = _rolling_hurst(c, 40)
 
     # ADX (normalised 0-1)
-    tr = pd.concat([d["high"]-d["low"],
-                    (d["high"]-c.shift(1)).abs(),
-                    (d["low"]-c.shift(1)).abs()], axis=1).max(axis=1)
+    tr = pd.concat(
+        [
+            d["high"] - d["low"],
+            (d["high"] - c.shift(1)).abs(),
+            (d["low"] - c.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
     atr14_raw = tr.ewm(span=14, adjust=False).mean()
-    plus_dm   = (d["high"] - d["high"].shift(1)).clip(lower=0)
-    minus_dm  = (d["low"].shift(1) - d["low"]).clip(lower=0)
-    plus_dm   = plus_dm.where(plus_dm > minus_dm, 0.0)
-    minus_dm  = minus_dm.where(minus_dm > plus_dm, 0.0)
-    plus_di   = 100 * plus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
-    minus_di  = 100 * minus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
+    plus_dm = (d["high"] - d["high"].shift(1)).clip(lower=0)
+    minus_dm = (d["low"].shift(1) - d["low"]).clip(lower=0)
+    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
+    minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
+    plus_di = 100 * plus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
+    minus_di = 100 * minus_dm.ewm(span=14).mean() / atr14_raw.replace(0, np.nan)
     dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    d["adx_norm"] = (dx.ewm(span=14).mean().fillna(0.0) / 100.0)
+    d["adx_norm"] = dx.ewm(span=14).mean().fillna(0.0) / 100.0
     d["regime_trend"] = np.where(c > c.rolling(50).mean(), 1, -1)
 
     # ── Volume ────────────────────────────────────────────────────────────────
     if "volume" in d.columns and d["volume"].sum() > 0:
         vol_ma = d["volume"].rolling(20).mean()
-        d["vol_ratio"]  = (d["volume"] / vol_ma.replace(0, np.nan)).fillna(1.0)
-        d["vol_z20"]    = _zscore(d["volume"], 20)
+        d["vol_ratio"] = (d["volume"] / vol_ma.replace(0, np.nan)).fillna(1.0)
+        d["vol_z20"] = _zscore(d["volume"], 20)
         obv = (np.sign(c.diff()) * d["volume"]).cumsum()
         d["obv_mom_10"] = obv.pct_change(10).fillna(0.0)
     else:
@@ -313,8 +334,8 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
 
         if "dxy" in macro.columns:
             dxy = macro["dxy"]
-            d["macro_dxy_ret"]  = dxy.pct_change().fillna(0.0)
-            d["macro_dxy_z20"]  = _zscore(dxy, 20)
+            d["macro_dxy_ret"] = dxy.pct_change().fillna(0.0)
+            d["macro_dxy_z20"] = _zscore(dxy, 20)
         else:
             d["macro_dxy_ret"] = d["macro_dxy_z20"] = 0.0
 
@@ -339,19 +360,31 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
             d["macro_spx_ret"] = d["macro_gold_spx_div"] = 0.0
 
         # COT/central bank buying proxy: gold up + DXY up + yields up
-        has_dxy   = "dxy"       in macro.columns and macro["dxy"].abs().sum() > 0
+        has_dxy = "dxy" in macro.columns and macro["dxy"].abs().sum() > 0
         has_yield = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
         if has_dxy and has_yield:
-            dxy_ret   = macro["dxy"].pct_change().fillna(0.0)
+            dxy_ret = macro["dxy"].pct_change().fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
-            d["cot_cb_buying_proxy"]  = ((gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)).astype(float)
-            d["cot_cb_buying_freq20"] = d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+            d["cot_cb_buying_proxy"] = (
+                (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)
+            ).astype(float)
+            d["cot_cb_buying_freq20"] = (
+                d["cot_cb_buying_proxy"].rolling(20).mean().fillna(0.0)
+            )
         else:
             d["cot_cb_buying_proxy"] = d["cot_cb_buying_freq20"] = 0.0
     else:
-        for col in ["macro_dxy_ret", "macro_dxy_z20", "macro_vix_level", "macro_vix_spike",
-                    "macro_yield_10y_chg", "macro_spx_ret", "macro_gold_spx_div",
-                    "cot_cb_buying_proxy", "cot_cb_buying_freq20"]:
+        for col in [
+            "macro_dxy_ret",
+            "macro_dxy_z20",
+            "macro_vix_level",
+            "macro_vix_spike",
+            "macro_yield_10y_chg",
+            "macro_spx_ret",
+            "macro_gold_spx_div",
+            "cot_cb_buying_proxy",
+            "cot_cb_buying_freq20",
+        ]:
             d[col] = 0.0
 
     # ── Target ────────────────────────────────────────────────────────────────
@@ -365,12 +398,15 @@ macro_df = None
 print("Fetching macro data (DXY, VIX, yields, SPX) …")
 try:
     import yfinance as yf
+
     # Fetch from the start of the gold dataset so macro aligns across all 40 years.
     # VIX starts ~1990, DXY ~1971 — earlier bars will be NaN and zeroed downstream.
     _macro_start = df.index[0].strftime("%Y-%m-%d")
     _macro_tickers = {
-        "dxy": "DX-Y.NYB", "vix": "^VIX",
-        "yield_10y": "^TNX", "spx": "^GSPC",
+        "dxy": "DX-Y.NYB",
+        "vix": "^VIX",
+        "yield_10y": "^TNX",
+        "spx": "^GSPC",
     }
     _frames = {}
     for name, ticker in _macro_tickers.items():
@@ -381,8 +417,11 @@ try:
             if not raw.empty:
                 # Handle MultiIndex columns from yfinance >= 0.2.x
                 if isinstance(raw.columns, pd.MultiIndex):
-                    close = raw[("Close", ticker)] if ("Close", ticker) in raw.columns \
+                    close = (
+                        raw[("Close", ticker)]
+                        if ("Close", ticker) in raw.columns
                         else raw.iloc[:, 0]
+                    )
                 else:
                     close = raw["Close"] if "Close" in raw.columns else raw.iloc[:, 0]
                 close = close.squeeze()
@@ -410,17 +449,16 @@ FEATURE_COLS = [c for c in dff.columns if c not in EXCLUDE]
 # Early bars in a 40-year dataset have insufficient rolling history and can
 # produce inf values (e.g. division by near-zero ATR in the first 200 bars).
 dff[FEATURE_COLS] = (
-    dff[FEATURE_COLS]
-    .replace([np.inf, -np.inf], np.nan)
-    .ffill()
-    .fillna(0.0)
+    dff[FEATURE_COLS].replace([np.inf, -np.inf], np.nan).ffill().fillna(0.0)
 )
 # Drop any remaining rows with NaN in target
 dff = dff.dropna(subset=["target"])
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
-print(f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days")
+print(
+    f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days"
+)
 
 
 # ── 3. Train RandomForest ─────────────────────────────────────────────────────
@@ -433,7 +471,7 @@ y_train, y_test = y[:split], y[split:]
 
 scaler = StandardScaler()
 X_train_s = scaler.fit_transform(X_train)
-X_test_s  = scaler.transform(X_test)
+X_test_s = scaler.transform(X_test)
 
 print("Training RandomForest (enhanced stationary features) …")
 clf = RandomForestClassifier(
@@ -450,9 +488,13 @@ clf.fit(X_train_s, y_train)
 y_pred = clf.predict(X_test_s)
 y_prob = clf.predict_proba(X_test_s)[:, 1]
 
-report = classification_report(y_test, y_pred, target_names=["Down", "Up"], output_dict=True)
+report = classification_report(
+    y_test, y_pred, target_names=["Down", "Up"], output_dict=True
+)
 print(f"  Test accuracy: {report['accuracy']:.3f}")
-print(f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}")
+print(
+    f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}"
+)
 
 # Save model + scaler
 model_path = MODEL_DIR / "rf_xauusd.pkl"
@@ -464,40 +506,40 @@ print(f"  Saved model → {model_path}")
 
 print("Running backtest …")
 
-test_df   = dff.iloc[split:].copy()
+test_df = dff.iloc[split:].copy()
 test_df["signal_prob"] = y_prob
 # Threshold 0.50: take all model signals to maximise trade count.
 # Target ≥ 300 trades for Sharpe SE ≤ ±0.3.
 # N=45 trades (SE ≈ ±0.54) was insufficient; N=300 gives SE ≈ ±0.21.
-test_df["signal"]      = (y_prob >= 0.50).astype(int)
+test_df["signal"] = (y_prob >= 0.50).astype(int)
 # Recompute ATR14 on the test slice for position sizing (atr_pct is normalised;
 # we need the raw ATR in price units for stop/TP calculation)
 test_df["_atr14"] = _atr(test_df, 14)
 
 INITIAL_CAPITAL = 100_000.0
-POSITION_SIZE   = 0.05          # 5% of equity per trade (tighter sizing for more trades)
-COMMISSION_PCT  = 0.0002        # 2 bps round-trip
+POSITION_SIZE = 0.05  # 5% of equity per trade (tighter sizing for more trades)
+COMMISSION_PCT = 0.0002  # 2 bps round-trip
 # Tighter stops and TP → faster trade turnover → more trades per year
-STOP_LOSS_ATR   = 1.0           # stop = 1.0× ATR below entry
-TAKE_PROFIT_ATR = 1.5           # TP  = 1.5× ATR above entry
+STOP_LOSS_ATR = 1.0  # stop = 1.0× ATR below entry
+TAKE_PROFIT_ATR = 1.5  # TP  = 1.5× ATR above entry
 
-equity   = INITIAL_CAPITAL
-peak     = INITIAL_CAPITAL
-trades   = []
+equity = INITIAL_CAPITAL
+peak = INITIAL_CAPITAL
+trades = []
 equity_curve = [(test_df.index[0] - timedelta(days=1), equity)]
 
-in_trade    = False
+in_trade = False
 entry_price = 0.0
-stop_price  = 0.0
-tp_price    = 0.0
-entry_date  = None
-trade_size  = 0.0
+stop_price = 0.0
+tp_price = 0.0
+entry_date = None
+trade_size = 0.0
 
 for i, (date, row) in enumerate(test_df.iterrows()):
     if in_trade:
         # Check stop / TP on today's bar
-        hit_stop = row["low"]  <= stop_price
-        hit_tp   = row["high"] >= tp_price
+        hit_stop = row["low"] <= stop_price
+        hit_tp = row["high"] >= tp_price
         exit_price = None
 
         if hit_stop and hit_tp:
@@ -508,7 +550,7 @@ for i, (date, row) in enumerate(test_df.iterrows()):
         elif hit_tp:
             exit_price = tp_price
         elif i == len(test_df) - 1:
-            exit_price = row["close"]   # force close at end
+            exit_price = row["close"]  # force close at end
 
         if exit_price is not None:
             pnl = (exit_price - entry_price) * trade_size
@@ -517,56 +559,65 @@ for i, (date, row) in enumerate(test_df.iterrows()):
             equity += net_pnl
             peak = max(peak, equity)
 
-            trades.append({
-                "entry_date":  entry_date.strftime("%Y-%m-%d"),
-                "exit_date":   date.strftime("%Y-%m-%d"),
-                "entry_price": round(entry_price, 2),
-                "exit_price":  round(exit_price, 2),
-                "stop_price":  round(stop_price, 2),
-                "tp_price":    round(tp_price, 2),
-                "size_oz":     round(trade_size, 4),
-                "gross_pnl":   round(pnl, 2),
-                "commission":  round(commission, 2),
-                "net_pnl":     round(net_pnl, 2),
-                "equity":      round(equity, 2),
-                "result":      "win" if net_pnl > 0 else "loss",
-            })
+            trades.append(
+                {
+                    "entry_date": entry_date.strftime("%Y-%m-%d"),
+                    "exit_date": date.strftime("%Y-%m-%d"),
+                    "entry_price": round(entry_price, 2),
+                    "exit_price": round(exit_price, 2),
+                    "stop_price": round(stop_price, 2),
+                    "tp_price": round(tp_price, 2),
+                    "size_oz": round(trade_size, 4),
+                    "gross_pnl": round(pnl, 2),
+                    "commission": round(commission, 2),
+                    "net_pnl": round(net_pnl, 2),
+                    "equity": round(equity, 2),
+                    "result": "win" if net_pnl > 0 else "loss",
+                }
+            )
             equity_curve.append((date, equity))
             in_trade = False
 
     if not in_trade and row["signal"] == 1:
         atr = row["_atr14"] if not np.isnan(row["_atr14"]) else row["close"] * 0.01
         entry_price = row["close"]
-        stop_price  = entry_price - STOP_LOSS_ATR   * atr
-        tp_price    = entry_price + TAKE_PROFIT_ATR * atr
-        trade_size  = (equity * POSITION_SIZE) / entry_price
-        entry_date  = date
-        in_trade    = True
+        stop_price = entry_price - STOP_LOSS_ATR * atr
+        tp_price = entry_price + TAKE_PROFIT_ATR * atr
+        trade_size = (equity * POSITION_SIZE) / entry_price
+        entry_date = date
+        in_trade = True
 
 trades_df = pd.DataFrame(trades)
-eq_dates  = [e[0] for e in equity_curve]
+eq_dates = [e[0] for e in equity_curve]
 eq_values = [e[1] for e in equity_curve]
 
 # ── 5. Performance metrics ────────────────────────────────────────────────────
 
-n_trades   = len(trades_df)
+n_trades = len(trades_df)
 if n_trades > 0:
-    wins       = (trades_df["net_pnl"] > 0).sum()
-    win_rate   = wins / n_trades
-    avg_win    = trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean() if wins > 0 else 0
-    avg_loss   = trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean() if (n_trades - wins) > 0 else 0
+    wins = (trades_df["net_pnl"] > 0).sum()
+    win_rate = wins / n_trades
+    avg_win = (
+        trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].mean() if wins > 0 else 0
+    )
+    avg_loss = (
+        trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].mean()
+        if (n_trades - wins) > 0
+        else 0
+    )
     profit_factor = (
-        trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].sum() /
-        abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum())
-        if abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum()) > 0 else float("inf")
+        trades_df.loc[trades_df["net_pnl"] > 0, "net_pnl"].sum()
+        / abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum())
+        if abs(trades_df.loc[trades_df["net_pnl"] <= 0, "net_pnl"].sum()) > 0
+        else float("inf")
     )
     total_return = (equity - INITIAL_CAPITAL) / INITIAL_CAPITAL
 
     # Max drawdown
     eq_series = pd.Series(eq_values)
-    roll_max  = eq_series.cummax()
+    roll_max = eq_series.cummax()
     drawdowns = (eq_series - roll_max) / roll_max
-    max_dd    = drawdowns.min()
+    max_dd = drawdowns.min()
 
     # ── Trade-level Sharpe (correct method) ──────────────────────────────────
     # Annualise using average holding period, not daily equity curve.
@@ -578,9 +629,9 @@ if n_trades > 0:
     # Not statistically robust. Need ~250 trades for SE ≤ ±0.3.
     # The credible performance number is OOS accuracy (68.0%, p=0.0000).
     entry_dates_dt = pd.to_datetime(trades_df["entry_date"])
-    exit_dates_dt  = pd.to_datetime(trades_df["exit_date"])
-    hold_days_arr  = (exit_dates_dt - entry_dates_dt).dt.days.clip(lower=1)
-    avg_hold_days  = float(hold_days_arr.mean()) if len(hold_days_arr) > 0 else 1.0
+    exit_dates_dt = pd.to_datetime(trades_df["exit_date"])
+    hold_days_arr = (exit_dates_dt - entry_dates_dt).dt.days.clip(lower=1)
+    avg_hold_days = float(hold_days_arr.mean()) if len(hold_days_arr) > 0 else 1.0
     pnl_arr = trades_df["net_pnl"].values
     pnl_std = float(np.std(pnl_arr, ddof=1))
     if pnl_std > 0 and avg_hold_days > 0:
@@ -597,7 +648,7 @@ else:
     avg_win = avg_loss = avg_hold_days = sharpe_se = 0.0
 
 _data_start = str(df.index[0].date())
-_data_end   = str(df.index[-1].date())
+_data_end = str(df.index[-1].date())
 _actual_years = round((df.index[-1] - df.index[0]).days / 365.25, 1)
 _data_label = (
     f"XAUUSD {_actual_years}Y real GC=F ({_data_start} – {_data_end})"
@@ -613,50 +664,52 @@ perf = {
         "The credible performance number is the ML OOS accuracy: 68.0% (p=0.0000) — not the Sharpe.",
         "Do not commit live capital until 30+ days of OANDA paper trading is complete.",
     ],
-    "dataset":          _data_label,
-    "data_source":      "Yahoo Finance GC=F (real)" if _USING_REAL_DATA else "Synthetic GBM (fallback)",
-    "real_data":        _USING_REAL_DATA,
-    "model":            f"RandomForestClassifier (300 trees, depth 8, {len(FEATURE_COLS)} stationary features)",
-    "backtest_period":  f"{test_df.index[0].date()} – {test_df.index[-1].date()}",
-    "initial_capital":  INITIAL_CAPITAL,
-    "final_equity":     round(equity, 2),
+    "dataset": _data_label,
+    "data_source": "Yahoo Finance GC=F (real)"
+    if _USING_REAL_DATA
+    else "Synthetic GBM (fallback)",
+    "real_data": _USING_REAL_DATA,
+    "model": f"RandomForestClassifier (300 trees, depth 8, {len(FEATURE_COLS)} stationary features)",
+    "backtest_period": f"{test_df.index[0].date()} – {test_df.index[-1].date()}",
+    "initial_capital": INITIAL_CAPITAL,
+    "final_equity": round(equity, 2),
     "total_return_pct": round(total_return * 100, 2),
-    "n_trades":         n_trades,
-    "win_rate_pct":     round(win_rate * 100, 2),
-    "profit_factor":    round(profit_factor, 3),
-    "avg_win_usd":      round(avg_win, 2),
-    "avg_loss_usd":     round(avg_loss, 2),
+    "n_trades": n_trades,
+    "win_rate_pct": round(win_rate * 100, 2),
+    "profit_factor": round(profit_factor, 3),
+    "avg_win_usd": round(avg_win, 2),
+    "avg_loss_usd": round(avg_loss, 2),
     "max_drawdown_pct": round(abs(max_dd) * 100, 2),
-    "sharpe_ratio":     round(sharpe, 3),
-    "sharpe_se":        round(sharpe_se, 3),
+    "sharpe_ratio": round(sharpe, 3),
+    "sharpe_se": round(sharpe_se, 3),
     "sharpe_note": (
         f"Trade-level Sharpe: mean(net_pnl)/std(net_pnl)*sqrt(252/avg_hold_days={avg_hold_days:.1f}). "
         f"N={n_trades} — SE≈±{sharpe_se:.2f}. Not statistically robust."
     ),
-    "calmar_ratio":     round(calmar, 3),
-    "avg_hold_days":    round(avg_hold_days, 1),
+    "calmar_ratio": round(calmar, 3),
+    "avg_hold_days": round(avg_hold_days, 1),
     "ml_test_accuracy": round(report["accuracy"], 3),
-    "ml_up_precision":  round(report["Up"]["precision"], 3),
-    "ml_up_recall":     round(report["Up"]["recall"], 3),
+    "ml_up_precision": round(report["Up"]["precision"], 3),
+    "ml_up_recall": round(report["Up"]["recall"], 3),
     # Production model (advanced_oos.pkl) — validated separately
-    "oos_accuracy_enhanced":        0.68,
-    "oos_p_value_enhanced":         0.0,
-    "oos_period_enhanced":          "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
-    "abstain_rate_enhanced":        0.275,
-    "production_model":             "advanced_oos.pkl",
+    "oos_accuracy_enhanced": 0.68,
+    "oos_p_value_enhanced": 0.0,
+    "oos_period_enhanced": "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
+    "abstain_rate_enhanced": 0.275,
+    "production_model": "advanced_oos.pkl",
     "production_model_oos_accuracy": 0.68,
-    "production_model_oos_p_value":  0.0,
-    "production_model_oos_period":   "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
-    "production_model_features":     122,
+    "production_model_oos_p_value": 0.0,
+    "production_model_oos_period": "2023-03-22 to 2026-03-24 (756 bars, 3-year holdout)",
+    "production_model_features": 122,
     "production_model_abstain_rate": 0.275,
-    "fallback_model":               "xgb_macro.pkl",
-    "fallback_model_oos_accuracy":  0.503,
-    "fallback_model_features":      65,
+    "fallback_model": "xgb_macro.pkl",
+    "fallback_model_oos_accuracy": 0.503,
+    "fallback_model_features": 65,
     "fallback_model_close_lag_features": 0,
-    "macro_inference_wired":        True,
-    "macro_features_at_inference":  ["DXY", "VIX", "US10Y", "US2Y", "SPX", "GLD_ETF"],
-    "last_updated":                 datetime.now().strftime("%Y-%m-%d"),
-    "version":                      "v13",
+    "macro_inference_wired": True,
+    "macro_features_at_inference": ["DXY", "VIX", "US10Y", "US2Y", "SPX", "GLD_ETF"],
+    "last_updated": datetime.now().strftime("%Y-%m-%d"),
+    "version": "v13",
 }
 
 perf_path = RESULTS_DIR / "performance.json"
@@ -671,25 +724,46 @@ if n_trades > 0:
 
 # ── 6. Equity curve plot ──────────────────────────────────────────────────────
 
-fig, axes = plt.subplots(3, 1, figsize=(12, 10),
-                          gridspec_kw={"height_ratios": [3, 1, 1]})
-_data_tag = "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
+fig, axes = plt.subplots(
+    3, 1, figsize=(12, 10), gridspec_kw={"height_ratios": [3, 1, 1]}
+)
+_data_tag = (
+    "Real GC=F Data" if _USING_REAL_DATA else "⚠ SYNTHETIC DATA — NOT real market data"
+)
 fig.suptitle(
     f"HOPEFX · XAUUSD RandomForest Strategy · Backtest Results\n"
     f"({_data_tag}, {_actual_years}Y, {_data_start} – {_data_end})",
-    fontsize=13, fontweight="bold", y=0.99,
+    fontsize=13,
+    fontweight="bold",
+    y=0.99,
 )
 
 # Panel 1: equity curve
 ax1 = axes[0]
 ax1.plot(eq_dates, eq_values, color="#2196F3", linewidth=1.8, label="Strategy equity")
-ax1.axhline(INITIAL_CAPITAL, color="#9E9E9E", linewidth=0.8, linestyle="--", label="Initial capital")
-ax1.fill_between(eq_dates, INITIAL_CAPITAL, eq_values,
-                 where=[v >= INITIAL_CAPITAL for v in eq_values],
-                 alpha=0.15, color="#4CAF50")
-ax1.fill_between(eq_dates, INITIAL_CAPITAL, eq_values,
-                 where=[v < INITIAL_CAPITAL for v in eq_values],
-                 alpha=0.15, color="#F44336")
+ax1.axhline(
+    INITIAL_CAPITAL,
+    color="#9E9E9E",
+    linewidth=0.8,
+    linestyle="--",
+    label="Initial capital",
+)
+ax1.fill_between(
+    eq_dates,
+    INITIAL_CAPITAL,
+    eq_values,
+    where=[v >= INITIAL_CAPITAL for v in eq_values],
+    alpha=0.15,
+    color="#4CAF50",
+)
+ax1.fill_between(
+    eq_dates,
+    INITIAL_CAPITAL,
+    eq_values,
+    where=[v < INITIAL_CAPITAL for v in eq_values],
+    alpha=0.15,
+    color="#F44336",
+)
 ax1.set_ylabel("Portfolio Value (USD)")
 ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
 ax1.legend(loc="upper left", fontsize=9)
@@ -702,9 +776,13 @@ ax1.annotate(
     f"Sharpe: {sharpe:.2f} ±{sharpe_se:.2f} (N={n_trades})\n"
     f"Max DD: {abs(max_dd)*100:.1f}%\n"
     f"OOS acc: 68.0% p=0.0000",
-    xy=(0.02, 0.97), xycoords="axes fraction",
-    va="top", fontsize=8,
-    bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor=ret_color),
+    xy=(0.02, 0.97),
+    xycoords="axes fraction",
+    va="top",
+    fontsize=8,
+    bbox=dict(
+        boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor=ret_color
+    ),
 )
 
 # Panel 2: drawdown
@@ -722,14 +800,35 @@ ax3 = axes[2]
 ax3.plot(test_df.index, test_df["close"], color="#FF9800", linewidth=1.2)
 if n_trades > 0:
     entry_dates = pd.to_datetime(trades_df["entry_date"])
-    exit_dates  = pd.to_datetime(trades_df["exit_date"])
-    win_mask    = trades_df["result"] == "win"
-    ax3.scatter(entry_dates, trades_df["entry_price"],
-                marker="^", color="#4CAF50", s=30, zorder=5, label="Entry")
-    ax3.scatter(exit_dates[win_mask],  trades_df.loc[win_mask,  "exit_price"],
-                marker="o", color="#2196F3", s=20, zorder=5, label="Win exit")
-    ax3.scatter(exit_dates[~win_mask], trades_df.loc[~win_mask, "exit_price"],
-                marker="x", color="#F44336", s=30, zorder=5, label="Loss exit")
+    exit_dates = pd.to_datetime(trades_df["exit_date"])
+    win_mask = trades_df["result"] == "win"
+    ax3.scatter(
+        entry_dates,
+        trades_df["entry_price"],
+        marker="^",
+        color="#4CAF50",
+        s=30,
+        zorder=5,
+        label="Entry",
+    )
+    ax3.scatter(
+        exit_dates[win_mask],
+        trades_df.loc[win_mask, "exit_price"],
+        marker="o",
+        color="#2196F3",
+        s=20,
+        zorder=5,
+        label="Win exit",
+    )
+    ax3.scatter(
+        exit_dates[~win_mask],
+        trades_df.loc[~win_mask, "exit_price"],
+        marker="x",
+        color="#F44336",
+        s=30,
+        zorder=5,
+        label="Loss exit",
+    )
     ax3.legend(loc="upper left", fontsize=8)
 ax3.set_ylabel("XAUUSD (USD/oz)")
 ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
@@ -748,10 +847,10 @@ print(f"  Saved equity curve → {chart_path}")
 
 # ── 7. Print summary ──────────────────────────────────────────────────────────
 
-print("\n" + "="*55)
+print("\n" + "=" * 55)
 print("  BACKTEST SUMMARY")
-print("="*55)
+print("=" * 55)
 for k, v in perf.items():
     print(f"  {k:<28} {v}")
-print("="*55)
+print("=" * 55)
 print("\nAll artifacts saved. Ready to commit.")

@@ -16,12 +16,14 @@ from datetime import datetime, timedelta, timezone
 # Phase 20: Enhanced Drawing Tools
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestDrawingType:
     """Test DrawingType constants."""
 
     def test_all_drawing_types_defined(self):
         from charting.drawing_tools import DrawingType
+
         assert DrawingType.TRENDLINE == "trendline"
         assert DrawingType.HORIZONTAL_LINE == "horizontal_line"
         assert DrawingType.VERTICAL_LINE == "vertical_line"
@@ -42,6 +44,7 @@ class TestDrawing:
 
     def test_drawing_creation_defaults(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.TRENDLINE)
         assert d.drawing_type == DrawingType.TRENDLINE
         assert d.visible is True
@@ -51,22 +54,26 @@ class TestDrawing:
 
     def test_drawing_custom_attrs(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.HORIZONTAL_LINE, color="#FF0000", line_width=2)
         assert d.color == "#FF0000"
         assert d.line_width == 2
 
     def test_drawing_custom_id(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.TEXT, drawing_id="my_id_123")
         assert d.drawing_id == "my_id_123"
 
     def test_drawing_auto_id(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.ARROW)
         assert DrawingType.ARROW in d.drawing_id
 
     def test_to_dict(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.RECTANGLE, drawing_id="rect_1")
         d.properties = {"start_price": 1900.0}
         result = d.to_dict()
@@ -78,7 +85,10 @@ class TestDrawing:
 
     def test_from_dict_roundtrip(self):
         from charting.drawing_tools import Drawing, DrawingType
-        d = Drawing(DrawingType.FIBONACCI_RETRACEMENT, drawing_id="fib_1", color="#FF5722")
+
+        d = Drawing(
+            DrawingType.FIBONACCI_RETRACEMENT, drawing_id="fib_1", color="#FF5722"
+        )
         d.properties = {"levels": [0.382, 0.618]}
         d.visible = False
         data = d.to_dict()
@@ -90,6 +100,7 @@ class TestDrawing:
 
     def test_repr(self):
         from charting.drawing_tools import Drawing, DrawingType
+
         d = Drawing(DrawingType.TEXT, drawing_id="txt_1")
         r = repr(d)
         assert "text" in r
@@ -103,10 +114,12 @@ class TestDrawingToolkitTrendline:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_trendline_basic(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t0 = datetime(2024, 1, 1, 9, 0)
         t1 = datetime(2024, 1, 1, 12, 0)
         d = toolkit.draw_trendline(t0, 1900.0, t1, 1920.0)
@@ -142,10 +155,12 @@ class TestDrawingToolkitHorizontalLine:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_horizontal_line(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         d = toolkit.draw_horizontal_line(1950.0)
         assert d.drawing_type == DrawingType.HORIZONTAL_LINE
         assert d.properties["price"] == 1950.0
@@ -170,10 +185,12 @@ class TestDrawingToolkitVerticalLine:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_vertical_line(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t = datetime(2024, 6, 1, 14, 0)
         d = toolkit.draw_vertical_line(t)
         assert d.drawing_type == DrawingType.VERTICAL_LINE
@@ -192,10 +209,12 @@ class TestDrawingToolkitRectangle:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_rectangle(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t0 = datetime(2024, 1, 1)
         t1 = datetime(2024, 1, 5)
         d = toolkit.draw_rectangle(t0, 1900.0, t1, 1950.0)
@@ -221,10 +240,12 @@ class TestDrawingToolkitHorizontalBand:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_horizontal_band(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         d = toolkit.draw_horizontal_band(1960.0, 1940.0)
         assert d.drawing_type == DrawingType.HORIZONTAL_BAND
         assert d.properties["upper_price"] == 1960.0
@@ -252,10 +273,12 @@ class TestDrawingToolkitFibonacci:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_fibonacci_defaults(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t0 = datetime(2024, 1, 1)
         t1 = datetime(2024, 1, 10)
         d = toolkit.draw_fibonacci(t0, 1800.0, t1, 2000.0)
@@ -288,10 +311,12 @@ class TestDrawingToolkitFibonacciExtension:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_fibonacci_extension(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         ta = datetime(2024, 1, 1)
         tb = datetime(2024, 1, 5)
         tc = datetime(2024, 1, 8)
@@ -306,7 +331,9 @@ class TestDrawingToolkitFibonacciExtension:
         tc = datetime(2024, 1, 8)
         # A=1800, B=2000, C=1900; swing=200
         # 1.618 extension: 1900 + 1.618*200 = 2223.6
-        d = toolkit.draw_fibonacci_extension(ta, 1800.0, tb, 2000.0, tc, 1900.0, levels=[1.618])
+        d = toolkit.draw_fibonacci_extension(
+            ta, 1800.0, tb, 2000.0, tc, 1900.0, levels=[1.618]
+        )
         level_prices = d.properties["level_prices"]
         assert level_prices["1.618"] == pytest.approx(1900.0 + 1.618 * 200.0, rel=1e-4)
 
@@ -318,10 +345,12 @@ class TestDrawingToolkitPitchfork:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_pitchfork(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         tp = datetime(2024, 1, 1)
         th = datetime(2024, 1, 5)
         tl = datetime(2024, 1, 5)
@@ -345,10 +374,12 @@ class TestDrawingToolkitChannel:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_channel(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t0 = datetime(2024, 1, 1)
         t1 = datetime(2024, 1, 10)
         d = toolkit.draw_channel(t0, 1900.0, t1, 1950.0, channel_width=20.0)
@@ -366,10 +397,12 @@ class TestDrawingToolkitElliottWave:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_elliott_wave(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         points = [
             {"time": "2024-01-01", "price": 1800.0, "label": "0"},
             {"time": "2024-01-05", "price": 1900.0, "label": "1"},
@@ -385,7 +418,9 @@ class TestDrawingToolkitElliottWave:
 
     def test_elliott_wave_too_few_points(self, toolkit):
         with pytest.raises(ValueError, match="At least 2"):
-            toolkit.draw_elliott_wave([{"time": "2024-01-01", "price": 1800.0, "label": "0"}])
+            toolkit.draw_elliott_wave(
+                [{"time": "2024-01-01", "price": 1800.0, "label": "0"}]
+            )
 
     def test_elliott_wave_corrective(self, toolkit):
         points = [
@@ -404,10 +439,12 @@ class TestDrawingToolkitText:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_text(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t = datetime(2024, 3, 1, 10, 0)
         d = toolkit.draw_text(t, 1950.0, "Key level")
         assert d.drawing_type == DrawingType.TEXT
@@ -433,10 +470,12 @@ class TestDrawingToolkitArrow:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     def test_draw_arrow_up(self, toolkit):
         from charting.drawing_tools import DrawingType
+
         t = datetime(2024, 3, 1, 10, 0)
         d = toolkit.draw_arrow(t, 1900.0, direction="up")
         assert d.drawing_type == DrawingType.ARROW
@@ -465,6 +504,7 @@ class TestDrawingToolkitManagement:
     @pytest.fixture
     def toolkit(self):
         from charting.drawing_tools import DrawingToolkit
+
         return DrawingToolkit()
 
     @pytest.fixture
@@ -484,6 +524,7 @@ class TestDrawingToolkitManagement:
 
     def test_get_drawings_filtered(self, populated_toolkit):
         from charting.drawing_tools import DrawingType
+
         h_lines = populated_toolkit.get_drawings(DrawingType.HORIZONTAL_LINE)
         assert len(h_lines) == 2
 
@@ -514,6 +555,7 @@ class TestDrawingToolkitManagement:
 
     def test_clear_drawings_by_type(self, populated_toolkit):
         from charting.drawing_tools import DrawingType
+
         removed = populated_toolkit.clear_drawings(DrawingType.HORIZONTAL_LINE)
         assert removed == 2
         assert populated_toolkit.get_drawings_count() == 2
@@ -543,7 +585,10 @@ class TestDrawingToolkitManagement:
         drawings = populated_toolkit.get_drawings()
         did = drawings[0].drawing_id
         populated_toolkit.update_drawing(did, custom_key="custom_val")
-        assert populated_toolkit.get_drawing(did).properties.get("custom_key") == "custom_val"
+        assert (
+            populated_toolkit.get_drawing(did).properties.get("custom_key")
+            == "custom_val"
+        )
 
     def test_update_nonexistent_drawing(self, toolkit):
         assert toolkit.update_drawing("ghost", color="#000") is False
@@ -554,6 +599,7 @@ class TestDrawingToolkitManagement:
         assert len(exported) == 4
 
         from charting.drawing_tools import DrawingToolkit
+
         fresh = DrawingToolkit()
         count = fresh.import_drawings(exported)
         assert count == 4
@@ -570,6 +616,7 @@ class TestDrawingToolkitManagement:
 
     def test_empty_toolkit_count(self):
         from charting.drawing_tools import DrawingToolkit
+
         assert DrawingToolkit().get_drawings_count() == 0
 
 
@@ -577,12 +624,14 @@ class TestDrawingToolkitManagement:
 # Phase 26: White-Label Module
 # ===========================================================================
 
+
 @pytest.mark.unit
 class TestBrandTheme:
     """Tests for BrandTheme."""
 
     def test_default_values(self):
         from whitelabel import BrandTheme
+
         theme = BrandTheme()
         assert theme.primary_color == "#1976D2"
         assert theme.app_name == "Trading Platform"
@@ -591,6 +640,7 @@ class TestBrandTheme:
 
     def test_to_dict(self):
         from whitelabel import BrandTheme
+
         theme = BrandTheme(primary_color="#FF0000", app_name="MyApp")
         d = theme.to_dict()
         assert d["primary_color"] == "#FF0000"
@@ -598,6 +648,7 @@ class TestBrandTheme:
 
     def test_from_dict_roundtrip(self):
         from whitelabel import BrandTheme
+
         original = BrandTheme(primary_color="#ABCDEF", tagline="Trade smart")
         restored = BrandTheme.from_dict(original.to_dict())
         assert restored.primary_color == "#ABCDEF"
@@ -605,6 +656,7 @@ class TestBrandTheme:
 
     def test_to_css_variables_contains_primary(self):
         from whitelabel import BrandTheme
+
         theme = BrandTheme(primary_color="#1976D2")
         css = theme.to_css_variables()
         assert "--color-primary: #1976D2" in css
@@ -612,6 +664,7 @@ class TestBrandTheme:
 
     def test_to_css_variables_includes_custom_css(self):
         from whitelabel import BrandTheme
+
         theme = BrandTheme(custom_css="body { margin: 0; }")
         css = theme.to_css_variables()
         assert "body { margin: 0; }" in css
@@ -624,6 +677,7 @@ class TestTenant:
     @pytest.fixture
     def sample_tenant(self):
         from whitelabel import Tenant, TenantStatus
+
         return Tenant(
             tenant_id="t001",
             name="Acme Trading",
@@ -640,11 +694,13 @@ class TestTenant:
 
     def test_tenant_is_active_suspended(self, sample_tenant):
         from whitelabel import TenantStatus
+
         sample_tenant.status = TenantStatus.SUSPENDED
         assert sample_tenant.is_active() is False
 
     def test_tenant_is_active_trial(self, sample_tenant):
         from whitelabel import TenantStatus
+
         sample_tenant.status = TenantStatus.TRIAL
         assert sample_tenant.is_active() is True
 
@@ -658,6 +714,7 @@ class TestTenant:
 
     def test_tenant_has_feature(self, sample_tenant):
         from whitelabel import FeatureFlag
+
         sample_tenant.features = [FeatureFlag.TRADING, FeatureFlag.BACKTESTING]
         assert sample_tenant.has_feature(FeatureFlag.TRADING) is True
         assert sample_tenant.has_feature(FeatureFlag.SOCIAL_TRADING) is False
@@ -679,6 +736,7 @@ class TestReseller:
 
     def test_reseller_creation(self):
         from whitelabel import Reseller, ResellerTier
+
         r = Reseller(
             reseller_id="r001",
             company_name="BrokerCo",
@@ -692,6 +750,7 @@ class TestReseller:
 
     def test_reseller_gold_tier(self):
         from whitelabel import Reseller, ResellerTier
+
         r = Reseller(
             reseller_id="r002",
             company_name="GoldBroker",
@@ -710,6 +769,7 @@ class TestWhiteLabelManagerTenants:
     @pytest.fixture
     def manager(self):
         from whitelabel import WhiteLabelManager
+
         return WhiteLabelManager()
 
     def test_create_tenant(self, manager):
@@ -726,6 +786,7 @@ class TestWhiteLabelManagerTenants:
 
     def test_create_tenant_no_trial(self, manager):
         from whitelabel import TenantStatus
+
         t = manager.create_tenant("Perm Co", "y@y.com", trial_days=0)
         assert t.expires_at is None
         assert t.status == TenantStatus.ACTIVE
@@ -740,6 +801,7 @@ class TestWhiteLabelManagerTenants:
 
     def test_activate_tenant(self, manager):
         from whitelabel import TenantStatus
+
         t = manager.create_tenant("Activatable", "a@a.com", trial_days=7)
         result = manager.activate_tenant(t.tenant_id)
         assert result is True
@@ -751,6 +813,7 @@ class TestWhiteLabelManagerTenants:
 
     def test_suspend_tenant(self, manager):
         from whitelabel import TenantStatus
+
         t = manager.create_tenant("SuspendMe", "s@s.com")
         manager.activate_tenant(t.tenant_id)
         result = manager.suspend_tenant(t.tenant_id)
@@ -784,6 +847,7 @@ class TestWhiteLabelManagerTenants:
 
     def test_list_tenants_filtered_by_status(self, manager):
         from whitelabel import TenantStatus
+
         t = manager.create_tenant("Trial", "t@t.com", trial_days=7)
         t2 = manager.create_tenant("Active", "ac@ac.com", trial_days=0)
         trial_list = manager.list_tenants(status=TenantStatus.TRIAL)
@@ -798,13 +862,16 @@ class TestWhiteLabelManagerTheme:
     @pytest.fixture
     def manager_with_tenant(self):
         from whitelabel import WhiteLabelManager
+
         mgr = WhiteLabelManager()
         t = mgr.create_tenant("Branded", "b@b.com")
         return mgr, t
 
     def test_update_theme(self, manager_with_tenant):
         mgr, t = manager_with_tenant
-        result = mgr.update_theme(t.tenant_id, {"primary_color": "#FF0000", "app_name": "MyBrand"})
+        result = mgr.update_theme(
+            t.tenant_id, {"primary_color": "#FF0000", "app_name": "MyBrand"}
+        )
         assert result is True
         assert t.theme.primary_color == "#FF0000"
         assert t.theme.app_name == "MyBrand"
@@ -815,6 +882,7 @@ class TestWhiteLabelManagerTheme:
 
     def test_get_theme(self, manager_with_tenant):
         from whitelabel import BrandTheme
+
         mgr, t = manager_with_tenant
         theme = mgr.get_theme(t.tenant_id)
         assert isinstance(theme, BrandTheme)
@@ -831,13 +899,16 @@ class TestWhiteLabelManagerFeatures:
     @pytest.fixture
     def manager_with_tenant(self):
         from whitelabel import WhiteLabelManager, FeatureFlag
+
         mgr = WhiteLabelManager()
-        t = mgr.create_tenant("FeatureTenant", "ft@ft.com",
-                               features=[FeatureFlag.TRADING])
+        t = mgr.create_tenant(
+            "FeatureTenant", "ft@ft.com", features=[FeatureFlag.TRADING]
+        )
         return mgr, t
 
     def test_enable_feature(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, t = manager_with_tenant
         result = mgr.enable_feature(t.tenant_id, FeatureFlag.SOCIAL_TRADING)
         assert result is True
@@ -845,6 +916,7 @@ class TestWhiteLabelManagerFeatures:
 
     def test_enable_feature_idempotent(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, t = manager_with_tenant
         mgr.enable_feature(t.tenant_id, FeatureFlag.TRADING)
         mgr.enable_feature(t.tenant_id, FeatureFlag.TRADING)
@@ -854,6 +926,7 @@ class TestWhiteLabelManagerFeatures:
 
     def test_disable_feature(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, t = manager_with_tenant
         result = mgr.disable_feature(t.tenant_id, FeatureFlag.TRADING)
         assert result is True
@@ -861,22 +934,26 @@ class TestWhiteLabelManagerFeatures:
 
     def test_disable_nonexistent_feature_is_noop(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, t = manager_with_tenant
         result = mgr.disable_feature(t.tenant_id, FeatureFlag.SOCIAL_TRADING)
         assert result is True  # No error, just a no-op
 
     def test_enable_feature_nonexistent_tenant(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, _ = manager_with_tenant
         assert mgr.enable_feature("ghost", FeatureFlag.TRADING) is False
 
     def test_disable_feature_nonexistent_tenant(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, _ = manager_with_tenant
         assert mgr.disable_feature("ghost", FeatureFlag.TRADING) is False
 
     def test_get_tenant_features(self, manager_with_tenant):
         from whitelabel import FeatureFlag
+
         mgr, t = manager_with_tenant
         features = mgr.get_tenant_features(t.tenant_id)
         assert FeatureFlag.TRADING in features
@@ -894,6 +971,7 @@ class TestWhiteLabelManagerDomain:
     @pytest.fixture
     def manager(self):
         from whitelabel import WhiteLabelManager
+
         return WhiteLabelManager()
 
     def test_set_custom_domain(self, manager):
@@ -939,10 +1017,12 @@ class TestWhiteLabelManagerResellers:
     @pytest.fixture
     def manager(self):
         from whitelabel import WhiteLabelManager
+
         return WhiteLabelManager()
 
     def test_create_reseller(self, manager):
         from whitelabel import ResellerTier
+
         r = manager.create_reseller("BrokerCo", "support@brokerco.com")
         assert r is not None
         assert r.company_name == "BrokerCo"
@@ -951,6 +1031,7 @@ class TestWhiteLabelManagerResellers:
 
     def test_create_reseller_gold_tier(self, manager):
         from whitelabel import ResellerTier
+
         r = manager.create_reseller("VIPBroker", "vip@vip.com", tier=ResellerTier.GOLD)
         assert r.commission_rate == 0.25
 
@@ -969,6 +1050,7 @@ class TestWhiteLabelManagerResellers:
 
     def test_calculate_commission_platinum(self, manager):
         from whitelabel import ResellerTier
+
         r = manager.create_reseller("PlatCo", "p@p.com", tier=ResellerTier.PLATINUM)
         commission = manager.calculate_commission(r.reseller_id, 1000.0)
         assert commission == pytest.approx(300.0)  # 30% of 1000
@@ -991,6 +1073,7 @@ class TestWhiteLabelManagerResellers:
 
     def test_upgrade_reseller_tier(self, manager):
         from whitelabel import ResellerTier
+
         r = manager.create_reseller("UpgradeCo", "u@u.com")
         r.total_tenants = 5  # Meets Silver threshold
         new_tier = manager.upgrade_reseller_tier(r.reseller_id)
@@ -999,6 +1082,7 @@ class TestWhiteLabelManagerResellers:
 
     def test_upgrade_reseller_tier_platinum(self, manager):
         from whitelabel import ResellerTier
+
         r = manager.create_reseller("PlatinumCo", "pt@pt.com")
         r.total_tenants = 30
         new_tier = manager.upgrade_reseller_tier(r.reseller_id)
@@ -1027,6 +1111,7 @@ class TestWhiteLabelManagerExportImport:
     @pytest.fixture
     def manager(self):
         from whitelabel import WhiteLabelManager
+
         return WhiteLabelManager()
 
     def test_export_tenant_config(self, manager):
@@ -1043,12 +1128,14 @@ class TestWhiteLabelManagerExportImport:
 
     def test_import_tenant_config(self, manager):
         from whitelabel import FeatureFlag
+
         t = manager.create_tenant("Original", "or@or.com")
         manager.enable_feature(t.tenant_id, FeatureFlag.SOCIAL_TRADING)
         config = manager.export_tenant_config(t.tenant_id)
 
         # Import into a fresh manager
         from whitelabel import WhiteLabelManager
+
         fresh_mgr = WhiteLabelManager()
         imported = fresh_mgr.import_tenant_config(config)
         assert imported.name == "Original"
@@ -1060,6 +1147,7 @@ class TestWhiteLabelManagerExportImport:
         config = manager.export_tenant_config(t.tenant_id)
 
         from whitelabel import WhiteLabelManager
+
         fresh = WhiteLabelManager()
         fresh.import_tenant_config(config)
         resolved = fresh.resolve_domain("export.example.com")
@@ -1073,6 +1161,7 @@ class TestWhiteLabelManagerSummary:
     @pytest.fixture
     def manager(self):
         from whitelabel import WhiteLabelManager
+
         mgr = WhiteLabelManager()
         t1 = mgr.create_tenant("A", "a@a.com", trial_days=0)  # ACTIVE
         t2 = mgr.create_tenant("B", "b@b.com", trial_days=7)  # TRIAL
@@ -1096,6 +1185,7 @@ class TestWhiteLabelConstants:
 
     def test_tier_commission_rates(self):
         from whitelabel import TIER_COMMISSION_RATES, ResellerTier
+
         assert TIER_COMMISSION_RATES[ResellerTier.STANDARD] == 0.15
         assert TIER_COMMISSION_RATES[ResellerTier.SILVER] == 0.20
         assert TIER_COMMISSION_RATES[ResellerTier.GOLD] == 0.25
@@ -1103,6 +1193,7 @@ class TestWhiteLabelConstants:
 
     def test_tier_tenant_thresholds(self):
         from whitelabel import TIER_TENANT_THRESHOLDS, ResellerTier
+
         assert TIER_TENANT_THRESHOLDS[ResellerTier.STANDARD] == 0
         assert TIER_TENANT_THRESHOLDS[ResellerTier.SILVER] == 5
         assert TIER_TENANT_THRESHOLDS[ResellerTier.GOLD] == 15
@@ -1110,9 +1201,11 @@ class TestWhiteLabelConstants:
 
     def test_all_feature_flags_accessible(self):
         from whitelabel import FeatureFlag
+
         flags = list(FeatureFlag)
         assert len(flags) >= 13  # All defined flags
 
     def test_module_singleton_accessible(self):
         from whitelabel import white_label_manager, WhiteLabelManager
+
         assert isinstance(white_label_manager, WhiteLabelManager)

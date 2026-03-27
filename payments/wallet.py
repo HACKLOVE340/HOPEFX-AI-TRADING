@@ -23,12 +23,14 @@ logger = logging.getLogger(__name__)
 
 class WalletType:
     """Wallet type constants"""
+
     SUBSCRIPTION = "subscription"
     COMMISSION = "commission"
 
 
 class WalletStatus:
     """Wallet status constants"""
+
     ACTIVE = "active"
     FROZEN = "frozen"
     SUSPENDED = "suspended"
@@ -42,12 +44,12 @@ class Wallet:
         self,
         wallet_id: str,
         user_id: str,
-        subscription_balance: Decimal = Decimal('0.00'),
-        commission_balance: Decimal = Decimal('0.00'),
-        currency: str = 'USD',
+        subscription_balance: Decimal = Decimal("0.00"),
+        commission_balance: Decimal = Decimal("0.00"),
+        currency: str = "USD",
         status: str = WalletStatus.ACTIVE,
         created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None
+        updated_at: Optional[datetime] = None,
     ):
         self.wallet_id = wallet_id
         self.user_id = user_id
@@ -61,15 +63,15 @@ class Wallet:
     def to_dict(self) -> Dict:
         """Convert wallet to dictionary"""
         return {
-            'wallet_id': self.wallet_id,
-            'user_id': self.user_id,
-            'subscription_balance': float(self.subscription_balance),
-            'commission_balance': float(self.commission_balance),
-            'total_balance': float(self.subscription_balance + self.commission_balance),
-            'currency': self.currency,
-            'status': self.status,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            "wallet_id": self.wallet_id,
+            "user_id": self.user_id,
+            "subscription_balance": float(self.subscription_balance),
+            "commission_balance": float(self.commission_balance),
+            "total_balance": float(self.subscription_balance + self.commission_balance),
+            "currency": self.currency,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -98,18 +100,21 @@ class WalletManager:
             return
         try:
             from database.models import WalletTransaction
+
             with self._session_factory() as session:
-                session.add(WalletTransaction(
-                    transaction_id=txn["transaction_id"],
-                    user_id=user_id,
-                    transaction_type=txn["type"],
-                    amount=txn["amount"],
-                    balance_after=txn["balance_after"],
-                    currency=txn.get("currency", "USD"),
-                    reference=txn.get("reference"),
-                    status=txn.get("status", "completed"),
-                    notes=txn.get("wallet_type"),
-                ))
+                session.add(
+                    WalletTransaction(
+                        transaction_id=txn["transaction_id"],
+                        user_id=user_id,
+                        transaction_type=txn["type"],
+                        amount=txn["amount"],
+                        balance_after=txn["balance_after"],
+                        currency=txn.get("currency", "USD"),
+                        reference=txn.get("reference"),
+                        status=txn.get("status", "completed"),
+                        notes=txn.get("wallet_type"),
+                    )
+                )
                 session.commit()
         except Exception as exc:
             logger.error("Wallet DB write failed: %s", exc)
@@ -120,6 +125,7 @@ class WalletManager:
             return None
         try:
             from database.models import WalletTransaction
+
             with self._session_factory() as session:
                 row = (
                     session.query(WalletTransaction)
@@ -136,8 +142,8 @@ class WalletManager:
     def create_wallet(
         self,
         user_id: str,
-        initial_balance: Decimal = Decimal('0.00'),
-        currency: str = 'USD'
+        initial_balance: Decimal = Decimal("0.00"),
+        currency: str = "USD",
     ) -> Wallet:
         """
         Create a new wallet for a user
@@ -164,7 +170,7 @@ class WalletManager:
             wallet_id=wallet_id,
             user_id=user_id,
             subscription_balance=starting_balance,
-            commission_balance=Decimal('0.00'),
+            commission_balance=Decimal("0.00"),
             currency=currency,
             status=WalletStatus.ACTIVE,
         )
@@ -172,7 +178,9 @@ class WalletManager:
         self._wallets[wallet_id] = wallet
         self._transaction_history[user_id] = []
 
-        logger.info(f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})")
+        logger.info(
+            f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})"
+        )
         return wallet
 
     def get_wallet(self, user_id: str) -> Optional[Wallet]:
@@ -188,11 +196,7 @@ class WalletManager:
         wallet_id = f"WAL-{user_id}"
         return self._wallets.get(wallet_id)
 
-    def get_balance(
-        self,
-        user_id: str,
-        wallet_type: Optional[str] = None
-    ) -> Dict:
+    def get_balance(self, user_id: str, wallet_type: Optional[str] = None) -> Dict:
         """
         Get wallet balance(s)
 
@@ -207,30 +211,32 @@ class WalletManager:
 
         if not wallet:
             return {
-                'subscription_balance': 0.00,
-                'commission_balance': 0.00,
-                'total_balance': 0.00,
-                'currency': 'USD'
+                "subscription_balance": 0.00,
+                "commission_balance": 0.00,
+                "total_balance": 0.00,
+                "currency": "USD",
             }
 
         if wallet_type == WalletType.SUBSCRIPTION:
             return {
-                'balance': float(wallet.subscription_balance),
-                'wallet_type': 'subscription',
-                'currency': wallet.currency
+                "balance": float(wallet.subscription_balance),
+                "wallet_type": "subscription",
+                "currency": wallet.currency,
             }
         elif wallet_type == WalletType.COMMISSION:
             return {
-                'balance': float(wallet.commission_balance),
-                'wallet_type': 'commission',
-                'currency': wallet.currency
+                "balance": float(wallet.commission_balance),
+                "wallet_type": "commission",
+                "currency": wallet.currency,
             }
         else:
             return {
-                'subscription_balance': float(wallet.subscription_balance),
-                'commission_balance': float(wallet.commission_balance),
-                'total_balance': float(wallet.subscription_balance + wallet.commission_balance),
-                'currency': wallet.currency
+                "subscription_balance": float(wallet.subscription_balance),
+                "commission_balance": float(wallet.commission_balance),
+                "total_balance": float(
+                    wallet.subscription_balance + wallet.commission_balance
+                ),
+                "currency": wallet.currency,
             }
 
     def credit_wallet(
@@ -238,9 +244,9 @@ class WalletManager:
         user_id: str,
         amount: Decimal,
         wallet_type: str = WalletType.SUBSCRIPTION,
-        transaction_type: str = 'deposit',
-        method: str = 'unknown',
-        reference: Optional[str] = None
+        transaction_type: str = "deposit",
+        method: str = "unknown",
+        reference: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Credit (add funds to) a wallet
@@ -278,15 +284,19 @@ class WalletManager:
 
         # Record transaction
         transaction = {
-            'transaction_id': f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
-            'type': transaction_type,
-            'wallet_type': wallet_type,
-            'amount': float(amount),
-            'method': method,
-            'reference': reference,
-            'balance_after': float(wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance),
-            'status': 'completed',
-            'created_at': datetime.now(timezone.utc).isoformat()
+            "transaction_id": f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "type": transaction_type,
+            "wallet_type": wallet_type,
+            "amount": float(amount),
+            "method": method,
+            "reference": reference,
+            "balance_after": float(
+                wallet.subscription_balance
+                if wallet_type == WalletType.SUBSCRIPTION
+                else wallet.commission_balance
+            ),
+            "status": "completed",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if user_id not in self._transaction_history:
@@ -302,8 +312,8 @@ class WalletManager:
         user_id: str,
         amount: Decimal,
         wallet_type: str = WalletType.SUBSCRIPTION,
-        transaction_type: str = 'withdrawal',
-        reference: Optional[str] = None
+        transaction_type: str = "withdrawal",
+        reference: Optional[str] = None,
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Debit (remove funds from) a wallet
@@ -329,17 +339,22 @@ class WalletManager:
             return False, f"Wallet is {wallet.status}", None
 
         # AML gate — only applied to actual withdrawals, not internal debits
-        if transaction_type == 'withdrawal':
+        if transaction_type == "withdrawal":
             try:
                 from compliance.aml import get_aml_gate
-                kyc_status = getattr(wallet, 'kyc_status', 'unverified')
+
+                kyc_status = getattr(wallet, "kyc_status", "unverified")
                 decision = get_aml_gate().check_withdrawal(
                     user_id=user_id,
                     amount=amount,
                     kyc_status=kyc_status,
                 )
                 if not decision.allowed:
-                    logger.warning("AML blocked withdrawal for user %s: %s", user_id, decision.reason)
+                    logger.warning(
+                        "AML blocked withdrawal for user %s: %s",
+                        user_id,
+                        decision.reason,
+                    )
                     return False, f"Withdrawal blocked: {decision.reason}", None
             except Exception as _aml_err:
                 logger.warning("AML check error (allowing): %s", _aml_err)
@@ -360,14 +375,18 @@ class WalletManager:
 
         # Record transaction
         transaction = {
-            'transaction_id': f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
-            'type': transaction_type,
-            'wallet_type': wallet_type,
-            'amount': float(amount),
-            'reference': reference,
-            'balance_after': float(wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance),
-            'status': 'completed',
-            'created_at': datetime.now(timezone.utc).isoformat()
+            "transaction_id": f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "type": transaction_type,
+            "wallet_type": wallet_type,
+            "amount": float(amount),
+            "reference": reference,
+            "balance_after": float(
+                wallet.subscription_balance
+                if wallet_type == WalletType.SUBSCRIPTION
+                else wallet.commission_balance
+            ),
+            "status": "completed",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if user_id not in self._transaction_history:
@@ -379,11 +398,7 @@ class WalletManager:
         return True, "Wallet debited successfully", transaction
 
     def transfer_between_wallets(
-        self,
-        user_id: str,
-        amount: Decimal,
-        from_wallet: str,
-        to_wallet: str
+        self, user_id: str, amount: Decimal, from_wallet: str, to_wallet: str
     ) -> Tuple[bool, str]:
         """
         Transfer funds between wallet types
@@ -405,7 +420,7 @@ class WalletManager:
 
         # Debit from source
         success, message, _ = self.debit_wallet(
-            user_id, amount, from_wallet, 'transfer', f"Transfer to {to_wallet}"
+            user_id, amount, from_wallet, "transfer", f"Transfer to {to_wallet}"
         )
 
         if not success:
@@ -413,17 +428,29 @@ class WalletManager:
 
         # Credit to destination
         success, message, _ = self.credit_wallet(
-            user_id, amount, to_wallet, 'transfer', 'internal', f"Transfer from {from_wallet}"
+            user_id,
+            amount,
+            to_wallet,
+            "transfer",
+            "internal",
+            f"Transfer from {from_wallet}",
         )
 
         if not success:
             # Rollback debit
             self.credit_wallet(
-                user_id, amount, from_wallet, 'reversal', 'internal', "Transfer rollback"
+                user_id,
+                amount,
+                from_wallet,
+                "reversal",
+                "internal",
+                "Transfer rollback",
             )
             return False, f"Transfer failed: {message}"
 
-        logger.info(f"Transferred {amount} from {from_wallet} to {to_wallet} for user {user_id}")
+        logger.info(
+            f"Transferred {amount} from {from_wallet} to {to_wallet} for user {user_id}"
+        )
         return True, "Transfer successful"
 
     def freeze_wallet(self, user_id: str) -> Tuple[bool, str]:
@@ -466,11 +493,7 @@ class WalletManager:
         logger.info(f"Wallet unfrozen for user {user_id}")
         return True, "Wallet activated successfully"
 
-    def get_transaction_history(
-        self,
-        user_id: str,
-        limit: int = 50
-    ) -> List[Dict]:
+    def get_transaction_history(self, user_id: str, limit: int = 50) -> List[Dict]:
         """
         Get transaction history for a user
 

@@ -37,19 +37,19 @@ except Exception:
     mobile_analytics = None
 
 __all__ = [
-    'MobileAPI',
-    'MobileAuth',
-    'PushNotificationManager',
-    'MobileTradingEngine',
-    'MobileAnalytics',
-    'mobile_api',
-    'mobile_auth',
-    'push_notification_manager',
-    'mobile_trading_engine',
-    'mobile_analytics',
+    "MobileAPI",
+    "MobileAuth",
+    "PushNotificationManager",
+    "MobileTradingEngine",
+    "MobileAnalytics",
+    "mobile_api",
+    "mobile_auth",
+    "push_notification_manager",
+    "mobile_trading_engine",
+    "mobile_analytics",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Mobile-optimized APIs with push notifications and trading features'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Development Team"
+__description__ = "Mobile-optimized APIs with push notifications and trading features"

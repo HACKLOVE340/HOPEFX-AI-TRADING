@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 _PRICE_BOUNDS: Dict[str, tuple[float, float]] = {
     # (min_price, max_price)
-    "XAUUSD": (500.0, 10_000.0),   # Gold: $500–$10,000 per troy oz
+    "XAUUSD": (500.0, 10_000.0),  # Gold: $500–$10,000 per troy oz
     "EURUSD": (0.5, 2.5),
     "GBPUSD": (0.5, 3.0),
     "USDJPY": (50.0, 300.0),
@@ -59,6 +59,7 @@ _STALE_MULTIPLIER = 2.0
 # Result type
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationResult:
     ok: bool
@@ -76,6 +77,7 @@ class ValidationResult:
 # ---------------------------------------------------------------------------
 # Validator
 # ---------------------------------------------------------------------------
+
 
 class DataValidator:
     """
@@ -112,7 +114,7 @@ class DataValidator:
         try:
             o = float(bar["open"])
             h = float(bar["high"])
-            l = float(bar["low"])
+            l = float(bar["low"])  # noqa: E741
             c = float(bar["close"])
             v = float(bar.get("volume", 0))
         except (KeyError, TypeError, ValueError) as exc:
@@ -202,6 +204,7 @@ class DataValidator:
 # ---------------------------------------------------------------------------
 # Convenience function
 # ---------------------------------------------------------------------------
+
 
 def validate_ohlcv(
     bars: List[Dict],

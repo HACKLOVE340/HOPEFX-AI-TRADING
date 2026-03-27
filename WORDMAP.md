@@ -1,6 +1,6 @@
 # HOPEFX-AI-TRADING — WORDMAP
-> **Single Source of Truth** for the entire project.  
-> Every module, route, agent, strategy, price function, and hidden component catalogued here.  
+> **Single Source of Truth** for the entire project.
+> Every module, route, agent, strategy, price function, and hidden component catalogued here.
 > _Last generated: 2026-03-03_
 
 ---
@@ -509,7 +509,7 @@ Previously hidden (implemented but not exposed). Now fully wired with REST API.
 
 ## Random/Simulated Data
 
-> **All locations below are LEGITIMATE uses of random numbers.**  
+> **All locations below are LEGITIMATE uses of random numbers.**
 > Zero random prices in any production data flow or UI.
 
 | File | Type | Legitimacy |

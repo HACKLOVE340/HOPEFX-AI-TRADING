@@ -23,7 +23,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 logger = logging.getLogger(__name__)
 
-from monetization import (
+from monetization import (  # noqa: E402
     BillingCycle,
     PartnerType,
     StrategyCategory,
@@ -219,12 +219,14 @@ async def get_tier_pricing(tier: str):
         pricing_tier = pricing_manager.get_tier(tier_enum)
         if not pricing_tier:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail=f"Tier '{tier}' not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tier '{tier}' not found",
             )
         return pricing_tier.to_dict()
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid tier: {tier}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid tier: {tier}",
         )
 
 
@@ -275,13 +277,18 @@ async def subscribe(request: SubscribeRequest):
 
     # Create checkout session
     checkout = stripe_integration.create_checkout_session(
-        customer_id=customer.customer_id, tier=tier, billing_cycle=billing_cycle,
+        customer_id=customer.customer_id,
+        tier=tier,
+        billing_cycle=billing_cycle,
     )
 
     # Create pending subscription
     duration_days = 365 if billing_cycle == BillingCycle.ANNUAL else 30
     subscription = subscription_manager.create_subscription(
-        user_id=request.user_id, tier=tier, duration_days=duration_days, auto_renew=True,
+        user_id=request.user_id,
+        tier=tier,
+        duration_days=duration_days,
+        auto_renew=True,
     )
 
     return SubscribeResponse(
@@ -317,7 +324,8 @@ async def cancel_subscription(subscription_id: str):
     success = subscription_manager.cancel_subscription(subscription_id)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscription not found",
         )
 
     return {"success": True, "message": "Subscription cancelled"}
@@ -362,7 +370,9 @@ async def activate_code(request: ActivateCodeRequest):
 
     # Mark code as used
     access_code_generator.activate_code(
-        request.code, request.user_id, subscription.subscription_id,
+        request.code,
+        request.user_id,
+        subscription.subscription_id,
     )
 
     return ActivateCodeResponse(
@@ -446,7 +456,8 @@ async def create_referral(request: ReferralRequest):
     Create referral tracking for a referred user.
     """
     referral = affiliate_manager.create_referral(
-        affiliate_code=request.affiliate_code, referred_user_id=request.referred_user_id,
+        affiliate_code=request.affiliate_code,
+        referred_user_id=request.referred_user_id,
     )
 
     if not referral:
@@ -480,7 +491,8 @@ async def get_affiliate_referrals(affiliate_id: str, status: Optional[str] = Non
             )
 
     referrals = affiliate_manager.get_affiliate_referrals(
-        affiliate_id, status=status_enum,
+        affiliate_id,
+        status=status_enum,
     )
 
     return {"total": len(referrals), "referrals": [r.to_dict() for r in referrals]}
@@ -541,7 +553,8 @@ async def search_strategies(
     max_price: Optional[float] = None,
     min_rating: Optional[float] = None,
     sort_by: str = Query(
-        "popular", pattern="^(popular|rating|newest|price_low|price_high)$",
+        "popular",
+        pattern="^(popular|rating|newest|price_low|price_high)$",
     ),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -581,7 +594,8 @@ async def get_strategy(strategy_id: str):
     strategy = strategy_marketplace.get_strategy(strategy_id)
     if not strategy:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found",
         )
 
     reviews = strategy_marketplace.get_strategy_reviews(strategy_id, limit=5)
@@ -595,7 +609,8 @@ async def purchase_strategy(request: StrategyPurchaseRequest):
     Purchase a strategy.
     """
     purchase = strategy_marketplace.purchase_strategy(
-        buyer_id=request.buyer_id, strategy_id=request.strategy_id,
+        buyer_id=request.buyer_id,
+        strategy_id=request.strategy_id,
     )
 
     if not purchase:
@@ -677,7 +692,8 @@ async def get_analytics_report(
         time_period = TimePeriod.MONTHLY
 
     return revenue_analytics.generate_report(
-        period=time_period, include_projections=include_projections,
+        period=time_period,
+        include_projections=include_projections,
     )
 
 
@@ -756,7 +772,8 @@ async def get_partner(partner_id: str):
     partner = enterprise_manager.get_partner(partner_id)
     if not partner:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Partner not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Partner not found",
         )
 
     return partner.to_dict()
@@ -777,7 +794,9 @@ async def create_white_label(request: WhiteLabelRequest):
     )
 
     instance = enterprise_manager.create_white_label_instance(
-        partner_id=request.partner_id, name=request.name, config=config,
+        partner_id=request.partner_id,
+        name=request.name,
+        config=config,
     )
 
     if not instance:

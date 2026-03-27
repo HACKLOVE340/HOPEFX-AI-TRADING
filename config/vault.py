@@ -71,7 +71,11 @@ class SecureVault:
         """Derive Fernet key from password using PBKDF2."""
         salt = hashlib.sha256(os.urandom(32)).digest()
         kdf = hashlib.pbkdf2_hmac(
-            "sha256", password.encode(), salt[:16], iterations=480000, dklen=32,
+            "sha256",
+            password.encode(),
+            salt[:16],
+            iterations=480000,
+            dklen=32,
         )
         return base64.urlsafe_b64encode(kdf)
 
@@ -125,10 +129,14 @@ class SecureVault:
             # Log but do not swallow — caller must know if keyring wipe failed
             # so they can escalate (e.g. force pod restart, alert ops).
             import logging as _logging
+
             _logging.getLogger(__name__).error(
-                "SecureVault.secure_delete: keyring wipe failed: %s", e,
+                "SecureVault.secure_delete: keyring wipe failed: %s",
+                e,
             )
-            raise VaultError(f"Keyring wipe failed — key may still be stored: {e}") from e
+            raise VaultError(
+                f"Keyring wipe failed — key may still be stored: {e}"
+            ) from e
         finally:
             # Always zero the in-memory key regardless of keyring outcome
             self._fernet = None

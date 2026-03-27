@@ -354,11 +354,11 @@
             h1 {
                 font-size: 2rem;
             }
-            
+
             .pricing-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .faq-grid {
                 grid-template-columns: 1fr;
             }
@@ -371,7 +371,7 @@
             <div class="logo">⚡ HOPEFX AI</div>
             <h1>Professional AI Trading</h1>
             <p class="subtitle">
-                Choose the plan that fits your trading needs. All plans include our 
+                Choose the plan that fits your trading needs. All plans include our
                 advanced AI-powered trading algorithms and real-time market analysis.
             </p>
         </header>
@@ -514,7 +514,7 @@
         <section class="enterprise-section">
             <h2>🏢 Need Custom Solutions?</h2>
             <p>
-                We offer white-label solutions, partner programs, and custom enterprise 
+                We offer white-label solutions, partner programs, and custom enterprise
                 deployments for organizations with specific requirements.
             </p>
             <div class="enterprise-features">
@@ -536,43 +536,43 @@
                 <div class="faq-item">
                     <div class="faq-question">What payment methods do you accept?</div>
                     <div class="faq-answer">
-                        We accept all major credit cards via Stripe, bank transfers, 
+                        We accept all major credit cards via Stripe, bank transfers,
                         and cryptocurrency payments including Bitcoin, Ethereum, and USDT.
                     </div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-question">How does the commission work?</div>
                     <div class="faq-answer">
-                        Commission is charged on profitable trades only. The rate depends 
-                        on your subscription tier, ranging from 1% for free users to 0.1% 
+                        Commission is charged on profitable trades only. The rate depends
+                        on your subscription tier, ranging from 1% for free users to 0.1%
                         for Elite subscribers.
                     </div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-question">Can I upgrade or downgrade my plan?</div>
                     <div class="faq-answer">
-                        Yes! You can change your plan at any time. Upgrades take effect 
+                        Yes! You can change your plan at any time. Upgrades take effect
                         immediately, and downgrades apply at the end of your billing cycle.
                     </div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-question">Is there a free trial?</div>
                     <div class="faq-answer">
-                        Our Free tier allows you to test the platform indefinitely. For 
+                        Our Free tier allows you to test the platform indefinitely. For
                         paid plans, we offer a 14-day money-back guarantee.
                     </div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-question">What's the affiliate program?</div>
                     <div class="faq-answer">
-                        Earn 10-25% commission for every user you refer. Our affiliate 
+                        Earn 10-25% commission for every user you refer. Our affiliate
                         program includes tiered rewards and dedicated support.
                     </div>
                 </div>
                 <div class="faq-item">
                     <div class="faq-question">Do you offer volume discounts?</div>
                     <div class="faq-answer">
-                        Yes, annual billing saves you 16%. For enterprise deployments 
+                        Yes, annual billing saves you 16%. For enterprise deployments
                         with multiple users, contact our sales team for custom pricing.
                     </div>
                 </div>
@@ -582,8 +582,8 @@
         <footer>
             <p>
                 © 2026 HOPEFX AI Trading. All rights reserved.<br>
-                <a href="/terms">Terms of Service</a> · 
-                <a href="/privacy">Privacy Policy</a> · 
+                <a href="/terms">Terms of Service</a> ·
+                <a href="/privacy">Privacy Policy</a> ·
                 <a href="/contact">Contact Us</a>
             </p>
         </footer>
@@ -597,7 +597,7 @@
             const toggle = document.getElementById('billing-toggle');
             const monthlyLabel = document.getElementById('monthly-label');
             const annualLabel = document.getElementById('annual-label');
-            
+
             toggle.classList.toggle('annual', isAnnual);
             monthlyLabel.classList.toggle('active', !isAnnual);
             annualLabel.classList.toggle('active', isAnnual);
@@ -617,7 +617,7 @@
 
         async function subscribe(tier) {
             const billingCycle = isAnnual ? 'annual' : 'monthly';
-            
+
             try {
                 const response = await fetch('/api/monetization/subscribe', {
                     method: 'POST',
@@ -632,7 +632,7 @@
                 });
 
                 const data = await response.json();
-                
+
                 if (data.checkout_url) {
                     window.location.href = data.checkout_url;
                 } else {

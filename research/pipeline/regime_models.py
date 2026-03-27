@@ -59,13 +59,15 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 try:
-    from research.pipeline.models_ensemble import EnsemblePredictor
+    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
+
     ENSEMBLE_AVAILABLE = True
 except ImportError:
     ENSEMBLE_AVAILABLE = False
 
 try:
     from hmmlearn.hmm import GaussianHMM
+
     HMM_AVAILABLE = True
 except ImportError:
     HMM_AVAILABLE = False
@@ -74,6 +76,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # Regime classifier
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class RegimeClassifier:
     """
@@ -105,8 +108,17 @@ class RegimeClassifier:
         falls back to computing them from close price.
         """
         cols = []
-        for col in ["realvol_20", "realvol_5", "vol_ratio_5_20", "ret_20", "ret_5",
-                    "rsi_14", "bb_width", "atr_pct", "roll_std_20"]:
+        for col in [
+            "realvol_20",
+            "realvol_5",
+            "vol_ratio_5_20",
+            "ret_20",
+            "ret_5",
+            "rsi_14",
+            "bb_width",
+            "atr_pct",
+            "roll_std_20",
+        ]:
             if col in X.columns:
                 cols.append(col)
 
@@ -135,7 +147,9 @@ class RegimeClassifier:
                 self._hmm.fit(feats_sc)
                 logger.info("RegimeClassifier: HMM fitted (%d regimes)", self.n_regimes)
             except Exception as exc:
-                logger.warning("HMM fit failed (%s) — falling back to vol quantiles", exc)
+                logger.warning(
+                    "HMM fit failed (%s) — falling back to vol quantiles", exc
+                )
                 self._hmm = None
                 self.use_hmm = False
 
@@ -145,7 +159,9 @@ class RegimeClassifier:
                 feats_sc[:, 0],
                 np.linspace(0, 1, self.n_regimes + 1)[1:-1],
             )
-            logger.info("RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes)
+            logger.info(
+                "RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes
+            )
 
         self._fitted = True
         return self
@@ -191,6 +207,7 @@ class RegimeClassifier:
 # Per-regime specialist model
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _RegimeSpecialist:
     """
     Lightweight gradient-boosted classifier for a single regime.
@@ -220,7 +237,9 @@ class _RegimeSpecialist:
         if len(y) < self._MIN_SAMPLES:
             logger.warning(
                 "Regime %d: only %d samples (< %d) — skipping specialist",
-                self.regime_id, len(y), self._MIN_SAMPLES,
+                self.regime_id,
+                len(y),
+                self._MIN_SAMPLES,
             )
             return self
         self._model.fit(X.values, y)
@@ -237,6 +256,7 @@ class _RegimeSpecialist:
 # ─────────────────────────────────────────────────────────────────────────────
 # Regime router
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class RegimeRouter:
     """
@@ -292,7 +312,8 @@ class RegimeRouter:
             if frac < self.min_regime_frac:
                 logger.info(
                     "Regime %d: %.1f%% of data — below threshold, using fallback",
-                    r, 100 * frac,
+                    r,
+                    100 * frac,
                 )
                 continue
             spec = _RegimeSpecialist(regime_id=r)
@@ -301,7 +322,8 @@ class RegimeRouter:
 
         logger.info(
             "RegimeRouter fitted: %d/%d specialists trained",
-            len(self.specialists), self.n_regimes,
+            len(self.specialists),
+            self.n_regimes,
         )
         self._fitted = True
         return self

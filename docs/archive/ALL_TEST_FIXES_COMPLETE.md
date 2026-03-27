@@ -21,7 +21,7 @@ This document provides a comprehensive summary of all test failures that were id
 AttributeError: BASIC
 ```
 
-**Root Cause:** 
+**Root Cause:**
 The pricing model uses `STARTER` tier, not `BASIC`. Tests were written for an old pricing structure.
 
 **Actual Enum Values:**
@@ -120,14 +120,14 @@ The Discord notification implementation preferentially uses `requests.post()` wh
 def _send_discord(message, level, metadata):
     try:
         import requests  # ✅ Available in test environment
-        
+
         # Use requests library (primary path)
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=10
         )
-        
+
     except ImportError:
         # Fallback to urllib (only if requests not available)
         import urllib.request

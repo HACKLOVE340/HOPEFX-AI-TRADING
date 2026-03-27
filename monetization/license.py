@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ValidationResult(str, Enum):
     """Validation result enumeration"""
+
     VALID = "valid"
     EXPIRED = "expired"
     INVALID = "invalid"
@@ -86,8 +87,10 @@ class LicenseValidator:
         cache_key = f"{user_id}:{feature_name}"
         if cache_key in self._validation_cache:
             cache_entry = self._validation_cache[cache_key]
-            if (datetime.now(timezone.utc) - cache_entry['timestamp']).seconds < self._cache_duration:
-                return cache_entry['has_access']
+            if (
+                datetime.now(timezone.utc) - cache_entry["timestamp"]
+            ).seconds < self._cache_duration:
+                return cache_entry["has_access"]
 
         # Validate subscription
         result, message = self.validate_subscription(user_id)
@@ -106,8 +109,8 @@ class LicenseValidator:
     def _update_cache(self, cache_key: str, has_access: bool) -> None:
         """Update validation cache"""
         self._validation_cache[cache_key] = {
-            'has_access': has_access,
-            'timestamp': datetime.now(timezone.utc)
+            "has_access": has_access,
+            "timestamp": datetime.now(timezone.utc),
         }
 
     def get_user_tier(self, user_id: str) -> Optional[SubscriptionTier]:
@@ -122,13 +125,13 @@ class LicenseValidator:
     def check_strategy_limit(self, user_id: str, current_strategies: int) -> bool:
         """Check if user can create more strategies"""
         limits = self.get_user_limits(user_id)
-        max_strategies = limits.get('max_strategies', 0)
+        max_strategies = limits.get("max_strategies", 0)
         return current_strategies < max_strategies
 
     def check_broker_limit(self, user_id: str, current_brokers: int) -> bool:
         """Check if user can connect more brokers"""
         limits = self.get_user_limits(user_id)
-        max_brokers = limits.get('max_brokers', 0)
+        max_brokers = limits.get("max_brokers", 0)
         return current_brokers < max_brokers
 
     def get_feature_list(self, user_id: str) -> List[str]:
@@ -136,22 +139,22 @@ class LicenseValidator:
         limits = self.get_user_limits(user_id)
         features = []
 
-        if limits.get('ml_features'):
-            features.append('ml_features')
-        if limits.get('priority_support'):
-            features.append('priority_support')
-        if limits.get('api_access'):
-            features.append('api_access')
-        if limits.get('custom_development'):
-            features.append('custom_development')
-        if limits.get('dedicated_support'):
-            features.append('dedicated_support')
-        if limits.get('backtesting_unlimited'):
-            features.append('backtesting_unlimited')
-        if limits.get('pattern_recognition'):
-            features.append('pattern_recognition')
-        if limits.get('news_integration'):
-            features.append('news_integration')
+        if limits.get("ml_features"):
+            features.append("ml_features")
+        if limits.get("priority_support"):
+            features.append("priority_support")
+        if limits.get("api_access"):
+            features.append("api_access")
+        if limits.get("custom_development"):
+            features.append("custom_development")
+        if limits.get("dedicated_support"):
+            features.append("dedicated_support")
+        if limits.get("backtesting_unlimited"):
+            features.append("backtesting_unlimited")
+        if limits.get("pattern_recognition"):
+            features.append("pattern_recognition")
+        if limits.get("news_integration"):
+            features.append("news_integration")
 
         return features
 
@@ -163,7 +166,7 @@ class LicenseValidator:
             return False
 
         # Check API access feature
-        if not self.has_feature_access(user_id, 'api_access'):
+        if not self.has_feature_access(user_id, "api_access"):
             return False
 
         # Validate API key (would check against stored keys in production)
@@ -175,11 +178,11 @@ class LicenseValidator:
 
         if not subscription:
             return {
-                'valid': False,
-                'reason': 'No active subscription',
-                'tier': None,
-                'features': [],
-                'limits': {}
+                "valid": False,
+                "reason": "No active subscription",
+                "tier": None,
+                "features": [],
+                "limits": {},
             }
 
         result, message = self.validate_subscription(user_id)
@@ -187,18 +190,20 @@ class LicenseValidator:
         features = self.get_feature_list(user_id)
 
         return {
-            'valid': result == ValidationResult.VALID,
-            'reason': message,
-            'user_id': user_id,
-            'subscription_id': subscription.subscription_id,
-            'tier': subscription.tier.value,
-            'tier_name': pricing_manager.get_tier(subscription.tier).name,
-            'status': subscription.status.value,
-            'expires_at': subscription.end_date.isoformat(),
-            'days_remaining': subscription.days_remaining(),
-            'features': features,
-            'limits': limits,
-            'commission_rate': float(pricing_manager.get_commission_rate(subscription.tier))
+            "valid": result == ValidationResult.VALID,
+            "reason": message,
+            "user_id": user_id,
+            "subscription_id": subscription.subscription_id,
+            "tier": subscription.tier.value,
+            "tier_name": pricing_manager.get_tier(subscription.tier).name,
+            "status": subscription.status.value,
+            "expires_at": subscription.end_date.isoformat(),
+            "days_remaining": subscription.days_remaining(),
+            "features": features,
+            "limits": limits,
+            "commission_rate": float(
+                pricing_manager.get_commission_rate(subscription.tier)
+            ),
         }
 
     def can_upgrade_tier(self, user_id: str, new_tier: SubscriptionTier) -> bool:
@@ -223,7 +228,9 @@ class LicenseValidator:
         """Clear validation cache"""
         if user_id:
             # Clear only user's cache
-            keys_to_remove = [k for k in self._validation_cache.keys() if k.startswith(f"{user_id}:")]
+            keys_to_remove = [
+                k for k in self._validation_cache.keys() if k.startswith(f"{user_id}:")
+            ]
             for key in keys_to_remove:
                 del self._validation_cache[key]
         else:

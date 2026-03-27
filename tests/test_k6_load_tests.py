@@ -22,8 +22,6 @@ Checks
 
 from __future__ import annotations
 
-import os
-import re
 import stat
 from pathlib import Path
 
@@ -42,6 +40,7 @@ def k6_source() -> str:
 
 
 # ── file existence ────────────────────────────────────────────────────────────
+
 
 def test_k6_script_exists():
     assert K6_SCRIPT.exists()
@@ -63,63 +62,87 @@ def test_k6_results_dir_exists():
 
 # ── scenarios ─────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("scenario", ["smoke", "load", "soak", "spike", "stress", "breakpoint"])
+
+@pytest.mark.parametrize(
+    "scenario", ["smoke", "load", "soak", "spike", "stress", "breakpoint"]
+)
 def test_scenario_defined(k6_source, scenario):
-    assert scenario + ":" in k6_source, f"Scenario '{scenario}' not defined in load_tests.js"
+    assert (
+        scenario + ":" in k6_source
+    ), f"Scenario '{scenario}' not defined in load_tests.js"
 
 
 # ── thresholds ────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("threshold", [
-    "http_req_duration",
-    "order_latency_ms",
-    "signal_latency_ms",
-    "ml_latency_ms",
-    "macro_latency_ms",
-    "error_rate",
-    "http_req_failed",
-])
+
+@pytest.mark.parametrize(
+    "threshold",
+    [
+        "http_req_duration",
+        "order_latency_ms",
+        "signal_latency_ms",
+        "ml_latency_ms",
+        "macro_latency_ms",
+        "error_rate",
+        "http_req_failed",
+    ],
+)
 def test_threshold_defined(k6_source, threshold):
-    assert threshold in k6_source, f"Threshold '{threshold}' not defined in load_tests.js"
+    assert (
+        threshold in k6_source
+    ), f"Threshold '{threshold}' not defined in load_tests.js"
 
 
 # ── endpoint coverage ─────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("endpoint", [
-    "/health",
-    "/api/status",
-    "/api/signals/latest",
-    "/api/ml/predict/",
-    "/api/ml/status",
-    "/api/macro/snapshot",
-    "/api/macro/store",
-    "/api/macro/features",
-    "/api/trading/order",
-    "/api/trading/positions",
-    "/api/trading/account",
-    "/api/risk/status",
-    "/metrics",
-    "/auth/login",
-    "/ws/live",
-])
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/health",
+        "/api/status",
+        "/api/signals/latest",
+        "/api/ml/predict/",
+        "/api/ml/status",
+        "/api/macro/snapshot",
+        "/api/macro/store",
+        "/api/macro/features",
+        "/api/trading/order",
+        "/api/trading/positions",
+        "/api/trading/account",
+        "/api/risk/status",
+        "/metrics",
+        "/auth/login",
+        "/ws/live",
+    ],
+)
 def test_endpoint_covered(k6_source, endpoint):
     assert endpoint in k6_source, f"Endpoint '{endpoint}' not covered in load_tests.js"
 
 
 # ── advanced features ─────────────────────────────────────────────────────────
 
+
 def test_rate_limit_probe_present(k6_source):
-    assert "rate_limit_probe" in k6_source or "rateLimitHits" in k6_source, \
-        "Rate-limit probe not found in load_tests.js"
+    assert (
+        "rate_limit_probe" in k6_source or "rateLimitHits" in k6_source
+    ), "Rate-limit probe not found in load_tests.js"
 
 
 def test_websocket_test_present(k6_source):
-    assert "ws.connect" in k6_source or "testWebSocket" in k6_source, \
-        "WebSocket test not found in load_tests.js"
+    assert (
+        "ws.connect" in k6_source or "testWebSocket" in k6_source
+    ), "WebSocket test not found in load_tests.js"
 
 
 def test_custom_metrics_defined(k6_source):
-    for metric in ["errorRate", "orderLatency", "signalLatency", "mlLatency", "macroLatency"]:
+    for metric in [
+        "errorRate",
+        "orderLatency",
+        "signalLatency",
+        "mlLatency",
+        "macroLatency",
+    ]:
         assert metric in k6_source, f"Custom metric '{metric}' not defined"
 
 
@@ -137,6 +160,7 @@ def test_auth_token_configurable(k6_source):
 
 
 # ── runner script ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def runner_source() -> str:

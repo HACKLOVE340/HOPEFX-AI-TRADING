@@ -31,10 +31,14 @@ class CopyTradingEngine:
     def _key(self, follower_id: str, leader_id: str) -> str:
         return f"{follower_id}_{leader_id}"
 
-    def start_copying(self, follower_id: str, leader_id: str,
-                      copy_ratio: float = 1.0,
-                      max_allocation: Optional[Decimal] = None,
-                      max_per_trade: Optional[Decimal] = None) -> CopyRelationship:
+    def start_copying(
+        self,
+        follower_id: str,
+        leader_id: str,
+        copy_ratio: float = 1.0,
+        max_allocation: Optional[Decimal] = None,
+        max_per_trade: Optional[Decimal] = None,
+    ) -> CopyRelationship:
         rel = CopyRelationship(
             follower_id=follower_id,
             leader_id=leader_id,
@@ -61,7 +65,9 @@ class CopyTradingEngine:
                 result[copy_id] = rel.follower_id
         return result
 
-    def get_active_relationships(self, user_id: str, as_follower: bool = True) -> List[CopyRelationship]:
+    def get_active_relationships(
+        self, user_id: str, as_follower: bool = True
+    ) -> List[CopyRelationship]:
         out = []
         for rel in self.relationships.values():
             if not rel.is_active:
@@ -75,6 +81,7 @@ class CopyTradingEngine:
 
 class RiskLimitExceeded(Exception):
     """Raised when a copy trade would exceed risk limits."""
+
     pass
 
 
@@ -83,20 +90,26 @@ def _ct_init_patched(self, config=None):
     self.relationships = {}
     self.config = config or {}
 
-async def _copy_trade(self, leader_trade: dict, follower_config: dict,
-                      follower_balance: float = 100_000.0, balance: float = None) -> dict:
+
+async def _copy_trade(
+    self,
+    leader_trade: dict,
+    follower_config: dict,
+    follower_balance: float = 100_000.0,
+    balance: float = None,
+) -> dict:
     """Copy a leader trade proportionally, respecting follower risk limits."""
     if balance is not None:
         follower_balance = balance
 
-    copy_ratio     = follower_config.get("copy_ratio", 1.0)
-    max_pos_size   = follower_config.get("max_position_size", 1.0)  # fraction of balance
-    leader_qty     = leader_trade.get("quantity", 1.0)
+    copy_ratio = follower_config.get("copy_ratio", 1.0)
+    max_pos_size = follower_config.get("max_position_size", 1.0)  # fraction of balance
+    leader_qty = leader_trade.get("quantity", 1.0)
     leader_balance = 100_000.0  # assumed leader balance
 
     # Proportional sizing
     balance_ratio = follower_balance / leader_balance
-    raw_qty       = leader_qty * copy_ratio * balance_ratio
+    raw_qty = leader_qty * copy_ratio * balance_ratio
 
     # max_position_size is a fraction of balance expressed as notional lots.
     # 1 lot ≈ $1 notional when no price given; use price if available.
@@ -113,10 +126,10 @@ async def _copy_trade(self, leader_trade: dict, follower_config: dict,
         )
 
     return {
-        "symbol":      leader_trade["symbol"],
-        "side":        leader_trade.get("side", "buy"),
-        "quantity":    round(raw_qty, 4),
-        "price":       price or 0.0,
+        "symbol": leader_trade["symbol"],
+        "side": leader_trade.get("side", "buy"),
+        "quantity": round(raw_qty, 4),
+        "price": price or 0.0,
         "follower_id": follower_config.get("follower_id", ""),
     }
 
@@ -124,12 +137,11 @@ async def _copy_trade(self, leader_trade: dict, follower_config: dict,
 def _calculate_leaderboard(self, traders: list) -> list:
     """Rank traders by composite score: return × sharpe × log1p(followers)."""
     import math
+
     scored = []
     for t in traders:
         score = (
-            t.get("return", 0) *
-            t.get("sharpe", 1) *
-            math.log1p(t.get("followers", 0))
+            t.get("return", 0) * t.get("sharpe", 1) * math.log1p(t.get("followers", 0))
         )
         scored.append({**t, "score": score})
     scored.sort(key=lambda x: x["score"], reverse=True)

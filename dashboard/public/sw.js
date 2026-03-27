@@ -34,21 +34,21 @@ self.addEventListener('activate', (event) => {
 // Fetch: Network first, cache fallback
 self.addEventListener('fetch', (event) => {
   const { request } = event
-  
+
   // Skip non-GET requests
   if (request.method !== 'GET') return
-  
+
   // API calls: Network only
   if (request.url.includes('/api/')) {
     event.respondWith(fetch(request))
     return
   }
-  
+
   // Static assets: Cache first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
-      
+
       return fetch(request).then((response) => {
         // Cache successful responses
         if (response.ok && response.type === 'basic') {
@@ -73,7 +73,7 @@ self.addEventListener('sync', (event) => {
 async function processPendingOrders() {
   const db = await openDB('hopefx-orders', 1)
   const orders = await db.getAll('pending')
-  
+
   for (const order of orders) {
     try {
       const response = await fetch('/api/v1/trades', {
@@ -81,7 +81,7 @@ async function processPendingOrders() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(order)
       })
-      
+
       if (response.ok) {
         await db.delete('pending', order.id)
       }
@@ -94,7 +94,7 @@ async function processPendingOrders() {
 // Push notifications
 self.addEventListener('push', (event) => {
   const data = event.data.json()
-  
+
   event.waitUntil(
     self.registration.showNotification('HOPEFX Alert', {
       body: data.message,
@@ -112,7 +112,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  
+
   if (event.action === 'view') {
     event.waitUntil(
       clients.openWindow(`/trading?alert=${event.notification.tag}`)

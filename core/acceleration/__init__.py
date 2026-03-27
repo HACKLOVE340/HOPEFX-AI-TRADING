@@ -12,7 +12,7 @@ CUDA-powered inference for sub-millisecond predictions
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field  # noqa: F401
 from typing import Dict, List
 
 import numpy as np
@@ -47,7 +47,10 @@ class QuantizedTransformer(nn.Module):
     """Ultra-fast transformer for market prediction"""
 
     def __init__(
-        self, input_dim: int = 512, hidden_dim: int = 256, num_layers: int = 4,
+        self,
+        input_dim: int = 512,
+        hidden_dim: int = 256,
+        num_layers: int = 4,
     ):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, hidden_dim)
@@ -119,7 +122,8 @@ class GPUInferenceEngine:
 
         try:
             return await asyncio.wait_for(
-                future, timeout=self.config.max_latency_ms / 1000,
+                future,
+                timeout=self.config.max_latency_ms / 1000,
             )
         except asyncio.TimeoutError:
             return {"error": "timeout", "direction": 0.5, "confidence": 0}
@@ -138,7 +142,8 @@ class GPUInferenceEngine:
                     break
                 try:
                     req_id, feat = await asyncio.wait_for(
-                        self.batch_queue.get(), timeout=max(0, timeout),
+                        self.batch_queue.get(),
+                        timeout=max(0, timeout),
                     )
                     batch.append(feat)
                     ids.append(req_id)

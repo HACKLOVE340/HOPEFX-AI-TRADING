@@ -14,9 +14,9 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone  # noqa: F401
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: F401
 
 try:
     import aiohttp
@@ -27,7 +27,7 @@ except ImportError:
     logging.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np
+    import numpy as np  # noqa: F401
 
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -173,7 +173,10 @@ class BaseBroker:
         raise NotImplementedError
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float,
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
     ) -> Order:
         raise NotImplementedError
 
@@ -341,7 +344,10 @@ class PaperTradingBroker(BaseBroker):
             }
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float,
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
     ) -> Order:
         """
         Place market order with realistic simulation
@@ -561,7 +567,9 @@ class PaperTradingBroker(BaseBroker):
             try:
                 # Place closing order
                 order = await self.place_market_order(
-                    pos.symbol, close_side, pos.quantity,
+                    pos.symbol,
+                    close_side,
+                    pos.quantity,
                 )
 
                 # Calculate realized P&L
@@ -655,7 +663,9 @@ class PaperTradingBroker(BaseBroker):
                 session.add(trade)
                 session.commit()
             logger.debug(
-                "Trade persisted to DB: %s pnl=%.2f", record.get("symbol"), realized_pnl,
+                "Trade persisted to DB: %s pnl=%.2f",
+                record.get("symbol"),
+                realized_pnl,
             )
         except Exception as exc:
             logger.warning("Failed to persist paper trade to DB: %s", exc)
@@ -698,7 +708,7 @@ class PaperTradingBroker(BaseBroker):
         take_profit: float = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio
+        import asyncio as _asyncio  # noqa: F401
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt
@@ -1004,7 +1014,10 @@ class OANDABroker(BaseBroker):
         }
 
     async def place_market_order(
-        self, symbol: str, side: str, quantity: float,
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
     ) -> Order:
         """Place market order"""
         # Convert symbol to OANDA format
@@ -1022,7 +1035,9 @@ class OANDABroker(BaseBroker):
         }
 
         data = await self._make_request(
-            "POST", f"/accounts/{self.account_id}/orders", json=body,
+            "POST",
+            f"/accounts/{self.account_id}/orders",
+            json=body,
         )
 
         # Parse response
@@ -1121,7 +1136,8 @@ class OANDABroker(BaseBroker):
         """Cancel pending order"""
         try:
             await self._make_request(
-                "PUT", f"/accounts/{self.account_id}/orders/{order_id}/cancel",
+                "PUT",
+                f"/accounts/{self.account_id}/orders/{order_id}/cancel",
             )
             logger.info(f"Order cancelled: {order_id}")
             return True
@@ -1132,7 +1148,8 @@ class OANDABroker(BaseBroker):
     async def get_pending_orders(self) -> List[Order]:
         """Get pending orders"""
         data = await self._make_request(
-            "GET", f"/accounts/{self.account_id}/pendingOrders",
+            "GET",
+            f"/accounts/{self.account_id}/pendingOrders",
         )
 
         orders = []
@@ -1195,6 +1212,6 @@ except Exception as _exc:
     _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
 
 
-from brokers.factory import BrokerFactory
+from brokers.factory import BrokerFactory  # noqa: E402, F401
 
 __version__ = "1.0.0"

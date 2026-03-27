@@ -206,7 +206,7 @@ class TestTradingEndpoints:
 # api/admin.py
 # ============================================================
 
-from api.admin import (
+from api.admin import (  # noqa: E402
     log_activity,
     _load_persisted_risk_settings,
     _check_module,
@@ -215,15 +215,17 @@ from api.admin import (
 )
 
 
-import os as _os
-import time as _time
-import jwt as _jwt
+import os as _os  # noqa: E402
+import time as _time  # noqa: E402
+import jwt as _jwt  # noqa: E402
 
 
 def _admin_token() -> str:
     # Read the secret at call time — other test modules may have set it.
     # Do NOT overwrite the env var here; just use whatever is current.
-    secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
+    secret = _os.environ.get(
+        "SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!"
+    )
     return _jwt.encode(
         {"sub": "test-admin", "role": "admin", "exp": int(_time.time()) + 3600},
         secret,
@@ -297,9 +299,7 @@ class TestAdminHelpers:
 
     def test_load_persisted_risk_settings_valid_file(self):
         data = {"max_risk_per_trade": 1.5, "max_open_positions": 5}
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(data, f)
             tmp_path = Path(f.name)
         with patch("api.admin._RISK_SETTINGS_FILE", tmp_path):
@@ -308,9 +308,7 @@ class TestAdminHelpers:
         tmp_path.unlink(missing_ok=True)
 
     def test_load_persisted_risk_settings_invalid_json(self):
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("not valid json {{{")
             tmp_path = Path(f.name)
         with patch("api.admin._RISK_SETTINGS_FILE", tmp_path):
@@ -396,7 +394,7 @@ class TestAdminEndpoints:
 # api/signals.py
 # ============================================================
 
-from api.signals import (
+from api.signals import (  # noqa: E402
     TradingSignal,
     SignalStrength,
     SignalDirection,
@@ -457,10 +455,25 @@ class TestTradingSignalDataclass:
         sig = self._build_signal()
         d = sig.to_dict()
         required = {
-            "id", "symbol", "direction", "strength", "confidence", "price",
-            "entry_price", "stop_loss", "take_profit", "risk_reward_ratio",
-            "timeframe", "strategies_agreeing", "total_strategies", "regime",
-            "session", "expiry", "timestamp", "metadata", "is_valid",
+            "id",
+            "symbol",
+            "direction",
+            "strength",
+            "confidence",
+            "price",
+            "entry_price",
+            "stop_loss",
+            "take_profit",
+            "risk_reward_ratio",
+            "timeframe",
+            "strategies_agreeing",
+            "total_strategies",
+            "regime",
+            "session",
+            "expiry",
+            "timestamp",
+            "metadata",
+            "is_valid",
         }
         assert required.issubset(d.keys())
 
@@ -513,7 +526,11 @@ class TestRealTimeSignalService:
 
     def setup_method(self):
         self.svc = RealTimeSignalService(
-            config={"min_confidence": 0.3, "min_strategies": 2, "signal_expiry_minutes": 30}
+            config={
+                "min_confidence": 0.3,
+                "min_strategies": 2,
+                "signal_expiry_minutes": 30,
+            }
         )
 
     def test_initialization(self):
@@ -785,7 +802,7 @@ class TestCalculateStrength:
 # api/monetization.py — Pydantic model tests
 # ============================================================
 
-from api.monetization import (
+from api.monetization import (  # noqa: E402
     PricingTierResponse,
     SubscribeRequest,
     SubscribeResponse,
@@ -910,6 +927,7 @@ class TestMonetizationModels:
 
     def test_review_request_invalid_rating(self):
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             ReviewRequest(
                 user_id="u1",
@@ -947,6 +965,7 @@ class TestMonetizationEndpoints:
     def setup_method(self):
         app = FastAPI()
         from api.monetization import router as mon_router
+
         app.include_router(mon_router)
         self.client = TestClient(app)
 
@@ -1047,7 +1066,7 @@ class TestMonetizationEndpoints:
 # api/websocket_server.py
 # ============================================================
 
-from api.websocket_server import (
+from api.websocket_server import (  # noqa: E402
     WebSocketManager,
     WebSocketMessage,
     ConnectionInfo,
@@ -1295,7 +1314,9 @@ class TestWebSocketManager:
         assert "error" in resp
 
     async def test_handle_message_unknown_connection(self):
-        resp = await self.manager.handle_message("no_conn", json.dumps({"action": "ping"}))
+        resp = await self.manager.handle_message(
+            "no_conn", json.dumps({"action": "ping"})
+        )
         assert resp is None
 
     def test_get_stats(self):

@@ -34,7 +34,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     // Skip non-GET requests
     if (event.request.method !== 'GET') return;
-    
+
     // API calls - network only with timeout
     if (event.request.url.includes('/api/')) {
         event.respondWith(
@@ -43,7 +43,7 @@ self.addEventListener('fetch', (event) => {
         );
         return;
     }
-    
+
     // Static assets - cache first
     event.respondWith(
         caches.match(event.request)
@@ -73,7 +73,7 @@ self.addEventListener('sync', (event) => {
 async function syncPendingOrders() {
     const db = await openDB('hopefx-offline', 1);
     const orders = await db.getAll('pendingOrders');
-    
+
     for (const order of orders) {
         try {
             const response = await fetch('/api/orders', {
@@ -81,7 +81,7 @@ async function syncPendingOrders() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(order)
             });
-            
+
             if (response.ok) {
                 await db.delete('pendingOrders', order.id);
                 // Notify user

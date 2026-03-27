@@ -42,6 +42,7 @@ LIVE_GATE_OOS_MAX_PVAL=0.05 — maximum OOS p-value (default: 0.05)
 LIVE_GATE_MIN_TRADES=600    — minimum pooled trades for Sharpe gate (default: 600)
 LIVE_GATE_PAPER_DAYS=30     — minimum paper trading days (default: 30)
 """
+
 from __future__ import annotations
 
 import functools
@@ -51,7 +52,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +60,22 @@ ROOT = Path(__file__).parent.parent
 
 # ── Gate thresholds (overridable via env) ─────────────────────────────────────
 _LIVE_TRADING_ENABLED = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
-_OOS_MIN_ACC   = float(os.getenv("LIVE_GATE_OOS_MIN_ACC",   "0.60"))
-_OOS_MAX_PVAL  = float(os.getenv("LIVE_GATE_OOS_MAX_PVAL",  "0.05"))
-_MIN_TRADES    = int(os.getenv("LIVE_GATE_MIN_TRADES",       "600"))
-_PAPER_DAYS    = int(os.getenv("LIVE_GATE_PAPER_DAYS",       "30"))
+_OOS_MIN_ACC = float(os.getenv("LIVE_GATE_OOS_MIN_ACC", "0.60"))
+_OOS_MAX_PVAL = float(os.getenv("LIVE_GATE_OOS_MAX_PVAL", "0.05"))
+_MIN_TRADES = int(os.getenv("LIVE_GATE_MIN_TRADES", "600"))
+_PAPER_DAYS = int(os.getenv("LIVE_GATE_PAPER_DAYS", "30"))
 
 
 @dataclass
 class GateResult:
     """Result of a live trading gate check."""
+
     allowed: bool
     checks: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     reason: str = ""
-    checked_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    checked_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -96,6 +100,7 @@ class LiveTradingGate:
         """Check 1: Kill-switch must be inactive."""
         try:
             from kill_switch import KillSwitch
+
             ks = KillSwitch()
             if ks.is_active():
                 return False, f"Kill-switch is ACTIVE: {ks.reason}"
@@ -108,6 +113,7 @@ class LiveTradingGate:
         """Check 2: 30-day paper trading clock must be complete."""
         try:
             from brokers.oanda_paper_clock import get_clock
+
             clock = get_clock()
             status = clock.status()
             elapsed = status.get("elapsed_days", 0.0)
@@ -117,6 +123,7 @@ class LiveTradingGate:
                 # Fire Sentry alert
                 try:
                     from monitoring.sentry_config import capture_paper_clock_alert
+
                     capture_paper_clock_alert(
                         elapsed_days=elapsed,
                         remaining_days=remaining,
@@ -146,8 +153,8 @@ class LiveTradingGate:
                 meta = json.loads(path.read_text())
                 # Handle nested structure from training report
                 oos = meta.get("oos", meta)
-                acc   = float(oos.get("oos_accuracy", oos.get("accuracy", 0.0)))
-                pval  = float(oos.get("oos_p_value",  oos.get("p_value_binomial", 1.0)))
+                acc = float(oos.get("oos_accuracy", oos.get("accuracy", 0.0)))
+                pval = float(oos.get("oos_p_value", oos.get("p_value_binomial", 1.0)))
                 n_oos = int(oos.get("oos_n", oos.get("oos_size", 0)))
 
                 if acc < _OOS_MIN_ACC:
@@ -160,7 +167,10 @@ class LiveTradingGate:
                         f"OOS p-value {pval:.4f} >= threshold {_OOS_MAX_PVAL:.4f} "
                         f"(not statistically significant). n={n_oos}"
                     )
-                return True, f"OOS accuracy {acc:.3f} (p={pval:.4f}, n={n_oos}) — gate passed"
+                return (
+                    True,
+                    f"OOS accuracy {acc:.3f} (p={pval:.4f}, n={n_oos}) — gate passed",
+                )
             except Exception as exc:
                 logger.debug("OOS meta read failed for %s: %s", path, exc)
                 continue
@@ -185,7 +195,10 @@ class LiveTradingGate:
                 if not gate_passed:
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
-                        capture_sharpe_gate_alert(n_trades=n_total, sharpe=sharpe, se=se)
+
+                        capture_sharpe_gate_alert(
+                            n_trades=n_total, sharpe=sharpe, se=se
+                        )
                     except Exception:
                         pass
                     return False, (
@@ -215,8 +228,8 @@ class LiveTradingGate:
                 logger.debug("OOS meta sharpe gate read failed: %s", exc)
 
         return False, (
-            f"Sharpe gate: no backtest report found. "
-            f"Run: python backtest/multi_symbol_backtest.py --years 10"
+            "Sharpe gate: no backtest report found. "
+            "Run: python backtest/multi_symbol_backtest.py --years 10"
         )
 
     def _check_feature_flag(self) -> Tuple[bool, str]:
@@ -241,11 +254,11 @@ class LiveTradingGate:
         but all checks are still evaluated for the status dict.
         """
         check_fns = [
-            ("kill_switch",    self._check_kill_switch),
-            ("paper_clock",    self._check_paper_clock),
-            ("oos_accuracy",   self._check_oos_accuracy),
-            ("sharpe_gate",    self._check_sharpe_gate),
-            ("feature_flag",   self._check_feature_flag),
+            ("kill_switch", self._check_kill_switch),
+            ("paper_clock", self._check_paper_clock),
+            ("oos_accuracy", self._check_oos_accuracy),
+            ("sharpe_gate", self._check_sharpe_gate),
+            ("feature_flag", self._check_feature_flag),
         ]
 
         checks: Dict[str, Dict[str, Any]] = {}
@@ -271,12 +284,14 @@ class LiveTradingGate:
 
     def require_open(self, fn: Callable) -> Callable:
         """Decorator: raise RuntimeError if gate is not open."""
+
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             result = self.check()
             if not result.allowed:
                 raise RuntimeError(f"Live trading gate BLOCKED: {result.reason}")
             return fn(*args, **kwargs)
+
         return wrapper
 
     def status_dict(self) -> Dict[str, Any]:

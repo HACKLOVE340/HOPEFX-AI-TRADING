@@ -24,8 +24,8 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_event(transaction: str = "/api/signals") -> Dict[str, Any]:
     return {
@@ -40,16 +40,19 @@ def _make_event(transaction: str = "/api/signals") -> Dict[str, Any]:
 
 # ── init_sentry ───────────────────────────────────────────────────────────────
 
+
 class TestInitSentry:
     def test_returns_false_when_dsn_unset(self, monkeypatch):
         monkeypatch.delenv("SENTRY_DSN", raising=False)
         from monitoring.sentry_config import init_sentry
+
         assert init_sentry() is False
 
     def test_returns_true_when_dsn_set(self, monkeypatch):
         monkeypatch.setenv("SENTRY_DSN", "https://fake@o0.ingest.sentry.io/0")
         monkeypatch.setenv("APP_ENV", "production")
         from monitoring.sentry_config import init_sentry
+
         assert init_sentry() is True
 
     def test_returns_false_when_sentry_sdk_missing(self, monkeypatch):
@@ -58,6 +61,7 @@ class TestInitSentry:
             # Re-import to pick up the patched sys.modules
             import importlib
             import monitoring.sentry_config as sc
+
             importlib.reload(sc)
             result = sc.init_sentry()
         assert result is False
@@ -65,9 +69,11 @@ class TestInitSentry:
 
 # ── _scrub_dict ───────────────────────────────────────────────────────────────
 
+
 class TestScrubDict:
     def setup_method(self):
         from monitoring.sentry_config import _scrub_dict
+
         self._scrub = _scrub_dict
 
     def test_scrubs_password(self):
@@ -99,14 +105,17 @@ class TestScrubDict:
 
     def test_handles_non_dict_input(self):
         from monitoring.sentry_config import _scrub_dict
+
         assert _scrub_dict("plain string") == "plain string"  # type: ignore[arg-type]
 
 
 # ── _before_send ──────────────────────────────────────────────────────────────
 
+
 class TestBeforeSend:
     def setup_method(self):
         from monitoring.sentry_config import _before_send
+
         self._hook = _before_send
 
     def test_drops_health_check(self):
@@ -146,9 +155,11 @@ class TestBeforeSend:
 
 # ── _before_send_transaction ──────────────────────────────────────────────────
 
+
 class TestBeforeSendTransaction:
     def setup_method(self):
         from monitoring.sentry_config import _before_send_transaction
+
         self._hook = _before_send_transaction
 
     def test_drops_health(self):
@@ -161,10 +172,12 @@ class TestBeforeSendTransaction:
 
 # ── capture_ml_fallback_event ─────────────────────────────────────────────────
 
+
 class TestCaptureMlFallbackEvent:
     def test_does_not_raise_when_sentry_uninitialised(self):
         """Must be safe to call even when Sentry SDK is not initialised."""
         from monitoring.sentry_config import capture_ml_fallback_event
+
         # Should not raise regardless of Sentry state
         capture_ml_fallback_event(
             reason="advanced_oos.pkl not found",
@@ -180,6 +193,7 @@ class TestCaptureMlFallbackEvent:
 
         with patch.dict("sys.modules", {"sentry_sdk": mock_sdk}):
             from monitoring import sentry_config
+
             sentry_config.capture_ml_fallback_event(
                 reason="test",
                 fallback_model="xgb_macro.pkl",
@@ -193,10 +207,12 @@ class TestCaptureMlFallbackEvent:
 
 # ── start_transaction ─────────────────────────────────────────────────────────
 
+
 class TestStartTransaction:
     def test_returns_context_manager_when_sentry_off(self, monkeypatch):
         monkeypatch.delenv("SENTRY_DSN", raising=False)
         from monitoring.sentry_config import start_transaction
+
         with start_transaction("test_task", op="task") as txn:
             txn.set_tag("k", "v")  # must not raise
 
@@ -207,5 +223,6 @@ class TestStartTransaction:
         mock_sdk.start_transaction.return_value = mock_txn
         with patch.dict("sys.modules", {"sentry_sdk": mock_sdk}):
             from monitoring import sentry_config
+
             result = sentry_config.start_transaction("my_task", op="task")
         assert result is mock_txn

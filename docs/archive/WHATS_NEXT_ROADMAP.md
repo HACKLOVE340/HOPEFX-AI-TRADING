@@ -470,7 +470,7 @@ cd docs && make html
 
 ## 🎉 Summary
 
-**YOU ARE HERE:** ✅ All code in repository  
+**YOU ARE HERE:** ✅ All code in repository
 
 **NEXT STEPS:**
 1. Integration testing

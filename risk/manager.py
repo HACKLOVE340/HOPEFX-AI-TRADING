@@ -36,7 +36,9 @@ class RiskLevel(Enum):
 class RiskConfig:
     """Risk management configuration"""
 
-    max_position_size_pct: float = float(os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.05"))  # 5% per position (env-overridable)
+    max_position_size_pct: float = float(
+        os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.05")
+    )  # 5% per position (env-overridable)
     max_portfolio_exposure_pct: float = 0.5  # 50% total exposure
     max_drawdown_pct: float = 0.10  # 10% max drawdown
     daily_loss_limit_pct: float = 0.05  # 5% daily loss
@@ -44,7 +46,9 @@ class RiskConfig:
     min_risk_reward: float = float(os.getenv("RISK_MIN_RR", "2.0"))  # 2:1 R:R minimum
     max_correlation: float = 0.7
     volatility_lookback: int = 20
-    kelly_fraction: float = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))  # Quarter Kelly — safer than half-Kelly for live deployment
+    kelly_fraction: float = float(
+        os.getenv("RISK_KELLY_FRACTION", "0.25")
+    )  # Quarter Kelly — safer than half-Kelly for live deployment
     # Extended fields (used by test_risk_notification_extended)
     max_risk_per_trade: float = 2.0
     max_position_size: float = 10000.0
@@ -381,7 +385,8 @@ class RiskManager:
                 equity,
             )
             self._halt_trading(
-                f"equity invariant violated (equity={equity})", duration_hours=24,
+                f"equity invariant violated (equity={equity})",
+                duration_hours=24,
             )
             return RiskAssessment(
                 level=RiskLevel.CRITICAL,
@@ -528,7 +533,10 @@ class RiskManager:
         return max(0.0, raw_kelly * self.config.kelly_fraction)
 
     def _apply_correlation_penalty(
-        self, symbol: str, positions: List[Dict], base_pct: float,
+        self,
+        symbol: str,
+        positions: List[Dict],
+        base_pct: float,
     ) -> float:
         """
         Reduce base_pct by the correlation penalty for the given symbol.
@@ -664,7 +672,9 @@ class RiskManager:
 
         # ── Helper 2: correlation penalty ────────────────────────────────────
         position_risk_pct = self._apply_correlation_penalty(
-            symbol, existing_positions, position_risk_pct,
+            symbol,
+            existing_positions,
+            position_risk_pct,
         )
 
         # ── Helper 3: hard risk limits ────────────────────────────────────────
@@ -804,7 +814,9 @@ class RiskManager:
                     )
 
     def _calculate_correlation_penalty(
-        self, symbol: str, positions: List[Dict],
+        self,
+        symbol: str,
+        positions: List[Dict],
     ) -> float:
         """Calculate position size reduction due to correlation"""
         if not positions:
@@ -819,7 +831,8 @@ class RiskManager:
             # Same symbol = full correlation
             if pos_symbol == symbol:
                 correlated_exposure += pos.get("quantity", 0) * pos.get(
-                    "current_price", 0,
+                    "current_price",
+                    0,
                 )
                 continue
 
@@ -856,7 +869,7 @@ class RiskManager:
 
         filtered_signals = []
 
-        for signal in signals:
+        for signal in signals:  # noqa: F402
             # Basic validation
             if not all(
                 k in signal for k in ["symbol", "action", "entry_price", "stop_loss"]
@@ -881,12 +894,15 @@ class RiskManager:
                 entry_price=signal["entry_price"],
                 stop_loss_price=signal["stop_loss"],
                 take_profit_price=signal.get(
-                    "take_profit", signal["entry_price"] * 1.02,
+                    "take_profit",
+                    signal["entry_price"] * 1.02,
                 ),
                 account_equity=getattr(account_state, "equity", 100000),
                 volatility=signal.get("volatility", 0.1),
                 existing_positions=getattr(
-                    account_state, "active_positions", {},
+                    account_state,
+                    "active_positions",
+                    {},
                 ).values(),
             )
 
@@ -1046,7 +1062,10 @@ class RiskManager:
         return len(violations) == 0, violations
 
     def calculate_stop_loss(
-        self, entry: float, side: str, percent: float = None,
+        self,
+        entry: float,
+        side: str,
+        percent: float = None,
     ) -> float:
         pct = (percent or self.config.default_stop_loss_pct) / 100.0
         if side.upper() in ("BUY", "LONG"):
@@ -1054,7 +1073,10 @@ class RiskManager:
         return entry * (1 + pct)
 
     def calculate_take_profit(
-        self, entry: float, side: str, percent: float = None,
+        self,
+        entry: float,
+        side: str,
+        percent: float = None,
     ) -> float:
         pct = (percent or self.config.default_take_profit_pct) / 100.0
         if side.upper() in ("BUY", "LONG"):
@@ -1069,7 +1091,9 @@ class RiskManager:
         self.reset_daily_pnl()
 
     def check_drawdown(
-        self, equity_curve=None, max_dd: float = None,
+        self,
+        equity_curve=None,
+        max_dd: float = None,
     ) -> "RiskCheckResult":
         """Check drawdown against limit. Accepts equity_curve array or uses internal state."""
         import numpy as _np
@@ -1119,7 +1143,10 @@ class RiskManager:
         return self._trading_halted
 
     def check_price_tolerance(
-        self, order, current_price: float = None, tolerance: float = None,
+        self,
+        order,
+        current_price: float = None,
+        tolerance: float = None,
     ) -> "RiskCheckResult":
         """Check if order price is within tolerance of current market price."""
         if isinstance(order, dict):
@@ -1142,7 +1169,9 @@ class RiskManager:
         )
 
     def check_correlation_risk(
-        self, positions: List, max_correlation: float = 0.80,
+        self,
+        positions: List,
+        max_correlation: float = 0.80,
     ) -> "RiskCheckResult":
         """Check portfolio correlation risk (simplified heuristic)."""
         # Heuristic: EUR/GBP pairs are highly correlated
@@ -1158,7 +1187,10 @@ class RiskManager:
         )
 
     def check_concentration(
-        self, positions: List, account, max_single: float = 0.40,
+        self,
+        positions: List,
+        account,
+        max_single: float = 0.40,
     ) -> "RiskCheckResult":
         """Check single-position concentration."""
         balance = getattr(account, "balance", 100000.0) or 100000.0
@@ -1236,8 +1268,8 @@ class RiskManager:
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────
-from dataclasses import dataclass as _dc
-from dataclasses import field as _field
+from dataclasses import dataclass as _dc  # noqa: E402
+from dataclasses import field as _field  # noqa: E402
 
 
 @_dc
@@ -1301,7 +1333,8 @@ def install_invariant_signal_handlers(risk_manager: "RiskManager") -> None:
     def _handle(signum, frame):
         sig_name = signal.Signals(signum).name
         logger.warning(
-            "Signal %s received — halting trading and shutting down.", sig_name,
+            "Signal %s received — halting trading and shutting down.",
+            sig_name,
         )
         risk_manager._halt_trading(f"OS signal {sig_name}", duration_hours=0)
         sys.exit(0)

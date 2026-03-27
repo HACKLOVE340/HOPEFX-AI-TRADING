@@ -73,16 +73,17 @@ ARTEFACT_DIR.mkdir(parents=True, exist_ok=True)
 # Config dataclass
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class PipelineConfig:
     ticker: str = "AAPL"
-    interval: str = "1d"           # '1d', '5m', '15m', '1h'
+    interval: str = "1d"  # '1d', '5m', '15m', '1h'
     start_date: str = "2000-01-01"
-    lookback_days: int = 730       # for intraday
-    horizon: int = 1               # bars ahead to predict
-    threshold: float = 0.001       # min return to label as directional
-    seq_len: int = 60              # LSTM/Transformer look-back window
-    deep_arch: str = "lstm"        # 'lstm' | 'transformer' | 'tcn'
+    lookback_days: int = 730  # for intraday
+    horizon: int = 1  # bars ahead to predict
+    threshold: float = 0.001  # min return to label as directional
+    seq_len: int = 60  # LSTM/Transformer look-back window
+    deep_arch: str = "lstm"  # 'lstm' | 'transformer' | 'tcn'
     deep_epochs: int = 100
     deep_patience: int = 15
     ensemble_tune_trials: int = 30
@@ -90,23 +91,24 @@ class PipelineConfig:
     train_frac: float = 0.70
     val_frac: float = 0.15
     # test_frac is implied: 1 - train_frac - val_frac
-    use_mtf: bool = True           # enrich intraday with daily context
+    use_mtf: bool = True  # enrich intraday with daily context
     use_sentiment: bool = True
     use_cache: bool = True
     device: str = "auto"
     # ── Extension flags ───────────────────────────────────────────────────────
-    use_anomaly_weighting: bool = True   # IsolationForest sample weights
+    use_anomaly_weighting: bool = True  # IsolationForest sample weights
     use_synthetic_augment: bool = False  # TimeGAN augmentation (slow; off by default)
-    synthetic_epochs: int = 200          # TimeGAN training epochs
-    use_regime_routing: bool = True      # Per-regime specialist models
-    use_online_learning: bool = False    # IncrementalXGBoost live updates
+    synthetic_epochs: int = 200  # TimeGAN training epochs
+    use_regime_routing: bool = True  # Per-regime specialist models
+    use_online_learning: bool = False  # IncrementalXGBoost live updates
     anomaly_contamination: float = 0.02  # Expected anomaly fraction
-    n_regimes: int = 3                   # Volatility regime count
+    n_regimes: int = 3  # Volatility regime count
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Evaluation helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float:
     """Annualised Sharpe ratio of a return series."""
@@ -156,7 +158,9 @@ def evaluate_predictions(
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "f1": float(f1_score(y_true, y_pred, zero_division=0)),
         "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
-        "classification_report": classification_report(y_true, y_pred, output_dict=True),
+        "classification_report": classification_report(
+            y_true, y_pred, output_dict=True
+        ),
     }
 
     if actual_returns is not None:
@@ -164,7 +168,9 @@ def evaluate_predictions(
         equity = np.cumprod(1 + strat_ret)
         report["strategy_sharpe"] = _sharpe(strat_ret, periods_per_year)
         report["strategy_max_drawdown"] = _max_drawdown(equity)
-        report["strategy_total_return"] = float(equity[-1] - 1) if len(equity) > 0 else 0.0
+        report["strategy_total_return"] = (
+            float(equity[-1] - 1) if len(equity) > 0 else 0.0
+        )
         report["hit_rate"] = float((strat_ret > 0).mean())
 
     return report
@@ -173,6 +179,7 @@ def evaluate_predictions(
 # ─────────────────────────────────────────────────────────────────────────────
 # Temporal split
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def temporal_split(
     df: pd.DataFrame,
@@ -188,6 +195,7 @@ def temporal_split(
 # ─────────────────────────────────────────────────────────────────────────────
 # Late-fusion meta-weight
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _learn_meta_weight(
     deep_probs_val: np.ndarray,
@@ -209,13 +217,19 @@ def _learn_meta_weight(
         if auc > best_auc:
             best_auc = auc
             best_w = w
-    logger.info("Meta-weight: deep=%.2f  ensemble=%.2f  val_AUC=%.4f", best_w, 1 - best_w, best_auc)
+    logger.info(
+        "Meta-weight: deep=%.2f  ensemble=%.2f  val_AUC=%.4f",
+        best_w,
+        1 - best_w,
+        best_auc,
+    )
     return float(best_w)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main orchestrator
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class PipelineOrchestrator:
     """
@@ -280,7 +294,9 @@ class PipelineOrchestrator:
 
         # MTF enrichment for intraday
         if cfg.use_mtf and cfg.interval != "1d":
-            daily_df = fetch_daily(cfg.ticker, start=cfg.start_date, use_cache=cfg.use_cache)
+            daily_df = fetch_daily(
+                cfg.ticker, start=cfg.start_date, use_cache=cfg.use_cache
+            )
             fusion = MTFFusion(resample_hourly_from_5m=True)
             df = fusion.enrich(intraday_df=df, daily_df=daily_df)
 
@@ -296,10 +312,14 @@ class PipelineOrchestrator:
     # ── Step 3: Split ─────────────────────────────────────────────────────────
 
     def _split(self, feat_df: pd.DataFrame):
-        train, val, test = temporal_split(feat_df, self.cfg.train_frac, self.cfg.val_frac)
+        train, val, test = temporal_split(
+            feat_df, self.cfg.train_frac, self.cfg.val_frac
+        )
         logger.info(
             "Split: train=%d  val=%d  test=%d",
-            len(train), len(val), len(test),
+            len(train),
+            len(val),
+            len(test),
         )
         return train, val, test
 
@@ -307,7 +327,11 @@ class PipelineOrchestrator:
 
     def _prepare_arrays(self, split_df: pd.DataFrame):
         """Return (X_df, y_bin, y_ret) for a split."""
-        drop_cols = [c for c in split_df.columns if c.startswith("target") or c in ("is_synthetic", "category")]
+        drop_cols = [
+            c
+            for c in split_df.columns
+            if c.startswith("target") or c in ("is_synthetic", "category")
+        ]
         X = split_df.drop(columns=drop_cols, errors="ignore")
         y_bin = split_df["target_bin"].values
         y_ret = split_df["target_ret"].values
@@ -330,7 +354,9 @@ class PipelineOrchestrator:
 
         logger.info(
             "Training %s: seq_shape=%s  n_features=%d",
-            cfg.deep_arch, X_tr_seq.shape, n_features,
+            cfg.deep_arch,
+            X_tr_seq.shape,
+            n_features,
         )
 
         model = DeepPredictor(
@@ -373,7 +399,8 @@ class PipelineOrchestrator:
 
         # Augment the rarest regime (highest vol = index n_regimes-1)
         X_aug, labels_aug = synth.augment_rare_regimes(
-            X_train.values, regime_labels,
+            X_train.values,
+            regime_labels,
             target_regime=cfg.n_regimes - 1,
             multiplier=2.0,
         )
@@ -383,7 +410,9 @@ class PipelineOrchestrator:
         n_new = len(X_aug) - len(X_train)
         y_aug = np.concatenate([y_train, np.full(n_new, rare_label)])
         X_aug_df = pd.DataFrame(X_aug, columns=X_train.columns)
-        logger.info("Augmented training set: %d → %d samples", len(X_train), len(X_aug_df))
+        logger.info(
+            "Augmented training set: %d → %d samples", len(X_train), len(X_aug_df)
+        )
         return X_aug_df, y_aug
 
     # ── Step 6: Train ensemble ────────────────────────────────────────────────
@@ -441,10 +470,12 @@ class PipelineOrchestrator:
         deep_probs = self.deep_model.predict(X_seq)
 
         # Ensemble predictions — blend standard ensemble + regime router
-        ens_base = self.ensemble.predict_proba(X_df.iloc[cfg.seq_len:])
+        ens_base = self.ensemble.predict_proba(X_df.iloc[cfg.seq_len :])
         if self.regime_router is not None:
             try:
-                regime_probs = self.regime_router.predict_proba(X_df.iloc[cfg.seq_len:])
+                regime_probs = self.regime_router.predict_proba(
+                    X_df.iloc[cfg.seq_len :]
+                )
                 ens_probs = 0.6 * ens_base + 0.4 * regime_probs
             except Exception as exc:
                 logger.warning("Regime router predict failed: %s", exc)
@@ -457,12 +488,16 @@ class PipelineOrchestrator:
         deep_probs = deep_probs[-min_len:]
         ens_probs = ens_probs[-min_len:]
         y_eval = y_seq[-min_len:]
-        y_ret_eval = y_ret[cfg.seq_len:][-min_len:]
+        y_ret_eval = y_ret[cfg.seq_len :][-min_len:]
 
         # Late fusion
         final_probs = self.meta_weight * deep_probs + (1 - self.meta_weight) * ens_probs
 
-        periods = 252 if cfg.interval == "1d" else (252 * 78 if "5m" in cfg.interval else 252 * 26)
+        periods = (
+            252
+            if cfg.interval == "1d"
+            else (252 * 78 if "5m" in cfg.interval else 252 * 26)
+        )
 
         report = evaluate_predictions(
             y_true=y_eval,
@@ -492,7 +527,9 @@ class PipelineOrchestrator:
         """
         cfg = self.cfg
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        logger.info("Pipeline run %s  ticker=%s  interval=%s", run_id, cfg.ticker, cfg.interval)
+        logger.info(
+            "Pipeline run %s  ticker=%s  interval=%s", run_id, cfg.ticker, cfg.interval
+        )
 
         # 1. Data
         raw_df = self._load_data()
@@ -521,7 +558,9 @@ class PipelineOrchestrator:
             self.anomaly_weighter = self._fit_anomaly_weighter(X_train_df)
             sample_weights = self.anomaly_weighter.sample_weights(X_train_df)
             n_anomalies = int(self.anomaly_weighter.flag(X_train_df).sum())
-            logger.info("Anomaly weighting: %d anomalous bars down-weighted", n_anomalies)
+            logger.info(
+                "Anomaly weighting: %d anomalous bars down-weighted", n_anomalies
+            )
 
         # 5c. Synthetic augmentation (optional — slow)
         X_train_aug, y_train_aug = X_train_df, y_train
@@ -547,7 +586,7 @@ class PipelineOrchestrator:
         # 8. Learn meta-weight on validation set
         X_val_seq, y_val_seq = make_sequences(X_val_sc, y_val, cfg.seq_len)
         deep_val_probs = self.deep_model.predict(X_val_seq)
-        ens_val_probs = self.ensemble.predict_proba(X_val_df.iloc[cfg.seq_len:])
+        ens_val_probs = self.ensemble.predict_proba(X_val_df.iloc[cfg.seq_len :])
         min_len = min(len(deep_val_probs), len(ens_val_probs))
         self.meta_weight = _learn_meta_weight(
             deep_val_probs[-min_len:],
@@ -579,8 +618,12 @@ class PipelineOrchestrator:
             "config": asdict(cfg),
             "meta_weight": self.meta_weight,
             "feature_cols": self._feature_cols,
-            "val_report": {k: v for k, v in val_report.items() if k != "classification_report"},
-            "test_report": {k: v for k, v in test_report.items() if k != "classification_report"},
+            "val_report": {
+                k: v for k, v in val_report.items() if k != "classification_report"
+            },
+            "test_report": {
+                k: v for k, v in test_report.items() if k != "classification_report"
+            },
         }
         with open(run_dir / "run_meta.json", "w") as f:
             json.dump(meta, f, indent=2, default=str)
@@ -609,7 +652,11 @@ class PipelineOrchestrator:
             raise RuntimeError("Call run() or load artefacts before predict_latest()")
 
         feat_df = build_feature_matrix(df, drop_na=True)
-        drop_cols = [c for c in feat_df.columns if c.startswith("target") or c in ("is_synthetic", "category")]
+        drop_cols = [
+            c
+            for c in feat_df.columns
+            if c.startswith("target") or c in ("is_synthetic", "category")
+        ]
         X_df = feat_df.drop(columns=drop_cols, errors="ignore")[self._feature_cols]
         X_sc = self.scaler.transform(X_df)
 
@@ -617,13 +664,15 @@ class PipelineOrchestrator:
         if len(X_sc) < self.cfg.seq_len:
             raise ValueError(f"Need at least {self.cfg.seq_len} bars, got {len(X_sc)}")
 
-        X_seq = X_sc[-self.cfg.seq_len:][np.newaxis, ...]  # (1, seq_len, features)
+        X_seq = X_sc[-self.cfg.seq_len :][np.newaxis, ...]  # (1, seq_len, features)
         deep_prob = float(self.deep_model.predict(X_seq)[0])
 
         ens_base = float(self.ensemble.predict_proba(X_df.iloc[[-1]])[0])
         if self.regime_router is not None:
             try:
-                regime_prob = float(self.regime_router.predict_proba(X_df.iloc[[-1]])[0])
+                regime_prob = float(
+                    self.regime_router.predict_proba(X_df.iloc[[-1]])[0]
+                )
                 ens_prob = 0.6 * ens_base + 0.4 * regime_prob
             except Exception:
                 ens_prob = ens_base
@@ -642,5 +691,7 @@ class PipelineOrchestrator:
             "ensemble_prob": ens_prob,
             "final_prob": final_prob,
             "anomaly_flag": anomaly_flag,
-            "signal": "BUY" if final_prob > 0.6 else ("SELL" if final_prob < 0.4 else "HOLD"),
+            "signal": "BUY"
+            if final_prob > 0.6
+            else ("SELL" if final_prob < 0.4 else "HOLD"),
         }

@@ -17,6 +17,7 @@ New layers
 
 Total output: 200+ features when combined with build_advanced_features().
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,10 +33,17 @@ logger = logging.getLogger(__name__)
 # Layer 13: Order-flow & tape reading
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
     """Delta, cumulative delta, buy/sell pressure, VWAP deviation."""
     d = df.copy()
-    c, o, h, l, v = d["close"], d["open"], d["high"], d["low"], d["volume"].replace(0, np.nan)
+    c, o, h, l, v = (  # noqa: E741
+        d["close"],
+        d["open"],
+        d["high"],
+        d["low"],
+        d["volume"].replace(0, np.nan),
+    )
 
     # Estimated buy/sell volume via close position in bar range
     bar_range = (h - l).replace(0, np.nan)
@@ -63,12 +71,18 @@ def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
     d["of_vwap_dev_z20"] = _zscore(d["of_vwap_dev"], 20)
 
     # Volume-weighted momentum
-    d["of_vw_mom_10"] = (d["of_delta"].rolling(10).sum() / v.rolling(10).sum().replace(0, np.nan)).fillna(0.0)
-    d["of_vw_mom_20"] = (d["of_delta"].rolling(20).sum() / v.rolling(20).sum().replace(0, np.nan)).fillna(0.0)
+    d["of_vw_mom_10"] = (
+        d["of_delta"].rolling(10).sum() / v.rolling(10).sum().replace(0, np.nan)
+    ).fillna(0.0)
+    d["of_vw_mom_20"] = (
+        d["of_delta"].rolling(20).sum() / v.rolling(20).sum().replace(0, np.nan)
+    ).fillna(0.0)
 
     # Absorption: large volume with small price move = absorption
     price_move = (c - o).abs()
-    d["of_absorption"] = (v / (price_move.replace(0, np.nan) * c.replace(0, np.nan))).fillna(0.0)
+    d["of_absorption"] = (
+        v / (price_move.replace(0, np.nan) * c.replace(0, np.nan))
+    ).fillna(0.0)
     d["of_absorption_z20"] = _zscore(d["of_absorption"], 20)
 
     # Volume surge
@@ -78,7 +92,9 @@ def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Tape speed: number of consecutive same-direction closes
     direction = np.sign(c - c.shift(1)).fillna(0)
-    d["of_tape_streak"] = direction.groupby((direction != direction.shift()).cumsum()).cumcount() + 1
+    d["of_tape_streak"] = (
+        direction.groupby((direction != direction.shift()).cumsum()).cumcount() + 1
+    )
     d["of_tape_streak"] = d["of_tape_streak"] * direction
     d["of_tape_streak"] = d["of_tape_streak"].fillna(0.0)
 
@@ -88,6 +104,7 @@ def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Layer 14: Fractal geometry & chaos theory
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_fractal_features(df: pd.DataFrame) -> pd.DataFrame:
     """Fractal dimension, Lyapunov proxy, self-similarity, chaos indicators."""
@@ -126,6 +143,7 @@ def add_fractal_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
     """Higuchi fractal dimension via rolling window."""
+
     def _hfd(x: np.ndarray) -> float:
         n = len(x)
         if n < k_max * 2:
@@ -149,11 +167,13 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
             return float(np.polyfit(log_k, log_lk, 1)[0])
         except Exception:
             return 1.5
+
     return series.rolling(window).apply(_hfd, raw=True).fillna(1.5)
 
 
 def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
     """Detrended fluctuation analysis scaling exponent."""
+
     def _dfa(x: np.ndarray) -> float:
         n = len(x)
         if n < 16:
@@ -169,7 +189,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
                 continue
             rms = []
             for i in range(segs):
-                seg = y[i * s:(i + 1) * s]
+                seg = y[i * s : (i + 1) * s]
                 t = np.arange(len(seg))
                 try:
                     p = np.polyfit(t, seg, 1)
@@ -180,67 +200,75 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
                 f.append(np.mean(rms))
         if len(f) < 2:
             return 0.5
-        log_s = np.log([4, 8, max(8, n // 4)][:len(f)])
+        log_s = np.log([4, 8, max(8, n // 4)][: len(f)])
         log_f = np.log(np.array(f) + 1e-10)
         try:
             return float(np.polyfit(log_s, log_f, 1)[0])
         except Exception:
             return 0.5
+
     return series.rolling(window).apply(_dfa, raw=True).fillna(0.5)
 
 
 def _rolling_lyapunov(series: pd.Series, window: int) -> pd.Series:
     """Largest Lyapunov exponent proxy."""
+
     def _lyap(x: np.ndarray) -> float:
         n = len(x)
         if n < 8:
             return 0.0
         divergences = []
         for i in range(n // 2):
-            diffs = np.abs(x[i + 1:] - x[i])
+            diffs = np.abs(x[i + 1 :] - x[i])
             if len(diffs) == 0:
                 continue
             min_d = np.min(diffs[diffs > 0]) if np.any(diffs > 0) else 1e-10
             divergences.append(np.log(min_d + 1e-10))
         return float(np.mean(divergences)) if divergences else 0.0
+
     return series.rolling(window).apply(_lyap, raw=True).fillna(0.0)
 
 
 def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd.Series:
     """Approximate entropy."""
+
     def _apen(x: np.ndarray) -> float:
         n = len(x)
         r = r_factor * np.std(x)
         if r == 0 or n < m + 2:
             return 0.0
+
         def _phi(m_):
             count = 0
             total = 0
             for i in range(n - m_):
-                template = x[i:i + m_]
+                template = x[i : i + m_]
                 for j in range(n - m_):
-                    if np.max(np.abs(x[j:j + m_] - template)) <= r:
+                    if np.max(np.abs(x[j : j + m_] - template)) <= r:
                         count += 1
                 total += 1
             return np.log(count / max(total, 1) + 1e-10)
+
         try:
             return float(_phi(m) - _phi(m + 1))
         except Exception:
             return 0.0
+
     return series.rolling(window).apply(_apen, raw=True).fillna(0.0)
 
 
 def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Series:
     """Permutation entropy."""
+
     def _pe(x: np.ndarray) -> float:
         n = len(x)
         if n < order:
             return 0.0
-        from itertools import permutations
         import math
+
         counts: dict = {}
         for i in range(n - order + 1):
-            perm = tuple(np.argsort(x[i:i + order]))
+            perm = tuple(np.argsort(x[i : i + order]))
             counts[perm] = counts.get(perm, 0) + 1
         total = sum(counts.values())
         entropy = 0.0
@@ -249,11 +277,13 @@ def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Seri
             entropy -= p * math.log(p + 1e-10)
         max_entropy = math.log(math.factorial(order) + 1e-10)
         return float(entropy / max_entropy) if max_entropy > 0 else 0.0
+
     return series.rolling(window).apply(_pe, raw=True).fillna(0.0)
 
 
 def _rolling_recurrence(series: pd.Series, window: int, eps_factor: float) -> pd.Series:
     """Recurrence rate: fraction of state-space points within eps of each other."""
+
     def _rr(x: np.ndarray) -> float:
         n = len(x)
         if n < 4:
@@ -266,11 +296,13 @@ def _rolling_recurrence(series: pd.Series, window: int, eps_factor: float) -> pd
         for i in range(n):
             count += np.sum(np.abs(x - x[i]) < eps) - 1
         return float(count / max(total, 1))
+
     return series.rolling(window).apply(_rr, raw=True).fillna(0.0)
 
 
 def _rolling_wavelet_ratio(series: pd.Series, window: int) -> pd.Series:
     """High-freq vs low-freq energy ratio via Haar wavelet."""
+
     def _wr(x: np.ndarray) -> float:
         n = len(x)
         if n < 4:
@@ -280,14 +312,16 @@ def _rolling_wavelet_ratio(series: pd.Series, window: int) -> pd.Series:
         x2 = x[:n2]
         approx = (x2[::2] + x2[1::2]) / 2
         detail = (x2[::2] - x2[1::2]) / 2
-        e_approx = np.sum(approx ** 2) + 1e-10
-        e_detail = np.sum(detail ** 2) + 1e-10
+        e_approx = np.sum(approx**2) + 1e-10
+        e_detail = np.sum(detail**2) + 1e-10
         return float(e_detail / e_approx)
+
     return series.rolling(window).apply(_wr, raw=True).fillna(1.0)
 
 
 def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
     """Correlation dimension proxy (Grassberger-Procaccia)."""
+
     def _cd(x: np.ndarray) -> float:
         n = len(x)
         if n < 8:
@@ -303,18 +337,20 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
             c_vals.append(count / max(n * (n - 1), 1))
         if len(c_vals) < 2:
             return 1.0
-        log_eps = np.log(eps_vals[:len(c_vals)] + 1e-10)
+        log_eps = np.log(eps_vals[: len(c_vals)] + 1e-10)
         log_c = np.log(np.array(c_vals) + 1e-10)
         try:
             return float(np.polyfit(log_eps, log_c, 1)[0])
         except Exception:
             return 1.0
+
     return series.rolling(window).apply(_cd, raw=True).fillna(1.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Layer 15: Regime-adaptive cross-feature interactions
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -343,8 +379,12 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     d["ri_macd_signal"] = signal_line
     d["ri_macd_hist"] = macd - signal_line
     d["ri_macd_hist_z20"] = _zscore(d["ri_macd_hist"], 20)
-    d["ri_macd_cross_bull"] = ((macd > signal_line) & (macd.shift(1) <= signal_line.shift(1))).astype(int)
-    d["ri_macd_cross_bear"] = ((macd < signal_line) & (macd.shift(1) >= signal_line.shift(1))).astype(int)
+    d["ri_macd_cross_bull"] = (
+        (macd > signal_line) & (macd.shift(1) <= signal_line.shift(1))
+    ).astype(int)
+    d["ri_macd_cross_bear"] = (
+        (macd < signal_line) & (macd.shift(1) >= signal_line.shift(1))
+    ).astype(int)
 
     # Bollinger Bands
     ma20 = c.rolling(20).mean()
@@ -352,11 +392,17 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     bb_upper = ma20 + 2 * std20
     bb_lower = ma20 - 2 * std20
     bb_width = (bb_upper - bb_lower) / ma20.replace(0, np.nan)
-    d["ri_bb_pct"] = ((c - bb_lower) / (bb_upper - bb_lower).replace(0, np.nan)).fillna(0.5)
+    d["ri_bb_pct"] = ((c - bb_lower) / (bb_upper - bb_lower).replace(0, np.nan)).fillna(
+        0.5
+    )
     d["ri_bb_width"] = bb_width.fillna(0.0)
     d["ri_bb_width_z20"] = _zscore(d["ri_bb_width"], 20)
-    d["ri_bb_squeeze"] = (d["ri_bb_width"] < d["ri_bb_width"].rolling(20).quantile(0.2)).astype(int)
-    d["ri_bb_expansion"] = (d["ri_bb_width"] > d["ri_bb_width"].rolling(20).quantile(0.8)).astype(int)
+    d["ri_bb_squeeze"] = (
+        d["ri_bb_width"] < d["ri_bb_width"].rolling(20).quantile(0.2)
+    ).astype(int)
+    d["ri_bb_expansion"] = (
+        d["ri_bb_width"] > d["ri_bb_width"].rolling(20).quantile(0.8)
+    ).astype(int)
 
     # Ichimoku components (simplified)
     high9 = d["high"].rolling(9).max()
@@ -367,8 +413,12 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
     kijun = (high26 + low26) / 2
     d["ri_tenkan_kijun_diff"] = ((tenkan - kijun) / c.replace(0, np.nan)).fillna(0.0)
     d["ri_price_above_kijun"] = (c > kijun).astype(int)
-    d["ri_tk_cross_bull"] = ((tenkan > kijun) & (tenkan.shift(1) <= kijun.shift(1))).astype(int)
-    d["ri_tk_cross_bear"] = ((tenkan < kijun) & (tenkan.shift(1) >= kijun.shift(1))).astype(int)
+    d["ri_tk_cross_bull"] = (
+        (tenkan > kijun) & (tenkan.shift(1) <= kijun.shift(1))
+    ).astype(int)
+    d["ri_tk_cross_bear"] = (
+        (tenkan < kijun) & (tenkan.shift(1) >= kijun.shift(1))
+    ).astype(int)
 
     # Regime-gated momentum: momentum × regime_trend (if available)
     if "regime_trend" in d.columns and "mom_20" in d.columns:
@@ -391,15 +441,18 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
 
     # Mean-reversion signal: RSI + BB combined
     d["ri_mean_rev_score"] = (
-        (d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)) / 2.0
-        - (d["ri_rsi_overbought"].astype(float) + (d["ri_bb_pct"] > 0.9).astype(float)) / 2.0
-    )
+        d["ri_rsi_oversold"].astype(float) + (d["ri_bb_pct"] < 0.1).astype(float)
+    ) / 2.0 - (
+        d["ri_rsi_overbought"].astype(float) + (d["ri_bb_pct"] > 0.9).astype(float)
+    ) / 2.0
 
     # Momentum quality: alignment of RSI, MACD, price momentum
     mom_sign = np.sign(d.get("mom_20", pd.Series(0.0, index=d.index)))
     rsi_sign = np.sign(d["ri_rsi_14"] - 50)
     macd_sign = np.sign(d["ri_macd_hist"])
-    d["ri_signal_alignment"] = ((mom_sign == rsi_sign).astype(int) + (rsi_sign == macd_sign).astype(int)) / 2.0
+    d["ri_signal_alignment"] = (
+        (mom_sign == rsi_sign).astype(int) + (rsi_sign == macd_sign).astype(int)
+    ) / 2.0
 
     # Composite bull/bear score
     d["ri_bull_score"] = (
@@ -421,6 +474,7 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Master builder: 200+ features
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_extended_features(
     ohlcv: pd.DataFrame,
@@ -446,7 +500,7 @@ def build_extended_features(
     X : Feature DataFrame (200+ columns, no NaN, all stationary)
     y : Binary target Series (0=down, 1=up)
     """
-    from ml.advanced_features import build_advanced_features, build_filtered_target
+    from ml.advanced_features import build_advanced_features
 
     # Base 100 features
     X_base, y_base = build_advanced_features(
@@ -484,7 +538,10 @@ def build_extended_features(
 
     logger.info(
         "Extended features: %d bars × %d features (base=%d, extended=%d)",
-        len(X), X.shape[1], X_base.shape[1], d_ext.shape[1],
+        len(X),
+        X.shape[1],
+        X_base.shape[1],
+        d_ext.shape[1],
     )
     return X, y_base
 
@@ -492,6 +549,7 @@ def build_extended_features(
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _zscore(s: pd.Series, w: int) -> pd.Series:
     mu = s.rolling(w).mean()

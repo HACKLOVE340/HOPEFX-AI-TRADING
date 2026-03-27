@@ -46,7 +46,7 @@ The framework initializes components in a specific order to ensure proper depend
 ### Before Integration
 The old main.py only initialized:
 - Config
-- Database  
+- Database
 - Cache
 
 This meant:

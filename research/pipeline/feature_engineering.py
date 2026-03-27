@@ -39,7 +39,8 @@ import numpy as np
 import pandas as pd
 
 try:
-    from scipy.fft import rfft, rfftfreq
+    from scipy.fft import rfft, rfftfreq  # noqa: F401
+
     _SCIPY_AVAILABLE = True
 except ImportError:
     _SCIPY_AVAILABLE = False
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 # Low-level indicator helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
 
@@ -60,10 +62,10 @@ def _sma(series: pd.Series, window: int) -> pd.Series:
 
 
 def _true_range(df: pd.DataFrame) -> pd.Series:
-    h, l, c = df["high"], df["low"], df["close"]
-    tr = pd.concat(
-        [h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1
-    ).max(axis=1)
+    h, l, c = df["high"], df["low"], df["close"]  # noqa: E741
+    tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(
+        axis=1
+    )
     return tr
 
 
@@ -71,10 +73,11 @@ def _true_range(df: pd.DataFrame) -> pd.Series:
 # 1. Technical indicators
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     c = d["close"]
-    h, l, v = d["high"], d["low"], d["volume"]
+    h, l, v = d["high"], d["low"], d["volume"]  # noqa: E741
 
     # ── RSI (14) ──────────────────────────────────────────────────────────────
     delta = c.diff()
@@ -107,7 +110,9 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     d["bb_lower"] = bb_mid - 2 * bb_std
     d["bb_mid"] = bb_mid
     d["bb_width"] = (d["bb_upper"] - d["bb_lower"]) / bb_mid.replace(0, np.nan)
-    d["bb_pct"] = (c - d["bb_lower"]) / (d["bb_upper"] - d["bb_lower"]).replace(0, np.nan)
+    d["bb_pct"] = (c - d["bb_lower"]) / (d["bb_upper"] - d["bb_lower"]).replace(
+        0, np.nan
+    )
 
     # ── ATR ───────────────────────────────────────────────────────────────────
     tr = _true_range(d)
@@ -123,7 +128,9 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ── CCI ───────────────────────────────────────────────────────────────────
     typical = (h + l + c) / 3
     cci_sma = typical.rolling(20).mean()
-    cci_mad = typical.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    cci_mad = typical.rolling(20).apply(
+        lambda x: np.mean(np.abs(x - x.mean())), raw=True
+    )
     d["cci_20"] = (typical - cci_sma) / (0.015 * cci_mad.replace(0, np.nan))
 
     # ── Williams %R ───────────────────────────────────────────────────────────
@@ -167,7 +174,9 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 LAG_PERIODS = [1, 2, 3, 5, 10, 20, 60]
 
 
-def add_lag_features(df: pd.DataFrame, periods: List[int] = LAG_PERIODS) -> pd.DataFrame:
+def add_lag_features(
+    df: pd.DataFrame, periods: List[int] = LAG_PERIODS
+) -> pd.DataFrame:
     d = df.copy()
     c = d["close"]
 
@@ -191,7 +200,9 @@ def add_lag_features(df: pd.DataFrame, periods: List[int] = LAG_PERIODS) -> pd.D
 ROLLING_WINDOWS = [5, 10, 20, 50, 100]
 
 
-def add_rolling_stats(df: pd.DataFrame, windows: List[int] = ROLLING_WINDOWS) -> pd.DataFrame:
+def add_rolling_stats(
+    df: pd.DataFrame, windows: List[int] = ROLLING_WINDOWS
+) -> pd.DataFrame:
     d = df.copy()
     log_ret = np.log(d["close"] / d["close"].shift(1))
 
@@ -202,9 +213,13 @@ def add_rolling_stats(df: pd.DataFrame, windows: List[int] = ROLLING_WINDOWS) ->
         d[f"roll_kurt_{w}"] = log_ret.rolling(w).kurt()
         d[f"roll_min_{w}"] = d["close"].rolling(w).min()
         d[f"roll_max_{w}"] = d["close"].rolling(w).max()
-        d[f"roll_range_{w}"] = (d[f"roll_max_{w}"] - d[f"roll_min_{w}"]) / d["close"].replace(0, np.nan)
+        d[f"roll_range_{w}"] = (d[f"roll_max_{w}"] - d[f"roll_min_{w}"]) / d[
+            "close"
+        ].replace(0, np.nan)
         # Z-score of close within window
-        d[f"zscore_{w}"] = (d["close"] - d[f"roll_mean_{w}"].shift(1)) / d[f"roll_std_{w}"].shift(1).replace(0, np.nan)
+        d[f"zscore_{w}"] = (d["close"] - d[f"roll_mean_{w}"].shift(1)) / d[
+            f"roll_std_{w}"
+        ].shift(1).replace(0, np.nan)
 
     return d
 
@@ -212,6 +227,7 @@ def add_rolling_stats(df: pd.DataFrame, windows: List[int] = ROLLING_WINDOWS) ->
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Fourier transform features
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_fourier_features(
     df: pd.DataFrame,
@@ -241,7 +257,7 @@ def add_fourier_features(
     phases = np.zeros((n, n_components))
 
     for i in range(window, n):
-        segment = log_ret[i - window: i]
+        segment = log_ret[i - window : i]
         fft_vals = rfft(segment)
         magnitudes = np.abs(fft_vals)
         # Ignore DC component (index 0)
@@ -261,9 +277,10 @@ def add_fourier_features(
 # 5. Candlestick pattern features
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
-    o, h, l, c = d["open"], d["high"], d["low"], d["close"]
+    o, h, l, c = d["open"], d["high"], d["low"], d["close"]  # noqa: E741
     candle_range = (h - l).replace(0, np.nan)
     body = (c - o).abs()
 
@@ -272,15 +289,25 @@ def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
     d["cs_lower_wick"] = (pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range
     d["cs_bull"] = (c > o).astype(int)
     d["cs_doji"] = (d["cs_body_ratio"] < 0.1).astype(int)
-    d["cs_pin_bull"] = ((d["cs_lower_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(int)
-    d["cs_pin_bear"] = ((d["cs_upper_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(int)
+    d["cs_pin_bull"] = ((d["cs_lower_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(
+        int
+    )
+    d["cs_pin_bear"] = ((d["cs_upper_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(
+        int
+    )
 
     prev_body = (d["close"].shift(1) - d["open"].shift(1)).abs()
     d["cs_engulf_bull"] = (
-        (c > o) & (o < d["close"].shift(1)) & (c > d["open"].shift(1)) & (body > prev_body)
+        (c > o)
+        & (o < d["close"].shift(1))
+        & (c > d["open"].shift(1))
+        & (body > prev_body)
     ).astype(int)
     d["cs_engulf_bear"] = (
-        (c < o) & (o > d["close"].shift(1)) & (c < d["open"].shift(1)) & (body > prev_body)
+        (c < o)
+        & (o > d["close"].shift(1))
+        & (c < d["open"].shift(1))
+        & (body > prev_body)
     ).astype(int)
 
     # 3-bar momentum
@@ -294,12 +321,13 @@ def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
 # 6. Volatility regime features
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     log_ret = np.log(d["close"] / d["close"].shift(1))
 
     # GARCH-proxy: squared returns
-    d["sq_ret"] = log_ret ** 2
+    d["sq_ret"] = log_ret**2
 
     # Realised volatility at multiple horizons
     for w in [5, 20, 60]:
@@ -312,7 +340,9 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
 
     # High-vol regime flag (top quartile of 60-day realised vol)
     rv60 = d["realvol_60"]
-    d["high_vol_regime"] = (rv60 > rv60.rolling(252, min_periods=60).quantile(0.75)).astype(int)
+    d["high_vol_regime"] = (
+        rv60 > rv60.rolling(252, min_periods=60).quantile(0.75)
+    ).astype(int)
 
     return d
 
@@ -320,6 +350,7 @@ def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Calendar / seasonality features
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
@@ -347,6 +378,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 # 9. Swing levels — pivot highs/lows and distance from key S/R
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_swing_levels(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
     """
     Identify rolling pivot highs/lows and compute distance from current price.
@@ -365,20 +397,20 @@ def add_swing_levels(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
     c, h, lo = d["close"], d["high"], d["low"]
 
     swing_high = h.rolling(lookback).max().shift(1)
-    swing_low  = lo.rolling(lookback).min().shift(1)
+    swing_low = lo.rolling(lookback).min().shift(1)
     swing_range = (swing_high - swing_low).replace(0, np.nan)
 
     d[f"swing_high_{lookback}"] = swing_high
-    d[f"swing_low_{lookback}"]  = swing_low
-    d["swing_high_dist"]  = (swing_high - c) / c.replace(0, np.nan)
-    d["swing_low_dist"]   = (c - swing_low) / c.replace(0, np.nan)
-    d["swing_position"]   = (c - swing_low) / swing_range
+    d[f"swing_low_{lookback}"] = swing_low
+    d["swing_high_dist"] = (swing_high - c) / c.replace(0, np.nan)
+    d["swing_low_dist"] = (c - swing_low) / c.replace(0, np.nan)
+    d["swing_position"] = (c - swing_low) / swing_range
     d["swing_breakout_up"] = (c > swing_high).astype(int)
     d["swing_breakout_dn"] = (c < swing_low).astype(int)
 
     # 52-week high/low distance (useful for daily data)
     high_52w = h.rolling(252, min_periods=20).max()
-    low_52w  = lo.rolling(252, min_periods=20).min()
+    low_52w = lo.rolling(252, min_periods=20).min()
     d["dist_52wh"] = (high_52w - c) / high_52w.replace(0, np.nan)
     d["dist_52wl"] = (c - low_52w) / low_52w.replace(0, np.nan)
 
@@ -388,6 +420,7 @@ def add_swing_levels(df: pd.DataFrame, lookback: int = 20) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. Momentum divergence — price vs RSI/MACD divergence
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_momentum_divergence(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
     """
@@ -411,30 +444,32 @@ def add_momentum_divergence(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
     if "rsi_14" not in d.columns or "macd_hist" not in d.columns:
         d = add_technical_indicators(d)
 
-    rsi  = d["rsi_14"]
+    rsi = d["rsi_14"]
     macd = d["macd_hist"]
 
     # Rolling window lows/highs for divergence detection
-    price_low  = c.rolling(window).min()
+    price_low = c.rolling(window).min()
     price_high = c.rolling(window).max()
-    rsi_low    = rsi.rolling(window).min()
-    rsi_high   = rsi.rolling(window).max()
-    macd_low   = macd.rolling(window).min()
-    macd_high  = macd.rolling(window).max()
+    rsi_low = rsi.rolling(window).min()
+    rsi_high = rsi.rolling(window).max()
+    macd_low = macd.rolling(window).min()
+    macd_high = macd.rolling(window).max()
 
     # Bullish: price at new low but oscillator not at new low
-    d["div_rsi_bull"]  = ((c == price_low) & (rsi > rsi_low)).astype(int)
-    d["div_rsi_bear"]  = ((c == price_high) & (rsi < rsi_high)).astype(int)
+    d["div_rsi_bull"] = ((c == price_low) & (rsi > rsi_low)).astype(int)
+    d["div_rsi_bear"] = ((c == price_high) & (rsi < rsi_high)).astype(int)
     d["div_macd_bull"] = ((c == price_low) & (macd > macd_low)).astype(int)
     d["div_macd_bear"] = ((c == price_high) & (macd < macd_high)).astype(int)
 
     # Composite momentum strength (z-scored)
-    rsi_z  = (rsi  - rsi.rolling(50).mean())  / rsi.rolling(50).std().replace(0, np.nan)
-    macd_z = (macd - macd.rolling(50).mean()) / macd.rolling(50).std().replace(0, np.nan)
+    rsi_z = (rsi - rsi.rolling(50).mean()) / rsi.rolling(50).std().replace(0, np.nan)
+    macd_z = (macd - macd.rolling(50).mean()) / macd.rolling(50).std().replace(
+        0, np.nan
+    )
     d["mom_strength"] = (rsi_z.fillna(0) + macd_z.fillna(0)) / 2.0
 
     # Rate of change of momentum
-    d["mom_roc_5"]  = rsi.pct_change(5)
+    d["mom_roc_5"] = rsi.pct_change(5)
     d["mom_roc_20"] = rsi.pct_change(20)
 
     return d
@@ -443,6 +478,7 @@ def add_momentum_divergence(df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. Volume profile — VWAP bands, volume-weighted momentum
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_volume_profile(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -465,17 +501,17 @@ def add_volume_profile(df: pd.DataFrame) -> pd.DataFrame:
 
     # Session VWAP (rolling 20-bar approximation for non-intraday data)
     cum_tp_vol = (typical * v).rolling(20).sum()
-    cum_vol    = v.rolling(20).sum().replace(0, np.nan)
+    cum_vol = v.rolling(20).sum().replace(0, np.nan)
     d["vwap_session"] = cum_tp_vol / cum_vol
 
     vwap = d["vwap_session"]
     vwap_dev = c - vwap
     vwap_dev_std = vwap_dev.rolling(20).std().replace(0, np.nan)
 
-    d["vwap_dev_pct"]    = vwap_dev / vwap.replace(0, np.nan)
+    d["vwap_dev_pct"] = vwap_dev / vwap.replace(0, np.nan)
     d["vwap_band_upper"] = vwap + 2 * vwap_dev_std
     d["vwap_band_lower"] = vwap - 2 * vwap_dev_std
-    d["vwap_pct_b"]      = (c - d["vwap_band_lower"]) / (
+    d["vwap_pct_b"] = (c - d["vwap_band_lower"]) / (
         (d["vwap_band_upper"] - d["vwap_band_lower"]).replace(0, np.nan)
     )
 
@@ -501,6 +537,7 @@ def add_volume_profile(df: pd.DataFrame) -> pd.DataFrame:
 # 12. Microstructure proxy — tick direction, spread proxy, trade intensity
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def add_microstructure_proxy(df: pd.DataFrame) -> pd.DataFrame:
     """
     Microstructure features derived from OHLCV without order-book data.
@@ -525,21 +562,21 @@ def add_microstructure_proxy(df: pd.DataFrame) -> pd.DataFrame:
 
     # Tick direction
     tick = np.sign(c.diff()).fillna(0)
-    d["tick_dir"]  = tick
+    d["tick_dir"] = tick
     d["tick_ema5"] = _ema(tick, 5)
-    d["tick_run"]  = tick.groupby((tick != tick.shift()).cumsum()).cumcount() + 1
-    d["tick_run"]  = d["tick_run"] * tick  # signed run length
+    d["tick_run"] = tick.groupby((tick != tick.shift()).cumsum()).cumcount() + 1
+    d["tick_run"] = d["tick_run"] * tick  # signed run length
 
     # Spread proxy
     hl_range = (h - lo).replace(0, np.nan)
     spread_proxy = hl_range / c.replace(0, np.nan)
-    spread_mean  = spread_proxy.rolling(20).mean()
-    spread_std   = spread_proxy.rolling(20).std().replace(0, np.nan)
+    spread_mean = spread_proxy.rolling(20).mean()
+    spread_std = spread_proxy.rolling(20).std().replace(0, np.nan)
     d["spread_proxy"] = spread_proxy
-    d["spread_z20"]   = (spread_proxy - spread_mean) / spread_std
+    d["spread_z20"] = (spread_proxy - spread_mean) / spread_std
 
     # Close location within bar
-    d["close_loc"]    = (c - lo) / hl_range
+    d["close_loc"] = (c - lo) / hl_range
     d["buy_pressure"] = d["close_loc"].rolling(5).mean()
 
     # Price impact proxy
@@ -557,6 +594,7 @@ def add_microstructure_proxy(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # 13. Regime context — trend strength, vol regime, HMM-style state
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_regime_context(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -579,40 +617,44 @@ def add_regime_context(df: pd.DataFrame) -> pd.DataFrame:
     tr = _true_range(d)
     atr14 = tr.ewm(com=13, adjust=False).mean().replace(0, np.nan)
 
-    up_move   = h - h.shift(1)
+    up_move = h - h.shift(1)
     down_move = lo.shift(1) - lo
 
-    plus_dm  = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
     minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
 
-    plus_dm_s  = pd.Series(plus_dm,  index=d.index).ewm(com=13, adjust=False).mean()
+    plus_dm_s = pd.Series(plus_dm, index=d.index).ewm(com=13, adjust=False).mean()
     minus_dm_s = pd.Series(minus_dm, index=d.index).ewm(com=13, adjust=False).mean()
 
-    di_plus  = 100 * plus_dm_s  / atr14
+    di_plus = 100 * plus_dm_s / atr14
     di_minus = 100 * minus_dm_s / atr14
     dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus).replace(0, np.nan)
     adx = dx.ewm(com=13, adjust=False).mean()
 
-    d["adx_14"]   = adx
-    d["di_plus"]  = di_plus
+    d["adx_14"] = adx
+    d["di_plus"] = di_plus
     d["di_minus"] = di_minus
 
     # Trend strength and direction
     d["trend_strength"] = adx / 100.0  # normalised [0, 1]
-    d["trend_dir"] = np.where(di_plus > di_minus, 1, np.where(di_minus > di_plus, -1, 0))
+    d["trend_dir"] = np.where(
+        di_plus > di_minus, 1, np.where(di_minus > di_plus, -1, 0)
+    )
 
     # Volatility regime (3-class: low / medium / high)
     log_ret = np.log(c / c.shift(1))
     rv20 = log_ret.rolling(20).std() * np.sqrt(252)
-    q33  = rv20.rolling(252, min_periods=60).quantile(0.33)
-    q67  = rv20.rolling(252, min_periods=60).quantile(0.67)
+    q33 = rv20.rolling(252, min_periods=60).quantile(0.33)
+    q67 = rv20.rolling(252, min_periods=60).quantile(0.67)
     vol_regime = pd.Series(1, index=d.index)  # default: medium
-    vol_regime = vol_regime.where(rv20 >= q33, 0)   # low
-    vol_regime = vol_regime.where(rv20 <= q67, 2)   # high
+    vol_regime = vol_regime.where(rv20 >= q33, 0)  # low
+    vol_regime = vol_regime.where(rv20 <= q67, 2)  # high
     # Re-apply medium where both conditions fail
     vol_regime = np.where(rv20 < q33, 0, np.where(rv20 > q67, 2, 1))
-    d["vol_regime_3"]  = vol_regime
-    d["regime_change"] = (pd.Series(vol_regime, index=d.index).diff().abs() > 0).astype(int)
+    d["vol_regime_3"] = vol_regime
+    d["regime_change"] = (pd.Series(vol_regime, index=d.index).diff().abs() > 0).astype(
+        int
+    )
 
     # Choppiness index (measures trendiness vs choppiness)
     atr_sum = tr.rolling(14).sum()
@@ -625,6 +667,7 @@ def add_regime_context(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Master builder
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_feature_matrix(
     df: pd.DataFrame,
@@ -690,7 +733,9 @@ def build_feature_matrix(
     if drop_na:
         before = len(d)
         d.dropna(inplace=True)
-        logger.info("Dropped %d NaN rows (warm-up); final shape=%s", before - len(d), d.shape)
+        logger.info(
+            "Dropped %d NaN rows (warm-up); final shape=%s", before - len(d), d.shape
+        )
 
     logger.info("Feature matrix complete: %d features", d.shape[1])
     return d
@@ -698,14 +743,24 @@ def build_feature_matrix(
 
 def feature_names(df: pd.DataFrame) -> List[str]:
     """Return the list of feature column names (excludes OHLCV and target columns)."""
-    exclude = {"open", "high", "low", "close", "volume", "vwap",
-               "target_ret", "target_dir", "target_bin"}
+    exclude = {
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "vwap",
+        "target_ret",
+        "target_dir",
+        "target_bin",
+    }
     return [c for c in df.columns if c not in exclude]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Target engineering
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def add_targets(
     df: pd.DataFrame,

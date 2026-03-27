@@ -35,14 +35,15 @@ from typing import List, Dict
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
-    level  = logging.INFO,
-    format = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    datefmt= "%H:%M:%S",
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("hopefx")
 
 
 # ── config from env ───────────────────────────────────────────────────────────
+
 
 def _require(key: str) -> str:
     val = os.environ.get(key, "").strip()
@@ -51,11 +52,13 @@ def _require(key: str) -> str:
         sys.exit(1)
     return val
 
+
 def _optional(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
 # ── engine ────────────────────────────────────────────────────────────────────
+
 
 class HopeFXEngine:
     """
@@ -65,44 +68,49 @@ class HopeFXEngine:
     """
 
     def __init__(self):
-        self.oanda_api_key   = _require("OANDA_API_KEY")
-        self.oanda_account   = _require("OANDA_ACCOUNT_ID")
-        self.openai_api_key  = _require("OPENAI_API_KEY")
-        self.practice        = _optional("OANDA_PRACTICE", "true").lower() != "false"
-        self.instruments     = _optional("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
-        self.primary_symbol  = self.instruments[0]
-        self.timeframe       = _optional("TIMEFRAME", "H1")
-        self.rl_timesteps    = int(_optional("RL_TIMESTEPS", "50000"))
-        self.llm_model       = _optional("OPENAI_MODEL", "gpt-4o")
-        self.llm_prompt      = _optional(
+        self.oanda_api_key = _require("OANDA_API_KEY")
+        self.oanda_account = _require("OANDA_ACCOUNT_ID")
+        self.openai_api_key = _require("OPENAI_API_KEY")
+        self.practice = _optional("OANDA_PRACTICE", "true").lower() != "false"
+        self.instruments = _optional("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
+        self.primary_symbol = self.instruments[0]
+        self.timeframe = _optional("TIMEFRAME", "H1")
+        self.rl_timesteps = int(_optional("RL_TIMESTEPS", "50000"))
+        self.llm_model = _optional("OPENAI_MODEL", "gpt-4o")
+        self.llm_prompt = _optional(
             "LLM_STRATEGY_PROMPT",
             f"Create a mean-reversion strategy for {self.primary_symbol} "
             "using Bollinger Bands and RSI. Target Sharpe > 1.5.",
         )
 
-        self._stream         = None
-        self._event_bus      = None
-        self._vector_store   = None
-        self._llm_agent      = None
-        self._rl_trainer     = None
-        self._llm_strategy   = None   # compiled strategy instance
+        self._stream = None
+        self._event_bus = None
+        self._vector_store = None
+        self._llm_agent = None
+        self._rl_trainer = None
+        self._llm_strategy = None  # compiled strategy instance
         self._candles: List[Dict] = []
-        self._running        = False
+        self._running = False
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         logger.info("═══ HOPEFX Engine starting ═══")
-        logger.info("Symbol: %s  TF: %s  Practice: %s",
-                    self.primary_symbol, self.timeframe, self.practice)
+        logger.info(
+            "Symbol: %s  TF: %s  Practice: %s",
+            self.primary_symbol,
+            self.timeframe,
+            self.practice,
+        )
 
         # ── 1. OANDA stream ───────────────────────────────────────────────────
         from brokers.oanda_stream import OANDAStream
+
         self._stream = OANDAStream(
-            api_key     = self.oanda_api_key,
-            account_id  = self.oanda_account,
-            instruments = self.instruments,
-            practice    = self.practice,
+            api_key=self.oanda_api_key,
+            account_id=self.oanda_account,
+            instruments=self.instruments,
+            practice=self.practice,
         )
         await self._stream.__aenter__()
         connected = await self._stream.connect()
@@ -112,8 +120,9 @@ class HopeFXEngine:
 
         account = await self._stream.get_account_info()
         if account:
-            logger.info("Account balance: %.2f  Equity: %.2f",
-                        account.balance, account.equity)
+            logger.info(
+                "Account balance: %.2f  Equity: %.2f", account.balance, account.equity
+            )
 
         # ── 2. Fetch historical candles ───────────────────────────────────────
         logger.info("Fetching 2000 %s candles …", self.primary_symbol)
@@ -124,6 +133,7 @@ class HopeFXEngine:
 
         # ── 3. Vector store — ingest candles ──────────────────────────────────
         from research.vector_store import MarketVectorStore
+
         self._vector_store = MarketVectorStore(persist_dir="data/vectordb")
         ingested = await self._vector_store.ingest_candles(
             self._candles, self.primary_symbol, self.timeframe
@@ -133,11 +143,12 @@ class HopeFXEngine:
 
         # ── 4. LLM agent — generate strategy ─────────────────────────────────
         from brain.llm_agent import create_agent
+
         self._llm_agent = create_agent(
-            oanda_stream = self._stream,
-            api_key      = self.openai_api_key,
-            model        = self.llm_model,
-            target_sharpe= 1.5,
+            oanda_stream=self._stream,
+            api_key=self.openai_api_key,
+            model=self.llm_model,
+            target_sharpe=1.5,
             max_iterations=3,
         )
 
@@ -147,21 +158,27 @@ class HopeFXEngine:
 
         logger.info("LLM agent generating strategy …")
         result = await self._llm_agent.generate_strategy(
-            prompt      = full_prompt,
-            symbol      = self.primary_symbol,
-            timeframe   = self.timeframe,
-            candle_count= 500,
+            prompt=full_prompt,
+            symbol=self.primary_symbol,
+            timeframe=self.timeframe,
+            candle_count=500,
         )
 
         if result.success:
-            logger.info("✅ Strategy accepted — %s", result.backtest.summary() if result.backtest else "no backtest")
+            logger.info(
+                "✅ Strategy accepted — %s",
+                result.backtest.summary() if result.backtest else "no backtest",
+            )
         else:
-            logger.warning("⚠️  Strategy did not meet target Sharpe — using best attempt")
+            logger.warning(
+                "⚠️  Strategy did not meet target Sharpe — using best attempt"
+            )
             if result.backtest:
                 logger.info("Best attempt: %s", result.backtest.summary())
 
         # compile and store the strategy instance
         from brain.llm_agent import _compile_strategy
+
         if result.strategy_code:
             instance, err = _compile_strategy(result.strategy_code)
             if instance:
@@ -172,9 +189,10 @@ class HopeFXEngine:
 
         # ── 5. RL agent — train or load ───────────────────────────────────────
         from ml.rl_agent import RLAgentTrainer
+
         self._rl_trainer = RLAgentTrainer(
-            oanda_stream = self._stream,
-            model_name   = f"hopefx_ppo_{self.primary_symbol.lower()}",
+            oanda_stream=self._stream,
+            model_name=f"hopefx_ppo_{self.primary_symbol.lower()}",
         )
 
         if self._rl_trainer.agent.load():
@@ -183,10 +201,10 @@ class HopeFXEngine:
             logger.info("Training RL agent for %d timesteps …", self.rl_timesteps)
             try:
                 metrics = await self._rl_trainer.train(
-                    symbol    = self.primary_symbol,
-                    timeframe = self.timeframe,
-                    candles   = len(self._candles),
-                    timesteps = self.rl_timesteps,
+                    symbol=self.primary_symbol,
+                    timeframe=self.timeframe,
+                    candles=len(self._candles),
+                    timesteps=self.rl_timesteps,
                 )
                 logger.info("RL training complete: %s", metrics)
             except Exception as exc:
@@ -194,8 +212,9 @@ class HopeFXEngine:
 
         # ── 6. Event bus ──────────────────────────────────────────────────────
         from core.event_bus import EventBus, MemoryMappedEventStore
-        store            = MemoryMappedEventStore(base_path="data/events/")
-        self._event_bus  = EventBus(store=store)
+
+        store = MemoryMappedEventStore(base_path="data/events/")
+        self._event_bus = EventBus(store=store)
         self._stream.event_bus = self._event_bus
 
         # subscribe to price updates
@@ -223,7 +242,7 @@ class HopeFXEngine:
         try:
             data = event.decode()
             instrument = data.get("instrument", "")
-            mid        = data.get("mid", 0.0)
+            mid = data.get("mid", 0.0)
             logger.debug("Tick %s @ %.5f", instrument, mid)
 
             if instrument != self.primary_symbol.replace("/", "_"):
@@ -238,7 +257,10 @@ class HopeFXEngine:
             if action != 0 and confidence > 0.6:
                 logger.info(
                     "RL signal: %s %s @ %.5f (confidence %.2f)",
-                    action_name, instrument, mid, confidence,
+                    action_name,
+                    instrument,
+                    mid,
+                    confidence,
                 )
                 # In paper/practice mode we log; in live mode we'd place the order
                 if not self.practice:
@@ -250,6 +272,7 @@ class HopeFXEngine:
     async def _execute_signal(self, action: int, instrument: str, price: float) -> None:
         """Place a real order based on RL + LLM signal agreement."""
         from brokers.base import OrderSide
+
         side = OrderSide.BUY if action == 1 else OrderSide.SELL
 
         account = await self._stream.get_account_info()
@@ -261,16 +284,23 @@ class HopeFXEngine:
             return
 
         order = await self._stream.place_order(
-            symbol = instrument,
-            side   = side,
-            units  = units,
+            symbol=instrument,
+            side=side,
+            units=units,
         )
         if order:
-            logger.info("Order placed: %s %d units %s — id=%s status=%s",
-                        side.value, units, instrument, order.id, order.status)
+            logger.info(
+                "Order placed: %s %d units %s — id=%s status=%s",
+                side.value,
+                units,
+                instrument,
+                order.id,
+                order.status,
+            )
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
+
 
 async def _main() -> None:
     engine = HopeFXEngine()

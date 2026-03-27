@@ -66,7 +66,7 @@ class MultiPairStrategy(BaseStrategy):
     def __init__(self, config):
         super().__init__(config)
         self.pairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD']
-        
+
     def analyze_all_pairs(self, broker):
         signals = []
         for pair in self.pairs:
@@ -165,28 +165,28 @@ symbols = binance.get_symbols()
 class CryptoMomentumStrategy(BaseStrategy):
     """
     Crypto-specific momentum strategy
-    
+
     Considers:
     - 24/7 market operation
     - Higher volatility
     - Correlation with BTC
     """
-    
+
     def __init__(self, config):
         super().__init__(config)
         self.symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
         self.btc_correlation_threshold = 0.7
-        
+
     def generate_signal(self, data):
         # Check BTC trend first (market leader)
         btc_trend = self._get_btc_trend()
-        
+
         # Only trade alts in direction of BTC
         if btc_trend == 'bullish':
             return self._find_bullish_alt()
         elif btc_trend == 'bearish':
             return self._find_bearish_alt()
-        
+
         return None
 ```
 
@@ -245,24 +245,24 @@ class StockSelectionStrategy(BaseStrategy):
     """
     Select stocks based on momentum and fundamentals
     """
-    
+
     def __init__(self, config):
         super().__init__(config)
-        self.universe = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 
+        self.universe = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
                          'META', 'TSLA', 'JPM', 'V', 'WMT']
-        
+
     def select_stocks(self, broker):
         """Select top momentum stocks"""
         ranked = []
-        
+
         for symbol in self.universe:
             data = broker.get_market_data(symbol, '1D', limit=60)
             momentum = self._calculate_momentum(data)
             ranked.append({'symbol': symbol, 'momentum': momentum})
-        
+
         # Sort by momentum
         ranked.sort(key=lambda x: x['momentum'], reverse=True)
-        
+
         # Return top 5
         return [s['symbol'] for s in ranked[:5]]
 ```
@@ -318,7 +318,7 @@ futures_config = {
         'margin': 8000,
         'trading_hours': '18:00-17:00'
     },
-    
+
     # Risk management
     'risk': {
         'max_contracts': 5,
@@ -350,7 +350,7 @@ class IndexCorrelationStrategy(BaseStrategy):
     """
     Trade indices based on market correlations
     """
-    
+
     def __init__(self, config):
         super().__init__(config)
         self.indices = {
@@ -358,15 +358,15 @@ class IndexCorrelationStrategy(BaseStrategy):
             'NAS100': 'Nasdaq',
             'US30': 'Dow Jones'
         }
-        
+
     def generate_signal(self, data):
         # Calculate correlation matrix
         correlations = self._calculate_correlations()
-        
+
         # Look for divergence
         if self._detect_divergence():
             return self._trade_divergence()
-        
+
         return None
 ```
 
@@ -412,7 +412,7 @@ class MultiAssetPortfolio:
     """
     Manage a diversified multi-asset portfolio
     """
-    
+
     def __init__(self, config):
         self.allocation = {
             'forex': 0.30,      # 30% forex
@@ -421,7 +421,7 @@ class MultiAssetPortfolio:
             'commodities': 0.15, # 15% commodities
             'indices': 0.10     # 10% indices
         }
-        
+
         self.brokers = {
             'forex': OANDAConnector(config['oanda']),
             'crypto': BinanceConnector(config['binance']),
@@ -429,15 +429,15 @@ class MultiAssetPortfolio:
             'commodities': MT5Connector(config['mt5']),
             'indices': InteractiveBrokersConnector(config['ib'])
         }
-    
+
     def rebalance(self):
         """Rebalance portfolio to target allocation"""
         total_equity = self.get_total_equity()
-        
+
         for asset_class, target_pct in self.allocation.items():
             current_value = self.get_asset_class_value(asset_class)
             target_value = total_equity * target_pct
-            
+
             if current_value < target_value * 0.95:
                 self._increase_position(asset_class, target_value - current_value)
             elif current_value > target_value * 1.05:
@@ -451,21 +451,21 @@ class CorrelationManager:
     """
     Manage portfolio correlation to reduce risk
     """
-    
+
     def __init__(self, max_correlation: float = 0.7):
         self.max_correlation = max_correlation
-        
+
     def check_new_position(self, existing_positions: list, new_symbol: str):
         """Check if new position is too correlated"""
         for position in existing_positions:
             correlation = self._calculate_correlation(
-                position['symbol'], 
+                position['symbol'],
                 new_symbol
             )
-            
+
             if abs(correlation) > self.max_correlation:
                 return False, f"High correlation ({correlation:.2f}) with {position['symbol']}"
-        
+
         return True, "Position approved"
 ```
 
@@ -478,13 +478,13 @@ class CorrelationManager:
 ```python
 def generate_multi_asset_report(portfolio):
     """Generate multi-asset performance report"""
-    
+
     report = {
         'total_equity': portfolio.get_total_equity(),
         'total_pnl': portfolio.get_total_pnl(),
         'by_asset_class': {}
     }
-    
+
     for asset_class in ['forex', 'crypto', 'stocks', 'commodities', 'indices']:
         report['by_asset_class'][asset_class] = {
             'equity': portfolio.get_asset_class_value(asset_class),
@@ -492,7 +492,7 @@ def generate_multi_asset_report(portfolio):
             'positions': portfolio.get_positions(asset_class),
             'allocation': portfolio.get_allocation(asset_class)
         }
-    
+
     return report
 ```
 

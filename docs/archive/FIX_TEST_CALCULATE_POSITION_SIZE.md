@@ -6,7 +6,7 @@ Integration test `test_calculate_position_size` was failing with HTTP 422 status
 
 **Error Message:**
 ```
-FAILED tests/integration/test_api.py::TestTradingEndpoints::test_calculate_position_size 
+FAILED tests/integration/test_api.py::TestTradingEndpoints::test_calculate_position_size
 - assert 422 in [200, 500]
   + where 422 = <Response>.status_code
 ```
@@ -60,7 +60,7 @@ def test_calculate_position_size(self, client):
         "method": "fixed",
         "amount": 10000
     }
-    
+
     response = client.post("/api/trading/position-size", json=request_data)
     assert response.status_code in [200, 500]
 ```
@@ -74,7 +74,7 @@ def test_calculate_position_size(self, client):
         "stop_loss_price": 1.0950,
         "confidence": 0.8
     }
-    
+
     response = client.post("/api/trading/position-size", json=request_data)
     assert response.status_code in [200, 500]
 ```

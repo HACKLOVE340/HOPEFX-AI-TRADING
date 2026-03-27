@@ -63,7 +63,10 @@ except Exception as _prom_exc:
     _PROM_AVAILABLE = False
     # prometheus_client is optional — circuit breaker works without it
     import logging as _log
-    _log.getLogger(__name__).debug("prometheus_client unavailable — CB metrics disabled: %s", _prom_exc)
+
+    _log.getLogger(__name__).debug(
+        "prometheus_client unavailable — CB metrics disabled: %s", _prom_exc
+    )
 
 
 class CBState(IntEnum):
@@ -166,7 +169,9 @@ class CircuitBreaker:
                 # Probe failed — reopen immediately
                 self._transition(CBState.OPEN)
                 logger.warning(
-                    "Circuit breaker '%s' → OPEN (probe failed: %s)", self.name, error,
+                    "Circuit breaker '%s' → OPEN (probe failed: %s)",
+                    self.name,
+                    error,
                 )
             elif (
                 self._state == CBState.CLOSED
@@ -218,7 +223,9 @@ class CircuitBreaker:
             try:
                 _CB_STATE_GAUGE.labels(broker=self.name).set(int(new_state))
             except Exception as _gauge_exc:
-                logger.debug("CB Prometheus gauge update failed (non-fatal): %s", _gauge_exc)
+                logger.debug(
+                    "CB Prometheus gauge update failed (non-fatal): %s", _gauge_exc
+                )
 
         logger.debug("CB '%s': %s → %s", self.name, old.name, new_state.name)
 
@@ -286,7 +293,9 @@ def circuit_breaker(
             return await session.get(...)
     """
     cb = CircuitBreaker.get(
-        name, failure_threshold=failure_threshold, reset_timeout=reset_timeout,
+        name,
+        failure_threshold=failure_threshold,
+        reset_timeout=reset_timeout,
     )
 
     def decorator(fn: Callable) -> Callable:

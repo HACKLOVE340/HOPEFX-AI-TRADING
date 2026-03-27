@@ -42,7 +42,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
-import pandas as pd
+import pandas as pd  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,6 +56,7 @@ _H1_CSV_DIR = os.getenv("ML_H1_CSV_DIR", "data")
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+
 
 def _load_csv(symbol: str, csv_path: str | None, years: int) -> pd.DataFrame:
     """Load OHLCV data: explicit CSV > H1 CSV > yfinance fallback."""
@@ -84,7 +85,7 @@ def _load_csv(symbol: str, csv_path: str | None, years: int) -> pd.DataFrame:
         df = df[["open", "high", "low", "close", "volume"]].dropna()
         # Trim to requested years
         if years and len(df) > years * 365 * 24:
-            df = df.iloc[-(years * 365 * 24):]
+            df = df.iloc[-(years * 365 * 24) :]
         logger.info("  %d H1 bars loaded for %s", len(df), symbol)
         return df
 
@@ -93,10 +94,13 @@ def _load_csv(symbol: str, csv_path: str | None, years: int) -> pd.DataFrame:
         "No H1 CSV found for %s — falling back to yfinance daily data. "
         "For better accuracy run the backfill first:\n"
         "  python -m data.scheduler --backfill --symbol %s --from %d-01-01",
-        symbol, symbol, datetime.now().year - years,
+        symbol,
+        symbol,
+        datetime.now().year - years,
     )
     try:
         import yfinance as yf
+
         _YF_MAP = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
         yf_sym = _YF_MAP.get(symbol, symbol)
         period = f"{min(years, 10)}y"
@@ -114,6 +118,7 @@ def _load_csv(symbol: str, csv_path: str | None, years: int) -> pd.DataFrame:
 
 # ── MLflow logging (optional) ─────────────────────────────────────────────────
 
+
 def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) -> None:
     """Log metrics to MLflow if MLFLOW_TRACKING_URI is set."""
     uri = os.getenv("MLFLOW_TRACKING_URI", "")
@@ -121,8 +126,11 @@ def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) ->
         return
     try:
         import mlflow
+
         mlflow.set_tracking_uri(uri)
-        with mlflow.start_run(run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"):
+        with mlflow.start_run(
+            run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        ):
             mlflow.log_params(params)
             for k, v in metrics.items():
                 if isinstance(v, (int, float)):
@@ -133,6 +141,7 @@ def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) ->
 
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
+
 
 def retrain(
     symbol: str,
@@ -152,6 +161,7 @@ def retrain(
 
     # Resolve ml/training.py directly (avoids ml/training/ package shadowing)
     import importlib.util as _ilu
+
     _spec = _ilu.spec_from_file_location(
         "ml_training_module",
         str(_ROOT / "ml" / "training.py"),
@@ -165,7 +175,9 @@ def retrain(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
-    logger.info("Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir)
+    logger.info(
+        "Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir
+    )
     logger.info("=" * 60)
 
     results = train_ml_pipeline(
@@ -193,7 +205,8 @@ def retrain(
             "rmse": m.get("rmse"),
         }
         _log_to_mlflow(
-            symbol, name,
+            symbol,
+            name,
             {k: v for k, v in m.items() if isinstance(v, (int, float))},
             {"symbol": symbol, "model": name, "bars": len(df), "years": years},
         )
@@ -207,6 +220,7 @@ def retrain(
     try:
         from strategies.regime_router import update_regime_performance
         from strategies.regime_router import detect_regime
+
         regime, _ = detect_regime(df)
         for name, info in results.items():
             m = info.get("metrics") or {}
@@ -228,6 +242,7 @@ def retrain(
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -300,10 +315,14 @@ Examples:
     # ── Advanced mode: delegate to train_advanced.py ──────────────────────────
     if args.advanced or args.smoke:
         import subprocess
+
         cmd = [
-            sys.executable, str(_ROOT / "ml" / "train_advanced.py"),
-            "--years", str(args.years),
-            "--oos-years", str(args.oos_years),
+            sys.executable,
+            str(_ROOT / "ml" / "train_advanced.py"),
+            "--years",
+            str(args.years),
+            "--oos-years",
+            str(args.oos_years),
             "--use-cached",
         ]
         if args.smoke:

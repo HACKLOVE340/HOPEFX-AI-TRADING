@@ -54,12 +54,12 @@
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-amber-500 text-slate-950 rounded-lg font-medium 
+    @apply px-4 py-2 bg-amber-500 text-slate-950 rounded-lg font-medium
            hover:bg-amber-400 transition-colors active:scale-95;
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-slate-800 text-slate-200 rounded-lg 
+    @apply px-4 py-2 bg-slate-800 text-slate-200 rounded-lg
            hover:bg-slate-700 transition-colors border border-slate-700;
   }
 
@@ -68,8 +68,8 @@
   }
 
   .input {
-    @apply w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 
-           text-white focus:border-amber-500 focus:outline-none 
+    @apply w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2
+           text-white focus:border-amber-500 focus:outline-none
            placeholder:text-slate-500;
   }
 }

@@ -55,19 +55,19 @@ ENV_EXAMPLE = ROOT / ".env.example"
 # Secrets that MUST be set before production launch.
 # Format: (env_var_name, description, generator_fn)
 REQUIRED_SECRETS: List[Tuple[str, str, Optional[str]]] = [
-    ("SECURITY_JWT_SECRET",    "JWT signing key (48-char random)",    "token48"),
-    ("CONFIG_ENCRYPTION_KEY",  "Config encryption key (48-char)",     "token48"),
+    ("SECURITY_JWT_SECRET", "JWT signing key (48-char random)", "token48"),
+    ("CONFIG_ENCRYPTION_KEY", "Config encryption key (48-char)", "token48"),
     ("HOPEFX_KILL_SWITCH_TOKEN", "Kill-switch HMAC token (48-char)", "token48"),
-    ("POSTGRES_PASSWORD",      "PostgreSQL password",                 "token32"),
-    ("GRAFANA_ADMIN_PASSWORD", "Grafana admin password",              "token32"),
+    ("POSTGRES_PASSWORD", "PostgreSQL password", "token32"),
+    ("GRAFANA_ADMIN_PASSWORD", "Grafana admin password", "token32"),
 ]
 
 # Secrets that are required only in production (BROKER_TYPE=oanda / live)
 CONDITIONAL_SECRETS: List[Tuple[str, str, str]] = [
-    ("OANDA_API_KEY",     "OANDA REST API token",    "BROKER_TYPE=oanda"),
-    ("OANDA_ACCOUNT_ID",  "OANDA account ID",        "BROKER_TYPE=oanda"),
-    ("STRIPE_SECRET_KEY", "Stripe secret key",       "FEATURE_PAYMENTS=true"),
-    ("OPENAI_API_KEY",    "OpenAI API key",           "FEATURE_ML_PREDICTIONS=true"),
+    ("OANDA_API_KEY", "OANDA REST API token", "BROKER_TYPE=oanda"),
+    ("OANDA_ACCOUNT_ID", "OANDA account ID", "BROKER_TYPE=oanda"),
+    ("STRIPE_SECRET_KEY", "Stripe secret key", "FEATURE_PAYMENTS=true"),
+    ("OPENAI_API_KEY", "OpenAI API key", "FEATURE_ML_PREDICTIONS=true"),
 ]
 
 # Placeholder values that indicate a secret has NOT been set
@@ -85,16 +85,19 @@ PLACEHOLDERS = {
 
 # Patterns that indicate hardcoded secrets in source code
 AUDIT_PATTERNS: List[Tuple[str, str]] = [
-    (r'password\s*=\s*["\'][^"\']{4,}["\']',          "Hardcoded password"),
-    (r'api_key\s*=\s*["\'][^"\']{8,}["\']',            "Hardcoded API key"),
-    (r'secret\s*=\s*["\'][^"\']{8,}["\']',             "Hardcoded secret"),
-    (r'token\s*=\s*["\'][^"\']{16,}["\']',             "Hardcoded token"),
-    (r'["\']sk-[a-zA-Z0-9]{20,}["\']',                 "OpenAI API key"),
-    (r'["\']xoxb-[0-9]+-[a-zA-Z0-9]+["\']',            "Slack bot token"),
-    (r'discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+',  "Discord webhook URL"),
-    (r'["\']AKIA[0-9A-Z]{16}["\']',                    "AWS access key"),
-    (r'["\']ghp_[a-zA-Z0-9]{36}["\']',                 "GitHub personal token"),
-    (r'os\.getenv\([^)]+\)\s+or\s+["\'][^"\']{8,}["\']', "Env fallback to hardcoded value"),
+    (r'password\s*=\s*["\'][^"\']{4,}["\']', "Hardcoded password"),
+    (r'api_key\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded API key"),
+    (r'secret\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded secret"),
+    (r'token\s*=\s*["\'][^"\']{16,}["\']', "Hardcoded token"),
+    (r'["\']sk-[a-zA-Z0-9]{20,}["\']', "OpenAI API key"),
+    (r'["\']xoxb-[0-9]+-[a-zA-Z0-9]+["\']', "Slack bot token"),
+    (r"discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+", "Discord webhook URL"),
+    (r'["\']AKIA[0-9A-Z]{16}["\']', "AWS access key"),
+    (r'["\']ghp_[a-zA-Z0-9]{36}["\']', "GitHub personal token"),
+    (
+        r'os\.getenv\([^)]+\)\s+or\s+["\'][^"\']{8,}["\']',
+        "Env fallback to hardcoded value",
+    ),
 ]
 
 SKIP_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules", ".mypy_cache"}
@@ -102,6 +105,7 @@ SKIP_FILES = {"manage_secrets.py", ".env.example", "env.example"}
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _generate(kind: str) -> str:
     if kind == "token48":
@@ -165,6 +169,7 @@ def _is_placeholder(val: str) -> bool:
 
 # ── commands ──────────────────────────────────────────────────────────────────
 
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """Generate required secrets and write to .env (safe — never overwrites real values)."""
     env = _load_env(ENV_FILE)
@@ -215,20 +220,27 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     # Check conditional secrets based on feature flags
     broker_type = env.get("BROKER_TYPE", os.getenv("BROKER_TYPE", "paper"))
-    payments_on = env.get("FEATURE_PAYMENTS", os.getenv("FEATURE_PAYMENTS", "true")).lower() not in ("false", "0", "no", "off")
+    payments_on = env.get(
+        "FEATURE_PAYMENTS", os.getenv("FEATURE_PAYMENTS", "true")
+    ).lower() not in ("false", "0", "no", "off")
 
     for var, desc, condition in CONDITIONAL_SECRETS:
         active = (
-            (condition == "BROKER_TYPE=oanda" and broker_type == "oanda") or
-            (condition == "FEATURE_PAYMENTS=true" and payments_on) or
-            (condition == "FEATURE_ML_PREDICTIONS=true" and
-             env.get("FEATURE_ML_PREDICTIONS", "false").lower() not in ("false", "0", "no", "off"))
+            (condition == "BROKER_TYPE=oanda" and broker_type == "oanda")
+            or (condition == "FEATURE_PAYMENTS=true" and payments_on)
+            or (
+                condition == "FEATURE_ML_PREDICTIONS=true"
+                and env.get("FEATURE_ML_PREDICTIONS", "false").lower()
+                not in ("false", "0", "no", "off")
+            )
         )
         if not active:
             continue
         val = env.get(var, os.getenv(var, ""))
         if not val or _is_placeholder(val):
-            warnings.append(f"  ⚠ {var} — required for {condition} but not set ({desc})")
+            warnings.append(
+                f"  ⚠ {var} — required for {condition} but not set ({desc})"
+            )
         else:
             print(f"  ✓ {var} (conditional)")
 
@@ -263,7 +275,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     print(f"Rotated {key}")
     print(f"  Old: {'(not set)' if not old_val else old_val[:8] + '...'}")
     print(f"  New: {new_val[:8]}...")
-    print(f"\nRestart the application to pick up the new value.")
+    print("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):
         print("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
     return 0
@@ -324,7 +336,9 @@ def cmd_check_env(args: argparse.Namespace) -> int:
         print("No missing keys.")
 
     if extra:
-        print(f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:")
+        print(
+            f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:"
+        )
         for k in extra:
             print(f"  + {k}")
 
@@ -332,6 +346,7 @@ def cmd_check_env(args: argparse.Namespace) -> int:
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -352,10 +367,10 @@ def main() -> int:
     args = parser.parse_args()
 
     dispatch = {
-        "generate":  cmd_generate,
-        "validate":  cmd_validate,
-        "rotate":    cmd_rotate,
-        "audit":     cmd_audit,
+        "generate": cmd_generate,
+        "validate": cmd_validate,
+        "rotate": cmd_rotate,
+        "audit": cmd_audit,
         "check-env": cmd_check_env,
     }
     return dispatch[args.command](args)

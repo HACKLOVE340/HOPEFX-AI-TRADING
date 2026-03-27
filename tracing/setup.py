@@ -9,6 +9,7 @@ tracing/setup.py — OpenTelemetry + Jaeger tracing setup.
 Requires: opentelemetry-sdk, opentelemetry-exporter-jaeger
 Set JAEGER_HOST / JAEGER_PORT env vars to point at your Jaeger agent.
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,11 @@ try:
         agent_port=int(os.getenv("JAEGER_PORT", "6831")),
     )
     trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(jaeger_exporter))
-    logger.info("Jaeger tracing configured → %s:%s", os.getenv("JAEGER_HOST", "localhost"), os.getenv("JAEGER_PORT", "6831"))
+    logger.info(
+        "Jaeger tracing configured → %s:%s",
+        os.getenv("JAEGER_HOST", "localhost"),
+        os.getenv("JAEGER_PORT", "6831"),
+    )
 
 except Exception as _exc:
     logger.debug("Jaeger tracing not available: %s", _exc)

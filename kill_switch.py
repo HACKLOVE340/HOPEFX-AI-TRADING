@@ -56,7 +56,7 @@ try:
         token: str = ""
 
 except ImportError:  # pydantic not installed (e.g. minimal test env)
-    _KSActivateRequest = None   # type: ignore[assignment,misc]
+    _KSActivateRequest = None  # type: ignore[assignment,misc]
     _KSDeactivateRequest = None  # type: ignore[assignment,misc]
 
 # --------------------------------------------------------------------------- #
@@ -100,9 +100,8 @@ class KillSwitch:
         # HOPEFX_KILL_SWITCH_TOKEN env var when not supplied directly.
         # If neither is set, deactivation is disabled until a token is
         # configured — this prevents accidental or unauthenticated resumption.
-        self._deactivation_token: Optional[str] = (
-            deactivation_token
-            or os.environ.get("HOPEFX_KILL_SWITCH_TOKEN")
+        self._deactivation_token: Optional[str] = deactivation_token or os.environ.get(
+            "HOPEFX_KILL_SWITCH_TOKEN"
         )
 
         self._active: bool = False
@@ -157,6 +156,7 @@ class KillSwitch:
         # Authentication check — refuse if no token is configured or token
         # does not match.  Use constant-time comparison to prevent timing attacks.
         import hmac as _hmac
+
         if not self._deactivation_token:
             raise PermissionError(
                 "Kill switch deactivation is disabled: no HOPEFX_KILL_SWITCH_TOKEN "
@@ -166,9 +166,7 @@ class KillSwitch:
         provided = (token or "").encode()
         expected = self._deactivation_token.encode()
         if not _hmac.compare_digest(provided, expected):
-            logger.critical(
-                "Kill switch deactivation REFUSED — invalid token supplied"
-            )
+            logger.critical("Kill switch deactivation REFUSED — invalid token supplied")
             raise PermissionError("Kill switch deactivation refused: invalid token.")
 
         self._active = False
@@ -240,7 +238,9 @@ class KillSwitch:
         return {
             "active": self._active,
             "reason": self._reason,
-            "activated_at": self._activated_at.isoformat() if self._activated_at else None,
+            "activated_at": self._activated_at.isoformat()
+            if self._activated_at
+            else None,
             "flag_file": str(self._flag_file),
             "flag_file_exists": self._flag_file.exists(),
             "state_file": str(self._state_file),
@@ -268,6 +268,7 @@ class KillSwitch:
         # Also write to stderr so the message appears even if the log handler
         # is misconfigured or the process is about to crash.
         import sys as _sys
+
         _sys.stderr.write(f"\nKILL SWITCH ACTIVATED: {reason}\n")
         _sys.stderr.flush()
 
@@ -296,6 +297,7 @@ class KillSwitch:
         # Send Sentry critical alert (fire-and-forget)
         try:
             from monitoring.sentry_config import capture_kill_switch_alert
+
             capture_kill_switch_alert(reason=reason, triggered_by="system")
         except Exception as _sentry_exc:
             logger.debug("Sentry kill-switch alert failed: %s", _sentry_exc)
@@ -306,7 +308,7 @@ class KillSwitch:
 
             send_risk_halt_email(
                 reason=reason,
-                drawdown_pct=0.0,   # caller can override via callback if needed
+                drawdown_pct=0.0,  # caller can override via callback if needed
                 limit_pct=0.0,
             )
         except Exception as _email_exc:
@@ -321,10 +323,13 @@ class KillSwitch:
         is called from ``__init__`` before any env-var checks.
         """
         import json as _json
+
         state = {
             "active": self._active,
             "reason": self._reason,
-            "activated_at": self._activated_at.isoformat() if self._activated_at else None,
+            "activated_at": self._activated_at.isoformat()
+            if self._activated_at
+            else None,
         }
         try:
             self._state_file.write_text(_json.dumps(state, indent=2))
@@ -419,6 +424,7 @@ class KillSwitch:
             except RuntimeError:
                 # No running loop (e.g. tests) – call only if synchronous
                 import inspect as _inspect
+
                 result = self._event_bus.publish(event)
                 if _inspect.iscoroutine(result):
                     result.close()  # prevent "coroutine was never awaited" warning
@@ -470,7 +476,10 @@ class KillSwitch:
                     self._activate_internal(f"[file] {reason}")
 
                 # Env-var check (supports runtime injection)
-                if os.environ.get("HOPEFX_KILL_SWITCH", "0") == "1" and not self._active:
+                if (
+                    os.environ.get("HOPEFX_KILL_SWITCH", "0") == "1"
+                    and not self._active
+                ):
                     self._activate_internal("[env] HOPEFX_KILL_SWITCH=1")
 
             except Exception as exc:
@@ -484,6 +493,7 @@ class KillSwitch:
 #   from kill_switch import create_kill_switch_router
 #   app.include_router(create_kill_switch_router(kill_switch_instance))
 # ---------------------------------------------------------------------------
+
 
 def create_kill_switch_router(ks: "KillSwitch"):
     """
@@ -519,6 +529,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
         """
         try:
             from api.auth import _decode_token
+
             user = _decode_token(credentials.credentials)
         except HTTPException:
             raise
@@ -544,8 +555,6 @@ def create_kill_switch_router(ks: "KillSwitch"):
             raise HTTPException(status_code=403, detail="Role 'admin' required")
         return user
 
-
-
     @router.get("/status")
     async def get_status():
         """Return current kill switch state. No authentication required."""
@@ -555,6 +564,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
     # Prevents brute-force token guessing against the deactivate endpoint.
     import time as _time
     from collections import defaultdict as _defaultdict
+
     _ks_attempt_times: dict = _defaultdict(list)
     _KS_RATE_LIMIT = 5
     _KS_RATE_WINDOW = 60  # seconds
@@ -567,13 +577,17 @@ def create_kill_switch_router(ks: "KillSwitch"):
         if len(_ks_attempt_times[user_id]) >= _KS_RATE_LIMIT:
             logger.warning(
                 "Kill switch rate limit exceeded for user=%s (%d attempts in %ds)",
-                user_id, len(_ks_attempt_times[user_id]), _KS_RATE_WINDOW,
+                user_id,
+                len(_ks_attempt_times[user_id]),
+                _KS_RATE_WINDOW,
             )
             raise HTTPException(status_code=429, detail="Too many kill switch requests")
         _ks_attempt_times[user_id].append(now)
 
     @router.post("/activate")
-    async def activate(req: _KSActivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)):
+    async def activate(
+        req: _KSActivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)
+    ):
         """
         Halt all trading immediately.
 
@@ -585,7 +599,9 @@ def create_kill_switch_router(ks: "KillSwitch"):
         _check_rate_limit(user_id)
 
         if ks.is_active():
-            logger.info("Kill switch activate called but already active (user=%s)", user_id)
+            logger.info(
+                "Kill switch activate called but already active (user=%s)", user_id
+            )
             return {"status": "already_active", "reason": ks.reason}
 
         reason = f"[api:{user_id}] {req.reason}"
@@ -603,7 +619,11 @@ def create_kill_switch_router(ks: "KillSwitch"):
         }
 
     @router.post("/deactivate")
-    async def deactivate(req: _KSDeactivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)):
+    async def deactivate(
+        req: _KSDeactivateRequest,
+        request: _FastAPIRequest,
+        user=Depends(_require_admin),
+    ):
         """
         Resume trading after a kill switch event.
 
@@ -615,7 +635,9 @@ def create_kill_switch_router(ks: "KillSwitch"):
         _check_rate_limit(user_id)
 
         if not ks.is_active():
-            logger.info("Kill switch deactivate called but already inactive (user=%s)", user_id)
+            logger.info(
+                "Kill switch deactivate called but already inactive (user=%s)", user_id
+            )
             return {"status": "already_inactive"}
 
         try:

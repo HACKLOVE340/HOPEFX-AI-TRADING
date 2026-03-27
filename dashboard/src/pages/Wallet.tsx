@@ -68,7 +68,7 @@ export function Wallet() {
             </div>
             <div className="text-2xl font-bold">$45,000.00</div>
           </div>
-          
+
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-red-500/10 rounded">
@@ -78,7 +78,7 @@ export function Wallet() {
             </div>
             <div className="text-2xl font-bold">$20,234.50</div>
           </div>
-          
+
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-amber-500/10 rounded">
@@ -115,8 +115,8 @@ export function Wallet() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className={`px-2 py-1 rounded text-xs ${
-                      tx.status === 'completed' 
-                        ? 'bg-green-500/10 text-green-400' 
+                      tx.status === 'completed'
+                        ? 'bg-green-500/10 text-green-400'
                         : 'bg-amber-500/10 text-amber-400'
                     }`}>
                       {tx.status}
@@ -141,7 +141,7 @@ export function Wallet() {
               $99/month
             </span>
           </div>
-          
+
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
@@ -162,7 +162,7 @@ export function Wallet() {
               <span>Priority Support</span>
             </div>
           </div>
-          
+
           <div className="flex gap-3 mt-6">
             <button className="px-4 py-2 bg-slate-800 rounded-lg hover:bg-slate-700">
               Upgrade to Elite
@@ -190,7 +190,7 @@ export function Wallet() {
               Default
             </span>
           </div>
-          
+
           <button className="w-full py-3 border border-dashed border-slate-700 rounded-lg text-slate-400 hover:border-slate-500 hover:text-slate-300">
             + Add Payment Method
           </button>

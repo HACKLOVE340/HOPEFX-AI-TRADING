@@ -37,7 +37,6 @@ OANDA_INSTRUMENTS      — Comma-separated instruments (default XAU_USD,EUR_USD)
 
 from __future__ import annotations
 
-import asyncio
 import csv
 import json
 import logging
@@ -52,6 +51,7 @@ from typing import Any, Dict, List, Optional
 # ── dotenv ────────────────────────────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass  # dotenv optional; env vars may already be set
@@ -73,17 +73,26 @@ START_JSON = DATA_DIR / "oanda_paper_start.json"
 STATUS_JSON = DATA_DIR / "paper_trading_status.json"
 
 CSV_HEADERS = [
-    "timestamp", "instrument", "side", "units", "entry_price",
-    "exit_price", "pnl", "slippage_pips", "drawdown_pct", "balance",
+    "timestamp",
+    "instrument",
+    "side",
+    "units",
+    "entry_price",
+    "exit_price",
+    "pnl",
+    "slippage_pips",
+    "drawdown_pct",
+    "balance",
 ]
 
 OANDA_BASE = {
     "practice": "https://api-fxpractice.oanda.com",
-    "live":     "https://api-fxtrade.oanda.com",
+    "live": "https://api-fxtrade.oanda.com",
 }
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
@@ -99,6 +108,7 @@ def _require(key: str) -> str:
 
 # ── Telegram alert ────────────────────────────────────────────────────────────
 
+
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
     """Send a Telegram message; returns True on success."""
     if not token or not chat_id:
@@ -107,8 +117,11 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
     try:
         import urllib.request
         import urllib.parse
+
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
+        data = urllib.parse.urlencode(
+            {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        ).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status == 200
@@ -118,6 +131,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
 
 
 # ── OANDA REST helpers ────────────────────────────────────────────────────────
+
 
 class OANDAPaperClient:
     """Minimal OANDA v20 REST client for paper trading."""
@@ -133,6 +147,7 @@ class OANDAPaperClient:
 
     def _get(self, path: str) -> Dict[str, Any]:
         import urllib.request
+
         url = f"{self.base_url}{path}"
         req = urllib.request.Request(url, headers=self._headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -140,9 +155,12 @@ class OANDAPaperClient:
 
     def _post(self, path: str, body: Dict) -> Dict[str, Any]:
         import urllib.request
+
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(url, data=data, headers=self._headers, method="POST")
+        req = urllib.request.Request(
+            url, data=data, headers=self._headers, method="POST"
+        )
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
 
@@ -151,7 +169,9 @@ class OANDAPaperClient:
 
     def get_price(self, instrument: str) -> Optional[float]:
         try:
-            resp = self._get(f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}")
+            resp = self._get(
+                f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}"
+            )
             prices = resp.get("prices", [])
             if prices:
                 bid = float(prices[0].get("bids", [{}])[0].get("price", 0))
@@ -190,6 +210,7 @@ class OANDAPaperClient:
 
 # ── CSV logger ────────────────────────────────────────────────────────────────
 
+
 class TradeLogger:
     def __init__(self, path: Path = TRADES_CSV):
         self.path = path
@@ -208,6 +229,7 @@ class TradeLogger:
 
 # ── Status writer ─────────────────────────────────────────────────────────────
 
+
 def write_status(data: Dict[str, Any]) -> None:
     """Write /api/status/paper-trading compatible JSON."""
     payload = {**data, "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -215,6 +237,7 @@ def write_status(data: Dict[str, Any]) -> None:
 
 
 # ── Main engine loop ──────────────────────────────────────────────────────────
+
 
 class PaperTradingRunner:
     """
@@ -226,29 +249,31 @@ class PaperTradingRunner:
     """
 
     def __init__(self):
-        self.api_key      = _require("OANDA_API_KEY")
-        self.account_id   = _require("OANDA_ACCOUNT_ID")
-        self.environment  = _env("OANDA_ENVIRONMENT", "practice")
-        self.tg_token     = _env("TELEGRAM_BOT_TOKEN")
-        self.tg_chat      = _env("TELEGRAM_CHAT_ID")
-        self.max_dd_pct   = float(_env("PAPER_MAX_DD_PCT", "0.03"))
-        self.duration_s   = float(_env("PAPER_DURATION_DAYS", "30")) * 86400
-        self.instruments  = [i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")]
+        self.api_key = _require("OANDA_API_KEY")
+        self.account_id = _require("OANDA_ACCOUNT_ID")
+        self.environment = _env("OANDA_ENVIRONMENT", "practice")
+        self.tg_token = _env("TELEGRAM_BOT_TOKEN")
+        self.tg_chat = _env("TELEGRAM_CHAT_ID")
+        self.max_dd_pct = float(_env("PAPER_MAX_DD_PCT", "0.03"))
+        self.duration_s = float(_env("PAPER_DURATION_DAYS", "30")) * 86400
+        self.instruments = [
+            i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
+        ]
         self.poll_interval = 60  # seconds between signal checks
 
-        self.client       = OANDAPaperClient(self.api_key, self.account_id, self.environment)
+        self.client = OANDAPaperClient(self.api_key, self.account_id, self.environment)
         self.trade_logger = TradeLogger()
 
         self.start_balance: float = 0.0
-        self.peak_balance:  float = 0.0
+        self.peak_balance: float = 0.0
         self.current_balance: float = 0.0
-        self.trade_count:   int   = 0
-        self.start_time:    float = time.time()
+        self.trade_count: int = 0
+        self.start_time: float = time.time()
         self._price_history: Dict[str, List[float]] = {i: [] for i in self.instruments}
         self._running = True
 
         # Graceful shutdown on SIGINT/SIGTERM
-        signal.signal(signal.SIGINT,  self._handle_stop)
+        signal.signal(signal.SIGINT, self._handle_stop)
         signal.signal(signal.SIGTERM, self._handle_stop)
 
     def _handle_stop(self, *_) -> None:
@@ -261,37 +286,43 @@ class PaperTradingRunner:
         logger.info("Connecting to OANDA %s …", self.environment)
         summary = self.client.get_account()
         acct = summary.get("account", {})
-        self.start_balance   = float(acct.get("balance", 0))
-        self.peak_balance    = self.start_balance
+        self.start_balance = float(acct.get("balance", 0))
+        self.peak_balance = self.start_balance
         self.current_balance = self.start_balance
 
         if self.start_balance == 0:
             logger.error("Account balance is 0 — check OANDA credentials")
             sys.exit(1)
 
-        logger.info("Account %s | Balance: %.2f %s",
-                    self.account_id, self.start_balance, acct.get("currency", "USD"))
+        logger.info(
+            "Account %s | Balance: %.2f %s",
+            self.account_id,
+            self.start_balance,
+            acct.get("currency", "USD"),
+        )
 
         # Write start anchor (backup)
         if not START_JSON.exists():
             anchor = {
-                "account_id":    self.account_id,
+                "account_id": self.account_id,
                 "start_balance": self.start_balance,
-                "start_time":    datetime.now(timezone.utc).isoformat(),
-                "environment":   self.environment,
-                "instruments":   self.instruments,
+                "start_time": datetime.now(timezone.utc).isoformat(),
+                "environment": self.environment,
+                "instruments": self.instruments,
             }
             START_JSON.write_text(json.dumps(anchor, indent=2))
             logger.info("Wrote start anchor → %s", START_JSON)
 
-        write_status({
-            "complete":       False,
-            "start_balance":  self.start_balance,
-            "current_balance": self.start_balance,
-            "drawdown_pct":   0.0,
-            "trade_count":    0,
-            "elapsed_days":   0.0,
-        })
+        write_status(
+            {
+                "complete": False,
+                "start_balance": self.start_balance,
+                "current_balance": self.start_balance,
+                "drawdown_pct": 0.0,
+                "trade_count": 0,
+                "elapsed_days": 0.0,
+            }
+        )
 
     # ── signal generation (momentum) ─────────────────────────────────────────
 
@@ -324,11 +355,13 @@ class PaperTradingRunner:
         if dd > self.max_dd_pct:
             logger.critical(
                 "DRAWDOWN BREACH: %.2f%% > %.2f%% limit — activating kill switch",
-                dd * 100, self.max_dd_pct * 100,
+                dd * 100,
+                self.max_dd_pct * 100,
             )
             self.client.close_all_positions()
             send_telegram(
-                self.tg_token, self.tg_chat,
+                self.tg_token,
+                self.tg_chat,
                 f"🚨 <b>HOPEFX KILL SWITCH</b>\n"
                 f"Drawdown {dd*100:.2f}% exceeded {self.max_dd_pct*100:.0f}% limit.\n"
                 f"All positions closed. Session halted.",
@@ -359,8 +392,11 @@ class PaperTradingRunner:
 
     def run(self) -> None:
         self._bootstrap()
-        logger.info("Starting %s-day paper session | Kill at %.0f%% DD",
-                    self._duration_days(), self.max_dd_pct * 100)
+        logger.info(
+            "Starting %s-day paper session | Kill at %.0f%% DD",
+            self._duration_days(),
+            self.max_dd_pct * 100,
+        )
 
         last_daily_alert = time.time()
         end_time = self.start_time + self.duration_s
@@ -382,19 +418,26 @@ class PaperTradingRunner:
         # Session complete
         elapsed_days = (time.time() - self.start_time) / 86400
         complete = elapsed_days >= float(self._duration_days()) * 0.99
-        write_status({
-            "complete":        complete,
-            "start_balance":   self.start_balance,
-            "current_balance": self.current_balance,
-            "drawdown_pct":    self._check_drawdown(),
-            "trade_count":     self.trade_count,
-            "elapsed_days":    round(elapsed_days, 2),
-        })
-        logger.info("Session ended. Complete=%s | Trades=%d | Balance=%.2f",
-                    complete, self.trade_count, self.current_balance)
+        write_status(
+            {
+                "complete": complete,
+                "start_balance": self.start_balance,
+                "current_balance": self.current_balance,
+                "drawdown_pct": self._check_drawdown(),
+                "trade_count": self.trade_count,
+                "elapsed_days": round(elapsed_days, 2),
+            }
+        )
+        logger.info(
+            "Session ended. Complete=%s | Trades=%d | Balance=%.2f",
+            complete,
+            self.trade_count,
+            self.current_balance,
+        )
         if complete:
             send_telegram(
-                self.tg_token, self.tg_chat,
+                self.tg_token,
+                self.tg_chat,
                 f"✅ <b>30-day paper run COMPLETE</b>\n"
                 f"Trades: {self.trade_count} | Final balance: ${self.current_balance:,.2f}\n"
                 f"P&L: {self.current_balance - self.start_balance:+,.2f}\n"
@@ -442,30 +485,40 @@ class PaperTradingRunner:
 
                 self.trade_count += 1
                 record = {
-                    "timestamp":     datetime.now(timezone.utc).isoformat(),
-                    "instrument":    instrument,
-                    "side":          signal,
-                    "units":         abs(units),
-                    "entry_price":   entry_price,
-                    "exit_price":    fill_price,
-                    "pnl":           fill.get("pl", 0),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "instrument": instrument,
+                    "side": signal,
+                    "units": abs(units),
+                    "entry_price": entry_price,
+                    "exit_price": fill_price,
+                    "pnl": fill.get("pl", 0),
                     "slippage_pips": round(slippage_pips, 2),
-                    "drawdown_pct":  round(dd * 100, 4),
-                    "balance":       self.current_balance,
+                    "drawdown_pct": round(dd * 100, 4),
+                    "balance": self.current_balance,
                 }
                 self.trade_logger.log(record)
-                logger.info("TRADE #%d %s %s %d units @ %.5f (slip %.2f pips)",
-                            self.trade_count, signal, instrument, abs(units),
-                            fill_price, slippage_pips)
+                logger.info(
+                    "TRADE #%d %s %s %d units @ %.5f (slip %.2f pips)",
+                    self.trade_count,
+                    signal,
+                    instrument,
+                    abs(units),
+                    fill_price,
+                    slippage_pips,
+                )
 
-                write_status({
-                    "complete":        False,
-                    "start_balance":   self.start_balance,
-                    "current_balance": self.current_balance,
-                    "drawdown_pct":    round(dd * 100, 4),
-                    "trade_count":     self.trade_count,
-                    "elapsed_days":    round((time.time() - self.start_time) / 86400, 2),
-                })
+                write_status(
+                    {
+                        "complete": False,
+                        "start_balance": self.start_balance,
+                        "current_balance": self.current_balance,
+                        "drawdown_pct": round(dd * 100, 4),
+                        "trade_count": self.trade_count,
+                        "elapsed_days": round(
+                            (time.time() - self.start_time) / 86400, 2
+                        ),
+                    }
+                )
 
             except Exception as exc:
                 logger.error("Order failed for %s: %s", instrument, exc)

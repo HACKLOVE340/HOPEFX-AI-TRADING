@@ -57,14 +57,14 @@ async function loadStrategies() {
         const response = await fetch('/api/trading/strategies');
         const strategies = await response.json();
         const listEl = document.getElementById('strategies-list');
-        
+
         if (strategies.length === 0) {
             listEl.innerHTML = '<p style="color: #7f8c8d;">No strategies found. Create one above!</p>';
             return;
         }
-        
+
         let html = '<table><thead><tr><th>Name</th><th>Symbol</th><th>Status</th><th>Performance</th><th>Actions</th></tr></thead><tbody>';
-        
+
         strategies.forEach(strategy => {
             const perf = strategy.performance;
             const statusClass = strategy.status === 'RUNNING' ? 'badge-success' : 'badge-warning';
@@ -82,7 +82,7 @@ async function loadStrategies() {
                 </tr>
             `;
         });
-        
+
         html += '</tbody></table>';
         listEl.innerHTML = html;
     } catch (error) {
@@ -92,21 +92,21 @@ async function loadStrategies() {
 
 document.getElementById('create-strategy-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const data = {
         name: document.getElementById('strategy-name').value,
         symbol: document.getElementById('symbol').value,
         timeframe: document.getElementById('timeframe').value,
         strategy_type: document.getElementById('strategy-type').value,
     };
-    
+
     try {
         const response = await fetch('/api/trading/strategies', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
-        
+
         if (response.ok) {
             alert('Strategy created successfully!');
             document.getElementById('create-strategy-form').reset();

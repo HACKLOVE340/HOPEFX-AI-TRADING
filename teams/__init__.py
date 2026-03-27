@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class UserRole(Enum):
     """User roles in the system"""
+
     OWNER = "owner"
     ADMIN = "admin"
     MANAGER = "manager"
@@ -34,6 +35,7 @@ class UserRole(Enum):
 
 class Permission(Enum):
     """System permissions"""
+
     # Trading permissions
     TRADE_EXECUTE = "trade:execute"
     TRADE_VIEW = "trade:view"
@@ -71,27 +73,41 @@ class Permission(Enum):
 ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
     UserRole.OWNER: {p for p in Permission},  # All permissions
     UserRole.ADMIN: {
-        Permission.TRADE_EXECUTE, Permission.TRADE_VIEW,
-        Permission.STRATEGY_CREATE, Permission.STRATEGY_EDIT,
-        Permission.STRATEGY_DELETE, Permission.STRATEGY_VIEW,
+        Permission.TRADE_EXECUTE,
+        Permission.TRADE_VIEW,
+        Permission.STRATEGY_CREATE,
+        Permission.STRATEGY_EDIT,
+        Permission.STRATEGY_DELETE,
+        Permission.STRATEGY_VIEW,
         Permission.STRATEGY_ACTIVATE,
-        Permission.PORTFOLIO_VIEW, Permission.PORTFOLIO_MANAGE,
-        Permission.USER_INVITE, Permission.USER_MANAGE,
-        Permission.ANALYTICS_VIEW, Permission.ANALYTICS_EXPORT,
-        Permission.RISK_VIEW, Permission.RISK_MANAGE,
+        Permission.PORTFOLIO_VIEW,
+        Permission.PORTFOLIO_MANAGE,
+        Permission.USER_INVITE,
+        Permission.USER_MANAGE,
+        Permission.ANALYTICS_VIEW,
+        Permission.ANALYTICS_EXPORT,
+        Permission.RISK_VIEW,
+        Permission.RISK_MANAGE,
     },
     UserRole.MANAGER: {
-        Permission.TRADE_EXECUTE, Permission.TRADE_VIEW,
-        Permission.STRATEGY_CREATE, Permission.STRATEGY_EDIT,
-        Permission.STRATEGY_VIEW, Permission.STRATEGY_ACTIVATE,
-        Permission.PORTFOLIO_VIEW, Permission.PORTFOLIO_MANAGE,
+        Permission.TRADE_EXECUTE,
+        Permission.TRADE_VIEW,
+        Permission.STRATEGY_CREATE,
+        Permission.STRATEGY_EDIT,
+        Permission.STRATEGY_VIEW,
+        Permission.STRATEGY_ACTIVATE,
+        Permission.PORTFOLIO_VIEW,
+        Permission.PORTFOLIO_MANAGE,
         Permission.USER_INVITE,
-        Permission.ANALYTICS_VIEW, Permission.ANALYTICS_EXPORT,
+        Permission.ANALYTICS_VIEW,
+        Permission.ANALYTICS_EXPORT,
         Permission.RISK_VIEW,
     },
     UserRole.TRADER: {
-        Permission.TRADE_EXECUTE, Permission.TRADE_VIEW,
-        Permission.STRATEGY_VIEW, Permission.STRATEGY_ACTIVATE,
+        Permission.TRADE_EXECUTE,
+        Permission.TRADE_VIEW,
+        Permission.STRATEGY_VIEW,
+        Permission.STRATEGY_ACTIVATE,
         Permission.PORTFOLIO_VIEW,
         Permission.ANALYTICS_VIEW,
         Permission.RISK_VIEW,
@@ -100,7 +116,8 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
         Permission.TRADE_VIEW,
         Permission.STRATEGY_VIEW,
         Permission.PORTFOLIO_VIEW,
-        Permission.ANALYTICS_VIEW, Permission.ANALYTICS_EXPORT,
+        Permission.ANALYTICS_VIEW,
+        Permission.ANALYTICS_EXPORT,
         Permission.RISK_VIEW,
     },
     UserRole.VIEWER: {
@@ -115,6 +132,7 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
 @dataclass
 class TeamMember:
     """Team member profile"""
+
     user_id: str
     email: str
     display_name: str
@@ -130,6 +148,7 @@ class TeamMember:
 @dataclass
 class Team:
     """Team/organization configuration"""
+
     team_id: str
     name: str
     owner_id: str
@@ -146,6 +165,7 @@ class Team:
 @dataclass
 class TeamInvitation:
     """Pending team invitation"""
+
     invitation_id: str
     team_id: str
     email: str
@@ -160,6 +180,7 @@ class TeamInvitation:
 @dataclass
 class ActivityLog:
     """User activity log entry"""
+
     log_id: str
     team_id: str
     user_id: str
@@ -200,7 +221,7 @@ class TeamManager:
         name: str,
         owner_email: str,
         owner_name: str,
-        owner_id: Optional[str] = None
+        owner_id: Optional[str] = None,
     ) -> Team:
         """
         Create a new team.
@@ -214,7 +235,9 @@ class TeamManager:
         Returns:
             New team object
         """
-        team_id = f"team_{len(self.teams) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        team_id = (
+            f"team_{len(self.teams) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        )
         owner_id = owner_id or f"user_{int(datetime.now(timezone.utc).timestamp())}"
 
         # Create owner as first member
@@ -224,7 +247,7 @@ class TeamManager:
             display_name=owner_name,
             role=UserRole.OWNER,
             joined_at=datetime.now(timezone.utc),
-            last_active=datetime.now(timezone.utc)
+            last_active=datetime.now(timezone.utc),
         )
 
         team = Team(
@@ -234,24 +257,22 @@ class TeamManager:
             members={owner_id: owner},
             created_at=datetime.now(timezone.utc),
             settings={
-                'notifications_enabled': True,
-                'two_factor_required': False,
-                'allowed_ip_ranges': [],
-            }
+                "notifications_enabled": True,
+                "two_factor_required": False,
+                "allowed_ip_ranges": [],
+            },
         )
 
         self.teams[team_id] = team
-        self._log_activity(team_id, owner_id, 'create_team', 'team', team_id, {'name': name})
+        self._log_activity(
+            team_id, owner_id, "create_team", "team", team_id, {"name": name}
+        )
 
         logger.info(f"Created team: {name} (ID: {team_id})")
         return team
 
     def invite_member(
-        self,
-        team_id: str,
-        email: str,
-        role: UserRole,
-        invited_by: str
+        self, team_id: str, email: str, role: UserRole, invited_by: str
     ) -> Optional[TeamInvitation]:
         """
         Send an invitation to join a team.
@@ -272,7 +293,9 @@ class TeamManager:
 
         # Check if inviter has permission
         inviter = team.members.get(invited_by)
-        if not inviter or not self.has_permission(team_id, invited_by, Permission.USER_INVITE):
+        if not inviter or not self.has_permission(
+            team_id, invited_by, Permission.USER_INVITE
+        ):
             logger.error(f"User {invited_by} does not have invite permission")
             return None
 
@@ -290,23 +313,24 @@ class TeamManager:
             invited_by=invited_by,
             created_at=datetime.now(timezone.utc),
             expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-            token=secrets.token_urlsafe(32)
+            token=secrets.token_urlsafe(32),
         )
 
         self.invitations[invitation.invitation_id] = invitation
         self._log_activity(
-            team_id, invited_by, 'invite_member', 'invitation',
-            invitation.invitation_id, {'email': email, 'role': role.value}
+            team_id,
+            invited_by,
+            "invite_member",
+            "invitation",
+            invitation.invitation_id,
+            {"email": email, "role": role.value},
         )
 
         logger.info(f"Created invitation for {email} to team {team_id}")
         return invitation
 
     def accept_invitation(
-        self,
-        invitation_token: str,
-        user_id: str,
-        display_name: str
+        self, invitation_token: str, user_id: str, display_name: str
     ) -> Optional[TeamMember]:
         """
         Accept a team invitation.
@@ -346,26 +370,25 @@ class TeamManager:
             display_name=display_name,
             role=invitation.role,
             joined_at=datetime.now(timezone.utc),
-            last_active=datetime.now(timezone.utc)
+            last_active=datetime.now(timezone.utc),
         )
 
         team.members[user_id] = member
         invitation.accepted = True
 
         self._log_activity(
-            team.team_id, user_id, 'accept_invitation', 'user',
-            user_id, {'role': invitation.role.value}
+            team.team_id,
+            user_id,
+            "accept_invitation",
+            "user",
+            user_id,
+            {"role": invitation.role.value},
         )
 
         logger.info(f"User {user_id} joined team {invitation.team_id}")
         return member
 
-    def remove_member(
-        self,
-        team_id: str,
-        user_id: str,
-        removed_by: str
-    ) -> bool:
+    def remove_member(self, team_id: str, user_id: str, removed_by: str) -> bool:
         """
         Remove a member from a team.
 
@@ -394,8 +417,7 @@ class TeamManager:
         if user_id in team.members:
             del team.members[user_id]
             self._log_activity(
-                team_id, removed_by, 'remove_member', 'user',
-                user_id, {}
+                team_id, removed_by, "remove_member", "user", user_id, {}
             )
             logger.info(f"Removed user {user_id} from team {team_id}")
             return True
@@ -403,11 +425,7 @@ class TeamManager:
         return False
 
     def change_role(
-        self,
-        team_id: str,
-        user_id: str,
-        new_role: UserRole,
-        changed_by: str
+        self, team_id: str, user_id: str, new_role: UserRole, changed_by: str
     ) -> bool:
         """
         Change a member's role.
@@ -443,18 +461,19 @@ class TeamManager:
         member.role = new_role
 
         self._log_activity(
-            team_id, changed_by, 'change_role', 'user',
-            user_id, {'old_role': old_role.value, 'new_role': new_role.value}
+            team_id,
+            changed_by,
+            "change_role",
+            "user",
+            user_id,
+            {"old_role": old_role.value, "new_role": new_role.value},
         )
 
         logger.info(f"Changed role for {user_id} from {old_role} to {new_role}")
         return True
 
     def has_permission(
-        self,
-        team_id: str,
-        user_id: str,
-        permission: Permission
+        self, team_id: str, user_id: str, permission: Permission
     ) -> bool:
         """
         Check if a user has a specific permission.
@@ -486,11 +505,7 @@ class TeamManager:
 
         return False
 
-    def get_user_permissions(
-        self,
-        team_id: str,
-        user_id: str
-    ) -> Set[Permission]:
+    def get_user_permissions(self, team_id: str, user_id: str) -> Set[Permission]:
         """Get all permissions for a user."""
         team = self.teams.get(team_id)
         if not team:
@@ -504,12 +519,7 @@ class TeamManager:
         role_perms = ROLE_PERMISSIONS.get(member.role, set())
         return role_perms.union(member.custom_permissions)
 
-    def share_strategy(
-        self,
-        team_id: str,
-        strategy_id: str,
-        shared_by: str
-    ) -> bool:
+    def share_strategy(self, team_id: str, strategy_id: str, shared_by: str) -> bool:
         """Share a strategy with the team."""
         team = self.teams.get(team_id)
         if not team:
@@ -521,20 +531,14 @@ class TeamManager:
         if strategy_id not in team.shared_strategies:
             team.shared_strategies.append(strategy_id)
             self._log_activity(
-                team_id, shared_by, 'share_strategy',
-                'strategy', strategy_id, {}
+                team_id, shared_by, "share_strategy", "strategy", strategy_id, {}
             )
             logger.info(f"Strategy {strategy_id} shared with team {team_id}")
             return True
 
         return False
 
-    def share_portfolio(
-        self,
-        team_id: str,
-        portfolio_id: str,
-        shared_by: str
-    ) -> bool:
+    def share_portfolio(self, team_id: str, portfolio_id: str, shared_by: str) -> bool:
         """Share a portfolio with the team."""
         team = self.teams.get(team_id)
         if not team:
@@ -546,8 +550,7 @@ class TeamManager:
         if portfolio_id not in team.shared_portfolios:
             team.shared_portfolios.append(portfolio_id)
             self._log_activity(
-                team_id, shared_by, 'share_portfolio',
-                'portfolio', portfolio_id, {}
+                team_id, shared_by, "share_portfolio", "portfolio", portfolio_id, {}
             )
             logger.info(f"Portfolio {portfolio_id} shared with team {team_id}")
             return True
@@ -555,10 +558,7 @@ class TeamManager:
         return False
 
     def generate_api_key(
-        self,
-        team_id: str,
-        generated_by: str,
-        name: str = "API Key"
+        self, team_id: str, generated_by: str, name: str = "API Key"
     ) -> Optional[Dict[str, str]]:
         """Generate an API key for the team."""
         team = self.teams.get(team_id)
@@ -574,10 +574,7 @@ class TeamManager:
         salt = secrets.token_bytes(32)
         # Use PBKDF2 with SHA-256, 600000 iterations per OWASP 2023 recommendations
         api_key_hash = hashlib.pbkdf2_hmac(
-            'sha256',
-            api_key.encode(),
-            salt,
-            600000
+            "sha256", api_key.encode(), salt, 600000
         ).hex()
         # Store salt:hash format for later verification
         api_key_stored = f"{salt.hex()}:{api_key_hash}"
@@ -585,16 +582,20 @@ class TeamManager:
         team.api_keys.append(api_key_stored)
 
         self._log_activity(
-            team_id, generated_by, 'generate_api_key',
-            'api_key', api_key_hash[:16], {'name': name}
+            team_id,
+            generated_by,
+            "generate_api_key",
+            "api_key",
+            api_key_hash[:16],
+            {"name": name},
         )
 
         # Return the actual key only once
         return {
-            'key': api_key,
-            'key_id': api_key_hash[:16],
-            'name': name,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            "key": api_key,
+            "key_id": api_key_hash[:16],
+            "name": name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def verify_api_key(self, team_id: str, api_key: str) -> bool:
@@ -613,15 +614,12 @@ class TeamManager:
             return False
 
         for stored_key in team.api_keys:
-            if ':' in stored_key:
+            if ":" in stored_key:
                 # New format: salt:hash (PBKDF2)
-                salt_hex, stored_hash = stored_key.split(':', 1)
+                salt_hex, stored_hash = stored_key.split(":", 1)
                 salt = bytes.fromhex(salt_hex)
                 computed_hash = hashlib.pbkdf2_hmac(
-                    'sha256',
-                    api_key.encode(),
-                    salt,
-                    600000
+                    "sha256", api_key.encode(), salt, 600000
                 ).hex()
                 if hmac.compare_digest(computed_hash, stored_hash):
                     return True
@@ -639,7 +637,7 @@ class TeamManager:
         action: str,
         resource_type: str,
         resource_id: str,
-        details: Dict[str, Any]
+        details: Dict[str, Any],
     ):
         """Log team activity."""
         log = ActivityLog(
@@ -650,21 +648,15 @@ class TeamManager:
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         self.activity_logs.append(log)
 
     def get_activity_log(
-        self,
-        team_id: str,
-        user_id: Optional[str] = None,
-        limit: int = 100
+        self, team_id: str, user_id: Optional[str] = None, limit: int = 100
     ) -> List[Dict[str, Any]]:
         """Get team activity log."""
-        logs = [
-            log for log in self.activity_logs
-            if log.team_id == team_id
-        ]
+        logs = [log for log in self.activity_logs if log.team_id == team_id]
 
         if user_id:
             logs = [log for log in logs if log.user_id == user_id]
@@ -673,13 +665,13 @@ class TeamManager:
 
         return [
             {
-                'log_id': log.log_id,
-                'user_id': log.user_id,
-                'action': log.action,
-                'resource_type': log.resource_type,
-                'resource_id': log.resource_id,
-                'details': log.details,
-                'timestamp': log.timestamp.isoformat()
+                "log_id": log.log_id,
+                "user_id": log.user_id,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "details": log.details,
+                "timestamp": log.timestamp.isoformat(),
             }
             for log in logs
         ]
@@ -691,29 +683,29 @@ class TeamManager:
             return None
 
         return {
-            'team_id': team.team_id,
-            'name': team.name,
-            'created_at': team.created_at.isoformat(),
-            'member_count': len(team.members),
-            'max_members': team.max_members,
-            'subscription_tier': team.subscription_tier,
-            'shared_strategies': len(team.shared_strategies),
-            'shared_portfolios': len(team.shared_portfolios),
-            'api_keys_count': len(team.api_keys),
-            'members': [
+            "team_id": team.team_id,
+            "name": team.name,
+            "created_at": team.created_at.isoformat(),
+            "member_count": len(team.members),
+            "max_members": team.max_members,
+            "subscription_tier": team.subscription_tier,
+            "shared_strategies": len(team.shared_strategies),
+            "shared_portfolios": len(team.shared_portfolios),
+            "api_keys_count": len(team.api_keys),
+            "members": [
                 {
-                    'user_id': m.user_id,
-                    'display_name': m.display_name,
-                    'role': m.role.value,
-                    'is_active': m.is_active,
-                    'joined_at': m.joined_at.isoformat(),
+                    "user_id": m.user_id,
+                    "display_name": m.display_name,
+                    "role": m.role.value,
+                    "is_active": m.is_active,
+                    "joined_at": m.joined_at.isoformat(),
                 }
                 for m in team.members.values()
-            ]
+            ],
         }
 
 
-def create_teams_router(manager: 'TeamManager'):
+def create_teams_router(manager: "TeamManager"):
     """
     Create a FastAPI router for the Teams / Multi-User module.
 
@@ -804,8 +796,14 @@ def create_teams_router(manager: 'TeamManager'):
             display_name=req.display_name,
         )
         if not member:
-            raise HTTPException(status_code=400, detail="Invalid or expired invitation token")
-        return {"status": "accepted", "user_id": member.user_id, "role": member.role.value}
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired invitation token"
+            )
+        return {
+            "status": "accepted",
+            "user_id": member.user_id,
+            "role": member.role.value,
+        }
 
     @router.delete("/{team_id}/members/{user_id}")
     async def remove_member(team_id: str, user_id: str, removed_by: str = "admin"):
@@ -821,7 +819,9 @@ def create_teams_router(manager: 'TeamManager'):
         try:
             new_role = UserRole(req.new_role)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid role '{req.new_role}'")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid role '{req.new_role}'"
+            )
         success = manager.change_role(team_id, user_id, new_role, req.changed_by)
         if not success:
             raise HTTPException(status_code=404, detail="Team or member not found")
@@ -833,10 +833,16 @@ def create_teams_router(manager: 'TeamManager'):
         permissions = manager.get_user_permissions(team_id, user_id)
         if permissions is None:
             raise HTTPException(status_code=404, detail="Team or member not found")
-        return {"team_id": team_id, "user_id": user_id, "permissions": list(permissions)}
+        return {
+            "team_id": team_id,
+            "user_id": user_id,
+            "permissions": list(permissions),
+        }
 
     @router.get("/{team_id}/activity")
-    async def get_activity(team_id: str, user_id: Optional[str] = None, limit: int = 50):
+    async def get_activity(
+        team_id: str, user_id: Optional[str] = None, limit: int = 50
+    ):
         """Get team activity log."""
         return manager.get_activity_log(team_id, user_id=user_id, limit=limit)
 
@@ -845,13 +851,13 @@ def create_teams_router(manager: 'TeamManager'):
 
 # Module exports
 __all__ = [
-    'TeamManager',
-    'Team',
-    'TeamMember',
-    'TeamInvitation',
-    'UserRole',
-    'Permission',
-    'ROLE_PERMISSIONS',
-    'ActivityLog',
-    'create_teams_router',
+    "TeamManager",
+    "Team",
+    "TeamMember",
+    "TeamInvitation",
+    "UserRole",
+    "Permission",
+    "ROLE_PERMISSIONS",
+    "ActivityLog",
+    "create_teams_router",
 ]

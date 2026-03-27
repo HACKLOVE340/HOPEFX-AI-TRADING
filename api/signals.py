@@ -303,7 +303,10 @@ class RealTimeSignalService:
 
         # Determine strength
         strength = self._calculate_strength(
-            confidence, len(strategies_agreeing), total_strategies, rr_ratio,
+            confidence,
+            len(strategies_agreeing),
+            total_strategies,
+            rr_ratio,
         )
 
         # Create signal
@@ -396,7 +399,11 @@ class RealTimeSignalService:
             logger.debug("FCM signal push skipped: %s", exc)
 
     def _calculate_strength(
-        self, confidence: float, agreeing: int, total: int, rr_ratio: float,
+        self,
+        confidence: float,
+        agreeing: int,
+        total: int,
+        rr_ratio: float,
     ) -> SignalStrength:
         """Calculate signal strength based on multiple factors."""
 
@@ -550,7 +557,8 @@ class RealTimeSignalService:
             alert.last_triggered = datetime.now(timezone.utc)
 
             self._publish_event(
-                "alert_triggered", {"alert": asdict(alert), "signal": signal.to_dict()},
+                "alert_triggered",
+                {"alert": asdict(alert), "signal": signal.to_dict()},
             )
 
             logger.info(f"Alert triggered: {alert.id} by signal {signal.id}")
@@ -605,7 +613,9 @@ class RealTimeSignalService:
     # ============================================================
 
     def get_signal_history(
-        self, symbol: str = None, hours: int = 24,
+        self,
+        symbol: str = None,
+        hours: int = 24,
     ) -> List[TradingSignal]:
         """Get signal history."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -828,7 +838,8 @@ def create_signals_router():
             raise
         except Exception as e:
             raise HTTPException(
-                status_code=500, detail=f"Signal generation failed: {e}",
+                status_code=500,
+                detail=f"Signal generation failed: {e}",
             )
 
     @signals_router.get("/analytics")

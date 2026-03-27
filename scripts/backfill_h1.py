@@ -55,6 +55,7 @@ sys.path.insert(0, str(_ROOT))
 # Load .env if present
 try:
     from dotenv import load_dotenv
+
     load_dotenv(_ROOT / ".env")
 except ImportError:
     pass
@@ -66,9 +67,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Default backfill parameters
-_DEFAULT_SYMBOL      = "XAU_USD"
+_DEFAULT_SYMBOL = "XAU_USD"
 _DEFAULT_GRANULARITY = "H1"
-_DEFAULT_FROM        = "2015-01-01"
+_DEFAULT_FROM = "2015-01-01"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -143,7 +144,9 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"  To          : {to_dt.strftime('%Y-%m-%d')}")
     print(f"  Est. bars   : ~{total_bars_estimate:,}")
     print(f"  Output      : {output_path}")
-    print(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
+    print(
+        f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}"
+    )
     print()
 
     if args.dry_run:

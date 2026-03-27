@@ -611,6 +611,7 @@ class FeatureFlags:
 # Phase gate enforcement helpers
 # ---------------------------------------------------------------------------
 
+
 def check_phase2_gate() -> Tuple[bool, str]:
     """
     Verify the Phase 2 (anomaly weighting) paper-trading gate.
@@ -696,8 +697,7 @@ def check_phase3_gate() -> Tuple[bool, str]:
                 f"{remaining.days} days remaining (need 90)."
             )
         return True, (
-            f"Phase 3 gate passed: {elapsed.days} days elapsed, "
-            f"{fill_count} fills."
+            f"Phase 3 gate passed: {elapsed.days} days elapsed, " f"{fill_count} fills."
         )
     except ValueError as exc:
         return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
@@ -738,9 +738,7 @@ def check_phase4_gate(
         )
     if reasons:
         return False, "Phase 4 gate failed: " + "; ".join(reasons)
-    return True, (
-        f"Phase 4 gate passed: OOS={oos_accuracy:.1%} p={p_value:.4f}"
-    )
+    return True, (f"Phase 4 gate passed: OOS={oos_accuracy:.1%} p={p_value:.4f}")
 
 
 def check_sharpe_gate(

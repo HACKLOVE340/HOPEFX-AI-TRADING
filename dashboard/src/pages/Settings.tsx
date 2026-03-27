@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { 
-  Shield, 
-  Bell, 
-  Key, 
-  Globe, 
+import {
+  Shield,
+  Bell,
+  Key,
+  Globe,
   Smartphone,
   Save,
   Link,
@@ -55,7 +55,7 @@ export function Settings() {
           {activeSection === 'security' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Security Settings</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between py-4 border-b border-slate-800">
                   <div>
@@ -66,7 +66,7 @@ export function Settings() {
                     Enable
                   </button>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4 border-b border-slate-800">
                   <div>
                     <p className="font-medium">Login Notifications</p>
@@ -77,7 +77,7 @@ export function Settings() {
                     <div className="w-11 h-6 bg-slate-700 peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                   </label>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4 border-b border-slate-800">
                   <div>
                     <p className="font-medium">Withdrawal Whitelist</p>
@@ -87,7 +87,7 @@ export function Settings() {
                     Manage
                   </button>
                 </div>
-                
+
                 <div className="flex items-center justify-between py-4">
                   <div>
                     <p className="font-medium text-red-400">Danger Zone</p>
@@ -104,7 +104,7 @@ export function Settings() {
           {activeSection === 'api' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">API Keys</h3>
-              
+
               <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -127,11 +127,11 @@ export function Settings() {
                   </button>
                 </div>
               </div>
-              
+
               <button className="w-full py-3 border border-dashed border-slate-700 rounded-lg text-slate-400 hover:border-slate-500 hover:text-slate-300">
                 + Generate New API Key
               </button>
-              
+
               <div className="space-y-2 text-sm text-slate-400">
                 <p>• Never share your API keys</p>
                 <p>• Use IP whitelisting for production</p>
@@ -143,7 +143,7 @@ export function Settings() {
           {activeSection === 'trading' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Trading Preferences</h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
@@ -155,48 +155,48 @@ export function Settings() {
                     <option>1:100</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
                     Risk Per Trade (%)
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     defaultValue={1}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
                     Max Daily Loss (%)
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     defaultValue={2}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
                     Max Positions
                   </label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     defaultValue={5}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2"
                   />
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-3 pt-4">
                 <input type="checkbox" id="confirmations" defaultChecked className="w-4 h-4 rounded bg-slate-800 border-slate-700" />
                 <label htmlFor="confirmations" className="text-sm">
                   Require confirmation for trades over $10,000
                 </label>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="stop_loss" defaultChecked className="w-4 h-4 rounded bg-slate-800 border-slate-700" />
                 <label htmlFor="stop_loss" className="text-sm">

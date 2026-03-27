@@ -213,7 +213,7 @@ Based on `test_strategies.py` pattern:
 @pytest.mark.unit
 class TestAnalytics:
     """Test the Analytics module."""
-    
+
     def test_portfolio_optimization(self):
         """Test portfolio optimization."""
         # Implementation following established pattern
@@ -312,8 +312,8 @@ The HOPEFX AI Trading Framework is:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-02-13  
-**Status:** ✅ ALL TASKS COMPLETE  
+**Document Version:** 1.0
+**Last Updated:** 2026-02-13
+**Status:** ✅ ALL TASKS COMPLETE
 
 🎉 **SUCCESS! All required work is finished!** 🎉

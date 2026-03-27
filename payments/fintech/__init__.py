@@ -14,7 +14,10 @@ from .flutterwave import FlutterwaveClient, flutterwave_client
 from .bank_transfer import BankTransferClient, bank_transfer_client
 
 __all__ = [
-    'PaystackClient', 'paystack_client',
-    'FlutterwaveClient', 'flutterwave_client',
-    'BankTransferClient', 'bank_transfer_client'
+    "PaystackClient",
+    "paystack_client",
+    "FlutterwaveClient",
+    "flutterwave_client",
+    "BankTransferClient",
+    "bank_transfer_client",
 ]

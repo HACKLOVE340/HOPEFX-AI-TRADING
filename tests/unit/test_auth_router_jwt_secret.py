@@ -33,6 +33,7 @@ _OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_token(
     secret: str,
     sub: str = "user-123",
@@ -62,10 +63,12 @@ def _call(token: str):
             del sys.modules[key]
 
     import auth.router as router_mod
+
     return router_mod._get_current_user_id(_credentials(token))
 
 
 # ── Tests: server misconfiguration → 503 ─────────────────────────────────────
+
 
 class TestJWTSecretMisconfiguration:
     """Misconfigured secret must surface as 503, not silently accept tokens."""
@@ -85,12 +88,13 @@ class TestJWTSecretMisconfiguration:
         forged = _make_token(secret="tooshort")
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
-        assert exc_info.value.status_code == 503, (
-            f"Expected 503 (misconfigured), got {exc_info.value.status_code}."
-        )
+        assert (
+            exc_info.value.status_code == 503
+        ), f"Expected 503 (misconfigured), got {exc_info.value.status_code}."
 
 
 # ── Tests: invalid tokens → 401 ──────────────────────────────────────────────
+
 
 class TestEmptySecretBypass:
     """Core regression: tokens signed with '' must be rejected."""
@@ -115,6 +119,7 @@ class TestEmptySecretBypass:
 
 # ── Tests: valid token → success ─────────────────────────────────────────────
 
+
 class TestValidToken:
     """Correctly signed access tokens must be accepted."""
 
@@ -126,6 +131,7 @@ class TestValidToken:
 
 
 # ── Tests: invalid claims → 401 ──────────────────────────────────────────────
+
 
 class TestTokenClaimsValidation:
     """Invalid claims must be rejected with 401."""

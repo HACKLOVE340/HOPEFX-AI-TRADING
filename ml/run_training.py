@@ -59,7 +59,8 @@ def load_h1_csv(symbol: str, csv_dir: str = H1_CSV_DIR) -> pd.DataFrame | None:
     required = {"open", "high", "low", "close"}
     if not required.issubset(df.columns):
         logger.warning(
-            "CSV missing required columns %s — skipping", required - set(df.columns),
+            "CSV missing required columns %s — skipping",
+            required - set(df.columns),
         )
         return None
     if "volume" not in df.columns:
@@ -70,7 +71,9 @@ def load_h1_csv(symbol: str, csv_dir: str = H1_CSV_DIR) -> pd.DataFrame | None:
 
 
 def fetch_ohlcv_yfinance(
-    symbol: str, period: str = "2y", interval: str = "1d",
+    symbol: str,
+    period: str = "2y",
+    interval: str = "1d",
 ) -> pd.DataFrame:
     """Fallback: download OHLCV data from Yahoo Finance (daily bars)."""
     try:
@@ -182,11 +185,15 @@ def run_pipeline(
 def main():
     parser = argparse.ArgumentParser(description="HOPEFX ML training pipeline")
     parser.add_argument(
-        "--symbol", default=None, help="Single symbol to train (overrides ML_SYMBOLS)",
+        "--symbol",
+        default=None,
+        help="Single symbol to train (overrides ML_SYMBOLS)",
     )
     parser.add_argument("--csv", default=None, help="Explicit path to OHLCV CSV file")
     parser.add_argument(
-        "--period", default="2y", help="yfinance fallback period (default: 2y)",
+        "--period",
+        default="2y",
+        help="yfinance fallback period (default: 2y)",
     )
     parser.add_argument(
         "--models",
@@ -194,7 +201,9 @@ def main():
         help="Comma-separated model types: random_forest,xgboost,lstm",
     )
     parser.add_argument(
-        "--model-dir", default=MODEL_DIR, help="Output directory for saved weights",
+        "--model-dir",
+        default=MODEL_DIR,
+        help="Output directory for saved weights",
     )
     args = parser.parse_args()
 

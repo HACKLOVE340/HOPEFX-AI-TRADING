@@ -145,7 +145,10 @@ class RobustPredictor:
         self._agreement_threshold: float = 0.60  # was hardcoded 0.6
 
     def fit(
-        self, X: pd.DataFrame, y: pd.Series, sample_weights: Optional[np.ndarray] = None,
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        sample_weights: Optional[np.ndarray] = None,
     ) -> Dict:
         """
         Train with walk-forward validation and overfitting checks.
@@ -167,7 +170,10 @@ class RobustPredictor:
 
         # 3. Walk-forward validation with purging
         cv_results = self._walk_forward_validation(
-            X_selected, y, regimes, sample_weights,
+            X_selected,
+            y,
+            regimes,
+            sample_weights,
         )
 
         # 4. Check for overfitting
@@ -254,7 +260,10 @@ class RobustPredictor:
         return results
 
     def _train_ensemble(
-        self, X: pd.DataFrame, y: pd.Series, sample_weights: Optional[np.ndarray],
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        sample_weights: Optional[np.ndarray],
     ) -> Dict[str, Any]:
         """Train diverse models for ensemble"""
         models = {}
@@ -302,7 +311,9 @@ class RobustPredictor:
         return models
 
     def predict(
-        self, X: pd.DataFrame, regime: Optional[Regime] = None,
+        self,
+        X: pd.DataFrame,
+        regime: Optional[Regime] = None,
     ) -> PredictionResult:
         """
         Make prediction with uncertainty quantification.
@@ -534,7 +545,10 @@ class RobustPredictor:
         }
 
     def _estimate_return(
-        self, direction: int, probability: float, regime: Regime,
+        self,
+        direction: int,
+        probability: float,
+        regime: Regime,
     ) -> float:
         """
         Expected return estimate scaled by regime multiplier.
@@ -652,14 +666,19 @@ class RobustPredictor:
         return np.mean(correlations) if correlations else 0.0
 
     def _apply_embargo(
-        self, X: pd.DataFrame, y: pd.Series,
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """Remove recent data to prevent information leakage"""
         embargo_idx = len(X) - self.config.embargo_length
         return X.iloc[:embargo_idx], y.iloc[:embargo_idx]
 
     def _train_final_models(
-        self, X: pd.DataFrame, y: pd.Series, sample_weights: Optional[np.ndarray],
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        sample_weights: Optional[np.ndarray],
     ):
         """Train final models on all available data"""
         self.models = self._train_ensemble(X, y, sample_weights)
@@ -680,7 +699,9 @@ class RobustPredictor:
             self.meta_model.fit(meta_X, y)
 
     def _ensemble_predict(
-        self, models: Dict, X: pd.DataFrame,
+        self,
+        models: Dict,
+        X: pd.DataFrame,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Generate ensemble predictions"""
         predictions = []

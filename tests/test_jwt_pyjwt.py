@@ -36,6 +36,7 @@ verify_password = _mod.verify_password
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 class _FakeExc(Exception):
     status_code = 401
 
@@ -44,6 +45,7 @@ _CRED_EXC = _FakeExc("invalid credentials")
 
 
 # ── Token tests ───────────────────────────────────────────────────────────────
+
 
 def test_jose_not_imported():
     """python-jose must not be present in the module's imports."""
@@ -70,6 +72,7 @@ def test_create_and_verify_token():
 
 def test_token_with_custom_expiry():
     from datetime import timedelta
+
     token = create_access_token({"sub": "user-xyz"}, expires_delta=timedelta(hours=1))
     result = verify_token(token, _CRED_EXC)
     assert result == "user-xyz"
@@ -78,6 +81,7 @@ def test_token_with_custom_expiry():
 def test_expired_token_raises():
     """A token with exp in the past must be rejected."""
     import jwt as pyjwt
+
     secret = os.environ["JWT_SECRET_KEY"]
     expired_payload = {"sub": "user-exp", "exp": int(time.time()) - 10}
     token = pyjwt.encode(expired_payload, secret, algorithm="HS256")
@@ -95,6 +99,7 @@ def test_tampered_token_raises():
 def test_missing_sub_raises():
     """Token without 'sub' claim must be rejected."""
     import jwt as pyjwt
+
     secret = os.environ["JWT_SECRET_KEY"]
     token = pyjwt.encode({"exp": int(time.time()) + 3600}, secret, algorithm="HS256")
     with pytest.raises(Exception):
@@ -102,6 +107,7 @@ def test_missing_sub_raises():
 
 
 # ── Password hashing tests ────────────────────────────────────────────────────
+
 
 def test_hash_and_verify_password():
     hashed = hash_password("MySecureP@ss1")

@@ -48,13 +48,17 @@ def print_metrics(analyzer: AdvancedOrderFlowAnalyzer, symbol: str) -> None:
     pressure = analyzer.get_pressure_gauges(symbol)
 
     print(f"\n{'='*50}")
-    print(f"  Order Flow Snapshot — {symbol}  {datetime.now(timezone.utc).strftime('%H:%M:%S')}")
+    print(
+        f"  Order Flow Snapshot — {symbol}  {datetime.now(timezone.utc).strftime('%H:%M:%S')}"
+    )
     print(f"{'='*50}")
 
     if aggression:
         print(f"  Buy aggression  : {aggression.buy_aggression:6.1f}%")
         print(f"  Sell aggression : {aggression.sell_aggression:6.1f}%")
-        print(f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})")
+        print(
+            f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})"
+        )
 
     if oscillator:
         print(f"  OFO value       : {oscillator.value:+.1f}  → {oscillator.signal}")
@@ -103,8 +107,10 @@ def run_example() -> None:
     # Detect delta divergence
     divergence = analyzer.detect_delta_divergence(SYMBOL)
     if divergence:
-        print(f"\n  ⚡ Delta divergence: {divergence.divergence_type} "
-              f"(confidence={divergence.confidence:.2f})")
+        print(
+            f"\n  ⚡ Delta divergence: {divergence.divergence_type} "
+            f"(confidence={divergence.confidence:.2f})"
+        )
     else:
         print("\n  No delta divergence detected.")
 
@@ -113,8 +119,10 @@ def run_example() -> None:
     if stacked:
         print(f"\n  Stacked imbalances: {len(stacked)} found")
         for si in stacked[:3]:
-            print(f"    Direction={si.direction}  levels={len(si.levels)}  "
-                  f"strength={si.strength}")
+            print(
+                f"    Direction={si.direction}  levels={len(si.levels)}  "
+                f"strength={si.strength}"
+            )
     else:
         print("\n  No stacked imbalances found.")
 

@@ -301,7 +301,9 @@ class TechnicalFeatureEngineer:
             mean = close.rolling(window=period).mean()
             std = close.rolling(window=period).std()
             df[f"zscore_{period}"] = np.where(
-                std == 0, 0.0, (close - mean) / std.replace(0, np.nan),
+                std == 0,
+                0.0,
+                (close - mean) / std.replace(0, np.nan),
             )
 
         # Percentile rank
@@ -313,7 +315,10 @@ class TechnicalFeatureEngineer:
         return df
 
     def create_labels(
-        self, df: pd.DataFrame, method: str = "forward_return", **kwargs,
+        self,
+        df: pd.DataFrame,
+        method: str = "forward_return",
+        **kwargs,
     ) -> pd.Series:
         """
         Create labels for supervised learning.

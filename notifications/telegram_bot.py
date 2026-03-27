@@ -72,10 +72,12 @@ class TelegramBot:
             self.allowed_ids: List[int] = allowed_chat_ids
         else:
             self.allowed_ids = [
-                int(x.strip()) for x in raw_ids.split(",") if x.strip().lstrip("-").isdigit()
+                int(x.strip())
+                for x in raw_ids.split(",")
+                if x.strip().lstrip("-").isdigit()
             ]
         self.app_state = app_state
-        self._app = None          # telegram.ext.Application
+        self._app = None  # telegram.ext.Application
         self._paused = False
         self._running = False
 
@@ -91,6 +93,7 @@ class TelegramBot:
             return
         try:
             from telegram.ext import Application
+
             self._app = Application.builder().token(self.token).build()
             self._register_handlers()
             await self._app.initialize()
@@ -118,13 +121,15 @@ class TelegramBot:
         targets = [chat_id] if chat_id else self.allowed_ids
         for cid in targets:
             try:
-                await self._app.bot.send_message(chat_id=cid, text=text,
-                                                  parse_mode="Markdown")
+                await self._app.bot.send_message(
+                    chat_id=cid, text=text, parse_mode="Markdown"
+                )
             except Exception as exc:
                 logger.warning("Telegram send to %s failed: %s", cid, exc)
 
-    async def notify_signal(self, symbol: str, direction: str,
-                             confidence: float, price: float):
+    async def notify_signal(
+        self, symbol: str, direction: str, confidence: float, price: float
+    ):
         """Broadcast a trading signal to all allowed chats."""
         emoji = "🟢" if direction.upper() == "BUY" else "🔴"
         msg = (
@@ -136,8 +141,9 @@ class TelegramBot:
         )
         await self.send_message(msg)
 
-    async def notify_trade(self, symbol: str, side: str, quantity: float,
-                            price: float, order_id: str = ""):
+    async def notify_trade(
+        self, symbol: str, side: str, quantity: float, price: float, order_id: str = ""
+    ):
         """Broadcast a trade execution."""
         emoji = "✅" if side.upper() == "BUY" else "🔻"
         msg = (
@@ -159,6 +165,7 @@ class TelegramBot:
 
     def _register_handlers(self):
         from telegram.ext import CommandHandler
+
         cmds = {
             "start": self._cmd_start,
             "help": self._cmd_help,
@@ -176,11 +183,13 @@ class TelegramBot:
 
     def _guard(self, fn: Callable) -> Callable:
         """Wrap a handler to enforce allowed_ids check."""
+
         async def wrapper(update, context):
             if self.allowed_ids and update.effective_chat.id not in self.allowed_ids:
                 await update.message.reply_text("⛔ Unauthorized.")
                 return
             await fn(update, context)
+
         return wrapper
 
     async def _cmd_start(self, update, context):
@@ -189,15 +198,20 @@ class TelegramBot:
         )
 
     async def _cmd_help(self, update, context):
-        await update.message.reply_text(f"*Commands:*\n{_COMMANDS}", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"*Commands:*\n{_COMMANDS}", parse_mode="Markdown"
+        )
 
     async def _cmd_status(self, update, context):
         lines = ["*📊 Status*"]
         broker = getattr(self.app_state, "broker", None)
         if broker:
             try:
-                info = await broker.get_account_info() if asyncio.iscoroutinefunction(
-                    broker.get_account_info) else broker.get_account_info()
+                info = (
+                    await broker.get_account_info()
+                    if asyncio.iscoroutinefunction(broker.get_account_info)
+                    else broker.get_account_info()
+                )
                 lines.append(f"Balance: `${info.balance:,.2f}`")
                 lines.append(f"Equity: `${info.equity:,.2f}`")
                 lines.append(f"Positions: `{info.positions_count}`")
@@ -214,8 +228,11 @@ class TelegramBot:
             await update.message.reply_text("No broker connected.")
             return
         try:
-            positions = await broker.get_positions() if asyncio.iscoroutinefunction(
-                broker.get_positions) else broker.get_positions()
+            positions = (
+                await broker.get_positions()
+                if asyncio.iscoroutinefunction(broker.get_positions)
+                else broker.get_positions()
+            )
             if not positions:
                 await update.message.reply_text("No open positions.")
                 return
@@ -236,8 +253,11 @@ class TelegramBot:
             await update.message.reply_text("No broker connected.")
             return
         try:
-            info = await broker.get_account_info() if asyncio.iscoroutinefunction(
-                broker.get_account_info) else broker.get_account_info()
+            info = (
+                await broker.get_account_info()
+                if asyncio.iscoroutinefunction(broker.get_account_info)
+                else broker.get_account_info()
+            )
             await update.message.reply_text(
                 f"💰 *Balance*: `${info.balance:,.2f}`\n"
                 f"💼 *Equity*: `${info.equity:,.2f}`\n"
@@ -280,12 +300,16 @@ class TelegramBot:
     async def _cmd_pause(self, update, context):
         self._paused = True
         os.environ["SIGNAL_ENGINE_AUTO_TRADE"] = "false"
-        await update.message.reply_text("⏸ Auto-trading *paused*.", parse_mode="Markdown")
+        await update.message.reply_text(
+            "⏸ Auto-trading *paused*.", parse_mode="Markdown"
+        )
 
     async def _cmd_resume(self, update, context):
         self._paused = False
         os.environ["SIGNAL_ENGINE_AUTO_TRADE"] = "true"
-        await update.message.reply_text("▶️ Auto-trading *resumed*.", parse_mode="Markdown")
+        await update.message.reply_text(
+            "▶️ Auto-trading *resumed*.", parse_mode="Markdown"
+        )
 
     async def _cmd_stop(self, update, context):
         self._paused = True
@@ -294,8 +318,11 @@ class TelegramBot:
         closed = 0
         if broker:
             try:
-                positions = await broker.get_positions() if asyncio.iscoroutinefunction(
-                    broker.get_positions) else broker.get_positions()
+                positions = (
+                    await broker.get_positions()
+                    if asyncio.iscoroutinefunction(broker.get_positions)
+                    else broker.get_positions()
+                )
                 for pos in positions:
                     try:
                         if asyncio.iscoroutinefunction(broker.close_position):

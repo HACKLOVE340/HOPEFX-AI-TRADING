@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Optional Sentry
 try:
     import sentry_sdk  # type: ignore[import]
+
     _SENTRY = True
 except ImportError:
     _SENTRY = False
@@ -47,23 +48,25 @@ except ImportError:
 # Enums / data classes
 # ---------------------------------------------------------------------------
 
+
 class ExecutionStatus(Enum):
     PENDING = "pending"
     SUBMITTED = "submitted"
     FILLED = "filled"
     PARTIAL = "partial"
     REJECTED = "rejected"
-    BLOCKED = "blocked"       # blocked by pre-trade gate or kill switch
+    BLOCKED = "blocked"  # blocked by pre-trade gate or kill switch
     ERROR = "error"
 
 
 @dataclass
 class ExecutionRequest:
     """Inbound execution request from strategy/signal layer."""
+
     symbol: str
-    side: str                  # "BUY" | "SELL"
+    side: str  # "BUY" | "SELL"
     quantity: float
-    order_type: str = "MARKET" # "MARKET" | "LIMIT" | "STOP"
+    order_type: str = "MARKET"  # "MARKET" | "LIMIT" | "STOP"
     price: Optional[float] = None
     stop_price: Optional[float] = None
     stop_loss: Optional[float] = None
@@ -78,7 +81,9 @@ class ExecutionRequest:
         if self.quantity <= 0:
             raise ValueError(f"quantity must be > 0, got {self.quantity}")
         if self.order_type not in ("MARKET", "LIMIT", "STOP"):
-            raise ValueError(f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}")
+            raise ValueError(
+                f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}"
+            )
         if self.order_type == "LIMIT" and self.price is None:
             raise ValueError("price required for LIMIT orders")
         if self.order_type == "STOP" and self.stop_price is None:
@@ -88,6 +93,7 @@ class ExecutionRequest:
 @dataclass
 class ExecutionReport:
     """Result of an execution attempt."""
+
     request_id: str
     status: ExecutionStatus
     order_id: Optional[str] = None
@@ -108,6 +114,7 @@ class ExecutionReport:
 # Engine-level circuit breaker
 # ---------------------------------------------------------------------------
 
+
 class EngineCircuitBreaker:
     """
     Opens after `max_failures` consecutive broker errors within `window_sec`.
@@ -124,7 +131,7 @@ class EngineCircuitBreaker:
         self._max_failures = max_failures
         self._window_sec = window_sec
         self._reset_sec = reset_sec
-        self._failures: List[float] = []   # monotonic timestamps of failures
+        self._failures: List[float] = []  # monotonic timestamps of failures
         self._open = False
         self._opened_at: Optional[float] = None
         self._lock = asyncio.Lock()
@@ -140,7 +147,8 @@ class EngineCircuitBreaker:
                 self._opened_at = now
                 logger.critical(
                     "ENGINE CIRCUIT BREAKER OPEN: %d failures in %.0fs window.",
-                    len(self._failures), self._window_sec,
+                    len(self._failures),
+                    self._window_sec,
                 )
                 if _SENTRY:
                     try:
@@ -168,7 +176,8 @@ class EngineCircuitBreaker:
             elapsed = time.monotonic() - (self._opened_at or 0)
             if elapsed >= self._reset_sec:
                 logger.info(
-                    "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.", elapsed,
+                    "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.",
+                    elapsed,
                 )
                 self._open = False
                 self._opened_at = None
@@ -187,6 +196,7 @@ class EngineCircuitBreaker:
 # ---------------------------------------------------------------------------
 # Execution Engine
 # ---------------------------------------------------------------------------
+
 
 class ExecutionEngine:
     """
@@ -245,7 +255,8 @@ class ExecutionEngine:
         self._lock = asyncio.Lock()
 
         logger.info(
-            "ExecutionEngine initialised | max_latency=%.0fms", max_latency_ms,
+            "ExecutionEngine initialised | max_latency=%.0fms",
+            max_latency_ms,
         )
 
     # ------------------------------------------------------------------
@@ -294,7 +305,9 @@ class ExecutionEngine:
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
             self._total_blocks += 1
             return self._blocked_report(
-                request, f"[KILL_SWITCH] {reason}", t0,
+                request,
+                f"[KILL_SWITCH] {reason}",
+                t0,
             )
 
         # ── 2. Engine not running ─────────────────────────────────────────────
@@ -317,11 +330,14 @@ class ExecutionEngine:
             self._total_blocks += 1
             logger.error(
                 "ExecutionEngine: pre-trade gate error for %s: %s",
-                request.request_id, exc,
+                request.request_id,
+                exc,
             )
             self._capture_sentry(exc)
             return self._blocked_report(
-                request, f"[GATE_ERROR] {exc}", t0,
+                request,
+                f"[GATE_ERROR] {exc}",
+                t0,
             )
 
         if gate_result is not None:
@@ -336,7 +352,9 @@ class ExecutionEngine:
             tb = traceback.format_exc()
             logger.error(
                 "ExecutionEngine: broker submission error for %s: %s\n%s",
-                request.request_id, exc, tb,
+                request.request_id,
+                exc,
+                tb,
             )
             self._capture_sentry(exc)
             await self._circuit_breaker.record_failure()
@@ -362,8 +380,10 @@ class ExecutionEngine:
                 logger.warning(
                     "ExecutionEngine: latency %.2fms exceeds target %.0fms | "
                     "symbol=%s request_id=%s",
-                    report.latency_ms, self._max_latency_ms,
-                    request.symbol, request.request_id,
+                    report.latency_ms,
+                    self._max_latency_ms,
+                    request.symbol,
+                    request.request_id,
                 )
         else:
             await self._circuit_breaker.record_failure()
@@ -382,7 +402,12 @@ class ExecutionEngine:
         Returns None if all checks pass, or a block reason string.
         Raises on unexpected gate errors (caller blocks the trade).
         """
-        from risk.pre_trade_gate import GateOrder, PreTradeGate, RiskManagerError, TradeBlocked
+        from risk.pre_trade_gate import (
+            GateOrder,
+            PreTradeGate,
+            RiskManagerError,
+            TradeBlocked,
+        )
 
         gate = PreTradeGate(self._risk)
         gate_order = GateOrder(
@@ -401,14 +426,17 @@ class ExecutionEngine:
         except TradeBlocked as exc:
             logger.warning(
                 "ExecutionEngine: trade blocked | request_id=%s reason=%s detail=%s",
-                request.request_id, exc.reason_code, exc.detail,
+                request.request_id,
+                exc.reason_code,
+                exc.detail,
             )
             return f"[{exc.reason_code}] {exc.detail}"
         except RiskManagerError as exc:
             logger.critical(
                 "ExecutionEngine: risk manager error — blocking trade | "
                 "request_id=%s error=%s",
-                request.request_id, exc,
+                request.request_id,
+                exc,
             )
             self._capture_sentry(exc)
             return f"[RISK_MANAGER_ERROR] {exc}"
@@ -418,7 +446,9 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     async def _submit_to_broker(
-        self, request: ExecutionRequest, t0: float,
+        self,
+        request: ExecutionRequest,
+        t0: float,
     ) -> ExecutionReport:
         """Submit order to broker and return ExecutionReport."""
         from brokers.base import OrderSide, OrderType
@@ -434,8 +464,12 @@ class ExecutionEngine:
         logger.info(
             "ExecutionEngine: submitting | request_id=%s symbol=%s side=%s "
             "type=%s qty=%.4f price=%s",
-            request.request_id, request.symbol, request.side,
-            request.order_type, request.quantity, request.price,
+            request.request_id,
+            request.symbol,
+            request.side,
+            request.order_type,
+            request.quantity,
+            request.price,
         )
 
         # Run synchronous broker call in thread pool to avoid blocking event loop
@@ -455,6 +489,7 @@ class ExecutionEngine:
         latency_ms = (time.monotonic() - t0) * 1000.0
 
         from brokers.base import OrderStatus as BrokerOrderStatus
+
         status_map = {
             BrokerOrderStatus.FILLED: ExecutionStatus.FILLED,
             BrokerOrderStatus.PARTIAL: ExecutionStatus.PARTIAL,
@@ -485,8 +520,12 @@ class ExecutionEngine:
         logger.info(
             "ExecutionEngine: fill report | request_id=%s order_id=%s "
             "status=%s filled=%.4f avg_px=%.4f latency=%.2fms",
-            request.request_id, order.id, exec_status.value,
-            report.filled_quantity, report.average_price, latency_ms,
+            request.request_id,
+            order.id,
+            exec_status.value,
+            report.filled_quantity,
+            report.average_price,
+            latency_ms,
         )
         return report
 
@@ -495,30 +534,36 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     async def _persist_to_redis(
-        self, request: ExecutionRequest, report: ExecutionReport,
+        self,
+        request: ExecutionRequest,
+        report: ExecutionReport,
     ) -> None:
         """Persist order state to Redis for crash recovery."""
         if self._redis is None:
             return
         try:
             import json
+
             key = f"execution:order:{report.order_id}"
-            payload = json.dumps({
-                "request_id": request.request_id,
-                "order_id": report.order_id,
-                "symbol": request.symbol,
-                "side": request.side,
-                "quantity": request.quantity,
-                "filled_quantity": report.filled_quantity,
-                "average_price": report.average_price,
-                "status": report.status.value,
-                "latency_ms": report.latency_ms,
-                "timestamp": report.timestamp.isoformat(),
-                "strategy_id": request.strategy_id,
-            })
+            payload = json.dumps(
+                {
+                    "request_id": request.request_id,
+                    "order_id": report.order_id,
+                    "symbol": request.symbol,
+                    "side": request.side,
+                    "quantity": request.quantity,
+                    "filled_quantity": report.filled_quantity,
+                    "average_price": report.average_price,
+                    "status": report.status.value,
+                    "latency_ms": report.latency_ms,
+                    "timestamp": report.timestamp.isoformat(),
+                    "strategy_id": request.strategy_id,
+                }
+            )
             # TTL: 7 days
             await asyncio.get_event_loop().run_in_executor(
-                None, lambda: self._redis.setex(key, 604800, payload),
+                None,
+                lambda: self._redis.setex(key, 604800, payload),
             )
         except Exception as exc:
             # Redis failure must not block execution
@@ -526,7 +571,9 @@ class ExecutionEngine:
             self._capture_sentry(exc)
 
     async def _record_tca(
-        self, request: ExecutionRequest, report: ExecutionReport,
+        self,
+        request: ExecutionRequest,
+        report: ExecutionReport,
     ) -> None:
         """Record transaction cost analysis."""
         if self._tca is None:
@@ -561,14 +608,20 @@ class ExecutionEngine:
     # ------------------------------------------------------------------
 
     def _blocked_report(
-        self, request: ExecutionRequest, reason: str, t0: float,
+        self,
+        request: ExecutionRequest,
+        reason: str,
+        t0: float,
     ) -> ExecutionReport:
         latency_ms = (time.monotonic() - t0) * 1000.0
         logger.warning(
             "ExecutionEngine: ORDER BLOCKED | request_id=%s symbol=%s "
             "side=%s qty=%.4f reason=%s",
-            request.request_id, request.symbol,
-            request.side, request.quantity, reason,
+            request.request_id,
+            request.symbol,
+            request.side,
+            request.quantity,
+            reason,
         )
         return ExecutionReport(
             request_id=request.request_id,
@@ -586,11 +639,13 @@ class ExecutionEngine:
         """Return execution metrics snapshot."""
         avg_latency = (
             sum(self._latencies_ms) / len(self._latencies_ms)
-            if self._latencies_ms else 0.0
+            if self._latencies_ms
+            else 0.0
         )
         p99_latency = (
             sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)]
-            if len(self._latencies_ms) >= 100 else 0.0
+            if len(self._latencies_ms) >= 100
+            else 0.0
         )
         return {
             "total_orders": self._total_orders,

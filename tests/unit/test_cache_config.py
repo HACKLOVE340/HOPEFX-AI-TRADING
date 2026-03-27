@@ -287,7 +287,9 @@ class TestCacheTick:
 
     def test_get_tick_hit(self):
         tick = _make_tick()
-        serialised = json.dumps({"data": asdict(tick), "cached_at": "2024-01-01T00:00:00"})
+        serialised = json.dumps(
+            {"data": asdict(tick), "cached_at": "2024-01-01T00:00:00"}
+        )
         self.mock_redis.get.return_value = serialised
 
         result = self.cache.get_tick("XAUUSD")
@@ -318,7 +320,11 @@ class TestCacheTick:
     def test_get_ticks_hit(self):
         ticks = [_make_tick(ts=1_700_000_000 + i) for i in range(3)]
         serialised = json.dumps(
-            {"data": [asdict(t) for t in ticks], "cached_at": "2024-01-01T00:00:00", "count": 3}
+            {
+                "data": [asdict(t) for t in ticks],
+                "cached_at": "2024-01-01T00:00:00",
+                "count": 3,
+            }
         )
         self.mock_redis.get.return_value = serialised
         result = self.cache.get_ticks("XAUUSD")
@@ -376,7 +382,9 @@ class TestAppendOhlcv:
         )
         self.mock_redis.get.return_value = serialised
         candle = _make_ohlcv(1)[0]
-        result = self.cache.append_ohlcv("XAUUSD", Timeframe.ONE_HOUR, candle, max_size=50)
+        result = self.cache.append_ohlcv(
+            "XAUUSD", Timeframe.ONE_HOUR, candle, max_size=50
+        )
         assert result is True
         stored_json = self.mock_redis.setex.call_args[0][2]
         stored_data = json.loads(stored_json)
@@ -415,7 +423,9 @@ class TestMultiTimeframe:
             {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
         )
         self.mock_redis.get.return_value = serialised
-        result = self.cache.get_multi_timeframe("XAUUSD", [Timeframe.ONE_HOUR, Timeframe.ONE_DAY])
+        result = self.cache.get_multi_timeframe(
+            "XAUUSD", [Timeframe.ONE_HOUR, Timeframe.ONE_DAY]
+        )
         assert Timeframe.ONE_HOUR in result
         assert Timeframe.ONE_DAY in result
         assert result[Timeframe.ONE_HOUR] is not None
@@ -490,7 +500,10 @@ class TestCacheStatisticsOperations:
             call_count["n"] += 1
             match = kwargs.get("match", "")
             if "market_data" in match and call_count["n"] == 1:
-                return (0, ["market_data:XAUUSD:1h:ohlcv", "market_data:XAUUSD:1d:ohlcv"])
+                return (
+                    0,
+                    ["market_data:XAUUSD:1h:ohlcv", "market_data:XAUUSD:1d:ohlcv"],
+                )
             return (0, [])
 
         self.mock_redis.scan.side_effect = scan_side_effect
@@ -713,7 +726,12 @@ class TestDatabaseConfigExtended:
 
     def _sqlite(self):
         return DatabaseConfig(
-            db_type="sqlite", host="", port=0, username="", password="", database="test.db"
+            db_type="sqlite",
+            host="",
+            port=0,
+            username="",
+            password="",
+            database="test.db",
         )
 
     def _pg(self):
@@ -734,7 +752,12 @@ class TestDatabaseConfigExtended:
 
     def test_unsupported_db_type_validate(self):
         cfg = DatabaseConfig(
-            db_type="oracle", host="h", port=1521, username="u", password="p", database="d"
+            db_type="oracle",
+            host="h",
+            port=1521,
+            username="u",
+            password="p",
+            database="d",
         )
         assert cfg.validate() is False
 
@@ -783,7 +806,12 @@ class TestDatabaseConfigExtended:
 
     def test_unsupported_db_connection_string_raises(self):
         cfg = DatabaseConfig(
-            db_type="cassandra", host="h", port=9042, username="u", password="p", database="d"
+            db_type="cassandra",
+            host="h",
+            port=9042,
+            username="u",
+            password="p",
+            database="d",
         )
         with pytest.raises(ValueError):
             cfg.get_connection_string()

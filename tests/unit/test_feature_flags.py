@@ -45,10 +45,13 @@ class TestFeatureFlags:
         reg = ff.registry()
         safety_exceptions = {"LIVE_TRADING"}
         for name, info in reg.items():
-            if info["status"] == FeatureStatus.STABLE.value and name not in safety_exceptions:
-                assert info["default"] is True, (
-                    f"STABLE feature {name} should default to True"
-                )
+            if (
+                info["status"] == FeatureStatus.STABLE.value
+                and name not in safety_exceptions
+            ):
+                assert (
+                    info["default"] is True
+                ), f"STABLE feature {name} should default to True"
 
     def test_experimental_features_off_by_default(self):
         """All EXPERIMENTAL features must be disabled when no env vars are set."""
@@ -56,9 +59,9 @@ class TestFeatureFlags:
         reg = ff.registry()
         for name, info in reg.items():
             if info["status"] == FeatureStatus.EXPERIMENTAL.value:
-                assert info["default"] is False, (
-                    f"EXPERIMENTAL feature {name} should default to False"
-                )
+                assert (
+                    info["default"] is False
+                ), f"EXPERIMENTAL feature {name} should default to False"
 
     def test_live_trading_off_by_default(self):
         """LIVE_TRADING is a special case — STABLE but off by default for safety."""
@@ -92,18 +95,18 @@ class TestFeatureFlags:
         for falsy in ("0", "false", "no", "off", "FALSE", "No", "OFF"):
             with patch.dict(os.environ, {"FEATURE_BACKTESTING": falsy}):
                 ff = FeatureFlags()
-                assert ff.BACKTESTING is False, (
-                    f"Expected BACKTESTING=False for env value '{falsy}'"
-                )
+                assert (
+                    ff.BACKTESTING is False
+                ), f"Expected BACKTESTING=False for env value '{falsy}'"
 
     def test_env_var_truthy_variants(self):
         """Non-falsy strings enable a feature."""
         for truthy in ("1", "true", "yes", "on", "True", "YES"):
             with patch.dict(os.environ, {"FEATURE_ML_PREDICTIONS": truthy}):
                 ff = FeatureFlags()
-                assert ff.ML_PREDICTIONS is True, (
-                    f"Expected ML_PREDICTIONS=True for env value '{truthy}'"
-                )
+                assert (
+                    ff.ML_PREDICTIONS is True
+                ), f"Expected ML_PREDICTIONS=True for env value '{truthy}'"
 
     def test_global_flags_singleton_uses_live_env(self):
         """The module-level `flags` singleton reads from the live environment."""
@@ -139,17 +142,17 @@ class TestFeatureFlags:
         ff = FeatureFlags()
         valid_statuses = {s.value for s in FeatureStatus}
         for name, info in ff.registry().items():
-            assert info["status"] in valid_statuses, (
-                f"{name} has invalid status '{info['status']}'"
-            )
+            assert (
+                info["status"] in valid_statuses
+            ), f"{name} has invalid status '{info['status']}'"
 
     def test_registry_env_var_prefix(self):
         """Every env-var in the registry must start with FEATURE_."""
         ff = FeatureFlags()
         for name, info in ff.registry().items():
-            assert info["env_var"].startswith("FEATURE_"), (
-                f"{name}: env_var '{info['env_var']}' must start with FEATURE_"
-            )
+            assert info["env_var"].startswith(
+                "FEATURE_"
+            ), f"{name}: env_var '{info['env_var']}' must start with FEATURE_"
 
     # ── enabled / disabled helpers ────────────────────────────────────────
 
@@ -208,6 +211,7 @@ class TestFeatureFlags:
     def test_log_summary_does_not_raise(self, caplog):
         ff = FeatureFlags()
         import logging
+
         with caplog.at_level(logging.INFO, logger="config.feature_flags"):
             ff.log_summary()
         # Just check it doesn't raise and produces some output

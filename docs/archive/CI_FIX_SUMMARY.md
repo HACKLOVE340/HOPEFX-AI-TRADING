@@ -54,9 +54,9 @@ ERROR: Could not find a version that satisfies the requirement pandas-ta==0.3.14
 ## Verification
 
 ### Changes Made
-✅ Updated `requirements.txt` with valid pandas-ta version  
-✅ Updated `.github/workflows/tests.yml` with compatible Python versions  
-✅ Committed and pushed changes to repository  
+✅ Updated `requirements.txt` with valid pandas-ta version
+✅ Updated `.github/workflows/tests.yml` with compatible Python versions
+✅ Committed and pushed changes to repository
 
 ### Expected Results
 After merging these changes to main branch:
@@ -140,8 +140,8 @@ After merging these changes to main branch:
 
 ---
 
-**Status:** ✅ COMPLETED  
-**Date:** 2026-02-13  
-**Commit:** Fix CI failures: Update pandas-ta to 0.4.71b0 and Python to 3.11/3.12  
+**Status:** ✅ COMPLETED
+**Date:** 2026-02-13
+**Commit:** Fix CI failures: Update pandas-ta to 0.4.71b0 and Python to 3.11/3.12
 
 The CI/CD pipeline should now work correctly! 🚀

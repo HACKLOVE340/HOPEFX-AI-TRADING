@@ -13,8 +13,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class ExecutionQuality(Enum):
     """Execution quality ratings"""
+
     EXCELLENT = "excellent"
     GOOD = "good"
     AVERAGE = "average"
@@ -25,6 +27,7 @@ class ExecutionQuality(Enum):
 @dataclass
 class ExecutionRecord:
     """Record of a single trade execution"""
+
     execution_id: str
     order_id: str
     symbol: str
@@ -45,6 +48,7 @@ class ExecutionRecord:
 @dataclass
 class ExecutionReport:
     """Summary report of execution quality"""
+
     report_id: str
     period_start: datetime
     period_end: datetime
@@ -60,5 +64,3 @@ class ExecutionReport:
     total_slippage_cost: float
     execution_quality: ExecutionQuality
     broker_comparison: Dict[str, Dict[str, float]]
-
-

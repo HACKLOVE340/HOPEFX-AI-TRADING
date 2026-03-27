@@ -24,6 +24,7 @@ from decimal import Decimal
 
 class SubscriptionTier(str, Enum):
     """Subscription tier enumeration"""
+
     FREE = "free"
     STARTER = "starter"
     PROFESSIONAL = "professional"
@@ -33,6 +34,7 @@ class SubscriptionTier(str, Enum):
 
 class BillingCycle(str, Enum):
     """Billing cycle enumeration"""
+
     MONTHLY = "monthly"
     ANNUAL = "annual"
 
@@ -40,6 +42,7 @@ class BillingCycle(str, Enum):
 @dataclass
 class TierFeatures:
     """Features available in a tier"""
+
     max_strategies: int
     max_brokers: int
     ml_features: bool
@@ -64,7 +67,7 @@ class PricingTier:
         name: str,
         monthly_price: Decimal,
         commission_rate: Decimal,
-        features: TierFeatures
+        features: TierFeatures,
     ):
         self.tier = tier
         self.name = name
@@ -87,23 +90,23 @@ class PricingTier:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'tier': self.tier.value,
-            'name': self.name,
-            'monthly_price': float(self.monthly_price),
-            'annual_price': float(self.get_annual_price()),
-            'commission_rate': float(self.commission_rate),
-            'features': {
-                'max_strategies': self.features.max_strategies,
-                'max_brokers': self.features.max_brokers,
-                'ml_features': self.features.ml_features,
-                'priority_support': self.features.priority_support,
-                'api_access': self.features.api_access,
-                'custom_development': self.features.custom_development,
-                'dedicated_support': self.features.dedicated_support,
-                'backtesting_unlimited': self.features.backtesting_unlimited,
-                'pattern_recognition': self.features.pattern_recognition,
-                'news_integration': self.features.news_integration,
-            }
+            "tier": self.tier.value,
+            "name": self.name,
+            "monthly_price": float(self.monthly_price),
+            "annual_price": float(self.get_annual_price()),
+            "commission_rate": float(self.commission_rate),
+            "features": {
+                "max_strategies": self.features.max_strategies,
+                "max_brokers": self.features.max_brokers,
+                "ml_features": self.features.ml_features,
+                "priority_support": self.features.priority_support,
+                "api_access": self.features.api_access,
+                "custom_development": self.features.custom_development,
+                "dedicated_support": self.features.dedicated_support,
+                "backtesting_unlimited": self.features.backtesting_unlimited,
+                "pattern_recognition": self.features.pattern_recognition,
+                "news_integration": self.features.news_integration,
+            },
         }
 
 
@@ -131,8 +134,8 @@ class PricingManager:
                     dedicated_support=False,
                     backtesting_unlimited=False,
                     pattern_recognition=False,
-                    news_integration=False
-                )
+                    news_integration=False,
+                ),
             ),
             SubscriptionTier.STARTER: PricingTier(
                 tier=SubscriptionTier.STARTER,
@@ -149,8 +152,8 @@ class PricingManager:
                     dedicated_support=False,
                     backtesting_unlimited=False,
                     pattern_recognition=False,
-                    news_integration=False
-                )
+                    news_integration=False,
+                ),
             ),
             SubscriptionTier.PROFESSIONAL: PricingTier(
                 tier=SubscriptionTier.PROFESSIONAL,
@@ -167,8 +170,8 @@ class PricingManager:
                     dedicated_support=False,
                     backtesting_unlimited=True,
                     pattern_recognition=True,
-                    news_integration=False
-                )
+                    news_integration=False,
+                ),
             ),
             SubscriptionTier.ENTERPRISE: PricingTier(
                 tier=SubscriptionTier.ENTERPRISE,
@@ -185,8 +188,8 @@ class PricingManager:
                     dedicated_support=False,
                     backtesting_unlimited=True,
                     pattern_recognition=True,
-                    news_integration=True
-                )
+                    news_integration=True,
+                ),
             ),
             SubscriptionTier.ELITE: PricingTier(
                 tier=SubscriptionTier.ELITE,
@@ -203,9 +206,9 @@ class PricingManager:
                     dedicated_support=True,
                     backtesting_unlimited=True,
                     pattern_recognition=True,
-                    news_integration=True
-                )
-            )
+                    news_integration=True,
+                ),
+            ),
         }
 
     def get_tier(self, tier: SubscriptionTier) -> Optional[PricingTier]:
@@ -234,7 +237,9 @@ class PricingManager:
         pricing_tier = self.get_tier(tier)
         return pricing_tier.commission_rate if pricing_tier else Decimal("0.00")
 
-    def calculate_commission(self, tier: SubscriptionTier, trade_amount: Decimal) -> Decimal:
+    def calculate_commission(
+        self, tier: SubscriptionTier, trade_amount: Decimal
+    ) -> Decimal:
         """Calculate commission for a trade"""
         rate = self.get_commission_rate(tier)
         return trade_amount * rate
@@ -255,36 +260,40 @@ class PricingManager:
             return {}
 
         return {
-            'tier1': t1.to_dict(),
-            'tier2': t2.to_dict(),
-            'price_difference': float(t1.monthly_price - t2.monthly_price),
-            'commission_difference': float(t1.commission_rate - t2.commission_rate)
+            "tier1": t1.to_dict(),
+            "tier2": t2.to_dict(),
+            "price_difference": float(t1.monthly_price - t2.monthly_price),
+            "commission_difference": float(t1.commission_rate - t2.commission_rate),
         }
 
-    def get_upgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
+    def get_upgrade_path(
+        self, current_tier: SubscriptionTier
+    ) -> List[SubscriptionTier]:
         """Get available upgrade options"""
         tier_order = [
             SubscriptionTier.FREE,
             SubscriptionTier.STARTER,
             SubscriptionTier.PROFESSIONAL,
             SubscriptionTier.ENTERPRISE,
-            SubscriptionTier.ELITE
+            SubscriptionTier.ELITE,
         ]
 
         try:
             current_index = tier_order.index(current_tier)
-            return tier_order[current_index + 1:]
+            return tier_order[current_index + 1 :]
         except (ValueError, IndexError):
             return []
 
-    def get_downgrade_path(self, current_tier: SubscriptionTier) -> List[SubscriptionTier]:
+    def get_downgrade_path(
+        self, current_tier: SubscriptionTier
+    ) -> List[SubscriptionTier]:
         """Get available downgrade options"""
         tier_order = [
             SubscriptionTier.FREE,
             SubscriptionTier.STARTER,
             SubscriptionTier.PROFESSIONAL,
             SubscriptionTier.ENTERPRISE,
-            SubscriptionTier.ELITE
+            SubscriptionTier.ELITE,
         ]
 
         try:

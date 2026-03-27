@@ -18,7 +18,7 @@ class RiskAnalyzer:
         self,
         portfolio_returns: List[float],
         confidence_level: float = 0.95,
-        method: str = 'historical'
+        method: str = "historical",
     ) -> float:
         """Calculate 1-day Value at Risk.
 
@@ -35,10 +35,14 @@ class RiskAnalyzer:
         non-overlapping t-day return windows.  See risk/advanced_analytics.py for
         the full implementation with this caveat documented inline.
         """
-        if method == 'historical':
+        if method == "historical":
             sorted_returns = sorted(portfolio_returns)
             index = int((1 - confidence_level) * len(sorted_returns))
-            return sorted_returns[index] if index < len(sorted_returns) else sorted_returns[0]
+            return (
+                sorted_returns[index]
+                if index < len(sorted_returns)
+                else sorted_returns[0]
+            )
 
         # Parametric VaR — assumes normally distributed returns (fat tails not captured)
         mean = np.mean(portfolio_returns)
@@ -47,9 +51,7 @@ class RiskAnalyzer:
         return mean - z_score * std
 
     def calculate_cvar(
-        self,
-        portfolio_returns: List[float],
-        confidence_level: float = 0.95
+        self, portfolio_returns: List[float], confidence_level: float = 0.95
     ) -> float:
         """Calculate Conditional VaR (Expected Shortfall)"""
         var = self.calculate_var(portfolio_returns, confidence_level)
@@ -57,16 +59,14 @@ class RiskAnalyzer:
         return np.mean(tail_returns) if tail_returns else var
 
     def risk_attribution(
-        self,
-        portfolio_weights: np.ndarray,
-        covariance_matrix: np.ndarray
+        self, portfolio_weights: np.ndarray, covariance_matrix: np.ndarray
     ) -> Dict:
         """Calculate risk attribution"""
         portfolio_variance = portfolio_weights.T @ covariance_matrix @ portfolio_weights
         marginal_risk = covariance_matrix @ portfolio_weights
 
         return {
-            'total_risk': float(np.sqrt(portfolio_variance)),
-            'marginal_risk': marginal_risk.tolist(),
-            'component_risk': (portfolio_weights * marginal_risk).tolist()
+            "total_risk": float(np.sqrt(portfolio_variance)),
+            "marginal_risk": marginal_risk.tolist(),
+            "component_risk": (portfolio_weights * marginal_risk).tolist(),
         }

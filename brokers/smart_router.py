@@ -88,7 +88,9 @@ class SmartOrderRouter:
 
         # Rank brokers
         ranked = sorted(
-            self.scores.values(), key=lambda x: x.overall_score, reverse=True,
+            self.scores.values(),
+            key=lambda x: x.overall_score,
+            reverse=True,
         )
 
         # Select best available
@@ -168,7 +170,10 @@ class SmartOrderRouter:
 
         except Exception as e:
             logger.error(
-                "Primary broker %s failed: %s", primary_broker, e, exc_info=True,
+                "Primary broker %s failed: %s",
+                primary_broker,
+                e,
+                exc_info=True,
             )
 
             # Try alternatives
@@ -197,11 +202,15 @@ class SmartOrderRouter:
             raise Exception("All brokers failed to execute order")
 
     async def _execute_with_timeout(
-        self, broker_id: str, order: Dict, timeout_ms: int = 5000,
+        self,
+        broker_id: str,
+        order: Dict,
+        timeout_ms: int = 5000,
     ):
         """Execute with strict timeout"""
         return await asyncio.wait_for(
-            self.brokers[broker_id].place_order(order), timeout=timeout_ms / 1000,
+            self.brokers[broker_id].place_order(order),
+            timeout=timeout_ms / 1000,
         )
 
 

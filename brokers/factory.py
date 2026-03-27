@@ -66,10 +66,13 @@ class BrokerFactory:
             # Legacy fallback
             try:
                 from brokers.interactive_brokers import InteractiveBrokersConnector
+
                 cls._brokers["ib"] = InteractiveBrokersConnector
                 cls._brokers["interactive_brokers"] = InteractiveBrokersConnector
             except Exception as exc2:
-                logger.debug("interactive_brokers legacy connector unavailable: %s", exc2)
+                logger.debug(
+                    "interactive_brokers legacy connector unavailable: %s", exc2
+                )
         try:
             from brokers.prop_firms.ftmo import FTMOConnector
 
@@ -110,7 +113,8 @@ class BrokerFactory:
                 raise ValueError(f"{broker_class} is not a BrokerConnector subclass")
         except ImportError as exc:
             logger.debug(
-                "BrokerConnector base class unavailable during registration: %s", exc,
+                "BrokerConnector base class unavailable during registration: %s",
+                exc,
             )
         cls._brokers[name.lower()] = broker_class
         logger.info(f"Broker registered: {name}")

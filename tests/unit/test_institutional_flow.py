@@ -79,8 +79,12 @@ class TestInstitutionalFlowDetector:
         detector = InstitutionalFlowDetector(config={"large_order_threshold": 200})
         now = datetime.now(timezone.utc)
 
-        detector.add_trade("XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5))
-        detector.add_trade("XAUUSD", 1950.0, 50.0, "buy", timestamp=now - timedelta(minutes=5))
+        detector.add_trade(
+            "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5)
+        )
+        detector.add_trade(
+            "XAUUSD", 1950.0, 50.0, "buy", timestamp=now - timedelta(minutes=5)
+        )
 
         large = detector.detect_large_orders("XAUUSD")
         assert len(large) == 1
@@ -104,8 +108,11 @@ class TestInstitutionalFlowDetector:
         # Multiple fills at same price within short time
         for i in range(5):
             detector.add_trade(
-                "XAUUSD", 1950.00, 50.0, "buy",
-                timestamp=base + timedelta(seconds=i * 5)
+                "XAUUSD",
+                1950.00,
+                50.0,
+                "buy",
+                timestamp=base + timedelta(seconds=i * 5),
             )
         # A fill at different price - should not be part of iceberg
         detector.add_trade("XAUUSD", 1952.00, 50.0, "sell", timestamp=base)
@@ -134,15 +141,13 @@ class TestInstitutionalFlowDetector:
         # Normal trades spread across time
         for i in range(10):
             detector.add_trade(
-                "XAUUSD", 1950.0, 10.0, "buy",
-                timestamp=now - timedelta(minutes=20 + i)
+                "XAUUSD", 1950.0, 10.0, "buy", timestamp=now - timedelta(minutes=20 + i)
             )
 
         # Spike: large volume in a short window
         for _ in range(5):
             detector.add_trade(
-                "XAUUSD", 1950.0, 200.0, "buy",
-                timestamp=now - timedelta(minutes=2)
+                "XAUUSD", 1950.0, 200.0, "buy", timestamp=now - timedelta(minutes=2)
             )
 
         signals = detector.detect_volume_spikes("XAUUSD")
@@ -152,17 +157,18 @@ class TestInstitutionalFlowDetector:
     def test_detect_absorption(self):
         from analysis.institutional_flow import InstitutionalFlowDetector
 
-        detector = InstitutionalFlowDetector(
-            config={"absorption_price_pct": 0.5}
-        )
+        detector = InstitutionalFlowDetector(config={"absorption_price_pct": 0.5})
         now = datetime.now(timezone.utc)
 
         # High volume, tiny price range = absorption
         for i in range(10):
             side = "buy" if i % 3 != 0 else "sell"
             detector.add_trade(
-                "XAUUSD", 1950.00 + (i % 2) * 0.001, 200.0, side,
-                timestamp=now - timedelta(minutes=5, seconds=i * 3)
+                "XAUUSD",
+                1950.00 + (i % 2) * 0.001,
+                200.0,
+                side,
+                timestamp=now - timedelta(minutes=5, seconds=i * 3),
             )
 
         signals = detector.detect_absorption("XAUUSD")
@@ -192,8 +198,13 @@ class TestInstitutionalFlowDetector:
         detector = InstitutionalFlowDetector()
         now = datetime.now(timezone.utc)
         for i in range(20):
-            detector.add_trade("XAUUSD", 1950.0, float(i * 10 + 5), "buy",
-                               timestamp=now - timedelta(minutes=i))
+            detector.add_trade(
+                "XAUUSD",
+                1950.0,
+                float(i * 10 + 5),
+                "buy",
+                timestamp=now - timedelta(minutes=i),
+            )
 
         signals = detector.analyze_flow("XAUUSD")
         assert isinstance(signals, list)
@@ -212,11 +223,13 @@ class TestInstitutionalFlowDetector:
         now = datetime.now(timezone.utc)
 
         for _ in range(10):
-            detector.add_trade("XAUUSD", 1950.0, 300.0, "buy",
-                               timestamp=now - timedelta(minutes=5))
+            detector.add_trade(
+                "XAUUSD", 1950.0, 300.0, "buy", timestamp=now - timedelta(minutes=5)
+            )
         for _ in range(2):
-            detector.add_trade("XAUUSD", 1950.0, 100.0, "sell",
-                               timestamp=now - timedelta(minutes=5))
+            detector.add_trade(
+                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
+            )
 
         result = detector.get_smart_money_direction("XAUUSD")
         assert result is not None

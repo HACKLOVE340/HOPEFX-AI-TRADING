@@ -21,7 +21,6 @@ import os
 from unittest.mock import patch
 
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -218,7 +217,9 @@ class TestTemplateContext:
         with patch("notifications.email_triggers._send", side_effect=fake_send):
             from notifications.email_triggers import send_daily_report_email
 
-            send_daily_report_email("2026-03-25", 100.0, 0.1, 2, 50.0, 100100.0, to="t@e.com")
+            send_daily_report_email(
+                "2026-03-25", 100.0, 0.1, 2, 50.0, 100100.0, to="t@e.com"
+            )
 
         assert captured[0] == "daily_report.html"
 

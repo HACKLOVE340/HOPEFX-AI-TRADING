@@ -28,8 +28,8 @@ The CI badge reflects actual pytest output, not a hardcoded number.
 | xgb_macro.pkl | 50.3% ± 1.8% | p=0.720 | 65 stationary | ⚠️ Fallback only |
 | rf_macro.pkl | 50.7% ± 2.6% | p=0.612 | 65 stationary | ⚠️ Fallback only |
 
-**OOS period**: 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out)  
-**Abstain rate**: 27.5% of bars filtered (model signals only on high-confidence bars)  
+**OOS period**: 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out)
+**Abstain rate**: 27.5% of bars filtered (model signals only on high-confidence bars)
 **Target was**: ≥ 55% OOS with p < 0.05 — **exceeded** (68.0%, p=0.0000)
 
 Both fallback models have had all `close_lag_N` non-stationary features removed.

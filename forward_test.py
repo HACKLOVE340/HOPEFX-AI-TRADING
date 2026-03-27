@@ -53,6 +53,7 @@ def _utcnow() -> datetime:
 # Lightweight mock components (no external deps required)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MockTick:
     symbol: str
@@ -267,9 +268,7 @@ class MockOrderGateway:
                     "lots": pos.lots,
                     "pnl": round(pnl, 2),
                     "reason": reason,
-                    "duration_s": (
-                        _utcnow() - pos.opened_at
-                    ).total_seconds(),
+                    "duration_s": (_utcnow() - pos.opened_at).total_seconds(),
                 }
             )
             logger.info(
@@ -294,6 +293,7 @@ class MockOrderGateway:
 # ---------------------------------------------------------------------------
 # Forward test harness
 # ---------------------------------------------------------------------------
+
 
 class ForwardTestHarness:
     """
@@ -372,7 +372,9 @@ class ForwardTestHarness:
         try:
             for _ in range(self._max_ticks):
                 if self._is_halted():
-                    logger.warning("HALTED by kill switch after %d ticks", self._tick_num)
+                    logger.warning(
+                        "HALTED by kill switch after %d ticks", self._tick_num
+                    )
                     self._metrics["kill_switch_activations"] += 1
                     break
 
@@ -436,7 +438,9 @@ class ForwardTestHarness:
         logger.info("Win rate             : %.1f %%", win_rate)
         logger.info("Total PnL (USD)      : %.2f", self._metrics["total_pnl"])
         logger.info("Final balance (USD)  : %.2f", self._risk.balance)
-        logger.info("Kill switch fires    : %d", self._metrics["kill_switch_activations"])
+        logger.info(
+            "Kill switch fires    : %d", self._metrics["kill_switch_activations"]
+        )
         logger.info("=" * 60)
 
         if trades:
@@ -446,7 +450,9 @@ class ForwardTestHarness:
             total_losses = abs(sum(t["pnl"] for t in losses))
             logger.info("Avg win (USD)        : %.2f", avg_win)
             logger.info("Avg loss (USD)       : %.2f", avg_loss)
-            profit_factor = total_wins / total_losses if total_losses > 0 else float("inf")
+            profit_factor = (
+                total_wins / total_losses if total_losses > 0 else float("inf")
+            )
             logger.info("Profit factor        : %.2f", profit_factor)
 
         logger.info("=" * 60)
@@ -456,18 +462,29 @@ class ForwardTestHarness:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HOPEFX Forward Test (mock data)")
-    parser.add_argument("--ticks", type=int, default=500, help="Number of ticks to simulate")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
-    parser.add_argument("--mode", type=str, default="forward-test", help="Run mode label")
+    parser.add_argument(
+        "--ticks", type=int, default=500, help="Number of ticks to simulate"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random seed for reproducibility"
+    )
+    parser.add_argument(
+        "--mode", type=str, default="forward-test", help="Run mode label"
+    )
     return parser.parse_args()
 
 
 async def _async_main() -> int:
     args = _parse_args()
-    logger.info("Starting HOPEFX forward test (mode=%s, ticks=%d, seed=%s)",
-                args.mode, args.ticks, args.seed)
+    logger.info(
+        "Starting HOPEFX forward test (mode=%s, ticks=%d, seed=%s)",
+        args.mode,
+        args.ticks,
+        args.seed,
+    )
     harness = ForwardTestHarness(ticks=args.ticks, seed=args.seed)
     try:
         await harness.run()

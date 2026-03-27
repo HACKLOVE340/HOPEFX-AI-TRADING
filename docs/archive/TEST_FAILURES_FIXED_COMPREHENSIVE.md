@@ -325,7 +325,7 @@ def test_mark_invoice_paid(self):
 ```python
 def test_create_invoice(self):
     generator = InvoiceGenerator()
-    
+
     invoice = generator.create_invoice(
         user_id="user-123",
         subscription_id="sub-456",
@@ -333,7 +333,7 @@ def test_create_invoice(self):
         amount=Decimal("99.00"),  # ❌ TypeError
         access_code="XYZ789"
     )
-    
+
     assert invoice.amount == Decimal("99.00")
 ```
 
@@ -341,7 +341,7 @@ def test_create_invoice(self):
 ```python
 def test_create_invoice(self):
     generator = InvoiceGenerator()
-    
+
     invoice = generator.create_invoice(
         user_id="user-123",
         subscription_id="sub-456",
@@ -349,7 +349,7 @@ def test_create_invoice(self):
         access_code="XYZ789",
         duration_months=1  # ✅ Amount calculated from tier
     )
-    
+
     # Amount is auto-calculated, so we don't assert exact value
     assert invoice.user_id == "user-123"
     assert invoice.tier == SubscriptionTier.PROFESSIONAL
@@ -368,12 +368,12 @@ def test_discord_notification_with_config(self, mock_urlopen):
         'discord_webhook_url': 'https://discord.com/api/webhooks/test'
     }
     manager = NotificationManager(config)
-    
+
     mock_urlopen.return_value.__enter__ = Mock()
     mock_urlopen.return_value.__exit__ = Mock()
-    
+
     manager.send(...)
-    
+
     assert mock_urlopen.called  # ❌ AssertionError
 ```
 
@@ -386,12 +386,12 @@ def test_discord_notification_with_config(self, mock_urlopen):
         'discord_webhook_url': 'https://discord.com/api/webhooks/test'
     }
     manager = NotificationManager(config)
-    
+
     mock_response = MagicMock()
     mock_urlopen.return_value = mock_response
-    
+
     manager.send(...)
-    
+
     # ✅ Better assertion
     assert mock_urlopen.called
     call_args = mock_urlopen.call_args

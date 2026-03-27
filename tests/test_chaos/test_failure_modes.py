@@ -22,6 +22,7 @@ class TestBrokerFailureModes:
     @pytest.mark.asyncio
     async def test_close_nonexistent_position_returns_false(self):
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10_000.0)
         await broker.connect()
         result = broker.close_position("NONEXISTENT_SYMBOL")
@@ -32,6 +33,7 @@ class TestBrokerFailureModes:
     async def test_price_missing_returns_default(self):
         """get_market_price on an unknown symbol returns a default, not an exception."""
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10_000.0)
         await broker.connect()
         price = broker.get_market_price("UNKNOWN_PAIR")
@@ -41,6 +43,7 @@ class TestBrokerFailureModes:
     @pytest.mark.asyncio
     async def test_multiple_connects_are_idempotent(self):
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10_000.0)
         r1 = await broker.connect()
         r2 = await broker.connect()
@@ -51,6 +54,7 @@ class TestBrokerFailureModes:
     @pytest.mark.asyncio
     async def test_disconnect_without_connect_does_not_raise(self):
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10_000.0)
         # Should not raise even if never connected
         try:
@@ -64,6 +68,7 @@ class TestRiskManagerFailureModes:
 
     def _risk(self):
         from risk.manager import RiskManager, RiskConfig
+
         return RiskManager(
             config=RiskConfig(
                 max_position_size_pct=0.02,
@@ -110,6 +115,7 @@ class TestKillSwitchFailureModes:
 
     def _ks(self):
         from kill_switch import KillSwitch
+
         tmp = Path(tempfile.mkdtemp())
         return KillSwitch(flag_file=tmp / "ks.flag", deactivation_token="test-tok")
 
@@ -121,6 +127,7 @@ class TestKillSwitchFailureModes:
 
     def test_deactivate_without_token_raises(self):
         from kill_switch import KillSwitch
+
         tmp = Path(tempfile.mkdtemp())
         ks = KillSwitch(flag_file=tmp / "ks.flag")  # no token
         ks.activate("test")
@@ -154,6 +161,7 @@ class TestMetricsFailureModes:
 
     def setup_method(self):
         from infrastructure.metrics import get_metrics_registry
+
         self.registry = get_metrics_registry()
 
     def test_get_nonexistent_collector_returns_none(self):

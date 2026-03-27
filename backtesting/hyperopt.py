@@ -46,9 +46,10 @@ logger = logging.getLogger(__name__)
 
 # ── Parameter space helpers ──────────────────────────────────────────────────
 
+
 @dataclass
 class _Param:
-    kind: str          # "int" | "float" | "categorical" | "bool"
+    kind: str  # "int" | "float" | "categorical" | "bool"
     low: Any = None
     high: Any = None
     choices: Any = None
@@ -78,6 +79,7 @@ class ParamSpace:
 
 # ── Result dataclass ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class HyperoptResult:
     best_params: Dict[str, Any]
@@ -100,6 +102,7 @@ class HyperoptResult:
 
 
 # ── Core engine ──────────────────────────────────────────────────────────────
+
 
 class HyperoptEngine:
     """
@@ -125,8 +128,8 @@ class HyperoptEngine:
         metric: str = "sharpe_ratio",
         direction: Literal["maximize", "minimize"] = "maximize",
         initial_capital: float = 100_000.0,
-        commission: float = 0.001,       # 0.1% per trade
-        slippage: float = 0.0005,        # 0.05% per trade
+        commission: float = 0.001,  # 0.1% per trade
+        slippage: float = 0.0005,  # 0.05% per trade
         timeout_seconds: Optional[float] = None,
         n_jobs: int = 1,
         custom_objective: Optional[Callable] = None,
@@ -153,6 +156,7 @@ class HyperoptEngine:
         """Run the optimization and return the best result."""
         try:
             import optuna
+
             optuna.logging.set_verbosity(optuna.logging.WARNING)
         except ImportError:
             raise ImportError("optuna is required for hyperopt. pip install optuna")
@@ -215,7 +219,9 @@ class HyperoptEngine:
         for name, spec in self.param_space.items():
             if spec.kind == "int":
                 params[name] = trial.suggest_int(
-                    name, spec.low, spec.high,
+                    name,
+                    spec.low,
+                    spec.high,
                     step=spec.step or 1,
                     log=spec.log,
                 )
@@ -241,10 +247,12 @@ class HyperoptEngine:
         """
         try:
             from strategies.base import StrategyConfig
+
             cfg = StrategyConfig(
                 name=self.strategy_class.__name__,
                 symbol=self.market_data.get("symbol", ["XAUUSD"])[0]
-                if hasattr(self.market_data, "get") else "XAUUSD",
+                if hasattr(self.market_data, "get")
+                else "XAUUSD",
                 timeframe="1h",
                 parameters=params,
             )
@@ -253,6 +261,7 @@ class HyperoptEngine:
             # Strategy doesn't accept **params — pass via config only
             try:
                 from strategies.base import StrategyConfig
+
                 cfg = StrategyConfig(
                     name=self.strategy_class.__name__,
                     symbol="XAUUSD",
@@ -270,15 +279,19 @@ class HyperoptEngine:
             return float("-inf") if self.direction == "maximize" else float("inf")
 
         try:
-            gen = getattr(strategy, "_generate_dict_signal", None) or \
-                  getattr(strategy, "generate_signal_from_data", None)
+            gen = getattr(strategy, "_generate_dict_signal", None) or getattr(
+                strategy, "generate_signal_from_data", None
+            )
             if gen is None:
                 # Use analyze + generate_signal path
                 prices = df["close"].tolist()
                 signals = []
                 window = min(50, len(prices))
                 for i in range(window, len(prices)):
-                    data = {"prices": prices[max(0, i-100):i+1], "price": prices[i]}
+                    data = {
+                        "prices": prices[max(0, i - 100) : i + 1],
+                        "price": prices[i],
+                    }
                     analysis = strategy.analyze(data)
                     sig = strategy.generate_signal(analysis)
                     signals.append(sig.signal_type.value if sig else "HOLD")
@@ -286,7 +299,7 @@ class HyperoptEngine:
                 # Rolling window approach for dict-signal strategies
                 signals = []
                 for i in range(50, len(df)):
-                    window_df = df.iloc[max(0, i-100):i+1].copy()
+                    window_df = df.iloc[max(0, i - 100) : i + 1].copy()
                     result = gen(window_df)
                     signals.append(result.get("type", "HOLD"))
 
@@ -309,15 +322,23 @@ class HyperoptEngine:
         for i, sig in enumerate(signals[:-1]):
             ret = returns[i]
             if sig == "BUY" and position <= 0:
-                cost = abs(position) * close[offset + i] * (self.commission + self.slippage)
+                cost = (
+                    abs(position)
+                    * close[offset + i]
+                    * (self.commission + self.slippage)
+                )
                 current -= cost
                 position = 1.0
             elif sig == "SELL" and position >= 0:
-                cost = abs(position) * close[offset + i] * (self.commission + self.slippage)
+                cost = (
+                    abs(position)
+                    * close[offset + i]
+                    * (self.commission + self.slippage)
+                )
                 current -= cost
                 position = -1.0
 
-            current *= (1 + position * ret)
+            current *= 1 + position * ret
             equity.append(current)
 
         equity = np.array(equity)
@@ -354,7 +375,9 @@ class HyperoptEngine:
         if self.metric == "max_drawdown":
             peak = np.maximum.accumulate(equity)
             drawdown = (peak - equity) / peak
-            return float(-np.max(drawdown))  # negative so "maximize" = minimize drawdown
+            return float(
+                -np.max(drawdown)
+            )  # negative so "maximize" = minimize drawdown
 
         return float(total_return)
 
@@ -364,6 +387,7 @@ class HyperoptEngine:
             return {}
         try:
             import optuna
+
             return optuna.importance.get_param_importances(self._study)
         except Exception:
             return {}
@@ -374,6 +398,7 @@ class HyperoptEngine:
             return None
         try:
             import optuna.visualization as vis
+
             return vis.plot_optimization_history(self._study)
         except Exception:
             return None
@@ -384,12 +409,14 @@ class HyperoptEngine:
             return None
         try:
             import optuna.visualization as vis
+
             return vis.plot_param_importances(self._study)
         except Exception:
             return None
 
 
 # ── REST API router ──────────────────────────────────────────────────────────
+
 
 def create_hyperopt_router():
     """FastAPI router for hyperopt endpoints."""
@@ -416,33 +443,52 @@ def create_hyperopt_router():
     @router.post("/run", response_model=HyperoptStatus, summary="Start a hyperopt job")
     async def run_hyperopt(req: HyperoptRequest, background_tasks: BackgroundTasks):
         import uuid
+
         job_id = str(uuid.uuid4())[:8]
         _jobs[job_id] = {"status": "running", "result": None}
 
         def _run():
             try:
                 import yfinance as yf
-                _TICKER_MAP = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD",
-                               "EURUSD": "EURUSD=X"}
+
+                _TICKER_MAP = {
+                    "XAUUSD": "GC=F",
+                    "BTCUSD": "BTC-USD",
+                    "EURUSD": "EURUSD=X",
+                }
                 ticker = _TICKER_MAP.get(req.symbol, req.symbol)
-                df = yf.download(ticker, period="1y", interval=req.timeframe,
-                                 progress=False, auto_adjust=True)
+                df = yf.download(
+                    ticker,
+                    period="1y",
+                    interval=req.timeframe,
+                    progress=False,
+                    auto_adjust=True,
+                )
                 df.columns = [c.lower() for c in df.columns]
 
                 # Resolve strategy class
                 _STRATEGY_MAP = {
                     "RSIStrategy": ("strategies.rsi_strategy", "RSIStrategy"),
                     "MACDStrategy": ("strategies.macd_strategy", "MACDStrategy"),
-                    "BollingerBands": ("strategies.bollinger_bands", "BollingerBandsStrategy"),
-                    "MovingAverageCrossover": ("strategies.ma_crossover", "MovingAverageCrossover"),
+                    "BollingerBands": (
+                        "strategies.bollinger_bands",
+                        "BollingerBandsStrategy",
+                    ),
+                    "MovingAverageCrossover": (
+                        "strategies.ma_crossover",
+                        "MovingAverageCrossover",
+                    ),
                 }
                 if req.strategy not in _STRATEGY_MAP:
-                    _jobs[job_id] = {"status": "error",
-                                     "result": {"error": f"Unknown strategy: {req.strategy}"}}
+                    _jobs[job_id] = {
+                        "status": "error",
+                        "result": {"error": f"Unknown strategy: {req.strategy}"},
+                    }
                     return
 
                 mod_path, cls_name = _STRATEGY_MAP[req.strategy]
                 import importlib
+
                 mod = importlib.import_module(mod_path)
                 strategy_class = getattr(mod, cls_name)
 
@@ -451,11 +497,13 @@ def create_hyperopt_router():
                 for name, spec in req.param_space.items():
                     kind = spec.get("kind", "int")
                     if kind == "int":
-                        space[name] = ParamSpace.int(spec["low"], spec["high"],
-                                                      spec.get("step", 1))
+                        space[name] = ParamSpace.int(
+                            spec["low"], spec["high"], spec.get("step", 1)
+                        )
                     elif kind == "float":
-                        space[name] = ParamSpace.float(spec["low"], spec["high"],
-                                                        spec.get("step"))
+                        space[name] = ParamSpace.float(
+                            spec["low"], spec["high"], spec.get("step")
+                        )
                     elif kind == "categorical":
                         space[name] = ParamSpace.categorical(spec["choices"])
 
@@ -493,12 +541,26 @@ def create_hyperopt_router():
 
     @router.get("/strategies")
     async def list_strategies():
-        return {"strategies": ["RSIStrategy", "MACDStrategy",
-                               "BollingerBands", "MovingAverageCrossover"]}
+        return {
+            "strategies": [
+                "RSIStrategy",
+                "MACDStrategy",
+                "BollingerBands",
+                "MovingAverageCrossover",
+            ]
+        }
 
     @router.get("/metrics")
     async def list_metrics():
-        return {"metrics": ["sharpe_ratio", "total_return", "calmar_ratio",
-                            "win_rate", "profit_factor", "max_drawdown"]}
+        return {
+            "metrics": [
+                "sharpe_ratio",
+                "total_return",
+                "calmar_ratio",
+                "win_rate",
+                "profit_factor",
+                "max_drawdown",
+            ]
+        }
 
     return router

@@ -91,7 +91,10 @@ class PositionTracker:
             return True
 
     async def close_position(
-        self, position_id: str, exit_price: float, commission: float = 0,
+        self,
+        position_id: str,
+        exit_price: float,
+        commission: float = 0,
     ) -> Optional[Position]:
         """Close position"""
         async with self._lock:

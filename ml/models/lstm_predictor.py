@@ -26,12 +26,12 @@ try:
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from tensorflow.keras.layers import (
         LSTM,
-        Attention,
-        Bidirectional,
-        Concatenate,
+        Attention,  # noqa: F401
+        Bidirectional,  # noqa: F401
+        Concatenate,  # noqa: F401
         Dense,
         Dropout,
-        Input,
+        Input,  # noqa: F401
     )
     from tensorflow.keras.models import Model, Sequential
     from tensorflow.keras.optimizers import Adam
@@ -129,7 +129,9 @@ class LSTMPredictor:
         return model
 
     def prepare_data(
-        self, data: np.ndarray, target_index: int = 0,
+        self,
+        data: np.ndarray,
+        target_index: int = 0,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Prepare data for LSTM training
@@ -211,7 +213,9 @@ class LSTMPredictor:
         return self.history.history
 
     def predict(
-        self, X_test: np.ndarray, confidence_interval: float = 0.95,
+        self,
+        X_test: np.ndarray,
+        confidence_interval: float = 0.95,
     ) -> List[PredictionResult]:
         """
         Make predictions on test data

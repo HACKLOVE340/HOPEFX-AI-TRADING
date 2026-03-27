@@ -36,10 +36,10 @@ Added `get_market_price(symbol)` method to `brokers/paper_trading.py`:
 def get_market_price(self, symbol: str) -> float:
     """
     Get current market price for a symbol.
-    
+
     Args:
         symbol: Trading symbol
-        
+
     Returns:
         Current market price
     """
@@ -58,7 +58,7 @@ def get_market_price(self, symbol: str) -> float:
 ### Problems
 
 1. **Missing Attributes:**
-   - `max_positions` 
+   - `max_positions`
    - `max_drawdown` (as decimal)
    - `max_position_size`
 
@@ -83,7 +83,7 @@ def get_market_price(self, symbol: str) -> float:
 ```python
 def __init__(self, config: RiskConfig, initial_balance: float = 10000.0):
     # ... existing initialization ...
-    
+
     # Aliases for backward compatibility
     self.max_positions = config.max_open_positions
     self.max_drawdown = config.max_drawdown / 100.0  # Convert to decimal
@@ -136,35 +136,35 @@ def validate_trade(
 ) -> tuple[bool, str]:
     """
     Validate if a trade can be executed.
-    
+
     Args:
         symbol: Trading symbol
         size: Position size
         side: Trade side (BUY/SELL)
         **kwargs: Additional parameters
-        
+
     Returns:
         Tuple of (is_valid, reason)
     """
     # Check max open positions
     if len(self.open_positions) >= self.config.max_open_positions:
         return False, f"Max open positions reached ({self.config.max_open_positions})"
-    
+
     # Check position size limit
     if size > self.config.max_position_size:
         return False, f"Position size exceeds maximum (${self.config.max_position_size:,.2f})"
-    
+
     # Check daily loss limit
     daily_loss_pct = abs(self.daily_pnl / self.current_balance * 100) if self.current_balance > 0 else 0
     if self.daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss:
         return False, f"Daily loss limit reached ({self.config.max_daily_loss}%)"
-    
+
     # Check drawdown
     current_drawdown = self._calculate_drawdown()
     max_drawdown_pct = self.config.max_drawdown
     if current_drawdown >= max_drawdown_pct:
         return False, f"Max drawdown exceeded ({max_drawdown_pct}%)"
-    
+
     return True, ""
 ```
 
@@ -179,26 +179,26 @@ def validate_trade(
 def check_risk_limits(self) -> tuple[bool, list]:
     """
     Check all risk limits.
-    
+
     Returns:
         Tuple of (within_limits, list_of_violations)
     """
     violations = []
-    
+
     # Check max positions
     if len(self.open_positions) >= self.config.max_open_positions:
         violations.append(f"Max positions: {len(self.open_positions)}/{self.config.max_open_positions}")
-    
+
     # Check daily loss
     daily_loss_pct = abs(self.daily_pnl / self.current_balance * 100) if self.current_balance > 0 else 0
     if self.daily_pnl < 0 and daily_loss_pct >= self.config.max_daily_loss:
         violations.append(f"Daily loss limit: {daily_loss_pct:.2f}%/{self.config.max_daily_loss}%")
-    
+
     # Check drawdown
     current_drawdown = self._calculate_drawdown()
     if current_drawdown >= self.config.max_drawdown:
         violations.append(f"Max drawdown: {current_drawdown:.2f}%/{self.config.max_drawdown}%")
-    
+
     return len(violations) == 0, violations
 ```
 
@@ -219,26 +219,26 @@ def calculate_stop_loss(
 ) -> float:
     """
     Calculate stop loss price.
-    
+
     Args:
         entry_price: Entry price
         side: Trade side (BUY/SELL)
         percent: Stop loss percentage (optional)
         **kwargs: Additional parameters
-        
+
     Returns:
         Stop loss price
     """
     if percent is None:
         percent = self.config.default_stop_loss_pct
-    
+
     if side.upper() in ["BUY", "LONG"]:
         # For long positions, stop loss is below entry
         stop_loss = entry_price * (1 - percent / 100.0)
     else:
         # For short positions, stop loss is above entry
         stop_loss = entry_price * (1 + percent / 100.0)
-    
+
     return round(stop_loss, 5)
 ```
 
@@ -259,26 +259,26 @@ def calculate_take_profit(
 ) -> float:
     """
     Calculate take profit price.
-    
+
     Args:
         entry_price: Entry price
         side: Trade side (BUY/SELL)
         percent: Take profit percentage (optional)
         **kwargs: Additional parameters
-        
+
     Returns:
         Take profit price
     """
     if percent is None:
         percent = self.config.default_take_profit_pct
-    
+
     if side.upper() in ["BUY", "LONG"]:
         # For long positions, take profit is above entry
         take_profit = entry_price * (1 + percent / 100.0)
     else:
         # For short positions, take profit is below entry
         take_profit = entry_price * (1 - percent / 100.0)
-    
+
     return round(take_profit, 5)
 ```
 
@@ -293,7 +293,7 @@ def calculate_take_profit(
 def update_daily_pnl(self, pnl: float):
     """
     Update daily P&L.
-    
+
     Args:
         pnl: Profit/loss to add to daily total
     """

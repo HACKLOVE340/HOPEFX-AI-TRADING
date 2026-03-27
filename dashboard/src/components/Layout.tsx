@@ -74,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = location.pathname === item.path
-              
+
               return (
                 <Link
                   key={item.path}
@@ -82,8 +82,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   onClick={() => setSidebarOpen(false)}
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                    ${isActive 
-                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
+                    ${isActive
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
                   `}
                 >

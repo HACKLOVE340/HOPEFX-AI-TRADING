@@ -61,20 +61,20 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_WEBHOOK_URL         = os.getenv("DISCORD_WEBHOOK_URL", "")
-_FALLBACK_WEBHOOK    = os.getenv("DISCORD_FALLBACK_WEBHOOK_URL", _WEBHOOK_URL)
-_COOLDOWN_SECONDS    = int(os.getenv("DISCORD_SIGNAL_COOLDOWN_SECONDS", "300"))
-_BOT_USERNAME        = os.getenv("DISCORD_BOT_USERNAME", "HOPEFX Signals")
-_BOT_AVATAR_URL      = os.getenv("DISCORD_BOT_AVATAR_URL", "")
-_MENTION_ROLE_ID     = os.getenv("DISCORD_MENTION_ROLE_ID", "")
+_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+_FALLBACK_WEBHOOK = os.getenv("DISCORD_FALLBACK_WEBHOOK_URL", _WEBHOOK_URL)
+_COOLDOWN_SECONDS = int(os.getenv("DISCORD_SIGNAL_COOLDOWN_SECONDS", "300"))
+_BOT_USERNAME = os.getenv("DISCORD_BOT_USERNAME", "HOPEFX Signals")
+_BOT_AVATAR_URL = os.getenv("DISCORD_BOT_AVATAR_URL", "")
+_MENTION_ROLE_ID = os.getenv("DISCORD_MENTION_ROLE_ID", "")
 
 # Embed colours (Discord uses decimal integers)
-_COLOUR_BUY      = 0x00C853   # green
-_COLOUR_SELL     = 0xD50000   # red
-_COLOUR_NEUTRAL  = 0x9E9E9E   # grey
-_COLOUR_WARNING  = 0xFF6F00   # amber
-_COLOUR_CRITICAL = 0xB71C1C   # dark red
-_COLOUR_INFO     = 0x1565C0   # blue
+_COLOUR_BUY = 0x00C853  # green
+_COLOUR_SELL = 0xD50000  # red
+_COLOUR_NEUTRAL = 0x9E9E9E  # grey
+_COLOUR_WARNING = 0xFF6F00  # amber
+_COLOUR_CRITICAL = 0xB71C1C  # dark red
+_COLOUR_INFO = 0x1565C0  # blue
 
 
 def _direction_colour(direction: str) -> int:
@@ -99,7 +99,7 @@ def _rr_ratio(entry: float, sl: Optional[float], tp: Optional[float]) -> str:
     """Compute risk/reward ratio string, or 'N/A' if SL/TP not set."""
     if not sl or not tp or entry == 0:
         return "N/A"
-    risk   = abs(entry - sl)
+    risk = abs(entry - sl)
     reward = abs(tp - entry)
     if risk == 0:
         return "N/A"
@@ -108,35 +108,47 @@ def _rr_ratio(entry: float, sl: Optional[float], tp: Optional[float]) -> str:
 
 def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Build a Discord embed dict from a signal payload."""
-    symbol     = payload.get("symbol", "UNKNOWN")
-    direction  = payload.get("direction", "NEUTRAL")
+    symbol = payload.get("symbol", "UNKNOWN")
+    direction = payload.get("direction", "NEUTRAL")
     confidence = float(payload.get("confidence", 0.0))
-    ml_prob    = float(payload.get("probability", confidence))
-    model_ver  = payload.get("model_version", "unknown")
-    entry      = payload.get("entry_price")
-    sl         = payload.get("stop_loss")
-    tp         = payload.get("take_profit")
-    ts         = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
+    ml_prob = float(payload.get("probability", confidence))
+    model_ver = payload.get("model_version", "unknown")
+    entry = payload.get("entry_price")
+    sl = payload.get("stop_loss")
+    tp = payload.get("take_profit")
+    ts = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
 
     emoji = _direction_emoji(direction)
-    rr    = _rr_ratio(entry or 0, sl, tp)
+    rr = _rr_ratio(entry or 0, sl, tp)
 
     # Confidence bar (10 blocks)
     filled = round(ml_prob * 10)
     conf_bar = "█" * filled + "░" * (10 - filled)
 
     fields: List[Dict[str, Any]] = [
-        {"name": "Direction",    "value": f"{emoji} **{direction.upper()}**", "inline": True},
-        {"name": "Symbol",       "value": f"`{symbol}`",                      "inline": True},
-        {"name": "ML Confidence","value": f"`{conf_bar}` {ml_prob*100:.1f}%", "inline": False},
-        {"name": "Strategy Confidence", "value": f"{confidence*100:.1f}%",   "inline": True},
-        {"name": "Model",        "value": f"`{model_ver}`",                   "inline": True},
+        {
+            "name": "Direction",
+            "value": f"{emoji} **{direction.upper()}**",
+            "inline": True,
+        },
+        {"name": "Symbol", "value": f"`{symbol}`", "inline": True},
+        {
+            "name": "ML Confidence",
+            "value": f"`{conf_bar}` {ml_prob*100:.1f}%",
+            "inline": False,
+        },
+        {
+            "name": "Strategy Confidence",
+            "value": f"{confidence*100:.1f}%",
+            "inline": True,
+        },
+        {"name": "Model", "value": f"`{model_ver}`", "inline": True},
     ]
 
     if entry:
-        fields.append({"name": "Entry",  "value": f"`{entry:,.4f}`", "inline": True})
+        fields.append({"name": "Entry", "value": f"`{entry:,.4f}`", "inline": True})
     if sl:
-        fields.append({"name": "Stop Loss",   "value": f"`{sl:,.4f}`", "inline": True})
+        fields.append({"name": "Stop Loss", "value": f"`{sl:,.4f}`", "inline": True})
     if tp:
         fields.append({"name": "Take Profit", "value": f"`{tp:,.4f}`", "inline": True})
     if rr != "N/A":
@@ -144,15 +156,17 @@ def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # Fallback model warning
     if "fallback" in model_ver.lower() or "macro_xgb" in model_ver.lower():
-        fields.append({
-            "name": "⚠️ Fallback Model Active",
-            "value": (
-                "Advanced model unavailable. Signal generated by fallback model "
-                "(~50% OOS accuracy, no demonstrated edge). "
-                "**Do not trade live capital on this signal.**"
-            ),
-            "inline": False,
-        })
+        fields.append(
+            {
+                "name": "⚠️ Fallback Model Active",
+                "value": (
+                    "Advanced model unavailable. Signal generated by fallback model "
+                    "(~50% OOS accuracy, no demonstrated edge). "
+                    "**Do not trade live capital on this signal.**"
+                ),
+                "inline": False,
+            }
+        )
 
     return {
         "title": f"{emoji} {symbol} Signal — {direction.upper()}",
@@ -172,10 +186,10 @@ def _build_alert_embed(
 ) -> Dict[str, Any]:
     """Build a Discord embed for a system alert."""
     level_map = {
-        "info":     (_COLOUR_INFO,     "ℹ️"),
-        "warning":  (_COLOUR_WARNING,  "⚠️"),
+        "info": (_COLOUR_INFO, "ℹ️"),
+        "warning": (_COLOUR_WARNING, "⚠️"),
         "critical": (_COLOUR_CRITICAL, "🚨"),
-        "error":    (_COLOUR_CRITICAL, "❌"),
+        "error": (_COLOUR_CRITICAL, "❌"),
     }
     colour, emoji = level_map.get(level.lower(), (_COLOUR_INFO, "ℹ️"))
 

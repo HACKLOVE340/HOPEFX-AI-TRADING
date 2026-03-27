@@ -11,7 +11,6 @@ Scope: auth/, config/startup_validator.py, mobile/api.py
 """
 
 import os
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +19,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # auth/routes.py must not exist (deleted — contained hardcoded secret)
 # ---------------------------------------------------------------------------
+
 
 class TestAuthRoutesDeleted:
     def test_routes_py_does_not_exist(self):
@@ -37,17 +37,18 @@ class TestAuthRoutesDeleted:
             pytest.skip("auth/jwt.py not found")
         content = jwt_path.read_text()
         # The file may have a default for dev, but must warn and not silently use it
-        assert "your_secret_key" not in content, (
-            "auth/jwt.py contains literal 'your_secret_key'"
-        )
-        assert "fakehashedsecret" not in content, (
-            "auth/jwt.py contains 'fakehashedsecret' backdoor"
-        )
+        assert (
+            "your_secret_key" not in content
+        ), "auth/jwt.py contains literal 'your_secret_key'"
+        assert (
+            "fakehashedsecret" not in content
+        ), "auth/jwt.py contains 'fakehashedsecret' backdoor"
 
 
 # ---------------------------------------------------------------------------
 # CORS: allow_credentials=True with wildcard origins is forbidden
 # ---------------------------------------------------------------------------
+
 
 class TestCORSConfiguration:
     def _read_file(self, rel_path: str) -> str:
@@ -59,7 +60,7 @@ class TestCORSConfiguration:
     def test_mobile_api_no_wildcard_with_credentials(self):
         content = self._read_file("mobile/api.py")
         # If allow_credentials=True is present, allow_origins must NOT be ["*"]
-        if 'allow_credentials=True' in content:
+        if "allow_credentials=True" in content:
             assert 'allow_origins=["*"]' not in content, (
                 "mobile/api.py: allow_credentials=True with allow_origins=['*'] "
                 "violates CORS spec — browsers reject such responses."
@@ -67,32 +68,37 @@ class TestCORSConfiguration:
 
     def test_mobile_api_v2_no_wildcard_with_credentials(self):
         content = self._read_file("mobile/api_v2.py")
-        if 'allow_credentials=True' in content:
-            assert 'allow_origins=["*"]' not in content, (
-                "mobile/api_v2.py: allow_credentials=True with allow_origins=['*']"
-            )
+        if "allow_credentials=True" in content:
+            assert (
+                'allow_origins=["*"]' not in content
+            ), "mobile/api_v2.py: allow_credentials=True with allow_origins=['*']"
 
     def test_mobile_api_credentials_false(self):
         """After fix, allow_credentials must be False."""
         content = self._read_file("mobile/api.py")
-        assert 'allow_credentials=False' in content, (
-            "mobile/api.py: allow_credentials must be False"
-        )
+        assert (
+            "allow_credentials=False" in content
+        ), "mobile/api.py: allow_credentials must be False"
 
     def test_mobile_api_v2_credentials_false(self):
         content = self._read_file("mobile/api_v2.py")
-        assert 'allow_credentials=False' in content, (
-            "mobile/api_v2.py: allow_credentials must be False"
-        )
+        assert (
+            "allow_credentials=False" in content
+        ), "mobile/api_v2.py: allow_credentials must be False"
 
 
 # ---------------------------------------------------------------------------
 # Startup env validator
 # ---------------------------------------------------------------------------
 
+
 class TestStartupValidator:
     def test_raises_on_missing_secret_key(self):
-        from config.startup_validator import StartupValidationError, validate_environment
+        from config.startup_validator import (
+            StartupValidationError,
+            validate_environment,
+        )
+
         env = {
             "DB_PASSWORD": "strongpassword123",
             "DB_HOST": "localhost",
@@ -103,7 +109,11 @@ class TestStartupValidator:
                 validate_environment(strict=False)
 
     def test_raises_on_weak_secret_key(self):
-        from config.startup_validator import StartupValidationError, validate_environment
+        from config.startup_validator import (
+            StartupValidationError,
+            validate_environment,
+        )
+
         env = {
             "SECRET_KEY": "short",  # < 32 chars
             "DB_PASSWORD": "strongpassword123",
@@ -115,7 +125,11 @@ class TestStartupValidator:
                 validate_environment(strict=False)
 
     def test_raises_on_missing_db_password(self):
-        from config.startup_validator import StartupValidationError, validate_environment
+        from config.startup_validator import (
+            StartupValidationError,
+            validate_environment,
+        )
+
         env = {
             "SECRET_KEY": "a" * 32,
             "DB_HOST": "localhost",
@@ -126,7 +140,11 @@ class TestStartupValidator:
                 validate_environment(strict=False)
 
     def test_raises_on_invalid_redis_url(self):
-        from config.startup_validator import StartupValidationError, validate_environment
+        from config.startup_validator import (
+            StartupValidationError,
+            validate_environment,
+        )
+
         env = {
             "SECRET_KEY": "a" * 32,
             "DB_PASSWORD": "strongpassword123",
@@ -139,6 +157,7 @@ class TestStartupValidator:
 
     def test_passes_with_valid_env(self):
         from config.startup_validator import validate_environment
+
         env = {
             # Canonical JWT secret key name used by startup_validator
             "SECURITY_JWT_SECRET": "a" * 32,
@@ -149,7 +168,11 @@ class TestStartupValidator:
             validate_environment(strict=False)
 
     def test_invalid_ibkr_port_rejected(self):
-        from config.startup_validator import StartupValidationError, validate_environment
+        from config.startup_validator import (
+            StartupValidationError,
+            validate_environment,
+        )
+
         env = {
             "SECRET_KEY": "a" * 32,
             "DB_PASSWORD": "strongpassword123",

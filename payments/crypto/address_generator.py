@@ -34,18 +34,18 @@ class AddressGenerator:
         address_hash = hashlib.sha256(data).hexdigest()
 
         # Format based on currency
-        if currency == 'BTC':
+        if currency == "BTC":
             return f"bc1q{address_hash[:40]}"
-        elif currency == 'ETH' or currency == 'USDT_ERC20':
+        elif currency == "ETH" or currency == "USDT_ERC20":
             return f"0x{address_hash[:40]}"
-        elif currency == 'USDT_TRC20':
+        elif currency == "USDT_TRC20":
             return f"T{address_hash[:33]}"
 
         return address_hash[:40]
 
     def generate_qr_code(self, address: str, currency: str) -> str:
         """Generate QR code data"""
-        currency_lower = currency.lower().replace('_', ':')
+        currency_lower = currency.lower().replace("_", ":")
         return f"{currency_lower}:{address}"
 
 

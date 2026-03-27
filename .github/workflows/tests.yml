@@ -9,15 +9,15 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
-    
+
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
-    
+
     services:
       redis:
         image: redis:7
@@ -28,15 +28,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
@@ -44,7 +44,7 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-    
+
     - name: Install dependencies
       # Use lightweight CI requirements to avoid C-extension build failures
       # (ta-lib, MetaTrader5, tensorflow, etc. are excluded from CI).
@@ -52,7 +52,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-ci.txt
         pip install matplotlib "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6"
-    
+
     - name: Run tests
       env:
         CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}

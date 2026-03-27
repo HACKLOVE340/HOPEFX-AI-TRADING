@@ -40,10 +40,12 @@ router = APIRouter(prefix="/api/macro", tags=["Macro Data"])
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_macro_store():
     """Return the module-level MacroStore singleton (never raises)."""
     try:
         from ml.macro_store import macro_store
+
         return macro_store
     except Exception as exc:
         logger.debug("MacroStore unavailable: %s", exc)
@@ -63,11 +65,11 @@ def _push_snapshot_to_store(snapshot: Dict[str, Any]) -> int:
 
     today = datetime.now(timezone.utc).date().isoformat()
     mapping = {
-        "dxy":          "dxy",
-        "yield_10y":    "us10y",
-        "yield_2y":     "us2y",
+        "dxy": "dxy",
+        "yield_10y": "us10y",
+        "yield_2y": "us2y",
         "yield_spread": "yield_spread",
-        "cpi_latest":   "cpi_surprise",
+        "cpi_latest": "cpi_surprise",
     }
     updated = 0
     for feed_key, store_key in mapping.items():
@@ -82,6 +84,7 @@ def _push_snapshot_to_store(snapshot: Dict[str, Any]) -> int:
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/snapshot", summary="Current macro snapshot for gold")
 async def macro_snapshot():
@@ -107,7 +110,9 @@ async def macro_snapshot():
         )
 
 
-@router.get("/refresh", summary="Force-refresh macro data from FRED and update MacroStore")
+@router.get(
+    "/refresh", summary="Force-refresh macro data from FRED and update MacroStore"
+)
 async def macro_refresh():
     """
     Force a fresh pull from FRED, bypassing the 1-hour cache, and push
@@ -162,7 +167,9 @@ async def macro_features():
         )
 
 
-@router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
+@router.get(
+    "/store", summary="MacroStore snapshot — all loaded series with latest values"
+)
 async def macro_store_snapshot():
     """
     Return the current state of the in-memory MacroStore: which series are
@@ -184,7 +191,9 @@ async def macro_store_snapshot():
 
 
 class MacroUpdateRequest(BaseModel):
-    series_name: str = Field(..., description="MacroStore series name, e.g. 'dxy', 'us10y'")
+    series_name: str = Field(
+        ..., description="MacroStore series name, e.g. 'dxy', 'us10y'"
+    )
     date: str = Field(..., description="ISO date string, e.g. '2026-03-26'")
     value: float = Field(..., description="Observed value")
 

@@ -34,6 +34,7 @@ sys.path.insert(0, str(_ROOT))
 # Load .env if present
 try:
     from dotenv import load_dotenv
+
     load_dotenv(_ROOT / ".env")
 except ImportError:
     pass
@@ -49,15 +50,9 @@ def _check(label: str, ok: bool, detail: str = "") -> bool:
 
 
 def validate(practice: bool = True) -> bool:
-    api_key = (
-        os.getenv("OANDA_API_KEY")
-        or os.getenv("BROKER_OANDA_TOKEN")
-        or ""
-    )
+    api_key = os.getenv("OANDA_API_KEY") or os.getenv("BROKER_OANDA_TOKEN") or ""
     account_id = (
-        os.getenv("OANDA_ACCOUNT_ID")
-        or os.getenv("BROKER_OANDA_ACCOUNT")
-        or ""
+        os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
     )
 
     env_label = "practice" if practice else "LIVE"
@@ -96,7 +91,11 @@ def validate(practice: bool = True) -> bool:
             timeout=10,
         )
         if r.status_code == 401:
-            _check("API token valid", False, "401 Unauthorized — regenerate token in OANDA portal")
+            _check(
+                "API token valid",
+                False,
+                "401 Unauthorized — regenerate token in OANDA portal",
+            )
             return False
         if r.status_code == 404:
             _check("Account ID valid", False, f"404 — account {account_id!r} not found")
@@ -109,7 +108,11 @@ def validate(practice: bool = True) -> bool:
         _check("Account ID valid", True, f"{account_id}")
         _check("Account balance", True, f"{balance} {currency} ({env_label})")
     except requests.exceptions.ConnectionError:
-        _check("OANDA API reachable", False, "Connection refused — check internet / firewall")
+        _check(
+            "OANDA API reachable",
+            False,
+            "Connection refused — check internet / firewall",
+        )
         return False
     except Exception as exc:
         _check("OANDA API reachable", False, str(exc))
@@ -159,7 +162,11 @@ def validate(practice: bool = True) -> bool:
                     or resp.get("orderCreateTransaction", {}).get("id")
                     or "?"
                 )
-                _check("Order placement test", True, f"order filled/created (id={order_id})")
+                _check(
+                    "Order placement test",
+                    True,
+                    f"order filled/created (id={order_id})",
+                )
 
                 # Close any open position from the test
                 r2 = requests.put(
@@ -171,7 +178,11 @@ def validate(practice: bool = True) -> bool:
                 if r2.status_code in (200, 201):
                     _check("Test position closed", True)
             else:
-                _check("Order placement test", False, f"HTTP {r.status_code}: {r.text[:100]}")
+                _check(
+                    "Order placement test",
+                    False,
+                    f"HTTP {r.status_code}: {r.text[:100]}",
+                )
         except Exception as exc:
             _check("Order placement test", False, str(exc))
     else:
@@ -190,6 +201,7 @@ def validate_gate() -> None:
     print("=" * 40)
     try:
         from research.pipeline.paper_trading_gate import PaperTradingGate
+
         gate = PaperTradingGate()
         gate.print_status()
 
@@ -200,7 +212,9 @@ def validate_gate() -> None:
             print("\nTo start the 30-day clock:")
             print("  python -m research.pipeline.paper_trading_gate --set-start")
             print("\nTo record fills (called automatically by broker callback):")
-            print("  python -m research.pipeline.paper_trading_gate --record-fill <pnl>")
+            print(
+                "  python -m research.pipeline.paper_trading_gate --record-fill <pnl>"
+            )
         elif not p3_ok:
             print("\nPhase 2 gate passed. Enable anomaly weighting:")
             print("  FEATURE_ANOMALY_WEIGHTING=true  (in .env)")

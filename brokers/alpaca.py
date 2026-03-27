@@ -407,7 +407,10 @@ class AlpacaConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "1Min", limit: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "1Min",
+        limit: int = 100,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Get historical market data (bars).

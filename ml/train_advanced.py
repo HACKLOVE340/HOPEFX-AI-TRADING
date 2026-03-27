@@ -112,10 +112,16 @@ def fetch_gold_ohlcv(
                 cutoff = cutoff.replace(tzinfo=None)
             df = df[df.index >= cutoff]
             if not df.empty:
-                logger.info("Loaded %d bars from cache (%s → %s)", len(df),
-                            df.index[0].date(), df.index[-1].date())
+                logger.info(
+                    "Loaded %d bars from cache (%s → %s)",
+                    len(df),
+                    df.index[0].date(),
+                    df.index[-1].date(),
+                )
                 return df
-            logger.warning("Cached CSV empty after date filter — falling back to download")
+            logger.warning(
+                "Cached CSV empty after date filter — falling back to download"
+            )
 
     import yfinance as yf
 
@@ -565,7 +571,7 @@ def _sharpe_se(n_trades: int, sr_est: float = 1.52) -> float:
     """
     if n_trades < 2:
         return float("inf")
-    return float(np.sqrt((1 + 0.5 * sr_est ** 2) / n_trades))
+    return float(np.sqrt((1 + 0.5 * sr_est**2) / n_trades))
 
 
 def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) -> dict:
@@ -581,7 +587,7 @@ def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) 
     """
     se = _sharpe_se(n_trades, sr_est=sharpe)
     # Solve for N where SE = 0.10: N = (1 + 0.5*SR²) / 0.01
-    n_required = int(np.ceil((1 + 0.5 * sharpe ** 2) / 0.01))
+    n_required = int(np.ceil((1 + 0.5 * sharpe**2) / 0.01))
     gate_passed = n_trades >= target_n
     credible = se <= 0.10
 
@@ -677,16 +683,27 @@ def oos_eval_advanced(
 
     logger.info(
         "OOS advanced  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
-        acc, acc_se, f1, auc, n, k, p_value, p_value < 0.05,
+        acc,
+        acc_se,
+        f1,
+        auc,
+        n,
+        k,
+        p_value,
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
     # Determine OOS date range
     oos_start = (
-        X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+        X_oos.index[0].date()
+        if hasattr(X_oos.index[0], "date")
+        else str(X_oos.index[0])
     )
     oos_end = (
-        X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
+        X_oos.index[-1].date()
+        if hasattr(X_oos.index[-1], "date")
+        else str(X_oos.index[-1])
     )
 
     # Save OOS model with metadata sidecar
@@ -761,7 +778,9 @@ def main():
         help="Years of history to download (default: 50)",
     )
     parser.add_argument(
-        "--symbol", default="GC=F", help="Yahoo Finance symbol (default: GC=F)",
+        "--symbol",
+        default="GC=F",
+        help="Yahoo Finance symbol (default: GC=F)",
     )
     parser.add_argument(
         "--no-macro",
@@ -769,10 +788,16 @@ def main():
         help="Skip macro features (DXY, VIX, yields, SPX)",
     )
     parser.add_argument(
-        "--horizon", type=int, default=1, help="Prediction horizon in bars (default: 1)",
+        "--horizon",
+        type=int,
+        default=1,
+        help="Prediction horizon in bars (default: 1)",
     )
     parser.add_argument(
-        "--splits", type=int, default=8, help="Walk-forward CV splits (default: 8)",
+        "--splits",
+        type=int,
+        default=8,
+        help="Walk-forward CV splits (default: 8)",
     )
     parser.add_argument(
         "--min-move",
@@ -828,7 +853,9 @@ def main():
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
-        logger.info("Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2")
+        logger.info(
+            "Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2"
+        )
         args.years = 2
         args.oos_years = 0.0
         args.no_macro = True
@@ -838,9 +865,11 @@ def main():
     # Use extended 200+ feature builder when available, fall back to base
     try:
         from ml.features_extended import build_extended_features as _build_fn
+
         logger.info("Using extended 200+ feature builder (features_extended.py)")
     except ImportError:
         from ml.advanced_features import build_advanced_features as _build_fn
+
         logger.info("Using base 100-feature builder (features_extended.py not found)")
 
     # ── Fetch data ────────────────────────────────────────────────────────────
@@ -918,7 +947,8 @@ def main():
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
     logger.info(
-        "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===", args.splits,
+        "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===",
+        args.splits,
     )
     wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits)
 
@@ -936,7 +966,9 @@ def main():
     mode = "stacking ensemble" if args.stacking else "calibrated XGBoost"
     logger.info("\n=== Training final model (%s) ===", mode)
     final_model, final_metrics = train_final_model(
-        X_cv, y_cv, use_stacking=args.stacking,
+        X_cv,
+        y_cv,
+        use_stacking=args.stacking,
     )
 
     # Feature importance
@@ -1019,7 +1051,9 @@ def main():
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
         print("  ─── Sharpe SE Gate ────────────────────────────────────────")
-        print(f"  N={sg.get('n_trades','?')} OOS trades | SE={sg.get('se','?')} | Gate: {gate_status}")
+        print(
+            f"  N={sg.get('n_trades','?')} OOS trades | SE={sg.get('se','?')} | Gate: {gate_status}"
+        )
         print(f"  Need N>={sg.get('target_n',600)} for SE<=0.10 (credible Sharpe).")
         print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010','?')}")
         print("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
@@ -1032,13 +1066,21 @@ def main():
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
     if oos_acc >= 0.68:
-        print(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
+        print(
+            f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)"
+        )
     elif oos_acc >= 0.55:
-        print(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
+        print(
+            f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold"
+        )
     elif oos_acc > 0:
-        print(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
+        print(
+            f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume"
+        )
     elif final_acc >= 0.85:
-        print("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
+        print(
+            "  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)"
+        )
     elif final_acc >= 0.70:
         print("  ⚠ Partial in-sample accuracy — run with --oos-years 8 to validate")
     else:

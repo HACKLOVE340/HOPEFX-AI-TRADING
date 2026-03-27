@@ -28,15 +28,22 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _write_stamp(data_dir: pathlib.Path, started_utc: datetime, days: int = 30) -> pathlib.Path:
+
+def _write_stamp(
+    data_dir: pathlib.Path, started_utc: datetime, days: int = 30
+) -> pathlib.Path:
     stamp = data_dir / "oanda_paper_start.json"
-    stamp.write_text(json.dumps({
-        "account_id": "12345678\u2026",
-        "environment": "practice",
-        "started_utc": started_utc.isoformat(),
-        "target_days": days,
-        "note": "test",
-    }))
+    stamp.write_text(
+        json.dumps(
+            {
+                "account_id": "12345678\u2026",
+                "environment": "practice",
+                "started_utc": started_utc.isoformat(),
+                "target_days": days,
+                "note": "test",
+            }
+        )
+    )
     return stamp
 
 
@@ -97,12 +104,14 @@ def _compute_clock_status(stamp_path: pathlib.Path, oanda_key: str = "") -> dict
 # _stamp_oanda_paper_start
 # ---------------------------------------------------------------------------
 
+
 class TestStampOandaPaperStart:
     def test_creates_stamp_on_first_call(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data").mkdir()
 
         from core.startup_factories import _stamp_oanda_paper_start
+
         _stamp_oanda_paper_start("ACCT123456", practice=True)
 
         stamp = tmp_path / "data" / "oanda_paper_start.json"
@@ -118,15 +127,20 @@ class TestStampOandaPaperStart:
 
         original_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         stamp_path = tmp_path / "data" / "oanda_paper_start.json"
-        stamp_path.write_text(json.dumps({
-            "account_id": "ORIGINAL\u2026",
-            "environment": "practice",
-            "started_utc": original_time.isoformat(),
-            "target_days": 30,
-            "note": "original",
-        }))
+        stamp_path.write_text(
+            json.dumps(
+                {
+                    "account_id": "ORIGINAL\u2026",
+                    "environment": "practice",
+                    "started_utc": original_time.isoformat(),
+                    "target_days": 30,
+                    "note": "original",
+                }
+            )
+        )
 
         from core.startup_factories import _stamp_oanda_paper_start
+
         _stamp_oanda_paper_start("NEWACCOUNT", practice=True)
 
         data = json.loads(stamp_path.read_text())
@@ -138,6 +152,7 @@ class TestStampOandaPaperStart:
         (tmp_path / "data").mkdir()
 
         from core.startup_factories import _stamp_oanda_paper_start
+
         _stamp_oanda_paper_start("ABCDEFGHIJKLMNOP", practice=True)
 
         stamp = tmp_path / "data" / "oanda_paper_start.json"
@@ -150,6 +165,7 @@ class TestStampOandaPaperStart:
         (tmp_path / "data").mkdir()
 
         from core.startup_factories import _stamp_oanda_paper_start
+
         _stamp_oanda_paper_start("LIVEACCT1234", practice=False)
 
         stamp = tmp_path / "data" / "oanda_paper_start.json"
@@ -160,6 +176,7 @@ class TestStampOandaPaperStart:
 # ---------------------------------------------------------------------------
 # Clock arithmetic (pure logic, no FastAPI)
 # ---------------------------------------------------------------------------
+
 
 class TestPaperTradingClockLogic:
     def test_not_started_when_no_stamp(self, tmp_path):
@@ -227,6 +244,7 @@ class TestPaperTradingClockLogic:
 # init_broker selection logic
 # ---------------------------------------------------------------------------
 
+
 class TestInitBrokerSelection:
     """
     Test broker selection in init_broker() by patching lazy imports.
@@ -253,10 +271,13 @@ class TestInitBrokerSelection:
             mock_admin.log_activity = MagicMock()
             saved = sys.modules.copy()
             sys.modules["api.admin"] = mock_admin
-            sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
+            sys.modules["brokers.paper_trading"] = MagicMock(
+                PaperTradingBroker=MockPaperClass
+            )
             try:
                 import importlib
                 import core.startup_factories as sf
+
                 importlib.reload(sf)
                 broker = await sf.init_broker(mock_state)
             finally:
@@ -283,10 +304,13 @@ class TestInitBrokerSelection:
             mock_admin.log_activity = MagicMock()
             saved = sys.modules.copy()
             sys.modules["api.admin"] = mock_admin
-            sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
+            sys.modules["brokers.paper_trading"] = MagicMock(
+                PaperTradingBroker=MockPaperClass
+            )
             try:
                 import importlib
                 import core.startup_factories as sf
+
                 importlib.reload(sf)
                 broker = await sf.init_broker(mock_state)
             finally:

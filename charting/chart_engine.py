@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ChartType(str, _enum.Enum):
     """Chart type enum. Inherits from str so values compare equal to strings."""
+
     CANDLESTICK = "candlestick"
     LINE = "line"
     BAR = "bar"
@@ -25,8 +26,12 @@ class ChartType(str, _enum.Enum):
 class Chart:
     """Single chart with indicators and drawings."""
 
-    def __init__(self, symbol: str, timeframe: str = "1H",
-                 chart_type: ChartType = ChartType.CANDLESTICK):
+    def __init__(
+        self,
+        symbol: str,
+        timeframe: str = "1H",
+        chart_type: ChartType = ChartType.CANDLESTICK,
+    ):
         self.symbol = symbol
         self.timeframe = timeframe
         self.chart_type = chart_type
@@ -40,12 +45,25 @@ class Chart:
     def add_drawing(self, drawing_type: str, **params) -> None:
         self.drawings.append({"type": drawing_type, "params": params})
 
-    def add_candle(self, open_price: float, high: float, low: float,
-                   close: float, volume: float = 0, timestamp=None) -> None:
-        self.candles.append({
-            "open": open_price, "high": high, "low": low,
-            "close": close, "volume": volume, "timestamp": timestamp,
-        })
+    def add_candle(
+        self,
+        open_price: float,
+        high: float,
+        low: float,
+        close: float,
+        volume: float = 0,
+        timestamp=None,
+    ) -> None:
+        self.candles.append(
+            {
+                "open": open_price,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+                "timestamp": timestamp,
+            }
+        )
 
     def render(self, output_format: str = "plotly") -> Dict[str, Any]:
         return {
@@ -74,8 +92,12 @@ class ChartEngine:
     def __init__(self):
         self.charts: Dict[str, Chart] = {}
 
-    def create_chart(self, symbol: str, timeframe: str = "1H",
-                     chart_type: ChartType = ChartType.CANDLESTICK) -> Chart:
+    def create_chart(
+        self,
+        symbol: str,
+        timeframe: str = "1H",
+        chart_type: ChartType = ChartType.CANDLESTICK,
+    ) -> Chart:
         chart = Chart(symbol, timeframe, chart_type)
         key = f"{symbol}_{timeframe}"
         self.charts[key] = chart

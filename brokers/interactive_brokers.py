@@ -21,7 +21,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,
+        Option,  # noqa: F401
         Stock,
         StopOrder,
     )
@@ -96,7 +96,10 @@ class InteractiveBrokersConnector(BrokerConnector):
         """Connect to IB Gateway or TWS."""
         try:
             self.ib.connect(
-                host=self.host, port=self.port, clientId=self.client_id, readonly=False,
+                host=self.host,
+                port=self.port,
+                clientId=self.client_id,
+                readonly=False,
             )
 
             self.connected = True
@@ -358,7 +361,10 @@ class InteractiveBrokersConnector(BrokerConnector):
             return None
 
     def get_market_data(
-        self, symbol: str, timeframe: str = "1 hour", count: int = 100,
+        self,
+        symbol: str,
+        timeframe: str = "1 hour",
+        count: int = 100,
     ) -> Optional[List[Dict[str, Any]]]:
         """Get historical market data."""
         if not self.connected:

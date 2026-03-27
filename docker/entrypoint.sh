@@ -10,7 +10,7 @@ wait_for_service() {
     local host=$1
     local port=$2
     local service=$3
-    
+
     echo "Waiting for $service at $host:$port..."
     while ! nc -z $host $port; do
         sleep 1

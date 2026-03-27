@@ -20,7 +20,7 @@ class SimulationEngine:
         strategy,
         num_paths: int = 10000,
         time_horizon: int = 252,
-        confidence_levels: List[float] = None
+        confidence_levels: List[float] = None,
     ) -> Dict:
         """Run Monte Carlo simulation"""
         if confidence_levels is None:
@@ -35,13 +35,13 @@ class SimulationEngine:
         paths_sorted = sorted(paths)
 
         return {
-            'mean_return': np.mean(paths),
-            'std_dev': np.std(paths),
-            'var_95': paths_sorted[int(num_paths * 0.05)],
-            'var_99': paths_sorted[int(num_paths * 0.01)],
-            'max_drawdown': min(paths),
-            'best_case': max(paths),
-            'paths': paths
+            "mean_return": np.mean(paths),
+            "std_dev": np.std(paths),
+            "var_95": paths_sorted[int(num_paths * 0.05)],
+            "var_99": paths_sorted[int(num_paths * 0.01)],
+            "max_drawdown": min(paths),
+            "best_case": max(paths),
+            "paths": paths,
         }
 
     def genetic_algorithm_optimization(
@@ -49,7 +49,7 @@ class SimulationEngine:
         parameters: Dict,
         fitness_function,
         population_size: int = 100,
-        generations: int = 50
+        generations: int = 50,
     ) -> Dict:
         """Optimize parameters using genetic algorithm"""
         best_params = parameters
@@ -62,7 +62,7 @@ class SimulationEngine:
                 best_fitness = fitness
 
         return {
-            'best_parameters': best_params,
-            'fitness_score': best_fitness,
-            'generations': generations
+            "best_parameters": best_params,
+            "fitness_score": best_fitness,
+            "generations": generations,
         }

@@ -18,15 +18,18 @@ import pytest
 # PaperTradingBroker + RiskManager integration
 # ---------------------------------------------------------------------------
 
+
 class TestBrokerRiskIntegration:
     """PaperTradingBroker and RiskManager work together end-to-end."""
 
     def _make_broker(self, balance: float = 10_000.0):
         from brokers.paper_trading import PaperTradingBroker
+
         return PaperTradingBroker(initial_balance=balance)
 
     def _make_risk(self, balance: float = 10_000.0):
         from risk.manager import RiskManager, RiskConfig
+
         cfg = RiskConfig(
             max_position_size_pct=0.02,
             max_drawdown_pct=0.10,
@@ -53,6 +56,7 @@ class TestBrokerRiskIntegration:
         broker.update_market_price("XAUUSD", 2000.0)
 
         from brokers.base import OrderSide, OrderType
+
         order = broker.place_order(
             symbol="XAUUSD",
             side=OrderSide.BUY,
@@ -103,6 +107,7 @@ class TestBrokerRiskIntegration:
         broker.update_market_price("EURUSD", 1.0850)
 
         from brokers.base import OrderSide, OrderType
+
         broker.place_order(
             symbol="EURUSD",
             side=OrderSide.BUY,
@@ -124,11 +129,13 @@ class TestBrokerRiskIntegration:
 # MetricsRegistry integration
 # ---------------------------------------------------------------------------
 
+
 class TestMetricsRegistryIntegration:
     """MetricsRegistry records and exports values correctly."""
 
     def setup_method(self):
         from infrastructure.metrics import get_metrics_registry
+
         self.registry = get_metrics_registry()
 
     def test_counter_increments(self):
@@ -201,6 +208,7 @@ class TestMetricsRegistryIntegration:
 # KillSwitch integration
 # ---------------------------------------------------------------------------
 
+
 class TestKillSwitchIntegration:
     """KillSwitch activates, blocks trading, and deactivates correctly."""
 
@@ -209,6 +217,7 @@ class TestKillSwitchIntegration:
         import tempfile
         from pathlib import Path
         from kill_switch import KillSwitch
+
         if tmp_path is None:
             tmp_path = Path(tempfile.mkdtemp())
         flag = tmp_path / "ks_test.flag"
@@ -246,16 +255,19 @@ class TestKillSwitchIntegration:
 # DataScheduler import + instantiation
 # ---------------------------------------------------------------------------
 
+
 class TestDataSchedulerIntegration:
     """DataScheduler can be imported and instantiated without errors."""
 
     def test_import_and_instantiate(self):
         from data.scheduler import DataScheduler
+
         scheduler = DataScheduler()
         assert scheduler is not None
 
     def test_has_start_method(self):
         from data.scheduler import DataScheduler
+
         scheduler = DataScheduler()
         assert callable(getattr(scheduler, "start", None))
 
@@ -266,6 +278,7 @@ class TestDataSchedulerIntegration:
 
 try:
     import fastapi as _fastapi_check  # noqa: F401
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
@@ -280,12 +293,14 @@ class TestPrometheusMonitoringIntegration:
 
     def test_import(self):
         import prometheus_monitoring
+
         assert hasattr(prometheus_monitoring, "setup_prometheus_monitoring")
 
     @_skip_no_fastapi
     def test_setup_on_fastapi_app(self):
         from fastapi import FastAPI
         import prometheus_monitoring
+
         app = FastAPI()
         prometheus_monitoring.setup_prometheus_monitoring(app)
         paths = [r.path for r in app.routes]
@@ -296,6 +311,7 @@ class TestPrometheusMonitoringIntegration:
         """Calling setup twice must not raise or duplicate the route."""
         from fastapi import FastAPI
         import prometheus_monitoring
+
         app = FastAPI()
         prometheus_monitoring.setup_prometheus_monitoring(app)
         prometheus_monitoring.setup_prometheus_monitoring(app)

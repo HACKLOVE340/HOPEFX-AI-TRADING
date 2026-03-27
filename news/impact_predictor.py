@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ImpactLevel(Enum):
     """Market impact classification"""
+
     VERY_LOW = "very_low"
     LOW = "low"
     MEDIUM = "medium"
@@ -34,6 +35,7 @@ class ImpactLevel(Enum):
 
 class EventCategory(Enum):
     """News event categories"""
+
     ECONOMIC_DATA = "economic_data"
     CENTRAL_BANK = "central_bank"
     EARNINGS = "earnings"
@@ -47,6 +49,7 @@ class EventCategory(Enum):
 @dataclass
 class MarketImpact:
     """Represents predicted market impact"""
+
     level: ImpactLevel
     category: EventCategory
     confidence: float  # 0 to 1
@@ -58,13 +61,13 @@ class MarketImpact:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'level': self.level.value,
-            'category': self.category.value,
-            'confidence': self.confidence,
-            'expected_volatility': self.expected_volatility,
-            'direction_bias': self.direction_bias,
-            'affected_symbols': self.affected_symbols,
-            'timeframe': self.timeframe
+            "level": self.level.value,
+            "category": self.category.value,
+            "confidence": self.confidence,
+            "expected_volatility": self.expected_volatility,
+            "direction_bias": self.direction_bias,
+            "affected_symbols": self.affected_symbols,
+            "timeframe": self.timeframe,
         }
 
 
@@ -75,31 +78,108 @@ class ImpactPredictor:
 
     # High-impact keywords
     HIGH_IMPACT_KEYWORDS = {
-        'central bank', 'fed', 'ecb', 'boj', 'interest rate', 'rate hike',
-        'rate cut', 'quantitative easing', 'monetary policy', 'inflation',
-        'gdp', 'employment', 'unemployment', 'nonfarm payrolls', 'cpi',
-        'war', 'crisis', 'pandemic', 'emergency', 'collapse', 'bankruptcy',
+        "central bank",
+        "fed",
+        "ecb",
+        "boj",
+        "interest rate",
+        "rate hike",
+        "rate cut",
+        "quantitative easing",
+        "monetary policy",
+        "inflation",
+        "gdp",
+        "employment",
+        "unemployment",
+        "nonfarm payrolls",
+        "cpi",
+        "war",
+        "crisis",
+        "pandemic",
+        "emergency",
+        "collapse",
+        "bankruptcy",
         # Geopolitical keywords from World Monitor integration
-        'conflict', 'military', 'invasion', 'sanctions', 'nuclear',
-        'missile', 'strike', 'troops', 'escalation', 'terrorism'
+        "conflict",
+        "military",
+        "invasion",
+        "sanctions",
+        "nuclear",
+        "missile",
+        "strike",
+        "troops",
+        "escalation",
+        "terrorism",
     }
 
     # Category keywords
     CATEGORY_KEYWORDS = {
-        EventCategory.CENTRAL_BANK: ['fed', 'ecb', 'boj', 'central bank', 'fomc', 'rate decision'],
-        EventCategory.ECONOMIC_DATA: ['gdp', 'cpi', 'inflation', 'employment', 'retail sales', 'pmi'],
-        EventCategory.EARNINGS: ['earnings', 'profit', 'revenue', 'eps', 'quarterly results'],
-        EventCategory.GEOPOLITICAL: [
-            'war', 'conflict', 'sanctions', 'election', 'trade war',
-            # Extended geopolitical keywords from World Monitor
-            'military', 'invasion', 'nuclear', 'missile', 'terrorism',
-            'coup', 'assassination', 'civil unrest', 'protests', 'embargo',
-            'attack', 'bombing', 'troops', 'escalation', 'tension',
-            'hotspot', 'humanitarian', 'refugee', 'border'
+        EventCategory.CENTRAL_BANK: [
+            "fed",
+            "ecb",
+            "boj",
+            "central bank",
+            "fomc",
+            "rate decision",
         ],
-        EventCategory.REGULATORY: ['regulation', 'sec', 'fda', 'approval', 'ban', 'restriction'],
-        EventCategory.CORPORATE: ['merger', 'acquisition', 'ceo', 'dividend', 'buyback'],
-        EventCategory.MARKET_MOVE: ['surge', 'plunge', 'rally', 'crash', 'selloff']
+        EventCategory.ECONOMIC_DATA: [
+            "gdp",
+            "cpi",
+            "inflation",
+            "employment",
+            "retail sales",
+            "pmi",
+        ],
+        EventCategory.EARNINGS: [
+            "earnings",
+            "profit",
+            "revenue",
+            "eps",
+            "quarterly results",
+        ],
+        EventCategory.GEOPOLITICAL: [
+            "war",
+            "conflict",
+            "sanctions",
+            "election",
+            "trade war",
+            # Extended geopolitical keywords from World Monitor
+            "military",
+            "invasion",
+            "nuclear",
+            "missile",
+            "terrorism",
+            "coup",
+            "assassination",
+            "civil unrest",
+            "protests",
+            "embargo",
+            "attack",
+            "bombing",
+            "troops",
+            "escalation",
+            "tension",
+            "hotspot",
+            "humanitarian",
+            "refugee",
+            "border",
+        ],
+        EventCategory.REGULATORY: [
+            "regulation",
+            "sec",
+            "fda",
+            "approval",
+            "ban",
+            "restriction",
+        ],
+        EventCategory.CORPORATE: [
+            "merger",
+            "acquisition",
+            "ceo",
+            "dividend",
+            "buyback",
+        ],
+        EventCategory.MARKET_MOVE: ["surge", "plunge", "rally", "crash", "selloff"],
     }
 
     def __init__(self):
@@ -111,7 +191,7 @@ class ImpactPredictor:
         title: str,
         description: str,
         sentiment_score: Optional[float] = None,
-        symbols: Optional[List[str]] = None
+        symbols: Optional[List[str]] = None,
     ) -> MarketImpact:
         """
         Predict market impact of a news event
@@ -154,7 +234,7 @@ class ImpactPredictor:
                 expected_volatility=volatility,
                 direction_bias=direction_bias,
                 affected_symbols=symbols,
-                timeframe=timeframe
+                timeframe=timeframe,
             )
 
         except Exception as e:
@@ -164,7 +244,7 @@ class ImpactPredictor:
                 level=ImpactLevel.LOW,
                 category=EventCategory.OTHER,
                 confidence=0.0,
-                expected_volatility=0.0
+                expected_volatility=0.0,
             )
 
     def _categorize_event(self, text: str) -> EventCategory:
@@ -183,10 +263,14 @@ class ImpactPredictor:
 
         return EventCategory.OTHER
 
-    def _calculate_impact_level(self, text: str, category: EventCategory) -> ImpactLevel:
+    def _calculate_impact_level(
+        self, text: str, category: EventCategory
+    ) -> ImpactLevel:
         """Calculate impact level based on keywords and category"""
         # Count high-impact keywords
-        high_impact_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
+        high_impact_count = sum(
+            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
+        )
 
         # Category-based base impact
         category_impact = {
@@ -197,7 +281,7 @@ class ImpactPredictor:
             EventCategory.REGULATORY: 2,
             EventCategory.CORPORATE: 1,
             EventCategory.MARKET_MOVE: 3,
-            EventCategory.OTHER: 1
+            EventCategory.OTHER: 1,
         }
 
         # Calculate total score
@@ -216,10 +300,7 @@ class ImpactPredictor:
             return ImpactLevel.VERY_LOW
 
     def _calculate_confidence(
-        self,
-        text: str,
-        category: EventCategory,
-        sentiment_score: Optional[float]
+        self, text: str, category: EventCategory, sentiment_score: Optional[float]
     ) -> float:
         """Calculate confidence in prediction"""
         confidence = 0.5  # Base confidence
@@ -233,12 +314,16 @@ class ImpactPredictor:
             confidence += 0.1
 
         # Increase confidence if high-impact keywords present
-        keyword_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
+        keyword_count = sum(
+            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
+        )
         confidence += min(keyword_count * 0.1, 0.2)
 
         return min(confidence, 1.0)
 
-    def _estimate_volatility(self, impact_level: ImpactLevel, category: EventCategory) -> float:
+    def _estimate_volatility(
+        self, impact_level: ImpactLevel, category: EventCategory
+    ) -> float:
         """Estimate expected volatility (as percentage)"""
         # Base volatility by impact level
         volatility_map = {
@@ -246,7 +331,7 @@ class ImpactPredictor:
             ImpactLevel.LOW: 0.3,
             ImpactLevel.MEDIUM: 0.6,
             ImpactLevel.HIGH: 1.0,
-            ImpactLevel.VERY_HIGH: 2.0
+            ImpactLevel.VERY_HIGH: 2.0,
         }
 
         base_volatility = volatility_map.get(impact_level, 0.3)
@@ -265,9 +350,9 @@ class ImpactPredictor:
             return None
 
         if sentiment_score > 0.1:
-            return 'bullish'
+            return "bullish"
         elif sentiment_score < -0.1:
-            return 'bearish'
+            return "bearish"
         else:
             return None
 
@@ -275,18 +360,15 @@ class ImpactPredictor:
         """Estimate impact timeframe"""
         # Central bank and geopolitical events have longer-term impact
         if category in [EventCategory.CENTRAL_BANK, EventCategory.GEOPOLITICAL]:
-            return 'medium_term'
+            return "medium_term"
         # Economic data has short-term impact
         elif category == EventCategory.ECONOMIC_DATA:
-            return 'short_term'
+            return "short_term"
         # Most others are intraday
         else:
-            return 'intraday'
+            return "intraday"
 
-    def batch_predict(
-        self,
-        articles: List[Dict]
-    ) -> List[MarketImpact]:
+    def batch_predict(self, articles: List[Dict]) -> List[MarketImpact]:
         """
         Predict impact for multiple articles
 
@@ -299,29 +381,27 @@ class ImpactPredictor:
         impacts = []
         for article in articles:
             impact = self.predict_impact(
-                title=article.get('title', ''),
-                description=article.get('description', ''),
-                sentiment_score=article.get('sentiment'),
-                symbols=article.get('symbols')
+                title=article.get("title", ""),
+                description=article.get("description", ""),
+                sentiment_score=article.get("sentiment"),
+                symbols=article.get("symbols"),
             )
             impacts.append(impact)
 
         return impacts
 
     def get_high_impact_events(
-        self,
-        articles: List[Dict],
-        min_level: ImpactLevel = ImpactLevel.HIGH
+        self, articles: List[Dict], min_level: ImpactLevel = ImpactLevel.HIGH
     ) -> List[Dict]:
         """Filter articles for high-impact events"""
         high_impact = []
 
         for article in articles:
             impact = self.predict_impact(
-                title=article.get('title', ''),
-                description=article.get('description', ''),
-                sentiment_score=article.get('sentiment'),
-                symbols=article.get('symbols')
+                title=article.get("title", ""),
+                description=article.get("description", ""),
+                sentiment_score=article.get("sentiment"),
+                symbols=article.get("symbols"),
             )
 
             # Check if impact level is high enough
@@ -330,11 +410,11 @@ class ImpactPredictor:
                 ImpactLevel.LOW: 2,
                 ImpactLevel.MEDIUM: 3,
                 ImpactLevel.HIGH: 4,
-                ImpactLevel.VERY_HIGH: 5
+                ImpactLevel.VERY_HIGH: 5,
             }
 
             if impact_values[impact.level] >= impact_values[min_level]:
-                article['predicted_impact'] = impact.to_dict()
+                article["predicted_impact"] = impact.to_dict()
                 high_impact.append(article)
 
         return high_impact

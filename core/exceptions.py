@@ -12,7 +12,10 @@ class HopeFXError(Exception):
     """Base exception."""
 
     def __init__(
-        self, message: str = "", context: dict | None = None, **kwargs,
+        self,
+        message: str = "",
+        context: dict | None = None,
+        **kwargs,
     ) -> None:
         super().__init__(message)
         self.message = message

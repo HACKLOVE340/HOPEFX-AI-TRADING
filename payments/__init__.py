@@ -11,13 +11,7 @@ Supports crypto (Bitcoin, USDT, Ethereum) and Nigerian fintech (Paystack, Flutte
 """
 
 # Wallet Management
-from .wallet import (
-    WalletManager,
-    WalletType,
-    WalletStatus,
-    Wallet,
-    wallet_manager
-)
+from .wallet import WalletManager, WalletType, WalletStatus, Wallet, wallet_manager
 
 # Transaction Management
 from .transaction_manager import (
@@ -25,7 +19,7 @@ from .transaction_manager import (
     Transaction,
     TransactionType,
     TransactionStatus,
-    transaction_manager
+    transaction_manager,
 )
 
 # Payment Gateway
@@ -34,7 +28,7 @@ from .payment_gateway import (
     PaymentMethod,
     PaymentStatus,
     PaymentInfo,
-    payment_gateway
+    payment_gateway,
 )
 
 # Security
@@ -43,7 +37,7 @@ from .security import (
     KYCLevel,
     KYCInfo,
     TransactionLimit,
-    security_manager
+    security_manager,
 )
 
 # Compliance
@@ -52,7 +46,7 @@ from .compliance import (
     RiskLevel,
     AMLCheck,
     ComplianceReport,
-    compliance_manager
+    compliance_manager,
 )
 
 # Crypto Payment Methods
@@ -67,7 +61,7 @@ from .crypto import (
     CryptoWalletManager,
     crypto_wallet_manager,
     AddressGenerator,
-    address_generator
+    address_generator,
 )
 
 # Fintech Payment Methods
@@ -77,33 +71,62 @@ from .fintech import (
     FlutterwaveClient,
     flutterwave_client,
     BankTransferClient,
-    bank_transfer_client
+    bank_transfer_client,
 )
 
 __all__ = [
     # Wallet
-    'WalletManager', 'WalletType', 'WalletStatus', 'Wallet', 'wallet_manager',
+    "WalletManager",
+    "WalletType",
+    "WalletStatus",
+    "Wallet",
+    "wallet_manager",
     # Transactions
-    'TransactionManager', 'Transaction', 'TransactionType', 'TransactionStatus', 'transaction_manager',
+    "TransactionManager",
+    "Transaction",
+    "TransactionType",
+    "TransactionStatus",
+    "transaction_manager",
     # Payment Gateway
-    'PaymentGateway', 'PaymentMethod', 'PaymentStatus', 'PaymentInfo', 'payment_gateway',
+    "PaymentGateway",
+    "PaymentMethod",
+    "PaymentStatus",
+    "PaymentInfo",
+    "payment_gateway",
     # Security
-    'SecurityManager', 'KYCLevel', 'KYCInfo', 'TransactionLimit', 'security_manager',
+    "SecurityManager",
+    "KYCLevel",
+    "KYCInfo",
+    "TransactionLimit",
+    "security_manager",
     # Compliance
-    'ComplianceManager', 'RiskLevel', 'AMLCheck', 'ComplianceReport', 'compliance_manager',
+    "ComplianceManager",
+    "RiskLevel",
+    "AMLCheck",
+    "ComplianceReport",
+    "compliance_manager",
     # Crypto
-    'BitcoinClient', 'bitcoin_client',
-    'USDTClient', 'USDTNetwork', 'usdt_client',
-    'EthereumClient', 'ethereum_client',
-    'CryptoWalletManager', 'crypto_wallet_manager',
-    'AddressGenerator', 'address_generator',
+    "BitcoinClient",
+    "bitcoin_client",
+    "USDTClient",
+    "USDTNetwork",
+    "usdt_client",
+    "EthereumClient",
+    "ethereum_client",
+    "CryptoWalletManager",
+    "crypto_wallet_manager",
+    "AddressGenerator",
+    "address_generator",
     # Fintech
-    'PaystackClient', 'paystack_client',
-    'FlutterwaveClient', 'flutterwave_client',
-    'BankTransferClient', 'bank_transfer_client'
+    "PaystackClient",
+    "paystack_client",
+    "FlutterwaveClient",
+    "flutterwave_client",
+    "BankTransferClient",
+    "bank_transfer_client",
 ]
 
 # Module metadata
-__version__ = '1.0.0'
-__author__ = 'HOPEFX Development Team'
-__description__ = 'Payment system with crypto and fintech support'
+__version__ = "1.0.0"
+__author__ = "HOPEFX Development Team"
+__description__ = "Payment system with crypto and fintech support"

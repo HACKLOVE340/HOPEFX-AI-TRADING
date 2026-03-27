@@ -50,7 +50,7 @@ This prohibition covers:
 
 To obtain a commercial license (for closed-source use, white-labeling, or SaaS deployment without source disclosure), contact:
 
-**Email:** hacklove340@hopefx.io  
+**Email:** hacklove340@hopefx.io
 **GitHub:** [@HACKLOVE340](https://github.com/HACKLOVE340)
 
 ---

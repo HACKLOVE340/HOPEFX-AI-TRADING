@@ -29,11 +29,11 @@ class PriceLevel:
     """A support, resistance, or pivot price level."""
 
     price: float
-    level_type: str              # 'support', 'resistance', 'pivot'
-    strength: float              # 0.0 – 1.0 (higher = stronger)
-    touch_count: int             # Number of times price tested this level
+    level_type: str  # 'support', 'resistance', 'pivot'
+    strength: float  # 0.0 – 1.0 (higher = stronger)
+    touch_count: int  # Number of times price tested this level
     last_touch: Optional[datetime]  # Datetime of last touch, or None
-    method: str                  # 'swing', 'fibonacci', 'round_number', etc.
+    method: str  # 'swing', 'fibonacci', 'round_number', etc.
     is_active: bool
     description: str = ""
 
@@ -59,10 +59,10 @@ class SRLevel:
     """A single support or resistance level (legacy)."""
 
     price: float
-    level_type: str          # 'support' or 'resistance'
-    strength: float          # 0.0 – 1.0  (higher = stronger)
-    touches: int             # Number of times price tested this level
-    origin: str              # 'swing', 'volume', 'psychological'
+    level_type: str  # 'support' or 'resistance'
+    strength: float  # 0.0 – 1.0  (higher = stronger)
+    touches: int  # Number of times price tested this level
+    origin: str  # 'swing', 'volume', 'psychological'
     start_index: int = 0
     end_index: int = 0
 
@@ -85,8 +85,8 @@ class SRZone:
     low_price: float
     high_price: float
     mid_price: float
-    zone_type: str           # 'support', 'resistance', 'mixed'
-    strength: float          # 0.0 – 1.0
+    zone_type: str  # 'support', 'resistance', 'mixed'
+    strength: float  # 0.0 – 1.0
     touch_count: int
     levels: List[SRLevel] = field(default_factory=list)
 
@@ -105,6 +105,7 @@ class SRZone:
 # Swing-based helpers
 # ---------------------------------------------------------------------------
 
+
 def _find_swing_highs(
     highs: List[float],
     window: int = 5,
@@ -112,7 +113,7 @@ def _find_swing_highs(
     """Return (index, price) pairs for swing highs."""
     results = []
     for i in range(window, len(highs) - window):
-        high_window = highs[i - window: i + window + 1]
+        high_window = highs[i - window : i + window + 1]
         if highs[i] == max(high_window):
             results.append((i, highs[i]))
     return results
@@ -125,7 +126,7 @@ def _find_swing_lows(
     """Return (index, price) pairs for swing lows."""
     results = []
     for i in range(window, len(lows) - window):
-        low_window = lows[i - window: i + window + 1]
+        low_window = lows[i - window : i + window + 1]
         if lows[i] == min(low_window):
             results.append((i, lows[i]))
     return results
@@ -149,6 +150,7 @@ def _count_touches(
 # Swing S/R detection
 # ---------------------------------------------------------------------------
 
+
 def _build_swing_levels(
     highs: List[float],
     lows: List[float],
@@ -167,29 +169,33 @@ def _build_swing_levels(
         touches = _count_touches(price, highs, lows, tolerance)
         lvl_type = "resistance" if price > current_price else "support"
         strength = min(1.0, touches / 10.0)
-        levels.append(SRLevel(
-            price=round(price, 5),
-            level_type=lvl_type,
-            strength=strength,
-            touches=touches,
-            origin="swing",
-            start_index=idx,
-            end_index=idx,
-        ))
+        levels.append(
+            SRLevel(
+                price=round(price, 5),
+                level_type=lvl_type,
+                strength=strength,
+                touches=touches,
+                origin="swing",
+                start_index=idx,
+                end_index=idx,
+            )
+        )
 
     for idx, price in swing_lows:
         touches = _count_touches(price, highs, lows, tolerance)
         lvl_type = "support" if price < current_price else "resistance"
         strength = min(1.0, touches / 10.0)
-        levels.append(SRLevel(
-            price=round(price, 5),
-            level_type=lvl_type,
-            strength=strength,
-            touches=touches,
-            origin="swing",
-            start_index=idx,
-            end_index=idx,
-        ))
+        levels.append(
+            SRLevel(
+                price=round(price, 5),
+                level_type=lvl_type,
+                strength=strength,
+                touches=touches,
+                origin="swing",
+                start_index=idx,
+                end_index=idx,
+            )
+        )
 
     return levels
 
@@ -197,6 +203,7 @@ def _build_swing_levels(
 # ---------------------------------------------------------------------------
 # Psychological / round-number levels
 # ---------------------------------------------------------------------------
+
 
 def _round_level_step(current_price: float) -> float:
     """Choose an appropriate round-number step for the price magnitude."""
@@ -235,13 +242,15 @@ def _build_psychological_levels(
         lvl_type = "support" if price <= current_price else "resistance"
         strength = min(1.0, 0.3 + touches * 0.07)
 
-        levels.append(SRLevel(
-            price=price,
-            level_type=lvl_type,
-            strength=strength,
-            touches=touches,
-            origin="psychological",
-        ))
+        levels.append(
+            SRLevel(
+                price=price,
+                level_type=lvl_type,
+                strength=strength,
+                touches=touches,
+                origin="psychological",
+            )
+        )
 
     return levels
 
@@ -249,6 +258,7 @@ def _build_psychological_levels(
 # ---------------------------------------------------------------------------
 # Zone merging
 # ---------------------------------------------------------------------------
+
 
 def _merge_levels_into_zones(
     levels: List[SRLevel],
@@ -309,6 +319,7 @@ def _group_to_zone(group: List[SRLevel]) -> SRZone:
 # Volume-weighted S/R (optional, requires volume data)
 # ---------------------------------------------------------------------------
 
+
 def _build_volume_levels(
     closes: List[float],
     volumes: List[float],
@@ -346,13 +357,15 @@ def _build_volume_levels(
         strength = min(1.0, vol / total_vol * bins)
         lvl_type = "support" if price <= current_price else "resistance"
 
-        levels.append(SRLevel(
-            price=price,
-            level_type=lvl_type,
-            strength=strength,
-            touches=0,
-            origin="volume",
-        ))
+        levels.append(
+            SRLevel(
+                price=price,
+                level_type=lvl_type,
+                strength=strength,
+                touches=0,
+                origin="volume",
+            )
+        )
 
     return levels
 
@@ -360,6 +373,7 @@ def _build_volume_levels(
 # ---------------------------------------------------------------------------
 # Main detector class
 # ---------------------------------------------------------------------------
+
 
 class SupportResistanceDetector:
     """
@@ -405,6 +419,7 @@ class SupportResistanceDetector:
         """Return lower-cased column name map or None if df is invalid."""
         try:
             import pandas as pd
+
             if not isinstance(df, pd.DataFrame) or df.empty:
                 return None
         except ImportError:
@@ -511,29 +526,33 @@ class SupportResistanceDetector:
             touches = _count_touches(price, highs, lows, tolerance)
             lvl_type = "resistance" if price > current_price else "support"
             strength = min(1.0, touches / 10.0)
-            levels.append(PriceLevel(
-                price=round(price, 5),
-                level_type=lvl_type,
-                strength=strength,
-                touch_count=touches,
-                last_touch=None,
-                method="swing",
-                is_active=True,
-            ))
+            levels.append(
+                PriceLevel(
+                    price=round(price, 5),
+                    level_type=lvl_type,
+                    strength=strength,
+                    touch_count=touches,
+                    last_touch=None,
+                    method="swing",
+                    is_active=True,
+                )
+            )
 
         for _, price in swing_lows:
             touches = _count_touches(price, highs, lows, tolerance)
             lvl_type = "support" if price < current_price else "resistance"
             strength = min(1.0, touches / 10.0)
-            levels.append(PriceLevel(
-                price=round(price, 5),
-                level_type=lvl_type,
-                strength=strength,
-                touch_count=touches,
-                last_touch=None,
-                method="swing",
-                is_active=True,
-            ))
+            levels.append(
+                PriceLevel(
+                    price=round(price, 5),
+                    level_type=lvl_type,
+                    strength=strength,
+                    touch_count=touches,
+                    last_touch=None,
+                    method="swing",
+                    is_active=True,
+                )
+            )
 
         return levels
 
@@ -566,16 +585,18 @@ class SupportResistanceDetector:
         for ratio in fib_ratios:
             price = price_max - ratio * price_range
             strength = round(min(1.0, 0.5 + ratio * 0.2), 4)
-            levels.append(PriceLevel(
-                price=price,
-                level_type="pivot",
-                strength=strength,
-                touch_count=0,
-                last_touch=None,
-                method="fibonacci",
-                is_active=True,
-                description=f"Fibonacci {ratio * 100:.1f}% level",
-            ))
+            levels.append(
+                PriceLevel(
+                    price=price,
+                    level_type="pivot",
+                    strength=strength,
+                    touch_count=0,
+                    last_touch=None,
+                    method="fibonacci",
+                    is_active=True,
+                    description=f"Fibonacci {ratio * 100:.1f}% level",
+                )
+            )
 
         return levels
 
@@ -609,16 +630,18 @@ class SupportResistanceDetector:
             if price <= 0:
                 continue
             lvl_type = "support" if price <= current_price else "resistance"
-            levels.append(PriceLevel(
-                price=price,
-                level_type=lvl_type,
-                strength=0.6,
-                touch_count=0,
-                last_touch=None,
-                method="round_number",
-                is_active=True,
-                description=f"Round number level {price}",
-            ))
+            levels.append(
+                PriceLevel(
+                    price=price,
+                    level_type=lvl_type,
+                    strength=0.6,
+                    touch_count=0,
+                    last_touch=None,
+                    method="round_number",
+                    is_active=True,
+                    description=f"Round number level {price}",
+                )
+            )
 
         return levels
 
@@ -644,15 +667,17 @@ class SupportResistanceDetector:
         sr_levels = _build_volume_levels(closes, volumes)
         levels: List[PriceLevel] = []
         for sr in sr_levels:
-            levels.append(PriceLevel(
-                price=sr.price,
-                level_type=sr.level_type,
-                strength=sr.strength,
-                touch_count=0,
-                last_touch=None,
-                method="volume",
-                is_active=True,
-            ))
+            levels.append(
+                PriceLevel(
+                    price=sr.price,
+                    level_type=sr.level_type,
+                    strength=sr.strength,
+                    touch_count=0,
+                    last_touch=None,
+                    method="volume",
+                    is_active=True,
+                )
+            )
         return levels
 
     def get_dynamic_levels(self, df) -> List[PriceLevel]:
@@ -679,20 +704,20 @@ class SupportResistanceDetector:
         current_price = closes[-1]
         lvl_type = "support" if ma20 < current_price else "resistance"
 
-        return [PriceLevel(
-            price=round(ma20, 5),
-            level_type=lvl_type,
-            strength=0.5,
-            touch_count=0,
-            last_touch=None,
-            method="dynamic",
-            is_active=True,
-            description="20-period moving average",
-        )]
+        return [
+            PriceLevel(
+                price=round(ma20, 5),
+                level_type=lvl_type,
+                strength=0.5,
+                touch_count=0,
+                last_touch=None,
+                method="dynamic",
+                is_active=True,
+                description="20-period moving average",
+            )
+        ]
 
-    def classify_level(
-        self, level: PriceLevel, current_price: float
-    ) -> str:
+    def classify_level(self, level: PriceLevel, current_price: float) -> str:
         """
         Classify a price level as 'support', 'resistance', or 'pivot'.
 
@@ -741,9 +766,7 @@ class SupportResistanceDetector:
 
         tolerance = self._tolerance_for(closes[-1])
 
-        swing_levels = _build_swing_levels(
-            highs, lows, closes, self._window, tolerance
-        )
+        swing_levels = _build_swing_levels(highs, lows, closes, self._window, tolerance)
         psych_levels = _build_psychological_levels(closes, tolerance)
 
         all_levels = swing_levels + psych_levels
@@ -841,7 +864,4 @@ class SupportResistanceDetector:
         tolerance = price * tol_pct
         levels = self.detect(highs, lows, closes)
 
-        return any(
-            abs(lv.price - price) <= tolerance
-            for lv in levels
-        )
+        return any(abs(lv.price - price) <= tolerance for lv in levels)

@@ -45,7 +45,11 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import (
+    ExtraTreesClassifier,
+    RandomForestClassifier,
+    StackingClassifier,
+)
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
@@ -55,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import xgboost as xgb
+
     XGB_AVAILABLE = True
 except ImportError:
     XGB_AVAILABLE = False
@@ -62,6 +67,7 @@ except ImportError:
 
 try:
     import lightgbm as lgb
+
     LGB_AVAILABLE = True
 except ImportError:
     LGB_AVAILABLE = False
@@ -69,12 +75,14 @@ except ImportError:
 
 try:
     import shap
+
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
 
 try:
     import optuna
+
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     OPTUNA_AVAILABLE = True
 except ImportError:
@@ -85,6 +93,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature selector
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class SHAPFeatureSelector:
     """
@@ -105,21 +114,31 @@ class SHAPFeatureSelector:
                 if isinstance(shap_values, list):
                     shap_values = shap_values[1]  # binary: class 1
                 importance = np.abs(shap_values).mean(axis=0)
-                self.importances_ = pd.Series(importance, index=X.columns).sort_values(ascending=False)
+                self.importances_ = pd.Series(importance, index=X.columns).sort_values(
+                    ascending=False
+                )
             except Exception as exc:
-                logger.warning("SHAP failed, falling back to feature_importances_: %s", exc)
+                logger.warning(
+                    "SHAP failed, falling back to feature_importances_: %s", exc
+                )
                 self._fallback_importance(model, X)
         else:
             self._fallback_importance(model, X)
 
         self.selected_features_ = list(self.importances_.head(self.n_features).index)
-        logger.info("Selected %d features (top: %s)", len(self.selected_features_), self.selected_features_[:5])
+        logger.info(
+            "Selected %d features (top: %s)",
+            len(self.selected_features_),
+            self.selected_features_[:5],
+        )
         return self
 
     def _fallback_importance(self, model, X: pd.DataFrame) -> None:
         imp = getattr(model, "feature_importances_", None)
         if imp is not None:
-            self.importances_ = pd.Series(imp, index=X.columns).sort_values(ascending=False)
+            self.importances_ = pd.Series(imp, index=X.columns).sort_values(
+                ascending=False
+            )
         else:
             self.importances_ = pd.Series(np.ones(len(X.columns)), index=X.columns)
 
@@ -133,6 +152,7 @@ class SHAPFeatureSelector:
 # ─────────────────────────────────────────────────────────────────────────────
 # Optuna hyperparameter search
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _xgb_objective(trial, X: np.ndarray, y: np.ndarray, n_splits: int = 3) -> float:
     params = {
@@ -154,7 +174,12 @@ def _xgb_objective(trial, X: np.ndarray, y: np.ndarray, n_splits: int = 3) -> fl
     scores = []
     for train_idx, val_idx in tscv.split(X):
         model = xgb.XGBClassifier(**params)
-        model.fit(X[train_idx], y[train_idx], eval_set=[(X[val_idx], y[val_idx])], verbose=False)
+        model.fit(
+            X[train_idx],
+            y[train_idx],
+            eval_set=[(X[val_idx], y[val_idx])],
+            verbose=False,
+        )
         prob = model.predict_proba(X[val_idx])[:, 1]
         scores.append(log_loss(y[val_idx], prob))
     return np.mean(scores)
@@ -188,7 +213,14 @@ def tune_xgboost(
         show_progress_bar=False,
     )
     best = study.best_params
-    best.update({"use_label_encoder": False, "eval_metric": "logloss", "random_state": 42, "n_jobs": -1})
+    best.update(
+        {
+            "use_label_encoder": False,
+            "eval_metric": "logloss",
+            "random_state": 42,
+            "n_jobs": -1,
+        }
+    )
     logger.info("Best XGB params: %s  (loss=%.4f)", best, study.best_value)
     return best
 
@@ -196,6 +228,7 @@ def tune_xgboost(
 # ─────────────────────────────────────────────────────────────────────────────
 # Walk-forward evaluation
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def walk_forward_eval(
     model,
@@ -216,12 +249,17 @@ def walk_forward_eval(
         losses.append(log_loss(y[val_idx], prob))
         logger.info("Fold %d  AUC=%.4f  LogLoss=%.4f", fold + 1, aucs[-1], losses[-1])
 
-    return {"auc_mean": np.mean(aucs), "auc_std": np.std(aucs), "logloss_mean": np.mean(losses)}
+    return {
+        "auc_mean": np.mean(aucs),
+        "auc_std": np.std(aucs),
+        "logloss_mean": np.mean(losses),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Ensemble builder
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class EnsemblePredictor:
     """
@@ -259,42 +297,48 @@ class EnsemblePredictor:
             estimators.append(("xgb", xgb.XGBClassifier(**xgb_params)))
 
         if LGB_AVAILABLE:
-            estimators.append((
-                "lgb",
-                lgb.LGBMClassifier(
-                    n_estimators=300,
-                    learning_rate=0.05,
-                    num_leaves=63,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    random_state=42,
-                    n_jobs=-1,
-                    verbose=-1,
-                ),
-            ))
+            estimators.append(
+                (
+                    "lgb",
+                    lgb.LGBMClassifier(
+                        n_estimators=300,
+                        learning_rate=0.05,
+                        num_leaves=63,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        random_state=42,
+                        n_jobs=-1,
+                        verbose=-1,
+                    ),
+                )
+            )
 
-        estimators.append((
-            "rf",
-            RandomForestClassifier(
-                n_estimators=300,
-                max_depth=10,
-                min_samples_leaf=5,
-                n_jobs=-1,
-                random_state=42,
-            ),
-        ))
+        estimators.append(
+            (
+                "rf",
+                RandomForestClassifier(
+                    n_estimators=300,
+                    max_depth=10,
+                    min_samples_leaf=5,
+                    n_jobs=-1,
+                    random_state=42,
+                ),
+            )
+        )
 
         # ExtraTrees adds diversity via random feature thresholds
-        estimators.append((
-            "et",
-            ExtraTreesClassifier(
-                n_estimators=300,
-                max_depth=10,
-                min_samples_leaf=5,
-                n_jobs=-1,
-                random_state=43,
-            ),
-        ))
+        estimators.append(
+            (
+                "et",
+                ExtraTreesClassifier(
+                    n_estimators=300,
+                    max_depth=10,
+                    min_samples_leaf=5,
+                    n_jobs=-1,
+                    random_state=43,
+                ),
+            )
+        )
 
         return estimators
 
@@ -308,8 +352,11 @@ class EnsemblePredictor:
         # Initial model for feature selection
         if XGB_AVAILABLE:
             seed_model = xgb.XGBClassifier(
-                n_estimators=100, max_depth=5,
-                eval_metric="logloss", random_state=42, n_jobs=-1,
+                n_estimators=100,
+                max_depth=5,
+                eval_metric="logloss",
+                random_state=42,
+                n_jobs=-1,
             )
             seed_model.fit(X_df, y)
             self.selector.fit(seed_model, X_df, y)
@@ -324,8 +371,11 @@ class EnsemblePredictor:
         base = self._build_base_estimators(X_sel, y)
         # Ridge-regularised meta-learner with class balancing
         meta = LogisticRegression(
-            C=0.5, max_iter=2000, random_state=42,
-            class_weight="balanced", solver="lbfgs",
+            C=0.5,
+            max_iter=2000,
+            random_state=42,
+            class_weight="balanced",
+            solver="lbfgs",
         )
         self.stack_ = StackingClassifier(
             estimators=base,
@@ -339,13 +389,17 @@ class EnsemblePredictor:
             # Isotonic regression calibration; fall back to sigmoid if too few samples
             method = "isotonic" if len(y) >= 1000 else "sigmoid"
             self.stack_ = CalibratedClassifierCV(
-                self.stack_, method=method, cv=3,
+                self.stack_,
+                method=method,
+                cv=3,
             )
 
         self.stack_.fit(X_sel, y)
         logger.info(
             "Ensemble fitted: %d samples, %d features, calibrate=%s",
-            len(y), X_sel.shape[1], self.calibrate,
+            len(y),
+            X_sel.shape[1],
+            self.calibrate,
         )
         return self
 
@@ -393,6 +447,7 @@ class EnsemblePredictor:
 # DeepEnsembleStore — Phase 4 production inference store
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class DeepEnsembleStore:
     """
     Production deep learning ensemble store for the signal engine (Phase 4).
@@ -424,8 +479,8 @@ class DeepEnsembleStore:
     scaler_path       : Optional path to a StandardScaler for feature normalisation.
     """
 
-    DEFAULT_MODEL_PATH  = "ml/saved_models/deep_ensemble.pt"
-    DEFAULT_META_PATH   = "ml/saved_models/deep_ensemble_meta.json"
+    DEFAULT_MODEL_PATH = "ml/saved_models/deep_ensemble.pt"
+    DEFAULT_META_PATH = "ml/saved_models/deep_ensemble_meta.json"
     DEFAULT_SCALER_PATH = "ml/saved_models/deep_ensemble_scaler.pkl"
 
     # Number of features extracted by _extract_features()
@@ -441,13 +496,13 @@ class DeepEnsembleStore:
         seq_len: int = 60,
         scaler_path: Optional[str] = None,
     ) -> None:
-        self.model_path        = Path(model_path)
-        self.meta_path         = Path(meta_path)
+        self.model_path = Path(model_path)
+        self.meta_path = Path(meta_path)
         self.oos_accuracy_gate = oos_accuracy_gate
-        self.p_value_gate      = p_value_gate
-        self.deep_weight       = float(np.clip(deep_weight, 0.0, 1.0))
-        self.seq_len           = seq_len
-        self.scaler_path       = Path(scaler_path) if scaler_path else None
+        self.p_value_gate = p_value_gate
+        self.deep_weight = float(np.clip(deep_weight, 0.0, 1.0))
+        self.seq_len = seq_len
+        self.scaler_path = Path(scaler_path) if scaler_path else None
 
         self._predictor: Optional[object] = None
         self._scaler: Optional[StandardScaler] = None
@@ -491,15 +546,20 @@ class DeepEnsembleStore:
             for attempt in range(2):
                 try:
                     from research.pipeline.models_deep import DeepPredictor
+
                     self._predictor = DeepPredictor.load(str(self.model_path))
                     break
                 except FileNotFoundError:
-                    self._gate_failure_reason = f"model file disappeared: {self.model_path}"
+                    self._gate_failure_reason = (
+                        f"model file disappeared: {self.model_path}"
+                    )
                     logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
                     return False
                 except Exception as exc:
                     if attempt == 0:
-                        logger.debug("DeepEnsembleStore: load attempt 1 failed: %s", exc)
+                        logger.debug(
+                            "DeepEnsembleStore: load attempt 1 failed: %s", exc
+                        )
                         continue
                     self._gate_failure_reason = f"load failed: {exc}"
                     logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
@@ -510,9 +570,13 @@ class DeepEnsembleStore:
                 try:
                     with open(self.scaler_path, "rb") as f:
                         self._scaler = pickle.load(f)
-                    logger.debug("DeepEnsembleStore: scaler loaded ← %s", self.scaler_path)
+                    logger.debug(
+                        "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
+                    )
                 except Exception as exc:
-                    logger.debug("DeepEnsembleStore: scaler load failed (non-fatal): %s", exc)
+                    logger.debug(
+                        "DeepEnsembleStore: scaler load failed (non-fatal): %s", exc
+                    )
 
             self._active = True
             logger.info(
@@ -538,16 +602,14 @@ class DeepEnsembleStore:
                 meta = json.load(f)
 
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))
-            self._p_value      = float(meta.get("p_value", 1.0))
+            self._p_value = float(meta.get("p_value", 1.0))
 
             # Both gates must pass atomically
             acc_ok = self._oos_accuracy >= self.oos_accuracy_gate
             pval_ok = self._p_value < self.p_value_gate
 
             if not acc_ok:
-                self._gate_failure_reason = (
-                    f"OOS accuracy {self._oos_accuracy:.1%} < gate {self.oos_accuracy_gate:.1%}"
-                )
+                self._gate_failure_reason = f"OOS accuracy {self._oos_accuracy:.1%} < gate {self.oos_accuracy_gate:.1%}"
                 logger.info(
                     "DeepEnsembleStore: %s — inactive", self._gate_failure_reason
                 )
@@ -611,7 +673,7 @@ class DeepEnsembleStore:
                     pass  # proceed without scaling
 
             # Build sequence: (1, seq_len, n_features)
-            X_seq = feat[-self.seq_len:][np.newaxis, :, :]
+            X_seq = feat[-self.seq_len :][np.newaxis, :, :]
             deep_prob = float(self._predictor.predict(X_seq)[0])  # type: ignore[union-attr]
             deep_prob = float(np.clip(deep_prob, 0.0, 1.0))
 
@@ -619,7 +681,10 @@ class DeepEnsembleStore:
             blended = adv_weight * advanced_prob + self.deep_weight * deep_prob
             logger.debug(
                 "DeepEnsemble blend: adv=%.4f deep=%.4f w=%.2f → %.4f",
-                advanced_prob, deep_prob, self.deep_weight, blended,
+                advanced_prob,
+                deep_prob,
+                self.deep_weight,
+                blended,
             )
             return float(np.clip(blended, 0.0, 1.0))
         except Exception as exc:
@@ -635,32 +700,31 @@ class DeepEnsembleStore:
         All NaN/Inf values are replaced with 0.
         """
         try:
-            c  = ohlcv_df["close"]
-            h  = ohlcv_df["high"]
+            c = ohlcv_df["close"]
+            h = ohlcv_df["high"]
             lo = ohlcv_df["low"]
-            v  = ohlcv_df.get(
-                "volume", pd.Series(np.ones(len(c)), index=c.index)
+            v = ohlcv_df.get("volume", pd.Series(np.ones(len(c)), index=c.index))
+
+            log_ret = np.log(c / c.shift(1)).fillna(0).values
+            hl_range = ((h - lo) / c.replace(0, np.nan)).fillna(0).values
+            vol_z = (
+                ((v - v.rolling(20).mean()) / v.rolling(20).std().replace(0, np.nan))
+                .fillna(0)
+                .values
+            )
+            atr14 = (
+                ((h - lo).rolling(14).mean() / c.replace(0, np.nan)).fillna(0).values
+            )
+            sma20_d = (
+                ((c - c.rolling(20).mean()) / c.replace(0, np.nan)).fillna(0).values
             )
 
-            log_ret  = np.log(c / c.shift(1)).fillna(0).values
-            hl_range = ((h - lo) / c.replace(0, np.nan)).fillna(0).values
-            vol_z    = (
-                (v - v.rolling(20).mean()) /
-                v.rolling(20).std().replace(0, np.nan)
-            ).fillna(0).values
-            atr14    = (
-                (h - lo).rolling(14).mean() / c.replace(0, np.nan)
-            ).fillna(0).values
-            sma20_d  = (
-                (c - c.rolling(20).mean()) / c.replace(0, np.nan)
-            ).fillna(0).values
-
             rsi_raw = c.diff()
-            gain    = rsi_raw.clip(lower=0).ewm(com=13, adjust=False).mean()
-            loss    = (-rsi_raw).clip(lower=0).ewm(com=13, adjust=False).mean()
-            rsi     = (
-                100 - 100 / (1 + gain / loss.replace(0, np.nan))
-            ).fillna(50).values / 100.0
+            gain = rsi_raw.clip(lower=0).ewm(com=13, adjust=False).mean()
+            loss = (-rsi_raw).clip(lower=0).ewm(com=13, adjust=False).mean()
+            rsi = (100 - 100 / (1 + gain / loss.replace(0, np.nan))).fillna(
+                50
+            ).values / 100.0
 
             feat = np.column_stack([log_ret, hl_range, vol_z, atr14, sma20_d, rsi])
             feat = np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)

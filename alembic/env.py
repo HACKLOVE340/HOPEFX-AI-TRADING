@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import all models so their metadata is registered on Base
 from database.models import Base  # noqa: F401
+
 try:
     from database.user_models import User, UserSession, LoginAttempt  # noqa: F401
 except Exception:

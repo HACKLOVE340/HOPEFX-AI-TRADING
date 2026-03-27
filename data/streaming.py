@@ -447,9 +447,7 @@ class StreamingService:
 
         for attempt in range(1, attempts + 1):
             delay = self._reconnect_base * (2 ** (attempt - 1))
-            logger.info(
-                "Reconnection attempt %d/%d in %ds", attempt, attempts, delay
-            )
+            logger.info("Reconnection attempt %d/%d in %ds", attempt, attempts, delay)
             time.sleep(delay)
             try:
                 if connect_fn():
@@ -474,9 +472,7 @@ class StreamingService:
                 "status": self._status.value,
                 "subscribed_symbols": list(self._subscriptions.keys()),
                 "global_listeners": len(self._global_listeners),
-                "tick_buffer_sizes": {
-                    s: len(b) for s, b in self._tick_buffers.items()
-                },
+                "tick_buffer_sizes": {s: len(b) for s, b in self._tick_buffers.items()},
                 "available_timeframes": [f"{tf}m" for tf in self._timeframes],
             }
 
@@ -547,6 +543,7 @@ def create_streaming_router(service: StreamingService):
                     await websocket.send_text(json.dumps(queue.pop(0)))
                 # Small sleep to avoid busy-wait
                 import asyncio
+
                 await asyncio.sleep(0.01)
         except (WebSocketDisconnect, Exception):
             pass
@@ -566,6 +563,7 @@ def get_streaming_service() -> StreamingService:
     if _streaming_service is None:
         _streaming_service = StreamingService()
     return _streaming_service
+
 
 # Compatibility alias
 DataStreamingService = StreamingService

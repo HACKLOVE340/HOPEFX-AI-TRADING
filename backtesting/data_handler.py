@@ -43,7 +43,9 @@ class DataHandler:
         self.current_index = 0
         self.continue_backtest = True
 
-        logger.info(f"Initializing DataHandler for {len(symbols)} symbols from {start_date} to {end_date}")
+        logger.info(
+            f"Initializing DataHandler for {len(symbols)} symbols from {start_date} to {end_date}"
+        )
 
     def load_data(self):
         """Load historical data for all symbols."""
@@ -57,7 +59,7 @@ class DataHandler:
                     continue
 
                 # Ensure required columns
-                required_cols = ['open', 'high', 'low', 'close', 'volume']
+                required_cols = ["open", "high", "low", "close", "volume"]
                 if not all(col in df.columns for col in required_cols):
                     logger.error(f"Missing required columns for {symbol}")
                     continue
@@ -83,7 +85,7 @@ class DataHandler:
         df = df.dropna()
 
         # Remove duplicates
-        df = df[~df.index.duplicated(keep='first')]
+        df = df[~df.index.duplicated(keep="first")]
 
         # Sort by date
         df = df.sort_index()
@@ -129,7 +131,7 @@ class DataHandler:
         if self.current_index < n:
             return None
 
-        return self.data[symbol].iloc[self.current_index - n:self.current_index]
+        return self.data[symbol].iloc[self.current_index - n : self.current_index]
 
     def get_latest_bar(self, symbol: str) -> Optional[pd.Series]:
         """Get the latest bar for a symbol."""

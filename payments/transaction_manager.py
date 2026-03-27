@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class TransactionType(Enum):
     """Transaction types"""
+
     DEPOSIT = "deposit"
     WITHDRAWAL = "withdrawal"
     PAYMENT = "payment"
@@ -33,6 +34,7 @@ class TransactionType(Enum):
 
 class TransactionStatus(Enum):
     """Transaction status"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -44,6 +46,7 @@ class TransactionStatus(Enum):
 @dataclass
 class Transaction:
     """Transaction record"""
+
     transaction_id: str
     user_id: str
     wallet_id: str
@@ -63,21 +66,23 @@ class Transaction:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'transaction_id': self.transaction_id,
-            'user_id': self.user_id,
-            'wallet_id': self.wallet_id,
-            'type': self.type.value,
-            'amount': float(self.amount),
-            'currency': self.currency,
-            'method': self.method,
-            'wallet_type': self.wallet_type,
-            'status': self.status.value,
-            'reference': self.reference,
-            'metadata': self.metadata,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'failed_reason': self.failed_reason
+            "transaction_id": self.transaction_id,
+            "user_id": self.user_id,
+            "wallet_id": self.wallet_id,
+            "type": self.type.value,
+            "amount": float(self.amount),
+            "currency": self.currency,
+            "method": self.method,
+            "wallet_type": self.wallet_type,
+            "status": self.status.value,
+            "reference": self.reference,
+            "metadata": self.metadata,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
+            "failed_reason": self.failed_reason,
         }
 
 
@@ -86,7 +91,9 @@ class TransactionManager:
 
     def __init__(self):
         self.transactions: Dict[str, Transaction] = {}
-        self.user_transactions: Dict[str, List[str]] = {}  # user_id -> [transaction_ids]
+        self.user_transactions: Dict[
+            str, List[str]
+        ] = {}  # user_id -> [transaction_ids]
 
     def record_transaction(
         self,
@@ -98,7 +105,7 @@ class TransactionManager:
         method: str,
         wallet_type: str,
         reference: Optional[str] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> Transaction:
         """
         Record a new transaction
@@ -136,7 +143,7 @@ class TransactionManager:
                 method=method,
                 wallet_type=wallet_type,
                 reference=reference,
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
 
             # Store transaction
@@ -158,7 +165,7 @@ class TransactionManager:
         self,
         transaction_id: str,
         status: TransactionStatus,
-        failed_reason: Optional[str] = None
+        failed_reason: Optional[str] = None,
     ) -> bool:
         """
         Update transaction status
@@ -185,7 +192,9 @@ class TransactionManager:
             elif status == TransactionStatus.FAILED:
                 transaction.failed_reason = failed_reason
 
-            logger.info(f"Transaction {transaction_id} status updated to {status.value}")
+            logger.info(
+                f"Transaction {transaction_id} status updated to {status.value}"
+            )
             return True
 
         except Exception as e:
@@ -194,11 +203,15 @@ class TransactionManager:
 
     def complete_transaction(self, transaction_id: str) -> bool:
         """Mark transaction as completed"""
-        return self.update_transaction_status(transaction_id, TransactionStatus.COMPLETED)
+        return self.update_transaction_status(
+            transaction_id, TransactionStatus.COMPLETED
+        )
 
     def fail_transaction(self, transaction_id: str, reason: str) -> bool:
         """Mark transaction as failed"""
-        return self.update_transaction_status(transaction_id, TransactionStatus.FAILED, reason)
+        return self.update_transaction_status(
+            transaction_id, TransactionStatus.FAILED, reason
+        )
 
     def cancel_transaction(self, transaction_id: str) -> bool:
         """Cancel a pending transaction"""
@@ -210,12 +223,12 @@ class TransactionManager:
             logger.error(f"Cannot cancel non-pending transaction: {transaction_id}")
             return False
 
-        return self.update_transaction_status(transaction_id, TransactionStatus.CANCELLED)
+        return self.update_transaction_status(
+            transaction_id, TransactionStatus.CANCELLED
+        )
 
     def reverse_transaction(
-        self,
-        transaction_id: str,
-        reason: str
+        self, transaction_id: str, reason: str
     ) -> Optional[Transaction]:
         """
         Reverse a completed transaction
@@ -236,7 +249,9 @@ class TransactionManager:
                 return None
 
             if original.status != TransactionStatus.COMPLETED:
-                logger.error(f"Can only reverse completed transactions: {transaction_id}")
+                logger.error(
+                    f"Can only reverse completed transactions: {transaction_id}"
+                )
                 return None
 
             # Create reversal transaction (opposite type)
@@ -256,19 +271,21 @@ class TransactionManager:
                 wallet_type=original.wallet_type,
                 reference=f"REVERSAL-{transaction_id}",
                 metadata={
-                    'original_transaction': transaction_id,
-                    'reversal_reason': reason,
-                    'reversed_at': datetime.now(timezone.utc).isoformat()
-                }
+                    "original_transaction": transaction_id,
+                    "reversal_reason": reason,
+                    "reversed_at": datetime.now(timezone.utc).isoformat(),
+                },
             )
 
             # Mark original as reversed
             original.status = TransactionStatus.REVERSED
             original.updated_at = datetime.now(timezone.utc)
-            original.metadata['reversed_by'] = reversal.transaction_id
-            original.metadata['reversal_reason'] = reason
+            original.metadata["reversed_by"] = reversal.transaction_id
+            original.metadata["reversal_reason"] = reason
 
-            logger.info(f"Transaction {transaction_id} reversed with {reversal.transaction_id}")
+            logger.info(
+                f"Transaction {transaction_id} reversed with {reversal.transaction_id}"
+            )
             return reversal
 
         except Exception as e:
@@ -284,7 +301,7 @@ class TransactionManager:
         user_id: str,
         type: Optional[TransactionType] = None,
         status: Optional[TransactionStatus] = None,
-        limit: int = 100
+        limit: int = 100,
     ) -> List[Transaction]:
         """
         Get user's transactions
@@ -299,7 +316,11 @@ class TransactionManager:
             List of transactions
         """
         transaction_ids = self.user_transactions.get(user_id, [])
-        transactions = [self.transactions[tid] for tid in transaction_ids if tid in self.transactions]
+        transactions = [
+            self.transactions[tid]
+            for tid in transaction_ids
+            if tid in self.transactions
+        ]
 
         # Apply filters
         if type:
@@ -316,7 +337,7 @@ class TransactionManager:
         self,
         user_id: str,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict:
         """
         Generate transaction statement
@@ -337,31 +358,47 @@ class TransactionManager:
         # Get all transactions in date range
         all_transactions = self.get_user_transactions(user_id, limit=10000)
         transactions = [
-            t for t in all_transactions
-            if start_date <= t.created_at <= end_date
+            t for t in all_transactions if start_date <= t.created_at <= end_date
         ]
 
         # Calculate totals
-        total_deposits = sum(t.amount for t in transactions if t.type == TransactionType.DEPOSIT and t.status == TransactionStatus.COMPLETED)
-        total_withdrawals = sum(t.amount for t in transactions if t.type == TransactionType.WITHDRAWAL and t.status == TransactionStatus.COMPLETED)
-        total_payments = sum(t.amount for t in transactions if t.type == TransactionType.PAYMENT and t.status == TransactionStatus.COMPLETED)
-        total_commissions = sum(t.amount for t in transactions if t.type == TransactionType.COMMISSION and t.status == TransactionStatus.COMPLETED)
+        total_deposits = sum(
+            t.amount
+            for t in transactions
+            if t.type == TransactionType.DEPOSIT
+            and t.status == TransactionStatus.COMPLETED
+        )
+        total_withdrawals = sum(
+            t.amount
+            for t in transactions
+            if t.type == TransactionType.WITHDRAWAL
+            and t.status == TransactionStatus.COMPLETED
+        )
+        total_payments = sum(
+            t.amount
+            for t in transactions
+            if t.type == TransactionType.PAYMENT
+            and t.status == TransactionStatus.COMPLETED
+        )
+        total_commissions = sum(
+            t.amount
+            for t in transactions
+            if t.type == TransactionType.COMMISSION
+            and t.status == TransactionStatus.COMPLETED
+        )
 
         return {
-            'user_id': user_id,
-            'period': {
-                'start': start_date.isoformat(),
-                'end': end_date.isoformat()
+            "user_id": user_id,
+            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
+            "summary": {
+                "total_deposits": float(total_deposits),
+                "total_withdrawals": float(total_withdrawals),
+                "total_payments": float(total_payments),
+                "total_commissions": float(total_commissions),
+                "net_flow": float(total_deposits - total_withdrawals),
             },
-            'summary': {
-                'total_deposits': float(total_deposits),
-                'total_withdrawals': float(total_withdrawals),
-                'total_payments': float(total_payments),
-                'total_commissions': float(total_commissions),
-                'net_flow': float(total_deposits - total_withdrawals)
-            },
-            'transaction_count': len(transactions),
-            'transactions': [t.to_dict() for t in transactions]
+            "transaction_count": len(transactions),
+            "transactions": [t.to_dict() for t in transactions],
         }
 
     def get_statistics(self) -> Dict:
@@ -370,15 +407,15 @@ class TransactionManager:
 
         if total_transactions == 0:
             return {
-                'total_transactions': 0,
-                'by_status': {},
-                'by_type': {},
-                'total_volume': 0.0
+                "total_transactions": 0,
+                "by_status": {},
+                "by_type": {},
+                "total_volume": 0.0,
             }
 
         by_status = {}
         by_type = {}
-        total_volume = Decimal('0')
+        total_volume = Decimal("0")
 
         for txn in self.transactions.values():
             # Count by status
@@ -394,11 +431,13 @@ class TransactionManager:
                 total_volume += txn.amount
 
         return {
-            'total_transactions': total_transactions,
-            'by_status': by_status,
-            'by_type': by_type,
-            'total_volume': float(total_volume),
-            'success_rate': by_status.get('completed', 0) / total_transactions if total_transactions > 0 else 0
+            "total_transactions": total_transactions,
+            "by_status": by_status,
+            "by_type": by_type,
+            "total_volume": float(total_volume),
+            "success_rate": by_status.get("completed", 0) / total_transactions
+            if total_transactions > 0
+            else 0,
         }
 
 

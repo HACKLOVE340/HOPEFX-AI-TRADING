@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class InvoiceStatus(str, Enum):
     """Invoice status enumeration"""
+
     DRAFT = "draft"
     PENDING = "pending"
     PAID = "paid"
@@ -45,7 +46,7 @@ class Invoice:
         amount: Decimal,
         currency: str = "USD",
         access_code: Optional[str] = None,
-        status: InvoiceStatus = InvoiceStatus.DRAFT
+        status: InvoiceStatus = InvoiceStatus.DRAFT,
     ):
         self.invoice_id = invoice_id
         self.invoice_number = invoice_number
@@ -63,19 +64,16 @@ class Invoice:
         self.items: List[Dict] = []
         self.notes: str = ""
 
-    def add_item(
-        self,
-        description: str,
-        amount: Decimal,
-        quantity: int = 1
-    ) -> None:
+    def add_item(self, description: str, amount: Decimal, quantity: int = 1) -> None:
         """Add line item to invoice"""
-        self.items.append({
-            'description': description,
-            'amount': float(amount),
-            'quantity': quantity,
-            'total': float(amount * quantity)
-        })
+        self.items.append(
+            {
+                "description": description,
+                "amount": float(amount),
+                "quantity": quantity,
+                "total": float(amount * quantity),
+            }
+        )
 
     def mark_paid(self) -> None:
         """Mark invoice as paid"""
@@ -103,21 +101,21 @@ class Invoice:
     def to_dict(self) -> Dict:
         """Convert to dictionary"""
         return {
-            'invoice_id': self.invoice_id,
-            'invoice_number': self.invoice_number,
-            'user_id': self.user_id,
-            'subscription_id': self.subscription_id,
-            'tier': self.tier.value,
-            'amount': float(self.amount),
-            'currency': self.currency,
-            'access_code': self.access_code,
-            'status': self.status.value,
-            'created_at': self.created_at.isoformat(),
-            'due_date': self.due_date.isoformat(),
-            'paid_at': self.paid_at.isoformat() if self.paid_at else None,
-            'items': self.items,
-            'notes': self.notes,
-            'is_overdue': self.is_overdue()
+            "invoice_id": self.invoice_id,
+            "invoice_number": self.invoice_number,
+            "user_id": self.user_id,
+            "subscription_id": self.subscription_id,
+            "tier": self.tier.value,
+            "amount": float(self.amount),
+            "currency": self.currency,
+            "access_code": self.access_code,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "due_date": self.due_date.isoformat(),
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "items": self.items,
+            "notes": self.notes,
+            "is_overdue": self.is_overdue(),
         }
 
 
@@ -141,7 +139,7 @@ class InvoiceGenerator:
         subscription_id: str,
         tier: SubscriptionTier,
         access_code: Optional[str] = None,
-        duration_months: int = 1
+        duration_months: int = 1,
     ) -> Invoice:
         """Create a new invoice for subscription"""
         import uuid
@@ -162,20 +160,26 @@ class InvoiceGenerator:
             amount=amount,
             currency="USD",
             access_code=access_code,
-            status=InvoiceStatus.PENDING
+            status=InvoiceStatus.PENDING,
         )
 
         # Add subscription as line item
-        tier_name = pricing_manager.get_tier(tier).name if pricing_manager.get_tier(tier) else tier.value
+        tier_name = (
+            pricing_manager.get_tier(tier).name
+            if pricing_manager.get_tier(tier)
+            else tier.value
+        )
         invoice.add_item(
             description=f"{tier_name} Subscription ({duration_months} month{'s' if duration_months > 1 else ''})",
             amount=tier_price,
-            quantity=duration_months
+            quantity=duration_months,
         )
 
         # Add access code to notes
         if access_code:
-            invoice.notes = f"Access Code: {access_code}\nValid for {30 * duration_months} days"
+            invoice.notes = (
+                f"Access Code: {access_code}\nValid for {30 * duration_months} days"
+            )
 
         self._invoices[invoice_id] = invoice
 
@@ -183,10 +187,7 @@ class InvoiceGenerator:
         return invoice
 
     def create_commission_invoice(
-        self,
-        user_id: str,
-        commission_amount: Decimal,
-        period: str = "Monthly"
+        self, user_id: str, commission_amount: Decimal, period: str = "Monthly"
     ) -> Invoice:
         """Create invoice for commissions"""
         import uuid
@@ -202,18 +203,20 @@ class InvoiceGenerator:
             tier=SubscriptionTier.PROFESSIONAL,  # Default tier
             amount=commission_amount,
             currency="USD",
-            status=InvoiceStatus.PENDING
+            status=InvoiceStatus.PENDING,
         )
 
         invoice.add_item(
             description=f"{period} Trading Commissions",
             amount=commission_amount,
-            quantity=1
+            quantity=1,
         )
 
         self._invoices[invoice_id] = invoice
 
-        logger.info(f"Created commission invoice {invoice_number} for ${commission_amount}")
+        logger.info(
+            f"Created commission invoice {invoice_number} for ${commission_amount}"
+        )
         return invoice
 
     def get_invoice(self, invoice_id: str) -> Optional[Invoice]:
@@ -292,23 +295,27 @@ class InvoiceGenerator:
         overdue = len([inv for inv in invoices if inv.is_overdue()])
 
         total_amount = sum(inv.amount for inv in invoices)
-        paid_amount = sum(inv.amount for inv in invoices if inv.status == InvoiceStatus.PAID)
-        pending_amount = sum(inv.amount for inv in invoices if inv.status == InvoiceStatus.PENDING)
+        paid_amount = sum(
+            inv.amount for inv in invoices if inv.status == InvoiceStatus.PAID
+        )
+        pending_amount = sum(
+            inv.amount for inv in invoices if inv.status == InvoiceStatus.PENDING
+        )
 
         return {
-            'total_invoices': total,
-            'pending_invoices': pending,
-            'paid_invoices': paid,
-            'overdue_invoices': overdue,
-            'total_amount': float(total_amount),
-            'paid_amount': float(paid_amount),
-            'pending_amount': float(pending_amount)
+            "total_invoices": total,
+            "pending_invoices": pending,
+            "paid_invoices": paid,
+            "overdue_invoices": overdue,
+            "total_amount": float(total_amount),
+            "paid_amount": float(paid_amount),
+            "pending_amount": float(pending_amount),
         }
 
     def generate_pdf(self, invoice_id: str) -> Optional[bytes]:
         """
         Generate PDF for invoice.
-        
+
         Returns:
             PDF bytes or None if invoice not found
         """
@@ -321,111 +328,136 @@ class InvoiceGenerator:
             try:
                 from reportlab.lib.pagesizes import letter
                 from reportlab.lib.units import inch
-                from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+                from reportlab.platypus import (
+                    SimpleDocTemplate,
+                    Table,
+                    TableStyle,
+                    Paragraph,
+                    Spacer,
+                )
                 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
                 from reportlab.lib import colors
                 from io import BytesIO
-                
+
                 # Create PDF buffer
                 buffer = BytesIO()
                 doc = SimpleDocTemplate(buffer, pagesize=letter)
-                
+
                 # Container for elements
                 elements = []
                 styles = getSampleStyleSheet()
-                
+
                 # Custom title style
                 title_style = ParagraphStyle(
-                    'CustomTitle',
-                    parent=styles['Heading1'],
+                    "CustomTitle",
+                    parent=styles["Heading1"],
                     fontSize=24,
-                    textColor=colors.HexColor('#2C3E50'),
+                    textColor=colors.HexColor("#2C3E50"),
                     spaceAfter=30,
-                    alignment=1  # Center
+                    alignment=1,  # Center
                 )
-                
+
                 # Add title
                 elements.append(Paragraph("INVOICE", title_style))
-                elements.append(Spacer(1, 0.2*inch))
-                
+                elements.append(Spacer(1, 0.2 * inch))
+
                 # Invoice header info
                 header_data = [
-                    ['Invoice Number:', invoice.invoice_number],
-                    ['Invoice ID:', invoice.invoice_id],
-                    ['Date:', invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')],
-                    ['Status:', invoice.status.value.upper()],
+                    ["Invoice Number:", invoice.invoice_number],
+                    ["Invoice ID:", invoice.invoice_id],
+                    ["Date:", invoice.created_at.strftime("%Y-%m-%d %H:%M:%S")],
+                    ["Status:", invoice.status.value.upper()],
                 ]
-                
+
                 if invoice.paid_at:
-                    header_data.append(['Paid At:', invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')])
-                
-                header_table = Table(header_data, colWidths=[2*inch, 4*inch])
-                header_table.setStyle(TableStyle([
-                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                    ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 10),
-                    ('TOPPADDING', (0, 0), (-1, -1), 6),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ]))
+                    header_data.append(
+                        ["Paid At:", invoice.paid_at.strftime("%Y-%m-%d %H:%M:%S")]
+                    )
+
+                header_table = Table(header_data, colWidths=[2 * inch, 4 * inch])
+                header_table.setStyle(
+                    TableStyle(
+                        [
+                            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                            ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                            ("FONTSIZE", (0, 0), (-1, -1), 10),
+                            ("TOPPADDING", (0, 0), (-1, -1), 6),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                        ]
+                    )
+                )
                 elements.append(header_table)
-                elements.append(Spacer(1, 0.3*inch))
-                
+                elements.append(Spacer(1, 0.3 * inch))
+
                 # Invoice details
                 details_data = [
-                    ['Description', 'Amount'],
-                    [f'{invoice.tier.value.upper()} Subscription', f'${invoice.amount:.2f}'],
+                    ["Description", "Amount"],
+                    [
+                        f"{invoice.tier.value.upper()} Subscription",
+                        f"${invoice.amount:.2f}",
+                    ],
                 ]
-                
+
                 if invoice.access_code:
-                    details_data.append(['Access Code', invoice.access_code])
-                
-                details_table = Table(details_data, colWidths=[4*inch, 2*inch])
-                details_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#34495E')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 11),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                    ('TOPPADDING', (0, 1), (-1, -1), 8),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-                ]))
+                    details_data.append(["Access Code", invoice.access_code])
+
+                details_table = Table(details_data, colWidths=[4 * inch, 2 * inch])
+                details_table.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495E")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, 0), 11),
+                            ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                            ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                            ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                            ("TOPPADDING", (0, 1), (-1, -1), 8),
+                            ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+                        ]
+                    )
+                )
                 elements.append(details_table)
-                elements.append(Spacer(1, 0.3*inch))
-                
+                elements.append(Spacer(1, 0.3 * inch))
+
                 # Total
                 total_data = [
-                    ['TOTAL:', f'${invoice.amount:.2f} {invoice.currency}'],
+                    ["TOTAL:", f"${invoice.amount:.2f} {invoice.currency}"],
                 ]
-                total_table = Table(total_data, colWidths=[4*inch, 2*inch])
-                total_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 14),
-                    ('TOPPADDING', (0, 0), (-1, -1), 12),
-                ]))
+                total_table = Table(total_data, colWidths=[4 * inch, 2 * inch])
+                total_table.setStyle(
+                    TableStyle(
+                        [
+                            ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, -1), 14),
+                            ("TOPPADDING", (0, 0), (-1, -1), 12),
+                        ]
+                    )
+                )
                 elements.append(total_table)
-                
+
                 # Footer
-                elements.append(Spacer(1, 0.5*inch))
+                elements.append(Spacer(1, 0.5 * inch))
                 footer_text = "Thank you for your business!"
-                elements.append(Paragraph(footer_text, styles['Normal']))
-                
+                elements.append(Paragraph(footer_text, styles["Normal"]))
+
                 # Build PDF
                 doc.build(elements)
                 pdf_bytes = buffer.getvalue()
                 buffer.close()
-                
-                logger.info(f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)")
+
+                logger.info(
+                    f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)"
+                )
                 return pdf_bytes
-                
+
             except ImportError:
                 # Fallback: Generate simple text-based PDF without reportlab
                 logger.warning("reportlab not available, generating simple text PDF")
-                
+
                 pdf_content = f"""
 INVOICE
 
@@ -435,22 +467,26 @@ Date: {invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')}
 Status: {invoice.status.value.upper()}
 """
                 if invoice.paid_at:
-                    pdf_content += f"Paid At: {invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                
+                    pdf_content += (
+                        f"Paid At: {invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    )
+
                 pdf_content += f"""
 Description: {invoice.tier.value.upper()} Subscription
 Amount: ${invoice.amount:.2f} {invoice.currency}
 """
                 if invoice.access_code:
                     pdf_content += f"Access Code: {invoice.access_code}\n"
-                
+
                 pdf_content += f"\nTOTAL: ${invoice.amount:.2f} {invoice.currency}\n"
                 pdf_content += "\nThank you for your business!"
-                
-                return pdf_content.encode('utf-8')
-                
+
+                return pdf_content.encode("utf-8")
+
         except Exception as e:
-            logger.error(f"Error generating PDF for invoice {invoice.invoice_number}: {e}")
+            logger.error(
+                f"Error generating PDF for invoice {invoice.invoice_number}: {e}"
+            )
             return None
 
 
