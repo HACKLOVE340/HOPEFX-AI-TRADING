@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # HOPEFX-AI-TRADING
-# Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """
 scripts/bootstrap_dev.py
