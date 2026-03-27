@@ -5,9 +5,31 @@
 # No commercial use without explicit permission.
 """Unit test fixtures shared across test_all_strategies and test_strategies."""
 
-import pytest
-import pandas as pd
+import os
+
 import numpy as np
+import pandas as pd
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_feature_env_vars():
+    """
+    Snapshot all FEATURE_* env vars before each test and restore them after.
+
+    Prevents test-ordering pollution: a test that sets FEATURE_X=false without
+    using monkeypatch would otherwise corrupt subsequent tests that rely on the
+    default value of that flag.
+    """
+    snapshot = {k: v for k, v in os.environ.items() if k.startswith("FEATURE_")}
+    yield
+    # Remove any FEATURE_* vars added during the test
+    for key in list(os.environ.keys()):
+        if key.startswith("FEATURE_") and key not in snapshot:
+            del os.environ[key]
+    # Restore original values (including deletions)
+    for key, value in snapshot.items():
+        os.environ[key] = value
 
 
 @pytest.fixture
