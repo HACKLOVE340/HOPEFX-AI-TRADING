@@ -81,13 +81,8 @@ extend-exclude = '''
 )/
 '''
 
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --cov=. --cov-report=term-missing"
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
+# pytest config lives in pytest.ini — no [tool.pytest.ini_options] here to
+# avoid the "ignoring pytest config in pyproject.toml" warning on every run.
 
 [tool.coverage.run]
 source = ["."]
