@@ -1,0 +1,98 @@
+{{- if .Values.trading.enabled }}
+# helm/hopefx/templates/deployment-trading.yaml
+# Runs core/main_loop.py — the event-driven trading pipeline.
+# Always a single replica (replicaCount: 1) to prevent duplicate orders.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hopefx.fullname" . }}-trading
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trading-engine
+spec:
+  # Hard-coded to 1 — multiple replicas would submit duplicate orders
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hopefx.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: trading-engine
+  strategy:
+    # Recreate ensures the old pod is fully stopped before the new one starts.
+    # RollingUpdate would briefly run two trading engines simultaneously.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "hopefx.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: trading-engine
+    spec:
+      containers:
+        - name: trading-engine
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ .Values.trading.command | toJson }}
+          env:
+            {{- range $key, $val := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+            {{- range $key, $val := .Values.secrets }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hopefx.fullname" $ }}-secrets
+                  key: {{ $key }}
+                  optional: true
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            - name: trading-state
+              mountPath: /app/state
+            - name: fix-store
+              mountPath: /app/fix_store
+            - name: fix-logs
+              mountPath: /app/fix_logs
+          # Liveness: checkpoint file written on every clean shutdown/restart
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os, sys
+                  sys.exit(0 if os.path.exists('state/main_loop_checkpoint.json') else 1)
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.trading.resources | nindent 12 }}
+
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "hopefx.fullname" . }}-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: trading-state
+          emptyDir: {}
+        - name: fix-store
+          emptyDir: {}
+        - name: fix-logs
+          emptyDir: {}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
