@@ -879,18 +879,21 @@ async def startup_event():
         # These modules use a module-level `app_state = None` pattern and
         # expose a set_state() function to receive the live state object.
         _state_receivers = []
-        try:
-            from api.trading import set_state as _trading_set_state
-
-            _state_receivers.append(("api.trading", _trading_set_state))
-        except ImportError:
-            pass
-        try:
-            from api.admin import set_state as _admin_set_state
-
-            _state_receivers.append(("api.admin", _admin_set_state))
-        except ImportError:
-            pass
+        _state_modules = [
+            ("api.trading", "set_state"),
+            ("api.admin", "set_state"),
+            ("api.watchlist", "set_state"),
+            ("api.advanced_trading", "set_state"),
+        ]
+        for _mod_name, _fn_name in _state_modules:
+            try:
+                import importlib as _il
+                _mod = _il.import_module(_mod_name)
+                _fn = getattr(_mod, _fn_name, None)
+                if _fn is not None:
+                    _state_receivers.append((_mod_name, _fn))
+            except ImportError:
+                pass
         for _mod_name, _fn in _state_receivers:
             try:
                 _fn(app_state)
