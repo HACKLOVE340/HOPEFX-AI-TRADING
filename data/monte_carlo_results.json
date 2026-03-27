@@ -1,0 +1,48 @@
+{
+  "daily": {
+    "symbol": "GC=F",
+    "timeframe": "1d",
+    "start": "2022-01-31 00:00:00",
+    "end": "2026-03-26 00:00:00",
+    "total_bars": 1044,
+    "total_trades": 4,
+    "win_rate_pct": 25.0,
+    "total_pnl_usd": -1108.87,
+    "max_drawdown_pct": 3.0289,
+    "sharpe_ratio": -0.2406,
+    "final_balance": 98891.13,
+    "initial_balance": 100000.0,
+    "return_pct": -1.1089,
+    "monte_carlo": {
+      "n_runs": 200,
+      "worst_case_dd_pct": 3.0289,
+      "p99_dd_pct": 3.0289,
+      "p95_dd_pct": 3.0289,
+      "median_dd_pct": 2.0296,
+      "mean_dd_pct": 2.1076
+    }
+  },
+  "15m": {
+    "symbol": "GC=F",
+    "timeframe": "15m",
+    "start": "2026-01-28 09:45:00+00:00",
+    "end": "2026-03-27 01:30:00+00:00",
+    "total_bars": 3737,
+    "total_trades": 47,
+    "win_rate_pct": 29.79,
+    "total_pnl_usd": -6184.21,
+    "max_drawdown_pct": 10.9053,
+    "sharpe_ratio": -1.2909,
+    "final_balance": 93815.79,
+    "initial_balance": 100000.0,
+    "return_pct": -6.1842,
+    "monte_carlo": {
+      "n_runs": 200,
+      "worst_case_dd_pct": 17.9212,
+      "p99_dd_pct": 17.304,
+      "p95_dd_pct": 16.0739,
+      "median_dd_pct": 11.3842,
+      "mean_dd_pct": 11.5761
+    }
+  }
+}
