@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025-2026 Opeyemi. AGPLv3 — all mods must share source. No commercial use without permission.
 """
 deployment/challenge_launch.py
 ================================

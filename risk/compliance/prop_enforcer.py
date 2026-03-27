@@ -1,3 +1,4 @@
+# Copyright (c) 2025-2026 Opeyemi. AGPLv3 — all mods must share source. No commercial use without permission.
 """
 risk/compliance/prop_enforcer.py
 =================================
