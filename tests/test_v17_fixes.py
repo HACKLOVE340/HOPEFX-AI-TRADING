@@ -14,10 +14,7 @@ Run with:
 
 from __future__ import annotations
 
-import importlib
 import os
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -177,36 +174,36 @@ class TestRiskManagerFailSafe:
 # Issue 3 — JWT expiry conflict
 # ===========================================================================
 class TestJWTExpiryUnified:
-    """auth/jwt.py must read ACCESS_TOKEN_EXPIRE_MINUTES, not JWT_EXPIRE_MINUTES."""
+    """_get_access_token_expire_minutes() must read the env var at call time.
+
+    Tests call the function directly — no importlib.reload() — so module
+    state is never mutated and these tests are safe to run alongside any
+    other JWT tests in the same process.
+    """
 
     def test_reads_access_token_expire_minutes(self, monkeypatch):
         monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "20")
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
-        # Re-evaluate the module-level constant
-        import auth.jwt as jwt_mod
-        importlib.reload(jwt_mod)
-        assert jwt_mod.ACCESS_TOKEN_EXPIRE_MINUTES == 20
+        from auth.jwt import _get_access_token_expire_minutes
+        assert _get_access_token_expire_minutes() == 20
 
     def test_legacy_jwt_expire_minutes_fallback(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "25")
-        import auth.jwt as jwt_mod
-        importlib.reload(jwt_mod)
-        assert jwt_mod.ACCESS_TOKEN_EXPIRE_MINUTES == 25
+        from auth.jwt import _get_access_token_expire_minutes
+        assert _get_access_token_expire_minutes() == 25
 
     def test_access_token_takes_precedence_over_jwt_expire(self, monkeypatch):
         monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10")
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "99")
-        import auth.jwt as jwt_mod
-        importlib.reload(jwt_mod)
-        assert jwt_mod.ACCESS_TOKEN_EXPIRE_MINUTES == 10
+        from auth.jwt import _get_access_token_expire_minutes
+        assert _get_access_token_expire_minutes() == 10
 
     def test_default_is_15_when_neither_set(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
-        import auth.jwt as jwt_mod
-        importlib.reload(jwt_mod)
-        assert jwt_mod.ACCESS_TOKEN_EXPIRE_MINUTES == 15
+        from auth.jwt import _get_access_token_expire_minutes
+        assert _get_access_token_expire_minutes() == 15
 
 
 # ===========================================================================

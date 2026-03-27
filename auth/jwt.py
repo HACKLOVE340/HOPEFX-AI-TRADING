@@ -55,14 +55,28 @@ def SECRET_KEY() -> str:  # noqa: N802
 
 
 ALGORITHM = "HS256"
-# Read ACCESS_TOKEN_EXPIRE_MINUTES (same var as auth/service.py) so both
-# code paths produce tokens with identical expiry. JWT_EXPIRE_MINUTES is
-# accepted as a legacy alias; ACCESS_TOKEN_EXPIRE_MINUTES takes precedence.
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES")
-    or os.environ.get("JWT_EXPIRE_MINUTES")
-    or "15"
-)
+
+
+def _get_access_token_expire_minutes() -> int:
+    """Return the configured access-token lifetime in minutes.
+
+    Reads ACCESS_TOKEN_EXPIRE_MINUTES (same var as auth/service.py) so both
+    code paths produce tokens with identical expiry. JWT_EXPIRE_MINUTES is
+    accepted as a legacy alias; ACCESS_TOKEN_EXPIRE_MINUTES takes precedence.
+
+    Evaluated at call time so tests can override the env var without
+    reloading the module (which would mutate shared module state).
+    """
+    return int(
+        os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES")
+        or os.environ.get("JWT_EXPIRE_MINUTES")
+        or "15"
+    )
+
+
+# Module-level alias for code that reads auth.jwt.ACCESS_TOKEN_EXPIRE_MINUTES
+# directly. Kept for backward compatibility; prefer _get_access_token_expire_minutes().
+ACCESS_TOKEN_EXPIRE_MINUTES = _get_access_token_expire_minutes()
 
 # Password hashing — bcrypt with SHA-256 pre-hash to handle passwords >72 bytes.
 #
@@ -99,7 +113,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = (
         datetime.now(timezone.utc) + expires_delta
         if expires_delta
-        else datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        else datetime.now(timezone.utc) + timedelta(minutes=_get_access_token_expire_minutes())
     )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, _get_secret(), algorithm=ALGORITHM)
