@@ -12,8 +12,9 @@ Simulated broker for testing strategies without real money.
 import logging
 import time
 import uuid
+from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .base import (
     AccountInfo,
@@ -69,6 +70,13 @@ class PaperTradingBroker(BrokerConnector):
 
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
+
+        # Equity history: deque of (unix_timestamp, equity_value) tuples.
+        # Bounded at 10 000 points (~2.7 hours at 1-second resolution or
+        # ~7 months at 30-minute snapshots).  Seeded with the initial balance
+        # so the equity curve always has at least one data point.
+        self._equity_history: deque = deque(maxlen=10_000)
+        self._equity_history.append((time.time(), self.initial_balance))
 
         # Simulated market prices - Multi-asset support
         # Last updated: 2025-Q2. These are fallback prices used only when
@@ -178,6 +186,9 @@ class PaperTradingBroker(BrokerConnector):
 
             # Update position
             self._update_position(symbol, side, quantity, current_price)
+
+            # Record equity snapshot after every fill
+            self._snapshot_equity()
 
             logger.info(
                 f"Market order filled: {side.value} {quantity} {symbol} @ ${current_price}",
@@ -345,11 +356,32 @@ class PaperTradingBroker(BrokerConnector):
 
     def get_account_info(self) -> "AccountInfo":
         """Get account information."""
-        return self._get_account_info_sync()
+        info = self._get_account_info_sync()
+        # Record a throttled equity snapshot (at most once per 60 seconds)
+        # so the equity curve grows over time even without active trading.
+        last_ts = self._equity_history[-1][0] if self._equity_history else 0.0
+        if time.time() - last_ts >= 60.0:
+            self._equity_history.append((time.time(), float(info.equity)))
+        return info
 
     def set_price_feed(self, price_engine) -> None:
         """Attach a price feed / engine for live price updates."""
         self._price_feed = price_engine
+
+    def _snapshot_equity(self) -> None:
+        """Append a (timestamp, equity) point to the equity history."""
+        account = self._get_account_info_sync()
+        self._equity_history.append((time.time(), float(account.equity)))
+
+    def get_equity_history(self) -> List[Tuple[float, float]]:
+        """
+        Return the equity curve as a list of (unix_timestamp, equity) tuples.
+
+        Called by api/performance.py _load_equity_curve() to build the
+        /api/performance/equity-curve response.  Always returns at least
+        the initial balance point recorded at broker startup.
+        """
+        return list(self._equity_history)
 
     async def place_market_order(self, symbol: str, side: str, quantity: float):
         """Async market order — delegates to sync place_order."""
