@@ -4,22 +4,24 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-HOPEFX Engine — single entry point that wires all real components together.
+HOPEFX Engine — unified trading engine entry point.
 
     python hopefx_engine.py
 
 What runs
 ---------
-1. OANDAStream  — connects to OANDA, opens SSE price stream, publishes ticks
-                  onto the EventBus.
-2. EventBus     — routes PRICE_UPDATE events to all subscribers.
-3. LLMAgent     — on startup, generates a strategy for the configured symbol
-                  using GPT-4, back-tests it on live candles, and registers it.
-4. MarketVectorStore — ingests the fetched candles into ChromaDB so the LLM
-                  agent and RL agent have RAG context.
-5. RLAgentTrainer — trains (or loads) a PPO agent on live OANDA candles.
-6. Live loop    — on every tick the RL agent predicts an action; if BUY/SELL
-                  and the LLM strategy agrees, a real order is placed.
+1. Broker selection  — BROKER env var (oanda | mt5 | paper | alpaca …)
+2. HOPEFXBrain       — regime detection, ML predictor, strategy routing
+3. RiskManager       — drawdown tracker, prop-firm enforcement
+4. TradeLogger       — fills + equity snapshots to CSV + Prometheus
+5. HeartbeatService  — Telegram "I'm alive" ping every hour
+6. Live loop         — tick → brain.process_bar() → risk gate → order
+
+Broker hot paths
+----------------
+  BROKER=oanda  — OANDA SSE stream (default when OANDA_API_KEY is set)
+  BROKER=mt5    — MT5Bridge (direct or signal-export mode)
+  BROKER=paper  — PaperTradingBroker (no real orders)
 
 All credentials are read from environment variables (see .env.example).
 """
@@ -31,7 +33,10 @@ import logging
 import os
 import signal
 import sys
-from typing import List, Dict
+from collections import deque
+from typing import Dict, List, Optional
+
+import pandas as pd
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -42,16 +47,7 @@ logging.basicConfig(
 logger = logging.getLogger("hopefx")
 
 
-# ── config from env ───────────────────────────────────────────────────────────
-
-
-def _require(key: str) -> str:
-    val = os.environ.get(key, "").strip()
-    if not val:
-        logger.error("Missing required env var: %s", key)
-        sys.exit(1)
-    return val
-
+# ── config helpers ────────────────────────────────────────────────────────────
 
 def _optional(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
@@ -62,241 +58,393 @@ def _optional(key: str, default: str = "") -> str:
 
 class HopeFXEngine:
     """
-    Orchestrates all real components.
+    Unified trading engine.
 
-    Parameters are read from environment variables so no secrets live in code.
+    Wires HOPEFXBrain (ML + regime + strategy) → RiskManager → Broker.
+    Broker is selected via BROKER env var; defaults to OANDA when
+    OANDA_API_KEY is set, otherwise paper trading.
     """
 
-    def __init__(self):
-        self.oanda_api_key = _require("OANDA_API_KEY")
-        self.oanda_account = _require("OANDA_ACCOUNT_ID")
-        self.openai_api_key = _require("OPENAI_API_KEY")
+    def __init__(self) -> None:
+        # ── broker config ─────────────────────────────────────────────────────
+        self.broker_name = _optional("BROKER", "").lower()
+        if not self.broker_name:
+            self.broker_name = "oanda" if os.environ.get("OANDA_API_KEY") else "paper"
+
         self.practice = _optional("OANDA_PRACTICE", "true").lower() != "false"
         self.instruments = _optional("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
         self.primary_symbol = self.instruments[0]
         self.timeframe = _optional("TIMEFRAME", "H1")
-        self.rl_timesteps = int(_optional("RL_TIMESTEPS", "50000"))
-        self.llm_model = _optional("OPENAI_MODEL", "gpt-4o")
-        self.llm_prompt = _optional(
-            "LLM_STRATEGY_PROMPT",
-            f"Create a mean-reversion strategy for {self.primary_symbol} "
-            "using Bollinger Bands and RSI. Target Sharpe > 1.5.",
-        )
+        self.trading_mode = _optional("TRADING_MODE", "paper")
 
+        # ── component handles ─────────────────────────────────────────────────
+        self._broker = None
         self._stream = None
-        self._event_bus = None
-        self._vector_store = None
-        self._llm_agent = None
-        self._rl_trainer = None
-        self._llm_strategy = None  # compiled strategy instance
-        self._candles: List[Dict] = []
+        self._brain = None
+        self._risk_manager = None
+        self._trade_logger = None
+        self._heartbeat = None
+        self._predictor = None
+
+        # Rolling OHLCV window per symbol
+        self._ohlcv_window: Dict[str, deque] = {}
+        self._min_bars = int(_optional("PREDICTOR_MIN_BARS", "100"))
+
         self._running = False
+        self._bar_count = 0
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         logger.info("═══ HOPEFX Engine starting ═══")
         logger.info(
-            "Symbol: %s  TF: %s  Practice: %s",
-            self.primary_symbol,
-            self.timeframe,
-            self.practice,
+            "Broker: %s  Mode: %s  Symbol: %s  TF: %s",
+            self.broker_name, self.trading_mode,
+            self.primary_symbol, self.timeframe,
         )
 
-        # ── 1. OANDA stream ───────────────────────────────────────────────────
-        from brokers.oanda_stream import OANDAStream
+        # 1. Risk manager
+        from risk.manager import RiskManager
+        initial_balance = float(_optional("INITIAL_BALANCE", "100000"))
+        self._risk_manager = RiskManager(initial_balance=initial_balance)
+        logger.info("RiskManager initialised (balance=%.2f)", initial_balance)
 
-        self._stream = OANDAStream(
-            api_key=self.oanda_api_key,
-            account_id=self.oanda_account,
-            instruments=self.instruments,
-            practice=self.practice,
-        )
-        await self._stream.__aenter__()
-        connected = await self._stream.connect()
-        if not connected:
-            logger.error("OANDA connection failed — check API key and account ID")
-            sys.exit(1)
+        # 2. HOPEFXBrain
+        from brain.hopefx_brain import get_brain
+        self._brain = get_brain()
+        self._brain.inject(risk_manager=self._risk_manager)
+        logger.info("HOPEFXBrain initialised")
 
-        account = await self._stream.get_account_info()
-        if account:
+        # 3. ML predictor (warm up — loads model into memory)
+        try:
+            from ml.advanced_predictor import get_predictor
+            self._predictor = get_predictor()
+            self._brain.inject(ml_predictor=self._predictor)
             logger.info(
-                "Account balance: %.2f  Equity: %.2f", account.balance, account.equity
+                "AdvancedPredictor loaded — OOS acc=%.4f  AUC=%.4f",
+                self._predictor.meta.get("oos_accuracy", 0),
+                self._predictor.meta.get("oos_auc", 0),
             )
+        except Exception as exc:
+            logger.warning("AdvancedPredictor load failed (will degrade): %s", exc)
 
-        # ── 2. Fetch historical candles ───────────────────────────────────────
-        logger.info("Fetching 2000 %s candles …", self.primary_symbol)
-        self._candles = await self._stream.get_candles(
-            self.primary_symbol, self.timeframe, 2000
-        )
-        logger.info("Fetched %d candles", len(self._candles))
-
-        # ── 3. Vector store — ingest candles ──────────────────────────────────
-        from research.vector_store import MarketVectorStore
-
-        self._vector_store = MarketVectorStore(persist_dir="data/vectordb")
-        ingested = await self._vector_store.ingest_candles(
-            self._candles, self.primary_symbol, self.timeframe
-        )
-        logger.info("Vector store: %d windows ingested", ingested)
-        logger.info("Vector store stats: %s", self._vector_store.stats())
-
-        # ── 4. LLM agent — generate strategy ─────────────────────────────────
-        from brain.llm_agent import create_agent
-
-        self._llm_agent = create_agent(
-            oanda_stream=self._stream,
-            api_key=self.openai_api_key,
-            model=self.llm_model,
-            target_sharpe=1.5,
-            max_iterations=3,
+        # 4. Trade logger
+        from monitoring.trade_logger import get_trade_logger
+        self._trade_logger = get_trade_logger()
+        logger.info(
+            "TradeLogger initialised — log_dir=%s",
+            self._trade_logger.stats["log_dir"],
         )
 
-        # inject RAG context into the prompt
-        rag_ctx = self._vector_store.rag_context_for_llm(self._candles[-100:])
-        full_prompt = f"{self.llm_prompt}\n\n{rag_ctx}"
+        # 5. Telegram heartbeat
+        from notifications.heartbeat import start_heartbeat
+        self._heartbeat = start_heartbeat(get_status_fn=self._get_status)
+        logger.info("HeartbeatService started — stats=%s", self._heartbeat.stats)
 
-        logger.info("LLM agent generating strategy …")
-        result = await self._llm_agent.generate_strategy(
-            prompt=full_prompt,
-            symbol=self.primary_symbol,
-            timeframe=self.timeframe,
-            candle_count=500,
+        # 6. Broker
+        await self._init_broker()
+
+        # 7. Equity snapshotter (background thread)
+        self._trade_logger.start_equity_snapshotter(
+            get_equity_fn=self._get_equity_for_snapshot,
         )
 
-        if result.success:
-            logger.info(
-                "✅ Strategy accepted — %s",
-                result.backtest.summary() if result.backtest else "no backtest",
-            )
-        else:
-            logger.warning(
-                "⚠️  Strategy did not meet target Sharpe — using best attempt"
-            )
-            if result.backtest:
-                logger.info("Best attempt: %s", result.backtest.summary())
-
-        # compile and store the strategy instance
-        from brain.llm_agent import _compile_strategy
-
-        if result.strategy_code:
-            instance, err = _compile_strategy(result.strategy_code)
-            if instance:
-                self._llm_strategy = instance
-                logger.info("LLM strategy compiled and ready")
-            else:
-                logger.warning("Strategy compile error: %s", err)
-
-        # ── 5. RL agent — train or load ───────────────────────────────────────
-        from ml.rl_agent import RLAgentTrainer
-
-        self._rl_trainer = RLAgentTrainer(
-            oanda_stream=self._stream,
-            model_name=f"hopefx_ppo_{self.primary_symbol.lower()}",
-        )
-
-        if self._rl_trainer.agent.load():
-            logger.info("RL agent loaded from saved model")
-        else:
-            logger.info("Training RL agent for %d timesteps …", self.rl_timesteps)
-            try:
-                metrics = await self._rl_trainer.train(
-                    symbol=self.primary_symbol,
-                    timeframe=self.timeframe,
-                    candles=len(self._candles),
-                    timesteps=self.rl_timesteps,
-                )
-                logger.info("RL training complete: %s", metrics)
-            except Exception as exc:
-                logger.error("RL training failed: %s", exc)
-
-        # ── 6. Event bus ──────────────────────────────────────────────────────
-        from core.event_bus import EventBus, MemoryMappedEventStore
-
-        store = MemoryMappedEventStore(base_path="data/events/")
-        self._event_bus = EventBus(store=store)
-        self._stream.event_bus = self._event_bus
-
-        # subscribe to price updates
-        self._event_bus.subscribe("PRICE_UPDATE", self._on_price_event)
-
-        # ── 7. Start streaming ────────────────────────────────────────────────
+        # 8. Main loop
         self._running = True
-        logger.info("═══ All systems live — streaming prices ═══")
+        logger.info("═══ All systems live ═══")
+        await self._run_loop()
 
-        await asyncio.gather(
-            self._event_bus.run(),
-            self._stream.stream_prices(),
-        )
+    async def _init_broker(self) -> None:
+        if self.broker_name == "oanda":
+            await self._init_oanda()
+        elif self.broker_name == "mt5":
+            self._init_mt5()
+        else:
+            self._init_generic_broker()
 
-    async def stop(self) -> None:
-        self._running = False
-        if self._stream:
-            await self._stream.__aexit__(None, None, None)
-        logger.info("HOPEFX Engine stopped")
+    async def _init_oanda(self) -> None:
+        oanda_key = _optional("OANDA_API_KEY")
+        oanda_account = _optional("OANDA_ACCOUNT_ID")
+        if not oanda_key or not oanda_account:
+            logger.warning("OANDA credentials missing — falling back to paper broker")
+            self._init_generic_broker()
+            return
+        try:
+            from brokers.oanda_stream import OANDAStream
+            self._stream = OANDAStream(
+                api_key=oanda_key,
+                account_id=oanda_account,
+                instruments=self.instruments,
+                practice=self.practice,
+            )
+            await self._stream.__aenter__()
+            connected = await self._stream.connect()
+            if not connected:
+                logger.error("OANDA connection failed — falling back to paper")
+                self._init_generic_broker()
+                return
+            account = await self._stream.get_account_info()
+            if account:
+                logger.info(
+                    "OANDA account: balance=%.2f equity=%.2f",
+                    account.balance, account.equity,
+                )
+                self._risk_manager.update_equity(account.equity, account.balance)
+                self._trade_logger.log_equity(
+                    equity=account.equity, balance=account.balance,
+                )
+            self._broker = self._stream
+            logger.info("OANDA broker ready")
+        except Exception as exc:
+            logger.error("OANDA init failed: %s — falling back to paper", exc)
+            self._init_generic_broker()
+
+    def _init_mt5(self) -> None:
+        try:
+            from brokers.mt5_bridge import MT5Bridge
+            self._broker = MT5Bridge.from_env()
+            connected = self._broker.connect()
+            if connected:
+                acct = self._broker.get_account()
+                logger.info(
+                    "MT5 account: balance=%.2f equity=%.2f server=%s",
+                    acct.get("balance", 0), acct.get("equity", 0),
+                    acct.get("server", "?"),
+                )
+                self._risk_manager.update_equity(
+                    acct.get("equity", 0), acct.get("balance", 0)
+                )
+            else:
+                logger.warning("MT5 connect failed — running in signal-export mode")
+            logger.info("MT5Bridge ready")
+        except Exception as exc:
+            logger.error("MT5 init failed: %s — falling back to paper", exc)
+            self._init_generic_broker()
+
+    def _init_generic_broker(self) -> None:
+        from brokers.factory import BrokerFactory
+        name = self.broker_name if self.broker_name not in ("oanda", "mt5") else "paper"
+        self._broker = BrokerFactory.create_broker(name)
+        if self._broker is None:
+            self._broker = BrokerFactory.create_broker("paper")
+        logger.info("Broker ready: %s", name)
+
+    # ── main loop ─────────────────────────────────────────────────────────────
+
+    async def _run_loop(self) -> None:
+        if self.broker_name == "oanda" and self._stream is not None:
+            await self._oanda_loop()
+        else:
+            await self._poll_loop()
+
+    async def _oanda_loop(self) -> None:
+        logger.info("Starting OANDA streaming loop")
+        try:
+            async for tick in self._stream.stream_prices():
+                if not self._running:
+                    break
+                await self._on_tick(
+                    symbol=tick.instrument.replace("_", "/"),
+                    bid=tick.bid,
+                    ask=tick.ask,
+                    mid=(tick.bid + tick.ask) / 2,
+                )
+        except Exception as exc:
+            logger.error("OANDA stream error: %s", exc)
+
+    async def _poll_loop(self) -> None:
+        interval = float(_optional("POLL_INTERVAL_S", "5"))
+        logger.info("Starting poll loop (interval=%.1fs)", interval)
+        while self._running:
+            try:
+                for symbol in self.instruments:
+                    await self._poll_symbol(symbol)
+            except Exception as exc:
+                logger.error("Poll loop error: %s", exc)
+            await asyncio.sleep(interval)
+
+    async def _poll_symbol(self, symbol: str) -> None:
+        try:
+            price_data = {}
+            if hasattr(self._broker, "get_price"):
+                price_data = self._broker.get_price(symbol) or {}
+            elif hasattr(self._broker, "market_prices"):
+                price_data = self._broker.market_prices.get(symbol, {})
+            if not price_data:
+                return
+            bid = float(price_data.get("bid", price_data.get("price", 0)))
+            ask = float(price_data.get("ask", bid))
+            mid = (bid + ask) / 2
+            await self._on_tick(symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid)
+        except Exception as exc:
+            logger.debug("Poll symbol %s error: %s", symbol, exc)
 
     # ── tick handler ──────────────────────────────────────────────────────────
 
-    def _on_price_event(self, event) -> None:
-        """Called on every PRICE_UPDATE event from the event bus."""
-        try:
-            data = event.decode()
-            instrument = data.get("instrument", "")
-            mid = data.get("mid", 0.0)
-            logger.debug("Tick %s @ %.5f", instrument, mid)
+    async def _on_tick(self, symbol: str, bid: float, ask: float, mid: float) -> None:
+        """
+        Full intelligence pipeline for one tick.
 
-            if instrument != self.primary_symbol.replace("/", "_"):
-                return
-            if len(self._candles) < 60:
-                return
+        Accumulates ticks into a rolling OHLCV window, then on every
+        BARS_PER_SIGNAL tick fires brain.process_bar() → risk gate → order.
+        """
+        sym_key = symbol.replace("/", "_")
 
-            # RL prediction
-            action, confidence = self._rl_trainer.predict(self._candles[-100:])
-            action_name = {0: "HOLD", 1: "BUY", 2: "SELL"}.get(action, "HOLD")
+        if sym_key not in self._ohlcv_window:
+            self._ohlcv_window[sym_key] = deque(maxlen=500)
 
-            if action != 0 and confidence > 0.6:
-                logger.info(
-                    "RL signal: %s %s @ %.5f (confidence %.2f)",
-                    action_name,
-                    instrument,
-                    mid,
-                    confidence,
-                )
-                # In paper/practice mode we log; in live mode we'd place the order
-                if not self.practice:
-                    asyncio.create_task(self._execute_signal(action, instrument, mid))
+        self._ohlcv_window[sym_key].append({
+            "open": mid, "high": mid, "low": mid,
+            "close": mid, "volume": 1.0,
+        })
 
-        except Exception as exc:
-            logger.error("Price event handler error: %s", exc)
-
-    async def _execute_signal(self, action: int, instrument: str, price: float) -> None:
-        """Place a real order based on RL + LLM signal agreement."""
-        from brokers.base import OrderSide
-
-        side = OrderSide.BUY if action == 1 else OrderSide.SELL
-
-        account = await self._stream.get_account_info()
-        if not account:
+        self._bar_count += 1
+        bars_per_signal = int(_optional("BARS_PER_SIGNAL", "60"))
+        if self._bar_count % bars_per_signal != 0:
             return
 
-        units = int((account.balance * 0.01) / price)  # 1% risk per trade
-        if units < 1:
-            return
-
-        order = await self._stream.place_order(
-            symbol=instrument,
-            side=side,
-            units=units,
-        )
-        if order:
-            logger.info(
-                "Order placed: %s %d units %s — id=%s status=%s",
-                side.value,
-                units,
-                instrument,
-                order.id,
-                order.status,
+        window = list(self._ohlcv_window[sym_key])
+        if len(window) < self._min_bars:
+            logger.debug(
+                "Waiting for %d bars (have %d) for %s",
+                self._min_bars, len(window), sym_key,
             )
+            return
+
+        ohlcv_df = pd.DataFrame(window)
+
+        # ── Brain decision (ML + regime + strategy) ───────────────────────────
+        try:
+            decision = self._brain.process_bar(ohlcv_df, symbol=sym_key)
+        except Exception as exc:
+            logger.error("Brain.process_bar failed for %s: %s", sym_key, exc)
+            return
+
+        logger.info(
+            "Brain[%s]: action=%s conf=%.3f regime=%s strategy=%s "
+            "ml_prob=%.3f ml_conf=%.3f abstain=%s reason=%s",
+            sym_key, decision.action, decision.confidence,
+            decision.regime, decision.strategy,
+            decision.ml_probability, decision.ml_confidence,
+            decision.ml_abstain, decision.reason,
+        )
+
+        # ── Execute if signal is strong enough ────────────────────────────────
+        min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
+        if decision.action in ("long", "short") and decision.confidence >= min_conf:
+            await self._execute_decision(decision, mid, sym_key)
+
+        # ── Equity snapshot ───────────────────────────────────────────────────
+        await self._update_equity()
+
+    async def _execute_decision(self, decision, price: float, symbol: str) -> None:
+        """Execute a brain decision through the broker."""
+        side = "BUY" if decision.action == "long" else "SELL"
+        lots = float(_optional("DEFAULT_LOT_SIZE", "0.01"))
+
+        if self.trading_mode != "live":
+            logger.info(
+                "[PAPER] %s %s %.2f lots @ %.5f  conf=%.3f  reason=%s",
+                side, symbol, lots, price, decision.confidence, decision.reason,
+            )
+            self._trade_logger.log_fill(
+                symbol=symbol, side=side, lots=lots,
+                requested_price=price, fill_price=price,
+                pnl=0.0, broker=self.broker_name,
+                notes=f"paper|{decision.reason}",
+            )
+            return
+
+        # Live execution
+        try:
+            if hasattr(self._broker, "place_order"):
+                result = self._broker.place_order(
+                    symbol=symbol, side=side, lots=lots,
+                )
+                fill_price = float(result.get("fill_price", price)) if result else price
+                self._trade_logger.log_fill(
+                    symbol=symbol, side=side, lots=lots,
+                    requested_price=price, fill_price=fill_price,
+                    broker=self.broker_name, notes=decision.reason,
+                )
+                logger.info(
+                    "Order placed: %s %s %.2f lots @ %.5f",
+                    side, symbol, lots, fill_price,
+                )
+        except Exception as exc:
+            logger.error("Order execution failed: %s", exc)
+
+    async def _update_equity(self) -> None:
+        try:
+            equity = balance = 0.0
+            open_pos = 0
+            if hasattr(self._broker, "get_account_info"):
+                info = self._broker.get_account_info()
+                equity = float(info.get("equity", 0))
+                balance = float(info.get("balance", equity))
+                open_pos = int(info.get("open_positions", 0))
+            elif hasattr(self._broker, "get_account"):
+                info = self._broker.get_account()
+                equity = float(info.get("equity", 0))
+                balance = float(info.get("balance", equity))
+            if equity > 0:
+                self._risk_manager.update_equity(equity, balance)
+                self._trade_logger.log_equity(
+                    equity=equity, balance=balance, open_positions=open_pos,
+                )
+        except Exception as exc:
+            logger.debug("Equity update failed: %s", exc)
+
+    # ── status / snapshot helpers ─────────────────────────────────────────────
+
+    def _get_status(self) -> Dict:
+        tl_stats = self._trade_logger.stats if self._trade_logger else {}
+        brain_stats = self._brain.stats if self._brain else {}
+        last_decision = (self._brain.recent_decisions(1) or [{}])[0] if self._brain else {}
+        return {
+            "equity": tl_stats.get("equity", 0),
+            "balance": tl_stats.get("balance", 0),
+            "daily_pnl": tl_stats.get("daily_pnl", 0),
+            "open_positions": tl_stats.get("open_positions", 0),
+            "drawdown_pct": tl_stats.get("drawdown_pct", 0),
+            "broker": self.broker_name,
+            "mode": self.trading_mode,
+            "last_signal": {
+                "direction": last_decision.get("action", "hold"),
+                "confidence": last_decision.get("confidence", 0),
+            } if last_decision else None,
+            "risk_alerts": [],
+            "brain_signal_rate": brain_stats.get("signal_rate", 0),
+        }
+
+    def _get_equity_for_snapshot(self) -> Dict:
+        tl = self._trade_logger
+        if tl:
+            s = tl.stats
+            return {
+                "equity": s.get("equity", 0),
+                "balance": s.get("balance", 0),
+                "daily_pnl": s.get("daily_pnl", 0),
+                "open_positions": s.get("open_positions", 0),
+            }
+        return {}
+
+    # ── shutdown ──────────────────────────────────────────────────────────────
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._heartbeat:
+            self._heartbeat.stop()
+        if self._stream:
+            try:
+                await self._stream.__aexit__(None, None, None)
+            except Exception:
+                pass
+        logger.info(
+            "HOPEFX Engine stopped — bars=%d signals=%d",
+            self._bar_count,
+            self._brain.stats.get("signal_count", 0) if self._brain else 0,
+        )
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -304,15 +452,19 @@ class HopeFXEngine:
 
 async def _main() -> None:
     engine = HopeFXEngine()
-
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(engine.stop()))
-
     try:
         await engine.start()
     except (KeyboardInterrupt, asyncio.CancelledError):
         await engine.stop()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        logger.critical("Engine fatal error: %s", exc, exc_info=True)
+        await engine.stop()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
