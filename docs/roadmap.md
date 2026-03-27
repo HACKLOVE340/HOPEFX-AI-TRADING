@@ -1,0 +1,121 @@
+# HOPEFX — Roadmap
+
+> Last updated: 2026-03-27
+
+---
+
+## Current Status: Paper Mode Launch
+
+The platform is live in paper trading mode on OANDA practice.
+
+| Component | Status |
+|-----------|--------|
+| ML model (`advanced_oos.pkl`) | ✅ 68.0% OOS accuracy, p=0.0000 |
+| Risk engine (CVaR, kill switch, drawdown gate) | ✅ Production |
+| OANDA paper broker | ✅ Live |
+| Signal engine (regime-gated ML inference) | ✅ Wired |
+| Execution (OMS, position tracker, smart router) | ✅ Wired |
+| Observability (Prometheus, Sentry, Discord) | ✅ Production |
+| REST + WebSocket API | ✅ Stable |
+| Test suite (3 000+ tests, 70% coverage) | ✅ CI green |
+
+---
+
+## Milestone 1 — Statistical Robustness (N=200+ trades)
+
+**Target:** Accumulate 200+ live paper trades to reduce Sharpe SE below ±0.07.
+
+Current Sharpe SE = ±0.21 at N=48 trades. At N=200: SE ≈ ±0.10. At N=600: SE ≈ ±0.029.
+
+- [ ] Run paper trading for 60+ days on OANDA practice
+- [ ] Log every signal, fill, and P&L to PostgreSQL
+- [ ] Auto-generate weekly performance report (win rate, Sharpe, drawdown)
+- [ ] Validate live signal distribution matches OOS backtest distribution
+
+---
+
+## Milestone 2 — Live OANDA Run
+
+**Target:** First real-money trade on OANDA live account.
+
+- [ ] Complete paper trading milestone (200+ trades)
+- [ ] Security audit: rotate all API keys, review JWT config
+- [ ] Set `OANDA_ENVIRONMENT=live` and `FEATURE_LIVE_TRADING=true`
+- [ ] Start with 0.01 lot size, scale up after 50 live trades
+- [ ] Monitor daily drawdown gate — halt if −2% daily DD hit
+
+---
+
+## Milestone 3 — MT5 Export
+
+**Target:** Export signals to MetaTrader 5 via ZeroMQ bridge.
+
+- [ ] Implement `brokers/mt5_zmq_bridge.py` signal publisher
+- [ ] MT5 EA subscriber (MQL5) that receives signals and places orders
+- [ ] Round-trip latency test: target < 50ms signal-to-order
+- [ ] Paper test on MT5 demo for 2 weeks before live
+
+---
+
+## Milestone 4 — Multi-Symbol Expansion
+
+**Target:** Trade BTC/USD and ETH/USD alongside XAUUSD.
+
+- [ ] Retrain `advanced_oos.pkl` on BTC/USDT + ETH/USDT (Binance hourly)
+- [ ] Portfolio-level risk: cross-asset correlation limits
+- [ ] Multi-symbol backtest: target N=600 trades across 3 symbols
+- [ ] Validate Sharpe SE ≤ ±0.029 before live deployment
+
+---
+
+## Milestone 5 — Reinforcement Learning
+
+**Target:** Replace or augment XGBoost ensemble with a trained RL agent.
+
+- [ ] Implement `ml/rl_agent.py` using Stable-Baselines3 (PPO)
+- [ ] Custom gym environment: XAUUSD H1 with realistic slippage + spread
+- [ ] Walk-forward evaluation: RL agent vs XGBoost ensemble
+- [ ] Deploy only if RL OOS accuracy ≥ 65% with p < 0.05
+
+---
+
+## Milestone 6 — White-Label API
+
+**Target:** Expose HOPEFX as a signal API for third-party consumers.
+
+- [ ] `/api/v1/signals` endpoint with API key auth
+- [ ] Rate limiting per tier (free: 10 req/min, pro: 100 req/min)
+- [ ] Stripe billing integration for pro tier
+- [ ] SLA: 99.9% uptime, < 200ms p99 latency
+
+---
+
+## Type Safety (Ongoing)
+
+~974 mypy errors exist across 167 files. Tracked here, fixed incrementally.
+
+| Package | Error count | Target |
+|---------|-------------|--------|
+| `api/` | ~180 | Q3 2026 |
+| `ml/` | ~220 | Q3 2026 |
+| `risk/` | ~90 | Q2 2026 |
+| `brokers/` | ~80 | Q2 2026 |
+| `core/` | ~60 | Q2 2026 |
+| Others | ~344 | Q4 2026 |
+
+Once a package reaches zero errors it is added to the blocking mypy check in `ci.yml`.
+
+---
+
+## Done
+
+- [x] XGBoost stacking ensemble — 68% OOS, p=0.0000
+- [x] Walk-forward validation (5 folds, 50-year GC=F data)
+- [x] CVaR order gate + kill switch
+- [x] IBKR TWS/Gateway connector with mock-free tests
+- [x] OANDA paper clock + streaming
+- [x] FIX protocol adapter with circuit breaker
+- [x] Sentry production config + ML fallback alerts
+- [x] Discord rich signal embeds
+- [x] Pre-commit hooks (ruff, bandit) — all passing
+- [x] CI matrix: Python 3.10, 3.11, 3.12
