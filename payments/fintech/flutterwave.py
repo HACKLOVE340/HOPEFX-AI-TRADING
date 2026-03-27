@@ -9,9 +9,10 @@ Flutterwave Payment Integration
 Handles payments via Flutterwave (Nigeria) - Cards, Bank, Mobile Money.
 """
 
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict
+from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,12 @@ class FlutterwaveClient:
     FEE_PERCENT = Decimal("0.014")  # 1.4%
 
     def __init__(self, secret_key: str = None):
-        self.secret_key = secret_key or "FLWSECK_TEST-placeholder"
+        if not secret_key:
+            raise ValueError(
+                "FlutterwaveClient requires a secret key. "
+                "Set the FLUTTERWAVE_SECRET_KEY environment variable."
+            )
+        self.secret_key = secret_key
         self.payments = {}
 
     def initialize_payment(
@@ -81,4 +87,10 @@ class FlutterwaveClient:
             raise
 
 
-flutterwave_client = FlutterwaveClient()
+# Module-level singleton — only created when the env var is present so that
+# importing this module in environments without payment credentials does not
+# raise at import time. Callers must check for None before using.
+_flw_secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
+flutterwave_client: Optional[FlutterwaveClient] = (
+    FlutterwaveClient(_flw_secret) if _flw_secret else None
+)
