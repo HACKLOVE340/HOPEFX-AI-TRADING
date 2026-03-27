@@ -106,10 +106,29 @@ def add_orderflow_features(df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def add_fractal_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Fractal dimension, Lyapunov proxy, self-similarity, chaos indicators."""
+def add_fractal_features(df: pd.DataFrame, smoke: bool = False) -> pd.DataFrame:
+    """Fractal dimension, Lyapunov proxy, self-similarity, chaos indicators.
+
+    In smoke mode all columns are filled with their neutral constant so the
+    feature matrix shape stays identical but no expensive rolling apply runs.
+    """
     d = df.copy()
     c = d["close"]
+
+    if smoke:
+        # Fill with neutral constants — same columns, no computation cost
+        d["frac_hfd_10"] = 1.5
+        d["frac_hfd_20"] = 1.5
+        d["frac_dfa_20"] = 0.5
+        d["frac_dfa_40"] = 0.5
+        d["frac_lyapunov_10"] = 0.0
+        d["frac_apen_10"] = 0.0
+        d["frac_perm_ent_5"] = 0.0
+        d["frac_perm_ent_10"] = 0.0
+        d["frac_recurrence_20"] = 0.0
+        d["frac_wavelet_ratio"] = 1.0
+        d["frac_corr_dim"] = 1.5
+        return d
 
     # Higuchi fractal dimension proxy (simplified)
     d["frac_hfd_10"] = _rolling_hfd(c, window=20, k_max=4)
@@ -482,6 +501,7 @@ def build_extended_features(
     horizon: int = 1,
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
+    smoke: bool = False,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build 200+ feature matrix by combining base advanced_features (100)
@@ -494,6 +514,7 @@ def build_extended_features(
     horizon            : Prediction horizon in bars
     use_filtered_target: Drop low-conviction bars from training
     min_move_atr       : Minimum move (ATR units) to include a bar
+    smoke              : Skip expensive computations for CI speed
 
     Returns
     -------
@@ -509,6 +530,7 @@ def build_extended_features(
         horizon=horizon,
         use_filtered_target=use_filtered_target,
         min_move_atr=min_move_atr,
+        smoke=smoke,
     )
 
     # Re-run on full ohlcv to get extended features aligned to same index
@@ -519,7 +541,7 @@ def build_extended_features(
 
     # Apply extended layers
     d = add_orderflow_features(d)
-    d = add_fractal_features(d)
+    d = add_fractal_features(d, smoke=smoke)
     d = add_regime_interactions(d)
 
     # Collect only new columns (not in base OHLCV)

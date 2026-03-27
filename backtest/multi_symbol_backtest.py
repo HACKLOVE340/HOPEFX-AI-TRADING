@@ -163,6 +163,7 @@ def build_features(
             horizon=1,
             use_filtered_target=not smoke,
             min_move_atr=0.15 if not smoke else 0.0,
+            smoke=smoke,
         )
     except Exception as exc:
         logger.warning("Extended features failed, using base: %s", exc)
@@ -221,20 +222,22 @@ def backtest_symbol(
         return {"symbol": display_name, "error": "train set too small", "n_trades": 0}
 
     # Train calibrated XGBoost
-    n_est = 100 if smoke else 400
+    # smoke=True uses minimal estimators/cv so CI tests finish in <5 s per symbol
+    n_est = 20 if smoke else 400
+    cv_folds = 2 if smoke else 3
     base = xgb.XGBClassifier(
         n_estimators=n_est,
-        max_depth=4,
-        learning_rate=0.05,
+        max_depth=3 if smoke else 4,
+        learning_rate=0.1 if smoke else 0.05,
         subsample=0.8,
         colsample_bytree=0.8,
         min_child_weight=3,
         scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
         eval_metric="logloss",
         random_state=42,
-        n_jobs=-1,
+        n_jobs=1,
     )
-    cal = CalibratedClassifierCV(base, method="isotonic", cv=3)
+    cal = CalibratedClassifierCV(base, method="isotonic", cv=cv_folds)
     model = Pipeline([("scaler", StandardScaler()), ("model", cal)])
     model.fit(X_train, y_train)
 
