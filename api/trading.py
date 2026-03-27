@@ -79,6 +79,87 @@ def _check_kill_switch() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Live deployment gates
+#
+# Two hard blocks that must pass before any live order is accepted:
+#
+#   1. Sharpe gate — ml/saved_models/advanced_oos_meta.json must exist and
+#      record gate_passed=True (requires ≥600 OOS trades).  Missing file is
+#      treated as gate NOT passed (fail-closed).
+#
+#   2. CI model guard — if the meta file records that the model was trained
+#      with HOPEFX_CI=1 (n_estimators=20 stub), live orders are blocked until
+#      the model is retrained with HOPEFX_CI=0 on full data.
+#
+# Both gates are bypassed when BROKER_TYPE=paper (paper trading is always
+# allowed) or APP_ENV=test so the test suite is not affected.
+# ---------------------------------------------------------------------------
+import json as _json
+from pathlib import Path as _Path
+
+_OOS_META_PATH = _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
+_deployment_gate_cache: dict = {}   # {path_mtime: result} — avoids re-reading on every order
+
+
+def _read_oos_meta() -> dict:
+    """Read advanced_oos_meta.json, returning {} on any error."""
+    try:
+        mtime = _OOS_META_PATH.stat().st_mtime
+        if _deployment_gate_cache.get("mtime") == mtime:
+            return _deployment_gate_cache["data"]
+        data = _json.loads(_OOS_META_PATH.read_text())
+        _deployment_gate_cache["mtime"] = mtime
+        _deployment_gate_cache["data"] = data
+        return data
+    except Exception:
+        return {}
+
+
+def _check_live_deployment_gates() -> None:
+    """
+    Block live orders until both deployment gates pass.
+
+    Skipped entirely for paper trading (BROKER_TYPE=paper) and test
+    environments (APP_ENV=test) so neither paper trading nor the test
+    suite is affected.
+    """
+    broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+    app_env = os.getenv("APP_ENV", "").lower()
+
+    # Paper trading and test environments are always allowed through.
+    if broker_type == "paper" or app_env == "test":
+        return
+
+    meta = _read_oos_meta()
+
+    # Gate 1 — Sharpe gate
+    sharpe_gate = meta.get("sharpe_gate", {})
+    if not sharpe_gate.get("gate_passed", False):
+        n = sharpe_gate.get("n_trades", 0)
+        target = sharpe_gate.get("target_n", 600)
+        se = sharpe_gate.get("se", "unknown")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Live trading blocked — Sharpe gate not cleared. "
+                f"Need ≥{target} OOS trades (have {n}), SE={se}. "
+                "Run multi-symbol forward test and retrain before going live."
+            ),
+        )
+
+    # Gate 2 — CI model guard
+    if meta.get("ci_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Live trading blocked — model was trained with HOPEFX_CI=1 "
+                "(n_estimators=20 stub). Retrain with HOPEFX_CI=0 on full "
+                "50-year data before deploying to live."
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Per-user order rate limiting (sliding window, Redis-backed with in-memory fallback)
 # Default: 10 orders per 60 seconds per authenticated user.
 # Override via env: ORDER_RATE_LIMIT and ORDER_RATE_WINDOW.
@@ -532,7 +613,8 @@ async def place_order(
       _route_to_broker()  — broker submission
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
-    _check_kill_switch()          # hard block — must be first
+    _check_kill_switch()              # hard block — must be first
+    _check_live_deployment_gates()    # Sharpe gate + CI model guard
     _check_order_rate_limit(user.sub)
     await _validate_order(order)
     await _apply_risk_checks(order, user.sub)
