@@ -49,6 +49,15 @@ from api.auth import TokenPayload, get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Advanced Trading"])
 
+# ── App state (injected at startup) ──────────────────────────────────────────
+app_state = None
+
+
+def set_state(state) -> None:
+    global app_state
+    app_state = state
+
+
 # ── In-memory stores ──────────────────────────────────────────────────────────
 _ab_tests: Dict[str, dict] = {}
 _shared_results: Dict[str, dict] = {}  # slug → backtest result
@@ -373,24 +382,45 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 async def get_correlation(
     symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
     window: int = 30,
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     Return rolling correlation matrix for the given symbols.
-    Uses synthetic data when live prices are unavailable.
+
+    Uses live OHLCV from price_engine when available; falls back to
+    synthetic correlated returns for symbols without live data.
     """
     sym_list = [s.strip() for s in symbols.split(",")]
     rng = random.Random(42)
 
-    # Generate correlated synthetic returns
+    # Try to pull real returns from price_engine OHLCV history
+    series: Dict[str, List[float]] = {}
+    pe = getattr(app_state, "price_engine", None) if app_state else None
+    if pe is not None:
+        for sym in sym_list:
+            try:
+                import asyncio
+                ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
+                if asyncio.iscoroutine(ohlcv):
+                    ohlcv = await ohlcv
+                if ohlcv and len(ohlcv) >= 5:
+                    closes = [float(bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0)) for bar in ohlcv]
+                    returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0]
+                    if returns:
+                        series[sym] = returns
+            except Exception as exc:
+                logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
+
+    # Fill missing symbols with synthetic correlated returns
     n = window + 10
     base_returns = [rng.gauss(0, 0.01) for _ in range(n)]
-    series: Dict[str, List[float]] = {}
     for sym in sym_list:
-        noise_scale = rng.uniform(0.3, 0.8)
-        series[sym] = [
-            base_returns[i] * (1 - noise_scale) + rng.gauss(0, 0.01) * noise_scale
-            for i in range(n)
-        ]
+        if sym not in series:
+            noise_scale = rng.uniform(0.3, 0.8)
+            series[sym] = [
+                base_returns[i] * (1 - noise_scale) + rng.gauss(0, 0.01) * noise_scale
+                for i in range(n)
+            ]
 
     # Compute correlation matrix
     def corr(a: List[float], b: List[float]) -> float:
