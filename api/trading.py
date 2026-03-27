@@ -999,25 +999,130 @@ def _make_strategy_router():
 
     @_r.get("/risk-metrics")
     def get_risk_metrics():
-        return {
-            "daily_pnl": 0.0,
-            "max_drawdown": 0.0,
-            "open_positions": 0,
-            "margin_used": 0.0,
-            "risk_score": 0.0,
-        }
+        """Live risk metrics from the active broker / paper engine."""
+        try:
+            broker = getattr(app_state, "broker", None)
+            if broker is None:
+                raise AttributeError("no broker")
+
+            account = broker.get_account_info()
+            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+
+            # Daily PnL: sum unrealised PnL across open positions
+            daily_pnl = sum(
+                getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions
+            )
+
+            # Margin used from account info
+            margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
+
+            # Max drawdown from equity history
+            max_dd = 0.0
+            if hasattr(broker, "get_equity_history"):
+                history = broker.get_equity_history()
+                if history:
+                    values = [v for _, v in history]
+                    peak = values[0]
+                    for v in values:
+                        if v > peak:
+                            peak = v
+                        dd = (peak - v) / peak if peak > 0 else 0.0
+                        if dd > max_dd:
+                            max_dd = dd
+
+            # Risk score: 0–100 based on drawdown + open positions
+            open_count = len(positions)
+            risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
+
+            return {
+                "daily_pnl": round(daily_pnl, 2),
+                "max_drawdown": round(max_dd * 100, 3),
+                "open_positions": open_count,
+                "margin_used": round(margin_used, 2),
+                "risk_score": risk_score,
+            }
+        except Exception as exc:
+            logger.debug("risk-metrics fallback: %s", exc)
+            return {
+                "daily_pnl": 0.0,
+                "max_drawdown": 0.0,
+                "open_positions": 0,
+                "margin_used": 0.0,
+                "risk_score": 0.0,
+            }
 
     @_r.get("/performance/summary")
     def get_performance_summary():
-        return {
-            "total_return": 0.0,
-            "sharpe_ratio": 0.0,
-            "max_drawdown": 0.0,
-            "win_rate": 0.0,
-            "total_trades": 0,
-            "period_days": 30,
-            "total_strategies": len(_strategy_store),
-        }
+        """Performance summary from equity history and closed trades."""
+        import math as _math
+
+        try:
+            broker = getattr(app_state, "broker", None)
+            equity_history = []
+            if broker and hasattr(broker, "get_equity_history"):
+                equity_history = broker.get_equity_history()
+
+            if not equity_history:
+                raise ValueError("no history")
+
+            values = [v for _, v in equity_history]
+            initial = values[0]
+            final = values[-1]
+            total_return = ((final - initial) / initial * 100) if initial > 0 else 0.0
+
+            # Max drawdown
+            peak, max_dd = initial, 0.0
+            for v in values:
+                if v > peak:
+                    peak = v
+                dd = (peak - v) / peak if peak > 0 else 0.0
+                if dd > max_dd:
+                    max_dd = dd
+
+            # Sharpe from point-to-point returns
+            returns = [
+                (values[i] - values[i - 1]) / values[i - 1]
+                for i in range(1, len(values))
+                if values[i - 1] > 0
+            ]
+            sharpe = 0.0
+            if len(returns) >= 2:
+                mean_r = sum(returns) / len(returns)
+                var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+                std_r = _math.sqrt(var) if var > 0 else 0.0
+                if std_r > 0:
+                    sharpe = round((mean_r / std_r) * _math.sqrt(252), 3)
+
+            win_rate = (
+                sum(1 for r in returns if r > 0) / len(returns) if returns else 0.0
+            )
+
+            # Period in days
+            ts_list = [t for t, _ in equity_history]
+            period_days = max(
+                1, round((ts_list[-1] - ts_list[0]) / 86400)
+            ) if len(ts_list) >= 2 else 1
+
+            return {
+                "total_return": round(total_return, 4),
+                "sharpe_ratio": sharpe,
+                "max_drawdown": round(max_dd * 100, 3),
+                "win_rate": round(win_rate * 100, 2),
+                "total_trades": len(returns),
+                "period_days": period_days,
+                "total_strategies": len(_strategy_store),
+            }
+        except Exception as exc:
+            logger.debug("performance/summary fallback: %s", exc)
+            return {
+                "total_return": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+                "total_trades": 0,
+                "period_days": 30,
+                "total_strategies": len(_strategy_store),
+            }
 
     @_r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
