@@ -242,6 +242,7 @@ async def list_trades(
     tag: Optional[str] = None,
     emotion: Optional[str] = None,
     symbol: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
 ) -> List[JournalEntry]:
     entries = list(_load_all_entries().values())
     if tag:
@@ -274,7 +275,10 @@ async def create_entry(
 
 
 @router.get("/trades/{trade_id}", response_model=JournalEntry)
-async def get_entry(trade_id: str) -> JournalEntry:
+async def get_entry(
+    trade_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> JournalEntry:
     entries = _load_all_entries()
     if trade_id not in entries:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -299,7 +303,7 @@ async def update_entry(
 
 
 @router.get("/stats", response_model=JournalStats)
-async def get_stats() -> JournalStats:
+async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalStats:
     entries = list(_load_all_entries().values())
     closed = [e for e in entries if e.get("pnl") is not None]
     if not closed:
@@ -364,7 +368,9 @@ async def get_stats() -> JournalStats:
 
 
 @router.get("/mistakes", response_model=List[JournalEntry])
-async def get_mistakes() -> List[JournalEntry]:
+async def get_mistakes(
+    user: TokenPayload = Depends(get_current_user),
+) -> List[JournalEntry]:
     """Trades where the user deviated from their rules."""
     entries = _load_all_entries()
     mistakes = [e for e in entries.values() if not e.get("followed_rules", True)]
