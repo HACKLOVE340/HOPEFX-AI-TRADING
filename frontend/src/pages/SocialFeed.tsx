@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { authApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 import axios from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
   const submit = async () => {
     if (!text.trim()) return;
     try {
-      const res = await authApi.post(`/api/feed/${signalId}/comment`, { text });
+      const res = await api.post(`/api/feed/${signalId}/comment`, { text });
       setComments((prev) => [...prev, res.data]);
       setText('');
     } catch { /* ignore */ }
@@ -235,14 +235,14 @@ const SocialFeed: React.FC = () => {
 
   // Check opt-in status
   useEffect(() => {
-    authApi.get('/api/feed/status/me')
+    api.get('/api/feed/status/me')
       .then((r) => setOptedIn(r.data.opted_in))
       .catch(() => {});
   }, []);
 
   const handleReact = async (signalId: string, reaction: 'up' | 'down') => {
     try {
-      const res = await authApi.post(`/api/feed/${signalId}/react`, { reaction });
+      const res = await api.post(`/api/feed/${signalId}/react`, { reaction });
       setItems((prev) => prev.map((item) =>
         item.signal_id === signalId
           ? { ...item, thumbs_up: res.data.thumbs_up, thumbs_down: res.data.thumbs_down, your_reaction: res.data.your_reaction }
@@ -254,10 +254,10 @@ const SocialFeed: React.FC = () => {
   const toggleOptIn = async () => {
     try {
       if (optedIn) {
-        await authApi.post('/api/feed/opt-out');
+        await api.post('/api/feed/opt-out');
         setOptedIn(false);
       } else {
-        await authApi.post('/api/feed/opt-in');
+        await api.post('/api/feed/opt-in');
         setOptedIn(true);
       }
     } catch { /* ignore */ }

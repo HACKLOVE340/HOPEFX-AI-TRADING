@@ -10,7 +10,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, LineSeries, type IChartApi } from 'lightweight-charts';
-import { backtestApi } from '../hooks/useApi';
+import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -207,7 +207,7 @@ const WalkForward: React.FC = () => {
       const endpoint = id
         ? `/api/backtest/walk-forward/${id}`
         : '/api/backtest/walk-forward/latest';
-      const res = await backtestApi.get(endpoint);
+      const res = await api.get(endpoint);
       setData(res.data);
       setVisible(new Set(res.data.folds.map((f: FoldResult) => f.fold)));
     } catch {
