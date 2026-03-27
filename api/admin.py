@@ -324,7 +324,7 @@ async def get_kyc_status(
 
 
 @router.get(
-    "/api/system-info", response_model=None, summary="Server version and uptime"
+    "/system-info", response_model=None, summary="Server version and uptime"
 )
 def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
     """Server version and uptime. Requires: role >= 'admin'."""
@@ -335,13 +335,13 @@ def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
     }
 
 
-@router.get("/api/settings")
+@router.get("/settings-data")
 def get_settings(user: TokenPayload = Depends(require_role("admin"))):
     """Read current risk settings. Requires: role >= 'admin'."""
     return dict(_risk_settings)
 
 
-@router.post("/api/settings")
+@router.post("/settings-data")
 def save_settings(
     payload: Dict[str, Any],
     user: TokenPayload = Depends(require_role("admin")),
@@ -356,13 +356,13 @@ def save_settings(
         return {"status": "error", "detail": str(exc)}
 
 
-@router.get("/api/activity")
+@router.get("/activity")
 def get_activity(user: TokenPayload = Depends(require_role("admin"))):
     """All user activity logs. Requires: role >= 'admin'."""
     return {"events": list(activity_log)}
 
 
-@router.get("/api/dashboard-data")
+@router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
     return {
@@ -374,7 +374,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 
 
 @router.get(
-    "/api/system-metrics", response_model=None, summary="System resource metrics"
+    "/system-metrics", response_model=None, summary="System resource metrics"
 )
 def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """Prometheus-style system metrics. Requires: role >= 'admin'."""

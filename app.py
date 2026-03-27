@@ -1191,6 +1191,18 @@ async def sendgrid_webhook(request: Request):
     return {"suppressed": suppressed, "processed": len(events)}
 
 
+# /admin redirect — the root endpoint advertises /admin but the router is
+# mounted at /api/admin/. This redirect keeps the advertised URL working.
+@app.get("/admin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
+async def admin_redirect():
+    """Redirect /admin to the admin dashboard at /api/admin/."""
+    return HTMLResponse(
+        content='<html><head><meta http-equiv="refresh" content="0;url=/api/admin/"></head>'
+        "<body>Redirecting to admin dashboard…</body></html>",
+        status_code=200,
+    )
+
+
 # Root endpoint
 @app.get("/login", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
 async def login_page():
