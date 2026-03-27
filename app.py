@@ -408,11 +408,16 @@ def setup_cors(app: FastAPI):
     allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
 
     app_env = os.getenv("APP_ENV", "development")
-    if app_env == "production" and all("localhost" in o for o in allowed_origins):
-        _cors_logger.warning(
-            "CORS is restricted to localhost in a production environment. "
-            "Set ALLOWED_ORIGINS to your frontend domain(s) to allow browser access."
+    if app_env == "production" and all("localhost" in o or "127." in o for o in allowed_origins):
+        # Hard failure — localhost CORS in production means the frontend can
+        # never reach the API from a real domain. Operators must set this.
+        import sys as _sys
+        _cors_logger.critical(
+            "STARTUP BLOCKED: ALLOWED_ORIGINS is restricted to localhost in "
+            "production. Set ALLOWED_ORIGINS to your frontend domain(s), e.g.: "
+            "ALLOWED_ORIGINS=https://app.yourdomain.com"
         )
+        _sys.exit(1)
 
     _cors_logger.info("CORS allowed origins: %s", allowed_origins)
 
