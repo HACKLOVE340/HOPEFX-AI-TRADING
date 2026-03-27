@@ -184,6 +184,7 @@ class TestMarketRegimeDetector:
         detector.detect_regime(df)
         assert len(detector.regime_history) == 2
 
+    @pytest.mark.slow
     def test_regime_history_capped_at_1000(self):
         from analysis.market_analysis import MarketRegimeDetector
 
