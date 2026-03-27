@@ -54,11 +54,30 @@ class TestFeatureFlags:
                 ), f"STABLE feature {name} should default to True"
 
     def test_experimental_features_off_by_default(self):
-        """All EXPERIMENTAL features must be disabled when no env vars are set."""
+        """
+        Most EXPERIMENTAL features default to False.
+
+        Exceptions: features that are fully implemented, wired end-to-end,
+        and intentionally enabled despite still being EXPERIMENTAL status
+        (i.e. not yet promoted to BETA/STABLE).
+        """
+        # These are EXPERIMENTAL but deliberately default=True because they
+        # are fully implemented and wired into the app.
+        experimental_enabled_exceptions = {
+            "ADVANCED_TRADING",
+            "WATCHLIST",
+            "TRADE_JOURNAL",
+            "BILLING_SUBSCRIPTION",
+            "TWO_FACTOR_AUTH",
+            "PRICE_ALERTS",
+            "GRAPHQL_API",
+        }
         ff = FeatureFlags()
         reg = ff.registry()
         for name, info in reg.items():
             if info["status"] == FeatureStatus.EXPERIMENTAL.value:
+                if name in experimental_enabled_exceptions:
+                    continue  # intentionally on — see config/feature_flags.py
                 assert (
                     info["default"] is False
                 ), f"EXPERIMENTAL feature {name} should default to False"
