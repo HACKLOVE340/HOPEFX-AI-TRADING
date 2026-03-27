@@ -124,6 +124,105 @@ def _get_predictor():
     return None
 
 
+def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
+    """
+    Load real OHLCV data for a symbol.
+
+    Priority:
+    1. Live price engine (app_state.price_engine) — most recent bars
+    2. CSV files in data/ directory — XAU_USD_H1.csv etc.
+    3. Paper broker get_market_data() — simulated but realistic prices
+    4. Flat stub (last resort — signals model fallback, not garbage 1.0)
+
+    Returns a DataFrame with columns [open, high, low, close, volume]
+    and a DatetimeIndex, length >= lookback where possible.
+    """
+    import pathlib
+
+    import pandas as pd
+
+    symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
+    # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
+    if "_" not in symbol_upper and len(symbol_upper) == 6:
+        symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
+
+    # 1. Live price engine async buffer — skip (sync context here)
+
+    # 2. CSV files
+    data_dir = pathlib.Path(__file__).parent.parent / "data"
+    candidates = [
+        data_dir / f"{symbol_upper}_H1.csv",
+        data_dir / f"{symbol_upper.replace('_','')}_H1.csv",
+        data_dir / f"{symbol_upper}_H1.csv".replace("XAU_USD", "XAUUSD"),
+    ]
+    for csv_path in candidates:
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+                df = df.rename(columns={"timestamp": "time"}).set_index("time")
+                df = df[["open", "high", "low", "close", "volume"]].dropna()
+                df = df.tail(lookback)
+                if len(df) >= 20:
+                    logger.debug(
+                        "ML predict: loaded %d bars from %s", len(df), csv_path.name
+                    )
+                    return df
+            except Exception as exc:
+                logger.debug("CSV load failed (%s): %s", csv_path, exc)
+
+    # 3. Paper broker simulated prices
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        broker = getattr(app_state, "broker", None)
+        if broker and hasattr(broker, "get_market_data"):
+            raw = broker.get_market_data(
+                symbol.upper().replace("_", ""), "1h", lookback
+            )
+            if raw:
+                df = pd.DataFrame(raw)
+                df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+                df = df.set_index("time")[
+                    ["open", "high", "low", "close", "volume"]
+                ].dropna()
+                if len(df) >= 20:
+                    logger.debug(
+                        "ML predict: loaded %d bars from paper broker", len(df)
+                    )
+                    return df
+    except Exception as exc:
+        logger.debug("Paper broker OHLCV load failed: %s", exc)
+
+    # 4. Flat stub — use last known price so at least entry_price is real
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        broker = getattr(app_state, "broker", None)
+        last_price = 1.0
+        if broker and hasattr(broker, "market_prices"):
+            sym_key = symbol.upper().replace("_", "").replace("/", "")
+            last_price = broker.market_prices.get(sym_key, 1.0)
+    except Exception:
+        last_price = 1.0
+
+    idx = pd.date_range(
+        end=pd.Timestamp.utcnow().floor("h"),
+        periods=lookback,
+        freq="h",
+        tz="UTC",
+    )
+    return pd.DataFrame(
+        {
+            "open": last_price,
+            "high": last_price * 1.001,
+            "low": last_price * 0.999,
+            "close": last_price,
+            "volume": 1000.0,
+        },
+        index=idx,
+    )
+
+
 def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
     """
     Fetch aligned macro features from MacroStore for the given symbol.
@@ -290,24 +389,8 @@ async def predict(symbol: str, body: PredictRequest):
 
     if predictor is not None:
         try:
-            import pandas as pd
-
-            # Build OHLCV stub (real deployments replace with live feed)
-            try:
-                from data.feeds.oanda import get_ohlcv_stub
-
-                ohlcv = get_ohlcv_stub(symbol_upper, body.lookback)
-            except Exception:
-                idx = pd.date_range(
-                    end=pd.Timestamp.utcnow().floor("h"),
-                    periods=body.lookback,
-                    freq="h",
-                    tz="UTC",
-                )
-                ohlcv = pd.DataFrame(
-                    {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 0.0},
-                    index=idx,
-                )
+            # Load real OHLCV data (CSV → paper broker → stub fallback)
+            ohlcv = _load_ohlcv_for_symbol(symbol_upper, body.lookback)
 
             # InferenceEngine path (full pipeline)
             if hasattr(predictor, "predict") and hasattr(predictor, "health"):
