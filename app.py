@@ -199,28 +199,72 @@ app.include_router(payments_router)
 app.include_router(settings_router)
 app.include_router(status_router)
 app.include_router(brain_router)
-app.include_router(two_factor_router)
+
+# Two-factor authentication — gated: FEATURE_TWO_FACTOR_AUTH
+if feature_flags.TWO_FACTOR_AUTH:
+    app.include_router(two_factor_router)
+    logger.info("Two-factor auth router registered (/api/2fa)")
+else:
+    logger.debug("TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable")
+
 app.include_router(calendar_router)
-app.include_router(watchlist_router)
-app.include_router(journal_router)
+
+# Watchlist — gated: FEATURE_WATCHLIST
+if feature_flags.WATCHLIST:
+    app.include_router(watchlist_router)
+    logger.info("Watchlist router registered (/api/watchlist)")
+else:
+    logger.debug("WATCHLIST disabled — set FEATURE_WATCHLIST=true to enable")
+
+# Trade journal — gated: FEATURE_TRADE_JOURNAL
+if feature_flags.TRADE_JOURNAL:
+    app.include_router(journal_router)
+    logger.info("Trade journal router registered (/api/journal)")
+else:
+    logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
+
 app.include_router(profiles_router)
 app.include_router(social_feed_router)
 app.include_router(social_leaderboard_router)
 app.include_router(mobile_router)
 app.include_router(whitelabel_router)
-app.include_router(billing_router)
+
+# Billing subscription endpoint — gated: FEATURE_BILLING_SUBSCRIPTION
+if feature_flags.BILLING_SUBSCRIPTION:
+    app.include_router(billing_router)
+    logger.info("Billing router registered (/api/billing)")
+else:
+    logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
+
 app.include_router(platform_router)
-app.include_router(advanced_router)
+
+# Advanced trading (OCO, trailing stops, iceberg) — gated: FEATURE_ADVANCED_TRADING
+if feature_flags.ADVANCED_TRADING:
+    app.include_router(advanced_router)
+    logger.info("Advanced trading router registered (/api/advanced)")
+else:
+    logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")
+
 app.include_router(ml_router)
-app.include_router(alerts_router)
+
+# Price alerts — gated: FEATURE_PRICE_ALERTS
+if feature_flags.PRICE_ALERTS:
+    app.include_router(alerts_router)
+    logger.info("Price alerts router registered (/api/alerts)")
+else:
+    logger.debug("PRICE_ALERTS disabled — set FEATURE_PRICE_ALERTS=true to enable")
+
 if _signals_router is not None:
     app.include_router(_signals_router)
     logger.info("Signals router registered (/api/signals)")
 
-# Mount GraphQL at /graphql — GraphiQL playground available at GET /graphql
-if _graphql_available and _graphql_router is not None:
+# GraphQL — gated: FEATURE_GRAPHQL_API
+# GraphiQL playground available at GET /graphql when enabled
+if feature_flags.GRAPHQL_API and _graphql_available and _graphql_router is not None:
     app.include_router(_graphql_router, prefix="/graphql")
     logger.info("GraphQL endpoint mounted at /graphql")
+elif _graphql_available and not feature_flags.GRAPHQL_API:
+    logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
 
 # Live WebSocket endpoint (/ws/live) — matches frontend useWebSocket hook
 try:
