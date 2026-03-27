@@ -91,6 +91,7 @@ class RiskSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SECURITY_")
 
+    # Accepts SECURITY_JWT_SECRET (primary) or JWT_SECRET_KEY (legacy alias).
     jwt_secret: SecretStr = Field(default=...)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
@@ -98,11 +99,22 @@ class SecuritySettings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window: int = 60
 
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_jwt_secret(cls, values: Any) -> Any:
+        """Accept JWT_SECRET_KEY as a fallback alias for SECURITY_JWT_SECRET."""
+        if isinstance(values, dict):
+            if not values.get("jwt_secret"):
+                alias = os.getenv("JWT_SECRET_KEY", "")
+                if alias:
+                    values["jwt_secret"] = alias
+        return values
+
     @field_validator("jwt_secret", mode="before")
     @classmethod
     def require_jwt_secret(cls, v: Any) -> Any:
         raw = v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
-        if not raw or raw == "CHANGE_ME":
+        if not raw or raw.startswith("CHANGE_ME"):
             raise ValueError(
                 "SECURITY_JWT_SECRET must be set to a strong random value. "
                 "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
