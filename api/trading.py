@@ -173,6 +173,26 @@ def set_state(state) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Async-compat broker call helper
+# ---------------------------------------------------------------------------
+
+async def _broker_call(method_name: str, *args, **kwargs):
+    """
+    Call a broker method whether it is sync or async.
+    PaperTradingBroker uses sync methods; OANDA uses async.
+    This wrapper handles both transparently.
+    """
+    import asyncio
+    broker = app_state.broker
+    method = getattr(broker, method_name)
+    if asyncio.iscoroutinefunction(method):
+        return await method(*args, **kwargs)
+    # Sync method — run in executor to avoid blocking the event loop
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: method(*args, **kwargs))
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -200,7 +220,7 @@ async def _validate_order(order: "OrderRequest") -> None:
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
 
-        account_info = await app_state.broker.get_account_info()
+        account_info = await _broker_call("get_account_info")
         check_prop_firm_rules(account_info)
     except HTTPException:
         raise
@@ -220,8 +240,8 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
 
     # Standard risk assessment
     try:
-        account_info = await app_state.broker.get_account_info()
-        positions = await app_state.broker.get_positions()
+        account_info = await _broker_call("get_account_info")
+        positions = await _broker_call("get_positions")
         positions_dicts = [
             {
                 "symbol": p.symbol,
@@ -301,11 +321,9 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     Raises HTTP 400 on broker rejection or unexpected error.
     """
     try:
-        result = await app_state.broker.place_market_order(
-            symbol=order.symbol,
+        result = await _broker_call("place_market_order", symbol=order.symbol,
             side=order.side,
-            quantity=order.quantity,
-        )
+            quantity=order.quantity,)
         return result
     except HTTPException:
         raise
@@ -456,7 +474,7 @@ async def get_positions(
             detail="Broker not available",
         )
 
-    positions = await app_state.broker.get_positions()
+    positions = await _broker_call("get_positions")
     return [
         PositionResponse(
             id=p.id,
@@ -487,7 +505,7 @@ async def close_position(
             detail="Broker not available",
         )
 
-    success = await app_state.broker.close_position(position_id)
+    success = await _broker_call("close_position", position_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Position not found"
@@ -526,7 +544,7 @@ async def close_all_positions(
             detail="Broker not available",
         )
 
-    closed = await app_state.broker.close_all_positions()
+    closed = await _broker_call("close_all_positions")
     logger.info("All positions closed: user=%s count=%s", user.sub, closed)
     return {"status": "success", "closed_positions": closed}
 
@@ -542,7 +560,7 @@ async def get_account(
             detail="Broker not available",
         )
 
-    return await app_state.broker.get_account_info()
+    return await _broker_call("get_account_info")
 
 
 @router.get(
