@@ -1960,7 +1960,7 @@
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">if</span> <span class="ow">not</span> <span class="n">salt</span><span class="p">:</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">salt_bytes</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">master_key</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">digest</span><span class="p">()[:</span><span class="mi">16</span><span class="p">]</span>
 </code></pre></div></p>
-<p><strong>Impact:</strong> 
+<p><strong>Impact:</strong>
 - <strong>Before:</strong> Anyone with the source code could attempt to decrypt encrypted credentials
 - <strong>After:</strong> Unique salt per installation significantly increases security</p>
 <p><strong>Files Changed:</strong> <code>config/config_manager.py</code></p>
@@ -2041,7 +2041,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># cache/market_data_cache.py</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">TickData</span><span class="p">:</span>  <span class="c1"># Dataclass for caching</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># database/models.py  </span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># database/models.py</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TickData</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>  <span class="c1"># SQLAlchemy model</span>
 </code></pre></div></p>
 <p><strong>Solution:</strong> Renamed cache version to <code>CachedTickData</code>
@@ -2057,7 +2057,7 @@
 <h4 id="1-database-migration-strategy">1. Database Migration Strategy<a class="headerlink" href="#1-database-migration-strategy" title="Permanent link">&para;</a></h4>
 <p><strong>Issue:</strong> No Alembic or migration tool configured
 <strong>Impact:</strong> Schema changes difficult to manage across environments
-<strong>Recommendation:</strong> 
+<strong>Recommendation:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pip<span class="w"> </span>install<span class="w"> </span>alembic
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>alembic<span class="w"> </span>init<span class="w"> </span>alembic
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Configure alembic.ini and env.py</span>
@@ -2085,7 +2085,7 @@
 <p><strong>Issue:</strong> Large number of dependencies with some overlap
 - Both TensorFlow (2.15.0) and PyTorch (2.1.1)
 - Multiple data analysis libraries</p>
-<p><strong>Recommendation:</strong> 
+<p><strong>Recommendation:</strong>
 - Audit actual usage
 - Consider optional dependency groups
 - Pin all versions for reproducibility</p>

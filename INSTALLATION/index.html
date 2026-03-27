@@ -2554,7 +2554,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONFIG_ENCRYPTION_KEY</span><span class="o">=</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import secrets; print(secrets.token_hex(32))&quot;</span><span class="k">)</span>
 </code></pre></div></p>
 <h4 id="3-redis-connection-failed">3. Redis connection failed<a class="headerlink" href="#3-redis-connection-failed" title="Permanent link">&para;</a></h4>
-<p><strong>Solution:</strong> 
+<p><strong>Solution:</strong>
 - Check if Redis is running: <code>redis-cli ping</code>
 - Start Redis: <code>sudo systemctl start redis-server</code>
 - Or run without cache (will use fallback mode)</p>
@@ -2563,7 +2563,7 @@
 - For SQLite: Ensure <code>data/</code> directory exists
 - For PostgreSQL: Check credentials and ensure PostgreSQL is running</p>
 <h4 id="5-permission-denied-errors">5. Permission denied errors<a class="headerlink" href="#5-permission-denied-errors" title="Permanent link">&para;</a></h4>
-<p><strong>Solution:</strong> 
+<p><strong>Solution:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Fix directory permissions</span>
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>chmod<span class="w"> </span><span class="m">755</span><span class="w"> </span>logs<span class="w"> </span>data<span class="w"> </span>credentials
 </code></pre></div></p>

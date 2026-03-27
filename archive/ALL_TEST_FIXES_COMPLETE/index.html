@@ -1463,7 +1463,7 @@
 <p><strong>Error:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>AttributeError: BASIC
 </code></pre></div></p>
-<p><strong>Root Cause:</strong> 
+<p><strong>Root Cause:</strong>
 The pricing model uses <code>STARTER</code> tier, not <code>BASIC</code>. Tests were written for an old pricing structure.</p>
 <p><strong>Actual Enum Values:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">SubscriptionTier</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">Enum</span><span class="p">):</span>
