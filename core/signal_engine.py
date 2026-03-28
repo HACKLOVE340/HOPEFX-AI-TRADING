@@ -777,20 +777,62 @@ async def _execute_if_approved(
             equity: float = account_info.get("equity", 100_000)
 
             # ── ML probability gate ───────────────────────────────────────────
-            # Skip trades where the ML model has low conviction.
-            # Threshold: 0.58 (slightly above the 50% abstain boundary).
-            # This filters out marginal signals and concentrates capital on
-            # high-confidence setups where the 67%+ OOS edge is most reliable.
-            ml_prob: float = signal_payload.get("probability", 0.5)
-            _ML_MIN_PROB = float(os.getenv("ML_MIN_TRADE_PROB", "0.58"))
-            if ml_prob < _ML_MIN_PROB:
-                logger.info(
-                    "Auto-trade skipped: ML prob %.3f < threshold %.3f (%s)",
-                    ml_prob,
-                    _ML_MIN_PROB,
-                    symbol,
+            # ── Production-grade signal quality filter ────────────────────────
+            # Runs four independent gates before any order is sent:
+            # 1. Confidence gate (threshold per direction)
+            # 2. Expected value gate (EV > 0 based on rolling trade outcomes)
+            # 3. Regime filter (block HIGH_VOL / MEAN_REVERTING when enabled)
+            # 4. MTF confluence (H4+D1 alignment when enabled)
+            #
+            # Root cause: 66% OOS accuracy ≠ tradeable edge when the accuracy
+            # metric measures 1-bar direction but the hold period is 5 bars.
+            # The EV gate catches this — it blocks signals when the rolling
+            # win rate × avg_win < (1-win_rate) × avg_loss.
+            try:
+                from ml.signal_filter import get_signal_filter
+                _filt = get_signal_filter()
+                # Build a minimal OHLCV-like object from data dict for regime gate
+                _ohlcv_proxy = None
+                try:
+                    import pandas as _pd
+                    _prices = data.get("prices", [])
+                    _highs = data.get("highs", [])
+                    _lows = data.get("lows", [])
+                    if _prices and _highs and _lows:
+                        _ohlcv_proxy = _pd.DataFrame({
+                            "close": _prices,
+                            "high": _highs,
+                            "low": _lows,
+                        })
+                except Exception:
+                    pass
+
+                _filter_result = _filt.check(
+                    signal_payload,
+                    ohlcv=_ohlcv_proxy,
+                    symbol=symbol,
                 )
-                return
+                if not _filter_result.passed:
+                    logger.info(
+                        "Signal filter blocked [%s]: %s (symbol=%s confidence=%.3f)",
+                        _filter_result.gate,
+                        _filter_result.reason,
+                        symbol,
+                        _filter_result.confidence,
+                    )
+                    return
+            except Exception as _filt_exc:
+                # Filter failure must never block execution — log and continue
+                logger.debug("Signal filter error (pass-through): %s", _filt_exc)
+                # Fall back to legacy confidence check
+                ml_prob: float = signal_payload.get("probability", 0.5)
+                _ML_MIN_PROB = float(os.getenv("ML_MIN_TRADE_PROB", "0.58"))
+                if ml_prob < _ML_MIN_PROB:
+                    logger.info(
+                        "Auto-trade skipped (fallback): ML prob %.3f < %.3f (%s)",
+                        ml_prob, _ML_MIN_PROB, symbol,
+                    )
+                    return
 
             # ── ATR-based SL/TP ───────────────────────────────────────────────
             # Use ATR(14) from the data buffer for volatility-adaptive levels.
@@ -849,10 +891,47 @@ async def _execute_if_approved(
                         entry * 1.03 if direction.upper() == "BUY" else entry * 0.97
                     )
 
-            # ── ML-scaled signal strength ─────────────────────────────────────
-            # Pass ML probability as signal_strength so Kelly sizing scales up
-            # on high-conviction signals (prob 0.65+ gets larger allocation).
+            # ── Dynamic position sizing (volatility-scaled Kelly) ─────────────
+            # PositionSizer computes a volatility-adaptive lot size using:
+            # - Volatility method: risk_pct / ATR-based SL distance
+            # - Kelly method: quarter-Kelly from rolling win rate / avg P&L
+            # The result is passed as signal_strength to the risk manager which
+            # applies its own caps and correlation checks.
+            ml_prob: float = signal_payload.get("probability", 0.5)
             signal_strength = min(ml_prob, 0.80)  # cap at 80% to avoid over-sizing
+
+            try:
+                from ml.position_sizer import get_position_sizer
+                import pandas as _pd_sz
+                _ohlcv_sz = None
+                _prices_sz = (data or {}).get("prices", [])
+                _highs_sz = (data or {}).get("highs", [])
+                _lows_sz = (data or {}).get("lows", [])
+                if _prices_sz and _highs_sz and _lows_sz:
+                    _ohlcv_sz = _pd_sz.DataFrame({
+                        "close": _prices_sz,
+                        "high": _highs_sz,
+                        "low": _lows_sz,
+                    })
+                _sizer_lots = get_position_sizer().compute(
+                    symbol=symbol,
+                    direction=direction,
+                    entry_price=entry,
+                    stop_loss=sl_price,
+                    account_equity=equity,
+                    confidence=ml_prob,
+                    ohlcv=_ohlcv_sz,
+                )
+                # Use sizer output as signal_strength proxy (normalised to [0,1])
+                # so the risk manager's Kelly layer scales consistently
+                _max_lots = float(os.getenv("MAX_LOTS", "10.0"))
+                signal_strength = min(_sizer_lots / max(_max_lots, 1.0), 0.80)
+                logger.debug(
+                    "PositionSizer: %s lots=%.4f signal_strength=%.4f",
+                    symbol, _sizer_lots, signal_strength,
+                )
+            except Exception as _sz_exc:
+                logger.debug("PositionSizer error (fallback to ML prob): %s", _sz_exc)
 
             # ── Volatility estimate from recent returns ────────────────────────
             try:
