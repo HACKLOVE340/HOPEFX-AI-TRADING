@@ -65,45 +65,80 @@ class OandaPaperClock:
         environment: str = "practice",
     ) -> bool:
         """
-        Start the clock if not already started.
+        Start the clock on first real OANDA connection.
 
         Called by the OANDA broker connector on first successful connection.
-        Idempotent — does nothing if the stamp file already exists.
+        Handles two cases:
+        1. No stamp file — write a fresh stamp and start the clock.
+        2. Stamp file exists with ``requires_real_account: true`` (PENDING
+           placeholder) — overwrite with the real account_id while preserving
+           the original started_utc so the 30-day clock is not reset.
 
-        Parameters
-        ----------
-        account_id  : OANDA account ID (for audit trail).
-        environment : "practice" or "live".
-
-        Returns True if the clock was started now, False if already running.
+        Returns True if the clock was started or updated, False if already
+        running with a real account.
         """
         if self._stamp_path.exists():
-            logger.debug(
-                "OandaPaperClock: already started, stamp exists at %s", self._stamp_path
+            try:
+                existing = json.loads(self._stamp_path.read_text())
+            except Exception:
+                existing = {}
+
+            # If a real account is already stamped, preserve the clock.
+            if not existing.get("requires_real_account", False):
+                logger.debug(
+                    "OandaPaperClock: already running (account=%s…), not overwriting",
+                    str(existing.get("account_id", "?"))[:8],
+                )
+                return False
+
+            # PENDING placeholder — overwrite with real account, keep started_utc.
+            started_utc_str = existing.get("started_utc")
+            logger.info(
+                "OandaPaperClock: replacing PENDING placeholder with real account %s…",
+                account_id[:8] if account_id else "?",
             )
-            return False
+        else:
+            started_utc_str = None
 
         now = datetime.now(timezone.utc)
+        started_utc_str = started_utc_str or now.isoformat()
+
+        # Parse to compute live_gate_opens
+        try:
+            started_dt = datetime.fromisoformat(started_utc_str.replace("Z", "+00:00"))
+            if started_dt.tzinfo is None:
+                started_dt = started_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            started_dt = now
+
+        from datetime import timedelta
+        live_gate_opens = (started_dt + timedelta(days=_TARGET_DAYS)).isoformat()
+
+        # Mask account_id: first 8 chars + ellipsis
+        masked = (account_id[:8] + "…") if len(account_id) > 8 else account_id
+
         stamp = {
-            "started_utc": now.isoformat(),
+            "started_utc": started_utc_str,
             "target_days": _TARGET_DAYS,
-            "account_id": account_id,
+            "account_id": masked,
             "environment": environment,
+            "live_gate_opens": live_gate_opens,
             "note": (
-                f"OANDA paper trading clock started {now.date()}. "
-                f"Live trading gate opens after {_TARGET_DAYS} days."
+                f"OANDA paper trading clock running since {started_dt.date()}. "
+                f"Live trading gate opens after {_TARGET_DAYS} days "
+                f"({live_gate_opens[:10]})."
             ),
         }
         try:
             self._stamp_path.write_text(json.dumps(stamp, indent=2))
             logger.info(
-                "OandaPaperClock: 30-day clock STARTED at %s (account=%s env=%s)",
-                now.isoformat(),
-                account_id,
+                "OandaPaperClock: clock stamped — started=%s account=%s env=%s gate=%s",
+                started_utc_str,
+                masked,
                 environment,
+                live_gate_opens[:10],
             )
-            # Also sync to PaperTradingGate so phase gates use the same start time
-            self._sync_gate(now)
+            self._sync_gate(started_dt)
             return True
         except Exception as exc:
             logger.error("OandaPaperClock: failed to write stamp: %s", exc)
@@ -157,6 +192,36 @@ class OandaPaperClock:
 
         try:
             data = json.loads(self._stamp_path.read_text())
+
+            # PENDING placeholder — clock is pre-seeded but no real connection yet
+            if data.get("requires_real_account", False):
+                started_str = data.get("started_utc", "")
+                started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
+                if started_dt.tzinfo is None:
+                    started_dt = started_dt.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                elapsed = (now - started_dt).total_seconds() / 86400.0
+                target = float(data.get("target_days", _TARGET_DAYS))
+                remaining = max(0.0, target - elapsed)
+                return {
+                    "started": True,
+                    "started_utc": started_str,
+                    "elapsed_days": round(elapsed, 2),
+                    "remaining_days": round(remaining, 2),
+                    "target_days": int(target),
+                    "complete": False,
+                    "environment": data.get("environment", "practice"),
+                    "account_id": "PENDING",
+                    "pending_real_account": True,
+                    "live_gate_opens": data.get("live_gate_opens"),
+                    "note": (
+                        "Clock is running but no real OANDA account has connected. "
+                        "Set BROKER_TYPE=oanda, BROKER_OANDA_TOKEN, and "
+                        "BROKER_OANDA_ACCOUNT, then restart the server. "
+                        "The account_id will be stamped on first successful connection."
+                    ),
+                }
+
             started_str = data.get("started_utc", "")
             started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
             if started_dt.tzinfo is None:
@@ -176,6 +241,8 @@ class OandaPaperClock:
                 "complete": complete,
                 "environment": data.get("environment"),
                 "account_id": data.get("account_id"),
+                "pending_real_account": False,
+                "live_gate_opens": data.get("live_gate_opens"),
                 "note": (
                     f"Run complete — {elapsed:.1f} days elapsed."
                     if complete
@@ -193,6 +260,7 @@ class OandaPaperClock:
                 "complete": False,
                 "environment": None,
                 "account_id": None,
+                "pending_real_account": False,
                 "note": f"Clock read error: {exc}",
             }
 

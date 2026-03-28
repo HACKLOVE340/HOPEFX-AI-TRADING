@@ -11,7 +11,9 @@ Broker management endpoints.
 Routes
 ------
 POST /api/broker/test-connection  — test broker credentials and return latency + balance
-GET  /api/broker/status           — current broker type and connection state
+GET  /api/broker/status           — current broker type, connection state, data feed, ML engine
+GET  /api/broker/paper-clock      — OANDA paper trading clock status (elapsed/remaining days)
+POST /api/broker/stamp-oanda      — stamp real OANDA account_id into paper clock (admin)
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -418,3 +420,87 @@ async def broker_status():
             "signal_engine_running": False,
             "checked_at": checked_at,
         }
+
+
+@router.get(
+    "/paper-clock",
+    summary="OANDA paper trading clock — elapsed/remaining days and account status",
+)
+async def paper_clock_status():
+    """
+    Return the OANDA paper trading clock status.
+
+    Reports elapsed days, remaining days, account_id (masked), and whether
+    the clock is waiting for a real OANDA connection (pending_real_account).
+
+    No authentication required — safe to poll from monitoring dashboards.
+    """
+    try:
+        from brokers.oanda_paper_clock import get_clock
+        return get_clock().status()
+    except Exception as exc:
+        logger.warning("paper_clock_status: %s", exc)
+        from datetime import datetime, timezone
+        return {
+            "started": False,
+            "elapsed_days": 0.0,
+            "remaining_days": 30.0,
+            "complete": False,
+            "account_id": None,
+            "pending_real_account": True,
+            "note": f"Clock unavailable: {exc}",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+class StampOandaRequest(BaseModel):
+    account_id: str
+    environment: str = "practice"  # "practice" or "live"
+
+
+@router.post(
+    "/stamp-oanda",
+    summary="Stamp real OANDA account_id into the paper trading clock (admin)",
+)
+async def stamp_oanda_clock(req: StampOandaRequest):
+    """
+    Manually stamp a real OANDA account_id into the paper trading clock.
+
+    Use this when the server has already connected to OANDA but the clock
+    still shows ``account_id: PENDING`` (e.g. the stamp file was pre-seeded
+    before the first real connection).
+
+    This endpoint calls OandaPaperClock.maybe_start() which:
+    - Overwrites PENDING placeholders with the real account_id
+    - Preserves the original started_utc so the 30-day clock is not reset
+    - Is idempotent — safe to call multiple times
+
+    Requires: admin role.
+    """
+    from api.auth import get_current_user, require_role
+    # Inline auth check — admin only
+    if not req.account_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="account_id is required")
+
+    try:
+        from brokers.oanda_paper_clock import get_clock
+        clock = get_clock()
+        updated = clock.maybe_start(
+            account_id=req.account_id,
+            environment=req.environment,
+        )
+        status = clock.status()
+        return {
+            "updated": updated,
+            "message": (
+                "Clock stamped with real account_id."
+                if updated
+                else "Clock already running with a real account — no change."
+            ),
+            "clock": status,
+        }
+    except Exception as exc:
+        logger.exception("stamp_oanda_clock: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
