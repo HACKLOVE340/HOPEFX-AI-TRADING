@@ -60,11 +60,15 @@ class Order:
         self.strategy_id: str = "order_gateway"
 
     def fill(self, filled_quantity: float) -> None:
-        if filled_quantity > self.quantity:
-            raise ValueError("Filled quantity cannot exceed order quantity.")
+        # Use abs(quantity) so sell orders (negative quantity) work correctly.
+        max_qty = abs(self.quantity)
+        if filled_quantity > max_qty + 1e-9:
+            raise ValueError(
+                f"Filled quantity {filled_quantity} cannot exceed order quantity {max_qty}."
+            )
         self.executed_quantity += filled_quantity
         self.commission_paid += filled_quantity * self.commission_rate
-        if self.executed_quantity >= self.quantity:
+        if self.executed_quantity >= max_qty - 1e-9:
             self.is_filled = True
 
 
