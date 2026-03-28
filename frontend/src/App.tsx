@@ -257,7 +257,7 @@ const AppShell: React.FC = () => {
 // ── Root ──────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ErrorBoundary>
         <Routes>
           {/* Public full-screen pages — rendered WITHOUT the sidebar shell */}
