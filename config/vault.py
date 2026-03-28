@@ -64,7 +64,18 @@ class SecureVault:
             else:
                 raise VaultError("No stored key and no password provided")
 
+        except VaultError:
+            # Re-raise VaultError as-is — wrapping it again would double the
+            # message and obscure the original cause in structured log output.
+            raise
         except Exception as e:
+            # Preserve the full original traceback via exception chaining so
+            # that logging configurations that inspect __cause__ (e.g. Sentry,
+            # structlog) can surface the root error alongside the VaultError.
+            import logging as _logging
+            _logging.getLogger(__name__).error(
+                "Vault initialization failed: %s", e, exc_info=True
+            )
             raise VaultError(f"Vault initialization failed: {e}") from e
 
     def _derive_key(self, password: str) -> bytes:
