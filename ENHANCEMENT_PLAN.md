@@ -932,3 +932,481 @@ CREATE INDEX idx_audit_trail_user ON audit_trail(user_id);
 | 10 | Portfolio CVaR in pre-trade gate | `risk/pre_trade_gate.py` | ☐ |
 
 ---
+
+## 6. Phase 3 — World-Top Capability (Months 3–6+)
+
+**Gate:** Phase 2 complete + live Sharpe ≥ 1.2 over 90 days + no kill switch events.
+**Capital:** Scaled live ($10k–$100k+) with full institutional risk controls.
+
+### P3.1 — LLM News & Research Layer
+
+**Why:** Trade Ideas Holly AI, Bloomberg Intelligence, and QuantConnect's Alpha Streams
+all incorporate NLP on news. Gold is uniquely sensitive to geopolitical events, Fed
+statements, and inflation data. A real-time LLM news layer can provide 2–5% edge
+improvement on high-impact event days.
+
+**Architecture:**
+
+```
+NewsIntelligenceLayer (new: ml/news_intelligence.py)
+├── NewsIngestion       — Reuters/Bloomberg/Benzinga webhooks + RSS polling
+├── EventClassifier     — LLM (GPT-4o-mini) classifies: bullish/bearish/neutral + confidence
+├── SentimentAggregator — Rolling 4h sentiment score with decay weighting
+├── EventCalendarFusion — Fuses with data/news_calendar_feed.py economic calendar
+└── SignalModifier      — Adjusts XGBoost signal confidence ±0.05 based on sentiment
+```
+
+**Files:**
+
+| File | Change | Effort |
+|------|--------|--------|
+| `ml/news_intelligence.py` | New — full NLP pipeline | 12h |
+| `data/news_calendar_feed.py` | Extend with Reuters/Benzinga webhook receiver | 4h |
+| `ml/inference_engine.py` | Wire `NewsIntelligenceLayer` as optional signal modifier | 2h |
+| `api/signals.py` | Expose `/api/signals/news-sentiment` | 1h |
+| `config/feature_flags.py` | Add `FEATURE_NEWS_INTELLIGENCE` flag | 30m |
+
+**Implementation sketch:**
+
+```python
+# ml/news_intelligence.py
+import openai
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from collections import deque
+
+@dataclass
+class NewsSignal:
+    timestamp: datetime
+    headline: str
+    sentiment: float   # -1.0 (bearish) to +1.0 (bullish)
+    confidence: float  # 0.0 to 1.0
+    impact: str        # "high" | "medium" | "low"
+    symbols: list      # affected symbols
+
+class NewsIntelligenceLayer:
+    """
+    Real-time LLM news sentiment for XAUUSD signal modification.
+    Uses GPT-4o-mini for cost efficiency (~$0.002/1000 headlines).
+    Falls back to keyword-based sentiment if OpenAI unavailable.
+    """
+    _SYSTEM_PROMPT = """You are a gold market analyst. Classify this headline's
+    impact on XAUUSD price direction.
+    Respond with JSON: {"sentiment": float[-1,1], "confidence": float[0,1],
+    "impact": "high|medium|low", "reasoning": "one sentence"}"""
+
+    def __init__(self, window_hours: int = 4):
+        self._window = deque(maxlen=200)
+        self._window_hours = window_hours
+        self._client = openai.AsyncOpenAI()
+
+    async def classify_headline(self, headline: str) -> NewsSignal:
+        try:
+            resp = await self._client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": self._SYSTEM_PROMPT},
+                    {"role": "user", "content": headline}
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=100,
+                timeout=3.0,  # hard 3s timeout — never block trading
+            )
+            data = json.loads(resp.choices[0].message.content)
+            return NewsSignal(
+                timestamp=datetime.now(timezone.utc),
+                headline=headline,
+                sentiment=float(data["sentiment"]),
+                confidence=float(data["confidence"]),
+                impact=data["impact"],
+                symbols=["XAU_USD"],
+            )
+        except Exception:
+            return self._keyword_fallback(headline)
+
+    def get_aggregate_sentiment(self) -> float:
+        """Exponentially weighted sentiment over last window_hours."""
+        now = datetime.now(timezone.utc)
+        signals = [s for s in self._window
+                   if (now - s.timestamp).total_seconds() < self._window_hours * 3600]
+        if not signals:
+            return 0.0
+        weights = np.array([s.confidence for s in signals])
+        sentiments = np.array([s.sentiment for s in signals])
+        return float(np.average(sentiments, weights=weights))
+```
+
+**Cost control:** GPT-4o-mini at $0.15/1M input tokens. 200 headlines/day × 50 tokens
+= 10k tokens/day = $0.0015/day. Negligible. Hard rate limit: 500 API calls/hour.
+
+**Safety:** News layer is additive only — it can reduce signal confidence but never
+override a risk block. Max adjustment: ±0.05 on probability score.
+
+---
+
+### P3.2 — Reinforcement Learning Production Integration
+
+**Why:** `ml/rl_agent.py` has a PPO agent with realistic transaction costs but it's
+not in the live inference path. RL excels at position sizing and exit timing — areas
+where XGBoost is weakest. Jane Street and Renaissance use RL for execution optimization.
+
+**Architecture:**
+
+```
+RLExecutionLayer (new: ml/rl_execution_layer.py)
+├── PPOAgent (existing: ml/rl_agent.py)
+├── StateEncoder        — converts current position + market state to RL observation
+├── ActionDecoder       — maps RL action to position size adjustment
+└── SafetyWrapper       — clips RL actions to risk-approved range
+```
+
+**Files:**
+
+| File | Change | Effort |
+|------|--------|--------|
+| `ml/rl_execution_layer.py` | New — production wrapper for PPO agent | 8h |
+| `ml/rl_agent.py` | Add `load_production()` method + action safety clipping | 3h |
+| `execution/engine.py` | Wire RL layer for position sizing (not entry/exit direction) | 2h |
+| `ml/train_rl.py` | New — training script with walk-forward validation | 6h |
+
+**Key design decision:** RL controls **position sizing** (0.25x, 0.5x, 0.75x, 1.0x of
+risk-approved size), not entry/exit direction. XGBoost decides direction; RL decides
+how much. This limits RL's blast radius while capturing its sizing edge.
+
+**Safety wrapper:**
+
+```python
+# ml/rl_execution_layer.py
+class SafetyWrapper:
+    """Clips RL position size actions to risk-approved range."""
+    MIN_SCALE = 0.25   # never less than 25% of approved size
+    MAX_SCALE = 1.0    # never more than 100% of approved size
+
+    def clip_action(self, rl_action: float, risk_approved_size: float) -> float:
+        scale = np.clip(rl_action, self.MIN_SCALE, self.MAX_SCALE)
+        return risk_approved_size * scale
+```
+
+**Validation:** RL must show Sharpe improvement ≥ 0.1 over XGBoost-only on 6-month
+paper period before enabling in live. A/B test: 50% of signals use RL sizing,
+50% use fixed sizing. Compare Sharpe after 30 days.
+
+---
+
+### P3.3 — Alternative Data Feeds
+
+**Why:** Institutional alpha increasingly comes from alternative data. COT reports,
+gold ETF flows, and central bank reserve data are the most directly relevant for XAUUSD.
+
+**Data sources and integration:**
+
+| Source | Data | Frequency | File | Effort |
+|--------|------|-----------|------|--------|
+| CFTC COT | Real futures positioning (not proxy) | Weekly | `data/feeds/cot_feed.py` | 4h |
+| World Gold Council | ETF flows, central bank demand | Monthly | `data/feeds/wgc_feed.py` | 3h |
+| Fed H.4.1 | Reserve balances, repo rates | Weekly | `data/feeds/fed_feed.py` | 2h |
+| Google Trends | "gold price" search volume | Daily | `data/feeds/trends_feed.py` | 2h |
+| Options flow | GLD/GC options put/call ratio | Daily | `data/feeds/options_flow.py` | 4h |
+| Shipping indices | Baltic Dry (risk-off proxy) | Daily | `data/feeds/macro_extended.py` | 2h |
+
+**COT real data integration:**
+
+```python
+# data/feeds/cot_feed.py
+import requests
+import pandas as pd
+
+class COTFeed:
+    """
+    CFTC Commitments of Traders — Gold Futures (COMEX).
+    Published every Friday at 15:30 ET for the prior Tuesday.
+    URL: https://www.cftc.gov/dea/futures/deacmesf.htm
+    """
+    GOLD_CODE = "088691"  # COMEX Gold futures CFTC code
+
+    def fetch_latest(self) -> dict:
+        url = "https://www.cftc.gov/files/dea/history/fut_fin_xls_2024.zip"
+        # Parse Excel, filter GOLD_CODE, extract:
+        # - managed_money_long, managed_money_short (hedge fund positioning)
+        # - commercial_long, commercial_short (producer hedging)
+        # - net_speculative = managed_money_long - managed_money_short
+        # - cot_index = percentile of net_speculative over 3 years
+        ...
+
+    def as_features(self) -> dict:
+        data = self.fetch_latest()
+        return {
+            "cot_net_speculative": data["net_speculative"],
+            "cot_index_3y": data["cot_index"],          # 0-100 percentile
+            "cot_commercial_net": data["commercial_net"],
+            "cot_change_wow": data["net_speculative"] - data["prev_net_speculative"],
+        }
+```
+
+**Replace COT proxy features** in `ml/advanced_features.py` with real COT data
+when available. Keep proxy as fallback when CFTC data is delayed.
+
+---
+
+### P3.4 — High-Frequency Tick + Order Book Feed
+
+**Why:** H1 bars miss intraday microstructure. Institutional systems at Citadel and
+Two Sigma use tick data and Level 2 order book to detect institutional order flow,
+spoofing, and liquidity imbalances. Even at H1 trading frequency, tick-level features
+improve signal quality.
+
+**Architecture:**
+
+```
+TickDataPipeline (new: data/tick_pipeline.py)
+├── OANDAStreamConsumer  — existing brokers/oanda_stream.py + oanda_ws.py
+├── TickAggregator       — VWAP, tick imbalance, trade flow per bar
+├── OrderBookAnalyzer    — bid/ask depth, imbalance ratio, large order detection
+├── MicrostructureFeatures — 12 new features for ml/features_extended.py
+└── TickStore            — TimescaleDB or Redis time-series for tick storage
+```
+
+**12 new microstructure features:**
+
+```python
+# ml/features_extended.py — add to Layer 17:
+def add_microstructure_features(df: pd.DataFrame, tick_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Requires tick_df with columns: timestamp, bid, ask, last, volume, side
+    """
+    # 1. Tick imbalance (buy volume - sell volume) / total volume
+    df["tick_imbalance"] = (tick_df["buy_vol"] - tick_df["sell_vol"]) / tick_df["total_vol"]
+
+    # 2. VWAP deviation (price vs volume-weighted average)
+    df["vwap_deviation"] = (df["close"] - tick_df["vwap"]) / tick_df["vwap"]
+
+    # 3. Bid-ask spread normalized by ATR
+    df["spread_atr_ratio"] = tick_df["avg_spread"] / df["atr_14"]
+
+    # 4. Large trade ratio (trades > 10× median size)
+    df["large_trade_ratio"] = tick_df["large_trade_count"] / tick_df["total_trades"]
+
+    # 5. Order book imbalance (top 5 levels)
+    df["ob_imbalance"] = (tick_df["bid_depth_5"] - tick_df["ask_depth_5"]) / \
+                          (tick_df["bid_depth_5"] + tick_df["ask_depth_5"])
+
+    # 6-12: Kyle's lambda, Amihud illiquidity, Roll spread, etc.
+    ...
+    return df
+```
+
+---
+
+### P3.5 — Market Replay Dashboard + Backtesting Replay Engine
+
+**Why:** QuantConnect's LEAN engine and Bloomberg's backtesting suite allow traders
+to replay historical market conditions bar-by-bar with full signal visualization.
+This is essential for debugging signal failures and demonstrating edge to investors.
+
+**Files:**
+
+| File | Change | Effort |
+|------|--------|--------|
+| `dashboard/src/components/MarketReplay.tsx` | New — bar-by-bar replay with signal overlay | 16h |
+| `api/backtesting.py` | Add `/api/backtest/replay/{session_id}` streaming endpoint | 4h |
+| `backtest/engine.py` | Add `ReplayMode` that emits events via WebSocket | 4h |
+| `dashboard/src/components/SignalTimeline.tsx` | New — signal + trade timeline chart | 8h |
+
+**Replay API:**
+
+```python
+# api/backtesting.py — add replay endpoint:
+@router.get("/api/backtest/replay/{session_id}")
+async def stream_replay(session_id: str, speed: float = 1.0):
+    """
+    Streams backtest bars as Server-Sent Events.
+    Client receives: {bar, signal, position, pnl, features} per bar.
+    speed=1.0 = real-time, speed=10.0 = 10× faster.
+    """
+    async def event_generator():
+        session = await BacktestSession.load(session_id)
+        for bar in session.bars:
+            yield f"data: {bar.to_json()}\n\n"
+            await asyncio.sleep(bar.duration_seconds / speed)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+```
+
+---
+
+### P3.6 — Chaos Engineering Suite
+
+**Why:** Production systems fail in unexpected ways. Netflix's Chaos Monkey and
+Google's DiRT (Disaster Recovery Testing) are industry standards. Without chaos
+testing, you don't know if your kill switch, circuit breakers, and failover paths
+actually work under load.
+
+**Files:** `tests/test_chaos/test_failure_modes.py` (exists — extend it),
+`tests/chaos/` (new directory)
+
+**Chaos scenarios to implement:**
+
+```python
+# tests/chaos/test_broker_failure.py
+class TestBrokerChaos:
+    """Simulates broker failures and verifies system response."""
+
+    async def test_oanda_timeout_triggers_circuit_breaker(self):
+        """OANDA API times out — circuit breaker must open within 3 errors."""
+        with mock_oanda_timeout(delay=30):
+            for _ in range(3):
+                await engine.execute(test_order)
+        assert circuit_breaker.is_open()
+        assert kill_switch.is_active()  # belt-and-suspenders
+
+    async def test_redis_failure_falls_back_to_memory(self):
+        """Redis goes down — system must continue with in-memory state."""
+        with mock_redis_down():
+            signal = engine.predict(test_bars)
+        assert signal is not None  # must not crash
+
+    async def test_database_failure_blocks_new_orders(self):
+        """PostgreSQL goes down — no new orders, existing positions safe."""
+        with mock_db_down():
+            result = await engine.execute(test_order)
+        assert result.status == ExecutionStatus.BLOCKED
+
+    async def test_kill_switch_survives_process_restart(self):
+        """Kill switch state must persist across process restart."""
+        await risk_manager.activate_kill_switch("test")
+        # Simulate restart
+        new_manager = RiskManager()
+        assert new_manager.is_killed()
+
+    async def test_concurrent_orders_no_race_condition(self):
+        """100 concurrent orders must not exceed position limits."""
+        tasks = [engine.execute(test_order) for _ in range(100)]
+        results = await asyncio.gather(*tasks)
+        filled = [r for r in results if r.status == ExecutionStatus.FILLED]
+        assert len(filled) <= MAX_OPEN_POSITIONS
+```
+
+**CI integration:** Chaos tests run in a separate `chaos` stage in CI, after unit
+and integration tests. They use Docker Compose with `toxiproxy` for network fault injection.
+
+---
+
+### P3.7 — Kubernetes Production Deployment (Helm)
+
+**Why:** Docker Compose is not production-grade for a trading system. Kubernetes
+provides auto-scaling, self-healing, rolling deployments, and resource isolation.
+The existing `Dockerfile` is the foundation.
+
+**Files to create:**
+
+```
+helm/
+├── Chart.yaml
+├── values.yaml
+├── values.production.yaml
+├── templates/
+│   ├── deployment-api.yaml       — FastAPI app (2 replicas, HPA)
+│   ├── deployment-worker.yaml    — Background workers (scheduler, online learner)
+│   ├── deployment-redis.yaml     — Redis with persistence
+│   ├── service-api.yaml          — ClusterIP + LoadBalancer
+│   ├── ingress.yaml              — nginx ingress with TLS
+│   ├── hpa-api.yaml              — HorizontalPodAutoscaler (2-10 replicas)
+│   ├── pdb-api.yaml              — PodDisruptionBudget (min 1 available)
+│   ├── configmap.yaml            — Non-secret config
+│   ├── secret.yaml               — Sealed secrets (Bitnami sealed-secrets)
+│   └── cronjob-retrain.yaml      — Daily model retraining job
+```
+
+**Key Kubernetes design decisions:**
+
+```yaml
+# helm/templates/deployment-api.yaml
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0      # zero-downtime deployments
+      maxSurge: 1
+  template:
+    spec:
+      containers:
+      - name: hopefx-api
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+```
+
+**Kill switch in Kubernetes:** The kill switch state in Redis must be checked by
+the readiness probe. If kill switch is active, pod reports not-ready → load balancer
+stops sending traffic → no new orders accepted.
+
+---
+
+### P3.8 — Grafana Dashboard Suite
+
+**Why:** Prometheus metrics exist but there are no Grafana dashboards. Without
+dashboards, you cannot monitor the system in production. Bloomberg Terminal users
+expect real-time P&L, risk, and signal dashboards.
+
+**Dashboards to create:**
+
+| Dashboard | Panels | File |
+|-----------|--------|------|
+| Trading Overview | P&L curve, open positions, daily Sharpe, win rate | `grafana/dashboards/trading_overview.json` |
+| ML Health | Signal confidence distribution, non-neutral rate, drift PSI, model accuracy | `grafana/dashboards/ml_health.json` |
+| Risk Monitor | CVaR, drawdown, kill switch status, position limits | `grafana/dashboards/risk_monitor.json` |
+| Execution Quality | Latency histogram, slippage, fill rate, TCA metrics | `grafana/dashboards/execution_quality.json` |
+| Infrastructure | CPU/memory, Redis latency, DB connections, error rate | `grafana/dashboards/infrastructure.json` |
+
+**Prometheus metrics to add:**
+
+```python
+# utils/telemetry.py — add trading-specific metrics:
+from prometheus_client import Histogram, Gauge, Counter
+
+SIGNAL_CONFIDENCE = Histogram("hopefx_signal_confidence",
+    "Signal confidence distribution", buckets=[0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.9, 1.0])
+OPEN_POSITIONS = Gauge("hopefx_open_positions", "Number of open positions", ["symbol"])
+DAILY_PNL = Gauge("hopefx_daily_pnl_usd", "Daily P&L in USD")
+EXECUTION_LATENCY = Histogram("hopefx_execution_latency_ms",
+    "Order execution latency", buckets=[10, 50, 100, 200, 500, 1000, 2000])
+KILL_SWITCH_ACTIVE = Gauge("hopefx_kill_switch_active", "Kill switch state (0/1)")
+FEATURE_DRIFT_PSI = Gauge("hopefx_feature_drift_psi", "Feature PSI score", ["feature"])
+```
+
+---
+
+### Phase 3 Completion Checklist
+
+| # | Item | Owner File | Done |
+|---|------|-----------|------|
+| 1 | LLM news intelligence layer | `ml/news_intelligence.py` | ☐ |
+| 2 | RL production integration (sizing) | `ml/rl_execution_layer.py` | ☐ |
+| 3 | Real COT data feed | `data/feeds/cot_feed.py` | ☐ |
+| 4 | Tick + order book pipeline | `data/tick_pipeline.py` | ☐ |
+| 5 | Market replay dashboard | `dashboard/src/components/MarketReplay.tsx` | ☐ |
+| 6 | Chaos engineering suite | `tests/chaos/` | ☐ |
+| 7 | Kubernetes Helm chart | `helm/` | ☐ |
+| 8 | Grafana dashboard suite | `grafana/dashboards/` | ☐ |
+| 9 | Microstructure features (Layer 17) | `ml/features_extended.py` | ☐ |
+| 10 | RL A/B test: Sharpe ≥ +0.1 | `ml/rl_execution_layer.py` | ☐ |
+
+---
