@@ -95,18 +95,23 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
 
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=years * 365)
-        interval = "1d"
         df = yf.download(
             ticker,
             start=start,
             end=end,
-            interval=interval,
+            interval="1d",
             auto_adjust=True,
             progress=False,
         )
         if df.empty:
             raise ValueError(f"No data returned for {ticker}")
-        df.columns = [c.lower() for c in df.columns]
+
+        # yfinance ≥0.2.x returns a MultiIndex (Price, Ticker) — flatten it.
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0].lower() for col in df.columns]
+        else:
+            df.columns = [c.lower() for c in df.columns]
+
         df.index = pd.to_datetime(df.index, utc=True)
         # Cache for next run
         try:
@@ -364,13 +369,14 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
     gate_passed = n_total >= target_n
     credible = se <= 0.10
 
-    if gate_passed and credible:
-        msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}, SE={se:.3f} <= 0.10"
+    n_required_for_se = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
+    if gate_passed:
+        se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_required_for_se} for SE<=0.10)")
+        msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}. {se_note}"
     else:
-        n_required = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
         msg = (
-            f"Sharpe gate BLOCKED: N={n_total} trades, SE={se:.3f}. "
-            f"Need N>={target_n} (SE<=0.10 requires N>={n_required})."
+            f"Sharpe gate BLOCKED: N={n_total} trades < {target_n}. "
+            f"SE={se:.3f} (SE<=0.10 requires N>={n_required_for_se})."
         )
 
     logger.info(
