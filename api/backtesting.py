@@ -582,6 +582,83 @@ async def get_latest_multi_symbol_report(
     return report
 
 
+@router.get(
+    "/reconciled/investigation",
+    summary="Reconciled backtest root cause investigation results",
+)
+async def get_reconciled_investigation(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the root cause investigation for the -4.18 Sharpe reconciled backtest.
+
+    Runs four sweeps on the existing trade log:
+    1. Confidence threshold sweep (0.55 → 0.75)
+    2. Hold period sweep (1-bar → 10-bar)
+    3. Accuracy vs P&L correlation (direction-P&L match rate)
+    4. Cost sensitivity ($0 → $140 round-trip)
+
+    Results are cached in data/backtest_investigation.json.
+    Pass ?refresh=true to re-run the investigation.
+    """
+    import json
+    from pathlib import Path
+
+    cache_path = Path("data/backtest_investigation.json")
+    if cache_path.exists():
+        try:
+            return json.loads(cache_path.read_text())
+        except Exception:
+            pass
+
+    # Run investigation synchronously (fast — no model inference needed)
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from backtest.reconciled_backtest_investigation import run_investigation
+        results = run_investigation(smoke=False)
+        cache_path.write_text(json.dumps(results, indent=2))
+        return results
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Investigation failed: {exc}. Ensure data/reconciled_backtest.json exists.",
+        )
+
+
+@router.post(
+    "/reconciled/investigation/refresh",
+    summary="Re-run reconciled backtest root cause investigation",
+)
+async def refresh_reconciled_investigation(
+    background_tasks: BackgroundTasks,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Trigger a fresh root cause investigation run in the background.
+
+    Overwrites data/backtest_investigation.json with updated results.
+    Poll GET /api/backtest/reconciled/investigation to retrieve results.
+    """
+    def _run():
+        try:
+            import sys
+            from pathlib import Path as _Path
+            sys.path.insert(0, str(_Path(__file__).parent.parent))
+            from backtest.reconciled_backtest_investigation import run_investigation
+            import json as _json
+            results = run_investigation(smoke=False)
+            _Path("data/backtest_investigation.json").write_text(
+                _json.dumps(results, indent=2)
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error("Investigation refresh failed: %s", exc)
+
+    background_tasks.add_task(_run)
+    return {"status": "queued", "message": "Investigation running in background. Poll GET /api/backtest/reconciled/investigation for results."}
+
+
 def _build_pdf(result: dict) -> bytes:
     """Render a backtest result dict into a PDF and return raw bytes."""
     try:

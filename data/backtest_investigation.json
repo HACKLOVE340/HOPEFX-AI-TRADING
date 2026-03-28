@@ -1,0 +1,167 @@
+{
+  "generated_at": "2026-03-28T18:01:26.285566+00:00",
+  "source_file": "data/reconciled_backtest.json",
+  "baseline": {
+    "n_trades": 181,
+    "win_rate_pct": 3.31,
+    "sharpe_ratio": -24.612,
+    "return_pct": -23.2575,
+    "avg_pnl_net": -128.49
+  },
+  "confidence_sweep": [
+    {
+      "threshold": 0.55,
+      "n_trades": 181,
+      "win_rate": 0.0331,
+      "sharpe": -24.612,
+      "total_return_pct": -23.2575,
+      "avg_pnl": -128.49
+    },
+    {
+      "threshold": 0.58,
+      "n_trades": 137,
+      "win_rate": 0.0365,
+      "sharpe": -22.5532,
+      "total_return_pct": -17.3438,
+      "avg_pnl": -126.6
+    },
+    {
+      "threshold": 0.6,
+      "n_trades": 117,
+      "win_rate": 0.0342,
+      "sharpe": -21.6072,
+      "total_return_pct": -14.6524,
+      "avg_pnl": -125.23
+    },
+    {
+      "threshold": 0.65,
+      "n_trades": 48,
+      "win_rate": 0.0417,
+      "sharpe": -17.3781,
+      "total_return_pct": -5.8078,
+      "avg_pnl": -121.0
+    },
+    {
+      "threshold": 0.7,
+      "n_trades": 23,
+      "win_rate": 0.087,
+      "sharpe": -10.9978,
+      "total_return_pct": -2.2913,
+      "avg_pnl": -99.62
+    },
+    {
+      "threshold": 0.75,
+      "n_trades": 9,
+      "win_rate": 0.1111,
+      "sharpe": -4.9036,
+      "total_return_pct": -0.5836,
+      "avg_pnl": -64.84
+    }
+  ],
+  "hold_period_sweep": [
+    {
+      "hold_bars": 1,
+      "n_trades": 181,
+      "win_rate": 0.0055,
+      "sharpe": -78.2435,
+      "total_return_pct": -14.7875,
+      "avg_pnl": -81.7,
+      "note": "Approximate \u2014 scaled from 5-bar P&L. Run with OHLCV for exact results."
+    },
+    {
+      "hold_bars": 2,
+      "n_trades": 181,
+      "win_rate": 0.0166,
+      "sharpe": -44.7238,
+      "total_return_pct": -16.905,
+      "avg_pnl": -93.4,
+      "note": "Approximate \u2014 scaled from 5-bar P&L. Run with OHLCV for exact results."
+    },
+    {
+      "hold_bars": 3,
+      "n_trades": 181,
+      "win_rate": 0.0276,
+      "sharpe": -33.5506,
+      "total_return_pct": -19.0225,
+      "avg_pnl": -105.1,
+      "note": "Approximate \u2014 scaled from 5-bar P&L. Run with OHLCV for exact results."
+    },
+    {
+      "hold_bars": 5,
+      "n_trades": 181,
+      "win_rate": 0.0331,
+      "sharpe": -24.612,
+      "total_return_pct": -23.2575,
+      "avg_pnl": -128.49,
+      "note": "Approximate \u2014 scaled from 5-bar P&L. Run with OHLCV for exact results."
+    },
+    {
+      "hold_bars": 10,
+      "n_trades": 181,
+      "win_rate": 0.0497,
+      "sharpe": -17.908,
+      "total_return_pct": -33.845,
+      "avg_pnl": -186.99,
+      "note": "Approximate \u2014 scaled from 5-bar P&L. Run with OHLCV for exact results."
+    }
+  ],
+  "accuracy_pnl_correlation": {
+    "correlation": 0.0266,
+    "direction_pnl_match_rate": 0.3315,
+    "n": 181,
+    "note": "direction_pnl_match_rate is the fraction of trades where the model's predicted direction matches the P&L sign. If this is ~0.50 despite 66% OOS accuracy, the accuracy metric and trade P&L are measuring different things (e.g. accuracy measures 1-bar direction, P&L measures 5-bar cumulative return)."
+  },
+  "cost_sweep": [
+    {
+      "round_trip_cost_usd": 0.0,
+      "n_trades": 181,
+      "win_rate": 0.116,
+      "sharpe": -11.2041,
+      "total_return_pct": -10.5875,
+      "avg_pnl": -58.49,
+      "total_cost_drag_usd": 0.0
+    },
+    {
+      "round_trip_cost_usd": 35.0,
+      "n_trades": 181,
+      "win_rate": 0.0497,
+      "sharpe": -17.908,
+      "total_return_pct": -16.9225,
+      "avg_pnl": -93.49,
+      "total_cost_drag_usd": 6335.0
+    },
+    {
+      "round_trip_cost_usd": 70.0,
+      "n_trades": 181,
+      "win_rate": 0.0331,
+      "sharpe": -24.612,
+      "total_return_pct": -23.2575,
+      "avg_pnl": -128.49,
+      "total_cost_drag_usd": 12670.0
+    },
+    {
+      "round_trip_cost_usd": 105.0,
+      "n_trades": 181,
+      "win_rate": 0.0276,
+      "sharpe": -31.3159,
+      "total_return_pct": -29.5925,
+      "avg_pnl": -163.49,
+      "total_cost_drag_usd": 19005.0
+    },
+    {
+      "round_trip_cost_usd": 140.0,
+      "n_trades": 181,
+      "win_rate": 0.0276,
+      "sharpe": -38.0199,
+      "total_return_pct": -35.9275,
+      "avg_pnl": -198.49,
+      "total_cost_drag_usd": 25340.0
+    }
+  ],
+  "diagnosis": [
+    "\u274c THRESHOLD SWEEP: No confidence threshold produces a positive Sharpe. The model's directional accuracy does not translate to tradeable edge at any tested threshold with the current 5-bar hold strategy.",
+    "\u26a0\ufe0f  HOLD PERIOD: 10-bar hold improves Sharpe to -17.9080 but remains negative. Hold period is a contributing factor but not the sole cause.",
+    "\u274c ACCURACY/P&L DISCONNECT: Direction-P&L match rate = 33.1%. The model's predicted direction and actual trade P&L are nearly uncorrelated. The 66% OOS accuracy measures 1-bar direction; the 5-bar hold P&L measures something different. These two metrics are not comparable.",
+    "\u274c COST IS NOT THE SOLE BLOCKER: Even at $0 cost, Sharpe=-11.2041. The strategy has no gross edge \u2014 cost reduction alone will not fix it."
+  ]
+}
