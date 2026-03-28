@@ -78,10 +78,16 @@ pydantic-settings>=2.0.0
 # ── Multi-exchange trading ────────────────────────────────────────────────────
 ccxt>=4.1.0
 
-# ── Interactive Brokers (primary broker — OANDA removed) ─────────────────────
+# ── Interactive Brokers ───────────────────────────────────────────────────────
 ib_insync==0.9.86
 # quickfix-ng for FIX 4.4/5.0 low-latency path (install separately if needed)
 # quickfix-ng>=1.0.0
+
+# ── MetaTrader 5 (Windows only — install manually on Windows hosts) ───────────
+# Used by data_feed/mt5_backup.py and brokers/mt5_broker.py.
+# Not available on Linux/macOS; both modules degrade gracefully when absent.
+# On Windows: pip install MetaTrader5
+# MetaTrader5>=5.0.45
 
 # ── Observability / alerting ──────────────────────────────────────────────────
 sentry-sdk>=1.40.0
