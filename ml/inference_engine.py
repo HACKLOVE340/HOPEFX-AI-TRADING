@@ -32,11 +32,14 @@ Usage
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
+from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Deque, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -51,6 +54,9 @@ _ONLINE_LEARNING_ENABLED = (
     os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
 )
 _MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
+
+# Rolling window size for non-neutral rate tracking
+_SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 
 
 class InferenceEngine:
@@ -68,6 +74,13 @@ class InferenceEngine:
         self._last_predict_ms: float = 0.0
         self._predict_count: int = 0
         self._fallback_count: int = 0
+        # Uptime tracking — set on first predict call
+        self._first_predict_at: Optional[float] = None
+        # Rolling window of signal directions for non-neutral rate
+        self._signal_window: Deque[str] = deque(maxlen=_SIGNAL_WINDOW)
+        # Cached model metadata from advanced_oos_meta.json
+        self._meta_cache: Optional[Dict[str, Any]] = None
+        self._meta_mtime: float = 0.0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
@@ -350,6 +363,13 @@ class InferenceEngine:
         latency_ms = (time.perf_counter() - t0) * 1000
         self._last_predict_ms = latency_ms
 
+        # Track uptime from first predict call
+        if self._first_predict_at is None:
+            self._first_predict_at = time.time()
+
+        # Track signal direction for non-neutral rate
+        self._signal_window.append(direction)
+
         return {
             "direction": direction,
             "probability": round(raw_prob, 4),
@@ -364,42 +384,95 @@ class InferenceEngine:
             "online_active": online_active,
         }
 
+    # ── Metadata cache ────────────────────────────────────────────────────────
+
+    def _load_meta(self) -> Dict[str, Any]:
+        """
+        Load and cache advanced_oos_meta.json.
+
+        Re-reads from disk when the file mtime changes so a retrain
+        automatically refreshes health() without a restart.
+        """
+        meta_path = _SAVED / "advanced_oos_meta.json"
+        try:
+            mtime = meta_path.stat().st_mtime if meta_path.exists() else 0.0
+            if self._meta_cache is None or mtime != self._meta_mtime:
+                if meta_path.exists():
+                    self._meta_cache = json.loads(meta_path.read_text())
+                    self._meta_mtime = mtime
+                else:
+                    self._meta_cache = {}
+        except Exception as exc:
+            logger.debug("InferenceEngine: meta load failed: %s", exc)
+            self._meta_cache = self._meta_cache or {}
+        return self._meta_cache or {}
+
     def health(self) -> Dict[str, Any]:
         """
         Return engine health metrics for /api/ml/health and /api/ml/engine-health.
 
-        Includes:
-        - model availability and version
-        - pipeline step status (macro, MTF, calibrator, online learner)
-        - live counters (predict_count, fallback_count, fallback_rate)
-        - latency stats
-        - signal quality: non-neutral rate over last N predictions
-        - uptime since first predict call
+        Fields
+        ------
+        status               : "ok" | "degraded" | "unavailable"
+        model_available      : bool — predictor loaded and ready
+        model_version        : str  — model identifier from predictor
+        feature_count        : int  — number of features the model expects
+        oos_accuracy         : float | None — from advanced_oos_meta.json
+        last_trained_at      : str | None   — ISO timestamp from meta file
+        pipeline             : dict — per-step availability flags
+        calibrator_available : bool
+        online_learning_enabled : bool
+        mtf_fusion_enabled   : bool
+        predict_count        : int  — total predict() calls since startup
+        fallback_count       : int  — calls that used the fallback path
+        fallback_rate        : float — fallback_count / predict_count
+        non_neutral_rate     : float — fraction of last N signals that were
+                               long or short (signal quality indicator)
+        last_latency_ms      : float — most recent predict() wall-clock time
+        uptime_seconds       : float | None — seconds since first predict call
+        threshold_long       : float
+        threshold_short      : float
+        signal_filter        : dict — EV gate stats from SignalFilter
+        checked_at           : str  — ISO timestamp of this health call
         """
         predictor = self._get_predictor()
-        model_available = predictor is not None and getattr(predictor, "is_available", False)
+        model_available = predictor is not None and getattr(
+            predictor, "is_available", False
+        )
 
-        # Fallback rate — fraction of predictions that used the fallback path
+        # ── Fallback rate ─────────────────────────────────────────────────────
         fallback_rate = (
             round(self._fallback_count / self._predict_count, 4)
             if self._predict_count > 0
             else 0.0
         )
 
-        # Pipeline step availability
+        # ── Non-neutral rate (signal quality) ─────────────────────────────────
+        window = list(self._signal_window)
+        if window:
+            non_neutral = sum(1 for d in window if d != "neutral")
+            non_neutral_rate = round(non_neutral / len(window), 4)
+        else:
+            non_neutral_rate = 0.0
+
+        # ── Pipeline step availability ────────────────────────────────────────
         calibrator_ok = self._load_calibrator() is not None
 
         macro_ok = False
+        macro_series = 0
         try:
-            from ml.macro_store import macro_store
-            macro_ok = len(macro_store) > 0
+            from ml.macro_store import macro_store  # noqa: PLC0415
+            macro_series = len(macro_store)
+            macro_ok = macro_series > 0
         except Exception:
             pass
 
         mtf_ok = False
         if _MTF_FUSION_ENABLED:
             try:
-                from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+                from research.pipeline.mtf_fusion import (  # noqa: PLC0415
+                    _MTF_STORE_SINGLETON,
+                )
                 mtf_ok = _MTF_STORE_SINGLETON is not None
             except Exception:
                 pass
@@ -407,14 +480,52 @@ class InferenceEngine:
         online_ok = False
         if _ONLINE_LEARNING_ENABLED:
             try:
-                from research.pipeline.paper_trading_gate import get_gate
+                from research.pipeline.paper_trading_gate import (  # noqa: PLC0415
+                    get_gate,
+                )
                 gate = get_gate()
                 p3_ok, _ = gate.phase3_ready()
                 online_ok = p3_ok
             except Exception:
                 pass
 
-        # Overall status string
+        # ── Feature count ─────────────────────────────────────────────────────
+        feature_count = 0
+        try:
+            if predictor is not None and hasattr(predictor, "_model"):
+                n = getattr(predictor._model, "n_features_in_", 0)
+                feature_count = int(n) if n else 0
+        except Exception:
+            pass
+
+        # ── Metadata (oos_accuracy, last_trained_at) ──────────────────────────
+        meta = self._load_meta()
+        oos_accuracy: Optional[float] = None
+        last_trained_at: Optional[str] = None
+        if meta:
+            raw_acc = meta.get("oos_accuracy") or meta.get("accuracy")
+            oos_accuracy = float(raw_acc) if raw_acc is not None else None
+            if feature_count == 0:
+                fc = meta.get("feature_count", 0)
+                feature_count = int(fc) if fc else 0
+            last_trained_at = meta.get("validated_at") or meta.get("trained_at")
+
+        # ── SignalFilter EV stats ─────────────────────────────────────────────
+        signal_filter_stats: Dict[str, Any] = {}
+        try:
+            from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+            sf = get_signal_filter()
+            if hasattr(sf, "get_stats"):
+                signal_filter_stats = sf.get_stats()
+        except Exception:
+            pass
+
+        # ── Uptime ────────────────────────────────────────────────────────────
+        uptime_seconds: Optional[float] = None
+        if self._first_predict_at is not None:
+            uptime_seconds = round(time.time() - self._first_predict_at, 1)
+
+        # ── Overall status ────────────────────────────────────────────────────
         if model_available:
             status = "ok"
         elif self._predict_count > 0 and fallback_rate < 1.0:
@@ -426,8 +537,12 @@ class InferenceEngine:
             "status": status,
             "model_available": model_available,
             "model_version": predictor.version if predictor else "none",
+            "feature_count": feature_count,
+            "oos_accuracy": oos_accuracy,
+            "last_trained_at": last_trained_at,
             "pipeline": {
                 "macro_store": macro_ok,
+                "macro_series_count": macro_series,
                 "mtf_fusion": mtf_ok,
                 "calibrator": calibrator_ok,
                 "online_learner": online_ok,
@@ -438,9 +553,14 @@ class InferenceEngine:
             "predict_count": self._predict_count,
             "fallback_count": self._fallback_count,
             "fallback_rate": fallback_rate,
+            "non_neutral_rate": non_neutral_rate,
+            "signal_window_size": len(window),
             "last_latency_ms": self._last_predict_ms,
+            "uptime_seconds": uptime_seconds,
             "threshold_long": _THRESHOLD_LONG,
             "threshold_short": _THRESHOLD_SHORT,
+            "signal_filter": signal_filter_stats,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
 
