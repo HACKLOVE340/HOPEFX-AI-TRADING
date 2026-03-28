@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -48,6 +49,11 @@ try:
     _SENTRY = True
 except ImportError:
     _SENTRY = False
+
+# ── Risk-per-trade hard cap (env-configurable) ────────────────────────────────
+# Maximum fraction of equity that can be lost on a single trade (full SL hit).
+# Default: 1%.  Set MAX_RISK_PCT_PER_TRADE=0.005 for 0.5%, etc.
+_MAX_RISK_PCT_PER_TRADE: float = float(os.getenv("MAX_RISK_PCT_PER_TRADE", "0.01"))
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +228,26 @@ class PreTradeGate:
         self._run_check(
             name="validate_trade",
             fn=lambda: self._check_validate_trade(order),
+            checks_passed=checks_passed,
+        )
+
+        # ── 9. Hard <1% risk-per-trade cap ────────────────────────────────────
+        # Blocks the order if the notional risk (entry → SL) exceeds
+        # _MAX_RISK_PCT_PER_TRADE of account equity.  This is a second-layer
+        # check — TradeExecutor._clamp_size_to_risk_cap() should have already
+        # reduced the size, but the gate enforces the hard limit independently.
+        self._run_check(
+            name="risk_per_trade_cap",
+            fn=lambda: self._check_risk_per_trade(order),
+            checks_passed=checks_passed,
+        )
+
+        # ── 10. Loss-streak circuit breaker ───────────────────────────────────
+        # Blocks new entries when the executor has flagged a streak halt.
+        # The executor sets risk_manager._streak_halted=True; the gate reads it.
+        self._run_check(
+            name="loss_streak",
+            fn=self._check_loss_streak,
             checks_passed=checks_passed,
         )
 
@@ -472,4 +498,76 @@ class PreTradeGate:
                 reason_code="VALIDATE_TRADE",
                 detail=reason,
                 checks_failed=["validate_trade"],
+            )
+
+    def _check_risk_per_trade(self, order: GateOrder) -> None:
+        """
+        Block if the trade's notional risk exceeds _MAX_RISK_PCT_PER_TRADE.
+
+        Risk is defined as: quantity × |entry_price - stop_loss|.
+        When stop_loss is absent, risk is approximated as quantity × entry_price
+        (full notional), which is conservative.
+
+        This is a hard gate — the trade is blocked, not resized.  The caller
+        (TradeExecutor) is responsible for sizing down before reaching the gate.
+        """
+        rm = self._rm
+        balance = getattr(rm, "current_equity", None) or getattr(
+            rm, "current_balance", None
+        ) or getattr(rm, "initial_balance", 0.0)
+
+        if not balance or balance <= 0:
+            return  # cannot check — pass (balance unavailable)
+
+        max_loss_dollars = balance * _MAX_RISK_PCT_PER_TRADE
+
+        entry_price = order.price or 0.0
+        stop_loss = order.stop_loss
+
+        if entry_price > 0 and stop_loss is not None:
+            risk_per_unit = abs(entry_price - stop_loss)
+            notional_risk = order.quantity * risk_per_unit
+        elif entry_price > 0:
+            # No SL — treat full notional as risk (conservative)
+            notional_risk = order.quantity * entry_price
+        else:
+            return  # no price info — pass (cannot compute)
+
+        if notional_risk > max_loss_dollars:
+            detail = (
+                f"Notional risk ${notional_risk:.2f} exceeds "
+                f"{_MAX_RISK_PCT_PER_TRADE:.1%} cap (${max_loss_dollars:.2f}) "
+                f"on equity ${balance:.2f}. "
+                f"Reduce size or widen stop."
+            )
+            logger.warning("PRE-TRADE BLOCKED [RISK_PER_TRADE_CAP] %s", detail)
+            raise TradeBlocked(
+                reason_code="RISK_PER_TRADE_CAP",
+                detail=detail,
+                checks_failed=["risk_per_trade_cap"],
+            )
+
+    def _check_loss_streak(self) -> None:
+        """
+        Block new entries when a loss-streak cooldown is active.
+
+        TradeExecutor sets risk_manager._streak_halted = True when
+        STREAK_HALT_LOSSES consecutive losses are detected.  This gate
+        reads that flag so the block is enforced even if orders arrive
+        through a different code path (e.g. API direct order).
+        """
+        rm = self._rm
+        streak_halted = getattr(rm, "_streak_halted", False)
+        if streak_halted:
+            streak_losses = getattr(rm, "_streak_loss_count", "?")
+            detail = (
+                f"Loss-streak circuit breaker active "
+                f"({streak_losses} consecutive losses). "
+                "Wait for cooldown to expire before placing new entries."
+            )
+            logger.warning("PRE-TRADE BLOCKED [LOSS_STREAK] %s", detail)
+            raise TradeBlocked(
+                reason_code="LOSS_STREAK",
+                detail=detail,
+                checks_failed=["loss_streak"],
             )
