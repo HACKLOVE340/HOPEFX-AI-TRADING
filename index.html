@@ -1368,12 +1368,12 @@ Automated strategies, real-time signals, and institutional-grade risk management
 <h2 id="what-is-hopefx">What is HOPEFX?<a class="headerlink" href="#what-is-hopefx" title="Permanent link">&para;</a></h2>
 <p>HOPEFX is a self-hosted algorithmic trading framework that combines:</p>
 <ul>
-<li><strong>Machine learning</strong> — LSTM, XGBoost, and Random Forest models trained on OHLCV + macro data (DXY, US 10Y yield, CPI)</li>
-<li><strong>Strategy engine</strong> — 9 built-in strategies (MA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, EMA, mean reversion, breakout, stochastic)</li>
-<li><strong>Risk management</strong> — per-trade position sizing, daily loss limits, max drawdown circuit breakers, kill switch</li>
-<li><strong>Broker integration</strong> — OANDA live and practice accounts via REST API</li>
-<li><strong>Strategy marketplace</strong> — publish and subscribe to community strategies</li>
-<li><strong>Multi-channel alerts</strong> — Discord, Slack, Telegram, email</li>
+<li><strong>Machine learning</strong> — XGBoost stacking ensemble (176 features, 66.4% OOS accuracy, p=0.0000) with incremental online learning (SGD + EWC, hourly updates)</li>
+<li><strong>Strategy engine</strong> — 10 built-in strategies (MA crossover, EMA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, mean reversion, breakout, stochastic, Strategy Brain)</li>
+<li><strong>Risk management</strong> — per-trade position sizing, CVaR gate, daily loss limits, max drawdown circuit breakers, kill switch, prop-firm compliance mode</li>
+<li><strong>Broker integration</strong> — OANDA (practice + live), Interactive Brokers, paper trading simulator, FIX 4.4 adapter</li>
+<li><strong>Multi-symbol backtesting</strong> — walk-forward validation across XAU/USD, BTC/USD, ETH/USD; N=628 trades confirmed (Sharpe gate PASSED)</li>
+<li><strong>Multi-channel alerts</strong> — Discord, Telegram, email, Sentry</li>
 </ul>
 <hr />
 <h2 id="quick-navigation">Quick navigation<a class="headerlink" href="#quick-navigation" title="Permanent link">&para;</a></h2>
@@ -1413,26 +1413,34 @@ Automated strategies, real-time signals, and institutional-grade risk management
 </table>
 <hr />
 <h2 id="architecture-overview">Architecture overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌─────────────────────────────────────────────────────────┐
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│                     FastAPI Server                       │
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│  /api/backtest  /api/macro  /api/payments  /status  /   │
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└────────────────────────┬────────────────────────────────┘
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌──────────────────────────────────────────────────────────────┐
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│                        FastAPI Server                        │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   REST API · WebSocket · GraphQL · /docs · /api/signals      │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└────────────────────────┬─────────────────────────────────────┘
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                         │
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>         ┌───────────────┼───────────────┐
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>         ▼               ▼               ▼
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>   ┌──────────┐   ┌──────────┐   ┌──────────────┐
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>   │  ML/AI   │   │  Brain   │   │  Risk Mgr    │
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>   │ Training │   │ (HOPEFXBrain)│ (position    │
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>   │ Pipeline │   │ Decision │   │  sizing,     │
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>   │          │   │ Engine   │   │  drawdown)   │
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>   └──────────┘   └──────────┘   └──────────────┘
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>         │               │               │
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>         └───────────────┼───────────────┘
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>                         ▼
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>                  ┌──────────────┐
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>                  │    Broker    │
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>                  │ OANDA / Paper│
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>                  └──────────────┘
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>   ┌──────────┐   ┌──────────────┐  ┌──────────────┐
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>   │  ML/AI   │   │  HOPEFXBrain │  │  Risk Engine │
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>   │ advanced │   │  Signal +    │  │  CVaR gate   │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>   │ _oos.pkl │   │  Regime      │  │  Kill switch │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>   │ 176 feat │   │  Decision    │  │  Drawdown    │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>   └────┬─────┘   └──────┬───────┘  └──────┬───────┘
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        │                │                  │
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>   ┌────▼─────┐          └──────────────────┘
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>   │ Online   │                  │
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>   │ Learner  │                  ▼
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>   │ SGD+EWC  │         ┌──────────────────┐
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>   │ hourly   │         │  Execution Engine│
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>   └──────────┘         │  Smart Router    │
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>                        │  OANDA · IBKR    │
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>                        │  Paper · FIX 4.4 │
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>                        └────────┬─────────┘
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>                                 │
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>                  ┌──────────────▼──────────────┐
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>                  │      Data &amp; Persistence      │
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>                  │  PostgreSQL · Redis · Macro  │
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>                  └──────────────────────────────┘
 </code></pre></div>
 <hr />
 <h2 id="system-requirements">System requirements<a class="headerlink" href="#system-requirements" title="Permanent link">&para;</a></h2>
@@ -1452,7 +1460,7 @@ Automated strategies, real-time signals, and institutional-grade risk management
 </tr>
 <tr>
 <td>RAM</td>
-<td>2 GB</td>
+<td>4 GB</td>
 <td>8 GB</td>
 </tr>
 <tr>
@@ -1462,16 +1470,16 @@ Automated strategies, real-time signals, and institutional-grade risk management
 </tr>
 <tr>
 <td>Storage</td>
-<td>5 GB</td>
+<td>10 GB</td>
 <td>20 GB</td>
 </tr>
 <tr>
-<td>Redis</td>
+<td>Redis 7+</td>
 <td>Optional</td>
 <td>Recommended</td>
 </tr>
 <tr>
-<td>PostgreSQL</td>
+<td>PostgreSQL 16+</td>
 <td>Optional</td>
 <td>Recommended</td>
 </tr>

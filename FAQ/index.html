@@ -1392,10 +1392,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-do-i-train-an-ml-model" class="md-nav__link">
+  <a href="#how-do-i-retrain-the-production-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How do I train an ML model?
+        How do I retrain the production model?
       
     </span>
   </a>
@@ -1403,10 +1403,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#can-i-use-my-own-ml-models" class="md-nav__link">
+  <a href="#how-does-online-learning-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Can I use my own ML models?
+        How does online learning work?
       
     </span>
   </a>
@@ -2105,10 +2105,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#how-do-i-train-an-ml-model" class="md-nav__link">
+  <a href="#how-do-i-retrain-the-production-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How do I train an ML model?
+        How do I retrain the production model?
       
     </span>
   </a>
@@ -2116,10 +2116,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#can-i-use-my-own-ml-models" class="md-nav__link">
+  <a href="#how-does-online-learning-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Can I use my own ML models?
+        How does online learning work?
       
     </span>
   </a>
@@ -2490,16 +2490,17 @@
 <h2 id="installation-setup">Installation &amp; Setup<a class="headerlink" href="#installation-setup" title="Permanent link">&para;</a></h2>
 <h3 id="what-are-the-system-requirements">What are the system requirements?<a class="headerlink" href="#what-are-the-system-requirements" title="Permanent link">&para;</a></h3>
 <p><strong>Minimum:</strong>
-- Python 3.8+
-- 4GB RAM
+- Python 3.10, 3.11, or 3.12
+- 4 GB RAM
 - 2 CPU cores
-- 10GB disk space</p>
+- 10 GB disk space</p>
 <p><strong>Recommended:</strong>
-- Python 3.10+
-- 16GB RAM
+- Python 3.12
+- 8 GB RAM
 - 4+ CPU cores
-- SSD with 50GB space
-- Redis for caching</p>
+- SSD with 20 GB space
+- Redis 7+ for caching
+- PostgreSQL 16+ for production</p>
 <h3 id="how-do-i-install-hopefx">How do I install HOPEFX?<a class="headerlink" href="#how-do-i-install-hopefx" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Clone the repository</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
@@ -2524,7 +2525,7 @@
 <p>Common causes:
 1. <strong>Virtual environment not activated</strong> - Run <code>source venv/bin/activate</code>
 2. <strong>Missing dependencies</strong> - Run <code>pip install -r requirements.txt</code>
-3. <strong>Wrong Python version</strong> - Ensure Python 3.8+</p>
+3. <strong>Wrong Python version</strong> — Ensure Python 3.10+</p>
 <h3 id="how-do-i-configure-my-broker-api-keys">How do I configure my broker API keys?<a class="headerlink" href="#how-do-i-configure-my-broker-api-keys" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Create/edit your <code>.env</code> file</li>
@@ -2540,16 +2541,16 @@
 <li>Never commit <code>.env</code> to version control</li>
 </ol>
 <h3 id="how-do-i-run-the-api-server">How do I run the API server?<a class="headerlink" href="#how-do-i-run-the-api-server" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Development mode</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>python<span class="w"> </span>app.py
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Development mode (auto-reload)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uvicorn<span class="w"> </span>app:app<span class="w"> </span>--reload<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Production mode</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>uvicorn<span class="w"> </span>app:app<span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">5000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>uvicorn<span class="w"> </span>app:app<span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span><span class="w"> </span>--workers<span class="w"> </span><span class="m">4</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># With Docker</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># With Docker (recommended)</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>docker-compose<span class="w"> </span>up<span class="w"> </span>-d
 </code></pre></div>
-<p>Access API docs at <code>http://localhost:5000/docs</code></p>
+<p>Access API docs at <code>http://localhost:8000/docs</code></p>
 <hr />
 <h2 id="trading-strategies">Trading &amp; Strategies<a class="headerlink" href="#trading-strategies" title="Permanent link">&para;</a></h2>
 <h3 id="what-trading-strategies-are-included">What trading strategies are included?<a class="headerlink" href="#what-trading-strategies-are-included" title="Permanent link">&para;</a></h3>
@@ -2660,7 +2661,7 @@
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>python<span class="w"> </span>cli.py<span class="w"> </span>paper-trade<span class="w"> </span>--strategy<span class="w"> </span>smc_ict<span class="w"> </span>--balance<span class="w"> </span><span class="m">10000</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Or access the web dashboard</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Navigate to http://localhost:5000/paper-trading</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Navigate to http://localhost:8000/docs (paper trading controls in the API)</span>
 </code></pre></div>
 <h3 id="how-does-risk-management-work">How does risk management work?<a class="headerlink" href="#how-does-risk-management-work" title="Permanent link">&para;</a></h3>
 <p>HOPEFX includes comprehensive risk management:</p>
@@ -2761,46 +2762,39 @@
 <hr />
 <h2 id="machine-learning">Machine Learning<a class="headerlink" href="#machine-learning" title="Permanent link">&para;</a></h2>
 <h3 id="what-ml-models-are-included">What ML models are included?<a class="headerlink" href="#what-ml-models-are-included" title="Permanent link">&para;</a></h3>
+<p>The production model is <code>ml/saved_models/advanced_oos.pkl</code>:</p>
 <ul>
-<li><strong>LSTM:</strong> Time series price prediction</li>
-<li><strong>Random Forest:</strong> Pattern classification</li>
-<li><strong>XGBoost:</strong> Feature importance and prediction</li>
-<li><strong>Neural Networks:</strong> Deep learning models</li>
-<li><strong>Ensemble:</strong> Combined model predictions</li>
+<li><strong>Architecture:</strong> XGBoost + isotonic calibration (CalibratedClassifierCV)</li>
+<li><strong>Features:</strong> 176 stationary-tested features (ADF + KPSS)</li>
+<li><strong>OOS accuracy:</strong> 66.4% (p=0.0000, N=1,260 bars, 2019–2026)</li>
+<li><strong>Sharpe gate:</strong> PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10</li>
+<li><strong>Multi-symbol backtest:</strong> N=628 trades (XAU+BTC+ETH, 10-yr real data)</li>
 </ul>
-<h3 id="how-do-i-train-an-ml-model">How do I train an ML model?<a class="headerlink" href="#how-do-i-train-an-ml-model" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ml</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelTrainer</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">trainer</span> <span class="o">=</span> <span class="n">ModelTrainer</span><span class="p">()</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">trainer</span><span class="o">.</span><span class="n">load_data</span><span class="p">(</span><span class="s1">&#39;XAUUSD&#39;</span><span class="p">,</span> <span class="s1">&#39;1H&#39;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s1">&#39;2020-01-01&#39;</span><span class="p">)</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">trainer</span><span class="o">.</span><span class="n">prepare_features</span><span class="p">()</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">model</span> <span class="o">=</span> <span class="n">trainer</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="s1">&#39;lstm&#39;</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">model</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s1">&#39;models/xauusd_lstm.h5&#39;</span><span class="p">)</span>
+<p>Additional models used as fallbacks: <code>rf_macro.pkl</code>, <code>xgb_macro.pkl</code>.</p>
+<h3 id="how-do-i-retrain-the-production-model">How do I retrain the production model?<a class="headerlink" href="#how-do-i-retrain-the-production-model" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Smoke test (~30 s)</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>python<span class="w"> </span>ml/train_advanced.py<span class="w"> </span>--smoke
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Full production retrain (50 years, 3-year OOS)</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>python<span class="w"> </span>ml/train_advanced.py<span class="w"> </span>--years<span class="w"> </span><span class="m">50</span><span class="w"> </span>--oos-years<span class="w"> </span><span class="m">3</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Multi-symbol backtest</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>python<span class="w"> </span>backtest/multi_symbol_backtest.py<span class="w"> </span>--years<span class="w"> </span><span class="m">10</span><span class="w"> </span>--oos-frac<span class="w"> </span><span class="m">0</span>.3
 </code></pre></div>
-<h3 id="can-i-use-my-own-ml-models">Can I use my own ML models?<a class="headerlink" href="#can-i-use-my-own-ml-models" title="Permanent link">&para;</a></h3>
-<p>Yes! Implement the base interface:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ml.models.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyModel</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>        <span class="c1"># Training logic</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>        <span class="k">pass</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>        <span class="c1"># Prediction logic</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>        <span class="k">return</span> <span class="n">predictions</span>
-</code></pre></div>
+<h3 id="how-does-online-learning-work">How does online learning work?<a class="headerlink" href="#how-does-online-learning-work" title="Permanent link">&para;</a></h3>
+<p>Set <code>ML_HOURLY_ENABLED=true</code> to activate:</p>
+<ul>
+<li><strong>Hourly:</strong> <code>SklearnOnlineLearner</code> (SGDClassifier) receives the last 24 bars via <code>HourlyTrainer._online_update()</code> and calls <code>partial_fit()</code>.</li>
+<li><strong>Daily at 00:05 UTC:</strong> EWC regime-adaptation loop detects the current market regime (volatile / ranging / trending) and adjusts model plasticity accordingly.</li>
+<li>Learner state is persisted to <code>ml/saved_models/online_learner_{symbol}.pkl</code> and reloaded at startup.</li>
+</ul>
 <h3 id="how-accurate-are-the-ml-predictions">How accurate are the ML predictions?<a class="headerlink" href="#how-accurate-are-the-ml-predictions" title="Permanent link">&para;</a></h3>
-<p>ML model accuracy varies based on:
-- Training data quality
-- Feature engineering
-- Market conditions
-- Hyperparameter tuning</p>
-<p>We recommend:
+<p>The production model achieves <strong>66.4% OOS accuracy</strong> (p=0.0000) on 1,260 held-out bars spanning 2019–2026. The model abstains on low-confidence bars — only signals above the confidence threshold reach execution.</p>
+<p>Key points:
+- Cite OOS accuracy (66.4%, p=0.0000) as the credible performance number
+- Sharpe ratio is only reported after N ≥ 600 trades (gate PASSED at N=628)
 - Always backtest before live trading
-- Use ensemble methods for stability
-- Retrain models periodically
-- Monitor model performance</p>
+- Monitor live signal distribution against OOS backtest distribution</p>
 <hr />
 <h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
 <h3 id="how-are-my-api-keys-stored">How are my API keys stored?<a class="headerlink" href="#how-are-my-api-keys-stored" title="Permanent link">&para;</a></h3>
@@ -2816,10 +2810,10 @@
 - SSL/TLS for API communications
 - No data shared with third parties</p>
 <h3 id="how-do-i-enable-2fa">How do I enable 2FA?<a class="headerlink" href="#how-do-i-enable-2fa" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SecurityConfig</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">security</span> <span class="o">=</span> <span class="n">SecurityConfig</span><span class="p">()</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">security</span><span class="o">.</span><span class="n">enable_2fa</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;totp&#39;</span><span class="p">)</span>  <span class="c1"># Google Authenticator compatible</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SecurityConfig</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">security</span> <span class="o">=</span> <span class="n">SecurityConfig</span><span class="p">()</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">security</span><span class="o">.</span><span class="n">enable_2fa</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;totp&#39;</span><span class="p">)</span>  <span class="c1"># Google Authenticator compatible</span>
 </code></pre></div>
 <h3 id="best-practices-for-security">Best practices for security?<a class="headerlink" href="#best-practices-for-security" title="Permanent link">&para;</a></h3>
 <ol>
@@ -2849,14 +2843,14 @@
 <li><strong>Risk limits:</strong> Order may exceed risk parameters</li>
 </ol>
 <h3 id="how-do-i-view-logs">How do I view logs?<a class="headerlink" href="#how-do-i-view-logs" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># View recent logs</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>tail<span class="w"> </span>-f<span class="w"> </span>logs/hopefx.log
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Filter by level</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>grep<span class="w"> </span>ERROR<span class="w"> </span>logs/hopefx.log
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Use CLI</span>
-<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>python<span class="w"> </span>cli.py<span class="w"> </span>logs<span class="w"> </span>--level<span class="w"> </span>ERROR<span class="w"> </span>--tail<span class="w"> </span><span class="m">100</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># View recent logs</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>tail<span class="w"> </span>-f<span class="w"> </span>logs/hopefx.log
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Filter by level</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>grep<span class="w"> </span>ERROR<span class="w"> </span>logs/hopefx.log
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Use CLI</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>python<span class="w"> </span>cli.py<span class="w"> </span>logs<span class="w"> </span>--level<span class="w"> </span>ERROR<span class="w"> </span>--tail<span class="w"> </span><span class="m">100</span>
 </code></pre></div>
 <h3 id="how-do-i-report-a-bug">How do I report a bug?<a class="headerlink" href="#how-do-i-report-a-bug" title="Permanent link">&para;</a></h3>
 <ol>
