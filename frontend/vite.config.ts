@@ -12,6 +12,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: '0.0.0.0',
+    // Allow all Gitpod preview hostnames and localhost
+    allowedHosts: 'all',
     proxy: {
       // Forward all /api/* requests to the FastAPI backend
       '/api': {
