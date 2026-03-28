@@ -44,5 +44,33 @@
       "median_dd_pct": 11.3842,
       "mean_dd_pct": 11.5761
     }
+  },
+  "_reconciliation_note": {
+    "status": "UNRECONCILED \u2014 results contradict the 68% accuracy claim",
+    "root_cause": "Timeframe mismatch: the advanced model is trained and evaluated on DAILY bars. These Monte Carlo backtests run a DIFFERENT strategy on 1d (4 trades) and 15m (47 trades) bars. The negative P&L does not invalidate the daily model's OOS accuracy, but the discrepancy is undocumented and misleading.",
+    "daily_backtest": {
+      "timeframe": "1d",
+      "trades": 4,
+      "win_rate": "25%",
+      "pnl": "-$1,108",
+      "sharpe": -0.24,
+      "note": "Only 4 trades \u2014 statistically meaningless. Strategy parameters likely differ from the OOS evaluation setup."
+    },
+    "15m_backtest": {
+      "timeframe": "15m",
+      "trades": 47,
+      "win_rate": "29.8%",
+      "pnl": "-$6,184",
+      "sharpe": -1.29,
+      "max_dd": "10.9%",
+      "p99_dd": "17.3%",
+      "note": "The advanced model does NOT generate 15m signals. Applying a daily-trained model to 15m bars produces undefined behavior. This result should not be used to characterize the daily model's performance."
+    },
+    "action_required": [
+      "Run a daily-timeframe backtest using the same signal logic as the OOS evaluation (advanced_oos.pkl, daily GC=F bars, same entry/exit rules)",
+      "Document which strategy and parameters produced these Monte Carlo results",
+      "Remove or clearly label this file as 'wrong-timeframe experiment' until reconciliation is complete",
+      "Add overnight financing costs (OANDA XAU_USD swap rate) to any daily backtest with avg hold > 1 day"
+    ]
   }
 }
