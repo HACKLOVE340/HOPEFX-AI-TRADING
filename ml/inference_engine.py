@@ -365,16 +365,79 @@ class InferenceEngine:
         }
 
     def health(self) -> Dict[str, Any]:
-        """Return engine health metrics for the status endpoint."""
+        """
+        Return engine health metrics for /api/ml/health and /api/ml/engine-health.
+
+        Includes:
+        - model availability and version
+        - pipeline step status (macro, MTF, calibrator, online learner)
+        - live counters (predict_count, fallback_count, fallback_rate)
+        - latency stats
+        - signal quality: non-neutral rate over last N predictions
+        - uptime since first predict call
+        """
         predictor = self._get_predictor()
+        model_available = predictor is not None and getattr(predictor, "is_available", False)
+
+        # Fallback rate — fraction of predictions that used the fallback path
+        fallback_rate = (
+            round(self._fallback_count / self._predict_count, 4)
+            if self._predict_count > 0
+            else 0.0
+        )
+
+        # Pipeline step availability
+        calibrator_ok = self._load_calibrator() is not None
+
+        macro_ok = False
+        try:
+            from ml.macro_store import macro_store
+            macro_ok = len(macro_store) > 0
+        except Exception:
+            pass
+
+        mtf_ok = False
+        if _MTF_FUSION_ENABLED:
+            try:
+                from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+                mtf_ok = _MTF_STORE_SINGLETON is not None
+            except Exception:
+                pass
+
+        online_ok = False
+        if _ONLINE_LEARNING_ENABLED:
+            try:
+                from research.pipeline.paper_trading_gate import get_gate
+                gate = get_gate()
+                p3_ok, _ = gate.phase3_ready()
+                online_ok = p3_ok
+            except Exception:
+                pass
+
+        # Overall status string
+        if model_available:
+            status = "ok"
+        elif self._predict_count > 0 and fallback_rate < 1.0:
+            status = "degraded"
+        else:
+            status = "unavailable"
+
         return {
-            "model_available": predictor is not None and predictor.is_available,
+            "status": status,
+            "model_available": model_available,
             "model_version": predictor.version if predictor else "none",
-            "calibrator_available": self._load_calibrator() is not None,
+            "pipeline": {
+                "macro_store": macro_ok,
+                "mtf_fusion": mtf_ok,
+                "calibrator": calibrator_ok,
+                "online_learner": online_ok,
+            },
+            "calibrator_available": calibrator_ok,
             "online_learning_enabled": _ONLINE_LEARNING_ENABLED,
             "mtf_fusion_enabled": _MTF_FUSION_ENABLED,
             "predict_count": self._predict_count,
             "fallback_count": self._fallback_count,
+            "fallback_rate": fallback_rate,
             "last_latency_ms": self._last_predict_ms,
             "threshold_long": _THRESHOLD_LONG,
             "threshold_short": _THRESHOLD_SHORT,
