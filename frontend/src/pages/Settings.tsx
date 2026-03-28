@@ -37,19 +37,45 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'hopefx_notification_settings';
+const STORAGE_KEY = 'hopefx_notification_prefs';
 
-/** localStorage fallback — used as initial state while API loads */
-function loadLocalSettings(): NotificationSettings {
+/**
+ * Non-sensitive boolean preferences that are safe to cache locally.
+ * Webhook URLs and bot tokens are NEVER written to localStorage — they are
+ * loaded from and saved to the backend API only.
+ */
+type SafePrefs = Pick<
+  NotificationSettings,
+  | 'discord_enabled'
+  | 'slack_enabled'
+  | 'telegram_enabled'
+  | 'email_enabled'
+  | 'notify_on_trade'
+  | 'notify_on_signal'
+  | 'notify_on_error'
+  | 'notify_on_daily_summary'
+>;
+
+function loadLocalPrefs(): Partial<SafePrefs> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) return JSON.parse(raw) as Partial<SafePrefs>;
   } catch (_) {}
-  return { ...DEFAULT_SETTINGS };
+  return {};
 }
 
-function cacheLocalSettings(s: NotificationSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+function cacheLocalPrefs(s: NotificationSettings): void {
+  const prefs: SafePrefs = {
+    discord_enabled:        s.discord_enabled,
+    slack_enabled:          s.slack_enabled,
+    telegram_enabled:       s.telegram_enabled,
+    email_enabled:          s.email_enabled,
+    notify_on_trade:        s.notify_on_trade,
+    notify_on_signal:       s.notify_on_signal,
+    notify_on_error:        s.notify_on_error,
+    notify_on_daily_summary: s.notify_on_daily_summary,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -139,7 +165,11 @@ const WebhookField: React.FC<WebhookFieldProps> = ({
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Settings: React.FC = () => {
-  const [settings, setSettings] = useState<NotificationSettings>(loadLocalSettings);
+  // Seed initial state from cached non-sensitive prefs only; credentials start blank
+  const [settings, setSettings] = useState<NotificationSettings>(() => ({
+    ...DEFAULT_SETTINGS,
+    ...loadLocalPrefs(),
+  }));
   const [saved,    setSaved]    = useState(false);
   const [loading,  setLoading]  = useState(true);
   const [saveErr,  setSaveErr]  = useState('');
@@ -149,16 +179,19 @@ const Settings: React.FC = () => {
     telegram:'idle',
   });
 
-  // Load from API on mount; fall back to localStorage if API unreachable
+  // Load full settings (including credentials) from API on mount.
+  // Credentials are never read from localStorage — only from the server.
   useEffect(() => {
     api.get<NotificationSettings>('/api/settings/notifications')
       .then((res) => {
         const merged = { ...DEFAULT_SETTINGS, ...res.data };
         setSettings(merged);
-        cacheLocalSettings(merged);
+        // Cache only non-sensitive prefs for faster initial render next time
+        cacheLocalPrefs(merged);
       })
       .catch(() => {
-        // API unavailable — keep localStorage values already in state
+        // API unavailable — keep non-sensitive prefs already in state;
+        // credential fields remain blank (safe default)
       })
       .finally(() => setLoading(false));
   }, []);
@@ -168,19 +201,16 @@ const Settings: React.FC = () => {
 
   const handleSave = async () => {
     setSaveErr('');
-    // Always write to localStorage as immediate fallback
-    cacheLocalSettings(settings);
     try {
-      await api.post('/settings/notifications', settings);
+      await api.post('/api/settings/notifications', settings);
+      // Only cache non-sensitive prefs after a successful server save
+      cacheLocalPrefs(settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })
         ?.response?.data?.detail;
-      setSaveErr(detail ?? 'Failed to save to server — settings cached locally.');
-      // Still show saved indicator since local cache succeeded
-      setSaved(true);
-      setTimeout(() => { setSaved(false); setSaveErr(''); }, 4000);
+      setSaveErr(detail ?? 'Failed to save settings. Please try again.');
     }
   };
 
