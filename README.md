@@ -24,8 +24,10 @@
 
 | 📊 OOS Accuracy | 📈 Backtest Return | 🎯 Win Rate | 📉 Max Drawdown | ⚡ Sharpe |
 |:-:|:-:|:-:|:-:|:-:|
-| **68.0%** | **+5.52%** | **57.8%** | **−0.88%** | **1.52** |
-| p = 0.0000 · 756 bars | 48 trades · real GC=F | Profit factor 2.28 | 3-year OOS period | Trade-level |
+| **68.0%** (research) | **+5.52%** | **57.8%** | **−0.88%** | **1.52** |
+| `mtf_fusion_xauusd_v1` · p = 0.0000 · 756 bars · 27.5% abstain rate · coverage-adjusted 63.1% | 48 trades · real GC=F | Profit factor 2.28 | 3-year OOS period | Trade-level |
+
+> ⚠️ **Model status note:** The 68.0% figure is from the research model `mtf_fusion_xauusd_v1` (50-year dataset, 756 OOS bars, p = 0.0000). The current production file `advanced_oos.pkl` was retrained locally on a 2-year subset (325 rows) and shows 52.3% OOS accuracy (p = 0.409 — not statistically significant). A full retrain against the 50-year dataset is required before live deployment. See [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for details.
 
 <br/>
 
@@ -56,8 +58,8 @@
 
 Most retail trading bots are backtested on in-sample data, use fixed rules, and blow up on live markets. HOPEFX is built differently:
 
-- **Walk-forward validated** — the 68% accuracy figure comes from a 3-year held-out OOS period (2023–2026), not in-sample fitting
-- **Statistically tested** — p = 0.0000 on 756 OOS bars; the model abstains on 27.5% of bars where confidence is below threshold
+- **Walk-forward validated** — the 68% accuracy figure comes from the research model `mtf_fusion_xauusd_v1`, trained on a 50-year dataset with a 3-year held-out OOS period (2023–2026). The production pkl requires a full retrain to match this result.
+- **Statistically tested** — p = 0.0000 on 756 OOS bars (research model); abstain rate 27.5% of bars where confidence is below threshold; coverage-adjusted accuracy 63.1% across all bars
 - **Prop-firm safe** — daily drawdown gate, max position size enforcer, and a hardware kill switch that halts all orders instantly
 - **Broker-agnostic** — routes through OANDA, IBKR, or paper with automatic failover; no single point of failure
 - **Observable** — every trade, signal, and error flows through Prometheus, Sentry, and structured logs
@@ -100,20 +102,30 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 
 ## ML Pipeline
 
-The production model (`advanced_oos.pkl`) is a **stacking ensemble** trained on 50 years of GC=F futures data.
+Two models exist at different stages of development. The research model establishes the statistical edge; the production pkl requires a full retrain to match it.
 
-### Model Card
+### Model Card — Research Model (`mtf_fusion_xauusd_v1`)
 
 | Property | Value |
 |----------|-------|
 | Architecture | XGBoost + RF stacking ensemble |
 | Features | 154 engineered (stationary-tested) |
-| Training data | 50 years GC=F (6,365 bars) |
-| OOS period | 2023-03-22 → 2026-03-24 (756 bars) |
-| OOS accuracy | **68.0%** (p = 0.0000) |
-| Abstain rate | 27.5% of bars filtered |
+| Training data | ~50 years XAUUSD (~4,600 bars) |
+| OOS period | 2023–2026 (756 bars) |
+| OOS accuracy | **68.0%** on predicted bars (p = 0.0000) |
+| Abstain rate | 27.5% of bars filtered below confidence threshold |
+| Coverage-adjusted accuracy | **63.1%** across all 756 bars |
 | Walk-forward folds | 5 |
-| Target | ≥55% OOS with p < 0.05 — **exceeded** |
+| Status | Research — not the active production pkl |
+
+### Model Card — Production File (`advanced_oos.pkl`)
+
+| Property | Value |
+|----------|-------|
+| Training data | 2-year GC=F subset (325 rows) |
+| OOS accuracy | **52.3%** (p = 0.409 — not statistically significant) |
+| Status | ⚠️ Requires full retrain before live deployment |
+| Fix | Run `python scripts/retrain_model.py --advanced --years 50 --oos-years 5` |
 
 ### Top Predictive Features
 
