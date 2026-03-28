@@ -17,6 +17,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 type Step = 'idle' | 'setup' | 'verify' | 'active' | 'backup';
 
@@ -27,29 +28,22 @@ interface SetupData {
 }
 
 const TwoFactorSetup: React.FC = () => {
-  const token  = useStore((s) => s.token);
   const user   = useStore((s) => s.user);
   const userId = user?.id ?? 'demo-user';
 
-  const [step, setStep]             = useState<Step>('idle');
-  const [setupData, setSetupData]   = useState<SetupData | null>(null);
-  const [code, setCode]             = useState('');
+  const [step, setStep]               = useState<Step>('idle');
+  const [setupData, setSetupData]     = useState<SetupData | null>(null);
+  const [code, setCode]               = useState('');
   const [disableCode, setDisableCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [error, setError]           = useState('');
-  const [loading, setLoading]       = useState(false);
+  const [error, setError]             = useState('');
+  const [loading, setLoading]         = useState(false);
   const [is2FAEnabled, set2FAEnabled] = useState(false);
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  // Check current 2FA status on mount
+  // Check current 2FA status on mount — uses api instance (JWT injected automatically)
   useEffect(() => {
-    fetch(`/api/2fa/status/${userId}`, { headers })
-      .then((r) => r.json())
-      .then((d) => set2FAEnabled(d.enabled ?? false))
+    api.get<{ enabled: boolean }>(`/api/2fa/status/${userId}`)
+      .then((r) => set2FAEnabled(r.data.enabled ?? false))
       .catch(() => {});
   }, [userId]);
 
@@ -57,17 +51,11 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/2fa/setup', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ user_id: userId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setSetupData(data);
+      const res = await api.post<SetupData>('/api/2fa/setup', { user_id: userId });
+      setSetupData(res.data);
       setStep('setup');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Setup failed');
+      setError((e as { message?: string })?.message ?? 'Setup failed');
     } finally {
       setLoading(false);
     }
@@ -78,21 +66,16 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/2fa/verify', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ user_id: userId, code }),
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/verify', { user_id: userId, code });
+      if (res.data.success) {
         set2FAEnabled(true);
         setStep('active');
         setCode('');
       } else {
-        setError(data.message ?? 'Invalid code');
+        setError(res.data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Verify failed');
+      setError((e as { message?: string })?.message ?? 'Verify failed');
     } finally {
       setLoading(false);
     }
@@ -102,12 +85,11 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/2fa/backup-codes/${userId}`, { headers });
-      const data = await res.json();
-      setBackupCodes(data.codes ?? []);
+      const res = await api.get<{ codes: string[] }>(`/api/2fa/backup-codes/${userId}`);
+      setBackupCodes(res.data.codes ?? []);
       setStep('backup');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to get backup codes');
+      setError((e as { message?: string })?.message ?? 'Failed to get backup codes');
     } finally {
       setLoading(false);
     }
@@ -118,22 +100,17 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/2fa/disable', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ user_id: userId, code: disableCode }),
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/disable', { user_id: userId, code: disableCode });
+      if (res.data.success) {
         set2FAEnabled(false);
         setStep('idle');
         setDisableCode('');
         setSetupData(null);
       } else {
-        setError(data.message ?? 'Invalid code');
+        setError(res.data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Disable failed');
+      setError((e as { message?: string })?.message ?? 'Disable failed');
     } finally {
       setLoading(false);
     }

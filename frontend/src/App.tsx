@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Component } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -54,6 +54,32 @@ import { useStore, selectIsAuth, selectUser, selectWsStatus } from './store';
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 });
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+interface EBState { hasError: boolean; message: string }
+class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
+  state: EBState = { hasError: false, message: '' };
+  static getDerivedStateFromError(err: Error): EBState {
+    return { hasError: true, message: err.message };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, textAlign: 'center', color: '#f87171' }}>
+          <h2 style={{ marginBottom: 12 }}>Something went wrong</h2>
+          <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>{this.state.message}</p>
+          <button
+            onClick={() => { this.setState({ hasError: false, message: '' }); window.location.reload(); }}
+            style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, padding: '10px 20px' }}
+          >
+            Reload page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -173,49 +199,54 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ colla
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Wrap each page in ErrorBoundary so one broken page can't crash the whole shell
+  const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
+
   return (
     <div style={s.shell}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <main style={s.main}>
         <Routes>
           {/* Core */}
-          <Route path="/dashboard"    element={<AuthGuard><Dashboard /></AuthGuard>} />
-          <Route path="/settings"     element={<AuthGuard><Settings /></AuthGuard>} />
-          <Route path="/marketplace"  element={<Marketplace />} />
-          <Route path="/affiliate"    element={<Affiliate />} />
-          <Route path="/checkout"     element={<CryptoCheckout />} />
-          <Route path="/status"       element={<StatusPage />} />
+          <Route path="/dashboard"    element={wrap(<AuthGuard><Dashboard /></AuthGuard>)} />
+          <Route path="/settings"     element={wrap(<AuthGuard><Settings /></AuthGuard>)} />
+          <Route path="/marketplace"  element={wrap(<Marketplace />)} />
+          <Route path="/affiliate"    element={wrap(<Affiliate />)} />
+          <Route path="/checkout"     element={wrap(<CryptoCheckout />)} />
+          <Route path="/status"       element={wrap(<StatusPage />)} />
 
-          {/* Tasks 16–19: Calculator, Walk-Forward, Profile, Feed */}
-          <Route path="/risk-calc"    element={<AuthGuard><RiskCalculator /></AuthGuard>} />
-          <Route path="/walk-forward" element={<AuthGuard><WalkForward /></AuthGuard>} />
-          <Route path="/profile"      element={<AuthGuard><Profile /></AuthGuard>} />
-          <Route path="/profile/:id"  element={<Profile />} />
-          <Route path="/feed"         element={<AuthGuard><SocialFeed /></AuthGuard>} />
+          {/* Calculator, Walk-Forward, Profile, Feed */}
+          <Route path="/risk-calc"    element={wrap(<AuthGuard><RiskCalculator /></AuthGuard>)} />
+          <Route path="/walk-forward" element={wrap(<AuthGuard><WalkForward /></AuthGuard>)} />
+          <Route path="/profile"      element={wrap(<AuthGuard><Profile /></AuthGuard>)} />
+          <Route path="/profile/:id"  element={wrap(<Profile />)} />
+          <Route path="/feed"         element={wrap(<AuthGuard><SocialFeed /></AuthGuard>)} />
 
-          {/* Tasks 22, 36–41: Whitelabel + Admin */}
-          <Route path="/whitelabel"   element={<AuthGuard><WhitelabelAdmin /></AuthGuard>} />
-          <Route path="/admin"        element={<AuthGuard><AdminPanel /></AuthGuard>} />
+          {/* Whitelabel + Admin */}
+          <Route path="/whitelabel"   element={wrap(<AuthGuard><WhitelabelAdmin /></AuthGuard>)} />
+          <Route path="/admin"        element={wrap(<AuthGuard><AdminPanel /></AuthGuard>)} />
 
-          {/* Tasks 42–46: Advanced trading */}
-          <Route path="/ab-testing"   element={<AuthGuard><ABTesting /></AuthGuard>} />
-          <Route path="/correlation"  element={<AuthGuard><CorrelationDashboard /></AuthGuard>} />
-          <Route path="/indicators"   element={<AuthGuard><CustomIndicators /></AuthGuard>} />
+          {/* Advanced trading */}
+          <Route path="/ab-testing"   element={wrap(<AuthGuard><ABTesting /></AuthGuard>)} />
+          <Route path="/correlation"  element={wrap(<AuthGuard><CorrelationDashboard /></AuthGuard>)} />
+          <Route path="/indicators"   element={wrap(<AuthGuard><CustomIndicators /></AuthGuard>)} />
 
-          {/* Ported pages from dashboard/ */}
-          <Route path="/trading"      element={<AuthGuard><Trading /></AuthGuard>} />
-          <Route path="/journal"      element={<AuthGuard><TradeJournal /></AuthGuard>} />
-          <Route path="/performance"  element={<Performance />} />
-          <Route path="/watchlist"    element={<AuthGuard><WatchlistPage /></AuthGuard>} />
-          <Route path="/prop-firm"    element={<AuthGuard><PropFirmTracker /></AuthGuard>} />
-          <Route path="/calendar"     element={<AuthGuard><EconomicCalendar /></AuthGuard>} />
-          <Route path="/alerts"       element={<AuthGuard><PriceAlerts /></AuthGuard>} />
-          <Route path="/copy-trading" element={<AuthGuard><CopyTrading /></AuthGuard>} />
-          <Route path="/leaderboard"  element={<Leaderboard />} />
-          <Route path="/ai-strategy"  element={<AuthGuard><AIStrategyGenerator /></AuthGuard>} />
-          <Route path="/wallet"       element={<AuthGuard><Wallet /></AuthGuard>} />
-          <Route path="/2fa-setup"    element={<AuthGuard><TwoFactorSetup /></AuthGuard>} />
+          {/* Ported pages */}
+          <Route path="/trading"      element={wrap(<AuthGuard><Trading /></AuthGuard>)} />
+          <Route path="/journal"      element={wrap(<AuthGuard><TradeJournal /></AuthGuard>)} />
+          <Route path="/performance"  element={wrap(<Performance />)} />
+          <Route path="/watchlist"    element={wrap(<AuthGuard><WatchlistPage /></AuthGuard>)} />
+          <Route path="/prop-firm"    element={wrap(<AuthGuard><PropFirmTracker /></AuthGuard>)} />
+          <Route path="/calendar"     element={wrap(<AuthGuard><EconomicCalendar /></AuthGuard>)} />
+          <Route path="/alerts"       element={wrap(<AuthGuard><PriceAlerts /></AuthGuard>)} />
+          <Route path="/copy-trading" element={wrap(<AuthGuard><CopyTrading /></AuthGuard>)} />
+          <Route path="/leaderboard"  element={wrap(<Leaderboard />)} />
+          <Route path="/ai-strategy"  element={wrap(<AuthGuard><AIStrategyGenerator /></AuthGuard>)} />
+          <Route path="/wallet"       element={wrap(<AuthGuard><Wallet /></AuthGuard>)} />
+          <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
 
+          {/* Fallback — redirect unknown shell paths to dashboard */}
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
@@ -227,14 +258,18 @@ const AppShell: React.FC = () => {
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <Routes>
-        <Route path="/"           element={<LandingPage />} />
-        <Route path="/landing"    element={<LandingPage />} />
-        <Route path="/login"      element={<Login />} />
-        <Route path="/register"   element={<Register />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/*"          element={<AppShell />} />
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          {/* Public full-screen pages — rendered WITHOUT the sidebar shell */}
+          <Route path="/"           element={<LandingPage />} />
+          <Route path="/landing"    element={<LandingPage />} />
+          <Route path="/login"      element={<Login />} />
+          <Route path="/register"   element={<Register />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          {/* Everything else gets the sidebar shell */}
+          <Route path="/*"          element={<AppShell />} />
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   </QueryClientProvider>
 );
@@ -242,13 +277,14 @@ const App: React.FC = () => (
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
   shell: {
-    display: 'flex', minHeight: '100vh', background: '#0f172a',
+    display: 'flex', height: '100vh', overflow: 'hidden', background: '#0f172a',
     color: '#f1f5f9', fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   sidebar: {
     background: '#1e293b', borderRight: '1px solid #334155',
     display: 'flex', flexDirection: 'column', flexShrink: 0,
     transition: 'width 0.2s ease', overflow: 'hidden',
+    height: '100vh',
   },
   sidebarLogo: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -260,7 +296,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent', border: 'none', color: '#64748b',
     fontSize: 18, cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
   },
-  nav: { flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 2 },
+  nav: { flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', overflowX: 'hidden' },
   navLink: {
     display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
     textDecoration: 'none', fontSize: 14, fontWeight: 500,
@@ -278,7 +314,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent', border: '1px solid #334155', borderRadius: 6,
     color: '#64748b', fontSize: 12, cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
   },
-  main: { flex: 1, overflowY: 'auto', background: '#0f172a' },
+  main: { flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#0f172a', height: '100vh' },
 };
 
 export default App;

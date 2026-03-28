@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom';
 
+// NOTE: Do NOT add a global vi.mock for useApi here.
+// - hooks.test.ts needs the REAL api object to test its configuration.
+// - pages.test.tsx defines its own vi.mock with the correct resolved values.
+// Individual test files that need a mock should define it themselves.
+
 // Mock lightweight-charts (canvas not available in jsdom)
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn(() => ({

@@ -3,7 +3,7 @@
  * + CFTC COT Gold Sentiment (Task 46)
  */
 import React, { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
+import { api } from '../hooks/useApi';
 
 interface CorrelationData {
   symbols: string[];
@@ -43,8 +43,8 @@ const CorrelationDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [corrRes, cotRes] = await Promise.all([
-        axios.get(`/api/correlation?window=${window}`),
-        axios.get('/api/cot/gold'),
+        api.get(`/api/correlation?window=${window}`),
+        api.get('/api/cot/gold'),
       ]);
       setCorr(corrRes.data);
       setCot(cotRes.data);
