@@ -309,6 +309,36 @@ class RetrainResponse(BaseModel):
     message: str
 
 
+class MLHealthResponse(BaseModel):
+    """Response schema for GET /api/ml/health."""
+    status: str                          # "ok" | "degraded" | "unavailable"
+    model_loaded: bool
+    model_id: Optional[str]
+    feature_count: int
+    oos_accuracy: Optional[float]
+    last_trained_at: Optional[str]
+    predict_count: int
+    fallback_count: int
+    last_latency_ms: float
+    calibrator_available: bool
+    online_learning_enabled: bool
+    mtf_fusion_enabled: bool
+    threshold_long: float
+    threshold_short: float
+    checked_at: str
+
+
+class MLEngineHealthResponse(BaseModel):
+    """Response schema for GET /api/ml/engine-health (admin)."""
+    status: str                          # "ok" | "degraded" | "unavailable"
+    engine: Dict[str, Any]
+    macro_store: Dict[str, Any]
+    mtf_store: Dict[str, Any]
+    saved_model_files_kb: Dict[str, float]
+    checked_at: str
+    error: Optional[str] = None
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -665,31 +695,44 @@ async def trigger_retrain(
     }
 
 
-@router.get("/health", summary="ML model health check")
+@router.get(
+    "/health",
+    response_model=MLHealthResponse,
+    summary="ML model health check",
+    responses={
+        200: {"description": "Model loaded and healthy"},
+        206: {"description": "Model degraded (loaded but no trained weights)"},
+        503: {"description": "Model unavailable — inference disabled"},
+    },
+)
 async def ml_health(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current health status of the production ML model.
 
-    Delegates to InferenceEngine.health() for live engine metrics (predict
-    count, fallback count, last latency, calibrator state, feature flags).
-    Falls back to file-based registry inspection when the engine is not yet
-    initialised.  Any authenticated user may call this endpoint.
+    Delegates to InferenceEngine.health() for live engine metrics:
+    predict count, fallback count, last latency, calibrator state,
+    feature flags, and signal thresholds.
+
+    HTTP status codes:
+    - 200: model loaded and ready for inference
+    - 503: engine unavailable or no model loaded
+
+    Any authenticated user may call this endpoint.
+    Infrastructure liveness probes should use GET /api/health instead.
     """
-    from datetime import datetime, timezone
+    import json as _json
+    import pathlib
 
     checked_at = datetime.now(timezone.utc).isoformat()
 
     # ── Primary: InferenceEngine live health ──────────────────────────────────
     try:
-        from ml.inference_engine import get_inference_engine
+        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
 
         engine = get_inference_engine()
         engine_health = engine.health()
 
         # Enrich with saved-model registry metadata
-        import pathlib
-        import json as _json
-
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
         meta_path = saved_dir / "advanced_oos_meta.json"
         oos_accuracy: Optional[float] = None
@@ -700,93 +743,123 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         if meta_path.exists():
             try:
                 meta = _json.loads(meta_path.read_text())
-                oos_accuracy = float(meta.get("oos_accuracy", 0.0))
+                oos_accuracy = float(meta.get("oos_accuracy", 0.0)) or None
                 feature_count = int(meta.get("feature_count", 0))
                 model_file = meta.get("model_file", "advanced_oos.pkl")
                 last_trained_at = meta.get("validated_at") or meta.get("trained_at")
             except Exception as exc:
                 logger.debug("ml_health: meta parse failed: %s", exc)
 
-        # Derive feature_count from predictor if meta didn't have it
+        # Derive feature_count from predictor when meta didn't have it
         if feature_count == 0:
             try:
-                from ml.live_inference import get_advanced_predictor
+                from ml.live_inference import get_advanced_predictor  # noqa: PLC0415
                 pred = get_advanced_predictor()
                 if pred.is_available and hasattr(pred, "_model"):
                     n = getattr(pred._model, "n_features_in_", 0)
-                    feature_count = int(n) if n else feature_count
+                    feature_count = int(n) if n else 0
             except Exception:
                 pass
 
         model_available = engine_health.get("model_available", False)
-        status_str = "ok" if model_available else "degraded"
 
-        return {
-            "status": status_str,
-            "model_loaded": model_available,
-            "model_id": engine_health.get("model_version", model_file),
-            "feature_count": feature_count,
-            "oos_accuracy": oos_accuracy,
-            "last_trained_at": last_trained_at,
-            "predict_count": engine_health.get("predict_count", 0),
-            "fallback_count": engine_health.get("fallback_count", 0),
-            "last_latency_ms": engine_health.get("last_latency_ms", 0.0),
-            "calibrator_available": engine_health.get("calibrator_available", False),
-            "online_learning_enabled": engine_health.get("online_learning_enabled", False),
-            "mtf_fusion_enabled": engine_health.get("mtf_fusion_enabled", True),
-            "threshold_long": engine_health.get("threshold_long", 0.58),
-            "threshold_short": engine_health.get("threshold_short", 0.42),
-            "checked_at": checked_at,
-        }
+        payload = MLHealthResponse(
+            status="ok" if model_available else "degraded",
+            model_loaded=model_available,
+            model_id=engine_health.get("model_version", model_file),
+            feature_count=feature_count,
+            oos_accuracy=oos_accuracy,
+            last_trained_at=last_trained_at,
+            predict_count=engine_health.get("predict_count", 0),
+            fallback_count=engine_health.get("fallback_count", 0),
+            last_latency_ms=engine_health.get("last_latency_ms", 0.0),
+            calibrator_available=engine_health.get("calibrator_available", False),
+            online_learning_enabled=engine_health.get("online_learning_enabled", False),
+            mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
+            threshold_long=engine_health.get("threshold_long", 0.58),
+            threshold_short=engine_health.get("threshold_short", 0.42),
+            checked_at=checked_at,
+        )
+
+        if not model_available:
+            from fastapi.responses import JSONResponse  # noqa: PLC0415
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=payload.model_dump(),
+            )
+        return payload
+
     except Exception as exc:
         logger.warning("ml_health: InferenceEngine unavailable: %s", exc)
 
     # ── Fallback: file-based registry ─────────────────────────────────────────
     predictor = _get_predictor()
-    meta = _load_model_registry()
     model_loaded = predictor is not None
-    return {
-        "status": "ok" if model_loaded else "degraded",
-        "model_loaded": model_loaded,
-        "model_id": None,
-        "feature_count": 0,
-        "oos_accuracy": None,
-        "last_trained_at": None,
-        "predict_count": 0,
-        "fallback_count": 0,
-        "last_latency_ms": 0.0,
-        "calibrator_available": False,
-        "online_learning_enabled": False,
-        "mtf_fusion_enabled": False,
-        "threshold_long": 0.58,
-        "threshold_short": 0.42,
-        "checked_at": checked_at,
-    }
+
+    payload = MLHealthResponse(
+        status="ok" if model_loaded else "unavailable",
+        model_loaded=model_loaded,
+        model_id=None,
+        feature_count=0,
+        oos_accuracy=None,
+        last_trained_at=None,
+        predict_count=0,
+        fallback_count=0,
+        last_latency_ms=0.0,
+        calibrator_available=False,
+        online_learning_enabled=False,
+        mtf_fusion_enabled=False,
+        threshold_long=0.58,
+        threshold_short=0.42,
+        checked_at=checked_at,
+    )
+
+    if not model_loaded:
+        from fastapi.responses import JSONResponse  # noqa: PLC0415
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=payload.model_dump(),
+        )
+    return payload
 
 
-@router.get("/engine-health", summary="InferenceEngine detailed health (admin)")
+@router.get(
+    "/engine-health",
+    response_model=MLEngineHealthResponse,
+    summary="InferenceEngine detailed health (admin)",
+    responses={
+        200: {"description": "Engine healthy"},
+        503: {"description": "Engine unavailable or model not loaded"},
+    },
+)
 async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     """
     Return detailed InferenceEngine diagnostics.
 
     Includes pipeline step availability (MacroStore, MTF, online learner,
-    calibrator), live counters, and per-component status.  Admin only —
-    exposes internal model configuration details.
+    calibrator), live predict/fallback counters, last inference latency,
+    and saved model file inventory.
+
+    Admin only — exposes internal model configuration details.
+
+    HTTP status codes:
+    - 200: engine healthy, model loaded
+    - 503: engine unavailable or model not loaded
     """
-    from datetime import datetime, timezone
+    import pathlib
 
     checked_at = datetime.now(timezone.utc).isoformat()
 
     try:
-        from ml.inference_engine import get_inference_engine
+        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
 
         engine = get_inference_engine()
         health = engine.health()
 
         # MacroStore status
-        macro_status: dict = {"available": False, "series_count": 0}
+        macro_status: Dict[str, Any] = {"available": False, "series_count": 0}
         try:
-            from ml.macro_store import macro_store
+            from ml.macro_store import macro_store  # noqa: PLC0415
             macro_status = {
                 "available": len(macro_store) > 0,
                 "series_count": len(macro_store),
@@ -795,9 +868,9 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
             pass
 
         # MTF store status
-        mtf_status: dict = {"available": False, "ready": False}
+        mtf_status: Dict[str, Any] = {"available": False, "ready": False}
         try:
-            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON  # noqa: PLC0415
             if _MTF_STORE_SINGLETON is not None:
                 mtf_status = {
                     "available": True,
@@ -806,27 +879,46 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
         except Exception:
             pass
 
-        # Saved model files
-        import pathlib
+        # Saved model files inventory
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
-        model_files = {
-            f.name: round(f.stat().st_size / 1024, 1)
-            for f in saved_dir.glob("*.pkl")
-            if f.exists()
-        } if saved_dir.exists() else {}
+        model_files: Dict[str, float] = {}
+        if saved_dir.exists():
+            model_files = {
+                f.name: round(f.stat().st_size / 1024, 1)
+                for f in saved_dir.glob("*.pkl")
+                if f.exists()
+            }
 
-        return {
-            "status": "ok" if health.get("model_available") else "degraded",
-            "engine": health,
-            "macro_store": macro_status,
-            "mtf_store": mtf_status,
-            "saved_model_files_kb": model_files,
-            "checked_at": checked_at,
-        }
+        model_available = health.get("model_available", False)
+        payload = MLEngineHealthResponse(
+            status="ok" if model_available else "degraded",
+            engine=health,
+            macro_store=macro_status,
+            mtf_store=mtf_status,
+            saved_model_files_kb=model_files,
+            checked_at=checked_at,
+        )
+
+        if not model_available:
+            from fastapi.responses import JSONResponse  # noqa: PLC0415
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=payload.model_dump(),
+            )
+        return payload
+
     except Exception as exc:
         logger.warning("ml_engine_health: %s", exc)
-        return {
-            "status": "unavailable",
-            "error": str(exc),
-            "checked_at": checked_at,
-        }
+        from fastapi.responses import JSONResponse  # noqa: PLC0415
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=MLEngineHealthResponse(
+                status="unavailable",
+                engine={},
+                macro_store={},
+                mtf_store={},
+                saved_model_files_kb={},
+                checked_at=checked_at,
+                error=str(exc),
+            ).model_dump(),
+        )
