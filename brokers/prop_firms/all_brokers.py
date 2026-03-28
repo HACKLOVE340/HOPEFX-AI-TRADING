@@ -1237,12 +1237,14 @@ class PropFirmFactory:
 async def example_usage():
     """Example usage of prop firm brokers"""
 
-    # Create FTMO broker
+    # Create FTMO broker — credentials must come from environment variables.
+    # Set FTMO_API_KEY, FTMO_SECRET_KEY, FTMO_ACCOUNT_ID before running.
+    import os as _os
     async with PropFirmFactory.create_broker(
         PropFirmType.FTMO,
-        api_key="your-api-key",
-        secret_key="your-secret-key",
-        account_id="your-account-id",
+        api_key=_os.environ["FTMO_API_KEY"],
+        secret_key=_os.environ["FTMO_SECRET_KEY"],
+        account_id=_os.environ["FTMO_ACCOUNT_ID"],
         sandbox=True,
     ) as broker:
         # Get metrics

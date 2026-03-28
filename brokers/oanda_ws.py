@@ -41,8 +41,8 @@ class OANDAStreamAdapter:
     Usage::
 
         adapter = OANDAStreamAdapter(
-            api_key="...",
-            account_id="...",
+            api_key=os.environ["OANDA_API_KEY"],
+            account_id=os.environ["OANDA_ACCOUNT_ID"],
             instruments=["XAU_USD", "EUR_USD"],
             on_tick=my_callback,
         )
