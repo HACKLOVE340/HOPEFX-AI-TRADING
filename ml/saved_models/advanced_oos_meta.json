@@ -211,5 +211,8 @@
     "sharpe_gate_passed": true,
     "sharpe_credible": true,
     "message": "Sharpe gate PASSED: N=952 >= 919. SE=0.082 (credible)"
-  }
+  },
+  "reconcile_verified_at": "2026-03-28T12:38:08.231603+00:00",
+  "reconcile_feature_count_confirmed": 176,
+  "reconcile_oos_accuracy_confirmed": 0.6635
 }
