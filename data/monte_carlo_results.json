@@ -72,5 +72,50 @@
       "Remove or clearly label this file as 'wrong-timeframe experiment' until reconciliation is complete",
       "Add overnight financing costs (OANDA XAU_USD swap rate) to any daily backtest with avg hold > 1 day"
     ]
+  },
+  "reconciled_oos_period": {
+    "symbol": "XAUUSD",
+    "timeframe": "1d",
+    "model": "advanced_oos.pkl",
+    "strategy": "model_signal_fixed_hold",
+    "confidence_threshold": 0.55,
+    "hold_bars": 5,
+    "round_trip_cost_usd": 70.0,
+    "start": "2019-07-10",
+    "end": "2026-03-24",
+    "total_bars": 1221,
+    "total_trades": 181,
+    "win_rate_pct": 11.6,
+    "total_pnl_usd": -10587.5,
+    "final_balance": 89412.5,
+    "initial_balance": 100000.0,
+    "return_pct": -10.5875,
+    "max_drawdown_pct": 11.313,
+    "sharpe_ratio": -4.1776,
+    "avg_pnl_per_trade": -58.49,
+    "avg_hold_bars": 5.0,
+    "monte_carlo": {
+      "n_runs": 200,
+      "worst_case_dd_pct": 13.0153,
+      "p99_dd_pct": 12.8759,
+      "p95_dd_pct": 12.3085,
+      "median_dd_pct": 10.6016,
+      "mean_dd_pct": 10.625
+    },
+    "_reconciliation": "This backtest uses the same model (advanced_oos.pkl), same daily XAUUSD data, same filtered-target abstain logic, and same confidence threshold as the OOS evaluation. Results are directly comparable to the OOS accuracy metrics. The previous monte_carlo_results.json used a momentum SMA strategy on 1d/15m bars \u2014 a different strategy entirely."
+  },
+  "_reconciliation_status": "RECONCILED \u2014 reconciled_full_history and/or reconciled_oos_period entries use advanced_oos.pkl on daily XAUUSD bars, matching the OOS evaluation. The 'daily' and '15m' entries are legacy momentum-strategy results on a different strategy and are retained for reference only.",
+  "_diagnostic_finding": {
+    "summary": "Directional accuracy does not imply positive P&L under fixed-hold + transaction costs",
+    "oos_accuracy_pct": 66.3,
+    "backtest_win_rate_pct": 11.6,
+    "gap_explanation": "The OOS evaluation measures directional accuracy on filtered bars (|move| >= 0.25*ATR). The backtest applies a fixed 5-bar hold and $70 round-trip cost. A BUY signal that is directionally correct (price goes up) can still lose money if the move reverses before the 5-bar exit, or if the move is smaller than the $70 cost. The 66.3% directional accuracy is measured at bar-close; the backtest P&L depends on the path over 5 bars, not just the final direction.",
+    "required_actions": [
+      "Optimize exit logic: use trailing stop or ATR-based exit instead of fixed 5-bar hold",
+      "Reduce round-trip cost: target OANDA XAU_USD spread + commission < $50",
+      "Add overnight financing: ~$2-8/lot/night for 5-day avg hold",
+      "Run walk-forward P&L backtest (not just accuracy) before live deployment",
+      "The 66.3% accuracy is a necessary but not sufficient condition for profitability"
+    ]
   }
 }
