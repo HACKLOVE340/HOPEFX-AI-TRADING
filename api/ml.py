@@ -580,3 +580,46 @@ async def trigger_retrain(
         "status": "queued",
         "message": "Model retraining started in background. Check /ml/accuracy in ~10 minutes.",
     }
+
+
+@router.get("/health", summary="ML model health check")
+async def ml_health(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the current health status of the production ML model.
+
+    Reports whether advanced_oos.pkl is loaded, its feature count,
+    OOS accuracy, and the timestamp of the last successful prediction.
+    Does not require admin role — any authenticated user can call this.
+    """
+    from datetime import datetime, timezone
+
+    predictor = _get_predictor()
+    meta = _load_model_registry()
+
+    model_loaded = predictor is not None
+    feature_count: int = 0
+    last_prediction_at: Optional[str] = None
+    oos_accuracy: Optional[float] = None
+    model_id: Optional[str] = None
+
+    if model_loaded:
+        try:
+            feature_count = int(meta.get("feature_count", 0))
+            oos_accuracy = float(meta.get("oos_accuracy", 0.0))
+            model_id = meta.get("model_file", "advanced_oos.pkl")
+            # last_prediction_at is tracked on the predictor if available
+            last_prediction_at = getattr(predictor, "_last_prediction_at", None)
+            if last_prediction_at is None:
+                last_prediction_at = meta.get("validated_at")
+        except Exception as exc:
+            logger.warning("ml_health: could not read meta: %s", exc)
+
+    return {
+        "status": "ok" if model_loaded else "degraded",
+        "model_loaded": model_loaded,
+        "model_id": model_id,
+        "feature_count": feature_count,
+        "oos_accuracy": oos_accuracy,
+        "last_prediction_at": last_prediction_at,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
