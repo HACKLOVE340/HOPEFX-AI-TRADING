@@ -5,5 +5,12 @@
   "sharpe_before": null,
   "sharpe_after": null,
   "phase2_enabled_at": null,
-  "phase3_enabled_at": null
+  "phase3_enabled_at": null,
+  "fill_gate_target": 500,
+  "fill_gate_passed": false,
+  "fill_gate_pct": 0.0,
+  "last_fill_at": null,
+  "first_fill_at": null,
+  "last_sync_at": null,
+  "_note": "Run: python scripts/fill_tracker.py to sync fills from OANDA API"
 }
