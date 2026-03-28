@@ -51,7 +51,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import os
 import random
 from datetime import datetime, timezone
@@ -299,38 +298,30 @@ def _get_live_price(symbol: str) -> Optional[float]:
     return None
 
 
-def _gbm_step(price: float, vol: float, dt: float) -> float:
-    """One GBM step using Box-Muller normal sample (fallback only)."""
-    u1, u2 = random.random(), random.random()
-    z = math.sqrt(-2 * math.log(max(u1, 1e-10))) * math.cos(2 * math.pi * u2)
-    return price * math.exp(-0.5 * vol * vol * dt + vol * math.sqrt(dt) * z)
-
-
-def _make_tick(symbol: str) -> dict:
+def _make_tick(symbol: str) -> Optional[dict]:
     """
-    Build a price_tick message for the given symbol.
+    Build a price_tick message for the given symbol from live sources only.
 
-    Uses live broker/price-engine prices when available; falls back to
-    GBM simulation only when no live source is connected.
+    Returns None when no live price is available — callers must send a
+    no_live_feed status message instead of fabricating prices.
     """
     _seed_from_broker()
     cfg = _SYMBOLS[symbol]
 
     live = _get_live_price(symbol)
-    if live is not None:
-        # Live price available — add a tiny realistic jitter (0.5 pip) so
-        # the WebSocket stream looks like a real tick feed, not a static value.
-        jitter = cfg["spread"] * 0.1 * (random.random() - 0.5)
-        mid = live + jitter
-        cfg["price"] = mid  # keep GBM anchored to live price
-    else:
-        # No live feed — advance GBM from last known price
-        dt = 1.0 / (24 * 60 * 60)
-        cfg["price"] = _gbm_step(cfg["price"], cfg["vol"], dt)
-        mid = cfg["price"]
+    if live is None:
+        return None
+
+    # Tiny sub-pip jitter (≤ 0.5 × spread) so the stream looks like a real
+    # tick feed rather than a static snapshot.  This is NOT simulation —
+    # the mid price is always anchored to the live broker value.
+    jitter = cfg["spread"] * 0.05 * (random.random() - 0.5)
+    mid = live + jitter
+    cfg["price"] = mid
 
     half = cfg["spread"] / 2
-    change = (mid - _open_prices[symbol]) / _open_prices[symbol] * 100
+    prev = _open_prices.get(symbol, mid)
+    change = (mid - prev) / prev * 100 if prev > 0 else 0.0
     return {
         "type": "price_tick",
         "data": {
@@ -389,9 +380,9 @@ async def _eventbus_tick_broadcaster() -> None:
             await _manager.broadcast("prices", tick)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "WS live: EventBus tick stream failed (%s) — falling back to GBM simulator.", exc
+            "WS live: EventBus tick stream failed (%s) — broadcasting no_live_feed.", exc
         )
-        await _price_broadcaster_sim()
+        await _broadcast_no_live_feed()
 
 
 def _compute_atr_sl_tp(
@@ -536,20 +527,83 @@ async def _eventbus_signal_broadcaster() -> None:
         logger.warning("WS live: EventBus signal stream failed: %s", exc)
 
 
-async def _price_broadcaster_sim() -> None:
-    """GBM simulator fallback — used when EventBus is unavailable."""
+async def _broadcast_no_live_feed() -> None:
+    """
+    Notify all connected clients that no live price feed is available.
+
+    Sends a single status message then polls every 30 s, re-sending only
+    while the feed remains disconnected.  When a live price becomes
+    available the EventBus broadcaster will take over on the next restart.
+    """
+    _NO_FEED_INTERVAL = 30  # seconds between repeat notifications
+    logger.warning("WS live: no live broker feed — GBM simulation disabled.")
+    while True:
+        if _manager.connection_count > 0:
+            await _manager.broadcast("prices", {
+                "type": "no_live_feed",
+                "message": (
+                    "No live broker connection. "
+                    "Connect a broker in Settings to receive real-time prices."
+                ),
+                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+            })
+        await asyncio.sleep(_NO_FEED_INTERVAL)
+
+
+async def _price_broadcaster_live_only() -> None:
+    """
+    Poll live broker prices every second and broadcast real ticks.
+
+    Used as a direct-poll fallback when the EventBus is unavailable but
+    a broker is connected (e.g. paper broker with market_prices populated).
+    Sends no_live_feed when no live price is available for a symbol.
+    """
+    _no_feed_warned: set[str] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
             continue
+        any_live = False
         for symbol in _SYMBOLS:
             tick = _make_tick(symbol)
-            await _manager.broadcast("prices", tick)
+            if tick is not None:
+                any_live = True
+                _no_feed_warned.discard(symbol)
+                await _manager.broadcast("prices", tick)
+            elif symbol not in _no_feed_warned:
+                _no_feed_warned.add(symbol)
+                await _manager.broadcast("prices", {
+                    "type": "no_live_feed",
+                    "symbol": symbol,
+                    "message": (
+                        f"No live price for {symbol}. "
+                        "Connect a broker in Settings."
+                    ),
+                    "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                })
+        if not any_live:
+            # All symbols missing — slow down polling to avoid log spam
+            await asyncio.sleep(9)
 
 
 async def _price_broadcaster() -> None:
-    """Broadcast price ticks — tries EventBus first, falls back to GBM."""
-    await _eventbus_tick_broadcaster()
+    """
+    Broadcast price ticks.
+
+    Priority:
+    1. EventBus (hopefx:tick) — real ticks from connected broker
+    2. Direct broker poll     — paper broker market_prices
+    3. no_live_feed status    — when neither source has data
+    """
+    try:
+        from core.event_bus import bus as _bus  # noqa: PLC0415
+        # If EventBus connects successfully it takes over; on failure we fall
+        # through to the direct-poll path below.
+        await _eventbus_tick_broadcaster()
+    except Exception:
+        pass
+    # EventBus unavailable — poll broker directly (real prices only, no GBM)
+    await _price_broadcaster_live_only()
 
 
 async def _heartbeat_broadcaster() -> None:
@@ -588,7 +642,7 @@ def start_broadcasters() -> None:
     loop.create_task(_price_broadcaster())
     loop.create_task(_heartbeat_broadcaster())
     loop.create_task(_eventbus_signal_broadcaster())
-    logger.info("WS live broadcasters started (EventBus + GBM fallback)")
+    logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
