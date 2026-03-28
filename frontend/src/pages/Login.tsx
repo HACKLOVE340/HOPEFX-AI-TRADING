@@ -12,7 +12,7 @@ const Login: React.FC = () => {
   const location  = useLocation();
   const setAuth   = useStore((s) => s.setAuth);
 
-  const [username, setUsername] = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
@@ -21,14 +21,14 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password) {
-      setError('Username and password are required.');
+    if (!email.trim() || !password) {
+      setError('Email and password are required.');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.login({ username: username.trim(), password });
+      const res = await authApi.login({ email: email.trim().toLowerCase(), password });
       setAuth(res.data.access_token, res.data.user);
       navigate(from, { replace: true });
     } catch (err: unknown) {
@@ -50,15 +50,15 @@ const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} style={s.form}>
           <div style={s.field}>
-            <label style={s.label} htmlFor="username">Username or Email</label>
+            <label style={s.label} htmlFor="email">Email</label>
             <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               style={s.input}
               placeholder="trader@hopefx.io"
-              autoComplete="username"
+              autoComplete="email"
               autoFocus
             />
           </div>
