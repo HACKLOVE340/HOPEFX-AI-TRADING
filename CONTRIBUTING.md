@@ -47,12 +47,14 @@ See [CLA.md](./CLA.md) for full terms and [LICENSE-COMMERCIAL.md](./LICENSE-COMM
 4. **Test your changes**
    ```bash
    # Run tests
-   pytest
+   pytest tests/ -m "not slow" -q
 
-   # Run linters
-   black .
-   flake8 .
-   pylint hopefx
+   # Run linter and formatter (ruff covers both)
+   ruff check .
+   ruff format --check .
+
+   # Security scan
+   bandit -r . -ll
    ```
 
 5. **Commit with clear messages**
@@ -103,27 +105,30 @@ pre-commit install
 ### 3. Run Tests
 
 ```bash
-# Run all tests
-pytest
+# Fast suite (skips slow ML training tests)
+pytest tests/ -m "not slow" -q
 
-# Run with coverage
-pytest --cov=. --cov-report=term-missing
+# Full suite including ML training (~10 min)
+pytest tests/ -q
 
-# Run specific test file
-pytest tests/test_config.py
+# With coverage report
+pytest tests/ -m "not slow" --cov=. --cov-report=term-missing
+
+# Single module
+pytest tests/test_risk_calculations.py -v
 ```
 
 ## Code Style
 
 ### Python Style Guide
 
-We follow PEP 8 with some modifications:
+We follow PEP 8 enforced by **ruff** (linting + formatting). Key conventions:
 
-- **Line length**: 100 characters (not 79)
-- **Strings**: Use double quotes `"` for strings
-- **Imports**: Organized in groups (standard library, third-party, local)
-- **Type hints**: Use type hints for function signatures
-- **Docstrings**: Use Google-style docstrings
+- **Line length**: 100 characters
+- **Strings**: Double quotes `"` preferred
+- **Imports**: Organised in groups (standard library, third-party, local) — ruff handles this automatically
+- **Type hints**: Required for all public function signatures
+- **Docstrings**: Google-style
 
 ### Example
 
@@ -184,29 +189,30 @@ class TradingStrategy:
         return "HOLD"
 ```
 
-### Code Formatting
+### Code Formatting and Linting
 
-Use Black for automatic formatting:
+All formatting and linting is handled by **ruff**:
 
 ```bash
-# Format all Python files
-black .
+# Auto-fix lint issues
+ruff check . --fix
 
-# Check without modifying
-black --check .
+# Format all Python files
+ruff format .
+
+# Check without modifying (used in CI)
+ruff check .
+ruff format --check .
+
+# Type checking
+mypy .
 ```
 
-### Linting
+Pre-commit hooks run ruff and bandit automatically on every commit. Install them with:
 
 ```bash
-# Run flake8
-flake8 .
-
-# Run pylint
-pylint hopefx config cache database
-
-# Run mypy for type checking
-mypy .
+pip install pre-commit
+pre-commit install
 ```
 
 ## Project Structure
@@ -395,7 +401,7 @@ Fixes #456
 docs(readme): update installation instructions
 
 Add section for Windows installation and update
-Python version requirements to 3.8+.
+Python version requirements to 3.10+.
 ```
 
 ## Review Process

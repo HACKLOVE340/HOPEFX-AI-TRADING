@@ -4,7 +4,8 @@
 
 | Version | Security Updates |
 |---------|-----------------|
-| 1.14.x (current) | ✅ Active |
+| 1.15.x (current) | ✅ Active |
+| 1.14.x | ✅ Critical fixes only |
 | < 1.14 | ❌ Unsupported — upgrade to current |
 
 ---
@@ -53,14 +54,16 @@
 | Sentry error tracking | ✅ Implemented | Set `SENTRY_DSN` in production `.env` |
 | Prometheus metrics | ✅ Implemented | 41 metrics, Grafana dashboards |
 | ML fallback alert | ✅ Implemented | Sentry fatal + Discord when `advanced_oos.pkl` fails |
+| Online learner persistence | ✅ Implemented | `SklearnOnlineLearner` state persisted to `ml/saved_models/online_learner_{symbol}.pkl`; loaded at startup |
 
 ---
 
 ## Known Limitations
 
 1. **HTTPS not enforced at app level** — TLS must be terminated at the infrastructure layer (nginx, AWS ALB, Cloudflare). Do not expose port 8000 directly to the internet.
-2. **`ALLOWED_ORIGINS` default is `http://localhost:3000`** — must be set to your production domain before deploying. The startup validator will reject `*` in production.
+2. **`ALLOWED_ORIGINS` default is `http://localhost:3000`** — must be set to your production domain before deploying. The startup validator rejects `*` in production.
 3. **Sentry DSN optional in dev** — set `SENTRY_DSN` in production `.env` or error tracking is disabled.
+4. **Online learner pickle files** — `ml/saved_models/online_learner_*.pkl` are serialised with Python's `pickle`. Do not load these files from untrusted sources. They are written only by the application itself and should not be exposed via any API endpoint.
 
 ---
 

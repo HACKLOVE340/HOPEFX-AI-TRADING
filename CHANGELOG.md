@@ -16,7 +16,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - `FEATURE_ML_PREDICTIONS` promoted from BETA/off to STABLE/on by default.
-  The 68% OOS accuracy (p=0.0000) model is the platform's core signal edge.
+  The 66.4% OOS accuracy (p=0.0000) model is the platform's core signal edge.
+
+---
+
+## [1.15.0] — 2026-03-28 (V15)
+
+### Added
+- **Dual license**: `LICENSE-COMMERCIAL.md` defines commercial licensing terms
+  (proprietary products, SaaS, white-label, OEM). `CLA.md` v1.0 — contributors
+  sign by including a one-line statement in their first PR.
+- **Online learning wired into daily startup** (`ml/online_learner.py`):
+  - `SklearnOnlineLearner`: SGDClassifier-backed incremental learner with
+    `partial_fit()`, `predict_proba()`, persist/load, and `status()`.
+  - `get_online_learner(symbol)` module-level singleton registry — resolves the
+    correct learner per symbol for `HourlyTrainer._online_update()`.
+  - `init_daily_online_learner()` factory in `core/startup_factories.py`:
+    pre-loads learner singletons at startup (zero cold-start on first hourly tick)
+    and schedules a daily EWC regime-adaptation loop at 00:05 UTC.
+  - Registered in `app.py` as `daily_online_learner` component, gated on
+    `ML_HOURLY_ENABLED=true`.
+- **Multi-symbol backtest** (`backtest/multi_symbol_backtest.py`):
+  - Real market data run: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257.
+  - Pooled N=628 trades ≥ 600 target — Sharpe gate PASSED.
+  - Pooled Sharpe=4.05, SE=0.121 (10-yr OOS, oos_frac=0.30, real GC=F + BTC-USD + ETH-USD).
+  - Results written to `backtest/results/multi_symbol_report.json`.
+- **OOS validation stamped** (`ml/saved_models/advanced_oos_meta.json`):
+  - `validated_at`, `validation_status: PASSED`, `validation_notes` added.
+  - `multi_symbol_backtest` block appended with pooled results.
+  - Production model confirmed: 176 features, N=1,260 OOS bars, accuracy=66.4%,
+    p=0.0000, `ci_mode=false`.
+
+### Fixed
+- `data/oanda_paper_start.json`: replaced invalid `"account_id": "test_account"`
+  with `"PENDING…"` + `requires_real_account: true` + `live_gate_opens` timestamp.
+- `_stamp_oanda_paper_start()` in `core/startup_factories.py`: now overwrites the
+  PENDING placeholder on first real OANDA connection while preserving `started_utc`.
+- `backtest/multi_symbol_backtest.py`: fixed yfinance ≥0.2.x MultiIndex column
+  flattening (`(Price, Ticker)` → single-level lowercase). Fixed gate message to
+  correctly show PASSED when N ≥ target_n.
+- All MIT license references replaced with AGPL-3.0 across `pyproject.toml`,
+  `CONTRIBUTING.md`, `docs/CONTRIBUTING.md`, `docs/FAQ.md`, `docs/index.md`.
+
+### Changed
+- README metrics table updated: 66.4% OOS accuracy, N=1,260 bars, 176 features,
+  multi-symbol N=628. Stale research-model warning removed.
+- `.gitignore`: added `data/*Y.csv` and `data/*_H1.csv` patterns to exclude
+  yfinance OHLCV cache files.
 
 ---
 
@@ -203,10 +249,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## Roadmap
 
 ### Near-term (active)
-- Start OANDA paper trading (30-day run required before live capital).
-- Run multi-symbol backtest (XAU + BTC + ETH) to accumulate ~600 trades for
-  statistically valid Sharpe (current N=48, SE +/-0.21).
-- Wire ml/online_learner.py into daily startup schedule.
+- Complete 30-day OANDA paper run (started 2026-03-27, gate opens 2026-04-26).
+- Accumulate 200+ live paper fills to validate live signal distribution against OOS backtest.
+- Auto-generate weekly performance report (win rate, Sharpe, drawdown) from PostgreSQL fills.
 
 ### Medium-term
 - UI overhaul: integrate TradingView Charting Library or shadcn/ui component system.

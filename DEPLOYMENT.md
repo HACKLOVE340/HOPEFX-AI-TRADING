@@ -4,13 +4,13 @@ Complete deployment guide for HOPEFX AI Trading Framework in production.
 
 ## Prerequisites
 
-- Linux server (Ubuntu 20.04+ recommended)
-- Python 3.8+
-- Redis
-- PostgreSQL (for production)
-- Docker (optional, recommended)
-- 2+ GB RAM
-- 10+ GB disk space
+- Linux server (Ubuntu 22.04+ recommended)
+- Python 3.10, 3.11, or 3.12
+- Redis 7+
+- PostgreSQL 16+ (for production; SQLite used automatically in development)
+- Docker + Docker Compose (recommended)
+- 4+ GB RAM (8 GB recommended for ML training)
+- 20+ GB disk space
 
 ## Deployment Options
 
@@ -76,13 +76,13 @@ docker-compose logs -f hopefx-app
 
 ```bash
 # Check health
-curl http://localhost:5000/health
+curl http://localhost:8000/health
 
 # Check admin panel
-open http://localhost:5000/admin
+open http://localhost:8000/admin
 
 # Check API docs
-open http://localhost:5000/docs
+open http://localhost:8000/docs
 ```
 
 ---
@@ -182,7 +182,7 @@ sudo ufw enable
 sudo ufw allow 22/tcp
 
 # Allow application port (use reverse proxy in production)
-sudo ufw allow 5000/tcp
+sudo ufw allow 8000/tcp
 
 # Check status
 sudo ufw status
@@ -205,7 +205,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -242,10 +242,10 @@ chmod 600 .env
 
 ```bash
 # Check application health
-curl http://localhost:5000/health
+curl http://localhost:8000/health
 
 # View system metrics
-curl http://localhost:5000/admin/api/system-info
+curl http://localhost:8000/admin/api/system-info
 ```
 
 ### 2. Log Monitoring

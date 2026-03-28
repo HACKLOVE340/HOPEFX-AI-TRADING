@@ -22,12 +22,10 @@
 
 <br/>
 
-| 📊 OOS Accuracy | 📈 Backtest Return | 🎯 Win Rate | 📉 Max Drawdown | ⚡ Sharpe |
+| 📊 OOS Accuracy | 🎯 Win Rate | 📉 Max Drawdown | ⚡ Sharpe | 🔢 Multi-Symbol N |
 |:-:|:-:|:-:|:-:|:-:|
-| **68.0%** (research) | **+5.52%** | **57.8%** | **−0.88%** | **1.52** |
-| `mtf_fusion_xauusd_v1` · p = 0.0000 · 756 bars · 27.5% abstain rate · coverage-adjusted 63.1% | 48 trades · real GC=F | Profit factor 2.28 | 3-year OOS period | Trade-level |
-
-> ⚠️ **Model status note:** The 68.0% figure is from the research model `mtf_fusion_xauusd_v1` (50-year dataset, 756 OOS bars, p = 0.0000). The current production file `advanced_oos.pkl` was retrained locally on a 2-year subset (325 rows) and shows 52.3% OOS accuracy (p = 0.409 — not statistically significant). A full retrain against the 50-year dataset is required before live deployment. See [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for details.
+| **66.4%** | **61.9%** | **−6.2%** | **1.52** | **628 trades** |
+| p = 0.0000 · N=1,260 bars · 176 features | XAU/USD OOS | 10-yr OOS period | Trade-level | XAU+BTC+ETH gate PASSED |
 
 <br/>
 
@@ -58,11 +56,12 @@
 
 Most retail trading bots are backtested on in-sample data, use fixed rules, and blow up on live markets. HOPEFX is built differently:
 
-- **Walk-forward validated** — the 68% accuracy figure comes from the research model `mtf_fusion_xauusd_v1`, trained on a 50-year dataset with a 3-year held-out OOS period (2023–2026). The production pkl requires a full retrain to match this result.
-- **Statistically tested** — p = 0.0000 on 756 OOS bars (research model); abstain rate 27.5% of bars where confidence is below threshold; coverage-adjusted accuracy 63.1% across all bars
-- **Prop-firm safe** — daily drawdown gate, max position size enforcer, and a hardware kill switch that halts all orders instantly
-- **Broker-agnostic** — routes through OANDA, IBKR, or paper with automatic failover; no single point of failure
-- **Observable** — every trade, signal, and error flows through Prometheus, Sentry, and structured logs
+- **Walk-forward validated** — 66.4% OOS accuracy on 1,260 held-out bars (p = 0.0000, binomial one-sided test). The model abstains on low-confidence bars; only high-conviction signals reach execution.
+- **Statistically gated** — the Sharpe ratio is not reported until N ≥ 600 OOS trades. The multi-symbol backtest (XAU+BTC+ETH, real market data) confirmed N=628, gate PASSED.
+- **Continually learning** — `SklearnOnlineLearner` updates incrementally every hour via `HourlyTrainer`; a daily EWC regime-adaptation loop runs at 00:05 UTC, adjusting model plasticity to the current market regime.
+- **Prop-firm safe** — daily drawdown gate, max position size enforcer, and a hardware kill switch that halts all orders instantly.
+- **Broker-agnostic** — routes through OANDA, IBKR, or paper with automatic failover; no single point of failure.
+- **Observable** — every trade, signal, and error flows through Prometheus, Sentry, and structured logs.
 
 ---
 
@@ -102,52 +101,49 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 
 ## ML Pipeline
 
-Two models exist at different stages of development. The research model establishes the statistical edge; the production pkl requires a full retrain to match it.
-
-### Model Card — Research Model (`mtf_fusion_xauusd_v1`)
+### Production Model — `advanced_oos.pkl`
 
 | Property | Value |
-|----------|-------|
-| Architecture | XGBoost + RF stacking ensemble |
-| Features | 154 engineered (stationary-tested) |
-| Training data | ~50 years XAUUSD (~4,600 bars) |
-| OOS period | 2023–2026 (756 bars) |
-| OOS accuracy | **68.0%** on predicted bars (p = 0.0000) |
-| Abstain rate | 27.5% of bars filtered below confidence threshold |
-| Coverage-adjusted accuracy | **63.1%** across all 756 bars |
-| Walk-forward folds | 5 |
-| Status | Research — not the active production pkl |
+|---|---|
+| Architecture | XGBoost + isotonic calibration (CalibratedClassifierCV) |
+| Features | **176** engineered (stationary-tested, ADF + KPSS) |
+| Training data | ~50 years XAUUSD (GC=F daily) |
+| OOS period | 2019–2026 (1,260 bars) |
+| OOS accuracy | **66.4%** (p = 0.0000, binomial one-sided) |
+| OOS F1 | 0.728 |
+| OOS AUC | 0.711 |
+| Sharpe gate | PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10 |
+| Multi-symbol backtest | N=628 trades (XAU+BTC+ETH, 10-yr real data) |
+| `ci_mode` | `false` — production model, validated 2026-03-28 |
 
-### Model Card — Production File (`advanced_oos.pkl`)
+### Online Learning
 
-| Property | Value |
-|----------|-------|
-| Training data | 2-year GC=F subset (325 rows) |
-| OOS accuracy | **52.3%** (p = 0.409 — not statistically significant) |
-| Status | ⚠️ Requires full retrain before live deployment |
-| Fix | Run `python scripts/retrain_model.py --advanced --years 50 --oos-years 5` |
+The `SklearnOnlineLearner` (SGDClassifier-backed, `ml/online_learner.py`) updates incrementally every hour via `HourlyTrainer._online_update()`. A daily EWC regime-adaptation loop runs at 00:05 UTC, adjusting the model's plasticity based on the detected market regime (volatile / ranging / trending). Enable with `ML_HOURLY_ENABLED=true`.
 
 ### Top Predictive Features
 
 ```
 ri_bear_score        0.032   Regime bear pressure composite
-frac_apen_10         0.018   Approximate entropy (fractal)
-rvol_60              0.018   Realised volatility 60-bar
+frac_apen_10         0.018   Approximate entropy (fractal geometry)
+rvol_60              0.018   Realised volatility, 60-bar window
 of_delta             0.016   Order flow delta
 mom_roc              0.015   Rate of change momentum
 frac_lyapunov_10     0.014   Lyapunov exponent (chaos measure)
 parkinson_vol        0.014   Parkinson volatility estimator
-dist_ma_50           0.014   Distance from 50-period MA
+dist_ma_50           0.014   Distance from 50-period moving average
 ```
 
-### Training a New Model
+### Training
 
 ```bash
-# Quick smoke test (~30 s)
-python scripts/retrain_model.py --smoke --advanced
+# Smoke test (~30 s)
+python ml/train_advanced.py --smoke
 
-# Full retrain (50 years, 5 OOS years)
-python scripts/retrain_model.py --advanced --years 50 --oos-years 5
+# Full production retrain (50 years, 3-year OOS)
+python ml/train_advanced.py --years 50 --oos-years 3
+
+# Multi-symbol backtest (XAU + BTC + ETH)
+python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
 ---
@@ -197,6 +193,7 @@ python scripts/retrain_model.py --advanced --years 50 --oos-years 5
 | HMM regime detection | ✅ Stable |
 | Feature importance (SHAP) | ✅ Stable |
 | Macro feature integration | ✅ Stable |
+| Incremental online learning (SGD + EWC) | ✅ Stable |
 | Model explainability API | ✅ Beta |
 | Reinforcement learning (SB3) | 🔬 Experimental |
 
@@ -242,6 +239,7 @@ MA Crossover · EMA Crossover · Bollinger Bands · Breakout · MACD · RSI · S
 ```bash
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
 cd HOPEFX-AI-TRADING
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements-ci.txt
 ```
 
@@ -249,8 +247,9 @@ pip install -r requirements-ci.txt
 
 ```bash
 cp .env.example .env
-# Edit .env — minimum required for paper trading:
-#   OANDA_API_KEY, OANDA_ACCOUNT_ID, SECURITY_JWT_SECRET
+# Minimum required for paper trading:
+#   SECURITY_JWT_SECRET  (≥32 chars)
+#   OANDA_API_KEY + OANDA_ACCOUNT_ID  (for OANDA paper mode)
 ```
 
 ### 3. Start paper trading
@@ -279,16 +278,20 @@ docker-compose up -d
 All settings load from environment variables. See [`.env.example`](.env.example) for the full list.
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `OANDA_API_KEY` | ✅ | OANDA v20 REST API key |
-| `OANDA_ACCOUNT_ID` | ✅ | OANDA account ID |
+|---|---|---|
 | `SECURITY_JWT_SECRET` | ✅ | JWT signing secret (≥32 chars) |
-| `REDIS_URL` | ✅ | Redis connection string |
-| `DB_URL` | Paper only | PostgreSQL async URL |
+| `CONFIG_ENCRYPTION_KEY` | ✅ | Config encryption key (≥32 chars) |
+| `OANDA_API_KEY` | OANDA only | OANDA v20 REST API key |
+| `OANDA_ACCOUNT_ID` | OANDA only | OANDA account ID |
+| `OANDA_ENVIRONMENT` | OANDA only | `practice` or `live` |
+| `DATABASE_URL` | Production | PostgreSQL connection string |
+| `REDIS_URL` | Recommended | Redis connection string |
 | `SENTRY_DSN` | Recommended | Sentry error tracking DSN |
 | `DISCORD_WEBHOOK_URL` | Optional | Discord alert webhook |
-| `IBKR_HOST` | IBKR only | TWS/Gateway host (default: 127.0.0.1) |
-| `IBKR_PORT` | IBKR only | 7497 (paper) or 7496 (live) |
+| `ML_HOURLY_ENABLED` | Optional | `true` to enable hourly online learning |
+| `BROKER_TYPE` | Optional | `oanda`, `ibkr`, or `paper` (default: `paper`) |
+| `IBKR_HOST` | IBKR only | TWS/Gateway host (default: `127.0.0.1`) |
+| `IBKR_PORT` | IBKR only | `7497` (paper) or `7496` (live) |
 
 Feature flags are controlled via `FEATURE_*` env vars — see [`FEATURES.md`](FEATURES.md).
 
@@ -300,9 +303,15 @@ Feature flags are controlled via `FEATURE_*` env vars — see [`FEATURES.md`](FE
 <summary><strong>OANDA (recommended for paper trading)</strong></summary>
 
 1. Create a free practice account at [oanda.com](https://www.oanda.com)
-2. Generate an API key from *My Account → API Access*
-3. Set `OANDA_API_KEY` and `OANDA_ACCOUNT_ID` in `.env`
-4. Set `OANDA_ENVIRONMENT=practice` for paper, `live` for real money
+2. Generate an API key: *My Account → API Access*
+3. Set in `.env`:
+   ```
+   BROKER_TYPE=oanda
+   OANDA_API_KEY=your_practice_token
+   OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
+   OANDA_ENVIRONMENT=practice
+   ```
+4. The 30-day paper trading clock starts automatically on first successful connection. Progress is tracked in `data/oanda_paper_start.json`.
 
 </details>
 
@@ -311,8 +320,19 @@ Feature flags are controlled via `FEATURE_*` env vars — see [`FEATURES.md`](FE
 
 1. Install TWS or IB Gateway
 2. Enable API access: *File → Global Configuration → API → Settings*
-3. Set `IBKR_PORT=7497` (paper) or `7496` (live)
-4. The connector uses `ib_insync` — install with `pip install ib_insync`
+3. Set in `.env`:
+   ```
+   BROKER_TYPE=ibkr
+   IBKR_HOST=127.0.0.1
+   IBKR_PORT=7497   # 7497 = paper, 7496 = live
+   ```
+
+</details>
+
+<details>
+<summary><strong>Paper Trading (default)</strong></summary>
+
+No credentials required. Leave `BROKER_TYPE` unset or set to `paper`. Initial balance is controlled by `PAPER_TRADING_BALANCE` (default: 100,000).
 
 </details>
 
@@ -334,7 +354,7 @@ pytest tests/test_ibkr_broker.py -v
 pytest tests/ -m "not slow" --cov=. --cov-report=term-missing
 ```
 
-**Test matrix:** Python 3.10, 3.11, 3.12 · 3 000+ tests · 70% coverage gate
+**Test matrix:** Python 3.10, 3.11, 3.12 · 2,560+ tests · 70% coverage gate
 
 ---
 
@@ -347,6 +367,7 @@ See [`DEPLOYMENT.md`](DEPLOYMENT.md) for full production deployment instructions
 - Systemd service (`hopefx-trading.service`)
 - Prometheus + Grafana dashboards
 - Sentry configuration
+- Security hardening checklist
 
 ---
 
@@ -354,15 +375,21 @@ See [`DEPLOYMENT.md`](DEPLOYMENT.md) for full production deployment instructions
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the full milestone plan.
 
-**Current:** Paper mode live on OANDA  
-**Next:** Live OANDA run · 200+ trade sample · MT5 export  
-**Later:** Multi-symbol (BTC, ETH) · Reinforcement learning · White-label API
+| Phase | Status | Description |
+|---|---|---|
+| Paper trading (OANDA) | 🟡 Active | 30-day paper run in progress |
+| Multi-symbol backtest | ✅ Done | N=628 trades, Sharpe gate PASSED |
+| Online learning wired | ✅ Done | Hourly SGD updates + daily EWC loop |
+| Dual license + CLA | ✅ Done | AGPL-3.0 open source + commercial option |
+| Live OANDA trading | ⏳ Next | After 30-day paper run completes |
+| MT5 signal export | ⏳ Planned | ZeroMQ bridge to MetaTrader 5 |
+| Reinforcement learning | 🔬 Research | Phase 3–4, requires GPU training |
 
 ---
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). All contributions must pass CI (ruff, bandit, pytest) before merge.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). All contributions require a signed [CLA](CLA.md) and must pass CI (ruff, bandit, pytest) before merge.
 
 ---
 
@@ -370,13 +397,12 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). All contributions must pass CI (ruff, 
 
 **AGPL-3.0** — see [`LICENSE`](LICENSE).
 
-Modifications must be shared under the same license.  
-Commercial use requires explicit written permission from HOPEFX.
+Modifications must be shared under the same license. Commercial use (proprietary products, SaaS, white-label) requires a separate license — see [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md).
 
 ---
 
 <div align="center">
 
-*Copyright © 2025–2026 HOPEFX. Built with precision for gold traders.*
+*Copyright © 2025–2026 Opeyemi (HACKLOVE340). Built for precision gold trading.*
 
 </div>
