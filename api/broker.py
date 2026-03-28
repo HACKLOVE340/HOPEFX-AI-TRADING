@@ -284,7 +284,18 @@ async def broker_status():
                 "error": "Broker not initialised",
             }
         else:
-            broker_type = getattr(broker, "broker_type", type(broker).__name__.lower())
+            # Prefer explicit broker_type attr; fall back to class name stripped of
+            # "broker"/"trading" suffixes so "PaperTradingBroker" → "paper"
+            _raw_type = getattr(broker, "broker_type", None)
+            if not _raw_type:
+                _raw_type = (
+                    type(broker).__name__.lower()
+                    .replace("tradingbroker", "")
+                    .replace("broker", "")
+                    .replace("trading", "")
+                    .strip("_") or "unknown"
+                )
+            broker_type = _raw_type
             balance = None
             currency = None
             open_positions = 0
@@ -292,9 +303,21 @@ async def broker_status():
 
             try:
                 if hasattr(broker, "get_account_info"):
-                    info = await broker.get_account_info()
-                    balance = info.get("balance") or info.get("equity")
-                    currency = info.get("currency", "USD")
+                    import asyncio as _asyncio
+                    import inspect as _inspect
+                    if _inspect.iscoroutinefunction(broker.get_account_info):
+                        info = await broker.get_account_info()
+                    else:
+                        info = broker.get_account_info()
+                    # info may be a dataclass, dict, or object
+                    if hasattr(info, "__dict__"):
+                        info = info.__dict__
+                    if isinstance(info, dict):
+                        balance = info.get("balance") or info.get("equity") or info.get("nav")
+                        currency = info.get("currency", "USD")
+                    else:
+                        balance = getattr(info, "balance", None) or getattr(info, "equity", None)
+                        currency = getattr(info, "currency", "USD")
                 elif hasattr(broker, "get_account_balance"):
                     balance = broker.get_account_balance()
                 elif hasattr(broker, "balance"):
