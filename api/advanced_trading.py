@@ -78,71 +78,39 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _simulate_ab_test(req: ABTestRequest) -> dict:
-    """Simulate parallel paper trading for two strategies."""
-    random.Random(hash(req.strategy_a + req.strategy_b) % 10000)
+def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
+    """
+    Run a real backtest for a named strategy using the backtesting engine.
 
-    def run_strategy(name: str, seed_offset: int) -> dict:
-        r = random.Random(seed_offset)
-        equity = [req.initial_capital]
-        trades = []
-        for d in range(req.duration_days):
-            daily_pnl = (r.random() - 0.47) * 180
-            equity.append(equity[-1] + daily_pnl)
-            if r.random() > 0.7:
-                trades.append({"day": d, "pnl": round(daily_pnl, 2)})
-        wins = [t for t in trades if t["pnl"] > 0]
-        final = equity[-1]
-        returns = [
-            (equity[i + 1] - equity[i]) / equity[i] for i in range(len(equity) - 1)
-        ]
-        mean_r = sum(returns) / len(returns) if returns else 0
-        std_r = (
-            math.sqrt(sum((x - mean_r) ** 2 for x in returns) / len(returns))
-            if returns
-            else 1
+    Returns a result dict compatible with the A/B test response schema.
+    Raises ValueError when the strategy is not registered or data is unavailable.
+    """
+    try:
+        from backtest.engine import BacktestEngine  # noqa: PLC0415
+        engine = BacktestEngine()
+        result = engine.run(
+            strategy=strategy_name,
+            symbol=symbol,
+            days=duration_days,
+            initial_capital=initial_capital,
         )
-        sharpe = (mean_r / std_r) * math.sqrt(252) if std_r > 0 else 0
-        drawdowns = []
-        peak = req.initial_capital
-        for e in equity:
-            if e > peak:
-                peak = e
-            drawdowns.append((peak - e) / peak * 100)
         return {
-            "strategy": name,
-            "final_equity": round(final, 2),
-            "total_return": round(
-                (final - req.initial_capital) / req.initial_capital * 100,
-                2,
-            ),
-            "sharpe_ratio": round(sharpe, 3),
-            "max_drawdown": round(max(drawdowns), 2),
-            "total_trades": len(trades),
-            "win_rate": round(len(wins) / len(trades) * 100, 2) if trades else 0,
-            "equity_curve": [round(e, 2) for e in equity[:: max(1, len(equity) // 50)]],
+            "strategy": strategy_name,
+            "final_equity": round(float(result.get("final_equity", initial_capital)), 2),
+            "total_return": round(float(result.get("total_return_pct", 0.0)), 2),
+            "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0)), 3),
+            "max_drawdown": round(float(result.get("max_drawdown_pct", 0.0)), 2),
+            "total_trades": int(result.get("total_trades", 0)),
+            "win_rate": round(float(result.get("win_rate_pct", 0.0)), 2),
+            "equity_curve": result.get("equity_curve", []),
         }
-
-    result_a = run_strategy(req.strategy_a, 42)
-    result_b = run_strategy(req.strategy_b, 99)
-
-    # Statistical significance (simplified t-test proxy)
-    diff = result_a["total_return"] - result_b["total_return"]
-    p_value = round(max(0.01, min(0.99, 0.5 - abs(diff) / 20)), 3)
-    winner = (
-        req.strategy_a
-        if result_a["sharpe_ratio"] > result_b["sharpe_ratio"]
-        else req.strategy_b
-    )
-
-    return {
-        "strategy_a": result_a,
-        "strategy_b": result_b,
-        "winner": winner,
-        "p_value": p_value,
-        "significant": p_value < 0.05,
-        "recommendation": f"Deploy {winner} — higher risk-adjusted returns (Sharpe {max(result_a['sharpe_ratio'], result_b['sharpe_ratio']):.2f})",
-    }
+    except ImportError:
+        raise ValueError(
+            "BacktestEngine is not available. "
+            "Ensure the backtest module is installed and configured."
+        )
+    except Exception as exc:
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}")
 
 
 @router.post("/api/ab-test/start", status_code=201)
@@ -150,8 +118,24 @@ async def start_ab_test(
     req: ABTestRequest,
     user: TokenPayload = Depends(get_current_user),
 ):
+    """
+    Start an A/B test between two strategies using the real backtesting engine.
+
+    Both strategies are backtested over the same symbol and date range.
+    Returns HTTP 422 when either strategy name is not registered or
+    historical data is unavailable for the requested period.
+    """
+    try:
+        result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
+        result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Winner by Sharpe ratio (risk-adjusted)
+    winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
+    best_sharpe = max(result_a["sharpe_ratio"], result_b["sharpe_ratio"])
+
     test_id = str(uuid.uuid4())[:12]
-    results = _simulate_ab_test(req)
     _ab_tests[test_id] = {
         "test_id": test_id,
         "user_id": user.sub,
@@ -159,7 +143,13 @@ async def start_ab_test(
         "duration_days": req.duration_days,
         "status": "completed",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        **results,
+        "strategy_a": result_a,
+        "strategy_b": result_b,
+        "winner": winner,
+        "recommendation": (
+            f"Deploy {winner} — higher risk-adjusted returns "
+            f"(Sharpe {best_sharpe:.2f})"
+        ),
     }
     return _ab_tests[test_id]
 
@@ -185,27 +175,18 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_use
 
 @router.post("/api/backtest/{run_id}/share")
 async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_user)):
-    """Generate a public share URL for a backtest result."""
-    from api.backtesting import _results
+    """
+    Generate a public share URL for a completed backtest result.
+    Returns 404 when the run_id does not correspond to a real backtest.
+    """
+    from api.backtesting import _results  # noqa: PLC0415
 
     result = _results.get(run_id)
     if not result:
-        # Create a demo shareable result
-        result = {
-            "run_id": run_id,
-            "strategy": "MovingAverageCrossover",
-            "symbol": "XAU/USD",
-            "start_date": "2023-01-01",
-            "end_date": "2024-01-01",
-            "initial_capital": 10000,
-            "final_equity": 12840,
-            "total_return_pct": 28.4,
-            "max_drawdown_pct": 8.2,
-            "sharpe_ratio": 1.42,
-            "total_trades": 147,
-            "win_rate_pct": 58.5,
-            "status": "completed",
-        }
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backtest run '{run_id}' not found. Run a backtest first.",
+        )
 
     slug = f"{run_id[:8]}-{uuid.uuid4().hex[:6]}"
     _shared_results[slug] = {
@@ -250,19 +231,80 @@ class SaveIndicatorRequest(BaseModel):
     color: str = "#60a5fa"
 
 
-def _eval_indicator(formula: str, periods: int) -> List[dict]:
+def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
+    """
+    Load real OHLCV data for the indicator preview.
+
+    Priority:
+    1. CSV files in data/ directory
+    2. Paper broker get_market_data()
+
+    Raises ValueError when no real data is available.
+    """
+    import pathlib
+    import pandas as pd
+
+    sym_key = symbol.upper().replace("/", "_").replace("-", "_")
+    if "_" not in sym_key and len(sym_key) == 6:
+        sym_key = sym_key[:3] + "_" + sym_key[3:]
+
+    data_dir = pathlib.Path(__file__).parent.parent / "data"
+    candidates = [
+        data_dir / f"{sym_key}_H1.csv",
+        data_dir / f"{sym_key.replace('_', '')}_H1.csv",
+    ]
+    for csv_path in candidates:
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path).tail(periods + 50)
+                if len(df) >= 20:
+                    return {
+                        "close":  df["close"].tolist(),
+                        "open":   df["open"].tolist(),
+                        "high":   df["high"].tolist(),
+                        "low":    df["low"].tolist(),
+                        "volume": df["volume"].tolist() if "volume" in df.columns else [0.0] * len(df),
+                    }
+            except Exception as exc:
+                logger.debug("Indicator CSV load failed (%s): %s", csv_path, exc)
+
+    # Paper broker fallback
+    try:
+        from app import app_state  # noqa: PLC0415
+        broker = getattr(app_state, "broker", None)
+        if broker and hasattr(broker, "get_market_data"):
+            raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
+            if raw and len(raw) >= 20:
+                import pandas as pd
+                df = pd.DataFrame(raw)
+                return {
+                    "close":  df["close"].tolist(),
+                    "open":   df["open"].tolist(),
+                    "high":   df["high"].tolist(),
+                    "low":    df["low"].tolist(),
+                    "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
+                }
+    except Exception as exc:
+        logger.debug("Indicator broker load failed: %s", exc)
+
+    raise ValueError(
+        f"No OHLCV data available for {symbol}. "
+        "Connect a broker or add a CSV file to data/ to use the indicator builder."
+    )
+
+
+def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
     """
     Safe formula evaluator using a restricted namespace.
     Supports: EMA, SMA, RSI, close, open, high, low, volume.
+    Uses real OHLCV data — raises ValueError when data is unavailable.
     """
-
-    # Generate synthetic OHLCV
-    rng = random.Random(42)
-    prices = []
-    p = 2350.0
-    for _ in range(periods + 50):
-        p += rng.uniform(-8, 8)
-        prices.append(max(p, 100))
+    ohlcv = _load_ohlcv_for_indicator(symbol, periods)
+    closes  = ohlcv["close"]
+    opens   = ohlcv["open"]
+    highs   = ohlcv["high"]
+    lows    = ohlcv["low"]
+    volumes = ohlcv["volume"]
 
     def sma(data: List[float], n: int) -> List[float]:
         result = [None] * (n - 1)
@@ -298,11 +340,11 @@ def _eval_indicator(formula: str, periods: int) -> List[dict]:
         "EMA": ema,
         "SMA": sma,
         "RSI": rsi,
-        "close": prices,
-        "open": prices,
-        "high": [p * 1.002 for p in prices],
-        "low": [p * 0.998 for p in prices],
-        "volume": [rng.randint(1000, 5000) for _ in prices],
+        "close":  closes,
+        "open":   opens,
+        "high":   highs,
+        "low":    lows,
+        "volume": volumes,
     }
 
     try:
@@ -328,8 +370,12 @@ async def preview_indicator(
     req: IndicatorPreviewRequest,
     user: TokenPayload = Depends(get_current_user),
 ):
+    """
+    Evaluate a custom indicator formula against real OHLCV data.
+    Returns HTTP 400 when the formula is invalid or data is unavailable.
+    """
     try:
-        data = _eval_indicator(req.formula, req.periods)
+        data = _eval_indicator(req.formula, req.symbol, req.periods)
         return {
             "formula": req.formula,
             "symbol": req.symbol,
@@ -387,14 +433,21 @@ async def get_correlation(
     """
     Return rolling correlation matrix for the given symbols.
 
-    Uses live OHLCV from price_engine when available; falls back to
-    synthetic correlated returns for symbols without live data.
-    """
-    sym_list = [s.strip() for s in symbols.split(",")]
-    rng = random.Random(42)
+    Uses real OHLCV from:
+    1. price_engine.get_ohlcv() — live broker history
+    2. CSV files in data/ directory
 
-    # Try to pull real returns from price_engine OHLCV history
+    Returns HTTP 503 when fewer than 2 symbols have sufficient real data
+    to compute a meaningful correlation matrix.
+    """
+    import pathlib
+
+    sym_list = [s.strip() for s in symbols.split(",")]
+
+    # ── Collect real return series ────────────────────────────────────────────
     series: Dict[str, List[float]] = {}
+
+    # 1. Price engine
     pe = getattr(app_state, "price_engine", None) if app_state else None
     if pe is not None:
         for sym in sym_list:
@@ -404,25 +457,70 @@ async def get_correlation(
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
                 if ohlcv and len(ohlcv) >= 5:
-                    closes = [float(bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0)) for bar in ohlcv]
-                    returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0]
+                    closes = [
+                        float(bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0))
+                        for bar in ohlcv
+                    ]
+                    returns = [
+                        (closes[i] - closes[i - 1]) / closes[i - 1]
+                        for i in range(1, len(closes))
+                        if closes[i - 1] > 0
+                    ]
                     if returns:
                         series[sym] = returns
             except Exception as exc:
                 logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
 
-    # Fill missing symbols with synthetic correlated returns
-    n = window + 10
-    base_returns = [rng.gauss(0, 0.01) for _ in range(n)]
+    # 2. CSV fallback for symbols still missing
+    data_dir = pathlib.Path(__file__).parent.parent / "data"
     for sym in sym_list:
-        if sym not in series:
-            noise_scale = rng.uniform(0.3, 0.8)
-            series[sym] = [
-                base_returns[i] * (1 - noise_scale) + rng.gauss(0, 0.01) * noise_scale
-                for i in range(n)
-            ]
+        if sym in series:
+            continue
+        sym_key = sym.upper().replace("/", "_").replace("-", "_")
+        candidates = [
+            data_dir / f"{sym_key}_D1.csv",
+            data_dir / f"{sym_key}_H1.csv",
+            data_dir / f"{sym_key.replace('_', '')}_H1.csv",
+        ]
+        for csv_path in candidates:
+            if csv_path.exists():
+                try:
+                    import pandas as _pd
+                    df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
+                    closes = df["close"].tolist()
+                    returns = [
+                        (closes[i] - closes[i - 1]) / closes[i - 1]
+                        for i in range(1, len(closes))
+                        if closes[i - 1] > 0
+                    ]
+                    if len(returns) >= 5:
+                        series[sym] = returns
+                        break
+                except Exception as exc:
+                    logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
-    # Compute correlation matrix
+    # Require at least 2 symbols with real data
+    if len(series) < 2:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "insufficient_data",
+                "message": (
+                    "Correlation matrix requires real OHLCV history for at least 2 symbols. "
+                    f"Found data for: {list(series.keys()) or 'none'}. "
+                    "Connect a broker or add CSV files to data/ to enable this feature."
+                ),
+                "symbols_with_data": list(series.keys()),
+                "symbols_requested": sym_list,
+            },
+        )
+
+    # Align all series to the same length (shortest available)
+    min_len = min(len(v) for v in series.values())
+    for sym in series:
+        series[sym] = series[sym][-min_len:]
+
+    # ── Compute correlation matrix ────────────────────────────────────────────
     def corr(a: List[float], b: List[float]) -> float:
         n = len(a)
         ma, mb = sum(a) / n, sum(b) / n
@@ -431,16 +529,17 @@ async def get_correlation(
         db = math.sqrt(sum((x - mb) ** 2 for x in b))
         return round(num / (da * db), 3) if da * db > 0 else 0.0
 
+    # Only include symbols that have data
+    available = list(series.keys())
     matrix = {}
-    for s1 in sym_list:
+    for s1 in available:
         matrix[s1] = {}
-        for s2 in sym_list:
+        for s2 in available:
             matrix[s1][s2] = 1.0 if s1 == s2 else corr(series[s1], series[s2])
 
-    # Key insights
     insights = []
-    for s1 in sym_list:
-        for s2 in sym_list:
+    for s1 in available:
+        for s2 in available:
             if s1 >= s2:
                 continue
             c = matrix[s1][s2]
@@ -448,9 +547,11 @@ async def get_correlation(
                 direction = "positively" if c > 0 else "negatively"
                 insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
 
+    missing = [s for s in sym_list if s not in series]
     return {
-        "symbols": sym_list,
-        "window": window,
+        "symbols": available,
+        "symbols_missing_data": missing,
+        "window": min_len,
         "matrix": matrix,
         "insights": insights[:5],
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -466,7 +567,7 @@ async def get_correlation(
 async def get_cot_gold():
     """
     Return CFTC Commitment of Traders data for gold (COMEX).
-    Fetches from CFTC public API; falls back to cached demo data.
+    Fetches from CFTC public API. Returns HTTP 503 when the API is unreachable.
     """
     try:
         import json
@@ -495,22 +596,17 @@ async def get_cot_gold():
                     "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
                 }
     except Exception as exc:
-        logger.debug("CFTC API unavailable: %s — using demo data", exc)
-
-    # Demo fallback
-    return {
-        "report_date": "2024-03-19",
-        "net_speculator_long": 148320,
-        "long_positions": 212450,
-        "short_positions": 64130,
-        "sentiment": "BULLISH",
-        "sentiment_strength": "STRONG",
-        "source": "CFTC (demo)",
-        "note": "Speculator sentiment: BULLISH (net long +148K contracts). "
-        "Large net-long positions historically precede gold rallies.",
-        "weekly_change": +12400,
-        "4wk_trend": "INCREASING",
-    }
+        logger.warning("CFTC API unavailable: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "cftc_unavailable",
+                "message": (
+                    "CFTC public API is currently unreachable. "
+                    "Data is published weekly — retry after the next report release."
+                ),
+            },
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -531,7 +627,8 @@ def _run_monte_carlo(
     initial_capital: float,
     simulations: int,
 ) -> dict:
-    rng = random.Random(42)
+    # Use OS entropy so each run produces independent results
+    rng = random.Random()
     final_equities = []
     ruin_count = 0
     ruin_threshold = initial_capital * 0.5  # 50% drawdown = ruin
@@ -589,24 +686,35 @@ async def run_monte_carlo(
     req: MonteCarloRequest,
     user: TokenPayload = Depends(get_current_user),
 ):
-    from api.backtesting import _results
+    """
+    Run Monte Carlo simulation on a completed backtest result.
+    Returns 404 when the run_id does not correspond to a real backtest.
+    """
+    from api.backtesting import _results  # noqa: PLC0415
 
-    result = _results.get(run_id, {})
+    result = _results.get(run_id)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backtest run '{run_id}' not found. Run a backtest first.",
+        )
 
-    win_rate = result.get("win_rate_pct", 58.5) / 100
-    avg_win = result.get("avg_win", 312.0)
-    avg_loss = result.get("avg_loss", 198.0)
-    n_trades = result.get("total_trades", 147)
-    capital = req.initial_capital or result.get("initial_capital", 10000)
+    win_rate = float(result.get("win_rate_pct", 0)) / 100
+    avg_win = float(result.get("avg_win", 0))
+    avg_loss = float(result.get("avg_loss", 0))
+    n_trades = int(result.get("total_trades", 0))
+    capital = req.initial_capital or float(result.get("initial_capital", 10000))
 
-    mc = _run_monte_carlo(
-        win_rate,
-        avg_win,
-        avg_loss,
-        n_trades,
-        capital,
-        req.simulations,
-    )
+    if n_trades < 10:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Backtest '{run_id}' has only {n_trades} trades. "
+                "Monte Carlo requires at least 10 trades for meaningful results."
+            ),
+        )
+
+    mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(timezone.utc).isoformat()
     _mc_cache[run_id] = mc
@@ -615,11 +723,10 @@ async def run_monte_carlo(
 
 @router.get("/api/backtest/{run_id}/monte-carlo")
 async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Return cached Monte Carlo results. Returns 404 when not yet computed."""
     if run_id in _mc_cache:
         return _mc_cache[run_id]
-    # Auto-compute with defaults
-    mc = _run_monte_carlo(0.585, 312, 198, 147, 10000, 1000)
-    mc["run_id"] = run_id
-    mc["computed_at"] = datetime.now(timezone.utc).isoformat()
-    _mc_cache[run_id] = mc
-    return mc
+    raise HTTPException(
+        status_code=404,
+        detail=f"No Monte Carlo results for run '{run_id}'. POST to compute first.",
+    )
