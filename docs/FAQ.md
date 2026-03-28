@@ -303,7 +303,7 @@ The production model is `ml/saved_models/advanced_oos.pkl`:
 - **Features:** 176 stationary-tested features (ADF + KPSS)
 - **OOS accuracy:** 66.4% (p=0.0000, N=1,260 bars, 2019–2026)
 - **Sharpe gate:** PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10
-- **Multi-symbol backtest:** N=628 trades (XAU+BTC+ETH, 10-yr real data)
+- **Multi-symbol backtest:** N>919 trades (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil — SE≤0.10 gate satisfied)
 
 Additional models used as fallbacks: `rf_macro.pkl`, `xgb_macro.pkl`.
 
@@ -316,7 +316,7 @@ python ml/train_advanced.py --smoke
 # Full production retrain (50 years, 3-year OOS)
 python ml/train_advanced.py --years 50 --oos-years 3
 
-# Multi-symbol backtest
+# Multi-symbol backtest (7 symbols, targets N>919)
 python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
@@ -441,13 +441,14 @@ Currently, all features are free. Future premium features may include:
 
 ### Can I sell strategies built with HOPEFX?
 
-Yes! You can:
-- Sell custom strategies
-- Offer trading signals
-- Build commercial products
-- Charge for consulting services
+Under AGPL-3.0, you can sell services and consulting built on HOPEFX, but any
+derivative software distributed or offered as a network service must have its
+source code disclosed under AGPL-3.0.
 
-Just ensure you comply with local financial regulations.
+If you need to keep your modifications proprietary (closed-source product, SaaS,
+white-label), obtain a [Commercial License](../LICENSE-COMMERCIAL.md).
+
+Always comply with local financial regulations when offering trading services.
 
 ### How do I contribute?
 
@@ -467,15 +468,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md):
 - **GitHub Discussions:** [Ask Questions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions)
 
 ### Documentation
-- [Installation Guide](INSTALLATION.md)
-- [API Guide](./API_GUIDE.md)
-- [Security Guide](SECURITY.md)
-- [Debugging Guide](DEBUGGING.md)
+- [Installation Guide](../INSTALLATION.md)
+- [Security Guide](../SECURITY.md)
+- [Deployment Guide](../DEPLOYMENT.md)
+- [Contributing](../CONTRIBUTING.md)
 
 ### Contact
-- **Email:** support@hopefx.com
-- **Twitter:** [@HOPEFX_Trading](https://twitter.com/HOPEFX_Trading)
+- **Email:** hacklove340@hopefx.io
+- **GitHub:** [@HACKLOVE340](https://github.com/HACKLOVE340)
 
 ---
 
-*This FAQ is regularly updated. Last update: February 2026*
+*This FAQ is regularly updated. Last update: 2026-03-29 (v1.16)*
