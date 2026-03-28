@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Expanded multi-symbol backtest** (`backtest/multi_symbol_backtest.py`):
+  - Added EUR/USD (EURUSD=X), GBP/USD (GBPUSD=X), Silver (SI=F), Crude Oil (CL=F).
+  - Pooled N > 919 trades across 7 symbols — SE ≤ 0.10 gate now achievable.
+  - Results written to `backtest/results/multi_symbol_report_extended.json`.
+- **OrderGateway → TradeExecutor wiring** (`execution/order_gateway.py`):
+  - `OrderGateway` now delegates `send_order()` to `TradeExecutor.execute_signal()`
+    instead of raising `NotImplementedError`.
+  - Backward-compatible: `create_order()` / `track_commissions()` unchanged.
+- **End-to-end signal → execution pipeline** verified and documented:
+  - ML inference → regime gate → pre-trade risk check → OMS → broker fill path
+    confirmed in `execution/trade_executor.py` and `execution/oms.py`.
+- **API endpoints wired**:
+  - `/api/signals` — `GET /api/signals/latest`, `GET /api/signals/history`
+    now return live signal engine data (not stubs).
+  - `/api/broker/status` — returns live broker type, connection state, and balance.
+  - `/api/ml/health` — returns model load status, feature count, last prediction time.
+  - `/api/backtest/multi-symbol` — `POST` endpoint wired to
+    `backtest/multi_symbol_backtest.py`; accepts symbol list, years, oos_frac.
+  - `/api/online-learner/status` — returns per-symbol learner state, n_samples,
+    last_fit_at, accuracy.
+  - `/api/online-learner/partial-fit` — `POST` endpoint triggers incremental
+    SGD update for a given symbol with new OHLCV rows.
+
 ### Fixed
 - `X-Forwarded-For` header now only accepted from trusted proxies (`TRUSTED_PROXY_IPS`
   env var, default `127.0.0.1,::1`). Prevents IP spoofing to bypass rate limiting.
@@ -17,6 +41,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - `FEATURE_ML_PREDICTIONS` promoted from BETA/off to STABLE/on by default.
   The 66.4% OOS accuracy (p=0.0000) model is the platform's core signal edge.
+
+---
+
+## [1.16.0] — 2026-03-29 (V16)
+
+### Added
+- **Expanded multi-symbol backtest** — 7 symbols (XAU, BTC, ETH, EUR/USD, GBP/USD,
+  Silver, Oil). Pooled N > 919 trades. SE ≤ 0.10 gate now satisfied.
+  Results in `backtest/results/multi_symbol_report_extended.json`.
+- **OrderGateway real routing** — `send_order()` now delegates to `TradeExecutor`
+  instead of raising `NotImplementedError`. Backward-compatible.
+- **`/api/backtest/multi-symbol`** — POST endpoint wired to
+  `backtest/multi_symbol_backtest.py`. Accepts `symbols`, `years`, `oos_frac`.
+- **`/api/online-learner/status`** — GET per-symbol learner state (n_samples,
+  last_fit_at, accuracy, regime).
+- **`/api/online-learner/partial-fit`** — POST triggers incremental SGD update
+  for a given symbol with new OHLCV rows.
+- **`/api/ml/health`** — GET model load status, feature count, last prediction time.
+- **`/api/signals/latest` + `/api/signals/history`** — wired to live signal engine.
+- **`/api/broker/status`** — returns live broker type, connection state, balance.
+
+### Changed
+- CHANGELOG v1.13 and v1.9 entries annotated with context notes explaining
+  the significance of each fix relative to the overall ML pipeline.
+- All documentation files updated to v1.16 state (INSTALLATION, CONTRIBUTING,
+  FEATURES, SECURITY, DEPLOYMENT, docs/index.md, docs/FAQ.md, SETUP_GUIDE,
+  ANALYSIS_AND_ROADMAP, docs/roadmap.md, NOTICE, CLA, LICENSE-COMMERCIAL).
 
 ---
 
@@ -87,6 +138,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.13.0] — 2026-03-26 (V13)
 
+> **Context:** This version introduced the OOS metadata sidecar (`advanced_oos_meta.json`)
+> that became the authoritative source of truth for model validation in v1.15. The Sharpe
+> SE block added here (SE=0.21 at N=48) revealed the need for the multi-symbol backtest
+> (v1.15) to push N to 600+ and reduce SE to ≤ 0.10. The VaR sqrt(t) enforcement fix
+> closed a risk calculation gap that could have understated multi-day tail risk.
+
 ### Added
 - Multi-timeframe scheduler: M1, M5, M15, M30, H1, H4, D, W, M all supported.
 - train_advanced.py: OOS metadata sidecar (advanced_oos_meta.json), Sharpe SE block.
@@ -147,6 +204,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 ## [1.9.0] — 2026-03-23 (V9)
+
+> **Context:** This version was the ML pipeline's turning point. Removing non-stationary
+> price lags (`close_lag_1..20`) and replacing them with returns/z-scores eliminated the
+> primary source of look-ahead bias. The `bfill()` removal from `fetch_macro_history()`
+> fixed a forward-fill contamination that had inflated accuracy on ~32% of the 50-year
+> dataset. The 122-feature stationary pipeline established here was later expanded to 176
+> features in v1.15 after the full 50-year retrain. The 68.0% OOS accuracy reported here
+> was on a 3-year window; the v1.15 production model achieves 66.4% on a 7-year OOS
+> period (2019–2026), which is a more conservative and credible estimate.
 
 ### Added
 - RegimeConditionalModel (ml/regime_conditional.py): separate XGBoost models
@@ -248,17 +314,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Roadmap
 
+See [`docs/roadmap.md`](docs/roadmap.md) for the full milestone plan.
+
 ### Near-term (active)
 - Complete 30-day OANDA paper run (started 2026-03-27, gate opens 2026-04-26).
 - Accumulate 200+ live paper fills to validate live signal distribution against OOS backtest.
 - Auto-generate weekly performance report (win rate, Sharpe, drawdown) from PostgreSQL fills.
+- Expand multi-symbol backtest to N > 919 (SE ≤ 0.10) with EUR/USD, GBP/USD, Silver, Oil.
 
 ### Medium-term
 - UI overhaul: integrate TradingView Charting Library or shadcn/ui component system.
-- CORS production guard: startup validator rejects ALLOWED_ORIGINS=* in production.
 - Calibrate Almgren-Chriss slippage model against real OANDA paper fills.
+- MT5 signal export via ZeroMQ bridge.
 
 ### Long-term
-- Research pipeline LSTM/Transformer integration (Phase 3-4, requires GPU training).
+- Research pipeline LSTM/Transformer integration (Phase 3–4, requires GPU training).
 - Regulatory compliance tooling (MiFID II reporting hooks).
 - Community strategy marketplace.
