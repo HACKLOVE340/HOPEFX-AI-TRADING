@@ -392,8 +392,21 @@ class TradeExecutor:
                     self.risk_manager.daily_starting_equity + realized_pnl
                 )
 
-                # ── Streak tracking ───────────────────────────────────────────
+                # ── Streak tracking (executor + risk manager) ────────────────
                 self._update_streak(realized_pnl)
+                # Keep risk manager streak state in sync so PreTradeGate
+                # can enforce the halt even via alternative order paths.
+                try:
+                    if hasattr(self.risk_manager, "record_trade_outcome"):
+                        self.risk_manager.record_trade_outcome(
+                            realized_pnl=realized_pnl,
+                            symbol=getattr(closed_position, "symbol", position_id),
+                        )
+                except Exception as _rm_exc:
+                    logger.debug(
+                        "RiskManager.record_trade_outcome failed (non-fatal): %s",
+                        _rm_exc,
+                    )
 
                 # ── Post-close drawdown check ─────────────────────────────────
                 self._trigger_drawdown_halt_if_needed()
