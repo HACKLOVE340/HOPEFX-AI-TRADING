@@ -579,6 +579,27 @@ async def _record_fill(
     except Exception:
         pass
 
+    # Online learner feedback — notify Phase-3 store of the confirmed fill so
+    # it can update blend weights and accumulate training data.
+    try:
+        from core.signal_engine import notify_fill as _notify_fill
+        import pandas as _pd
+
+        # Build a minimal feature row from the fill so the online learner has
+        # something to learn from even when no pre-computed feature df exists.
+        _fill_price = result.average_fill_price or 0.0
+        _label = 1  # REST-API fills are assumed profitable (user-initiated)
+        _features = _pd.DataFrame([{
+            "symbol": order.symbol,
+            "side": order.side,
+            "quantity": order.quantity,
+            "fill_price": _fill_price,
+            "source": "rest_api",
+        }])
+        _notify_fill(_features, label=_label, primary_prob=None)
+    except Exception as _ol_exc:
+        logger.debug("notify_fill skipped in _record_fill: %s", _ol_exc)
+
     return {
         "status": "success",
         "order_id": result.id,
