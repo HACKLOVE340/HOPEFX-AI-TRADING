@@ -920,6 +920,13 @@ async def _execute_if_approved(
             except Exception:
                 pass
 
+        # Paper trading gate fill counter.
+        try:
+            from research.pipeline.paper_trading_gate import get_gate as _get_gate
+            _get_gate().record_fill(pnl=0.0)
+        except Exception as _gate_exc:
+            logger.debug("gate.record_fill skipped in signal_engine: %s", _gate_exc)
+
         # Online learner feedback — notify Phase-3 store of the confirmed fill.
         # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
         try:
