@@ -253,30 +253,66 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         )
 
 
-@router.get("/status", summary="Current broker connection status")
+@router.get("/status", summary="Current broker connection status and balance")
 async def broker_status():
-    """Return the current broker type and connection state."""
+    """
+    Return the current broker type, connection state, and account balance.
+
+    Reads from the live app_state broker instance. For paper trading this
+    returns the simulated balance. For OANDA it calls get_account_info()
+    to retrieve the live practice/live balance.
+    """
+    from datetime import datetime, timezone
+
     try:
         from app import app_state  # noqa: PLC0415
 
         broker = getattr(app_state, "broker", None)
         if broker is None:
-            return {"connected": False, "broker_type": "none", "balance": None}
+            return {
+                "connected": False,
+                "broker_type": "none",
+                "balance": None,
+                "currency": None,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         broker_type = getattr(broker, "broker_type", type(broker).__name__.lower())
         balance = None
+        currency = None
+        open_positions = 0
+
         try:
-            if hasattr(broker, "get_account_balance"):
+            if hasattr(broker, "get_account_info"):
+                info = await broker.get_account_info()
+                balance = info.get("balance") or info.get("equity")
+                currency = info.get("currency", "USD")
+            elif hasattr(broker, "get_account_balance"):
                 balance = broker.get_account_balance()
             elif hasattr(broker, "balance"):
                 balance = broker.balance
         except Exception as exc:
-            logger.warning("Could not retrieve broker balance: %s", exc)
+            logger.warning("broker_status: could not retrieve account info: %s", exc)
+
+        try:
+            if hasattr(broker, "get_positions"):
+                positions = await broker.get_positions()
+                open_positions = len(positions) if positions else 0
+        except Exception:
+            pass
 
         return {
             "connected": True,
             "broker_type": broker_type,
             "balance": balance,
+            "currency": currency,
+            "open_positions": open_positions,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
-        return {"connected": False, "broker_type": "unknown", "error": str(exc)}
+        return {
+            "connected": False,
+            "broker_type": "unknown",
+            "error": str(exc),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }

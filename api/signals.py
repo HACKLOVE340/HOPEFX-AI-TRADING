@@ -758,6 +758,24 @@ def create_signals_router():
         """Get a quick summary of current signal state."""
         return _get_signal_service().get_signal_summary()
 
+    @signals_router.get("/latest")
+    async def get_latest_signals(symbol: Optional[str] = None, limit: int = 10):
+        """
+        Return the most recent N signals from the live signal engine.
+
+        Pulls from the in-memory signal history ring buffer. Returns up to
+        `limit` signals (default 10), newest first. Optionally filter by symbol.
+        """
+        svc = _get_signal_service()
+        # get_signal_history returns newest-first from the ring buffer
+        signals = svc.get_signal_history(symbol=symbol, hours=24)
+        latest = signals[:limit]
+        return {
+            "signals": [s.to_dict() for s in latest],
+            "count": len(latest),
+            "symbol_filter": symbol,
+        }
+
     @signals_router.get("/active")
     async def get_active_signals(symbol: Optional[str] = None):
         """List all currently active signals, optionally filtered by symbol."""
