@@ -241,14 +241,69 @@ class APIGateway:
         ):
             self._verify_token(credentials.credentials, required_role="trader")
 
-            # Validate order
-            if order.get("quantity", 0) <= 0:
-                raise HTTPException(status_code=400, detail="Invalid quantity")
+            # Validate required fields
+            symbol = order.get("symbol", "").strip().upper()
+            action = order.get("action", order.get("side", "")).strip().lower()
+            quantity = float(order.get("quantity", order.get("size", 0)))
 
-            # Submit through OMS
-            # oms_id = self.oms.create_order(**order)
+            if not symbol:
+                raise HTTPException(status_code=400, detail="symbol is required")
+            if action not in ("buy", "sell", "close"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"action must be buy | sell | close, got {action!r}",
+                )
+            if quantity <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"quantity must be > 0, got {quantity}",
+                )
 
-            return {"success": True, "order_id": "placeholder", "status": "pending"}
+            # Route through the main app's TradeExecutor so all pre-trade risk
+            # checks (PreTradeGate, drawdown limits, position sizing) apply.
+            try:
+                from app import app_state  # noqa: PLC0415
+
+                trade_executor = getattr(app_state, "trade_executor", None)
+                if trade_executor is None:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="TradeExecutor not initialised — server is still starting up",
+                    )
+
+                signal = {
+                    "symbol": symbol,
+                    "action": action,
+                    "size": quantity,
+                    "price": order.get("price"),
+                    "stop_loss": order.get("stop_loss"),
+                    "take_profit": order.get("take_profit"),
+                    "strategy_id": order.get("strategy_id", "gateway_api"),
+                    "position_id": order.get("position_id"),
+                }
+
+                result = await trade_executor.execute_signal(signal)
+
+                return {
+                    "success": result.success,
+                    "order_id": result.order_id,
+                    "status": result.status.value,
+                    "filled_quantity": result.filled_quantity,
+                    "average_price": result.average_price,
+                    "commission": result.commission,
+                    "latency_ms": result.latency_ms,
+                    "message": result.message,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.exception("Gateway order execution error: %s", exc)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Order execution failed: {exc}",
+                )
 
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")

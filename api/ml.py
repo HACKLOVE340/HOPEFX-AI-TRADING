@@ -349,17 +349,34 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or data.get("test_accuracy")
                     or 0.0
                 )
-                precision = float(data.get("precision") or data.get("test_precision") or 0.0)
-                recall = float(data.get("recall") or data.get("test_recall") or 0.0)
-                f1 = float(data.get("f1") or data.get("f1_score") or 0.0)
-                sharpe = float(data.get("sharpe") or data.get("sharpe_ratio") or 0.0)
-                win_rate = float(data.get("win_rate") or data.get("accuracy") or accuracy)
-                total_signals = int(data.get("total_signals") or data.get("n_samples") or 0)
+                precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
+                recall = float(data.get("recall") or data.get("test_recall") or data.get("oos_auc") or 0.0)
+                f1 = float(data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0)
+                # Sharpe: prefer multi-symbol pooled, then sharpe_gate, then direct key
+                sharpe_gate = data.get("sharpe_gate") or {}
+                multi = data.get("multi_symbol_backtest_extended") or data.get("multi_symbol_backtest") or {}
+                sharpe = float(
+                    data.get("sharpe")
+                    or data.get("sharpe_ratio")
+                    or multi.get("pooled_sharpe")
+                    or sharpe_gate.get("sharpe")
+                    or 0.0
+                )
+                # win_rate: prefer multi-symbol pooled win rate, else accuracy
+                win_rate = float(data.get("win_rate") or accuracy)
+                # total_signals: prefer oos_n (number of OOS bars evaluated)
+                total_signals = int(
+                    data.get("total_signals")
+                    or data.get("oos_n")
+                    or data.get("n_samples")
+                    or multi.get("pooled_n_trades")
+                    or 0
+                )
                 model_id = str(
                     data.get("model_id") or data.get("model_file") or "advanced_oos"
                 )
                 evaluated_at = data.get("evaluated_at") or data.get("validated_at") or datetime.now(timezone.utc).isoformat()
-                note = data.get("note", "")
+                note = data.get("note") or data.get("validation_notes") or data.get("sharpe_note") or ""
 
                 # If accuracy is still 0 try to derive from InferenceEngine counters
                 if accuracy == 0.0:
