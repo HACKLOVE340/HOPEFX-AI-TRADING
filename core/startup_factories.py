@@ -693,6 +693,52 @@ async def init_macro_store(s: Any) -> Any:
     return macro_store
 
 
+async def init_inference_engine(s: Any) -> Any:
+    """
+    Eagerly initialise the InferenceEngine singleton at startup.
+
+    Calling get_inference_engine() here forces the module-level singleton to
+    be created and its lazy loaders to warm up (predictor, calibrator).  This
+    eliminates cold-start latency on the first /api/ml/predict call and makes
+    /api/ml/health report real counters from the moment the server is ready.
+
+    Dependencies: macro_store and mtf_store must be registered first so the
+    engine's _get_macro_df() and _get_mtf_df() helpers find populated stores.
+
+    Best-effort — a missing model file or import error is logged but never
+    blocks startup.
+    """
+    try:
+        from api.admin import log_activity  # noqa: PLC0415
+    except Exception:
+        def log_activity(msg: str) -> None:  # type: ignore[misc]
+            logger.info(msg)
+
+    try:
+        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
+
+        engine = get_inference_engine()
+        # Warm up the predictor and calibrator lazy loaders
+        engine._get_predictor()
+        engine._load_calibrator()
+
+        health = engine.health()
+        s.inference_engine = engine
+
+        log_activity(
+            f"InferenceEngine initialised — "
+            f"model_available={health['model_available']} "
+            f"model_version={health['model_version']} "
+            f"calibrator={health['calibrator_available']} "
+            f"online_learning={health['online_learning_enabled']} "
+            f"mtf_fusion={health['mtf_fusion_enabled']}"
+        )
+        return engine
+    except Exception as exc:
+        logger.warning("InferenceEngine init failed (non-fatal): %s", exc)
+        return None
+
+
 async def init_mtf_store(s: Any) -> Any:
     """
     Bootstrap the MTFFusionStore at startup.

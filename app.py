@@ -334,6 +334,10 @@ class AppState:
         self.ml_feature_engineer = None
         # Price engine — set during startup, used by /api/trading/ohlcv and /prices
         self.price_engine = None
+        # ML inference engine — full pipeline (MacroStore + MTF + 200 features)
+        self.inference_engine = None
+        # MacroStore — daily macro series (DXY, VIX, yields, etc.)
+        self.macro_store = None
         # Core trading components from main.py
         self.event_store = None
         self.brain = None
@@ -836,6 +840,15 @@ async def startup_event():
         # ── MTF fusion store (Phase 1 — H4/D1 regime features) ───────────────
         .register(
             "mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"]
+        )
+        # ── InferenceEngine (full ML pipeline: macro + MTF + 200 features) ───
+        # Eagerly initialised so the first /api/ml/predict call has zero
+        # cold-start latency and /api/ml/health reports real counters.
+        .register(
+            "inference_engine",
+            F.init_inference_engine,
+            required=False,
+            deps=["macro_store", "mtf_store"],
         )
         # ── Engines ───────────────────────────────────────────────────────────
         .register(

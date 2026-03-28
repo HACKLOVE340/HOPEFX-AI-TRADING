@@ -150,6 +150,37 @@ class GeneratedStrategy(BaseStrategy):
         return None
 """).strip()
 
+_CHAT_SYSTEM_PROMPT = textwrap.dedent("""
+You are the HOPEFX AI trading assistant — an expert in forex and commodities
+trading, quantitative analysis, and the HOPEFX platform.
+
+Your role
+---------
+- Answer questions about trading strategies, market analysis, risk management,
+  and the HOPEFX platform features.
+- Explain signals, positions, P&L, drawdown, and model predictions clearly.
+- Provide educational content about technical analysis, macro factors, and
+  trading psychology.
+- Help users interpret AI model outputs (confidence scores, direction signals,
+  feature importances).
+- Suggest risk management improvements based on the user's described situation.
+
+Constraints
+-----------
+- Never give specific financial advice or tell users to buy/sell specific assets.
+- Always remind users that past performance does not guarantee future results.
+- If asked about live positions or account data, explain you can see context
+  provided in the conversation but cannot access live broker accounts directly.
+- Keep responses concise and actionable. Use bullet points for lists.
+- If a question is outside trading/finance/platform scope, politely redirect.
+
+Tone: professional, direct, data-driven. Avoid hype or guarantees.
+""").strip()
+
+# Maximum number of conversation turns kept in history to avoid token overflow.
+# Each turn = 1 user + 1 assistant message. System prompt is always kept.
+_CHAT_MAX_HISTORY_TURNS = int(os.getenv("CHAT_MAX_HISTORY_TURNS", "20"))
+
 _REFLECT_PROMPT = textwrap.dedent("""
 The strategy you generated produced the following backtest result:
 
@@ -507,41 +538,97 @@ class LLMAgent:
 
     async def chat(self, message: str) -> str:
         """
-        Free-form chat with the agent (maintains conversation history).
+        Free-form chat with the trading assistant (maintains conversation history).
 
-        Before each LLM call, fetches similar historical market regimes from
-        the vector store (RAG) and prepends them to the system context so the
-        AI is aware of historical precedents when answering questions.
+        Uses a dedicated trading-assistant system prompt (not the strategy
+        engineer prompt).  Injects RAG context and live market snapshot before
+        each call.  Trims history to _CHAT_MAX_HISTORY_TURNS to stay within
+        the model's context window.
         """
+        # Initialise with the trading-assistant system prompt (not strategy prompt)
         if not self._history:
-            self._history = [{"role": "system", "content": _SYSTEM_PROMPT}]
+            self._history = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT}]
+        elif self._history[0].get("content") == _SYSTEM_PROMPT:
+            # Upgrade old sessions that were seeded with the strategy prompt
+            self._history[0] = {"role": "system", "content": _CHAT_SYSTEM_PROMPT}
+
+        # ── History trimming — keep system prompt + last N turns ──────────────
+        max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2  # system + (user+assistant)*N
+        if len(self._history) > max_msgs:
+            self._history = [self._history[0]] + self._history[-(max_msgs - 1):]
+
+        # ── Live market context injection ─────────────────────────────────────
+        live_context = self._build_live_context()
 
         # ── RAG context injection ─────────────────────────────────────────────
         rag_context = await self._fetch_rag_context()
+
+        # Build ephemeral system additions (not persisted in history)
+        ephemeral_parts: list[str] = []
+        if live_context:
+            ephemeral_parts.append(live_context)
         if rag_context:
-            # Inject as a system message immediately before the user turn so
-            # it doesn't pollute the persistent conversation history.
-            messages_with_rag = list(self._history) + [
-                {"role": "system", "content": rag_context},
+            ephemeral_parts.append(rag_context)
+
+        if ephemeral_parts:
+            ephemeral_msg = "\n\n".join(ephemeral_parts)
+            messages_with_context = list(self._history) + [
+                {"role": "system", "content": ephemeral_msg},
                 {"role": "user", "content": message},
             ]
+            response_text, error = await self._call_llm_with_messages(messages_with_context)
+            if not error:
+                # Persist the exchange without the ephemeral context
+                self._history.append({"role": "user", "content": message})
+                self._history.append({"role": "assistant", "content": response_text})
         else:
             self._history.append({"role": "user", "content": message})
-            messages_with_rag = None
-
-        if messages_with_rag:
-            # Call LLM with the RAG-augmented message list directly
-            code, error = await self._call_llm_with_messages(messages_with_rag)
+            response_text, error = await self._call_llm()
             if not error:
-                # Persist the exchange in history without the RAG injection
-                self._history.append({"role": "user", "content": message})
-                self._history.append({"role": "assistant", "content": code})
-        else:
-            code, error = await self._call_llm()
+                self._history.append({"role": "assistant", "content": response_text})
 
         if error:
-            return f"Error: {error}"
-        return code
+            return f"I'm unable to respond right now: {error}"
+        return response_text
+
+    def _build_live_context(self) -> str:
+        """
+        Build a brief live market snapshot for injection into the system context.
+
+        Pulls current prices from the paper broker / price engine if available.
+        Returns an empty string when no live data is accessible.
+        """
+        try:
+            from app import app_state  # noqa: PLC0415
+
+            broker = getattr(app_state, "broker", None)
+            if broker is None:
+                return ""
+
+            market_prices = getattr(broker, "market_prices", {})
+            if not market_prices:
+                return ""
+
+            lines = ["## Live Market Snapshot"]
+            for sym, price in list(market_prices.items())[:6]:
+                lines.append(f"- {sym}: {price}")
+
+            # Add InferenceEngine last signal if available
+            try:
+                engine = getattr(app_state, "inference_engine", None)
+                if engine is not None:
+                    h = engine.health()
+                    lines.append(
+                        f"\nML Engine: model={h.get('model_version','?')} "
+                        f"predictions={h.get('predict_count',0)} "
+                        f"fallbacks={h.get('fallback_count',0)}"
+                    )
+            except Exception:
+                pass
+
+            return "\n".join(lines)
+        except Exception:
+            return ""
 
     async def _fetch_rag_context(self) -> str:
         """

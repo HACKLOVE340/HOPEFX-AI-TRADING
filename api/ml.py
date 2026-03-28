@@ -317,53 +317,117 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     """
     Return accuracy metrics for the active model.
 
-    Reads from the most recent evaluation CSV if available; otherwise
-    returns the last known metrics from the saved model metadata.
+    Resolution order:
+    1. ml/saved_models/advanced_oos_meta.json  — written by train_with_macro.py
+    2. ml/evaluation_results.json              — written by evaluation pipeline
+    3. ml/saved_models/metrics.json            — legacy metrics file
+    4. Live InferenceEngine predict_count / fallback_count ratio
+    5. Baseline stub with a note to run training
 
     Requires: authenticated user (any role).
     """
     import json
     import pathlib
 
-    # Try to load evaluation results from disk
+    base_dir = pathlib.Path(__file__).parent.parent / "ml"
+    saved_dir = base_dir / "saved_models"
+
     eval_paths = [
-        pathlib.Path(__file__).parent.parent / "ml" / "evaluation_results.json",
-        pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "metrics.json",
+        saved_dir / "advanced_oos_meta.json",
+        base_dir / "evaluation_results.json",
+        saved_dir / "metrics.json",
     ]
+
     for p in eval_paths:
         if p.exists():
             try:
                 data = json.loads(p.read_text())
+                # Normalise field names across different file formats
+                accuracy = float(
+                    data.get("accuracy")
+                    or data.get("oos_accuracy")
+                    or data.get("test_accuracy")
+                    or 0.0
+                )
+                precision = float(data.get("precision") or data.get("test_precision") or 0.0)
+                recall = float(data.get("recall") or data.get("test_recall") or 0.0)
+                f1 = float(data.get("f1") or data.get("f1_score") or 0.0)
+                sharpe = float(data.get("sharpe") or data.get("sharpe_ratio") or 0.0)
+                win_rate = float(data.get("win_rate") or data.get("accuracy") or accuracy)
+                total_signals = int(data.get("total_signals") or data.get("n_samples") or 0)
+                model_id = str(
+                    data.get("model_id") or data.get("model_file") or "advanced_oos"
+                )
+                evaluated_at = data.get("evaluated_at") or data.get("validated_at") or datetime.now(timezone.utc).isoformat()
+                note = data.get("note", "")
+
+                # If accuracy is still 0 try to derive from InferenceEngine counters
+                if accuracy == 0.0:
+                    try:
+                        from ml.inference_engine import get_inference_engine
+                        eng = get_inference_engine()
+                        h = eng.health()
+                        total = h.get("predict_count", 0)
+                        fallback = h.get("fallback_count", 0)
+                        if total > 0:
+                            accuracy = round(1.0 - fallback / total, 4)
+                            win_rate = accuracy
+                            total_signals = total
+                            note = note or "Accuracy derived from live predict/fallback ratio"
+                    except Exception:
+                        pass
+
                 return AccuracyResponse(
-                    model_id=data.get("model_id", "xgb_macro"),
-                    accuracy=float(data.get("accuracy", 0.49)),
-                    precision=float(data.get("precision", 0.50)),
-                    recall=float(data.get("recall", 0.50)),
-                    f1=float(data.get("f1", 0.50)),
-                    sharpe=float(data.get("sharpe", 0.0)),
-                    win_rate=float(data.get("win_rate", 0.49)),
-                    total_signals=int(data.get("total_signals", 0)),
-                    evaluated_at=data.get(
-                        "evaluated_at",
-                        datetime.now(timezone.utc).isoformat(),
-                    ),
-                    note=data.get("note", ""),
+                    model_id=model_id,
+                    accuracy=accuracy,
+                    precision=precision,
+                    recall=recall,
+                    f1=f1,
+                    sharpe=sharpe,
+                    win_rate=win_rate,
+                    total_signals=total_signals,
+                    evaluated_at=evaluated_at,
+                    note=note,
                 )
             except Exception as exc:
                 logger.debug("Could not parse eval file %s: %s", p, exc)
 
-    # Fallback: return baseline metrics with a note
+    # ── Live engine counters as last resort before stub ───────────────────────
+    try:
+        from ml.inference_engine import get_inference_engine
+        eng = get_inference_engine()
+        h = eng.health()
+        total = h.get("predict_count", 0)
+        fallback = h.get("fallback_count", 0)
+        if total > 0:
+            live_accuracy = round(1.0 - fallback / total, 4)
+            return AccuracyResponse(
+                model_id=h.get("model_version", "inference_engine"),
+                accuracy=live_accuracy,
+                precision=0.0,
+                recall=0.0,
+                f1=0.0,
+                sharpe=0.0,
+                win_rate=live_accuracy,
+                total_signals=total,
+                evaluated_at=datetime.now(timezone.utc).isoformat(),
+                note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
+            )
+    except Exception:
+        pass
+
+    # ── Stub: model not yet trained ───────────────────────────────────────────
     return AccuracyResponse(
         model_id="xgb_macro",
-        accuracy=0.49,
-        precision=0.50,
-        recall=0.50,
-        f1=0.50,
+        accuracy=0.0,
+        precision=0.0,
+        recall=0.0,
+        f1=0.0,
         sharpe=0.0,
-        win_rate=0.49,
+        win_rate=0.0,
         total_signals=0,
         evaluated_at=datetime.now(timezone.utc).isoformat(),
-        note="Model not yet evaluated on real data. Run: python ml/train_with_macro.py --years 8",
+        note="No evaluation data found. Run: python ml/train_with_macro.py --years 8",
     )
 
 
@@ -587,39 +651,163 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     """
     Return the current health status of the production ML model.
 
-    Reports whether advanced_oos.pkl is loaded, its feature count,
-    OOS accuracy, and the timestamp of the last successful prediction.
-    Does not require admin role — any authenticated user can call this.
+    Delegates to InferenceEngine.health() for live engine metrics (predict
+    count, fallback count, last latency, calibrator state, feature flags).
+    Falls back to file-based registry inspection when the engine is not yet
+    initialised.  Any authenticated user may call this endpoint.
     """
     from datetime import datetime, timezone
 
+    checked_at = datetime.now(timezone.utc).isoformat()
+
+    # ── Primary: InferenceEngine live health ──────────────────────────────────
+    try:
+        from ml.inference_engine import get_inference_engine
+
+        engine = get_inference_engine()
+        engine_health = engine.health()
+
+        # Enrich with saved-model registry metadata
+        import pathlib
+        import json as _json
+
+        saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
+        meta_path = saved_dir / "advanced_oos_meta.json"
+        oos_accuracy: Optional[float] = None
+        feature_count: int = 0
+        model_file: str = "advanced_oos.pkl"
+        last_trained_at: Optional[str] = None
+
+        if meta_path.exists():
+            try:
+                meta = _json.loads(meta_path.read_text())
+                oos_accuracy = float(meta.get("oos_accuracy", 0.0))
+                feature_count = int(meta.get("feature_count", 0))
+                model_file = meta.get("model_file", "advanced_oos.pkl")
+                last_trained_at = meta.get("validated_at") or meta.get("trained_at")
+            except Exception as exc:
+                logger.debug("ml_health: meta parse failed: %s", exc)
+
+        # Derive feature_count from predictor if meta didn't have it
+        if feature_count == 0:
+            try:
+                from ml.live_inference import get_advanced_predictor
+                pred = get_advanced_predictor()
+                if pred.is_available and hasattr(pred, "_model"):
+                    n = getattr(pred._model, "n_features_in_", 0)
+                    feature_count = int(n) if n else feature_count
+            except Exception:
+                pass
+
+        model_available = engine_health.get("model_available", False)
+        status_str = "ok" if model_available else "degraded"
+
+        return {
+            "status": status_str,
+            "model_loaded": model_available,
+            "model_id": engine_health.get("model_version", model_file),
+            "feature_count": feature_count,
+            "oos_accuracy": oos_accuracy,
+            "last_trained_at": last_trained_at,
+            "predict_count": engine_health.get("predict_count", 0),
+            "fallback_count": engine_health.get("fallback_count", 0),
+            "last_latency_ms": engine_health.get("last_latency_ms", 0.0),
+            "calibrator_available": engine_health.get("calibrator_available", False),
+            "online_learning_enabled": engine_health.get("online_learning_enabled", False),
+            "mtf_fusion_enabled": engine_health.get("mtf_fusion_enabled", True),
+            "threshold_long": engine_health.get("threshold_long", 0.58),
+            "threshold_short": engine_health.get("threshold_short", 0.42),
+            "checked_at": checked_at,
+        }
+    except Exception as exc:
+        logger.warning("ml_health: InferenceEngine unavailable: %s", exc)
+
+    # ── Fallback: file-based registry ─────────────────────────────────────────
     predictor = _get_predictor()
     meta = _load_model_registry()
-
     model_loaded = predictor is not None
-    feature_count: int = 0
-    last_prediction_at: Optional[str] = None
-    oos_accuracy: Optional[float] = None
-    model_id: Optional[str] = None
-
-    if model_loaded:
-        try:
-            feature_count = int(meta.get("feature_count", 0))
-            oos_accuracy = float(meta.get("oos_accuracy", 0.0))
-            model_id = meta.get("model_file", "advanced_oos.pkl")
-            # last_prediction_at is tracked on the predictor if available
-            last_prediction_at = getattr(predictor, "_last_prediction_at", None)
-            if last_prediction_at is None:
-                last_prediction_at = meta.get("validated_at")
-        except Exception as exc:
-            logger.warning("ml_health: could not read meta: %s", exc)
-
     return {
         "status": "ok" if model_loaded else "degraded",
         "model_loaded": model_loaded,
-        "model_id": model_id,
-        "feature_count": feature_count,
-        "oos_accuracy": oos_accuracy,
-        "last_prediction_at": last_prediction_at,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "model_id": None,
+        "feature_count": 0,
+        "oos_accuracy": None,
+        "last_trained_at": None,
+        "predict_count": 0,
+        "fallback_count": 0,
+        "last_latency_ms": 0.0,
+        "calibrator_available": False,
+        "online_learning_enabled": False,
+        "mtf_fusion_enabled": False,
+        "threshold_long": 0.58,
+        "threshold_short": 0.42,
+        "checked_at": checked_at,
     }
+
+
+@router.get("/engine-health", summary="InferenceEngine detailed health (admin)")
+async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
+    """
+    Return detailed InferenceEngine diagnostics.
+
+    Includes pipeline step availability (MacroStore, MTF, online learner,
+    calibrator), live counters, and per-component status.  Admin only —
+    exposes internal model configuration details.
+    """
+    from datetime import datetime, timezone
+
+    checked_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        from ml.inference_engine import get_inference_engine
+
+        engine = get_inference_engine()
+        health = engine.health()
+
+        # MacroStore status
+        macro_status: dict = {"available": False, "series_count": 0}
+        try:
+            from ml.macro_store import macro_store
+            macro_status = {
+                "available": len(macro_store) > 0,
+                "series_count": len(macro_store),
+            }
+        except Exception:
+            pass
+
+        # MTF store status
+        mtf_status: dict = {"available": False, "ready": False}
+        try:
+            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+            if _MTF_STORE_SINGLETON is not None:
+                mtf_status = {
+                    "available": True,
+                    "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False),
+                }
+        except Exception:
+            pass
+
+        # Saved model files
+        import pathlib
+        saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
+        model_files = {
+            f.name: round(f.stat().st_size / 1024, 1)
+            for f in saved_dir.glob("*.pkl")
+            if f.exists()
+        } if saved_dir.exists() else {}
+
+        return {
+            "status": "ok" if health.get("model_available") else "degraded",
+            "engine": health,
+            "macro_store": macro_status,
+            "mtf_store": mtf_status,
+            "saved_model_files_kb": model_files,
+            "checked_at": checked_at,
+        }
+    except Exception as exc:
+        logger.warning("ml_engine_health: %s", exc)
+        return {
+            "status": "unavailable",
+            "error": str(exc),
+            "checked_at": checked_at,
+        }

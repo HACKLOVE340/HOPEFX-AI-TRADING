@@ -253,66 +253,125 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         )
 
 
-@router.get("/status", summary="Current broker connection status and balance")
+@router.get("/status", summary="Current broker connection status, balance, and data feed")
 async def broker_status():
     """
-    Return the current broker type, connection state, and account balance.
+    Return the current broker type, connection state, account balance, and
+    data feed engine status.
 
-    Reads from the live app_state broker instance. For paper trading this
-    returns the simulated balance. For OANDA it calls get_account_info()
-    to retrieve the live practice/live balance.
+    Reads from the live app_state broker and price_engine instances.
+    For paper trading this returns the simulated balance.
+    For OANDA it calls get_account_info() to retrieve the live balance.
+    The data_feed section reports RealTimePriceEngine connectivity.
     """
     from datetime import datetime, timezone
+
+    checked_at = datetime.now(timezone.utc).isoformat()
 
     try:
         from app import app_state  # noqa: PLC0415
 
         broker = getattr(app_state, "broker", None)
+
+        # ── Broker section ────────────────────────────────────────────────────
         if broker is None:
-            return {
+            broker_section: dict = {
                 "connected": False,
                 "broker_type": "none",
                 "balance": None,
                 "currency": None,
-                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "open_positions": 0,
+                "error": "Broker not initialised",
+            }
+        else:
+            broker_type = getattr(broker, "broker_type", type(broker).__name__.lower())
+            balance = None
+            currency = None
+            open_positions = 0
+            broker_error: Optional[str] = None
+
+            try:
+                if hasattr(broker, "get_account_info"):
+                    info = await broker.get_account_info()
+                    balance = info.get("balance") or info.get("equity")
+                    currency = info.get("currency", "USD")
+                elif hasattr(broker, "get_account_balance"):
+                    balance = broker.get_account_balance()
+                elif hasattr(broker, "balance"):
+                    balance = broker.balance
+            except Exception as exc:
+                broker_error = str(exc)
+                logger.warning("broker_status: account info error: %s", exc)
+
+            try:
+                if hasattr(broker, "get_positions"):
+                    positions = await broker.get_positions()
+                    open_positions = len(positions) if positions else 0
+            except Exception:
+                pass
+
+            broker_section = {
+                "connected": True,
+                "broker_type": broker_type,
+                "balance": balance,
+                "currency": currency,
+                "open_positions": open_positions,
+            }
+            if broker_error:
+                broker_section["error"] = broker_error
+
+        # ── Data feed / price engine section ──────────────────────────────────
+        price_engine = getattr(app_state, "price_engine", None)
+        if price_engine is not None and hasattr(price_engine, "get_status"):
+            try:
+                feed_raw = price_engine.get_status()
+                data_feed: dict = {
+                    "active": feed_raw.get("active", False),
+                    "primary_active": feed_raw.get("primary_active", False),
+                    "fallback_active": feed_raw.get("fallback_active", False),
+                    "websocket_connected": feed_raw.get("websocket_connected", False),
+                    "rest_available": feed_raw.get("rest_available", False),
+                    "symbols": feed_raw.get("symbols", []),
+                    "source": "RealTimePriceEngine",
+                }
+            except Exception as exc:
+                data_feed = {"active": False, "error": str(exc), "source": "RealTimePriceEngine"}
+        elif price_engine is not None:
+            # Engine exists but no get_status() — check active attribute
+            data_feed = {
+                "active": getattr(price_engine, "active", False),
+                "source": type(price_engine).__name__,
+                "symbols": getattr(price_engine, "symbols", []),
+            }
+        else:
+            # No price engine — check if broker has a built-in feed
+            has_feed = hasattr(broker, "market_prices") if broker else False
+            data_feed = {
+                "active": has_feed,
+                "source": "broker_internal" if has_feed else "none",
+                "note": "RealTimePriceEngine not initialised; broker provides prices directly"
+                if has_feed
+                else "No data feed available",
             }
 
-        broker_type = getattr(broker, "broker_type", type(broker).__name__.lower())
-        balance = None
-        currency = None
-        open_positions = 0
-
-        try:
-            if hasattr(broker, "get_account_info"):
-                info = await broker.get_account_info()
-                balance = info.get("balance") or info.get("equity")
-                currency = info.get("currency", "USD")
-            elif hasattr(broker, "get_account_balance"):
-                balance = broker.get_account_balance()
-            elif hasattr(broker, "balance"):
-                balance = broker.balance
-        except Exception as exc:
-            logger.warning("broker_status: could not retrieve account info: %s", exc)
-
-        try:
-            if hasattr(broker, "get_positions"):
-                positions = await broker.get_positions()
-                open_positions = len(positions) if positions else 0
-        except Exception:
-            pass
+        # ── Signal engine status ──────────────────────────────────────────────
+        signal_engine_running = any(
+            not t.done()
+            for t in getattr(app_state, "background_tasks", [])
+        )
 
         return {
-            "connected": True,
-            "broker_type": broker_type,
-            "balance": balance,
-            "currency": currency,
-            "open_positions": open_positions,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "broker": broker_section,
+            "data_feed": data_feed,
+            "signal_engine_running": signal_engine_running,
+            "checked_at": checked_at,
         }
+
     except Exception as exc:
+        logger.exception("broker_status: unexpected error: %s", exc)
         return {
-            "connected": False,
-            "broker_type": "unknown",
-            "error": str(exc),
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "broker": {"connected": False, "broker_type": "unknown", "error": str(exc)},
+            "data_feed": {"active": False, "source": "unknown"},
+            "signal_engine_running": False,
+            "checked_at": checked_at,
         }

@@ -394,6 +394,95 @@ async def _eventbus_tick_broadcaster() -> None:
         await _price_broadcaster_sim()
 
 
+def _compute_atr_sl_tp(
+    symbol: str,
+    mid: float,
+    direction: str,
+    sl_atr_mult: float = 1.5,
+    tp_atr_mult: float = 3.0,
+) -> tuple[Optional[float], Optional[float]]:
+    """
+    Compute ATR(14)-based stop-loss and take-profit prices.
+
+    Resolution order:
+    1. Recent H1 OHLCV from the signal engine data buffer
+    2. Recent H1 CSV from data/<symbol>_H1.csv
+    3. Percentage fallback (1.5% SL / 3.0% TP) when no price history available
+
+    Returns (stop_loss, take_profit) rounded to 5 decimal places.
+    sl_atr_mult and tp_atr_mult are read from env vars SL_ATR_MULT / TP_ATR_MULT
+    at call time so they can be tuned without a restart.
+    """
+    sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
+    tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
+
+    atr: Optional[float] = None
+
+    # ── 1. Signal engine data buffer ─────────────────────────────────────────
+    try:
+        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
+        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+        buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
+        if buf is not None and len(buf) >= 15:
+            import numpy as _np
+            highs  = _np.array([b["high"]  for b in list(buf)[-15:]], dtype=float)
+            lows   = _np.array([b["low"]   for b in list(buf)[-15:]], dtype=float)
+            closes = _np.array([b["close"] for b in list(buf)[-15:]], dtype=float)
+            tr = _np.maximum(
+                highs[1:] - lows[1:],
+                _np.maximum(
+                    _np.abs(highs[1:] - closes[:-1]),
+                    _np.abs(lows[1:]  - closes[:-1]),
+                ),
+            )
+            if len(tr) >= 14:
+                atr = float(_np.mean(tr[-14:]))
+    except Exception:
+        pass
+
+    # ── 2. CSV fallback ───────────────────────────────────────────────────────
+    if atr is None:
+        try:
+            import pathlib
+            import pandas as _pd
+            broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+            csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
+            if not csv_path.exists():
+                csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
+            if csv_path.exists():
+                df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
+                if len(df) >= 15:
+                    highs  = df["high"].values.astype(float)
+                    lows   = df["low"].values.astype(float)
+                    closes = df["close"].values.astype(float)
+                    import numpy as _np
+                    tr = _np.maximum(
+                        highs[1:] - lows[1:],
+                        _np.maximum(
+                            _np.abs(highs[1:] - closes[:-1]),
+                            _np.abs(lows[1:]  - closes[:-1]),
+                        ),
+                    )
+                    atr = float(_np.mean(tr[-14:]))
+        except Exception:
+            pass
+
+    # ── 3. Percentage fallback ────────────────────────────────────────────────
+    if atr is None or atr <= 0:
+        # 1.5% SL / 3.0% TP as last resort
+        atr = mid * 0.01
+
+    is_long = direction in ("long", "buy")
+    if is_long:
+        sl = round(mid - atr * sl_mult, 5)
+        tp = round(mid + atr * tp_mult, 5)
+    else:
+        sl = round(mid + atr * sl_mult, 5)
+        tp = round(mid - atr * tp_mult, 5)
+
+    return sl, tp
+
+
 async def _eventbus_signal_broadcaster() -> None:
     """
     Subscribe to hopefx:signal and forward signal_events to clients
@@ -416,17 +505,28 @@ async def _eventbus_signal_broadcaster() -> None:
                 "neutral"
             )
             mid = msg.get("mid", 0.0)
+            symbol = msg.get("symbol", "XAU/USD")
+
+            # Use signal-engine-provided SL/TP when present; compute ATR-based
+            # levels only when the upstream signal did not supply them.
+            sl = msg.get("stop_loss")
+            tp = msg.get("take_profit")
+            if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
+                computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
+                sl = sl if sl is not None else computed_sl
+                tp = tp if tp is not None else computed_tp
+
             signal = {
                 "type": "signal",
                 "data": {
                     "id":           f"sig_{msg.get('tick_seq', 0)}",
-                    "symbol":       msg.get("symbol", "XAU/USD"),
+                    "symbol":       symbol,
                     "direction":    direction_fe,
                     "confidence":   msg.get("confidence", 0.0),
-                    "model":        "advanced_oos",
+                    "model":        msg.get("model_version", "advanced_oos"),
                     "entry_price":  mid,
-                    "stop_loss":    round(mid * 0.998, 5),   # 0.2% SL placeholder
-                    "take_profit":  round(mid * 1.004, 5),   # 0.4% TP placeholder
+                    "stop_loss":    sl,
+                    "take_profit":  tp,
                     "generated_at": msg.get("timestamp", ""),
                     "status":       "active",
                 },
