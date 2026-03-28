@@ -411,16 +411,40 @@ def setup_cors(app: FastAPI):
     allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
 
     app_env = os.getenv("APP_ENV", "development")
-    if app_env == "production" and all("localhost" in o or "127." in o for o in allowed_origins):
-        # Hard failure — localhost CORS in production means the frontend can
-        # never reach the API from a real domain. Operators must set this.
+    if app_env == "production":
         import sys as _sys
-        _cors_logger.critical(
-            "STARTUP BLOCKED: ALLOWED_ORIGINS is restricted to localhost in "
-            "production. Set ALLOWED_ORIGINS to your frontend domain(s), e.g.: "
-            "ALLOWED_ORIGINS=https://app.yourdomain.com"
-        )
-        _sys.exit(1)
+
+        # Reject wildcard — credentials + wildcard is forbidden by the CORS spec
+        # and would allow any origin to send authenticated requests.
+        if "*" in allowed_origins:
+            _cors_logger.critical(
+                "STARTUP BLOCKED: ALLOWED_ORIGINS contains '*' with "
+                "allow_credentials=True. This is a CORS misconfiguration that "
+                "exposes authenticated endpoints to any origin. Set explicit "
+                "HTTPS origins, e.g.: ALLOWED_ORIGINS=https://app.yourdomain.com"
+            )
+            _sys.exit(1)
+
+        # Reject plain http:// origins in production — credentials must only
+        # travel over TLS to prevent session-hijacking via network interception.
+        insecure = [o for o in allowed_origins if o.startswith("http://")]
+        if insecure:
+            _cors_logger.critical(
+                "STARTUP BLOCKED: ALLOWED_ORIGINS contains insecure http:// "
+                "origins in production: %s. Use https:// only.",
+                insecure,
+            )
+            _sys.exit(1)
+
+        # Reject localhost-only config — the frontend can never reach the API
+        # from a real domain if only loopback addresses are allowed.
+        if all("localhost" in o or "127." in o for o in allowed_origins):
+            _cors_logger.critical(
+                "STARTUP BLOCKED: ALLOWED_ORIGINS is restricted to localhost in "
+                "production. Set ALLOWED_ORIGINS to your frontend domain(s), e.g.: "
+                "ALLOWED_ORIGINS=https://app.yourdomain.com"
+            )
+            _sys.exit(1)
 
     _cors_logger.info("CORS allowed origins: %s", allowed_origins)
 
