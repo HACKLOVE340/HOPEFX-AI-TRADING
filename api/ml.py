@@ -12,9 +12,11 @@ Routes
 ------
 GET  /ml/accuracy          — current model accuracy metrics
 GET  /ml/models            — list available trained models
-POST /ml/predict/{symbol}  — get a prediction for a symbol
+POST /ml/predict/{symbol}  — get a prediction for a symbol (includes ATR SL/TP)
 POST /ml/retrain           — trigger background model retraining (admin)
 GET  /ml/features          — list feature importances for the active model
+GET  /ml/health            — InferenceEngine health (any authenticated user)
+GET  /ml/engine-health     — InferenceEngine detailed diagnostics (admin only)
 """
 
 from __future__ import annotations
@@ -221,6 +223,61 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
         },
         index=idx,
     )
+
+
+def _compute_atr_sl_tp(
+    ohlcv: "pd.DataFrame",
+    entry_price: float,
+    direction: str,
+    sl_atr_mult: float = 1.5,
+    tp_atr_mult: float = 3.0,
+) -> tuple:
+    """
+    Compute ATR(14)-based stop-loss and take-profit from an OHLCV DataFrame.
+
+    Multipliers are read from SL_ATR_MULT / TP_ATR_MULT env vars so they
+    can be tuned without a restart.  Falls back to 1.5% / 3.0% of entry
+    price when fewer than 15 bars are available.
+
+    Returns (stop_loss, take_profit) rounded to 5 decimal places.
+    """
+    import os as _os
+    import numpy as _np
+
+    sl_mult = float(_os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
+    tp_mult = float(_os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
+
+    atr: float | None = None
+
+    try:
+        if ohlcv is not None and len(ohlcv) >= 15:
+            highs  = ohlcv["high"].values[-15:].astype(float)
+            lows   = ohlcv["low"].values[-15:].astype(float)
+            closes = ohlcv["close"].values[-15:].astype(float)
+            tr = _np.maximum(
+                highs[1:] - lows[1:],
+                _np.maximum(
+                    _np.abs(highs[1:] - closes[:-1]),
+                    _np.abs(lows[1:]  - closes[:-1]),
+                ),
+            )
+            if len(tr) >= 14:
+                atr = float(_np.mean(tr[-14:]))
+    except Exception:
+        pass
+
+    if atr is None or atr <= 0:
+        atr = entry_price * 0.01  # 1% fallback
+
+    is_long = direction in ("long", "buy", "BUY")
+    if is_long:
+        sl = round(entry_price - atr * sl_mult, 5)
+        tp = round(entry_price + atr * tp_mult, 5)
+    else:
+        sl = round(entry_price + atr * sl_mult, 5)
+        tp = round(entry_price - atr * tp_mult, 5)
+
+    return sl, tp
 
 
 def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
@@ -519,13 +576,17 @@ async def predict(
                     result.get("direction", "neutral"), "HOLD"
                 )
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                entry_price = result.get("last_close")
+                sl, tp = (None, None)
+                if entry_price and direction != "HOLD":
+                    sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
                 return PredictResponse(
                     symbol=symbol_upper,
                     direction=direction,
                     confidence=confidence,
-                    entry_price=result.get("last_close"),
-                    stop_loss=None,
-                    take_profit=None,
+                    entry_price=entry_price,
+                    stop_loss=sl,
+                    take_profit=tp,
                     features_used=result.get("bars_used", 0),
                     model_id=result.get("model_version", "inference_engine"),
                     generated_at=now_iso,
@@ -544,13 +605,17 @@ async def predict(
                     result.get("direction", "neutral"), "HOLD"
                 )
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
+                entry_price = result.get("last_close")
+                sl, tp = (None, None)
+                if entry_price and direction != "HOLD":
+                    sl, tp = _compute_atr_sl_tp(ohlcv, entry_price, direction)
                 return PredictResponse(
                     symbol=symbol_upper,
                     direction=direction,
                     confidence=confidence,
-                    entry_price=result.get("last_close"),
-                    stop_loss=None,
-                    take_profit=None,
+                    entry_price=entry_price,
+                    stop_loss=sl,
+                    take_profit=tp,
                     features_used=result.get("bars_used", 0),
                     model_id=result.get("model_version", "advanced_oos"),
                     generated_at=now_iso,
