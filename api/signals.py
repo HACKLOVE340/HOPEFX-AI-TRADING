@@ -702,6 +702,83 @@ class RealTimeSignalService:
         channels.append("alerts")
         return channels
 
+    def ingest_engine_signal(self, payload: Dict[str, Any]) -> Optional["TradingSignal"]:
+        """
+        Ingest a signal dict produced by core/signal_engine.py and store it in
+        the ring buffer so /api/signals/latest reflects engine-generated signals.
+
+        Parameters
+        ----------
+        payload:
+            Dict with keys: symbol, direction, confidence, probability,
+            entry_price, stop_loss, take_profit, timestamp, source.
+
+        Returns the created TradingSignal or None on failure.
+        """
+        try:
+            direction_str = payload.get("direction", "hold").lower()
+            try:
+                direction = SignalDirection(direction_str)
+            except ValueError:
+                direction = SignalDirection.HOLD
+
+            confidence = float(payload.get("confidence", 0.0))
+            entry = float(payload.get("entry_price") or 0.0)
+            sl = payload.get("stop_loss")
+            tp = payload.get("take_profit")
+
+            # Derive SL/TP from entry if not provided (0.5% conservative default)
+            if sl is None:
+                sl = round(entry * 0.995, 5) if direction == SignalDirection.BUY else round(entry * 1.005, 5)
+            if tp is None:
+                tp = round(entry * 1.015, 5) if direction == SignalDirection.BUY else round(entry * 0.985, 5)
+
+            rr = abs(float(tp) - entry) / max(abs(entry - float(sl)), 1e-9)
+
+            strength = (
+                SignalStrength.VERY_STRONG if confidence >= 0.8 else
+                SignalStrength.STRONG if confidence >= 0.6 else
+                SignalStrength.MODERATE if confidence >= 0.4 else
+                SignalStrength.WEAK
+            )
+
+            signal = TradingSignal(
+                id=f"eng_{payload.get('symbol', 'UNK')}_{int(datetime.now(timezone.utc).timestamp())}",
+                symbol=payload.get("symbol", "UNKNOWN"),
+                direction=direction,
+                strength=strength,
+                confidence=confidence,
+                price=entry,
+                entry_price=entry,
+                stop_loss=float(sl),
+                take_profit=float(tp),
+                risk_reward_ratio=round(rr, 2),
+                timeframe="1m",
+                strategies_agreeing=["signal_engine"],
+                total_strategies=1,
+                regime=payload.get("regime", "unknown"),
+                session="live",
+                expiry=datetime.now(timezone.utc).replace(
+                    second=0, microsecond=0
+                ).__class__.fromtimestamp(
+                    datetime.now(timezone.utc).timestamp() + 1800, tz=timezone.utc
+                ),
+                metadata={
+                    "probability": payload.get("probability"),
+                    "model_version": payload.get("model_version"),
+                    "source": payload.get("source", "signal_engine"),
+                },
+            )
+
+            with self._lock:
+                self.signal_history.appendleft(signal)
+                self.active_signals[signal.id] = signal
+
+            return signal
+        except Exception as exc:
+            logger.debug("ingest_engine_signal failed: %s", exc)
+            return None
+
 
 # ─────────────────────────────────────────────────────────────
 # FastAPI router — exposes RealTimeSignalService via REST
@@ -915,5 +992,38 @@ def create_signals_router():
     async def get_websocket_channels():
         """List available WebSocket channel names for signal subscriptions."""
         return {"channels": _get_signal_service().get_websocket_channels()}
+
+    @signals_router.get("/engine")
+    async def get_engine_status():
+        """
+        Return the live signal engine health and Phase 1–4 store status.
+
+        Includes:
+        - ml_available, symbols, interval_seconds, auto_trade flag
+        - phase1_mtf: MTF fusion store status
+        - phase2_anomaly: anomaly detection store status
+        - phase3_online: Phase-3 OnlineLearnerStore status
+        - phase4_deep: deep ensemble store status
+        - recent_signals: last 10 engine-generated signals from the ring buffer
+        """
+        try:
+            from core.signal_engine import get_signal_engine_status  # noqa: PLC0415
+            engine_status = get_signal_engine_status()
+        except Exception as exc:
+            engine_status = {"error": str(exc)}
+
+        # Pull the last 10 engine-generated signals from the ring buffer
+        svc = _get_signal_service()
+        recent = svc.get_signal_history(hours=1)
+        engine_signals = [
+            s.to_dict() for s in recent
+            if s.metadata.get("source") == "signal_engine"
+        ][:10]
+
+        return {
+            "engine": engine_status,
+            "recent_engine_signals": engine_signals,
+            "recent_engine_signal_count": len(engine_signals),
+        }
 
     return signals_router

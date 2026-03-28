@@ -679,6 +679,14 @@ async def _publish_and_broadcast(
         except Exception as ws_exc:
             logger.warning("Signal broadcast failed: %s", ws_exc)
 
+    # Ingest into RealTimeSignalService ring buffer so /api/signals/latest
+    # reflects engine-generated signals (not just manually-submitted ones).
+    try:
+        from api.signals import _get_signal_service as _svc_factory
+        _svc_factory().ingest_engine_signal(signal_payload)
+    except Exception as _ingest_exc:
+        logger.debug("ingest_engine_signal failed (non-fatal): %s", _ingest_exc)
+
     # Discord community bot — post signal embed to configured channel
     try:
         from notifications.discord_bot import discord_signal_bot
