@@ -153,7 +153,9 @@ FastAPI router at startup — no code changes required.
 | Teams Module | `FEATURE_TEAMS` | EXPERIMENTAL | `POST /api/teams`, `GET /api/teams/{id}`, `/api/teams/{id}/invite` |
 | No-Code Builder | `FEATURE_NOCODE` | EXPERIMENTAL | `GET/POST /api/nocode/strategies`, `GET /api/nocode/indicators` |
 | Replay Engine | `FEATURE_REPLAY` | EXPERIMENTAL | `POST /api/replay/sessions`, `/api/replay/sessions/{id}/play` |
-| ML Predictions | `FEATURE_ML_PREDICTIONS` | STABLE | `GET /api/ml/accuracy`, `GET /api/ml/models`, `POST /api/ml/predict/{symbol}`, `GET /api/ml/features` |
+| ML Predictions | `FEATURE_ML_PREDICTIONS` | STABLE | `GET /api/ml/accuracy`, `GET /api/ml/models`, `POST /api/ml/predict/{symbol}`, `GET /api/ml/features`, `GET /api/ml/health` |
+| Online Learner API | `ML_HOURLY_ENABLED` | STABLE | `GET /api/online-learner/status`, `POST /api/online-learner/partial-fit` |
+| Multi-Symbol Backtest API | `FEATURE_BACKTESTING` | STABLE | `POST /api/backtest/multi-symbol` |
 
 ---
 
