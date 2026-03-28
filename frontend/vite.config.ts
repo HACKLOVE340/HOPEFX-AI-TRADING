@@ -36,6 +36,16 @@ export default defineConfig({
   build: {
     outDir: '../static',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query':  ['@tanstack/react-query'],
+          'vendor-charts': ['lightweight-charts'],
+          'vendor-state':  ['zustand'],
+        },
+      },
+    },
   },
   test: {
     globals: true,
