@@ -2114,3 +2114,629 @@ spec:
 ```
 
 ---
+
+## 11. Observability & Security — Full Enhancement Catalogue
+
+### 11.1 — Sentry Production Alert Taxonomy
+
+**Why required:** Sentry is wired but all alerts go to the same queue. Institutional
+systems triage alerts by severity and route to different channels.
+
+**Files:** `utils/telemetry.py`, `core/startup_factories.py`
+
+**Alert taxonomy:**
+
+| Level | Trigger | Channel | Response Time |
+|-------|---------|---------|---------------|
+| `fatal` | Kill switch activated, position reconciliation failure | PagerDuty + SMS | Immediate |
+| `error` | Model load failure, broker connection lost, fill rejected | Sentry + Discord | < 5 min |
+| `warning` | Feature drift PSI > 0.1, Sharpe drop > 0.1, latency SLA breach | Sentry + email | < 1 hour |
+| `info` | Model retrain complete, paper gate status change | Sentry only | Next business day |
+
+```python
+# utils/telemetry.py — structured alert routing:
+import sentry_sdk
+
+def alert(level: str, message: str, context: dict = None, exc: Exception = None):
+    """Unified alert function with channel routing."""
+    extra = context or {}
+
+    if level == "fatal":
+        sentry_sdk.capture_message(message, level="fatal", extras=extra)
+        _pagerduty_alert(message, extra)
+        _sms_alert(message)
+    elif level == "error":
+        if exc:
+            sentry_sdk.capture_exception(exc, extras=extra)
+        else:
+            sentry_sdk.capture_message(message, level="error", extras=extra)
+        _discord_alert(f"ERROR: {message}", extra)
+    elif level == "warning":
+        sentry_sdk.capture_message(message, level="warning", extras=extra)
+    # info: Sentry only, no external channel
+```
+
+---
+
+### 11.2 — Security Hardening Checklist
+
+**Why required:** A trading platform handling real money is a high-value target.
+The following security controls are required before any live capital.
+
+**Current gaps and fixes:**
+
+| Gap | File | Fix | Effort |
+|-----|------|-----|--------|
+| JWT secret rotation | `api/auth.py` | Add `JWT_SECRET_ROTATION_DAYS=90` + auto-rotate | 2h |
+| API rate limiting | `api/` all routers | Add `slowapi` rate limiter: 100 req/min per user | 2h |
+| SQL injection | `database/` | Verify all queries use SQLAlchemy ORM (no raw SQL) | 1h |
+| Secrets in logs | `utils/logger.py` | Add `SensitiveDataFilter` to scrub API keys from logs | 1h |
+| CORS misconfiguration | `app.py` | Restrict `allow_origins` to production domain only | 30m |
+| Missing HTTPS enforcement | `helm/templates/ingress.yaml` | Add TLS redirect + HSTS header | 1h |
+| Dependency vulnerabilities | `requirements.txt` | Add `pip-audit` to CI pipeline | 1h |
+| Container runs as root | `Dockerfile` | Add `USER hopefx` non-root user | 30m |
+
+**Rate limiting implementation:**
+
+```python
+# app.py — add rate limiting:
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# On sensitive endpoints:
+@router.post("/api/auth/login")
+@limiter.limit("10/minute")  # brute-force protection
+async def login(request: Request, ...):
+    ...
+
+@router.post("/api/trading/order")
+@limiter.limit("100/minute")  # order rate limit
+async def place_order(request: Request, ...):
+    ...
+```
+
+**Dockerfile non-root user:**
+
+```dockerfile
+# Dockerfile — add near end:
+RUN addgroup --system hopefx && adduser --system --ingroup hopefx hopefx
+RUN chown -R hopefx:hopefx /app
+USER hopefx
+```
+
+---
+
+### 11.3 — Secrets Management (HashiCorp Vault)
+
+**Why required:** Current secrets are in `.env` files. For production Kubernetes
+deployment, secrets must be managed by HashiCorp Vault or AWS Secrets Manager.
+
+**Files:** `config/vault.py` (exists), `helm/templates/secret.yaml`
+
+**Vault integration:**
+
+```python
+# config/vault.py — enhance with dynamic secrets:
+import hvac
+
+class VaultClient:
+    def __init__(self):
+        self._client = hvac.Client(
+            url=os.getenv("VAULT_ADDR", "http://vault:8200"),
+            token=os.getenv("VAULT_TOKEN"),
+        )
+
+    def get_secret(self, path: str, key: str) -> str:
+        """Reads secret from Vault KV v2."""
+        response = self._client.secrets.kv.v2.read_secret_version(path=path)
+        return response["data"]["data"][key]
+
+    def get_oanda_credentials(self) -> dict:
+        return {
+            "api_key": self.get_secret("hopefx/oanda", "api_key"),
+            "account_id": self.get_secret("hopefx/oanda", "account_id"),
+        }
+```
+
+**Kubernetes Sealed Secrets** for GitOps-safe secret storage:
+
+```bash
+# Encrypt secret for Git storage:
+kubectl create secret generic hopefx-secrets \
+  --from-literal=OANDA_API_KEY=xxx \
+  --dry-run=client -o yaml | kubeseal > helm/templates/sealed-secret.yaml
+```
+
+---
+
+### 11.4 — Security Audit Automation
+
+**Why required:** Manual security reviews miss regressions. Automated scanning in CI
+catches vulnerabilities before they reach production.
+
+**Files:** `.github/workflows/security-scan.yml` (exists — enhance it)
+
+```yaml
+# .github/workflows/security-scan.yml — add comprehensive scanning:
+jobs:
+  security:
+    steps:
+      - name: Dependency audit
+        run: pip-audit --requirement requirements.txt --format json
+
+      - name: SAST scan (Bandit)
+        run: bandit -r . -x tests/ -f json -o bandit-report.json
+
+      - name: Secret detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+
+      - name: Container scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: hopefx:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: 1  # fail CI on critical vulnerabilities
+
+      - name: OWASP dependency check
+        uses: dependency-check/Dependency-Check_Action@main
+```
+
+---
+
+### 11.5 — Live Trading Warnings + Confirmation Gates
+
+**Why required:** `core/live_trading_gate.py` exists. Add explicit human-confirmation
+gates before transitioning from paper to live, and before increasing position sizes.
+
+**Files:** `core/live_trading_gate.py`, `api/admin.py`
+
+```python
+# core/live_trading_gate.py — add confirmation gates:
+class LiveTradingGate:
+    CONFIRMATION_REQUIRED_FOR = [
+        "paper_to_live_transition",
+        "position_size_increase_gt_50pct",
+        "new_symbol_addition",
+        "kill_switch_deactivation",
+    ]
+
+    async def request_confirmation(self, action: str, context: dict,
+                                    admin_user_id: str) -> str:
+        """
+        Creates a pending confirmation token.
+        Admin must call /api/admin/confirm/{token} within 10 minutes.
+        """
+        token = secrets.token_urlsafe(32)
+        await self._redis.setex(
+            f"confirm:{token}",
+            600,  # 10 minute expiry
+            json.dumps({"action": action, "context": context,
+                         "requested_by": admin_user_id,
+                         "requested_at": datetime.utcnow().isoformat()})
+        )
+        await self._alert_admins(f"Confirmation required: {action}", token)
+        return token
+```
+
+---
+
+## 12. Commercial & SaaS — Full Enhancement Catalogue
+
+### 12.1 — SaaS Multi-Tenant Architecture
+
+**Why required:** Current architecture is single-tenant. For commercial deployment,
+each customer must have isolated data, separate broker credentials, and independent
+risk limits.
+
+**Files:** `database/models.py`, `api/` all routers, `config/settings.py`
+
+**Tenant isolation model:**
+
+```python
+# database/models.py — add tenant isolation:
+class Tenant(Base):
+    __tablename__ = "tenants"
+    id = Column(UUID, primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    plan = Column(String(20), nullable=False)  # "starter" | "pro" | "institutional"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(Boolean, default=True)
+
+# All trading tables get tenant_id foreign key:
+class Trade(Base):
+    tenant_id = Column(UUID, ForeignKey("tenants.id"), nullable=False)
+    # Row-level security: every query must filter by tenant_id
+```
+
+**Row-Level Security (PostgreSQL RLS):**
+
+```sql
+-- Enforce tenant isolation at database level:
+ALTER TABLE trades ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON trades
+    USING (tenant_id = current_setting('app.current_tenant_id')::uuid);
+```
+
+**Middleware to set tenant context:**
+
+```python
+# api/middleware.py — tenant context middleware:
+class TenantMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        user = await get_current_user_from_request(request)
+        if user:
+            # Set PostgreSQL session variable for RLS
+            async with db.begin():
+                await db.execute(
+                    text("SET LOCAL app.current_tenant_id = :tid"),
+                    {"tid": str(user.tenant_id)}
+                )
+        return await call_next(request)
+```
+
+---
+
+### 12.2 — Stripe Billing Enhancement
+
+**Why required:** `api/billing.py` and `api/payments.py` exist with Stripe integration.
+Missing: usage-based billing (per-trade fees), invoice generation, dunning management.
+
+**Files:** `api/billing.py`, `api/payments.py`, `api/monetization.py`
+
+**Pricing tiers:**
+
+| Plan | Price | Limits | Features |
+|------|-------|--------|---------|
+| Starter | $49/mo | 1 symbol, 10 trades/day, paper only | Basic signals, no ML |
+| Pro | $199/mo | 5 symbols, unlimited trades, live | Full ML, SHAP, alerts |
+| Institutional | $999/mo | Unlimited, white-label, API access | All features + SLA |
+| Enterprise | Custom | Dedicated infra, custom models | Full source access |
+
+**Usage-based billing:**
+
+```python
+# api/billing.py — add usage metering:
+async def record_trade_usage(tenant_id: str, trade_count: int = 1):
+    """Records trade usage for metered billing."""
+    await stripe.UsageRecord.create(
+        subscription_item=await _get_subscription_item(tenant_id),
+        quantity=trade_count,
+        timestamp=int(datetime.utcnow().timestamp()),
+        action="increment",
+    )
+```
+
+---
+
+### 12.3 — White-Label Kit
+
+**Why required:** `whitelabel/__init__.py` exists. Institutional clients want to
+rebrand HOPEFX as their own product. White-label requires: custom domain, logo,
+color scheme, and removal of HOPEFX branding.
+
+**Files:** `whitelabel/`, `dashboard/src/`, `templates/`
+
+**White-label configuration:**
+
+```python
+# whitelabel/config.py (new)
+@dataclass
+class WhiteLabelConfig:
+    tenant_id: str
+    brand_name: str           # "AcmeFX Trading"
+    logo_url: str             # CDN URL
+    primary_color: str        # "#1a73e8"
+    secondary_color: str      # "#34a853"
+    domain: str               # "trading.acmefx.com"
+    support_email: str
+    hide_hopefx_branding: bool = True
+    custom_css_url: str = ""
+    custom_js_url: str = ""   # for analytics injection
+```
+
+**Dashboard theming:**
+
+```typescript
+// dashboard/src/theme/whitelabel.ts
+export const getWhiteLabelTheme = async (): Promise<Theme> => {
+  const config = await fetch('/api/whitelabel/config').then(r => r.json());
+  return createTheme({
+    palette: {
+      primary: { main: config.primary_color },
+      secondary: { main: config.secondary_color },
+    },
+    components: {
+      MuiAppBar: {
+        styleOverrides: {
+          root: { backgroundColor: config.primary_color }
+        }
+      }
+    }
+  });
+};
+```
+
+---
+
+### 12.4 — Mobile App Completion
+
+**Why required:** `api/mobile.py` exists. Mobile trading alerts are essential for
+institutional clients who need to monitor positions away from desk.
+
+**Files:** `api/mobile.py`, `dashboard/` (React Native or PWA)
+
+**Push notification integration:**
+
+```python
+# api/mobile.py — enhance push notifications:
+class MobilePushService:
+    async def send_signal_alert(self, user_id: str, signal: dict):
+        """Sends push notification for new trading signal."""
+        await self._fcm.send(
+            token=await self._get_device_token(user_id),
+            notification={
+                "title": f"Signal: {signal['direction'].upper()} {signal['symbol']}",
+                "body": f"Confidence: {signal['confidence']:.0%} | "
+                        f"Entry: {signal['entry_price']:.2f}",
+            },
+            data={
+                "signal_id": signal["id"],
+                "type": "trading_signal",
+                "deep_link": f"hopefx://signal/{signal['id']}",
+            },
+            android={"priority": "high"},
+            apns={"headers": {"apns-priority": "10"}},
+        )
+```
+
+---
+
+### 12.5 — API Rate Limiting + Monetization
+
+**Why required:** Public API access must be metered and rate-limited per plan tier.
+
+**Files:** `api/` all routers, `api/monetization.py`
+
+```python
+# api/monetization.py — plan-based rate limits:
+PLAN_RATE_LIMITS = {
+    "starter":       {"requests_per_minute": 60,  "signals_per_day": 10},
+    "pro":           {"requests_per_minute": 300, "signals_per_day": 1000},
+    "institutional": {"requests_per_minute": 1000, "signals_per_day": -1},  # unlimited
+}
+
+def get_rate_limit(plan: str) -> str:
+    limits = PLAN_RATE_LIMITS.get(plan, PLAN_RATE_LIMITS["starter"])
+    return f"{limits['requests_per_minute']}/minute"
+```
+
+---
+
+## 13. Future-Proofing — Full Enhancement Catalogue
+
+### 13.1 — Multimodal LLM Integration
+
+**Why required:** GPT-4o and Claude 3.5 can process charts, earnings transcripts,
+and Fed meeting minutes as images + text. This is the next frontier in alpha generation.
+
+**Files:** `ml/news_intelligence.py`, `api/chat.py`
+
+**Chart analysis:**
+
+```python
+# ml/news_intelligence.py — add chart analysis:
+async def analyze_chart(self, chart_image_base64: str,
+                          symbol: str, timeframe: str) -> dict:
+    """
+    Sends chart screenshot to GPT-4o for pattern recognition.
+    Supplements quantitative signals with visual pattern analysis.
+    """
+    response = await self._client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "text",
+                 "text": f"Analyze this {symbol} {timeframe} chart. "
+                         "Identify: trend direction, key support/resistance, "
+                         "chart patterns, and likely next move. "
+                         "Respond with JSON: {direction, confidence, patterns, levels}"},
+                {"type": "image_url",
+                 "image_url": {"url": f"data:image/png;base64,{chart_image_base64}"}}
+            ]
+        }],
+        max_tokens=300,
+        timeout=5.0,
+    )
+    return json.loads(response.choices[0].message.content)
+```
+
+**Safety:** Chart analysis is advisory only — it cannot override risk blocks or
+increase position size beyond approved limits. Max weight in signal fusion: 0.10.
+
+---
+
+### 13.2 — Satellite Data Pipeline
+
+**Why required:** Satellite data (gold mine production, shipping routes, geopolitical
+activity) provides non-correlated alpha. Used by Citadel, Two Sigma, and Point72.
+
+**Files:** `data/feeds/satellite_feed.py` (new)
+
+**Data sources:**
+
+| Source | Data | Provider | Cost |
+|--------|------|----------|------|
+| Spire Global | Shipping AIS (gold transport) | API | $500/mo |
+| Planet Labs | Mine activity (open-pit gold mines) | API | $1000/mo |
+| Orbital Insight | Commodity storage levels | API | $2000/mo |
+| Quandl/Nasdaq | Aggregated satellite indices | API | $200/mo |
+
+**Phase 3+ only** — requires significant data budget. Start with Quandl aggregated
+indices as a cost-effective proxy.
+
+---
+
+### 13.3 — Low-Latency Execution Path
+
+**Why required:** Current Python async execution targets < 500ms. For HFT-adjacent
+strategies (M1/M5 timeframes), sub-100ms execution is required.
+
+**Architecture options:**
+
+| Approach | Latency | Effort | When |
+|----------|---------|--------|------|
+| Python async (current) | 200–500ms | 0 | Now |
+| Python + C extension for hot path | 50–200ms | 40h | Phase 3 |
+| Rust microservice for execution | 5–50ms | 200h | Phase 3+ |
+| Co-location at OANDA data center | 1–5ms | Infra cost | Phase 4 |
+
+**Python + C extension approach (Phase 3):**
+
+```python
+# execution/fast_path.py — Cython/ctypes hot path:
+# Compile: python setup_fast_path.py build_ext --inplace
+# The fast path handles: signal threshold check + order size calc + broker submit
+# Everything else stays in Python
+```
+
+**Rust microservice (Phase 3+):**
+
+```
+execution/
+├── rust_executor/          — Rust crate
+│   ├── src/main.rs         — Tokio async runtime
+│   ├── src/oanda.rs        — OANDA v20 REST client
+│   └── src/risk.rs         — Pre-trade gate (port of Python logic)
+└── executor_client.py      — Python gRPC client to Rust service
+```
+
+---
+
+### 13.4 — Federated Learning for Multi-Client Models
+
+**Why required:** With multiple institutional clients, each client's trading data
+can improve the shared model without sharing raw data (privacy-preserving).
+
+**Architecture:**
+
+```
+FederatedLearningCoordinator (new: ml/federated.py)
+├── ClientModelAggregator   — FedAvg algorithm
+├── DifferentialPrivacy     — Gaussian noise injection (ε=1.0)
+├── SecureAggregation       — Encrypted gradient aggregation
+└── GlobalModelUpdater      — Updates shared model from client gradients
+```
+
+**Phase 4 only** — requires multiple institutional clients with sufficient data volume.
+
+---
+
+### 13.5 — Quantum-Resistant Cryptography
+
+**Why required:** NIST post-quantum cryptography standards (CRYSTALS-Kyber,
+CRYSTALS-Dilithium) are finalized. Trading systems handling financial data should
+begin migration before quantum computers break RSA/ECDSA.
+
+**Files:** `utils/security.py`, `security_service.py`
+
+**Migration path:**
+1. Audit all cryptographic operations (JWT signing, TLS, API key storage)
+2. Replace RSA-2048 JWT signing with Ed25519 (already quantum-resistant)
+3. Plan migration to CRYSTALS-Dilithium for JWT when library support matures
+4. Ensure TLS 1.3 (already quantum-resistant for symmetric keys)
+
+**Immediate action:** Switch JWT algorithm from `HS256` to `EdDSA` (Ed25519):
+
+```python
+# security_service.py — use Ed25519 for JWT:
+import jwt
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+private_key = Ed25519PrivateKey.generate()
+token = jwt.encode(payload, private_key, algorithm="EdDSA")
+```
+
+---
+
+## 14. Testing & Rollback Strategy
+
+### 14.1 — Test Coverage Requirements
+
+| Layer | Current | Target | Method |
+|-------|---------|--------|--------|
+| Unit tests | 2560 passing | 3000+ | Add tests for all new components |
+| Integration tests | 18 | 50+ | API→DB→broker flow tests |
+| E2E tests | Partial | Full signal→fill→audit chain | `tests/e2e/test_trading_flow.py` |
+| Chaos tests | Partial | 10 scenarios | `tests/chaos/` |
+| Load tests | k6 + Locust | 1000 concurrent users | `tests/test_k6_load_tests.py` |
+| Property-based | Hypothesis | Risk invariants | `tests/unit/test_risk_properties.py` |
+
+**Coverage gate:** CI blocks merge if coverage < 80% on `ml/`, `risk/`, `execution/`.
+
+---
+
+### 14.2 — Model Rollback Procedure
+
+**Trigger:** Live Sharpe drops > 0.2 from 30-day baseline, or OOS accuracy drops > 3%.
+
+```bash
+# Step 1 — Identify last good model version
+mlflow ui  # or: mlflow models list --name hopefx_xgboost
+
+# Step 2 — Roll back via API (admin only)
+curl -X POST https://api.hopefx.com/api/ml/rollback \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"model": "xgboost", "version": 3, "reason": "sharpe_degradation"}'
+
+# Step 3 — Verify rollback
+curl https://api.hopefx.com/api/ml/health | jq '.model_version'
+
+# Step 4 — Investigate degradation
+python ml/train_advanced.py --diagnose --compare-versions 3 4
+```
+
+**Automatic rollback:** If live Sharpe drops > 0.3 in 7 days, auto-rollback fires
+and alerts admin. Requires human confirmation to re-enable new model.
+
+---
+
+### 14.3 — Deployment Rollback (Kubernetes)
+
+```bash
+# Roll back to previous deployment:
+kubectl rollout undo deployment/hopefx-api
+
+# Roll back to specific revision:
+kubectl rollout undo deployment/hopefx-api --to-revision=3
+
+# Verify rollback:
+kubectl rollout status deployment/hopefx-api
+
+# Check which image is running:
+kubectl get deployment hopefx-api -o jsonpath='{.spec.template.spec.containers[0].image}'
+```
+
+**Blue-green deployment** (Phase 3): Run two identical environments. Switch traffic
+via load balancer. Instant rollback by switching back.
+
+---
+
+### 14.4 — Incident Response Playbook
+
+| Incident | Detection | Response | Recovery |
+|----------|-----------|----------|---------|
+| Kill switch fires | Sentry fatal + PagerDuty | Close all positions, halt trading | Investigate cause, human approval to restart |
+| Position reconciliation failure | Sentry error | Halt new orders, reconcile manually | Fix discrepancy, restart reconciler |
+| Model accuracy drops > 5% | Daily accuracy check | Switch to fallback model | Retrain + validate before re-enabling |
+| Broker connection lost | Circuit breaker opens | Route to backup broker | Restore primary, verify positions |
+| Database down | Health check fails | Serve from Redis cache (read-only) | Restore DB, replay missed events |
+| Redis down | Connection error | Fall back to in-memory state | Restore Redis, reconcile state |
+| DDoS attack | Rate limiter triggers | Auto-block IPs, scale up | Cloudflare WAF activation |
+
+---
