@@ -102,3 +102,10 @@ class TraderProfileManager:
     def get_profile(self, trader_id: str) -> Optional[TraderProfile]:
         """Get trader profile"""
         return self.profiles.get(trader_id)
+
+    def list_profiles(self, public_only: bool = False) -> list:
+        """Return all profiles, optionally filtered to public/opted-in traders."""
+        profiles = list(self.profiles.values())
+        if public_only:
+            profiles = [p for p in profiles if getattr(p, "is_public", True)]
+        return profiles

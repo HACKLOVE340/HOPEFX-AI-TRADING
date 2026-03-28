@@ -16,7 +16,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -105,54 +104,31 @@ async def update_my_profile(
 
 @router.get("/{trader_id}")
 async def get_public_profile(trader_id: str):
-    """Return a public trader profile."""
+    """Return a public trader profile. Returns 404 when the trader does not exist."""
     profile = _manager.get_profile(trader_id)
     if not profile:
-        # Return a demo profile so the UI always has data
-        profile = TraderProfile(
-            trader_id=trader_id,
-            username=f"trader_{trader_id[:6]}",
-            email="",
-            bio="Algorithmic trader specialising in XAU/USD and EURUSD.",
-            verified=True,
-            total_followers=142,
-            total_following=38,
-            total_trades=847,
-            win_rate=58.3,
-            total_pnl=24680.0,
-            avg_win=312.0,
-            avg_loss=198.0,
-            sharpe_ratio=1.42,
-            created_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        )
+        raise HTTPException(status_code=404, detail="Trader profile not found")
     return _profile_to_response(profile)
 
 
 @router.get("/{trader_id}/signals")
 async def get_trader_signals(trader_id: str, limit: int = 10):
-    """Return recent public signals for a trader (demo data)."""
-    import random
+    """
+    Return recent public signals for a trader.
 
-    random.seed(hash(trader_id) % 1000)
-    signals = []
-    symbols = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY"]
-    for i in range(min(limit, 10)):
-        sym = random.choice(symbols)
-        direction = random.choice(["BUY", "SELL"])
-        pnl = round((random.random() - 0.4) * 200, 2)
-        signals.append(
-            {
-                "signal_id": f"sig-{trader_id[:4]}-{i:03d}",
-                "symbol": sym,
-                "direction": direction,
-                "confidence": round(70 + random.random() * 25, 1),
-                "pnl": pnl,
-                "copies": random.randint(0, 12),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-    return {"signals": signals}
+    Reads from the live social feed store — only signals that were
+    published by the signal engine from opted-in users are returned.
+    Returns an empty list when the trader has no public signals yet.
+    """
+    from api.social_feed import _feed_items  # noqa: PLC0415
+
+    signals = [
+        item
+        for item in _feed_items.values()
+        if item.get("trader_id") == trader_id and item.get("is_public")
+    ]
+    signals.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"signals": signals[:limit], "total": len(signals)}
 
 
 @router.post("/{trader_id}/follow")
