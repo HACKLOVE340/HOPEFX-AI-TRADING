@@ -1,0 +1,406 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""
+IBKRBroker — yaml-config-driven Interactive Brokers broker implementation.
+
+Credential mapping (matches config/brokers.yaml):
+    login    → IB username (informational; TWS/Gateway uses session auth)
+    password → IB password (informational; TWS/Gateway uses session auth)
+    server   → "paper" (port 7497) | "live" (port 7496)
+    host     → TWS/Gateway host (default: "127.0.0.1")
+    client_id → unique integer per simultaneous connection (default: 1)
+
+Requires TWS or IB Gateway to be running and API connections enabled.
+Uses ib_insync for the async event loop integration.
+
+Usage
+-----
+    broker = IBKRBroker(config)
+    await broker.connect()
+    info = await broker.get_account_info()
+    result = await broker.place_order({
+        "symbol": "XAUUSD",
+        "action": "BUY",
+        "quantity": 1,
+        "order_type": "MKT",
+    })
+    await broker.disconnect()
+"""
+
+import asyncio
+import logging
+import os
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+try:
+    from ib_insync import IB, Contract, Forex, Future, LimitOrder, MarketOrder, Order, Stock, StopOrder  # type: ignore
+
+    _IB_AVAILABLE = True
+except ImportError:
+    IB = None  # type: ignore
+    _IB_AVAILABLE = False
+    logger.warning(
+        "ib_insync not installed — IBKRBroker will be unavailable. "
+        "Install with: pip install ib_insync"
+    )
+
+# TWS / IB Gateway default ports.
+_PORT_PAPER = 7497
+_PORT_LIVE = 7496
+
+# Default connection timeout (seconds).
+_CONNECT_TIMEOUT = 30
+
+
+def _resolve_env(value: Any) -> str:
+    """Expand ``${ENV_VAR:default}`` placeholders."""
+    if not isinstance(value, str):
+        return str(value) if value is not None else ""
+    if value.startswith("${") and value.endswith("}"):
+        inner = value[2:-1]
+        var, _, default = inner.partition(":")
+        return os.environ.get(var, default)
+    return value
+
+
+class IBKRBroker:
+    """
+    Async Interactive Brokers broker backed by ib_insync.
+
+    Parameters
+    ----------
+    config:
+        Dict with keys ``login``, ``password``, ``server`` ("paper" | "live").
+        Optional: ``host`` (str, default "127.0.0.1"), ``client_id`` (int, default 1).
+    """
+
+    def __init__(self, config: Dict) -> None:
+        self._config = config
+        self.connected: bool = False
+        self._ib: Optional[Any] = IB() if _IB_AVAILABLE else None
+        self._server_type: Optional[str] = None
+        self._host: Optional[str] = None
+        self._port: Optional[int] = None
+        self._client_id: Optional[int] = None
+        self._account: Optional[str] = None
+
+    # ── Lifecycle ──────────────────────────────────────────────────────────────
+
+    async def connect(self) -> bool:
+        """
+        Connect to TWS or IB Gateway.
+
+        Returns True on success, False on any failure (SDK missing, TWS not
+        running, wrong port, etc.).
+        """
+        if not _IB_AVAILABLE:
+            logger.error("IBKRBroker.connect: ib_insync not installed")
+            return False
+
+        self._server_type = _resolve_env(self._config.get("server", "paper")).lower()
+        self._host = _resolve_env(self._config.get("host", "127.0.0.1"))
+        self._client_id = int(self._config.get("client_id", 1))
+        self._port = _PORT_PAPER if self._server_type == "paper" else _PORT_LIVE
+
+        username = _resolve_env(self._config.get("login", ""))
+        if not username or username.startswith("your_ibkr"):
+            logger.warning(
+                "IBKRBroker: login appears to be a placeholder ('%s'). "
+                "Set IBKR_USERNAME env var or update config/brokers.yaml. "
+                "Note: TWS/Gateway uses session-based auth — username is informational.",
+                username,
+            )
+
+        try:
+            await asyncio.wait_for(
+                self._ib.connectAsync(
+                    host=self._host,
+                    port=self._port,
+                    clientId=self._client_id,
+                    readonly=False,
+                ),
+                timeout=_CONNECT_TIMEOUT,
+            )
+            self.connected = True
+            accounts = self._ib.managedAccounts()
+            self._account = accounts[0] if accounts else None
+            logger.info(
+                "IBKRBroker connected | %s | host=%s:%s | clientId=%s | account=%s",
+                "Paper" if self._server_type == "paper" else "Live",
+                self._host,
+                self._port,
+                self._client_id,
+                self._account,
+            )
+            return True
+        except asyncio.TimeoutError:
+            logger.error(
+                "IBKRBroker connect timed out after %ss — is TWS/Gateway running on %s:%s?",
+                _CONNECT_TIMEOUT, self._host, self._port,
+            )
+            return False
+        except Exception as exc:  # noqa: BLE001
+            logger.error("IBKRBroker connect failed: %s", exc)
+            return False
+
+    async def disconnect(self) -> None:
+        """Disconnect from TWS / IB Gateway."""
+        if self.connected and _IB_AVAILABLE and self._ib:
+            self._ib.disconnect()
+            self.connected = False
+            logger.info("IBKRBroker disconnected (account=%s)", self._account)
+
+    # ── Account ───────────────────────────────────────────────────────────────
+
+    async def get_account_info(self) -> Optional[Dict]:
+        """Return account summary as a plain dict."""
+        if not self._assert_connected("get_account_info"):
+            return None
+        summary = self._ib.accountSummary(account=self._account or "")
+        result: Dict = {}
+        for item in summary:
+            result[item.tag] = item.value
+        # Normalise the most common fields.
+        return {
+            "account": self._account,
+            "net_liquidation": _safe_float(result.get("NetLiquidation")),
+            "total_cash": _safe_float(result.get("TotalCashValue")),
+            "buying_power": _safe_float(result.get("BuyingPower")),
+            "gross_position_value": _safe_float(result.get("GrossPositionValue")),
+            "unrealized_pnl": _safe_float(result.get("UnrealizedPnL")),
+            "realized_pnl": _safe_float(result.get("RealizedPnL")),
+            "currency": result.get("Currency", "USD"),
+            "raw": result,
+        }
+
+    async def get_positions(self) -> List[Dict]:
+        """Return all open positions."""
+        if not self._assert_connected("get_positions"):
+            return []
+        positions = self._ib.positions(account=self._account or "")
+        return [
+            {
+                "account": p.account,
+                "symbol": p.contract.symbol,
+                "sec_type": p.contract.secType,
+                "exchange": p.contract.exchange,
+                "currency": p.contract.currency,
+                "position": p.position,
+                "avg_cost": p.avgCost,
+                "market_value": p.position * p.avgCost,
+            }
+            for p in positions
+        ]
+
+    async def get_orders(self) -> List[Dict]:
+        """Return all open/pending orders."""
+        if not self._assert_connected("get_orders"):
+            return []
+        trades = self._ib.openTrades()
+        return [
+            {
+                "order_id": t.order.orderId,
+                "perm_id": t.order.permId,
+                "symbol": t.contract.symbol,
+                "action": t.order.action,
+                "quantity": t.order.totalQuantity,
+                "order_type": t.order.orderType,
+                "limit_price": t.order.lmtPrice,
+                "aux_price": t.order.auxPrice,
+                "status": t.orderStatus.status,
+                "filled": t.orderStatus.filled,
+                "remaining": t.orderStatus.remaining,
+            }
+            for t in trades
+        ]
+
+    # ── Order execution ───────────────────────────────────────────────────────
+
+    async def place_order(self, order_params: Dict) -> Dict:
+        """
+        Place an order via TWS / IB Gateway.
+
+        Parameters
+        ----------
+        order_params:
+            symbol      (str)   — e.g. "XAUUSD", "AAPL"
+            action      (str)   — "BUY" | "SELL"
+            quantity    (float) — number of units / contracts
+            order_type  (str)   — "MKT" (default) | "LMT" | "STP"
+            limit_price (float) — required for LMT orders
+            aux_price   (float) — stop price for STP orders
+            sec_type    (str)   — "CASH" (default for FX) | "STK" | "FUT" | "CFD"
+            exchange    (str)   — exchange (default: "IDEALPRO" for FX, "SMART" for stocks)
+            currency    (str)   — currency (default: "USD")
+            account     (str)   — override account (default: first managed account)
+
+        Returns
+        -------
+        Dict with keys: ``success`` (bool), ``order_id`` (int), ``perm_id`` (int),
+        ``status`` (str), ``comment`` (str).
+        """
+        if not self._assert_connected("place_order"):
+            return {"success": False, "order_id": 0, "comment": "Not connected"}
+
+        symbol: str = order_params.get("symbol", "XAUUSD")
+        action: str = order_params.get("action", "BUY").upper()
+        quantity: float = float(order_params.get("quantity", 1))
+        order_type: str = order_params.get("order_type", "MKT").upper()
+        limit_price: float = float(order_params.get("limit_price", 0.0))
+        aux_price: float = float(order_params.get("aux_price", 0.0))
+        sec_type: str = order_params.get("sec_type", "CASH")
+        currency: str = order_params.get("currency", "USD")
+        account: str = order_params.get("account", self._account or "")
+
+        # Default exchange by security type.
+        default_exchange = "IDEALPRO" if sec_type == "CASH" else "SMART"
+        exchange: str = order_params.get("exchange", default_exchange)
+
+        # Build contract.
+        contract = _build_contract(symbol, sec_type, exchange, currency)
+
+        # Build order.
+        if order_type == "MKT":
+            ib_order = MarketOrder(action=action, totalQuantity=quantity)
+        elif order_type == "LMT":
+            ib_order = LimitOrder(action=action, totalQuantity=quantity, lmtPrice=limit_price)
+        elif order_type == "STP":
+            ib_order = StopOrder(action=action, totalQuantity=quantity, stopPrice=aux_price)
+        else:
+            return {"success": False, "order_id": 0, "comment": f"Unsupported order_type: {order_type}"}
+
+        if account:
+            ib_order.account = account
+
+        try:
+            trade = self._ib.placeOrder(contract, ib_order)
+            # Give TWS a moment to acknowledge.
+            await asyncio.sleep(0.1)
+            logger.info(
+                "IBKR order placed | symbol=%s | action=%s | qty=%.2f | type=%s | order_id=%s",
+                symbol, action, quantity, order_type, trade.order.orderId,
+            )
+            return {
+                "success": True,
+                "order_id": trade.order.orderId,
+                "perm_id": trade.order.permId,
+                "status": trade.orderStatus.status,
+                "comment": "OK",
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("IBKRBroker.place_order failed: %s", exc)
+            return {"success": False, "order_id": 0, "comment": str(exc)}
+
+    async def cancel_order(self, order_id: int) -> Dict:
+        """Cancel a pending order by order ID."""
+        if not self._assert_connected("cancel_order"):
+            return {"success": False, "comment": "Not connected"}
+        open_trades = self._ib.openTrades()
+        target = next((t for t in open_trades if t.order.orderId == order_id), None)
+        if target is None:
+            return {"success": False, "comment": f"Order {order_id} not found in open trades"}
+        try:
+            self._ib.cancelOrder(target.order)
+            await asyncio.sleep(0.1)
+            logger.info("IBKR order cancelled | order_id=%s", order_id)
+            return {"success": True, "comment": "OK"}
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "comment": str(exc)}
+
+    async def close_position(self, symbol: str, sec_type: str = "CASH",
+                              exchange: str = "IDEALPRO", currency: str = "USD") -> Dict:
+        """
+        Close all open positions for *symbol* by placing a market order in the
+        opposite direction.
+        """
+        if not self._assert_connected("close_position"):
+            return {"success": False, "comment": "Not connected"}
+
+        positions = self._ib.positions(account=self._account or "")
+        target = next(
+            (p for p in positions if p.contract.symbol == symbol), None
+        )
+        if target is None:
+            return {"success": False, "comment": f"No open position for {symbol}"}
+
+        close_action = "SELL" if target.position > 0 else "BUY"
+        return await self.place_order({
+            "symbol": symbol,
+            "action": close_action,
+            "quantity": abs(target.position),
+            "order_type": "MKT",
+            "sec_type": sec_type,
+            "exchange": exchange,
+            "currency": currency,
+        })
+
+    async def get_tick(self, symbol: str, sec_type: str = "CASH",
+                       exchange: str = "IDEALPRO", currency: str = "USD") -> Optional[Dict]:
+        """Request a snapshot tick for *symbol*."""
+        if not self._assert_connected("get_tick"):
+            return None
+        contract = _build_contract(symbol, sec_type, exchange, currency)
+        try:
+            ticker = self._ib.reqMktData(contract, "", True, False)
+            await asyncio.sleep(0.5)  # Allow snapshot to populate.
+            self._ib.cancelMktData(contract)
+            bid = ticker.bid if ticker.bid and ticker.bid > 0 else None
+            ask = ticker.ask if ticker.ask and ticker.ask > 0 else None
+            return {
+                "symbol": symbol,
+                "bid": bid,
+                "ask": ask,
+                "mid": (bid + ask) / 2.0 if bid and ask else None,
+                "last": ticker.last,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("IBKRBroker.get_tick error: %s", exc)
+            return None
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _assert_connected(self, method: str) -> bool:
+        if not self.connected or self._ib is None:
+            logger.error("IBKRBroker.%s called before connect()", method)
+            return False
+        return True
+
+    def status(self) -> Dict:
+        """Return a health snapshot for monitoring."""
+        return {
+            "broker": "ibkr",
+            "connected": self.connected,
+            "account": self._account,
+            "server_type": self._server_type,
+            "host": self._host,
+            "port": self._port,
+            "client_id": self._client_id,
+            "sdk_available": _IB_AVAILABLE,
+        }
+
+
+# ── Module-level helpers ───────────────────────────────────────────────────────
+
+def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) -> Any:
+    """Build an ib_insync Contract from basic parameters."""
+    if not _IB_AVAILABLE:
+        raise RuntimeError("ib_insync not installed")
+    contract = Contract()
+    contract.symbol = symbol
+    contract.secType = sec_type
+    contract.exchange = exchange
+    contract.currency = currency
+    return contract
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    """Convert a value to float, returning None on failure."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
