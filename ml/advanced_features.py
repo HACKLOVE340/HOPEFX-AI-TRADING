@@ -372,18 +372,30 @@ def add_intermarket_features(
         return d
 
     macro = macro_df.copy()
+    # Normalise both indices to tz-naive UTC so reindex never hits a
+    # "Cannot compare dtypes datetime64[ns] and datetime64[ns, UTC]" error.
     if macro.index.tz is not None:
-        macro.index = macro.index.tz_localize(None)
+        macro.index = macro.index.tz_convert("UTC").tz_localize(None)
     macro.index = pd.to_datetime(macro.index)
     # Normalising to midnight creates duplicate dates when macro_df has
     # sub-daily frequency.  Only normalise if the index is already daily
     # (all times are midnight) to avoid the duplicate-label reindex error.
-    if (macro.index.time == macro.index[0].time()).all():
+    if len(macro.index) > 0 and (macro.index.time == macro.index[0].time()).all():
         macro.index = macro.index.normalize()
     # Drop any remaining duplicates before reindexing
     if macro.index.duplicated().any():
         macro = macro[~macro.index.duplicated(keep="last")]
+
+    # Strip tz from d.index for the reindex, then restore both afterwards
+    # so that arithmetic between d-derived series and macro-derived series
+    # never hits "Cannot join tz-naive with tz-aware DatetimeIndex".
+    d_tz = d.index.tz
+    if d_tz is not None:
+        d.index = d.index.tz_localize(None)
     macro = macro.reindex(d.index, method="ffill").fillna(0.0)
+    if d_tz is not None:
+        d.index = d.index.tz_localize(d_tz)
+        macro.index = macro.index.tz_localize(d_tz)
 
     gold_ret = d["close"].pct_change().fillna(0.0)
 
@@ -486,16 +498,26 @@ def add_cot_proxy_features(
     # ── Cross-asset proxies (require macro_df) ────────────────────────────────
     if macro_df is not None and not macro_df.empty:
         macro = macro_df.copy()
+        # Normalise both indices to tz-naive UTC (same fix as add_intermarket_features)
         if macro.index.tz is not None:
-            macro.index = macro.index.tz_localize(None)
+            macro.index = macro.index.tz_convert("UTC").tz_localize(None)
         macro.index = pd.to_datetime(macro.index)
         # Only normalise to midnight when the index is already daily-frequency
         # (all times identical) — normalising sub-daily data creates duplicates.
-        if (macro.index.time == macro.index[0].time()).all():
+        if len(macro.index) > 0 and (macro.index.time == macro.index[0].time()).all():
             macro.index = macro.index.normalize()
         if macro.index.duplicated().any():
             macro = macro[~macro.index.duplicated(keep="last")]
+
+        # Strip tz from d.index for the reindex, then restore both so that
+        # arithmetic between d-derived and macro-derived series stays tz-consistent.
+        d_tz = d.index.tz
+        if d_tz is not None:
+            d.index = d.index.tz_localize(None)
         macro = macro.reindex(d.index, method="ffill").fillna(0.0)
+        if d_tz is not None:
+            d.index = d.index.tz_localize(d_tz)
+            macro.index = macro.index.tz_localize(d_tz)
 
         gold_ret = d["close"].pct_change().fillna(0.0)
 
