@@ -974,3 +974,84 @@ class OnlineLearnerStore:
             if self._adwin_detector
             else 0,
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module-level singleton factory
+# ─────────────────────────────────────────────────────────────────────────────
+
+_store_registry: Dict[str, "OnlineLearnerStore"] = {}
+_registry_lock = threading.Lock()
+
+
+def get_online_learner(
+    symbol: str = "XAUUSD",
+    persist_path: Optional[Path] = None,
+    primary_weight: float = 0.7,
+    online_weight: float = 0.3,
+    min_fills: int = 20,
+    adaptive_weights: bool = True,
+) -> "OnlineLearnerStore":
+    """
+    Return (or create) the singleton ``OnlineLearnerStore`` for *symbol*.
+
+    This is the canonical factory used by ``ml/inference_engine.py`` and any
+    other module that needs to interact with the Phase-3 online learner.
+
+    Parameters
+    ----------
+    symbol:
+        Trading symbol key (e.g. ``"XAUUSD"``).  One store per symbol.
+    persist_path:
+        Where to save/load the incremental XGBoost model.  Defaults to
+        ``ml/saved_models/online_{symbol.lower()}.pkl``.
+    primary_weight / online_weight:
+        Initial blend weights (must sum to 1.0).
+    min_fills:
+        Minimum confirmed fills before the online model contributes to blending.
+    adaptive_weights:
+        When True, blend weights shift toward the better-performing model.
+
+    Returns
+    -------
+    OnlineLearnerStore singleton for *symbol*.
+    """
+    key = symbol.upper()
+    with _registry_lock:
+        if key not in _store_registry:
+            if persist_path is None:
+                persist_path = Path("ml/saved_models") / f"online_{key.lower()}.pkl"
+            store = OnlineLearnerStore(
+                primary_weight=primary_weight,
+                online_weight=online_weight,
+                min_fills=min_fills,
+                adaptive_weights=adaptive_weights,
+                persist_path=persist_path,
+            )
+            _store_registry[key] = store
+            logger.info(
+                "OnlineLearnerStore created for symbol=%s persist=%s", key, persist_path
+            )
+        return _store_registry[key]
+
+
+def reset_online_learner(symbol: str = "XAUUSD") -> bool:
+    """
+    Remove the singleton for *symbol* from the registry so the next call to
+    ``get_online_learner()`` creates a fresh instance.
+
+    Returns True if a store was removed, False if none existed.
+    """
+    key = symbol.upper()
+    with _registry_lock:
+        if key in _store_registry:
+            del _store_registry[key]
+            logger.info("OnlineLearnerStore reset for symbol=%s", key)
+            return True
+        return False
+
+
+def list_online_learners() -> Dict[str, Dict]:
+    """Return status snapshots for all registered online learner stores."""
+    with _registry_lock:
+        return {sym: store.status() for sym, store in _store_registry.items()}
