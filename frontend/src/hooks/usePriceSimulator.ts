@@ -23,11 +23,21 @@ const SYMBOLS: Record<string, SymbolConfig> = {
   'BTC/USD': { base: 67000.0, spread: 10.0,   volatility: 0.025 },
 };
 
-// Geometric Brownian Motion step
+/**
+ * Box-Muller transform — returns a standard normal sample N(0,1).
+ * Uses two uniform draws; produces an exact normal (not a triangular approx).
+ */
+function stdNormal(): number {
+  // Clamp u1 away from 0 to avoid log(0)
+  const u1 = Math.max(Math.random(), 1e-10);
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+/** Geometric Brownian Motion step with zero drift (demo mode). */
 function gbmStep(price: number, vol: number, dt: number): number {
-  const drift = 0;
-  const z = (Math.random() + Math.random() + Math.random() - 1.5) * Math.sqrt(4 / 3); // approx normal
-  return price * Math.exp((drift - 0.5 * vol * vol) * dt + vol * Math.sqrt(dt) * z);
+  const z = stdNormal();
+  return price * Math.exp(-0.5 * vol * vol * dt + vol * Math.sqrt(dt) * z);
 }
 
 export function usePriceSimulator(active = true, intervalMs = 1000) {
