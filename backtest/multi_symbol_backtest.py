@@ -6,20 +6,25 @@
 """
 backtest/multi_symbol_backtest.py
 ==================================
-Multi-symbol backtest engine targeting N=600 trades for Sharpe credibility.
+Multi-symbol backtest engine targeting N=919 trades for SE≤0.10 Sharpe credibility.
 
-Symbols
--------
-- XAU/USD  (GC=F  — gold futures, primary)
-- BTC/USD  (BTC-USD — crypto, high-vol regime)
-- ETH/USD  (ETH-USD — crypto, correlated to BTC)
+Symbols (7 total)
+-----------------
+- XAU/USD  (GC=F       — gold futures, primary)
+- BTC/USD  (BTC-USD    — crypto, high-vol regime)
+- ETH/USD  (ETH-USD    — crypto, correlated to BTC)
+- EUR/USD  (EURUSD=X   — major forex pair)
+- GBP/USD  (GBPUSD=X   — major forex pair)
+- Silver   (SI=F       — precious metals, correlated to gold)
+- Crude Oil(CL=F       — commodity, macro-driven)
 
-Why N=600?
+Why N=919?
 ----------
 Sharpe SE = sqrt((1 + 0.5*SR²) / T).
 At SR=1.52, T=48:  SE=0.21 — not credible.
 At SR=1.52, T=600: SE=0.06 — credible (95% CI: ±0.12).
-Multi-symbol pooling achieves N=600 faster than single-symbol.
+At SR=1.52, T=919: SE=0.10 — SE≤0.10 gate satisfied.
+7-symbol pooling achieves N=919 reliably.
 
 Architecture
 ------------
@@ -28,13 +33,15 @@ Architecture
 3. Train a per-symbol model on the first (1 - oos_frac) of data
 4. Walk-forward OOS backtest on the last oos_frac
 5. Pool all OOS trades across symbols → compute pooled Sharpe + SE
-6. Sharpe gate check: gate_passed when N >= target_n
-7. Save results to backtest/results/multi_symbol_report.json
+6. Sharpe gate check: gate_passed when N >= target_n AND SE <= 0.10
+7. Save results to backtest/results/multi_symbol_report.json (3-symbol)
+   and backtest/results/multi_symbol_report_extended.json (7-symbol)
 
 Usage
 -----
     python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
-    python backtest/multi_symbol_backtest.py --smoke   # fast CI run
+    python backtest/multi_symbol_backtest.py --extended  # 7-symbol run
+    python backtest/multi_symbol_backtest.py --smoke     # fast CI run
 """
 
 from __future__ import annotations
@@ -62,11 +69,26 @@ RESULTS_DIR = ROOT / "backtest" / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Symbol config: (yfinance_ticker, display_name, pip_size)
+# Core 3-symbol set (original — N≈628, gate PASSED at N≥600)
 SYMBOLS = [
     ("GC=F", "XAU/USD", 0.01),
     ("BTC-USD", "BTC/USD", 1.0),
     ("ETH-USD", "ETH/USD", 0.1),
 ]
+
+# Extended 7-symbol set — targets N>919 for SE≤0.10 gate
+SYMBOLS_EXTENDED = [
+    ("GC=F",     "XAU/USD",   0.01),
+    ("BTC-USD",  "BTC/USD",   1.0),
+    ("ETH-USD",  "ETH/USD",   0.1),
+    ("EURUSD=X", "EUR/USD",   0.0001),
+    ("GBPUSD=X", "GBP/USD",   0.0001),
+    ("SI=F",     "Silver",    0.001),
+    ("CL=F",     "Crude Oil", 0.01),
+]
+
+# SE≤0.10 requires N≥919 at SR=1.52
+TARGET_N_SE010 = 919
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -412,14 +434,25 @@ def run_backtest(
     target_n: int = 600,
     smoke: bool = False,
     symbols: Optional[List] = None,
+    extended: bool = False,
 ) -> Dict:
-    """Run multi-symbol backtest and return full report."""
+    """Run multi-symbol backtest and return full report.
+
+    Args:
+        extended: If True, use SYMBOLS_EXTENDED (7 symbols, target N>919, SE≤0.10).
+                  Results saved to multi_symbol_report_extended.json.
+    """
     if smoke:
         years = 3
         oos_frac = 0.4
         logger.info("Smoke mode: years=3, oos_frac=0.4")
 
-    syms = symbols or SYMBOLS
+    if extended and symbols is None:
+        syms = SYMBOLS_EXTENDED
+        target_n = max(target_n, TARGET_N_SE010)
+        logger.info("Extended mode: 7 symbols, target_n=%d (SE≤0.10)", target_n)
+    else:
+        syms = symbols or SYMBOLS
     symbol_results = []
 
     for ticker, display_name, pip_size in syms:
@@ -441,17 +474,23 @@ def run_backtest(
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)
 
+    n_syms = len([r for r in symbol_results if "error" not in r])
     report = {
         "run_at": datetime.now(timezone.utc).isoformat(),
         "years": years,
         "oos_frac": oos_frac,
         "target_n": target_n,
+        "extended": extended,
+        "n_symbols": n_syms,
         "symbols": symbol_results,
         "pooled": pooled,
     }
 
-    # Save report
-    report_path = RESULTS_DIR / "multi_symbol_report.json"
+    # Save report — extended run gets its own file
+    report_filename = (
+        "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
+    )
+    report_path = RESULTS_DIR / report_filename
     # Strip trade-level data for the saved report (keep summary only)
     report_slim = {
         **report,
@@ -502,6 +541,11 @@ def main():
         "--smoke", action="store_true", help="Fast smoke test (3 years)"
     )
     parser.add_argument(
+        "--extended",
+        action="store_true",
+        help="Run 7-symbol extended set (XAU+BTC+ETH+EUR/USD+GBP/USD+Silver+Oil), target N>919",
+    )
+    parser.add_argument(
         "--symbols", nargs="+", default=None, help="Override symbols: e.g. GC=F BTC-USD"
     )
     args = parser.parse_args()
@@ -515,6 +559,7 @@ def main():
         oos_frac=args.oos_frac,
         target_n=args.target_n,
         smoke=args.smoke,
+        extended=args.extended,
         symbols=syms,
     )
 
