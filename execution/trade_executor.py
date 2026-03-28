@@ -304,6 +304,32 @@ class TradeExecutor:
                     + closed_position.realized_pnl,
                 )
 
+                # ── Signal filter EV update on position close ─────────────────
+                # This path fires when positions are closed via close_position()
+                # (e.g. SL/TP hit, manual close) rather than via execute_signal().
+                # Records the outcome so the EV gate accumulates real data.
+                try:
+                    from ml.signal_filter import get_signal_filter
+                    _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
+                    _realized = closed_position.realized_pnl
+                    _pnl_pct = _realized / _entry_px if _entry_px > 0 else 0.0
+                    _side = getattr(closed_position, "side", "buy")
+                    _direction = 1 if str(_side).lower() == "buy" else -1
+                    _conf = getattr(closed_position, "signal_confidence", 0.6)
+                    _sym = getattr(closed_position, "symbol", position_id)
+                    get_signal_filter().record_outcome(
+                        symbol=_sym,
+                        pnl_pct=_pnl_pct,
+                        direction=_direction,
+                        confidence=float(_conf),
+                    )
+                    logger.debug(
+                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d",
+                        _sym, _pnl_pct, _direction,
+                    )
+                except Exception as _sf_exc:
+                    logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
+
         return ExecutionResult(
             success=success,
             order_id=position_id,
@@ -370,6 +396,8 @@ class TradeExecutor:
             # Build a minimal feature row from the signal for the online learner.
             # The engine's update_online() accepts any DataFrame with numeric cols.
             import pandas as _pd
+            _confidence = float(signal.get("confidence", 0.0))
+            _action = signal.get("action", "buy")
             features = _pd.DataFrame(
                 [
                     {
@@ -377,8 +405,8 @@ class TradeExecutor:
                         "filled_qty": result.filled_quantity,
                         "commission": result.commission,
                         "latency_ms": result.latency_ms,
-                        "confidence": float(signal.get("confidence", 0.0)),
-                        "direction_long": 1 if signal.get("action", "buy") == "buy" else 0,
+                        "confidence": _confidence,
+                        "direction_long": 1 if _action == "buy" else 0,
                     }
                 ]
             )
@@ -390,6 +418,30 @@ class TradeExecutor:
                 pnl,
                 label,
             )
+
+            # ── Signal filter EV update ───────────────────────────────────────
+            # Record the trade outcome in the SignalFilter rolling window so
+            # the EV gate accumulates real data and can block negative-EV signals.
+            # pnl_pct = pnl / entry_price (normalised so all symbols are comparable)
+            try:
+                from ml.signal_filter import get_signal_filter
+                _sym = signal.get("symbol", "UNKNOWN")
+                _entry = result.average_price or 1.0
+                _pnl_pct = pnl / _entry if _entry > 0 else 0.0
+                _direction = 1 if _action == "buy" else -1
+                get_signal_filter().record_outcome(
+                    symbol=_sym,
+                    pnl_pct=_pnl_pct,
+                    direction=_direction,
+                    confidence=_confidence,
+                )
+                logger.debug(
+                    "SignalFilter outcome recorded: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
+                    _sym, _pnl_pct, _direction, _confidence,
+                )
+            except Exception as _sf_exc:
+                logger.debug("SignalFilter record_outcome failed (non-fatal): %s", _sf_exc)
+
         except Exception as exc:
             logger.debug("InferenceEngine fill notify failed (non-fatal): %s", exc)
 
