@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 # Prefix must match the frontend useApi.ts mlApi calls (/api/ml/*)
@@ -313,12 +313,14 @@ class RetrainResponse(BaseModel):
 
 
 @router.get("/accuracy", response_model=AccuracyResponse)
-async def get_accuracy():
+async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     """
     Return accuracy metrics for the active model.
 
     Reads from the most recent evaluation CSV if available; otherwise
     returns the last known metrics from the saved model metadata.
+
+    Requires: authenticated user (any role).
     """
     import json
     import pathlib
@@ -366,19 +368,27 @@ async def get_accuracy():
 
 
 @router.get("/models", response_model=List[ModelInfo])
-async def list_models():
-    """List all available trained models with metadata."""
+async def list_models(user: TokenPayload = Depends(get_current_user)):
+    """List all available trained models with metadata. Requires authentication."""
     registry = _load_model_registry()
     return [ModelInfo(**v) for v in registry.values()]
 
 
 @router.post("/predict/{symbol}", response_model=PredictResponse)
-async def predict(symbol: str, body: PredictRequest):
+async def predict(
+    symbol: str,
+    body: PredictRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Generate a trading prediction for the given symbol.
 
     Uses the XGBoost macro model if available; falls back to a
     rule-based regime signal when no model is loaded.
+
+    Requires: authenticated user (any role). Feature weights exposed by
+    this endpoint are proprietary; unauthenticated access would allow
+    adversaries to reverse-engineer the model's signal structure.
     """
     import random
 
@@ -480,10 +490,13 @@ async def predict(symbol: str, body: PredictRequest):
     response_model=FeatureImportancesResponse,
     summary="Feature importances for the active XGBoost model",
 )
-async def get_feature_importances():
+async def get_feature_importances(user: TokenPayload = Depends(require_role("admin"))):
     """
     Return feature importances for the active XGBoost model.
     Used by the explainability panel.
+
+    Requires: admin role. Raw feature importances reveal the model's
+    internal weighting structure and must not be publicly accessible.
     """
     import pathlib
 
@@ -530,14 +543,14 @@ async def get_feature_importances():
 )
 async def trigger_retrain(
     background_tasks: BackgroundTasks,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Trigger a background model retraining job.
     Admin only. Returns immediately; training runs in background.
+
+    Requires: admin role enforced via require_role dependency (not manual check).
     """
-    if getattr(user, "role", "user") not in ("admin", "superadmin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
 
     def _retrain():
         try:
