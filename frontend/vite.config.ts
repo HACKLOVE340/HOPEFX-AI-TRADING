@@ -21,6 +21,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Proxy the live WebSocket endpoint so the frontend can connect via a
+      // relative URL (wss://<vite-host>/ws/live) instead of hardcoding port 8000.
+      // This is required in Gitpod/Ona where each port has a distinct tunnel URL.
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true,
+      },
       // NOTE: do NOT proxy '/status' — that path is handled by the React
       // StatusPage component. Only /api/status/* goes to the backend.
     },
