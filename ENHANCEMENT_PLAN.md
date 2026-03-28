@@ -531,3 +531,404 @@ Add deployment gate job that blocks merge to `main` if:
 | 10 | Sentry DSN set in prod `.env` | `.env` | ☐ |
 
 ---
+
+## 5. Phase 2 — Institutional Hardening (Months 1–3)
+
+**Gate:** Phase 1 complete + paper fills ≥ 250 + Sharpe SE ≤ 0.10 on paper.
+**Capital:** Micro-live ($1k–$10k) with hard daily loss limit = 2% of account.
+
+### P2.1 — Feature Store + Drift Detection
+
+**Why world-top requires this:** Bloomberg Terminal, QuantConnect, and Two Sigma all
+run versioned feature stores. Without one, you cannot reproduce a signal from 6 months
+ago, detect when the market has drifted away from your training distribution, or safely
+roll back a bad model update. This is the single most important infrastructure addition.
+
+**Architecture:**
+
+```
+FeatureStore (new: ml/feature_store.py)
+├── FeatureRegistry     — versioned feature definitions (name, transform, dtype)
+├── FeatureCache        — Redis-backed L1 cache (TTL per timeframe)
+├── FeatureAuditLog     — PostgreSQL table: feature_snapshots (bar_time, symbol, features JSON)
+├── DriftDetector       — PSI + KS test per feature, daily batch
+└── FeatureHealthAPI    — /api/ml/features/drift, /api/ml/features/snapshot
+```
+
+**File changes:**
+
+| File | Change | Effort |
+|------|--------|--------|
+| `ml/feature_store.py` | New — `FeatureStore`, `FeatureRegistry`, `DriftDetector` | 8h |
+| `ml/inference_engine.py` | Replace ad-hoc feature building with `FeatureStore.get(symbol, tf)` | 3h |
+| `ml/features_extended.py` | Register all 176 features in `FeatureRegistry` on import | 2h |
+| `database/models.py` | Add `FeatureSnapshot` SQLAlchemy model | 1h |
+| `alembic/versions/` | Migration: `feature_snapshots` table | 30m |
+| `api/ml.py` | Add `/api/ml/features/drift` endpoint | 1h |
+
+**Drift detection implementation:**
+
+```python
+# ml/feature_store.py
+import numpy as np
+from scipy import stats
+
+class DriftDetector:
+    """
+    Population Stability Index (PSI) + KS test for feature drift.
+    PSI > 0.2 = significant drift — triggers model retraining alert.
+    KS p < 0.05 = distribution shift — logged to Sentry.
+    """
+    PSI_WARN = 0.1
+    PSI_CRITICAL = 0.2
+
+    def compute_psi(self, reference: np.ndarray, current: np.ndarray,
+                    n_bins: int = 10) -> float:
+        """Population Stability Index."""
+        ref_pct, bins = np.histogram(reference, bins=n_bins, density=True)
+        cur_pct, _ = np.histogram(current, bins=bins, density=True)
+        ref_pct = np.where(ref_pct == 0, 1e-6, ref_pct)
+        cur_pct = np.where(cur_pct == 0, 1e-6, cur_pct)
+        return float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct)))
+
+    def check_all_features(self, reference_df, current_df) -> dict:
+        results = {}
+        for col in reference_df.columns:
+            psi = self.compute_psi(reference_df[col].dropna(), current_df[col].dropna())
+            ks_stat, ks_p = stats.ks_2samp(reference_df[col].dropna(), current_df[col].dropna())
+            results[col] = {"psi": psi, "ks_p": ks_p,
+                            "status": "critical" if psi > self.PSI_CRITICAL
+                                      else "warn" if psi > self.PSI_WARN else "ok"}
+        return results
+```
+
+**Robustness:** Reference distribution computed from last 252 trading days of training
+data. Current distribution from last 21 days of live bars. Daily batch job at 00:00 UTC.
+Alert fires to Sentry + Discord if any feature hits PSI > 0.2.
+
+---
+
+### P2.2 — Online Continual Learning Activation
+
+**Why:** The `ml/online_learner.py` SGD adapter + EWC regularizer is complete but
+`FEATURE_ONLINE_LEARNING=false`. Phase 3 gate requires 90 days paper + 500 fills.
+Phase 2 work: wire the hourly SGD update path and validate it doesn't degrade accuracy.
+
+**Files:** `ml/online_learner.py`, `ml/hourly_trainer.py`, `ml/inference_engine.py`,
+`data/scheduler.py`
+
+**Wiring the hourly SGD update:**
+
+```python
+# data/scheduler.py — add to hourly job:
+async def hourly_online_update():
+    """
+    Called every hour after market close bar is confirmed.
+    Updates SGD adapter on last bar's confirmed outcome.
+    """
+    from ml.online_learner import OnlineLearner
+    learner = OnlineLearner.get_instance()
+
+    # Get last confirmed fill outcome from OMS
+    fills = await oms.get_confirmed_fills(since_hours=1)
+    for fill in fills:
+        X = feature_store.get_snapshot(fill.bar_time, fill.symbol)
+        y = 1 if fill.pnl > 0 else 0
+        learner.partial_fit(X, y)
+
+    # Daily EWC update (consolidate Fisher information)
+    if datetime.utcnow().hour == 22:  # after NY close
+        learner.update_ewc()
+```
+
+**Safety gates for online learning:**
+- SGD learning rate capped at `1e-4` (prevents catastrophic weight updates)
+- EWC lambda = 1000 (strong regularization against forgetting)
+- Accuracy monitored on rolling 50-bar window; if drops > 5% from baseline, auto-disable
+- `FEATURE_ONLINE_LEARNING` can be toggled via `/api/ml/online-learner/toggle` (admin only)
+- All weight updates logged to `ml/saved_models/online_learner_audit.jsonl`
+
+---
+
+### P2.3 — Regime-Conditional Model Router
+
+**Why:** A single global model trained on 50 years of mixed regimes underperforms
+in specific regimes. `ml/regime_conditional.py` has `RegimeConditionalModel` but it's
+not wired into the live inference path.
+
+**Files:** `ml/regime_conditional.py`, `ml/inference_engine.py`, `ml/regime.py`
+
+**Wiring:**
+
+```python
+# ml/inference_engine.py — add regime routing:
+from ml.regime_conditional import RegimeConditionalModel
+from ml.regime import RegimeDetector
+
+class InferenceEngine:
+    def __init__(self):
+        ...
+        self._regime_detector = RegimeDetector()
+        self._regime_model = RegimeConditionalModel()
+        self._regime_model.load(_SAVED / "regime_conditional.pkl")
+
+    def predict(self, df, symbol="XAU_USD"):
+        regime = self._regime_detector.detect(df)  # "trending" | "mean_reverting" | "volatile"
+        X = self._build_features(df)
+
+        # Route to regime-specific model if available
+        if self._regime_model.has_model(regime):
+            prob = self._regime_model.predict_proba(X, regime=regime)
+            source = f"regime_{regime}"
+        else:
+            prob = self._predictor.predict_proba(X)
+            source = "global"
+
+        return self._threshold_signal(prob, source=source)
+```
+
+**Regime detection:** Rolling 20-bar Hurst exponent (R/S analysis) + normalised ADX.
+- Hurst > 0.6 + ADX > 25 → trending
+- Hurst < 0.4 + ADX < 20 → mean-reverting
+- VIX > 30 or ATR > 2× median → volatile
+
+**Training:** `python ml/train_advanced.py --regime-conditional --years 50 --oos-years 3`
+Saves `regime_conditional.pkl` with separate XGBoost models per regime.
+
+---
+
+### P2.4 — Transaction Cost Analysis (TCA) Live Calibration
+
+**Why:** `execution/tca.py` exists but records fills without calibrating the slippage
+model. Bloomberg Tradebook and institutional desks run live TCA to continuously update
+their market impact models. Without this, position sizing is based on stale assumptions.
+
+**Files:** `execution/tca.py`, `execution/engine.py`, `ml/position_sizer.py`
+
+**TCA calibration loop:**
+
+```python
+# execution/tca.py — add live calibration:
+class TCAEngine:
+    def calibrate_slippage_model(self, lookback_fills: int = 200) -> dict:
+        """
+        Fits Almgren-Chriss parameters to recent fills.
+        Returns updated eta (temporary impact) and gamma (permanent impact).
+        """
+        fills = self._db.query_recent_fills(n=lookback_fills)
+        if len(fills) < 50:
+            return self._default_params  # not enough data
+
+        # Regress: slippage = eta * sqrt(participation_rate) + gamma * participation_rate
+        participation = fills["quantity"] / fills["adv"]  # ADV = avg daily volume
+        slippage = (fills["fill_price"] - fills["signal_price"]) / fills["signal_price"]
+
+        from scipy.optimize import curve_fit
+        def ac_model(x, eta, gamma):
+            return eta * np.sqrt(x) + gamma * x
+
+        popt, _ = curve_fit(ac_model, participation, slippage, p0=[0.1, 0.05])
+        eta, gamma = popt
+
+        # Update position sizer with new parameters
+        self._position_sizer.update_impact_params(eta=eta, gamma=gamma)
+        logger.info("TCA calibration: eta=%.4f gamma=%.4f (n=%d fills)", eta, gamma, len(fills))
+        return {"eta": eta, "gamma": gamma, "n_fills": len(fills)}
+```
+
+**Schedule:** Run calibration daily at 22:00 UTC. Expose via `/api/tca/calibration`.
+Alert if eta or gamma changes > 50% from prior day (regime shift in liquidity).
+
+---
+
+### P2.5 — Portfolio-Level CVaR
+
+**Why:** Current CVaR in `risk/manager.py` is per-trade. Institutional risk management
+requires portfolio-level CVaR that accounts for correlation between open positions.
+At Two Sigma / Citadel, portfolio CVaR is the primary risk constraint.
+
+**Files:** `risk/manager.py`, `risk/analytics.py`, `risk/advanced_analytics.py`
+
+**Implementation:**
+
+```python
+# risk/advanced_analytics.py — add portfolio CVaR:
+class PortfolioCVaR:
+    """
+    Monte Carlo portfolio CVaR with correlation matrix.
+    Runs 10,000 simulations in <100ms using numpy vectorization.
+    """
+    def __init__(self, confidence: float = 0.95, n_sims: int = 10_000):
+        self.confidence = confidence
+        self.n_sims = n_sims
+
+    def compute(self, positions: list, returns_history,
+                horizon_days: int = 1) -> dict:
+        if not positions:
+            return {"cvar": 0.0, "var": 0.0, "n_positions": 0}
+
+        symbols = [p.symbol for p in positions]
+        weights = np.array([p.notional for p in positions])
+        weights /= weights.sum()
+
+        rets = returns_history[symbols].dropna()
+        cov = rets.cov().values * 252  # annualized
+
+        # Cholesky decomposition for correlated simulation
+        L = np.linalg.cholesky(cov + 1e-8 * np.eye(len(symbols)))
+        z = np.random.standard_normal((self.n_sims, len(symbols)))
+        sim_returns = (z @ L.T) * np.sqrt(horizon_days / 252)
+
+        portfolio_returns = sim_returns @ weights
+        var = np.percentile(portfolio_returns, (1 - self.confidence) * 100)
+        cvar = portfolio_returns[portfolio_returns <= var].mean()
+
+        return {
+            "cvar": float(cvar),
+            "var": float(var),
+            "confidence": self.confidence,
+            "n_positions": len(positions),
+            "n_sims": self.n_sims,
+        }
+```
+
+**Integration:** Called in `risk/pre_trade_gate.py` before every new order.
+If portfolio CVaR would exceed `MAX_PORTFOLIO_CVAR_PCT` (default 3% of equity), reject.
+
+---
+
+### P2.6 — Advanced Slippage Simulator for Backtesting
+
+**Why:** Current `backtest/engine.py` uses fixed slippage. Real XAUUSD slippage is
+regime-dependent: 0.5–2 pips in normal conditions, 5–20 pips during news events.
+Without realistic slippage, backtest Sharpe is overstated.
+
+**Files:** `backtest/engine.py`, `execution/tca.py`
+
+**Implementation:**
+
+```python
+# backtest/engine.py — replace fixed slippage with regime-aware model:
+class SlippageSimulator:
+    """
+    Regime-aware slippage model calibrated to XAUUSD microstructure.
+    Based on Almgren-Chriss with news event multiplier.
+    """
+    BASE_SPREAD_PIPS = 0.5      # normal market
+    NEWS_MULTIPLIER = 4.0       # during high-impact news
+    VOLATILE_MULTIPLIER = 2.0   # VIX > 25
+
+    def simulate(self, order_size: float, adv: float, vix: float,
+                 is_news_window: bool) -> float:
+        participation = order_size / adv
+        base = self.BASE_SPREAD_PIPS * (1 + 0.5 * np.sqrt(participation))
+        if is_news_window:
+            base *= self.NEWS_MULTIPLIER
+        elif vix > 25:
+            base *= self.VOLATILE_MULTIPLIER
+        noise = abs(np.random.normal(0, base * 0.3))
+        return base + noise
+```
+
+---
+
+### P2.7 — Multi-User RBAC (Role-Based Access Control)
+
+**Why:** Commercial deployment requires user isolation. Current auth is single-user JWT.
+For SaaS, each user must see only their own trades, positions, and settings.
+
+**Files:** `api/auth.py`, `database/models.py`, `api/trading.py`, `api/watchlist.py`
+
+**RBAC roles:**
+
+| Role | Permissions |
+|------|-------------|
+| `viewer` | Read-only: signals, performance, charts |
+| `trader` | viewer + place/cancel orders (own account only) |
+| `analyst` | trader + ML model inspection, feature importance |
+| `admin` | analyst + user management, kill switch, system config |
+| `superadmin` | admin + billing, white-label config, audit logs |
+
+**Implementation:**
+
+```python
+# api/auth.py — add RBAC decorator:
+from functools import wraps
+from enum import Enum
+
+class Role(str, Enum):
+    VIEWER = "viewer"
+    TRADER = "trader"
+    ANALYST = "analyst"
+    ADMIN = "admin"
+    SUPERADMIN = "superadmin"
+
+ROLE_HIERARCHY = {
+    Role.VIEWER: 0, Role.TRADER: 1, Role.ANALYST: 2,
+    Role.ADMIN: 3, Role.SUPERADMIN: 4
+}
+
+def require_role(min_role: Role):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, current_user=Depends(get_current_user), **kwargs):
+            if ROLE_HIERARCHY[current_user.role] < ROLE_HIERARCHY[min_role]:
+                raise HTTPException(403, f"Requires role: {min_role}")
+            return await func(*args, current_user=current_user, **kwargs)
+        return wrapper
+    return decorator
+```
+
+---
+
+### P2.8 — Regulatory Audit Trail
+
+**Why:** MiFID II (EU), CFTC (US), and FCA (UK) require immutable audit trails for
+all order activity. Without this, the platform cannot be used by regulated entities
+or white-labeled to institutional clients.
+
+**Files:** `risk/compliance/` (new subdirectory), `execution/engine.py`,
+`database/models.py`
+
+**Audit trail schema:**
+
+```sql
+-- alembic migration: audit_trail table
+CREATE TABLE audit_trail (
+    id          BIGSERIAL PRIMARY KEY,
+    event_time  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    event_type  VARCHAR(50) NOT NULL,
+    user_id     UUID REFERENCES users(id),
+    symbol      VARCHAR(20),
+    order_id    VARCHAR(100),
+    quantity    NUMERIC(18,8),
+    price       NUMERIC(18,8),
+    pnl         NUMERIC(18,8),
+    metadata    JSONB,
+    checksum    VARCHAR(64) NOT NULL  -- SHA-256 of (event_time||event_type||metadata)
+);
+CREATE INDEX idx_audit_trail_time ON audit_trail(event_time);
+CREATE INDEX idx_audit_trail_user ON audit_trail(user_id);
+```
+
+**Checksum chain:** Each row's checksum includes the previous row's checksum
+(blockchain-style), making tampering detectable.
+
+---
+
+### Phase 2 Completion Checklist
+
+| # | Item | Owner File | Done |
+|---|------|-----------|------|
+| 1 | Feature store + drift detection | `ml/feature_store.py` | ☐ |
+| 2 | Online learning activated (90d gate) | `ml/online_learner.py` | ☐ |
+| 3 | Regime-conditional model router | `ml/inference_engine.py` | ☐ |
+| 4 | TCA live calibration | `execution/tca.py` | ☐ |
+| 5 | Portfolio-level CVaR | `risk/advanced_analytics.py` | ☐ |
+| 6 | Advanced slippage simulator | `backtest/engine.py` | ☐ |
+| 7 | Multi-user RBAC | `api/auth.py` | ☐ |
+| 8 | Regulatory audit trail | `database/models.py` | ☐ |
+| 9 | Deep ensemble enabled (if OOS ≥ XGB) | `ml/deep_ensemble_layer.py` | ☐ |
+| 10 | Portfolio CVaR in pre-trade gate | `risk/pre_trade_gate.py` | ☐ |
+
+---
