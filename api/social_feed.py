@@ -219,6 +219,41 @@ async def my_feed_status(user: TokenPayload = Depends(get_current_user)):
     return {"opted_in": user.sub in _opted_in}
 
 
+@router.get("/status")
+async def feed_status(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the current user's feed opt-in state plus signal and follower counts.
+
+    Used by the FeedSettings UI component.
+    """
+    _load_opted_in()
+    opted_in = user.sub in _opted_in
+
+    # Count signals this user has published to the feed
+    signal_count = sum(
+        1 for item in _feed_items.values()
+        if item.get("trader_id") == user.sub and item.get("is_public")
+    )
+
+    # Follower count from profile store
+    follower_count = 0
+    try:
+        from social.profiles import TraderProfileManager as _TPM  # noqa: PLC0415
+        mgr = _TPM()
+        profile = mgr.get_profile(user.sub)
+        if profile:
+            follower_count = getattr(profile, "total_followers", 0)
+    except Exception:
+        pass
+
+    return {
+        "opted_in": opted_in,
+        "trader_id": user.sub,
+        "signal_count": signal_count,
+        "follower_count": follower_count,
+    }
+
+
 # ── Leaderboard router ────────────────────────────────────────────────────────
 # Mounted at /api/social so CopyTrading.tsx and Leaderboard.tsx can call
 # GET /api/social/leaderboard without a prefix conflict with /api/feed.
