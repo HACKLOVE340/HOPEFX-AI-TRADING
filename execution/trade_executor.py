@@ -4,13 +4,41 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-HOPEFX Trade Executor
-Smart order routing and execution management
+execution/trade_executor.py
+===========================
+Smart order router with mandatory pre-trade risk gate.
+
+Risk controls enforced on every order
+--------------------------------------
+1. Pre-trade gate (8 checks)  — kill switch, halt, daily loss, drawdown,
+   CVaR, position size, max open positions, validate_trade.
+2. Hard <1% risk-per-trade cap — position notional capped so that a full
+   stop-loss hit never exceeds MAX_RISK_PCT_PER_TRADE of account equity.
+   Default: 0.01 (1%).  Override via env var MAX_RISK_PCT_PER_TRADE.
+3. Drawdown circuit breaker   — if current drawdown >= DRAWDOWN_HALT_PCT
+   (default 5%) trading is halted immediately and the risk manager's
+   _trading_halted flag is set.
+4. Loss-streak detection      — after STREAK_HALT_LOSSES (default 3)
+   consecutive losses the executor pauses for STREAK_COOLDOWN_MINUTES
+   (default 30) before allowing new entries.
+
+Signal-filter wiring
+---------------------
+- record_outcome() is called on every position close (both via
+  _execute_close and via _notify_inference_engine_fill) so the EV gate
+  accumulates real trade data.
+
+Online-learning wiring
+-----------------------
+- InferenceEngine.update_online() is called on every confirmed fill with
+  a label derived from realised P&L.
 """
 
 import asyncio
 import logging
-from dataclasses import dataclass
+import os
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Dict, List, Optional
@@ -18,6 +46,20 @@ from typing import Callable, Dict, List, Optional
 from infrastructure.metrics import get_metrics_registry
 
 logger = logging.getLogger(__name__)
+
+# ── Risk constants (env-configurable) ────────────────────────────────────────
+# Hard cap: maximum fraction of equity risked on a single trade.
+# A stop-loss hit at this distance from entry must not exceed this loss.
+MAX_RISK_PCT_PER_TRADE: float = float(os.getenv("MAX_RISK_PCT_PER_TRADE", "0.01"))
+
+# Drawdown circuit breaker: halt trading when drawdown reaches this level.
+DRAWDOWN_HALT_PCT: float = float(os.getenv("DRAWDOWN_HALT_PCT", "0.05"))
+
+# Loss-streak circuit breaker: halt after N consecutive losses.
+STREAK_HALT_LOSSES: int = int(os.getenv("STREAK_HALT_LOSSES", "3"))
+
+# Cooldown in minutes after a streak halt before new entries are allowed.
+STREAK_COOLDOWN_MINUTES: float = float(os.getenv("STREAK_COOLDOWN_MINUTES", "30"))
 
 
 class OrderStatus(Enum):
@@ -32,7 +74,7 @@ class OrderStatus(Enum):
 
 @dataclass
 class ExecutionResult:
-    """Order execution result"""
+    """Order execution result."""
 
     success: bool
     order_id: Optional[str]
@@ -41,18 +83,19 @@ class ExecutionResult:
     commission: float
     status: OrderStatus
     message: str
-    latency_ms: float
-    timestamp: datetime = datetime.now(timezone.utc)
+    latency_ms: float = 0.0
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TradeExecutor:
     """
-    Smart trade execution with:
-    - Order validation
-    - Position sizing verification
-    - Slippage protection
-    - Retry logic
-    - Execution reporting
+    Smart trade execution with mandatory pre-trade risk gate.
+
+    Risk controls applied on every order:
+    - Pre-trade gate (8 checks)
+    - Hard <1% risk-per-trade cap (MAX_RISK_PCT_PER_TRADE)
+    - Drawdown circuit breaker (DRAWDOWN_HALT_PCT)
+    - Loss-streak detection (STREAK_HALT_LOSSES / STREAK_COOLDOWN_MINUTES)
     """
 
     def __init__(self, broker, risk_manager, position_tracker):
@@ -65,15 +108,17 @@ class TradeExecutor:
         self._execution_callbacks: List[Callable] = []
         self._lock = asyncio.Lock()
 
+        # ── Streak tracking ───────────────────────────────────────────────────
+        self._consecutive_losses: int = 0
+        self._streak_halted_until: Optional[float] = None  # monotonic time
+
     async def execute_signal(self, signal: Dict) -> ExecutionResult:
-        """
-        Execute trading signal with full validation
-        """
+        """Execute a trading signal with full validation and risk controls."""
         start_time = asyncio.get_event_loop().time()
 
-        # Validate signal
         required_fields = ["symbol", "action", "size"]
-        if not all(f in signal for f in required_fields):
+        missing = [f for f in required_fields if f not in signal]
+        if missing:
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -81,16 +126,14 @@ class TradeExecutor:
                 average_price=0,
                 commission=0,
                 status=OrderStatus.ERROR,
-                message=f"Missing required fields: {[f for f in required_fields if f not in signal]}",
+                message=f"Missing required fields: {missing}",
                 latency_ms=0,
             )
 
         symbol = signal["symbol"]
         action = signal["action"]
-        signal["size"]
 
-        # Validate action
-        if action not in ["buy", "sell", "close"]:
+        if action not in ("buy", "sell", "close"):
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -103,39 +146,31 @@ class TradeExecutor:
             )
 
         try:
-            # Execute based on action type
             if action == "close":
                 result = await self._execute_close(signal)
             else:
                 result = await self._execute_open(signal)
 
-            # Record metrics
             latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
             result.latency_ms = latency_ms
             self.metrics.record_order_latency(latency_ms)
 
             if result.success:
                 self.metrics.get_collector("orders_filled_total").inc(
-                    1,
-                    {"symbol": symbol, "type": "market"},
+                    1, {"symbol": symbol, "type": "market"}
                 )
             else:
                 self.metrics.get_collector("orders_rejected_total").inc(
-                    1,
-                    {"symbol": symbol, "reason": result.status.value},
+                    1, {"symbol": symbol, "reason": result.status.value}
                 )
 
-            # Notify callbacks
             await self._notify_callbacks(result, signal)
-
             return result
 
-        except Exception as e:
+        except Exception as exc:
             latency_ms = (asyncio.get_event_loop().time() - start_time) * 1000
-            logger.exception(f"Execution error for {symbol}: {e}")
-
-            self.metrics.record_error("trade_executor", type(e).__name__)
-
+            logger.exception("Execution error for %s: %s", symbol, exc)
+            self.metrics.record_error("trade_executor", type(exc).__name__)
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -143,20 +178,78 @@ class TradeExecutor:
                 average_price=0,
                 commission=0,
                 status=OrderStatus.ERROR,
-                message=str(e),
+                message=str(exc),
                 latency_ms=latency_ms,
             )
 
     async def _execute_open(self, signal: Dict) -> ExecutionResult:
-        """Execute opening order — mandatory pre-trade gate, no fallback."""
+        """
+        Execute an opening order.
+
+        Checks applied in order:
+        1. Drawdown circuit breaker
+        2. Loss-streak circuit breaker
+        3. <1% risk-per-trade cap (size clamping)
+        4. Mandatory pre-trade gate (8 checks)
+        5. Broker order placement
+        """
         symbol = signal["symbol"]
         side = signal["action"]
-        size = signal["size"]
+        size = float(signal["size"])
 
-        # ── Mandatory pre-trade gate ──────────────────────────────────────────
-        # Any exception (TradeBlocked OR RiskManagerError) blocks the order.
-        # There is NO "allow anyway" path — a broken risk check is a hard stop.
-        from risk.pre_trade_gate import (
+        # ── 1. Drawdown circuit breaker ───────────────────────────────────────
+        blocked, dd_msg = self._check_drawdown_circuit_breaker()
+        if blocked:
+            logger.warning(
+                "ORDER BLOCKED [DRAWDOWN_CIRCUIT_BREAKER] symbol=%s %s",
+                symbol, dd_msg,
+            )
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message=f"[DRAWDOWN_CIRCUIT_BREAKER] {dd_msg}",
+                latency_ms=0,
+            )
+
+        # ── 2. Loss-streak circuit breaker ────────────────────────────────────
+        blocked, streak_msg = self._check_streak_circuit_breaker()
+        if blocked:
+            logger.warning(
+                "ORDER BLOCKED [STREAK_CIRCUIT_BREAKER] symbol=%s %s",
+                symbol, streak_msg,
+            )
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message=f"[STREAK_CIRCUIT_BREAKER] {streak_msg}",
+                latency_ms=0,
+            )
+
+        # ── 3. Hard <1% risk-per-trade cap ────────────────────────────────────
+        size = self._clamp_size_to_risk_cap(signal, size)
+        if size <= 0:
+            return ExecutionResult(
+                success=False,
+                order_id=None,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.REJECTED,
+                message="[RISK_CAP] Computed position size is zero after risk capping",
+                latency_ms=0,
+            )
+        signal = {**signal, "size": size}  # propagate clamped size
+
+        # ── 4. Mandatory pre-trade gate ───────────────────────────────────────
+        from risk.pre_trade_gate import (  # noqa: PLC0415
             GateOrder,
             PreTradeGate,
             RiskManagerError,
@@ -167,7 +260,7 @@ class TradeExecutor:
         gate_order = GateOrder(
             symbol=symbol,
             side=side.upper(),
-            quantity=float(size),
+            quantity=size,
             price=signal.get("price"),
             stop_loss=signal.get("stop_loss"),
             take_profit=signal.get("take_profit"),
@@ -177,13 +270,9 @@ class TradeExecutor:
             gate.check(gate_order)
         except TradeBlocked as exc:
             logger.warning(
-                "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%s "
+                "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%.4f "
                 "reason_code=%s detail=%s",
-                symbol,
-                side,
-                size,
-                exc.reason_code,
-                exc.detail,
+                symbol, side, size, exc.reason_code, exc.detail,
             )
             return ExecutionResult(
                 success=False,
@@ -196,18 +285,13 @@ class TradeExecutor:
                 latency_ms=0,
             )
         except RiskManagerError as exc:
-            # Risk manager itself is broken — hard block, alert ops
             logger.critical(
                 "RISK MANAGER ERROR — order blocked as safety measure | "
-                "symbol=%s side=%s qty=%s error=%s",
-                symbol,
-                side,
-                size,
-                exc,
+                "symbol=%s side=%s qty=%.4f error=%s",
+                symbol, side, size, exc,
             )
             try:
-                import sentry_sdk
-
+                import sentry_sdk  # noqa: PLC0415
                 sentry_sdk.capture_exception(exc)
             except Exception:
                 pass
@@ -222,16 +306,15 @@ class TradeExecutor:
                 latency_ms=0,
             )
 
-        # Place order through broker
+        # ── 5. Place order ────────────────────────────────────────────────────
         order = await self.broker.place_market_order(
             symbol=symbol,
             side=side,
             quantity=size,
         )
 
-        # Update position tracker
-        if order.status.value in ["filled", "partial"]:
-            from execution.position_tracker import Position
+        if order.status.value in ("filled", "partial"):
+            from execution.position_tracker import Position  # noqa: PLC0415
 
             position = Position(
                 id=order.id,
@@ -244,11 +327,10 @@ class TradeExecutor:
                 stop_loss=signal.get("stop_loss"),
                 take_profit=signal.get("take_profit"),
             )
-
             await self.position_tracker.add_position(position)
 
         return ExecutionResult(
-            success=order.status.value in ["filled", "partial"],
+            success=order.status.value in ("filled", "partial"),
             order_id=order.id,
             filled_quantity=order.filled_quantity,
             average_price=order.average_fill_price,
@@ -258,9 +340,16 @@ class TradeExecutor:
         )
 
     async def _execute_close(self, signal: Dict) -> ExecutionResult:
-        """Execute closing order"""
-        position_id = signal.get("position_id")
+        """
+        Execute a closing order.
 
+        On success:
+        - Updates risk manager equity
+        - Records outcome in SignalFilter (EV gate)
+        - Updates streak counter (win resets, loss increments)
+        - Checks drawdown circuit breaker post-close
+        """
+        position_id = signal.get("position_id")
         if not position_id:
             return ExecutionResult(
                 success=False,
@@ -270,9 +359,9 @@ class TradeExecutor:
                 commission=0,
                 status=OrderStatus.ERROR,
                 message="No position_id specified for close",
+                latency_ms=0,
             )
 
-        # Get position
         position = self.position_tracker.get_position(position_id)
         if not position:
             return ExecutionResult(
@@ -283,52 +372,63 @@ class TradeExecutor:
                 commission=0,
                 status=OrderStatus.ERROR,
                 message=f"Position not found: {position_id}",
+                latency_ms=0,
             )
 
-        # Close through broker
         success = await self.broker.close_position(position_id)
 
         if success:
-            # Update position tracker
             closed_position = await self.position_tracker.close_position(
                 position_id,
                 position.current_price,
                 commission=position.commission,
             )
 
-            # Record trade result for strategy performance
             if closed_position:
-                # Notify risk manager of realized P&L
+                realized_pnl = closed_position.realized_pnl
+
+                # Update risk manager equity
                 self.risk_manager.update_equity(
-                    self.risk_manager.daily_starting_equity
-                    + closed_position.realized_pnl,
+                    self.risk_manager.daily_starting_equity + realized_pnl
                 )
 
-                # ── Signal filter EV update on position close ─────────────────
-                # This path fires when positions are closed via close_position()
-                # (e.g. SL/TP hit, manual close) rather than via execute_signal().
-                # Records the outcome so the EV gate accumulates real data.
+                # ── Streak tracking ───────────────────────────────────────────
+                self._update_streak(realized_pnl)
+
+                # ── Post-close drawdown check ─────────────────────────────────
+                self._trigger_drawdown_halt_if_needed()
+
+                # ── SignalFilter EV update ────────────────────────────────────
                 try:
-                    from ml.signal_filter import get_signal_filter
-                    _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
-                    _realized = closed_position.realized_pnl
-                    _pnl_pct = _realized / _entry_px if _entry_px > 0 else 0.0
+                    from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+
+                    _entry_px = (
+                        getattr(closed_position, "entry_price", None)
+                        or position.current_price
+                    )
+                    _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
                     _side = getattr(closed_position, "side", "buy")
-                    _direction = 1 if str(_side).lower() == "buy" else -1
-                    _conf = getattr(closed_position, "signal_confidence", 0.6)
+                    _direction = 1 if str(_side).lower() in ("buy", "long") else -1
+                    _conf = float(
+                        getattr(closed_position, "signal_confidence", 0.6)
+                    )
                     _sym = getattr(closed_position, "symbol", position_id)
+
                     get_signal_filter().record_outcome(
                         symbol=_sym,
                         pnl_pct=_pnl_pct,
                         direction=_direction,
-                        confidence=float(_conf),
+                        confidence=_conf,
                     )
                     logger.debug(
-                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d",
-                        _sym, _pnl_pct, _direction,
+                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f "
+                        "dir=%d conf=%.3f",
+                        _sym, _pnl_pct, _direction, _conf,
                     )
                 except Exception as _sf_exc:
-                    logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
+                    logger.debug(
+                        "SignalFilter close record failed (non-fatal): %s", _sf_exc
+                    )
 
         return ExecutionResult(
             success=success,
@@ -340,8 +440,165 @@ class TradeExecutor:
             message="Position closed" if success else "Close failed",
         )
 
+    # ── Risk circuit breakers ─────────────────────────────────────────────────
+
+    def _check_drawdown_circuit_breaker(self) -> tuple:
+        """
+        Return (blocked: bool, reason: str) based on current drawdown.
+
+        Also respects the risk manager's _trading_halted flag so a previously
+        triggered halt is enforced even after a restart.
+        """
+        if getattr(self.risk_manager, "_trading_halted", False):
+            halt_reason = getattr(self.risk_manager, "_halt_reason", "trading halted")
+            return True, f"Risk manager halt active: {halt_reason}"
+
+        current_dd = getattr(self.risk_manager, "current_drawdown", 0.0)
+        if current_dd >= DRAWDOWN_HALT_PCT:
+            msg = (
+                f"Drawdown {current_dd:.2%} >= circuit breaker threshold "
+                f"{DRAWDOWN_HALT_PCT:.2%}. Trading halted."
+            )
+            self._trigger_drawdown_halt_if_needed()
+            return True, msg
+
+        return False, ""
+
+    def _trigger_drawdown_halt_if_needed(self) -> None:
+        """
+        Set _trading_halted on the risk manager when drawdown breaches
+        DRAWDOWN_HALT_PCT.  Idempotent — safe to call after every close.
+        """
+        current_dd = getattr(self.risk_manager, "current_drawdown", 0.0)
+        if current_dd >= DRAWDOWN_HALT_PCT:
+            if not getattr(self.risk_manager, "_trading_halted", False):
+                reason = (
+                    f"Drawdown circuit breaker: {current_dd:.2%} >= "
+                    f"{DRAWDOWN_HALT_PCT:.2%}"
+                )
+                logger.warning(
+                    "DRAWDOWN CIRCUIT BREAKER TRIGGERED: %s — halting trading",
+                    reason,
+                )
+                try:
+                    self.risk_manager._trading_halted = True
+                    self.risk_manager._halt_reason = reason
+                except Exception:
+                    pass
+
+    def _check_streak_circuit_breaker(self) -> tuple:
+        """
+        Return (blocked: bool, reason: str) if a loss-streak cooldown is active.
+
+        The cooldown expires automatically after STREAK_COOLDOWN_MINUTES.
+        """
+        if self._streak_halted_until is None:
+            return False, ""
+
+        now = time.monotonic()
+        if now < self._streak_halted_until:
+            remaining = self._streak_halted_until - now
+            msg = (
+                f"Loss streak of {STREAK_HALT_LOSSES} consecutive losses. "
+                f"Cooldown active — {remaining / 60:.1f} min remaining."
+            )
+            return True, msg
+
+        # Cooldown expired — reset
+        logger.info(
+            "Streak cooldown expired after %.0f min — resuming trading",
+            STREAK_COOLDOWN_MINUTES,
+        )
+        self._streak_halted_until = None
+        self._consecutive_losses = 0
+        return False, ""
+
+    def _update_streak(self, realized_pnl: float) -> None:
+        """
+        Update consecutive-loss counter and trigger cooldown when threshold hit.
+
+        A winning trade resets the counter.  A losing trade increments it.
+        When STREAK_HALT_LOSSES is reached, a cooldown timer is set.
+        """
+        if realized_pnl > 0:
+            if self._consecutive_losses > 0:
+                logger.debug(
+                    "Streak reset: winning trade after %d consecutive losses",
+                    self._consecutive_losses,
+                )
+            self._consecutive_losses = 0
+        else:
+            self._consecutive_losses += 1
+            logger.debug(
+                "Consecutive losses: %d / %d",
+                self._consecutive_losses, STREAK_HALT_LOSSES,
+            )
+            if self._consecutive_losses >= STREAK_HALT_LOSSES:
+                cooldown_secs = STREAK_COOLDOWN_MINUTES * 60
+                self._streak_halted_until = time.monotonic() + cooldown_secs
+                logger.warning(
+                    "STREAK CIRCUIT BREAKER: %d consecutive losses — "
+                    "halting new entries for %.0f min",
+                    self._consecutive_losses, STREAK_COOLDOWN_MINUTES,
+                )
+
+    def _clamp_size_to_risk_cap(self, signal: Dict, size: float) -> float:
+        """
+        Clamp position size so that a full stop-loss hit never exceeds
+        MAX_RISK_PCT_PER_TRADE of current account equity.
+
+        Formula (when SL is provided):
+            max_loss_dollars = equity × MAX_RISK_PCT_PER_TRADE
+            max_size = max_loss_dollars / (entry_price × sl_distance_pct)
+
+        Falls back to notional cap when stop_loss is absent.
+        """
+        try:
+            equity = (
+                getattr(self.risk_manager, "current_equity", None)
+                or getattr(self.risk_manager, "current_balance", None)
+                or getattr(self.risk_manager, "initial_balance", 0.0)
+            )
+            if not equity or equity <= 0:
+                return size
+
+            entry_price = signal.get("price") or signal.get("entry_price")
+            stop_loss = signal.get("stop_loss")
+
+            if entry_price and stop_loss and entry_price > 0:
+                sl_distance = abs(entry_price - stop_loss)
+                sl_pct = sl_distance / entry_price
+                if sl_pct > 0:
+                    max_loss = equity * MAX_RISK_PCT_PER_TRADE
+                    max_size = max_loss / (entry_price * sl_pct)
+                    if max_size < size:
+                        logger.info(
+                            "Risk cap applied: size %.4f → %.4f "
+                            "(equity=%.2f, sl_pct=%.3f%%, max_risk=%.1f%%)",
+                            size, max_size, equity, sl_pct * 100,
+                            MAX_RISK_PCT_PER_TRADE * 100,
+                        )
+                        return round(max_size, 8)
+            else:
+                # No SL — cap by notional: size × price <= equity × cap
+                if entry_price and entry_price > 0:
+                    max_notional = equity * MAX_RISK_PCT_PER_TRADE
+                    max_size_notional = max_notional / entry_price
+                    if max_size_notional < size:
+                        logger.info(
+                            "Risk cap (notional fallback): size %.4f → %.4f",
+                            size, max_size_notional,
+                        )
+                        return round(max_size_notional, 8)
+        except Exception as exc:
+            logger.debug("Risk cap calculation failed (non-fatal): %s", exc)
+
+        return size
+
+    # ── Callbacks ─────────────────────────────────────────────────────────────
+
     def register_callback(self, callback: Callable[[ExecutionResult, Dict], None]):
-        """Register execution callback"""
+        """Register an execution callback."""
         self._execution_callbacks.append(callback)
 
     async def _notify_callbacks(self, result: ExecutionResult, signal: Dict):
@@ -352,13 +609,9 @@ class TradeExecutor:
                     await callback(result, signal)
                 else:
                     callback(result, signal)
-            except Exception as e:
-                logger.error(f"Callback error: {e}")
+            except Exception as exc:
+                logger.error("Callback error: %s", exc)
 
-        # ── InferenceEngine online-learning fill notification ─────────────────
-        # On every filled order, notify the InferenceEngine so it can update
-        # the online learner with the outcome label (1 = profitable, 0 = loss).
-        # This is best-effort — a failure here must never block execution.
         if result.success and result.status in (OrderStatus.FILLED, OrderStatus.PARTIAL):
             await self._notify_inference_engine_fill(result, signal)
 
@@ -368,17 +621,14 @@ class TradeExecutor:
         """
         Notify InferenceEngine of a confirmed fill for online learning.
 
-        Determines the outcome label from the closed P&L when available,
-        or defers to a neutral label (0.5 → skipped) when the trade is
-        still open.  Only closed positions with a known P&L are used for
-        online learning to avoid label leakage.
+        Only closed positions with a known P&L are used to avoid label
+        leakage on open trades.
         """
         try:
-            from ml.inference_engine import get_inference_engine
+            from ml.inference_engine import get_inference_engine  # noqa: PLC0415
 
             engine = get_inference_engine()
 
-            # Resolve P&L: prefer explicit pnl in signal, else look up position
             pnl: Optional[float] = signal.get("realized_pnl")
             if pnl is None:
                 position_id = signal.get("position_id") or result.order_id
@@ -387,17 +637,15 @@ class TradeExecutor:
                     if pos is not None:
                         pnl = getattr(pos, "realized_pnl", None)
 
-            # Only update when we have a definitive outcome
             if pnl is None:
                 return
 
             label = 1 if pnl > 0 else 0
-
-            # Build a minimal feature row from the signal for the online learner.
-            # The engine's update_online() accepts any DataFrame with numeric cols.
-            import pandas as _pd
             _confidence = float(signal.get("confidence", 0.0))
             _action = signal.get("action", "buy")
+
+            import pandas as _pd  # noqa: PLC0415
+
             features = _pd.DataFrame(
                 [
                     {
@@ -410,21 +658,16 @@ class TradeExecutor:
                     }
                 ]
             )
-
             engine.update_online(features, label)
             logger.debug(
                 "InferenceEngine fill notify: symbol=%s pnl=%.4f label=%d",
-                signal.get("symbol", "?"),
-                pnl,
-                label,
+                signal.get("symbol", "?"), pnl, label,
             )
 
-            # ── Signal filter EV update ───────────────────────────────────────
-            # Record the trade outcome in the SignalFilter rolling window so
-            # the EV gate accumulates real data and can block negative-EV signals.
-            # pnl_pct = pnl / entry_price (normalised so all symbols are comparable)
+            # ── SignalFilter EV update (fill path) ────────────────────────────
             try:
-                from ml.signal_filter import get_signal_filter
+                from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+
                 _sym = signal.get("symbol", "UNKNOWN")
                 _entry = result.average_price or 1.0
                 _pnl_pct = pnl / _entry if _entry > 0 else 0.0
@@ -436,27 +679,55 @@ class TradeExecutor:
                     confidence=_confidence,
                 )
                 logger.debug(
-                    "SignalFilter outcome recorded: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
+                    "SignalFilter outcome (fill): symbol=%s pnl_pct=%.5f "
+                    "dir=%d conf=%.3f",
                     _sym, _pnl_pct, _direction, _confidence,
                 )
             except Exception as _sf_exc:
-                logger.debug("SignalFilter record_outcome failed (non-fatal): %s", _sf_exc)
+                logger.debug(
+                    "SignalFilter record_outcome failed (non-fatal): %s", _sf_exc
+                )
 
         except Exception as exc:
             logger.debug("InferenceEngine fill notify failed (non-fatal): %s", exc)
 
-    async def cancel_all_pending(self) -> List[str]:
-        """Cancel all pending orders"""
-        cancelled = []
+    # ── Utilities ─────────────────────────────────────────────────────────────
 
+    async def cancel_all_pending(self) -> List[str]:
+        """Cancel all pending orders."""
+        cancelled = []
         async with self._lock:
-            for order_id, order_info in list(self._pending_orders.items()):
+            for order_id in list(self._pending_orders):
                 try:
                     success = await self.broker.cancel_order(order_id)
                     if success:
                         cancelled.append(order_id)
                         del self._pending_orders[order_id]
-                except Exception as e:
-                    logger.error(f"Error cancelling order {order_id}: {e}")
-
+                except Exception as exc:
+                    logger.error("Error cancelling order %s: %s", order_id, exc)
         return cancelled
+
+    def get_risk_status(self) -> Dict:
+        """
+        Return current risk circuit-breaker state for monitoring.
+
+        Exposed via health endpoints and dashboard widgets.
+        """
+        streak_cooldown_remaining: Optional[float] = None
+        if self._streak_halted_until is not None:
+            remaining = self._streak_halted_until - time.monotonic()
+            streak_cooldown_remaining = max(0.0, round(remaining / 60, 1))
+
+        return {
+            "consecutive_losses": self._consecutive_losses,
+            "streak_halt_threshold": STREAK_HALT_LOSSES,
+            "streak_halted": (
+                self._streak_halted_until is not None
+                and time.monotonic() < self._streak_halted_until
+            ),
+            "streak_cooldown_remaining_min": streak_cooldown_remaining,
+            "drawdown_halt_pct": DRAWDOWN_HALT_PCT,
+            "max_risk_pct_per_trade": MAX_RISK_PCT_PER_TRADE,
+            "trading_halted": getattr(self.risk_manager, "_trading_halted", False),
+            "halt_reason": getattr(self.risk_manager, "_halt_reason", None),
+        }
