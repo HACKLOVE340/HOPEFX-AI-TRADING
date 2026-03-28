@@ -1511,12 +1511,28 @@ setup_metrics_middleware(app)
 
 # Serve the React dashboard from dashboard/dist/ — mounted LAST so all /api/*
 # routes take precedence.  Falls back gracefully when dist/ doesn't exist yet.
+#
+# Vite builds with base "/" so assets reference /assets/, /registerSW.js etc.
+# We mount the dist directory at BOTH "/" (so asset paths resolve) and "/app"
+# (legacy alias).  A redirect from bare "/" → "/app/" gives a clean entry URL.
 _dashboard_dist = Path(__file__).parent / "dashboard" / "dist"
 if _dashboard_dist.exists():
+    from fastapi.responses import RedirectResponse  # noqa: PLC0415
+
+    @app.get("/", include_in_schema=False)
+    async def _root_redirect():
+        return RedirectResponse(url="/app/", status_code=302)
+
+    # Mount at /app for the canonical dashboard URL
     app.mount(
         "/app", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard"
     )
-    logger.info("React dashboard mounted at /app (dashboard/dist/)")
+    # Also mount at root so Vite's /assets/, /registerSW.js, /sw.js, /manifest*
+    # all resolve correctly (Vite hardcodes these as root-relative paths).
+    app.mount(
+        "/", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard_root"
+    )
+    logger.info("React dashboard mounted at /app and / (dashboard/dist/)")
 else:
     logger.warning(
         "dashboard/dist/ not found — run 'cd dashboard && npm run build' to build the UI"
