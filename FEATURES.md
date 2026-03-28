@@ -15,14 +15,6 @@ Each feature maps to an env-var that can enable or disable it at runtime
 
 ---
 
-## Diff: current branch vs `main`
-
-> **There are currently no code differences between this branch and `main`.**
-> The branch was created to investigate CI failures for PR #38.  All fixes
-> had already been merged to `main` via PR #39.
-
----
-
 ## Core Trading
 
 | Feature | Env Var | Default | Status | Description |
@@ -80,13 +72,18 @@ Each feature maps to an env-var that can enable or disable it at runtime
 
 | Feature | Env Var | Default | Status |
 |---------|---------|---------|--------|
-| ML Predictions (XGBoost/LightGBM/RF ensemble) | `FEATURE_ML_PREDICTIONS` | ✅ on | STABLE |
+| ML Predictions (XGBoost + isotonic calibration) | `FEATURE_ML_PREDICTIONS` | ✅ on | STABLE |
 | ML Feature Engineering | `FEATURE_ML_FEATURE_ENGINEERING` | ✅ on | STABLE |
+| Incremental Online Learning (SGD + EWC) | `ML_HOURLY_ENABLED` | ❌ off | STABLE |
 
-> **ML Predictions** uses `ml/saved_models/advanced_oos.pkl` — 122 stationary features,
-> 68.0% OOS accuracy (p=0.0000), 3-year held-out test period. Falls back to rule-based
-> signal when the model file is absent. LSTM/Transformer integration is a future research
-> path (Phase 3–4), not part of the current production model.
+> **ML Predictions** uses `ml/saved_models/advanced_oos.pkl` — 176 stationary features,
+> 66.4% OOS accuracy (p=0.0000, N=1,260 bars), validated 2026-03-28. Falls back to
+> rule-based signal when the model file is absent.
+>
+> **Online Learning** (`ML_HOURLY_ENABLED=true`): `SklearnOnlineLearner` updates
+> incrementally every hour via `HourlyTrainer`. A daily EWC regime-adaptation loop
+> runs at 00:05 UTC. Learner state is persisted to `ml/saved_models/online_learner_{symbol}.pkl`.
+> LSTM/Transformer integration is a future research path (Phase 3–4).
 
 ## Charting
 

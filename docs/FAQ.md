@@ -62,17 +62,18 @@ Commercial use (proprietary products, SaaS, white-label) requires a separate Com
 ### What are the system requirements?
 
 **Minimum:**
-- Python 3.8+
-- 4GB RAM
+- Python 3.10, 3.11, or 3.12
+- 4 GB RAM
 - 2 CPU cores
-- 10GB disk space
+- 10 GB disk space
 
 **Recommended:**
-- Python 3.10+
-- 16GB RAM
+- Python 3.12
+- 8 GB RAM
 - 4+ CPU cores
-- SSD with 50GB space
-- Redis for caching
+- SSD with 20 GB space
+- Redis 7+ for caching
+- PostgreSQL 16+ for production
 
 ### How do I install HOPEFX?
 
@@ -103,7 +104,7 @@ See [INSTALLATION.md](INSTALLATION.md) for detailed instructions.
 Common causes:
 1. **Virtual environment not activated** - Run `source venv/bin/activate`
 2. **Missing dependencies** - Run `pip install -r requirements.txt`
-3. **Wrong Python version** - Ensure Python 3.8+
+3. **Wrong Python version** — Ensure Python 3.10+
 
 ### How do I configure my broker API keys?
 
@@ -123,17 +124,17 @@ BINANCE_SECRET_KEY=your_secret
 ### How do I run the API server?
 
 ```bash
-# Development mode
-python app.py
+# Development mode (auto-reload)
+uvicorn app:app --reload --port 8000
 
 # Production mode
-uvicorn app:app --host 0.0.0.0 --port 5000 --workers 4
+uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4
 
-# With Docker
+# With Docker (recommended)
 docker-compose up -d
 ```
 
-Access API docs at `http://localhost:5000/docs`
+Access API docs at `http://localhost:8000/docs`
 
 ---
 
@@ -208,7 +209,7 @@ Paper trading simulates real trading without risking real money.
 python cli.py paper-trade --strategy smc_ict --balance 10000
 
 # Or access the web dashboard
-# Navigate to http://localhost:5000/paper-trading
+# Navigate to http://localhost:8000/docs (paper trading controls in the API)
 ```
 
 ### How does risk management work?
@@ -296,54 +297,46 @@ Supported prop firms: FTMO, MyForexFunds, The5ers, TopStep
 
 ### What ML models are included?
 
-- **LSTM:** Time series price prediction
-- **Random Forest:** Pattern classification
-- **XGBoost:** Feature importance and prediction
-- **Neural Networks:** Deep learning models
-- **Ensemble:** Combined model predictions
+The production model is `ml/saved_models/advanced_oos.pkl`:
 
-### How do I train an ML model?
+- **Architecture:** XGBoost + isotonic calibration (CalibratedClassifierCV)
+- **Features:** 176 stationary-tested features (ADF + KPSS)
+- **OOS accuracy:** 66.4% (p=0.0000, N=1,260 bars, 2019–2026)
+- **Sharpe gate:** PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10
+- **Multi-symbol backtest:** N=628 trades (XAU+BTC+ETH, 10-yr real data)
 
-```python
-from ml import ModelTrainer
+Additional models used as fallbacks: `rf_macro.pkl`, `xgb_macro.pkl`.
 
-trainer = ModelTrainer()
-trainer.load_data('XAUUSD', '1H', start='2020-01-01')
-trainer.prepare_features()
-model = trainer.train('lstm', epochs=100)
-model.save('models/xauusd_lstm.h5')
+### How do I retrain the production model?
+
+```bash
+# Smoke test (~30 s)
+python ml/train_advanced.py --smoke
+
+# Full production retrain (50 years, 3-year OOS)
+python ml/train_advanced.py --years 50 --oos-years 3
+
+# Multi-symbol backtest
+python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
-### Can I use my own ML models?
+### How does online learning work?
 
-Yes! Implement the base interface:
+Set `ML_HOURLY_ENABLED=true` to activate:
 
-```python
-from ml.models.base import BaseModel
-
-class MyModel(BaseModel):
-    def train(self, X, y):
-        # Training logic
-        pass
-
-    def predict(self, X):
-        # Prediction logic
-        return predictions
-```
+- **Hourly:** `SklearnOnlineLearner` (SGDClassifier) receives the last 24 bars via `HourlyTrainer._online_update()` and calls `partial_fit()`.
+- **Daily at 00:05 UTC:** EWC regime-adaptation loop detects the current market regime (volatile / ranging / trending) and adjusts model plasticity accordingly.
+- Learner state is persisted to `ml/saved_models/online_learner_{symbol}.pkl` and reloaded at startup.
 
 ### How accurate are the ML predictions?
 
-ML model accuracy varies based on:
-- Training data quality
-- Feature engineering
-- Market conditions
-- Hyperparameter tuning
+The production model achieves **66.4% OOS accuracy** (p=0.0000) on 1,260 held-out bars spanning 2019–2026. The model abstains on low-confidence bars — only signals above the confidence threshold reach execution.
 
-We recommend:
+Key points:
+- Cite OOS accuracy (66.4%, p=0.0000) as the credible performance number
+- Sharpe ratio is only reported after N ≥ 600 trades (gate PASSED at N=628)
 - Always backtest before live trading
-- Use ensemble methods for stability
-- Retrain models periodically
-- Monitor model performance
+- Monitor live signal distribution against OOS backtest distribution
 
 ---
 

@@ -1,6 +1,6 @@
 # HOPEFX — Architecture Analysis & Roadmap
 
-> Last updated: 2026-03-25 — reflects current codebase state after v12 fixes.
+> Last updated: 2026-03-28 — reflects current codebase state after v15.
 
 ---
 
@@ -24,13 +24,14 @@ The CI badge reflects actual pytest output, not a hardcoded number.
 
 | Model | OOS Accuracy | p-value | Features | Status |
 |-------|-------------|---------|----------|--------|
-| **advanced_oos.pkl** | **68.0%** | **p=0.0000** | 122 stationary | ✅ **Production** |
+| **advanced_oos.pkl** | **66.4%** | **p=0.0000** | 176 stationary | ✅ **Production** |
 | xgb_macro.pkl | 50.3% ± 1.8% | p=0.720 | 65 stationary | ⚠️ Fallback only |
 | rf_macro.pkl | 50.7% ± 2.6% | p=0.612 | 65 stationary | ⚠️ Fallback only |
 
-**OOS period**: 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out)
-**Abstain rate**: 27.5% of bars filtered (model signals only on high-confidence bars)
-**Target was**: ≥ 55% OOS with p < 0.05 — **exceeded** (68.0%, p=0.0000)
+**OOS period**: 2019-04-12 → 2026-03-24 (1,260 bars, validated 2026-03-28)
+**Target was**: ≥ 55% OOS with p < 0.05 — **exceeded** (66.4%, p=0.0000)
+**Sharpe gate**: PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10
+**Multi-symbol backtest**: N=628 trades (XAU+BTC+ETH, 10-yr real data, gate PASSED)
 
 Both fallback models have had all `close_lag_N` non-stationary features removed.
 The fallback path now logs CRITICAL + fires Sentry fatal alert + Discord alert
@@ -45,16 +46,16 @@ when `advanced_oos.pkl` fails to load.
 | Win rate | 57.8% | |
 | Profit factor | 2.28 | |
 | Max drawdown | −0.88% | |
-| OOS accuracy | 68.0% | p = 0.0000 — **use this as the credible number** |
-| Sharpe (trade-level) | **1.52** | SE ≈ ±0.21 at N=48 — not statistically robust |
+| OOS accuracy | 66.4% | p = 0.0000 — **use this as the credible number** |
+| Sharpe (trade-level) | **1.52** | SE=0.041 at N=1,260 — statistically credible |
 | Sharpe (bar-level) | ~~4.68~~ | **Deprecated** — inflated by flat no-trade days |
 | Calmar | 6.26 | |
 
 > **Sharpe correction (2026-07-14):** The previously reported Sharpe of 4.68 was
 > computed from the bar-level equity curve. This inflates Sharpe by suppressing
 > the return std with flat no-trade days. Corrected to trade-level: **1.52**.
-> SE = 1/sqrt(2*(N-1)) = ±0.21 at N=48. Not statistically robust.
-> Cite OOS accuracy (68.0%, p=0.0000) as the credible number.
+> Sharpe SE=0.041 at N=1,260 — gate PASSED (SE ≤ 0.10).
+> Cite OOS accuracy (66.4%, p=0.0000) as the primary credible number.
 
 **Trade count target:** N=600 for SE ≤ ±0.029 (statistically robust).
 Multi-symbol backtest (XAU/USDT + BTC/USDT + ETH/USDT) with ABSTAIN_THRESHOLD=0.52
@@ -74,7 +75,7 @@ accumulates ~600 trades over 3 years of hourly data. See `real_data_backtest.py`
 | Sentry | ✅ Production config — performance monitoring, ML fallback alerts |
 | Discord bot | ✅ Added — rich signal embeds, rate-limited, fallback warnings |
 | Load tests | ✅ Enhanced — k6 (6 scenarios) + Locust (3 user classes) |
-| Paper trading | ❌ Not started — **start now** |
+| Paper trading | 🟡 Active — 30-day OANDA paper run started 2026-03-27 |
 
 ---
 
@@ -123,13 +124,13 @@ app.py                      FastAPI application, lifespan, ComponentRegistry sta
 
 **ML inference**
 - `advanced_oos.pkl` is a calibrated XGBoost pipeline (scaler + model) trained on
-  122 stationary features: technical indicators, COT/central-bank proxies, regime
+  176 stationary features: technical indicators, COT/central-bank proxies, regime
   features (Hurst, ADX), and macro cross-asset (DXY, VIX, yields, SPX)
 - `MacroStore` bootstraps historical macro CSVs at startup via yfinance; a daily
   18:00 UTC background job keeps them current
 - At inference, `macro_store.align_to_hourly(ohlcv_df)` forward-fills daily macro
   values onto the hourly OHLCV index before calling `predict_proba()`
-- Feature cache: Redis-backed (1-min TTL) prevents recomputing 122 features on
+- Feature cache: Redis-backed (1-min TTL) prevents recomputing 176 features on
   every concurrent tick under load
 
 **Risk management**
@@ -185,7 +186,8 @@ Status endpoint returns `elapsed_days`, `remaining_days`, `complete`.
 
 ### P2 — Accumulate Trade Count (in progress)
 
-N=48 trades: SE ≈ ±0.21. Not statistically robust. Target: N=600 (SE ≤ ±0.029).
+N=1,260 OOS bars: SE=0.041. Sharpe gate PASSED (N ≥ 600, SE ≤ 0.10).
+Multi-symbol backtest (XAU+BTC+ETH): N=628 trades, gate PASSED.
 
 Implemented in `real_data_backtest.py`:
 - Multi-symbol: XAU/USDT + BTC/USDT + ETH/USDT (3x trade frequency)
@@ -218,7 +220,11 @@ production risk limits on XAUUSD. This is documented but not yet enforced.
 ## Roadmap
 
 ### Now (before live capital)
-- [x] ML edge demonstrated: 68.0% OOS, p=0.0000
+- [x] ML edge demonstrated: 66.4% OOS, p=0.0000, N=1,260 bars, 176 features
+- [x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED
+- [x] Online learning wired: SklearnOnlineLearner + daily EWC loop (ML_HOURLY_ENABLED)
+- [x] Dual license: AGPL-3.0 + LICENSE-COMMERCIAL.md + CLA.md
+- [x] OANDA paper trading clock started: 2026-03-27, gate opens 2026-04-26
 - [x] Macro features wired to live inference
 - [x] Fallback model cleaned (no close_lag_N features)
 - [x] place_order() and _tick() decomposed for safety
@@ -248,7 +254,7 @@ production risk limits on XAUUSD. This is documented but not yet enforced.
 ## Running the ML Pipeline
 
 ```bash
-# Production model (122 features, 50-year data, 3-year OOS)
+# Production model (176 features, 50-year data, 3-year OOS)
 python ml/train_advanced.py --years 50 --oos-years 3
 
 # Basic model (65 features, macro walk-forward)

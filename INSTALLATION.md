@@ -4,11 +4,11 @@ Complete installation guide for the HOPEFX AI Trading Framework.
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10, 3.11, or 3.12
 - pip (Python package manager)
 - Git
-- Redis (optional, for caching)
-- PostgreSQL (optional, for production database)
+- Redis 7+ (optional — rate limiting and caching fall back to in-memory without it)
+- PostgreSQL 16+ (optional — SQLite used automatically in development)
 
 ## Quick Installation
 
@@ -35,11 +35,14 @@ venv\Scripts\activate
 ### 3. Install Dependencies
 
 ```bash
-# Install all dependencies
+# Standard install
 pip install -r requirements.txt
 
-# Or install package in development mode
-pip install -e .
+# CI / lightweight environments (no C extensions, no GPU deps)
+pip install -r requirements-ci.txt
+
+# Development mode (editable install + dev tools)
+pip install -e ".[dev]"
 ```
 
 ### 4. Configure Environment Variables
@@ -52,15 +55,17 @@ cp .env.example .env
 nano .env  # or use your preferred editor
 ```
 
-**Required Environment Variables:**
+**Minimum required variables (app will not start without these):**
 
 ```bash
-# Security (REQUIRED)
-export CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-export CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
+# JWT signing key
+SECURITY_JWT_SECRET=<48-char random>   # python -c "import secrets; print(secrets.token_urlsafe(48))"
 
-# Application
-export APP_ENV=development
+# Config encryption key
+CONFIG_ENCRYPTION_KEY=<48-char random>
+
+# Application mode
+APP_ENV=development
 ```
 
 ### 5. Initialize the Application
@@ -76,65 +81,25 @@ python cli.py status
 ### 6. Run the Application
 
 ```bash
-# Run main application
-python main.py
+# Start the API server (development, auto-reload)
+uvicorn app:app --reload --port 8000
+# Swagger UI: http://localhost:8000/docs
 
-# Or start the API server
-python app.py
+# Or use the quickstart script for paper trading
+python quickstart.py
 ```
 
 ## Detailed Installation
 
-### Installing Individual Components
+All dependencies are declared in `requirements.txt` (full) and `requirements-ci.txt` (lightweight, no C extensions). Do not install packages individually — use the requirements files to ensure version compatibility.
 
-#### 1. Core Dependencies
+Optional broker-specific packages not included by default:
 
-```bash
-# Install core trading and financial libraries
-pip install yfinance pandas numpy ta-lib pandas-ta
-
-# Install machine learning libraries
-pip install scikit-learn tensorflow keras torch xgboost lightgbm catboost
-
-# Install web framework
-pip install fastapi uvicorn flask
-```
-
-#### 2. Broker Integrations
-
-```bash
-# Install broker APIs
-pip install alpaca-trade-api python-binance ccxt
-
-# For MetaTrader 5
-pip install MetaTrader5
-
-# For Interactive Brokers
-pip install ibapi
-```
-
-#### 3. Database
-
-```bash
-# Install database drivers
-pip install sqlalchemy pymongo redis
-
-# For PostgreSQL
-pip install psycopg2-binary
-
-# For MySQL
-pip install pymysql
-```
-
-#### 4. Additional Services
-
-```bash
-# Notifications
-pip install python-telegram-bot discord.py twilio
-
-# Utilities
-pip install python-dotenv loguru pyyaml
-```
+| Broker | Package | Install |
+|---|---|---|
+| MetaTrader 5 | `MetaTrader5` | `pip install MetaTrader5` |
+| Interactive Brokers | `ib_insync` | `pip install ib_insync` |
+| Binance / CCXT | `ccxt` | `pip install ccxt` |
 
 ### Optional: Install Redis
 
@@ -236,7 +201,7 @@ BINANCE_API_SECRET=your_api_secret
 
 ```bash
 # Check Python version
-python --version  # Should be 3.8+
+python --version  # Should be 3.10+
 
 # Check pip version
 pip --version
@@ -275,29 +240,26 @@ python cli.py status
 ### Development Mode
 
 ```bash
-# Run main application
-python main.py --env development
-
-# Run API server with auto-reload
-python app.py
+# API server with auto-reload
+uvicorn app:app --reload --port 8000
 ```
 
 Access API documentation at:
-- Swagger UI: http://localhost:5000/docs
-- ReDoc: http://localhost:5000/redoc
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ### Production Mode
 
 ```bash
 # Set environment variables
 export APP_ENV=production
-export CONFIG_ENCRYPTION_KEY=your_production_key
-export CONFIG_SALT=your_production_salt
+export SECURITY_JWT_SECRET=<your-secret>
+export CONFIG_ENCRYPTION_KEY=<your-key>
 
-# Run with production settings
-python main.py --env production
+# Run with Gunicorn (recommended for production)
+gunicorn app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
-# Or use systemd service (see DEPLOYMENT.md)
+# Or use the systemd service (see DEPLOYMENT.md)
 ```
 
 ## Troubleshooting
@@ -342,9 +304,11 @@ chmod 755 logs data credentials
 ### Getting Help
 
 1. Check documentation:
-   - [README.md](./README.md) - Overview
-   - [SECURITY.md](./SECURITY.md) - Security configuration
-   - [DEBUGGING.md](./DEBUGGING.md) - Known issues and fixes
+   - [README.md](./README.md) — Overview and quick start
+   - [SETUP_GUIDE.md](./SETUP_GUIDE.md) — Detailed environment configuration
+   - [SECURITY.md](./SECURITY.md) — Security configuration and hardening
+   - [DEBUGGING.md](./DEBUGGING.md) — Known issues and fixes
+   - [DEPLOYMENT.md](./DEPLOYMENT.md) — Production deployment guide
 
 2. Check logs:
    ```bash

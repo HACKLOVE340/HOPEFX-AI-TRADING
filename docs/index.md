@@ -9,12 +9,12 @@ Automated strategies, real-time signals, and institutional-grade risk management
 
 HOPEFX is a self-hosted algorithmic trading framework that combines:
 
-- **Machine learning** — LSTM, XGBoost, and Random Forest models trained on OHLCV + macro data (DXY, US 10Y yield, CPI)
-- **Strategy engine** — 9 built-in strategies (MA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, EMA, mean reversion, breakout, stochastic)
-- **Risk management** — per-trade position sizing, daily loss limits, max drawdown circuit breakers, kill switch
-- **Broker integration** — OANDA live and practice accounts via REST API
-- **Strategy marketplace** — publish and subscribe to community strategies
-- **Multi-channel alerts** — Discord, Slack, Telegram, email
+- **Machine learning** — XGBoost stacking ensemble (176 features, 66.4% OOS accuracy, p=0.0000) with incremental online learning (SGD + EWC, hourly updates)
+- **Strategy engine** — 10 built-in strategies (MA crossover, EMA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, mean reversion, breakout, stochastic, Strategy Brain)
+- **Risk management** — per-trade position sizing, CVaR gate, daily loss limits, max drawdown circuit breakers, kill switch, prop-firm compliance mode
+- **Broker integration** — OANDA (practice + live), Interactive Brokers, paper trading simulator, FIX 4.4 adapter
+- **Multi-symbol backtesting** — walk-forward validation across XAU/USD, BTC/USD, ETH/USD; N=628 trades confirmed (Sharpe gate PASSED)
+- **Multi-channel alerts** — Discord, Telegram, email, Sentry
 
 ---
 
@@ -34,26 +34,34 @@ HOPEFX is a self-hosted algorithmic trading framework that combines:
 ## Architecture overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     FastAPI Server                       │
-│  /api/backtest  /api/macro  /api/payments  /status  /   │
-└────────────────────────┬────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        FastAPI Server                        │
+│   REST API · WebSocket · GraphQL · /docs · /api/signals      │
+└────────────────────────┬─────────────────────────────────────┘
                          │
          ┌───────────────┼───────────────┐
          ▼               ▼               ▼
-   ┌──────────┐   ┌──────────┐   ┌──────────────┐
-   │  ML/AI   │   │  Brain   │   │  Risk Mgr    │
-   │ Training │   │ (HOPEFXBrain)│ (position    │
-   │ Pipeline │   │ Decision │   │  sizing,     │
-   │          │   │ Engine   │   │  drawdown)   │
-   └──────────┘   └──────────┘   └──────────────┘
-         │               │               │
-         └───────────────┼───────────────┘
-                         ▼
-                  ┌──────────────┐
-                  │    Broker    │
-                  │ OANDA / Paper│
-                  └──────────────┘
+   ┌──────────┐   ┌──────────────┐  ┌──────────────┐
+   │  ML/AI   │   │  HOPEFXBrain │  │  Risk Engine │
+   │ advanced │   │  Signal +    │  │  CVaR gate   │
+   │ _oos.pkl │   │  Regime      │  │  Kill switch │
+   │ 176 feat │   │  Decision    │  │  Drawdown    │
+   └────┬─────┘   └──────┬───────┘  └──────┬───────┘
+        │                │                  │
+   ┌────▼─────┐          └──────────────────┘
+   │ Online   │                  │
+   │ Learner  │                  ▼
+   │ SGD+EWC  │         ┌──────────────────┐
+   │ hourly   │         │  Execution Engine│
+   └──────────┘         │  Smart Router    │
+                        │  OANDA · IBKR    │
+                        │  Paper · FIX 4.4 │
+                        └────────┬─────────┘
+                                 │
+                  ┌──────────────▼──────────────┐
+                  │      Data & Persistence      │
+                  │  PostgreSQL · Redis · Macro  │
+                  └──────────────────────────────┘
 ```
 
 ---
@@ -63,11 +71,11 @@ HOPEFX is a self-hosted algorithmic trading framework that combines:
 | Component | Minimum | Recommended |
 |---|---|---|
 | Python | 3.10 | 3.12 |
-| RAM | 2 GB | 8 GB |
+| RAM | 4 GB | 8 GB |
 | CPU | 2 cores | 4+ cores |
-| Storage | 5 GB | 20 GB |
-| Redis | Optional | Recommended |
-| PostgreSQL | Optional | Recommended |
+| Storage | 10 GB | 20 GB |
+| Redis 7+ | Optional | Recommended |
+| PostgreSQL 16+ | Optional | Recommended |
 
 ---
 

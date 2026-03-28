@@ -170,20 +170,44 @@ See `helm/hopefx/values.yaml` for all configurable parameters.
 
 ## 8. ML model
 
-The production model (`ml/saved_models/advanced_oos.pkl`) is included in the repository.
+The production model (`ml/saved_models/advanced_oos.pkl`) is included in the repository — 176 features, 66.4% OOS accuracy (p=0.0000, N=1,260 bars), validated 2026-03-28.
 
-To retrain from scratch (requires 50 years of XAUUSD data):
+To retrain from scratch:
 
 ```bash
+# Smoke test (~30 s)
+python ml/train_advanced.py --smoke
+
+# Full production retrain (50 years, 3-year OOS)
 python ml/train_advanced.py --years 50 --oos-years 3
+
+# Multi-symbol backtest (XAU + BTC + ETH)
+python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
 To verify the model is loaded correctly:
 
 ```bash
 curl http://localhost:8000/api/ml/accuracy
-# {"model_id":"advanced_oos","accuracy":0.68,"..."}
+# {"model_id":"advanced_oos","accuracy":0.664,"oos_n":1260,"gate_passed":true,...}
 ```
+
+## 9. Online learning (optional)
+
+Enable incremental model updates that keep the model current without a full retrain:
+
+```env
+# In .env
+ML_HOURLY_ENABLED=true
+ML_SYMBOLS=XAU_USD
+ONLINE_LEARNER_PERSIST=true
+ONLINE_LEARNER_DIR=ml/saved_models
+```
+
+When enabled:
+- **Every hour:** `SklearnOnlineLearner` receives the last 24 bars and calls `partial_fit()`.
+- **Daily at 00:05 UTC:** EWC regime-adaptation loop adjusts model plasticity based on detected market regime (volatile / ranging / trending).
+- Learner state is persisted to `ml/saved_models/online_learner_{symbol}.pkl` and reloaded at startup.
 
 ---
 
