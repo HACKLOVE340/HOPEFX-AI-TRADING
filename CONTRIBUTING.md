@@ -2,6 +2,14 @@
 
 Thank you for your interest in contributing to the HOPEFX AI Trading Framework!
 
+## Contributor License Agreement
+
+Before your first pull request can be merged, you must agree to the [Contributor License Agreement (CLA)](./CLA.md). The CLA enables the project's dual-license model (AGPL-3.0 open source + commercial). To sign, include the following statement in your first PR description or comment:
+
+> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
+
+See [CLA.md](./CLA.md) for full terms and [LICENSE-COMMERCIAL.md](./LICENSE-COMMERCIAL.md) for the commercial licensing model.
+
 ## How to Contribute
 
 ### Reporting Issues
