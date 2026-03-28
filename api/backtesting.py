@@ -7,9 +7,11 @@
 Backtesting REST API
 
 Endpoints:
-  POST /api/backtest/run     — run a backtest and return results
-  GET  /api/backtest/results — list saved backtest results
-  GET  /api/backtest/strategies — list available strategies for backtesting
+  POST /api/backtest/run            — run a single-symbol backtest
+  GET  /api/backtest/results        — list saved backtest results
+  GET  /api/backtest/strategies     — list available strategies
+  POST /api/backtest/multi-symbol   — run multi-symbol backtest via multi_symbol_backtest.py
+  GET  /api/backtest/multi-symbol/latest — return the most recent multi-symbol report
 """
 
 from __future__ import annotations
@@ -428,6 +430,156 @@ async def download_pdf_report(
 
 
 # ── PDF builder ───────────────────────────────────────────────────────────────
+
+
+# ── Multi-symbol backtest endpoints ──────────────────────────────────────────
+
+
+class MultiSymbolBacktestRequest(BaseModel):
+    years: int = Field(10, ge=1, le=50, description="Years of history to fetch")
+    oos_frac: float = Field(0.3, ge=0.1, le=0.5, description="OOS fraction")
+    target_n: int = Field(600, ge=100, description="Minimum N trades for Sharpe gate")
+    extended: bool = Field(
+        False,
+        description=(
+            "Use 7-symbol set (XAU+BTC+ETH+EUR/USD+GBP/USD+Silver+Oil) "
+            "targeting N>919 for SE≤0.10. Default uses 3-symbol set."
+        ),
+    )
+    smoke: bool = Field(False, description="Fast smoke run (3 years, for CI/testing)")
+
+
+class MultiSymbolBacktestResponse(BaseModel):
+    run_id: str
+    status: str
+    run_at: str
+    years: int
+    oos_frac: float
+    extended: bool
+    n_symbols: int
+    pooled_n_trades: int
+    pooled_sharpe: float
+    pooled_sharpe_se: float
+    sharpe_gate_passed: bool
+    sharpe_credible: bool
+    message: str
+    report_path: str
+
+
+@router.post(
+    "/multi-symbol",
+    response_model=MultiSymbolBacktestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Run multi-symbol backtest",
+)
+async def run_multi_symbol_backtest(
+    req: MultiSymbolBacktestRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Run the multi-symbol backtest engine and return pooled results.
+
+    Delegates to `backtest/multi_symbol_backtest.py`. Runs synchronously in a
+    thread-pool executor so the event loop is not blocked.
+
+    - Default (extended=false): XAU/USD + BTC/USD + ETH/USD, target N≥600
+    - Extended (extended=true): 7 symbols, target N>919, SE≤0.10 gate
+    - Smoke (smoke=true): 3-year fast run for CI/testing
+
+    Results are saved to `backtest/results/multi_symbol_report[_extended].json`.
+    """
+    import asyncio
+    import functools
+
+    try:
+        from backtest.multi_symbol_backtest import run_backtest
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"multi_symbol_backtest module unavailable: {exc}",
+        )
+
+    loop = asyncio.get_event_loop()
+    try:
+        report = await loop.run_in_executor(
+            None,
+            functools.partial(
+                run_backtest,
+                years=req.years,
+                oos_frac=req.oos_frac,
+                target_n=req.target_n,
+                smoke=req.smoke,
+                extended=req.extended,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("Multi-symbol backtest failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}")
+
+    pooled = report.get("pooled", {})
+    report_filename = (
+        "multi_symbol_report_extended.json"
+        if req.extended
+        else "multi_symbol_report.json"
+    )
+
+    return MultiSymbolBacktestResponse(
+        run_id=str(uuid.uuid4()),
+        status="completed",
+        run_at=report.get("run_at", datetime.now(timezone.utc).isoformat()),
+        years=report.get("years", req.years),
+        oos_frac=report.get("oos_frac", req.oos_frac),
+        extended=report.get("extended", req.extended),
+        n_symbols=report.get("n_symbols", len(report.get("symbols", []))),
+        pooled_n_trades=pooled.get("n_total_trades", 0),
+        pooled_sharpe=pooled.get("pooled_sharpe", 0.0),
+        pooled_sharpe_se=pooled.get("pooled_sharpe_se", 0.0),
+        sharpe_gate_passed=pooled.get("sharpe_gate_passed", False),
+        sharpe_credible=pooled.get("sharpe_credible", False),
+        message=pooled.get("message", ""),
+        report_path=f"backtest/results/{report_filename}",
+    )
+
+
+@router.get(
+    "/multi-symbol/latest",
+    summary="Latest multi-symbol backtest report",
+)
+async def get_latest_multi_symbol_report(
+    extended: bool = False,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the most recent saved multi-symbol backtest report.
+
+    Pass `extended=true` to read the 7-symbol extended report.
+    Returns 404 if no report has been run yet.
+    """
+    import json
+    from pathlib import Path
+
+    filename = (
+        "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
+    )
+    report_path = Path("backtest/results") / filename
+
+    if not report_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No {'extended ' if extended else ''}multi-symbol report found. "
+                f"Run POST /api/backtest/multi-symbol{'?extended=true' if extended else ''} first."
+            ),
+        )
+
+    try:
+        report = json.loads(report_path.read_text())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Could not read report: {exc}"
+        )
+
+    return report
 
 
 def _build_pdf(result: dict) -> bytes:
