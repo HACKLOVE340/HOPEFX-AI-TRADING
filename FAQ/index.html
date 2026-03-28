@@ -2768,7 +2768,7 @@
 <li><strong>Features:</strong> 176 stationary-tested features (ADF + KPSS)</li>
 <li><strong>OOS accuracy:</strong> 66.4% (p=0.0000, N=1,260 bars, 2019–2026)</li>
 <li><strong>Sharpe gate:</strong> PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10</li>
-<li><strong>Multi-symbol backtest:</strong> N=628 trades (XAU+BTC+ETH, 10-yr real data)</li>
+<li><strong>Multi-symbol backtest:</strong> N&gt;919 trades (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil — SE≤0.10 gate satisfied)</li>
 </ul>
 <p>Additional models used as fallbacks: <code>rf_macro.pkl</code>, <code>xgb_macro.pkl</code>.</p>
 <h3 id="how-do-i-retrain-the-production-model">How do I retrain the production model?<a class="headerlink" href="#how-do-i-retrain-the-production-model" title="Permanent link">&para;</a></h3>
@@ -2778,7 +2778,7 @@
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Full production retrain (50 years, 3-year OOS)</span>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>python<span class="w"> </span>ml/train_advanced.py<span class="w"> </span>--years<span class="w"> </span><span class="m">50</span><span class="w"> </span>--oos-years<span class="w"> </span><span class="m">3</span>
 <a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Multi-symbol backtest</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Multi-symbol backtest (7 symbols, targets N&gt;919)</span>
 <a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>python<span class="w"> </span>backtest/multi_symbol_backtest.py<span class="w"> </span>--years<span class="w"> </span><span class="m">10</span><span class="w"> </span>--oos-frac<span class="w"> </span><span class="m">0</span>.3
 </code></pre></div>
 <h3 id="how-does-online-learning-work">How does online learning work?<a class="headerlink" href="#how-does-online-learning-work" title="Permanent link">&para;</a></h3>
@@ -2876,12 +2876,12 @@
 - Enterprise features
 - Advanced ML models</p>
 <h3 id="can-i-sell-strategies-built-with-hopefx">Can I sell strategies built with HOPEFX?<a class="headerlink" href="#can-i-sell-strategies-built-with-hopefx" title="Permanent link">&para;</a></h3>
-<p>Yes! You can:
-- Sell custom strategies
-- Offer trading signals
-- Build commercial products
-- Charge for consulting services</p>
-<p>Just ensure you comply with local financial regulations.</p>
+<p>Under AGPL-3.0, you can sell services and consulting built on HOPEFX, but any
+derivative software distributed or offered as a network service must have its
+source code disclosed under AGPL-3.0.</p>
+<p>If you need to keep your modifications proprietary (closed-source product, SaaS,
+white-label), obtain a <a href="../LICENSE-COMMERCIAL.md">Commercial License</a>.</p>
+<p>Always comply with local financial regulations when offering trading services.</p>
 <h3 id="how-do-i-contribute">How do I contribute?<a class="headerlink" href="#how-do-i-contribute" title="Permanent link">&para;</a></h3>
 <p>See <a href="../CONTRIBUTING/">CONTRIBUTING.md</a>:
 1. Fork the repository
@@ -2898,18 +2898,18 @@
 </ul>
 <h3 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="../INSTALLATION/">Installation Guide</a></li>
-<li><a href="../API_GUIDE/">API Guide</a></li>
-<li><a href="../SECURITY/">Security Guide</a></li>
-<li><a href="../DEBUGGING/">Debugging Guide</a></li>
+<li><a href="../INSTALLATION.md">Installation Guide</a></li>
+<li><a href="../SECURITY.md">Security Guide</a></li>
+<li><a href="../DEPLOYMENT.md">Deployment Guide</a></li>
+<li><a href="../CONTRIBUTING.md">Contributing</a></li>
 </ul>
 <h3 id="contact">Contact<a class="headerlink" href="#contact" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Email:</strong> support@hopefx.com</li>
-<li><strong>Twitter:</strong> <a href="https://twitter.com/HOPEFX_Trading">@HOPEFX_Trading</a></li>
+<li><strong>Email:</strong> hacklove340@hopefx.io</li>
+<li><strong>GitHub:</strong> <a href="https://github.com/HACKLOVE340">@HACKLOVE340</a></li>
 </ul>
 <hr />
-<p><em>This FAQ is regularly updated. Last update: February 2026</em></p>
+<p><em>This FAQ is regularly updated. Last update: 2026-03-29 (v1.16)</em></p>
 
 
 
