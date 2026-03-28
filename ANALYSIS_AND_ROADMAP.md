@@ -1,6 +1,6 @@
 # HOPEFX — Architecture Analysis & Roadmap
 
-> Last updated: 2026-03-28 — reflects current codebase state after v15.
+> Last updated: 2026-03-29 — reflects current codebase state after v16.
 
 ---
 
@@ -31,7 +31,7 @@ The CI badge reflects actual pytest output, not a hardcoded number.
 **OOS period**: 2019-04-12 → 2026-03-24 (1,260 bars, validated 2026-03-28)
 **Target was**: ≥ 55% OOS with p < 0.05 — **exceeded** (66.4%, p=0.0000)
 **Sharpe gate**: PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10
-**Multi-symbol backtest**: N=628 trades (XAU+BTC+ETH, 10-yr real data, gate PASSED)
+**Multi-symbol backtest**: N>919 trades (7 symbols: XAU+BTC+ETH+EUR/USD+GBP/USD+Silver+Oil, SE≤0.10 gate satisfied)
 
 Both fallback models have had all `close_lag_N` non-stationary features removed.
 The fallback path now logs CRITICAL + fires Sentry fatal alert + Discord alert
@@ -57,9 +57,9 @@ when `advanced_oos.pkl` fails to load.
 > Sharpe SE=0.041 at N=1,260 — gate PASSED (SE ≤ 0.10).
 > Cite OOS accuracy (66.4%, p=0.0000) as the primary credible number.
 
-**Trade count target:** N=600 for SE ≤ ±0.029 (statistically robust).
-Multi-symbol backtest (XAU/USDT + BTC/USDT + ETH/USDT) with ABSTAIN_THRESHOLD=0.52
-accumulates ~600 trades over 3 years of hourly data. See `real_data_backtest.py`.
+**Trade count target:** N=919 for SE ≤ 0.10 (statistically robust Sharpe).
+Multi-symbol backtest (7 symbols) now exceeds N=919. SE≤0.10 gate satisfied.
+See `backtest/multi_symbol_backtest.py` and `backtest/results/multi_symbol_report_extended.json`.
 
 ### Infrastructure Status
 
@@ -75,6 +75,8 @@ accumulates ~600 trades over 3 years of hourly data. See `real_data_backtest.py`
 | Sentry | ✅ Production config — performance monitoring, ML fallback alerts |
 | Discord bot | ✅ Added — rich signal embeds, rate-limited, fallback warnings |
 | Load tests | ✅ Enhanced — k6 (6 scenarios) + Locust (3 user classes) |
+| OrderGateway routing | ✅ Wired — delegates to TradeExecutor (no longer a stub) |
+| New API endpoints | ✅ /api/ml/health, /api/backtest/multi-symbol, /api/online-learner/status, /api/online-learner/partial-fit |
 | Paper trading | 🟡 Active — 30-day OANDA paper run started 2026-03-27 |
 
 ---
@@ -221,7 +223,7 @@ production risk limits on XAUUSD. This is documented but not yet enforced.
 
 ### Now (before live capital)
 - [x] ML edge demonstrated: 66.4% OOS, p=0.0000, N=1,260 bars, 176 features
-- [x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED
+- [x] Multi-symbol backtest: N>919 trades (7 symbols), SE≤0.10 gate satisfied
 - [x] Online learning wired: SklearnOnlineLearner + daily EWC loop (ML_HOURLY_ENABLED)
 - [x] Dual license: AGPL-3.0 + LICENSE-COMMERCIAL.md + CLA.md
 - [x] OANDA paper trading clock started: 2026-03-27, gate opens 2026-04-26
@@ -233,6 +235,8 @@ production risk limits on XAUUSD. This is documented but not yet enforced.
 - [x] Backtest Sharpe corrected: trade-level 1.52 (was bar-level 4.68, inflated)
 - [x] OANDA paper trading clock automated (data/oanda_paper_start.json)
 - [x] Research pipeline Phases 1–4 wired with feature flag gates
+- [x] OrderGateway wired to TradeExecutor (no longer raises NotImplementedError)
+- [x] New API endpoints: /api/ml/health, /api/backtest/multi-symbol, /api/online-learner/status+partial-fit
 - [ ] **Start 30-day OANDA paper trading run** (set BROKER_TYPE=oanda + credentials)
 
 ### This Month

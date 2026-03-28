@@ -181,7 +181,7 @@ python ml/train_advanced.py --smoke
 # Full production retrain (50 years, 3-year OOS)
 python ml/train_advanced.py --years 50 --oos-years 3
 
-# Multi-symbol backtest (XAU + BTC + ETH)
+# Multi-symbol backtest (7 symbols — XAU, BTC, ETH, EUR/USD, GBP/USD, Silver, Oil)
 python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 ```
 
@@ -190,6 +190,9 @@ To verify the model is loaded correctly:
 ```bash
 curl http://localhost:8000/api/ml/accuracy
 # {"model_id":"advanced_oos","accuracy":0.664,"oos_n":1260,"gate_passed":true,...}
+
+curl http://localhost:8000/api/ml/health
+# {"status":"ok","feature_count":176,"model_loaded":true,...}
 ```
 
 ## 9. Online learning (optional)
