@@ -199,9 +199,9 @@ describe('Login page', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
-  it('renders username field', async () => {
+  it('renders email field', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/username or email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
   });
 
   it('renders password field', async () => {

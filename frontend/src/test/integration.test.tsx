@@ -11,6 +11,17 @@ import React from 'react';
 import { useStore } from '../store';
 import type { PriceTick, Position, Signal, AccountMetrics } from '../store';
 
+/** Build a minimal valid JWT with exp 1 hour in the future. */
+function makeMockJwt(overrides: Record<string, unknown> = {}): string {
+  const header  = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '');
+  const payload = btoa(JSON.stringify({
+    sub: '1', type: 'access',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...overrides,
+  })).replace(/=/g, '');
+  return `${header}.${payload}.sig`;
+}
+
 vi.mock('../hooks/useWebSocket', () => ({
   useWebSocket: vi.fn(() => ({ send: vi.fn() })),
 }));
@@ -208,6 +219,8 @@ describe('auth flow integration', () => {
   });
 
   it('AuthGuard allows authenticated access', async () => {
+    const mockUser = { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' as const };
+    useStore.getState().setAuth(makeMockJwt(), mockUser);
     const AuthGuard = (await import('../components/AuthGuard')).default;
     render(
       <MemoryRouter>
@@ -221,6 +234,8 @@ describe('auth flow integration', () => {
   });
 
   it('clearAuth causes re-render to login', async () => {
+    const mockUser = { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' as const };
+    useStore.getState().setAuth(makeMockJwt(), mockUser);
     const AuthGuard = (await import('../components/AuthGuard')).default;
     const { rerender } = render(
       <MemoryRouter>
