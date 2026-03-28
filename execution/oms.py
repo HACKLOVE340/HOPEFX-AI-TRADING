@@ -145,7 +145,36 @@ class OrderLifecycleManager:
         return order
 
     def submit_order(self, order_id: str) -> bool:
-        """Submit order to market"""
+        """Submit order to market.
+
+        Kill switch is checked first — before any state mutation — so that
+        orders submitted directly to the OMS (bypassing the API route layer)
+        are also blocked when trading is halted.  This provides defense-in-depth
+        beyond the API-level kill switch check.
+        """
+        # ── Kill switch: defense-in-depth gate ───────────────────────────────
+        # Check unconditionally so direct OMS callers cannot bypass the halt.
+        try:
+            from kill_switch import KillSwitch as _KillSwitch
+
+            _ks = _KillSwitch()
+            if _ks.is_active():
+                logger.critical(
+                    "OMS.submit_order BLOCKED by kill switch (order=%s reason=%r)",
+                    order_id,
+                    _ks.reason,
+                )
+                return False
+        except Exception as _ks_exc:
+            # Kill switch check itself failed — fail closed: block the order.
+            logger.critical(
+                "OMS.submit_order: kill switch check raised %s — blocking order %s",
+                _ks_exc,
+                order_id,
+            )
+            return False
+        # ─────────────────────────────────────────────────────────────────────
+
         order = self.orders.get(order_id)
         if not order:
             return False
