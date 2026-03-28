@@ -75,8 +75,39 @@ def _load_persisted_risk_settings() -> Dict[str, Any]:
 
 
 def apply_persisted_risk_settings() -> None:
-    """Apply risk settings persisted from a previous run (placeholder)."""
-    pass
+    """
+    Load risk settings persisted from a previous run and apply them to the
+    in-memory store and, if available, the live RiskManager instance.
+
+    Called once at startup by app.py after app_state is initialised.
+    """
+    global _risk_settings
+    persisted = _load_persisted_risk_settings()
+    if not persisted:
+        logger.debug("apply_persisted_risk_settings: no persisted settings found")
+        return
+
+    _risk_settings.update(persisted)
+    logger.info(
+        "apply_persisted_risk_settings: restored %d keys from %s",
+        len(persisted),
+        _RISK_SETTINGS_FILE,
+    )
+
+    # Push into the live RiskManager if it is already initialised.
+    try:
+        if app_state is not None:
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is not None:
+                for key, value in persisted.items():
+                    if hasattr(rm, key):
+                        setattr(rm, key, value)
+                        logger.debug(
+                            "apply_persisted_risk_settings: set risk_manager.%s = %s",
+                            key, value,
+                        )
+    except Exception as exc:
+        logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
 
 
 class AdminStatusResponse(BaseModel):
@@ -101,13 +132,65 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     """Full system status. Requires: role >= 'admin'."""
     if not app_state:
         raise HTTPException(status_code=503, detail="App not initialized")
-    return {
-        "components": {
-            "config": app_state.config is not None,
-            "database": app_state.db_engine is not None,
-            "cache": app_state.cache is not None,
-        },
+
+    components: Dict[str, bool] = {
+        "config": app_state.config is not None,
+        "database": app_state.db_engine is not None,
+        "cache": app_state.cache is not None,
     }
+
+    # Broker
+    try:
+        broker = getattr(app_state, "broker", None)
+        components["broker"] = broker is not None
+    except Exception:
+        components["broker"] = False
+
+    # Risk manager
+    try:
+        rm = getattr(app_state, "risk_manager", None)
+        components["risk_manager"] = rm is not None
+    except Exception:
+        components["risk_manager"] = False
+
+    # Brain / strategy brain
+    try:
+        brain = getattr(app_state, "strategy_brain", None) or getattr(app_state, "brain", None)
+        components["brain"] = brain is not None
+    except Exception:
+        components["brain"] = False
+
+    # Signal engine
+    try:
+        from core.signal_engine import get_signal_engine_status
+        se_status = get_signal_engine_status()
+        components["signal_engine"] = se_status.get("ml_available", False)
+    except Exception:
+        components["signal_engine"] = False
+
+    # Hourly trainer
+    try:
+        ht = getattr(app_state, "hourly_trainer", None)
+        components["hourly_trainer"] = ht is not None
+    except Exception:
+        components["hourly_trainer"] = False
+
+    # Online learner (Phase 3)
+    try:
+        from research.pipeline.online_learning import list_online_learners
+        learners = list_online_learners()
+        components["online_learner"] = len(learners) > 0
+    except Exception:
+        components["online_learner"] = False
+
+    # Data feed engine
+    try:
+        df_engine = getattr(app_state, "data_engine", None)
+        components["data_feed"] = df_engine is not None and getattr(df_engine, "is_running", False)
+    except Exception:
+        components["data_feed"] = False
+
+    return {"components": components}
 
 
 @router.get("/logs")
@@ -367,11 +450,72 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
 @router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
+    trading_stats: Dict[str, Any] = {"total_trades": 0, "open_positions": 0, "daily_pnl": 0.0}
+    risk_status: Dict[str, Any] = {"within_limits": True}
+    module_status: Dict[str, Any] = {"strategies": False, "brokers": False, "signal_engine": False}
+
+    # Live broker stats
+    try:
+        if app_state is not None:
+            broker = getattr(app_state, "broker", None)
+            if broker is not None:
+                module_status["brokers"] = True
+                # Positions count (sync-safe: use cached value if available)
+                pos = getattr(broker, "_cached_positions", None)
+                if pos is not None:
+                    trading_stats["open_positions"] = len(pos)
+    except Exception as exc:
+        logger.debug("dashboard-data broker stats failed: %s", exc)
+
+    # Risk manager stats
+    try:
+        if app_state is not None:
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is not None:
+                rm_status = rm.get_status() if hasattr(rm, "get_status") else {}
+                risk_status = {
+                    "within_limits": not rm_status.get("trading_halted", False),
+                    "trading_halted": rm_status.get("trading_halted", False),
+                    "halt_reason": rm_status.get("halt_reason"),
+                    "daily_pnl": rm_status.get("daily_pnl", 0.0),
+                    "drawdown_pct": rm_status.get("drawdown_pct", 0.0),
+                    "kill_switch": rm_status.get("kill_switch_active", False),
+                }
+                trading_stats["daily_pnl"] = rm_status.get("daily_pnl", 0.0)
+    except Exception as exc:
+        logger.debug("dashboard-data risk stats failed: %s", exc)
+
+    # Trade logger stats
+    try:
+        from core.trade_logger import TradeLogger
+        tl = TradeLogger.get_trade_logger()
+        tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
+        trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
+    except Exception as exc:
+        logger.debug("dashboard-data trade logger stats failed: %s", exc)
+
+    # Signal engine
+    try:
+        from core.signal_engine import get_signal_engine_status
+        se = get_signal_engine_status()
+        module_status["signal_engine"] = se.get("ml_available", False)
+        module_status["strategies"] = True
+    except Exception:
+        pass
+
+    # Paper trading gate fill count
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+        gate = get_gate()
+        trading_stats["paper_fill_count"] = gate.fill_count
+    except Exception:
+        pass
+
     return {
-        "system_health": {"status": "ok"},
-        "trading_stats": {"total_trades": 0, "open_positions": 0},
-        "risk_status": {"within_limits": True},
-        "module_status": {"strategies": True, "brokers": True},
+        "system_health": {"status": "ok", "uptime": time.time() - _start_time},
+        "trading_stats": trading_stats,
+        "risk_status": risk_status,
+        "module_status": module_status,
     }
 
 
@@ -380,12 +524,25 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 )
 def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """Prometheus-style system metrics. Requires: role >= 'admin'."""
+    import os as _os
     uptime_secs = time.time() - _start_time
+    memory_mb: float = 0.0
+    cpu_pct: float = 0.0
+
+    try:
+        import psutil
+        proc = psutil.Process(_os.getpid())
+        memory_mb = round(proc.memory_info().rss / 1_048_576, 2)
+        cpu_pct = round(proc.cpu_percent(interval=0.1), 2)
+    except Exception as exc:
+        logger.debug("system-metrics psutil failed: %s", exc)
+
     return {
         "uptime": uptime_secs,
         "uptime_seconds": uptime_secs,
-        "memory_mb": 0,
-        "cpu_pct": 0,
+        "memory_mb": memory_mb,
+        "cpu_pct": cpu_pct,
+        "pid": _os.getpid(),
     }
 
 
