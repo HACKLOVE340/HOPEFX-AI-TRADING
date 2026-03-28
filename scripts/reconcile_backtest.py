@@ -203,11 +203,12 @@ def generate_signals(
     raw_df: pd.DataFrame,
     model,
     scaler,
+    confidence_threshold: float = CONFIDENCE_THRESHOLD,
 ) -> pd.DataFrame:
     """
     Generate BUY/SELL signals using the model, matching OOS evaluation logic:
     - Abstain on bars where |return| < MIN_MOVE_ATR * ATR(14)
-    - Signal only when predict_proba >= CONFIDENCE_THRESHOLD
+    - Signal only when predict_proba >= confidence_threshold
     """
     atr = _atr(raw_df, ATR_PERIOD).reindex(feat_df.index)
     returns = raw_df["close"].pct_change().reindex(feat_df.index)
@@ -257,8 +258,8 @@ def generate_signals(
     signals["tradeable"] = tradeable.values
     signals["signal"] = 0  # 0=hold, 1=buy, -1=sell
 
-    buy_mask = tradeable & (prob_up >= CONFIDENCE_THRESHOLD)
-    sell_mask = tradeable & (prob_up <= (1 - CONFIDENCE_THRESHOLD))
+    buy_mask = tradeable & (prob_up >= confidence_threshold)
+    sell_mask = tradeable & (prob_up <= (1 - confidence_threshold))
     signals.loc[buy_mask, "signal"] = 1
     signals.loc[sell_mask, "signal"] = -1
 
@@ -279,13 +280,21 @@ def generate_signals(
 def run_backtest(
     signals: pd.DataFrame,
     prices: pd.Series,
+    hold_bars: int = HOLD_BARS,
+    round_trip_cost: float = ROUND_TRIP_COST_USD,
 ) -> Tuple[List[Dict], pd.Series]:
     """
-    Simulate trades using fixed HOLD_BARS exit.
+    Simulate trades using fixed hold_bars exit.
 
-    Returns:
-        trades: list of trade dicts
-        equity: daily equity curve
+    Parameters
+    ----------
+    hold_bars       : Exit after this many bars (default: HOLD_BARS=5)
+    round_trip_cost : Round-trip cost in USD per trade (default: $70)
+
+    Returns
+    -------
+    trades : list of trade dicts
+    equity : daily equity curve
     """
     trades: List[Dict] = []
     equity = pd.Series(INITIAL_BALANCE, index=prices.index, dtype=float)
@@ -301,11 +310,11 @@ def run_backtest(
         # Check exit first
         if open_trade is not None:
             bars_held = i - open_trade["entry_bar"]
-            if bars_held >= HOLD_BARS:
+            if bars_held >= hold_bars:
                 exit_price = price_arr[i]
                 direction = open_trade["direction"]
                 pnl_points = (exit_price - open_trade["entry_price"]) * direction
-                pnl_usd = pnl_points * UNIT_VALUE_USD - ROUND_TRIP_COST_USD
+                pnl_usd = pnl_points * UNIT_VALUE_USD - round_trip_cost
                 balance += pnl_usd
                 open_trade["exit_price"] = exit_price
                 open_trade["exit_date"] = str(idx[i].date())
@@ -426,6 +435,31 @@ def _parse_args() -> argparse.Namespace:
         default=200,
         help="Monte Carlo simulation runs (default: 200)",
     )
+    p.add_argument(
+        "--hold-bars",
+        type=int,
+        default=HOLD_BARS,
+        help=(
+            f"Exit after N bars (default: {HOLD_BARS}). "
+            "Set to 1 to match the 1-bar training horizon. "
+            "Root cause investigation shows 1-bar hold has better accuracy/P&L alignment."
+        ),
+    )
+    p.add_argument(
+        "--threshold",
+        type=float,
+        default=CONFIDENCE_THRESHOLD,
+        help=(
+            f"Minimum model confidence to take a trade (default: {CONFIDENCE_THRESHOLD}). "
+            "Investigation shows 0.65+ filters to higher-conviction signals."
+        ),
+    )
+    p.add_argument(
+        "--cost",
+        type=float,
+        default=ROUND_TRIP_COST_USD,
+        help=f"Round-trip cost in USD (default: {ROUND_TRIP_COST_USD})",
+    )
     return p.parse_args()
 
 
@@ -448,11 +482,30 @@ def main() -> int:
     logger.info("Loading model …")
     model, scaler = load_model()
 
+    # Apply CLI overrides — allows investigation sweeps without code changes
+    effective_threshold = args.threshold
+    effective_hold = args.hold_bars
+    effective_cost = args.cost
+
+    if effective_threshold != CONFIDENCE_THRESHOLD:
+        logger.info("Threshold override: %.2f (default %.2f)", effective_threshold, CONFIDENCE_THRESHOLD)
+    if effective_hold != HOLD_BARS:
+        logger.info("Hold bars override: %d (default %d)", effective_hold, HOLD_BARS)
+    if effective_cost != ROUND_TRIP_COST_USD:
+        logger.info("Cost override: $%.0f (default $%.0f)", effective_cost, ROUND_TRIP_COST_USD)
+
     logger.info("Generating signals …")
-    signals = generate_signals(feat_df, raw_aligned, model, scaler)
+    signals = generate_signals(
+        feat_df, raw_aligned, model, scaler,
+        confidence_threshold=effective_threshold,
+    )
 
     logger.info("Running backtest …")
-    trades, equity = run_backtest(signals, raw_aligned["close"])
+    trades, equity = run_backtest(
+        signals, raw_aligned["close"],
+        hold_bars=effective_hold,
+        round_trip_cost=effective_cost,
+    )
 
     logger.info("Computing metrics (MC runs=%d) …", args.mc_runs)
     metrics = compute_metrics(trades, equity, mc_runs=args.mc_runs)
@@ -464,9 +517,9 @@ def main() -> int:
         "timeframe": "1d",
         "model": "advanced_oos.pkl",
         "strategy": "model_signal_fixed_hold",
-        "confidence_threshold": CONFIDENCE_THRESHOLD,
-        "hold_bars": HOLD_BARS,
-        "round_trip_cost_usd": ROUND_TRIP_COST_USD,
+        "confidence_threshold": effective_threshold,
+        "hold_bars": effective_hold,
+        "round_trip_cost_usd": effective_cost,
         "start": str(raw_aligned.index[0].date()),
         "end": str(raw_aligned.index[-1].date()),
         "total_bars": len(raw_aligned),

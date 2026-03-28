@@ -1,0 +1,58 @@
+========================================================================
+RECONCILED BACKTEST ROOT CAUSE INVESTIGATION
+Generated: 2026-03-28T18:01:26.285566+00:00
+========================================================================
+
+BASELINE (threshold=0.55, hold=5, cost=$70)
+  Trades: 181
+  Win rate: 3.3%
+  Sharpe: -24.6120
+  Return: -23.26%
+
+────────────────────────────────────────────────────────────────────────
+INVESTIGATION 1: Confidence Threshold Sweep
+────────────────────────────────────────────────────────────────────────
+ Threshold   N Trades   Win Rate     Sharpe    Return%
+      0.55        181       3.3%   -24.6120    -23.26%
+      0.58        137       3.6%   -22.5532    -17.34%
+      0.60        117       3.4%   -21.6072    -14.65%
+      0.65         48       4.2%   -17.3781     -5.81%
+      0.70         23       8.7%   -10.9978     -2.29%
+      0.75          9      11.1%    -4.9036     -0.58%
+
+────────────────────────────────────────────────────────────────────────
+INVESTIGATION 2: Hold Period Sweep (cost=$70)
+────────────────────────────────────────────────────────────────────────
+ Hold Bars   N Trades   Win Rate     Sharpe    Return%
+         1        181       0.5%   -78.2435    -14.79%
+         2        181       1.7%   -44.7238    -16.91%
+         3        181       2.8%   -33.5506    -19.02%
+         5        181       3.3%   -24.6120    -23.26%
+        10        181       5.0%   -17.9080    -33.84%
+
+────────────────────────────────────────────────────────────────────────
+INVESTIGATION 3: Accuracy vs P&L Correlation
+────────────────────────────────────────────────────────────────────────
+  Direction-P&L correlation: 0.0266
+  Direction-P&L match rate:  0.3315
+  N trades analysed:         181
+  Note: direction_pnl_match_rate is the fraction of trades where the model's predicted direction matches the P&L sign. If this is ~0.50 despite 66% OOS accuracy, the accuracy metric and trade P&L are measuring different things (e.g. accuracy measures 1-bar direction, P&L measures 5-bar cumulative return).
+
+────────────────────────────────────────────────────────────────────────
+INVESTIGATION 4: Cost Sensitivity
+────────────────────────────────────────────────────────────────────────
+    Cost $   Win Rate     Sharpe    Return%    Cost Drag
+         0      11.6%   -11.2041    -10.59% $         0
+        35       5.0%   -17.9080    -16.92% $     6,335
+        70       3.3%   -24.6120    -23.26% $    12,670
+       105       2.8%   -31.3159    -29.59% $    19,005
+       140       2.8%   -38.0199    -35.93% $    25,340
+
+────────────────────────────────────────────────────────────────────────
+DIAGNOSIS
+────────────────────────────────────────────────────────────────────────
+❌ THRESHOLD SWEEP: No confidence threshold produces a positive Sharpe. The model's directional accuracy does not translate to tradeable edge at any tested threshold with the current 5-bar hold strategy.
+⚠️  HOLD PERIOD: 10-bar hold improves Sharpe to -17.9080 but remains negative. Hold period is a contributing factor but not the sole cause.
+❌ ACCURACY/P&L DISCONNECT: Direction-P&L match rate = 33.1%. The model's predicted direction and actual trade P&L are nearly uncorrelated. The 66% OOS accuracy measures 1-bar direction; the 5-bar hold P&L measures something different. These two metrics are not comparable.
+❌ COST IS NOT THE SOLE BLOCKER: Even at $0 cost, Sharpe=-11.2041. The strategy has no gross edge — cost reduction alone will not fix it.
+========================================================================
