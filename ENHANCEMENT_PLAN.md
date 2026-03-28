@@ -1709,3 +1709,408 @@ spec:
 ```
 
 ---
+
+## 8. Risk & Compliance — Full Enhancement Catalogue
+
+### 8.1 — Greeks-Aware Position Sizing for Options Overlay
+
+**Why required:** If HOPEFX ever trades GLD options or GC futures options as a hedge,
+position sizing must account for delta, gamma, and vega. Even without options, the
+framework is needed for institutional white-label clients.
+
+**Files:** `analytics/options.py` (exists), `risk/position_sizing.py`, `ml/position_sizer.py`
+
+```python
+# risk/position_sizing.py — add Greeks-aware sizing:
+class GreeksAwarePositionSizer:
+    def size_with_greeks(self, signal_direction: str, confidence: float,
+                          portfolio_delta: float, max_delta: float = 0.5) -> float:
+        base_size = self._kelly_size(confidence)
+        if signal_direction == "long" and portfolio_delta > 0:
+            delta_penalty = min(1.0, portfolio_delta / max_delta)
+            base_size *= (1 - delta_penalty * 0.5)
+        elif signal_direction == "short" and portfolio_delta < 0:
+            delta_penalty = min(1.0, abs(portfolio_delta) / max_delta)
+            base_size *= (1 - delta_penalty * 0.5)
+        return max(0.0, base_size)
+```
+
+---
+
+### 8.2 — Stress Testing: XAUUSD Historical Scenarios
+
+**Why required:** `risk/stress_test.py` exists but runs generic scenarios. Institutional
+risk desks run XAUUSD-specific stress tests calibrated to real historical events.
+
+**Files:** `risk/stress_test.py`, `risk/manager.py`
+
+```python
+# risk/stress_test.py — add historical scenario library:
+XAUUSD_STRESS_SCENARIOS = {
+    "2008_financial_crisis": {"price_shock": -0.30, "vol_multiplier": 3.5, "duration_days": 90},
+    "2020_covid_crash":      {"price_shock": -0.12, "vol_multiplier": 4.0, "duration_days": 14},
+    "2022_rate_shock":       {"price_shock": -0.20, "vol_multiplier": 2.0, "duration_days": 365},
+    "1980_bubble_burst":     {"price_shock": -0.65, "vol_multiplier": 5.0, "duration_days": 730},
+    "geopolitical_spike":    {"price_shock": +0.15, "vol_multiplier": 3.0, "duration_days": 5},
+}
+```
+
+**Integration:** Run stress tests daily at startup. If any scenario shows > 20%
+drawdown on current positions, reduce position sizes by 50% and alert.
+
+---
+
+### 8.3 — Drawdown-Based Position Scaling
+
+**Why required:** Current kill switch is binary. Institutional systems use graduated
+position scaling — as drawdown increases, sizes decrease proportionally.
+
+**Files:** `risk/manager.py`, `risk/drawdown_tracker.py`, `ml/position_sizer.py`
+
+```python
+# risk/manager.py — graduated scaling table:
+DRAWDOWN_SCALE_TABLE = [
+    (0.00, 0.02, 1.00),   # 0-2% DD: full size
+    (0.02, 0.04, 0.75),   # 2-4% DD: 75% size
+    (0.04, 0.06, 0.50),   # 4-6% DD: 50% size
+    (0.06, 0.08, 0.25),   # 6-8% DD: 25% size
+    (0.08, 1.00, 0.00),   # >8% DD: kill switch
+]
+
+def get_position_scale(self, current_drawdown: float) -> float:
+    for dd_min, dd_max, scale in DRAWDOWN_SCALE_TABLE:
+        if dd_min <= current_drawdown < dd_max:
+            return scale
+    return 0.0
+```
+
+---
+
+### 8.4 — MiFID II Best Execution Reporting
+
+**Why required:** Any EU-regulated entity using HOPEFX must demonstrate best execution
+under MiFID II RTS 27/28. Required for institutional white-label clients.
+
+**Files:** `risk/compliance/mifid_reporter.py` (new), `execution/tca.py`, `api/admin.py`
+
+```python
+# risk/compliance/mifid_reporter.py (new)
+class MiFIDReporter:
+    def generate_rts27_report(self, period: str) -> dict:
+        fills = self._db.query_fills(period=period)
+        return {
+            "period": period,
+            "venue": "OANDA",
+            "instrument_class": "FX_SPOT",
+            "total_orders": len(fills),
+            "avg_execution_speed_ms": fills["latency_ms"].mean(),
+            "avg_slippage_bps": fills["slippage_bps"].mean(),
+            "fill_rate": fills["filled"].mean(),
+            "price_improvement_pct": (fills["fill_price"] < fills["signal_price"]).mean(),
+        }
+```
+
+---
+
+### 8.5 — Prop Firm Rule Engine (YAML-Driven)
+
+**Why required:** `brokers/prop_firms/` exists. Rules must be configurable without
+code changes — prop firms update rules frequently.
+
+**Files:** `brokers/prop_firms/`, `config/prop_firm_rules.yaml` (new)
+
+```yaml
+# config/prop_firm_rules.yaml
+ftmo:
+  max_daily_loss_pct: 0.05
+  max_total_loss_pct: 0.10
+  profit_target_pct: 0.10
+  max_position_size_lots: 10
+  news_trading_allowed: false
+  weekend_holding_allowed: false
+  instruments_allowed: ["XAUUSD", "EURUSD", "GBPUSD"]
+
+topstep:
+  max_daily_loss_pct: 0.03
+  max_total_loss_pct: 0.06
+  trailing_drawdown: true
+  max_contracts: 5
+```
+
+---
+
+## 9. Execution & OMS — Full Enhancement Catalogue
+
+### 9.1 — Smart Router: Latency-Aware Venue Selection
+
+**Why required:** Current `brokers/smart_router.py` routes on availability, not latency.
+Institutional routers select venues on real-time latency, fill rates, and spread.
+
+**Files:** `brokers/smart_router.py`, `execution/engine.py`
+
+```python
+# brokers/smart_router.py — latency-aware scoring:
+class SmartRouter:
+    async def select_venue(self, order) -> str:
+        scores = {}
+        for venue, stats in self._venue_stats.items():
+            if not self._is_available(venue):
+                continue
+            latency_score = 1.0 / (1 + stats["avg_latency_ms"] / 100)
+            fill_score = stats["fill_rate"]
+            spread_score = 1.0 / (1 + stats["avg_spread_pips"])
+            scores[venue] = (0.4 * latency_score + 0.4 * fill_score + 0.2 * spread_score)
+        return max(scores, key=scores.get) if scores else "paper"
+
+    async def update_venue_stats(self, venue: str, latency_ms: float,
+                                  filled: bool, spread_pips: float):
+        alpha = 0.1  # EWMA decay
+        s = self._venue_stats.setdefault(venue, {
+            "avg_latency_ms": latency_ms, "fill_rate": 1.0, "avg_spread_pips": spread_pips
+        })
+        s["avg_latency_ms"] = alpha * latency_ms + (1-alpha) * s["avg_latency_ms"]
+        s["fill_rate"] = alpha * (1.0 if filled else 0.0) + (1-alpha) * s["fill_rate"]
+        s["avg_spread_pips"] = alpha * spread_pips + (1-alpha) * s["avg_spread_pips"]
+```
+
+---
+
+### 9.2 — Bracket Orders (Entry + SL + TP Atomic)
+
+**Why required:** `execution/oms.py` lacks bracket orders. Every institutional OMS
+supports atomic bracket submission — entry fills trigger automatic SL + TP as OCO.
+
+**Files:** `execution/oms.py`, `execution/engine.py`
+
+```python
+# execution/oms.py — bracket order support:
+@dataclass
+class BracketOrder:
+    entry: Order
+    stop_loss: Order
+    take_profit: Order
+    oco_group_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+class OMS:
+    async def submit_bracket(self, bracket: BracketOrder) -> BracketResult:
+        entry_result = await self._submit(bracket.entry)
+        if entry_result.status == ExecutionStatus.FILLED:
+            await self._submit_oco(bracket.stop_loss, bracket.take_profit,
+                                    group_id=bracket.oco_group_id)
+        return BracketResult(entry=entry_result, bracket=bracket)
+```
+
+---
+
+### 9.3 — DMA-Style Limit Order Placement
+
+**Why required:** Market orders have guaranteed slippage. Limit orders placed at
+optimal price levels reduce market impact by 30–60% in normal conditions.
+
+**Files:** `execution/engine.py`, `brokers/oanda.py`
+
+```python
+# execution/engine.py — DMA-style limit placement:
+class DMAExecutor:
+    def calculate_limit_price(self, direction: str, mid_price: float,
+                               spread: float, urgency: float) -> float:
+        """urgency=0.0: passive, urgency=1.0: aggressive (cross spread)."""
+        half_spread = spread / 2
+        if direction == "long":
+            return mid_price - half_spread * (1 - urgency)
+        return mid_price + half_spread * (1 - urgency)
+
+    async def execute_with_timeout(self, order, limit_price: float,
+                                    timeout_seconds: int = 30):
+        result = await self._submit_limit(order, limit_price)
+        if not result.is_filled:
+            await asyncio.sleep(timeout_seconds)
+            if not result.is_filled:
+                result = await self._submit_market(order)
+        return result
+```
+
+---
+
+### 9.4 — FIX Heartbeat Monitor + Auto-Reconnect
+
+**Why required:** `execution/fix_adapter.py` is complete but lacks heartbeat monitoring.
+A dead FIX session with open positions is a critical failure mode.
+
+**Files:** `execution/fix_adapter.py`
+
+```python
+# execution/fix_adapter.py — heartbeat monitor:
+class FIXAdapter:
+    HEARTBEAT_INTERVAL = 30
+    MAX_MISSED_HEARTBEATS = 3
+
+    async def _heartbeat_monitor(self):
+        missed = 0
+        while self._running:
+            await asyncio.sleep(self.HEARTBEAT_INTERVAL)
+            if not await self._check_heartbeat():
+                missed += 1
+                if missed >= self.MAX_MISSED_HEARTBEATS:
+                    logger.error("FIX session dead — reconnecting")
+                    await self._reconnect()
+                    missed = 0
+            else:
+                missed = 0
+```
+
+---
+
+## 10. Data & Infrastructure — Full Enhancement Catalogue
+
+### 10.1 — TimescaleDB for Time-Series Storage
+
+**Why required:** PostgreSQL is not optimized for time-series. TimescaleDB provides
+10–100× faster queries with automatic partitioning. Essential for tick data.
+
+**Files:** `utils/database.py`, `docker-compose.yml`, `alembic/versions/`
+
+```yaml
+# docker-compose.yml — replace postgres with timescaledb:
+  db:
+    image: timescale/timescaledb:latest-pg15
+```
+
+```python
+# alembic migration — convert to hypertables:
+def upgrade():
+    op.execute("SELECT create_hypertable('tick_data', 'timestamp')")
+    op.execute("SELECT create_hypertable('feature_snapshots', 'bar_time')")
+    op.execute("SELECT add_compression_policy('tick_data', INTERVAL '7 days')")
+```
+
+---
+
+### 10.2 — Redis Streams Event Bus
+
+**Why required:** `core/event_bus.py` uses in-memory pub/sub. Redis Streams provide
+persistent, ordered, consumer-group delivery — essential for reliable signal → execution
+→ risk → audit event chains that survive process restarts.
+
+**Files:** `core/event_bus.py`
+
+```python
+# core/event_bus.py — Redis Streams:
+class EventBus:
+    STREAMS = {
+        "signals": "hopefx:signals",
+        "orders": "hopefx:orders",
+        "fills": "hopefx:fills",
+        "risk": "hopefx:risk",
+        "audit": "hopefx:audit",
+    }
+
+    async def publish(self, stream: str, event: dict) -> str:
+        return await self._redis.xadd(
+            self.STREAMS[stream],
+            {k: json.dumps(v) if not isinstance(v, str) else v for k, v in event.items()},
+            maxlen=10_000,
+        )
+```
+
+---
+
+### 10.3 — OpenTelemetry Distributed Tracing
+
+**Why required:** End-to-end tracing from signal generation to order fill is essential
+for debugging latency and proving execution quality to regulators.
+
+**Files:** `utils/telemetry.py`, `tracing/setup.py` (exists), `execution/engine.py`
+
+```python
+# utils/telemetry.py — OpenTelemetry setup:
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+def setup_tracing(service_name: str = "hopefx-api"):
+    provider = TracerProvider()
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
+        endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    )))
+    trace.set_tracer_provider(provider)
+
+# execution/engine.py — instrument execute():
+tracer = trace.get_tracer("hopefx.execution")
+
+async def execute(self, order):
+    with tracer.start_as_current_span("execute_order") as span:
+        span.set_attribute("order.symbol", order.symbol)
+        span.set_attribute("order.direction", order.direction)
+        result = await self._route_order(order)
+        span.set_attribute("execution.latency_ms", result.latency_ms)
+        return result
+```
+
+---
+
+### 10.4 — Data Pipeline Reliability (Retry + Circuit Breaker)
+
+**Why required:** `data/market_ingest.py` has no retry logic. A transient OANDA
+outage during market hours would cause missed signals and stale features.
+
+**Files:** `data/market_ingest.py`, `data/real_time_price_engine.py`
+
+```python
+# data/market_ingest.py — retry + fallback:
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+class MarketDataIngestor:
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(min=1, max=60))
+    async def fetch_bars(self, symbol: str, timeframe: str, count: int):
+        ...
+
+    async def fetch_with_fallback(self, symbol: str, timeframe: str):
+        for source in [self._oanda_stream, self._oanda_rest, self._yfinance]:
+            try:
+                return await source.fetch(symbol, timeframe)
+            except Exception as e:
+                logger.warning("Source %s failed: %s", source.name, e)
+        raise DataUnavailableError(f"All sources failed for {symbol}/{timeframe}")
+```
+
+---
+
+### 10.5 — Kubernetes HPA + PodDisruptionBudget
+
+**Why required:** Zero-downtime deployments require both HPA (auto-scaling) and PDB
+(minimum available pods during rolling updates).
+
+**Files:** `helm/templates/hpa-api.yaml` (new), `helm/templates/pdb-api.yaml` (new)
+
+```yaml
+# helm/templates/hpa-api.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+
+# helm/templates/pdb-api.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: hopefx-api
+```
+
+---
