@@ -147,6 +147,19 @@ class RiskManager:
         self._halt_reason: Optional[str] = None
         self._halt_until: Optional[datetime] = None
 
+        # ── Loss-streak circuit breaker ───────────────────────────────────────
+        # Set by record_trade_outcome() and read by PreTradeGate._check_loss_streak.
+        # TradeExecutor also sets _streak_halted directly via its own tracker;
+        # the risk manager maintains a parallel copy so the gate can enforce it
+        # even when orders arrive through alternative code paths.
+        self._streak_halted: bool = False
+        self._streak_loss_count: int = 0
+        self._streak_halt_losses: int = int(os.getenv("STREAK_HALT_LOSSES", "3"))
+        self._streak_cooldown_minutes: float = float(
+            os.getenv("STREAK_COOLDOWN_MINUTES", "30")
+        )
+        self._streak_halted_until: Optional[datetime] = None
+
         # Two-tier drawdown alert state (Area 2)
         self._amber_warned: bool = False
 
@@ -173,6 +186,34 @@ class RiskManager:
         # This prevents a process restart from silently resuming trading
         # after a drawdown-triggered halt.
         self._restore_halt_state()
+
+    # ── Properties ────────────────────────────────────────────────────────────
+
+    @property
+    def current_equity(self) -> float:
+        """
+        Current floating equity.
+
+        Returns current_balance as the best available proxy.  When the
+        DrawdownTracker is active it tracks equity separately; callers that
+        need the precise floating equity should use get_drawdown_status().
+        """
+        return self.current_balance
+
+    # ── Hard <1% risk-per-trade cap ───────────────────────────────────────────
+
+    @property
+    def max_risk_pct_per_trade(self) -> float:
+        """
+        Hard cap on risk per trade as a fraction of equity.
+
+        Reads MAX_RISK_PCT_PER_TRADE env var (default 0.01 = 1%).
+        This is the single source of truth used by:
+        - _apply_risk_limits() in position sizing
+        - PreTradeGate._check_risk_per_trade()
+        - TradeExecutor._clamp_size_to_risk_cap()
+        """
+        return float(os.getenv("MAX_RISK_PCT_PER_TRADE", "0.01"))
 
     def update_equity(self, equity: float, balance: Optional[float] = None) -> None:
         """
@@ -350,10 +391,14 @@ class RiskManager:
                 )
                 return
 
-        # ── Lift expired halt ─────────────────────────────────────────────────
+        # ── Lift expired trading halt ─────────────────────────────────────────
         if self._trading_halted and self._halt_until:
             if datetime.now(timezone.utc) >= self._halt_until:
                 self._resume_trading()
+
+        # ── Lift expired streak halt ──────────────────────────────────────────
+        # check_streak_halt() auto-clears expired cooldowns as a side effect.
+        self.check_streak_halt()
 
     def _compute_cvar(self, confidence: float = 0.95) -> float:
         """
@@ -646,6 +691,124 @@ class RiskManager:
         return True, f"CVaR={cvar:.4f} within limit={self._cvar_daily_limit:.4f}"
 
     # ------------------------------------------------------------------
+    # Trade outcome recording and streak management
+    # ------------------------------------------------------------------
+
+    def record_trade_outcome(self, realized_pnl: float, symbol: str = "") -> None:
+        """
+        Record a completed trade outcome and update the loss-streak state.
+
+        Called by TradeExecutor after every position close.  Maintains a
+        parallel streak counter to the one in TradeExecutor so that the
+        PreTradeGate can enforce the streak halt even when orders arrive
+        through alternative code paths (e.g. direct API calls).
+
+        Parameters
+        ----------
+        realized_pnl : Realised P&L of the closed trade (negative = loss).
+        symbol       : Instrument symbol (for logging).
+        """
+        if realized_pnl > 0:
+            if self._streak_loss_count > 0:
+                logger.debug(
+                    "RiskManager streak reset: win after %d consecutive losses "
+                    "(symbol=%s)",
+                    self._streak_loss_count, symbol,
+                )
+            self._streak_loss_count = 0
+            # Clear streak halt if it was set
+            if self._streak_halted:
+                self._streak_halted = False
+                self._streak_halted_until = None
+                logger.info(
+                    "RiskManager streak halt cleared by winning trade (symbol=%s)",
+                    symbol,
+                )
+        else:
+            self._streak_loss_count += 1
+            logger.debug(
+                "RiskManager consecutive losses: %d / %d (symbol=%s)",
+                self._streak_loss_count, self._streak_halt_losses, symbol,
+            )
+            if self._streak_loss_count >= self._streak_halt_losses:
+                self._activate_streak_halt()
+
+    def _activate_streak_halt(self) -> None:
+        """
+        Activate the loss-streak halt.
+
+        Sets _streak_halted=True and schedules automatic expiry after
+        _streak_cooldown_minutes.  Idempotent — safe to call multiple times.
+        """
+        if self._streak_halted:
+            return  # already halted
+
+        self._streak_halted = True
+        self._streak_halted_until = datetime.now(timezone.utc) + timedelta(
+            minutes=self._streak_cooldown_minutes
+        )
+        logger.warning(
+            "STREAK CIRCUIT BREAKER (RiskManager): %d consecutive losses — "
+            "halting new entries until %s",
+            self._streak_loss_count,
+            self._streak_halted_until.isoformat(),
+        )
+
+    def check_streak_halt(self) -> bool:
+        """
+        Return True if the streak halt is currently active.
+
+        Automatically clears an expired halt so callers always get the
+        current state without needing to call a separate expiry check.
+        """
+        if not self._streak_halted:
+            return False
+
+        if self._streak_halted_until is not None:
+            if datetime.now(timezone.utc) >= self._streak_halted_until:
+                logger.info(
+                    "RiskManager streak cooldown expired after %.0f min — "
+                    "resuming trading",
+                    self._streak_cooldown_minutes,
+                )
+                self._streak_halted = False
+                self._streak_halted_until = None
+                self._streak_loss_count = 0
+                return False
+
+        return True
+
+    def get_risk_summary(self) -> Dict[str, Any]:
+        """
+        Return a concise risk state snapshot for monitoring and health endpoints.
+
+        Includes drawdown, daily P&L, halt state, streak state, and the
+        hard risk-per-trade cap so operators can verify configuration at a glance.
+        """
+        streak_remaining_min: Optional[float] = None
+        if self._streak_halted_until is not None:
+            delta = self._streak_halted_until - datetime.now(timezone.utc)
+            streak_remaining_min = max(0.0, round(delta.total_seconds() / 60, 1))
+
+        return {
+            "trading_halted": self._trading_halted,
+            "halt_reason": self._halt_reason,
+            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
+            "current_drawdown_pct": round(self.current_drawdown * 100, 4),
+            "drawdown_limit_pct": round(self.config.max_drawdown_pct * 100, 2),
+            "daily_pnl": round(self.daily_pnl, 4),
+            "daily_loss_limit_pct": round(self.config.daily_loss_limit_pct * 100, 2),
+            "streak_halted": self.check_streak_halt(),
+            "streak_loss_count": self._streak_loss_count,
+            "streak_halt_threshold": self._streak_halt_losses,
+            "streak_cooldown_remaining_min": streak_remaining_min,
+            "max_risk_pct_per_trade": round(self.max_risk_pct_per_trade * 100, 2),
+            "max_position_size_pct": round(self.config.max_position_size_pct * 100, 2),
+            "current_equity": round(self.current_equity, 2),
+            "peak_equity": round(self.peak_equity, 2),
+        }
+
+    # ------------------------------------------------------------------
     # Position sizing helpers (Area 3 — split from _calculate_position_size_full)
     # ------------------------------------------------------------------
 
@@ -687,17 +850,24 @@ class RiskManager:
 
     def _apply_risk_limits(self, pct: float, equity: float) -> float:
         """
-        Clamp pct to the configured max_position_size_pct and apply
-        volatility / drawdown scaling factors.
+        Clamp pct to the hard risk-per-trade cap and configured position size limit.
+
+        The hard cap (MAX_RISK_PCT_PER_TRADE, default 1%) is the absolute ceiling.
+        The configured max_position_size_pct is applied as an additional limit so
+        the lower of the two always wins.
 
         Args:
-            pct:    Proposed risk percentage.
-            equity: Current account equity (unused here but kept for signature).
+            pct:    Proposed risk percentage (Kelly-adjusted, volatility-scaled).
+            equity: Current account equity (kept for signature compatibility).
 
         Returns:
             Final risk percentage after all caps.
         """
-        return min(pct, self.config.max_position_size_pct)
+        # Hard <1% per-trade cap — non-negotiable
+        hard_cap = self.max_risk_pct_per_trade
+        # Configured position size limit (may be lower than hard cap)
+        config_cap = self.config.max_position_size_pct
+        return min(pct, hard_cap, config_cap)
 
     def _calculate_position_size_full(
         self,
