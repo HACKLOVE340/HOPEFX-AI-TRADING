@@ -1,7 +1,9 @@
 {
   "started_utc": "2026-03-27T03:34:53.828586+00:00",
   "target_days": 30,
-  "account_id": "test_account",
+  "account_id": "PENDING\u2026",
   "environment": "practice",
-  "note": "OANDA paper trading clock started 2026-03-27. Live trading gate opens after 30 days."
+  "requires_real_account": true,
+  "note": "Set BROKER_TYPE=oanda, BROKER_OANDA_TOKEN, and BROKER_OANDA_ACCOUNT env vars. On first successful OANDA connection the account_id field is overwritten with the real account prefix (first 8 chars + ellipsis) by _stamp_oanda_paper_start() in core/startup_factories.py. The 30-day paper trading clock runs from started_utc.",
+  "live_gate_opens": "2026-04-26T03:34:53.828586+00:00"
 }
