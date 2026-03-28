@@ -1,5 +1,16 @@
 {
 	"name": "Ona",
 	"image": "mcr.microsoft.com/devcontainers/universal:4.0.1-noble",
-	"postCreateCommand": "pip install -r requirements-ci.txt -q"
+	"postCreateCommand": "pip install -r requirements-ci.txt -q",
+	"forwardPorts": [5173, 8000],
+	"portsAttributes": {
+		"5173": {
+			"label": "Frontend (Vite)",
+			"onAutoForward": "openPreview"
+		},
+		"8000": {
+			"label": "Backend (FastAPI)",
+			"onAutoForward": "silent"
+		}
+	}
 }
