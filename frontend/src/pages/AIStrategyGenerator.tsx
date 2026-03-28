@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,6 @@ const pct = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}%`;
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const AIStrategyGenerator: React.FC = () => {
-  const token = useStore((s) => s.token);
 
   const [prompt, setPrompt]         = useState('');
   const [symbol, setSymbol]         = useState('XAU_USD');
@@ -62,19 +62,9 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      const res = await fetch('/api/brain/generate-strategy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ prompt, symbol, timeframe }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: GenerateResponse = await res.json();
-      setResult(data);
-      setStage(data.success ? 'done' : 'error');
+      const res = await api.post<GenerateResponse>('/api/brain/generate-strategy', { prompt, symbol, timeframe });
+      setResult(res.data);
+      setStage(res.data.success ? 'done' : 'error');
     } catch (err: unknown) {
       setResult({
         success: false,
@@ -82,7 +72,7 @@ const AIStrategyGenerator: React.FC = () => {
         strategy_code: '',
         backtest: null,
         iterations: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
+        error: (err as { message?: string })?.message ?? 'Unknown error',
       });
       setStage('error');
     }
@@ -94,21 +84,12 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      const res = await fetch('/api/brain/deploy-strategy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          strategy_name: result.strategy_name,
-          strategy_code: result.strategy_code,
-          symbol,
-          mode: 'paper',
-        }),
+      await api.post('/api/brain/deploy-strategy', {
+        strategy_name: result.strategy_name,
+        strategy_code: result.strategy_code,
+        symbol,
+        mode: 'paper',
       });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setDeployMsg('Strategy deployed to paper trading.');
     } catch (err: unknown) {
       setDeployMsg(`Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

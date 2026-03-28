@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries } from 'lightweight-charts';
 import { useStore, selectUser } from '../store';
-import { tradingApi } from '../hooks/useApi';
+import { api, tradingApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -232,12 +232,14 @@ const Trading: React.FC = () => {
     seriesRef.current = series;
 
     // Encode symbol so 'XAU/USD' becomes 'XAU%2FUSD' in the URL
-    fetch(`/api/trading/ohlcv/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=200`)
-      .then((r) => r.json())
-      .then((data) => {
-        const candles = Array.isArray(data) ? data : (data.data ?? []);
-        // lightweight-charts v5 expects UTCTimestamp (seconds since epoch)
-        series.setData(candles.map((c: { timestamp: number | string; open: number; high: number; low: number; close: number }) => ({
+    type OHLCVCandle = { timestamp: number | string; open: number; high: number; low: number; close: number };
+    api.get<OHLCVCandle[] | { data?: OHLCVCandle[] }>(
+      `/api/trading/ohlcv/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=200`
+    )
+      .then((r) => {
+        const raw = r.data;
+        const candles: OHLCVCandle[] = Array.isArray(raw) ? raw : (raw.data ?? []);
+        series.setData(candles.map((c) => ({
           time: Math.floor(
             typeof c.timestamp === 'number' ? c.timestamp : new Date(c.timestamp).getTime() / 1000
           ) as import('lightweight-charts').UTCTimestamp,

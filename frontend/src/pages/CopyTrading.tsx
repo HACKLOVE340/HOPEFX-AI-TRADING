@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,24 +95,16 @@ const LeaderCard: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CopyTrading: React.FC = () => {
-  const token = useStore((s) => s.token);
-
-  const [leaders, setLeaders]           = useState<Leader[]>(FALLBACK_LEADERS);
-  const [selected, setSelected]         = useState<string | null>(null);
-  const [allocation, setAllocation]     = useState(10000);
-  const [sortBy, setSortBy]             = useState<'return' | 'sharpe' | 'followers'>('return');
-  const [copying, setCopying]           = useState(false);
-  const [copyMsg, setCopyMsg]           = useState('');
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const [leaders, setLeaders]       = useState<Leader[]>(FALLBACK_LEADERS);
+  const [selected, setSelected]     = useState<string | null>(null);
+  const [allocation, setAllocation] = useState(10000);
+  const [sortBy, setSortBy]         = useState<'return' | 'sharpe' | 'followers'>('return');
+  const [copying, setCopying]       = useState(false);
+  const [copyMsg, setCopyMsg]       = useState('');
 
   useEffect(() => {
-    fetch('/api/social/leaderboard', { headers })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.length) setLeaders(data); })
+    api.get<Leader[]>('/api/social/leaderboard')
+      .then((r) => { if (r.data?.length) setLeaders(r.data); })
       .catch(() => {});
   }, []);
 
@@ -129,15 +122,10 @@ const CopyTrading: React.FC = () => {
     setCopying(true);
     setCopyMsg('');
     try {
-      const res = await fetch(`/api/social/copy/${selected}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ allocation_amount: allocation }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await api.post(`/api/social/copy/${selected}`, { allocation_amount: allocation });
       setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
-    } catch (e: any) {
-      setCopyMsg(`Failed: ${e.message}`);
+    } catch (e: unknown) {
+      setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
     }
     setCopying(false);
   };

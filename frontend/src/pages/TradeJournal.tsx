@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,34 +77,25 @@ function pnlColor(pnl: number | null): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const TradeJournal: React.FC = () => {
-  const token = useStore((s) => s.token);
-
-  const [tab, setTab]           = useState<Tab>('trades');
-  const [trades, setTrades]     = useState<JournalEntry[]>([]);
-  const [mistakes, setMistakes] = useState<JournalEntry[]>([]);
-  const [stats, setStats]       = useState<JournalStats | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [editing, setEditing]   = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<JournalEntry>>({});
-  const [saving, setSaving]     = useState(false);
+  const [tab, setTab]             = useState<Tab>('trades');
+  const [trades, setTrades]       = useState<JournalEntry[]>([]);
+  const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
+  const [stats, setStats]         = useState<JournalStats | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [editing, setEditing]     = useState<string | null>(null);
+  const [editForm, setEditForm]   = useState<Partial<JournalEntry>>({});
+  const [saving, setSaving]       = useState(false);
   const [filterTag, setFilterTag] = useState('');
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
   const fetchAll = useCallback(async () => {
-    try {
-      const [tradesRes, statsRes, mistakesRes] = await Promise.all([
-        fetch(`/api/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`, { headers }),
-        fetch('/api/journal/stats', { headers }),
-        fetch('/api/journal/mistakes', { headers }),
-      ]);
-      if (tradesRes.ok) setTrades(await tradesRes.json());
-      if (statsRes.ok) setStats(await statsRes.json());
-      if (mistakesRes.ok) setMistakes(await mistakesRes.json());
-    } catch { /* silent */ }
+    const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
+      api.get<JournalEntry[]>(`/api/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
+      api.get<JournalStats>('/api/journal/stats'),
+      api.get<JournalEntry[]>('/api/journal/mistakes'),
+    ]);
+    if (tradesRes.status === 'fulfilled')   setTrades(tradesRes.value.data ?? []);
+    if (statsRes.status === 'fulfilled')    setStats(statsRes.value.data);
+    if (mistakesRes.status === 'fulfilled') setMistakes(mistakesRes.value.data ?? []);
     setLoading(false);
   }, [filterTag]);
 
@@ -119,9 +110,7 @@ const TradeJournal: React.FC = () => {
     if (!editing) return;
     setSaving(true);
     try {
-      await fetch(`/api/journal/trades/${editing}`, {
-        method: 'PATCH', headers, body: JSON.stringify(editForm),
-      });
+      await api.patch(`/api/journal/trades/${editing}`, editForm);
       setEditing(null);
       await fetchAll();
     } catch { /* silent */ }

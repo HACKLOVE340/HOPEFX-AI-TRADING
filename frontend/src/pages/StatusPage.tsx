@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,29 +122,18 @@ const StatusPage: React.FC = () => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const load = useCallback(async () => {
-    try {
-      const [statusRes, histRes] = await Promise.all([
-        fetch('/api/status/json'),
-        fetch('/api/status/history'),
-      ]);
-      if (statusRes.ok) {
-        setData(await statusRes.json());
-      } else {
-        setData(MOCK_STATUS);
-      }
-      if (histRes.ok) {
-        const h = await histRes.json();
-        setHistory(h.history ?? []);
-      } else {
-        setHistory(MOCK_HISTORY);
-      }
-    } catch (_) {
-      setData(MOCK_STATUS);
-      setHistory(MOCK_HISTORY);
-    } finally {
-      setLoading(false);
-      setLastRefresh(new Date());
-    }
+    const [statusRes, histRes] = await Promise.allSettled([
+      api.get<StatusData>('/api/status/json'),
+      api.get<{ history?: HistoryDay[] }>('/api/status/history'),
+    ]);
+    setData(statusRes.status === 'fulfilled' ? statusRes.value.data : MOCK_STATUS);
+    setHistory(
+      histRes.status === 'fulfilled'
+        ? (histRes.value.data.history ?? [])
+        : MOCK_HISTORY
+    );
+    setLoading(false);
+    setLastRefresh(new Date());
   }, []);
 
   useEffect(() => {

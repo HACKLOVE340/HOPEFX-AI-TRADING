@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '../hooks/useApi';
+import { useStore } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -133,40 +135,43 @@ const Affiliate: React.FC = () => {
   const [signupLoading, setSignupLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'leaderboard'>('overview');
 
-  // Demo user id — in production this comes from auth context
-  const userId = 'demo_user';
+  // User id comes from auth store; falls back to 'demo_user' for unauthenticated preview
+  const user   = useStore((s) => s.user);
+  const userId = user?.id ?? 'demo_user';
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/monetization/affiliate/${userId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.has_affiliate_account) {
-          setAccount(data.affiliate);
-          setMetrics(data.metrics);
-          // Load referrals
-          const rRes = await fetch(`/api/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`);
-          if (rRes.ok) {
-            const rData = await rRes.json();
-            setReferrals(rData.referrals ?? []);
-          }
-        }
+      const res = await api.get<{
+        has_affiliate_account: boolean;
+        affiliate: AffiliateAccount;
+        metrics: AffiliateMetrics;
+      }>(`/api/monetization/affiliate/${userId}`);
+      const data = res.data;
+      if (data.has_affiliate_account) {
+        setAccount(data.affiliate);
+        setMetrics(data.metrics);
+        try {
+          const rRes = await api.get<{ referrals: Referral[] }>(
+            `/api/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
+          );
+          setReferrals(rRes.data.referrals ?? []);
+        } catch { /* non-fatal */ }
       } else {
-        // API unavailable — use mock data for demo
         setAccount(MOCK_ACCOUNT);
         setMetrics(MOCK_METRICS);
         setReferrals(MOCK_REFERRALS);
       }
-      // Leaderboard
-      const lRes = await fetch('/api/monetization/affiliate/leaderboard?limit=10');
-      if (lRes.ok) {
-        const lData = await lRes.json();
-        setLeaderboard(lData.leaderboard ?? lData ?? []);
-      } else {
+      try {
+        const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>(
+          '/api/monetization/affiliate/leaderboard?limit=10'
+        );
+        const lData = lRes.data;
+        setLeaderboard(Array.isArray(lData) ? lData : (lData as { leaderboard?: LeaderboardEntry[] }).leaderboard ?? []);
+      } catch {
         setLeaderboard(MOCK_LEADERBOARD);
       }
-    } catch (_) {
+    } catch {
       setAccount(MOCK_ACCOUNT);
       setMetrics(MOCK_METRICS);
       setReferrals(MOCK_REFERRALS);
@@ -181,16 +186,9 @@ const Affiliate: React.FC = () => {
   const handleSignup = async () => {
     setSignupLoading(true);
     try {
-      const res = await fetch('/api/monetization/affiliate/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
-      });
-      if (res.ok) {
-        await loadData();
-      }
-    } catch (_) {
-      // Fallback to mock
+      await api.post('/api/monetization/affiliate/signup', { user_id: userId });
+      await loadData();
+    } catch {
       setAccount(MOCK_ACCOUNT);
       setMetrics(MOCK_METRICS);
     } finally {
