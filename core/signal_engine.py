@@ -920,6 +920,27 @@ async def _execute_if_approved(
             except Exception:
                 pass
 
+        # Online learner feedback — notify Phase-3 store of the confirmed fill.
+        # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
+        try:
+            import pandas as _pd
+            _fill_price = order.average_fill_price or signal_payload["entry_price"]
+            _features = _pd.DataFrame([{
+                "symbol": symbol,
+                "direction": direction,
+                "confidence": signal_payload.get("confidence", 0.0),
+                "fill_price": _fill_price,
+                "ml_prob": signal_payload.get("probability", 0.5),
+                "source": "signal_engine_auto",
+            }])
+            notify_fill(
+                _features,
+                label=1,
+                primary_prob=signal_payload.get("probability"),
+            )
+        except Exception as _ol_exc:
+            logger.debug("notify_fill skipped after auto-trade: %s", _ol_exc)
+
     except Exception as order_exc:
         logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
 

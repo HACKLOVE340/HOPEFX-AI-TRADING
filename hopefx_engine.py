@@ -371,6 +371,26 @@ class HopeFXEngine:
                     "Order placed: %s %s %.2f lots @ %.5f",
                     side, symbol, lots, fill_price,
                 )
+
+                # Online learner feedback — notify Phase-3 store of the fill.
+                try:
+                    from core.signal_engine import notify_fill as _notify_fill
+                    import pandas as _pd
+                    _features = _pd.DataFrame([{
+                        "symbol": symbol,
+                        "direction": side,
+                        "fill_price": fill_price,
+                        "confidence": getattr(decision, "confidence", 0.0),
+                        "source": "hopefx_engine",
+                    }])
+                    _notify_fill(
+                        _features,
+                        label=1,
+                        primary_prob=getattr(decision, "confidence", None),
+                    )
+                except Exception as _ol_exc:
+                    logger.debug("notify_fill skipped in hopefx_engine: %s", _ol_exc)
+
         except Exception as exc:
             logger.error("Order execution failed: %s", exc)
 
