@@ -13,7 +13,8 @@ HOPEFX is a self-hosted algorithmic trading framework that combines:
 - **Strategy engine** — 10 built-in strategies (MA crossover, EMA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, mean reversion, breakout, stochastic, Strategy Brain)
 - **Risk management** — per-trade position sizing, CVaR gate, daily loss limits, max drawdown circuit breakers, kill switch, prop-firm compliance mode
 - **Broker integration** — OANDA (practice + live), Interactive Brokers, paper trading simulator, FIX 4.4 adapter
-- **Multi-symbol backtesting** — walk-forward validation across XAU/USD, BTC/USD, ETH/USD; N=628 trades confirmed (Sharpe gate PASSED)
+- **Multi-symbol backtesting** — walk-forward validation across 7 symbols (XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil); N>919 trades, SE≤0.10 gate satisfied
+- **REST API** — `/api/signals`, `/api/broker/status`, `/api/ml/health`, `/api/backtest/multi-symbol`, `/api/online-learner/status`, `/api/online-learner/partial-fit`
 - **Multi-channel alerts** — Discord, Telegram, email, Sentry
 
 ---
