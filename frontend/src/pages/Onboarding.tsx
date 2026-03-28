@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../hooks/useApi';
 
 const STORAGE_KEY = 'hopefx_onboarding_step';
 
@@ -167,20 +168,17 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
   const runBacktest = async () => {
     setRunning(true);
     try {
-      const res = await fetch('/api/backtesting/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: 'XAUUSD', strategy: 'ml_ensemble', period_days: 30 }),
+      const res = await api.post<{ total_return?: number; total_trades?: number; win_rate?: number; metrics?: { total_return?: number; total_trades?: number; win_rate?: number } }>(
+        '/api/backtesting/run',
+        { symbol: 'XAUUSD', strategy: 'ml_ensemble', period_days: 30 }
+      );
+      const data = res.data;
+      setResult({
+        return_pct: data.total_return ?? data.metrics?.total_return ?? 0,
+        trades:     data.total_trades ?? data.metrics?.total_trades ?? 0,
+        win_rate:   data.win_rate ?? data.metrics?.win_rate ?? 0,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setResult({
-          return_pct: data.total_return ?? data.metrics?.total_return ?? 0,
-          trades:     data.total_trades ?? data.metrics?.total_trades ?? 0,
-          win_rate:   data.win_rate ?? data.metrics?.win_rate ?? 0,
-        });
-        setState({ ...state, backtestDone: true });
-      }
+      setState({ ...state, backtestDone: true });
     } catch {
       setResult({ return_pct: 1.2, trades: 14, win_rate: 57.1 });
       setState({ ...state, backtestDone: true });
@@ -226,7 +224,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
 
   const startPaper = async () => {
     setStarting(true);
-    try { await fetch('/api/trading/paper/start', { method: 'POST' }); } catch { /* ignore */ }
+    try { await api.post('/api/trading/paper/start'); } catch { /* ignore */ }
     setState({ ...state, paperStarted: true });
     setStarting(false);
   };

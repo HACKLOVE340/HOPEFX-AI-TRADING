@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,8 +70,6 @@ const CHANNELS  = ['discord', 'telegram', 'email', 'push'];
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const PriceAlerts: React.FC = () => {
-  const token = useStore((s) => s.token);
-
   const [alerts, setAlerts]     = useState<Alert[]>([]);
   const [history, setHistory]   = useState<AlertTrigger[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -89,19 +87,14 @@ const PriceAlerts: React.FC = () => {
     priority: 'high',
   });
 
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
   const fetchAlerts = useCallback(async () => {
     try {
-      const [alertsRes, histRes] = await Promise.all([
-        fetch('/api/alerts/', { headers }),
-        fetch('/api/alerts/history/triggers', { headers }),
+      const [alertsRes, histRes] = await Promise.allSettled([
+        api.get<Alert[]>('/api/alerts/'),
+        api.get<AlertTrigger[]>('/api/alerts/history/triggers'),
       ]);
-      if (alertsRes.ok) setAlerts(await alertsRes.json());
-      if (histRes.ok) setHistory(await histRes.json());
+      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data ?? []);
+      if (histRes.status === 'fulfilled')   setHistory(histRes.value.data ?? []);
     } catch { /* silent */ }
     setLoading(false);
   }, []);
@@ -113,33 +106,33 @@ const PriceAlerts: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      const body = {
+      await api.post('/api/alerts/', {
         name: form.name,
         symbol: form.symbol,
         conditions: [{ type: form.condition_type, threshold: parseFloat(form.threshold) }],
         notification_channels: form.channels,
         priority: form.priority,
-      };
-      const res = await fetch('/api/alerts/', { method: 'POST', headers, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      });
       setShowForm(false);
       setForm({ name: '', symbol: 'XAUUSD', condition_type: 'price_above', threshold: '', channels: ['discord'], priority: 'high' });
       await fetchAlerts();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create alert');
+      setError((e as { message?: string })?.message ?? 'Failed to create alert');
     }
     setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/alerts/${id}`, { method: 'DELETE', headers });
+    try { await api.delete(`/api/alerts/${id}`); } catch { /* silent */ }
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
   const handleToggle = async (alert: Alert) => {
     const action = alert.status === 'paused' ? 'resume' : 'pause';
-    const res = await fetch(`/api/alerts/${alert.id}/${action}`, { method: 'POST', headers });
-    if (res.ok) await fetchAlerts();
+    try {
+      await api.post(`/api/alerts/${alert.id}/${action}`);
+      await fetchAlerts();
+    } catch { /* silent */ }
   };
 
   const toggleChannel = (ch: string) => {

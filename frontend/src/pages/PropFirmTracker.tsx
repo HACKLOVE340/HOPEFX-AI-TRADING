@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { api } from '../hooks/useApi';
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -66,12 +67,11 @@ const PropFirmTracker: React.FC = () => {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/risk/prop-firm-status');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setStatus(await res.json());
+      const res = await api.get<PropFirmStatus>('/api/risk/prop-firm-status');
+      setStatus(res.data);
       setError(null);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e as { message?: string })?.message ?? 'Failed to load');
     } finally {
       setLoading(false);
     }

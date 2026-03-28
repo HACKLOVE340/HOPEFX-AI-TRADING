@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,31 +55,21 @@ const STATUS_COLOR: Record<string, string> = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Wallet: React.FC = () => {
-  const token = useStore((s) => s.token);
-
-  const [tab, setTab]               = useState<'overview' | 'transactions' | 'subscriptions' | 'payment-methods'>('overview');
-  const [transactions, setTxs]      = useState<Transaction[]>(FALLBACK_TXS);
-  const [balance, setBalance]       = useState(24765.50);
-  const [showDeposit, setShowDeposit] = useState(false);
+  const [tab, setTab]                   = useState<'overview' | 'transactions' | 'subscriptions' | 'payment-methods'>('overview');
+  const [transactions, setTxs]          = useState<Transaction[]>(FALLBACK_TXS);
+  const [balance, setBalance]           = useState(24765.50);
+  const [showDeposit, setShowDeposit]   = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const [amount, setAmount]         = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [msg, setMsg]               = useState('');
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const [amount, setAmount]             = useState('');
+  const [processing, setProcessing]     = useState(false);
+  const [msg, setMsg]                   = useState('');
 
   useEffect(() => {
-    fetch('/api/payments/balance', { headers })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.balance) setBalance(d.balance); })
+    api.get<{ balance: number }>('/api/payments/balance')
+      .then((r) => { if (r.data?.balance) setBalance(r.data.balance); })
       .catch(() => {});
-
-    fetch('/api/payments/transactions', { headers })
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d?.length) setTxs(d); })
+    api.get<Transaction[]>('/api/payments/transactions')
+      .then((r) => { if (r.data?.length) setTxs(r.data); })
       .catch(() => {});
   }, []);
 
@@ -88,18 +78,11 @@ const Wallet: React.FC = () => {
     setProcessing(true);
     setMsg('');
     try {
-      const res = await fetch('/api/payments/deposit', {
-        method: 'POST', headers,
-        body: JSON.stringify({ amount: parseFloat(amount) }),
-      });
-      if (res.ok) {
-        setMsg(`Deposit of $${amount} initiated.`);
-        setShowDeposit(false);
-        setAmount('');
-      } else {
-        setMsg('Deposit failed.');
-      }
-    } catch { setMsg('Network error.'); }
+      await api.post('/api/payments/deposit', { amount: parseFloat(amount) });
+      setMsg(`Deposit of $${amount} initiated.`);
+      setShowDeposit(false);
+      setAmount('');
+    } catch { setMsg('Deposit failed.'); }
     setProcessing(false);
   };
 
@@ -108,18 +91,11 @@ const Wallet: React.FC = () => {
     setProcessing(true);
     setMsg('');
     try {
-      const res = await fetch('/api/payments/withdraw', {
-        method: 'POST', headers,
-        body: JSON.stringify({ amount: parseFloat(amount) }),
-      });
-      if (res.ok) {
-        setMsg(`Withdrawal of $${amount} submitted.`);
-        setShowWithdraw(false);
-        setAmount('');
-      } else {
-        setMsg('Withdrawal failed.');
-      }
-    } catch { setMsg('Network error.'); }
+      await api.post('/api/payments/withdraw', { amount: parseFloat(amount) });
+      setMsg(`Withdrawal of $${amount} submitted.`);
+      setShowWithdraw(false);
+      setAmount('');
+    } catch { setMsg('Withdrawal failed.'); }
     setProcessing(false);
   };
 

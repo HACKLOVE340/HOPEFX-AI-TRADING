@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useStore } from '../store';
+import { api } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,37 +79,32 @@ function formatDate(iso: string): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const EconomicCalendar: React.FC = () => {
-  const token = useStore((s) => s.token);
-
-  const [events, setEvents]         = useState<CalendarEvent[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [filter, setFilter]         = useState<'all' | 'high'>('all');
-  const [autoPause, setAutoPause]   = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
+  const [events, setEvents]           = useState<CalendarEvent[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState<'all' | 'high'>('all');
+  const [autoPause, setAutoPause]     = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
   const [savingPause, setSavingPause] = useState(false);
-  const [, setTick] = useState(0); // force re-render for countdown
-
-  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const [, setTick]                   = useState(0);
 
   const fetchEvents = useCallback(async () => {
     try {
       const url = filter === 'high' ? '/api/calendar/high-impact' : '/api/calendar/upcoming?hours=168';
-      const res = await fetch(url, { headers });
-      if (res.ok) setEvents(await res.json());
+      const res = await api.get<CalendarEvent[]>(url);
+      setEvents(res.data);
     } catch { /* silent */ }
     setLoading(false);
   }, [filter]);
 
   const fetchAutoPause = useCallback(async () => {
     try {
-      const res = await fetch('/api/calendar/auto-pause', { headers });
-      if (res.ok) setAutoPause(await res.json());
+      const res = await api.get<AutoPauseConfig>('/api/calendar/auto-pause');
+      setAutoPause(res.data);
     } catch { /* silent */ }
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
   useEffect(() => { fetchAutoPause(); }, [fetchAutoPause]);
 
-  // Countdown tick every 30s
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
@@ -119,12 +114,8 @@ const EconomicCalendar: React.FC = () => {
     setSavingPause(true);
     const next = { ...autoPause, enabled: !autoPause.enabled };
     try {
-      const res = await fetch('/api/calendar/auto-pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify(next),
-      });
-      if (res.ok) setAutoPause(await res.json());
+      const res = await api.post<AutoPauseConfig>('/api/calendar/auto-pause', next);
+      setAutoPause(res.data);
     } catch { /* silent */ }
     setSavingPause(false);
   };

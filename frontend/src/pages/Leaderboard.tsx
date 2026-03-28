@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { api } from '../hooks/useApi';
 
 interface Trader {
   rank: number;
@@ -30,9 +31,8 @@ const Leaderboard: React.FC = () => {
   const [traders, setTraders] = useState<Trader[]>(FALLBACK);
 
   useEffect(() => {
-    fetch(`/api/social/leaderboard?period=${period}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.length) setTraders(data); })
+    api.get<Trader[]>(`/api/social/leaderboard?period=${period}`)
+      .then((r) => { if (r.data?.length) setTraders(r.data); })
       .catch(() => {});
   }, [period]);
 
