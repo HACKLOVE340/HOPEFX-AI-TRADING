@@ -6,18 +6,27 @@
 """
 api/online_learner.py
 =====================
-REST endpoints for the SklearnOnlineLearner (ml/online_learner.py).
+REST endpoints for both online learner layers:
+
+  Layer A — SklearnOnlineLearner (ml/online_learner.py, SGD-based)
+  Layer B — OnlineLearnerStore   (research/pipeline/online_learning.py, XGBoost Phase-3)
 
 Endpoints
 ---------
   GET  /api/online-learner/status
-       Return per-symbol learner state: fitted, update_count, last_fit_at,
-       accuracy, regime. Lists all registered symbols or filters by ?symbol=.
+       Combined status for both layers across all registered symbols.
 
   POST /api/online-learner/partial-fit
-       Trigger an incremental SGD update for a given symbol using the most
-       recent N bars of OHLCV data fetched from yfinance.
+       Trigger an incremental SGD update (Layer A) for a symbol.
        Requires admin role.
+
+  GET  /api/online-learner/diagnostics
+       Deep diagnostics: drift counts, blend weights, buffer sizes, EWC lambda,
+       circuit-breaker state, and recent error trend for both layers.
+
+  POST /api/online-learner/reset
+       Reset the OnlineLearnerStore singleton for a symbol (Layer B).
+       Clears accumulated fills and drift counters. Requires admin role.
 """
 
 from __future__ import annotations
@@ -136,7 +145,63 @@ class PartialFitResponse(BaseModel):
     message: str
 
 
+class Phase3StatusItem(BaseModel):
+    symbol: str
+    ready: bool
+    fill_count: int
+    ph_drift_count: int
+    adwin_drift_count: int
+    recent_error: Optional[float] = None
+    primary_weight: float
+    online_weight: float
+    adaptive_weights: bool
+    adwin_window: int
+
+
+class DiagnosticsResponse(BaseModel):
+    checked_at: str
+    sklearn_layer: List[LearnerStatusItem]
+    phase3_layer: List[Phase3StatusItem]
+
+
+class ResetRequest(BaseModel):
+    symbol: str = Field("XAUUSD", description="Symbol whose Phase-3 store to reset")
+
+
+class ResetResponse(BaseModel):
+    symbol: str
+    reset: bool
+    message: str
+    reset_at: str
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+def _get_phase3_items(symbol: Optional[str] = None) -> List[Phase3StatusItem]:
+    """Collect Phase-3 OnlineLearnerStore status for all registered symbols."""
+    items: List[Phase3StatusItem] = []
+    try:
+        from research.pipeline.online_learning import list_online_learners  # noqa: PLC0415
+        stores = list_online_learners()
+        for sym, snap in stores.items():
+            if symbol is not None and sym.upper() != symbol.upper():
+                continue
+            items.append(Phase3StatusItem(
+                symbol=sym,
+                ready=snap.get("ready", False),
+                fill_count=snap.get("fill_count", 0),
+                ph_drift_count=snap.get("ph_drift_count", 0),
+                adwin_drift_count=snap.get("adwin_drift_count", 0),
+                recent_error=snap.get("recent_error"),
+                primary_weight=snap.get("primary_weight", 0.7),
+                online_weight=snap.get("online_weight", 0.3),
+                adaptive_weights=snap.get("adaptive_weights", True),
+                adwin_window=snap.get("adwin_window", 0),
+            ))
+    except Exception as exc:
+        logger.debug("_get_phase3_items failed: %s", exc)
+    return items
 
 
 @router.get(
@@ -149,27 +214,15 @@ async def online_learner_status(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Return the current state of all registered SklearnOnlineLearner instances.
+    Return the current state of all registered SklearnOnlineLearner instances
+    (Layer A — SGD) and Phase-3 OnlineLearnerStore instances (Layer B — XGBoost).
 
-    Each entry reports:
-    - `fitted`        — whether partial_fit() has been called at least once
-    - `update_count`  — number of incremental updates applied
-    - `persist_path`  — path to the persisted .pkl file
-    - `last_fit_at`   — ISO timestamp of the last partial_fit call (if tracked)
-    - `accuracy`      — most recent OOS accuracy estimate (if available)
-    - `regime`        — current detected market regime (if available)
+    Each sklearn entry reports: fitted, update_count, persist_path, last_fit_at,
+    accuracy, regime.
 
-    Pass `?symbol=XAU_USD` to filter to a single symbol.
+    Pass ``?symbol=XAU_USD`` to filter to a single symbol.
     """
     registry = _get_registry()
-
-    if not registry:
-        # No learners registered yet — return empty but valid response
-        return LearnerStatusResponse(
-            learners=[],
-            count=0,
-            checked_at=datetime.now(timezone.utc).isoformat(),
-        )
 
     items: List[LearnerStatusItem] = []
     for sym, learner in registry.items():
@@ -257,4 +310,100 @@ async def partial_fit(
             if success
             else f"partial_fit returned False for {req.symbol} — check logs"
         ),
+    )
+
+
+@router.get(
+    "/diagnostics",
+    response_model=DiagnosticsResponse,
+    summary="Deep diagnostics for both online learner layers",
+)
+async def online_learner_diagnostics(
+    symbol: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return deep diagnostics for both online learner layers.
+
+    **Layer A (sklearn SGD)** — per-symbol: fitted, update_count, accuracy,
+    persist_path, last_fit_at, regime.
+
+    **Layer B (Phase-3 XGBoost)** — per-symbol: ready, fill_count,
+    Page-Hinkley drift count, ADWIN drift count, recent prediction error,
+    primary/online blend weights, adaptive_weights flag, ADWIN window size.
+
+    Pass ``?symbol=XAUUSD`` to filter to a single symbol.
+    """
+    # Layer A — sklearn
+    registry = _get_registry()
+    sklearn_items: List[LearnerStatusItem] = []
+    for sym, learner in registry.items():
+        if symbol is not None and sym.upper() != symbol.upper():
+            continue
+        try:
+            raw = learner.status()
+        except Exception as exc:
+            logger.warning("diagnostics: sklearn status() failed for %s: %s", sym, exc)
+            raw = {"symbol": sym, "fitted": False, "update_count": 0, "persist_path": ""}
+        sklearn_items.append(LearnerStatusItem(
+            symbol=raw.get("symbol", sym),
+            fitted=raw.get("fitted", False),
+            update_count=raw.get("update_count", 0),
+            persist_path=raw.get("persist_path", ""),
+            last_fit_at=getattr(learner, "_last_fit_at", None),
+            accuracy=getattr(learner, "_last_accuracy", None),
+            regime=getattr(learner, "_current_regime", None),
+        ))
+
+    # Layer B — Phase-3 XGBoost
+    phase3_items = _get_phase3_items(symbol=symbol)
+
+    return DiagnosticsResponse(
+        checked_at=datetime.now(timezone.utc).isoformat(),
+        sklearn_layer=sklearn_items,
+        phase3_layer=phase3_items,
+    )
+
+
+@router.post(
+    "/reset",
+    response_model=ResetResponse,
+    summary="Reset the Phase-3 OnlineLearnerStore for a symbol",
+)
+async def reset_online_learner(
+    req: ResetRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Remove the Phase-3 ``OnlineLearnerStore`` singleton for *symbol* from the
+    registry.  The next inference call will create a fresh instance, discarding
+    all accumulated fills, drift counters, and blend-weight history.
+
+    Use this after a major model retrain to prevent stale online weights from
+    contaminating the new primary model's blend.
+
+    Requires admin role.
+    """
+    reset_at = datetime.now(timezone.utc).isoformat()
+    try:
+        from research.pipeline.online_learning import reset_online_learner as _reset  # noqa: PLC0415
+        removed = _reset(symbol=req.symbol)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"reset_online_learner failed: {exc}",
+        )
+
+    msg = (
+        f"OnlineLearnerStore for {req.symbol.upper()} removed from registry — "
+        "fresh instance will be created on next inference call."
+        if removed
+        else f"No OnlineLearnerStore found for {req.symbol.upper()} — nothing to reset."
+    )
+    logger.info("online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed)
+    return ResetResponse(
+        symbol=req.symbol.upper(),
+        reset=removed,
+        message=msg,
+        reset_at=reset_at,
     )
