@@ -34,6 +34,14 @@ from fastapi.testclient import TestClient
 os.environ["SECURITY_JWT_SECRET"] = "test-secret-key-minimum-32-characters-long"
 os.environ["ALLOWED_SYMBOLS"] = "XAUUSD,EURUSD,BTCUSD"
 os.environ["MAX_ORDER_QUANTITY"] = "10.0"
+# Ensure kill switch is never active during tests regardless of persisted state.
+# The flag and state files may be left by integration runs or backtests.
+os.environ["HOPEFX_KILL_SWITCH"] = "0"
+_KS_ROOT = pathlib.Path(__file__).parents[2]
+for _ks_artifact in ("kill_switch.flag", "kill_switch.state.json"):
+    _p = _KS_ROOT / _ks_artifact
+    if _p.exists():
+        _p.unlink()
 
 _API_DIR = pathlib.Path(__file__).parents[2] / "api"
 
