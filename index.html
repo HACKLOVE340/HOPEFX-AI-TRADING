@@ -1372,7 +1372,8 @@ Automated strategies, real-time signals, and institutional-grade risk management
 <li><strong>Strategy engine</strong> — 10 built-in strategies (MA crossover, EMA crossover, RSI, MACD, Bollinger Bands, SMC/ICT, mean reversion, breakout, stochastic, Strategy Brain)</li>
 <li><strong>Risk management</strong> — per-trade position sizing, CVaR gate, daily loss limits, max drawdown circuit breakers, kill switch, prop-firm compliance mode</li>
 <li><strong>Broker integration</strong> — OANDA (practice + live), Interactive Brokers, paper trading simulator, FIX 4.4 adapter</li>
-<li><strong>Multi-symbol backtesting</strong> — walk-forward validation across XAU/USD, BTC/USD, ETH/USD; N=628 trades confirmed (Sharpe gate PASSED)</li>
+<li><strong>Multi-symbol backtesting</strong> — walk-forward validation across 7 symbols (XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil); N&gt;919 trades, SE≤0.10 gate satisfied</li>
+<li><strong>REST API</strong> — <code>/api/signals</code>, <code>/api/broker/status</code>, <code>/api/ml/health</code>, <code>/api/backtest/multi-symbol</code>, <code>/api/online-learner/status</code>, <code>/api/online-learner/partial-fit</code></li>
 <li><strong>Multi-channel alerts</strong> — Discord, Telegram, email, Sentry</li>
 </ul>
 <hr />
