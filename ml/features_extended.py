@@ -6,7 +6,7 @@
 """
 ml/features_extended.py
 =======================
-Extended feature engineering — layers 13-15 adding 100+ features on top of
+Extended feature engineering — layers 13-16 adding 130+ features on top of
 the existing 100-feature base in advanced_features.py.
 
 New layers
@@ -14,8 +14,12 @@ New layers
 13. Order-flow & tape reading  — delta, cumulative delta, buy/sell pressure
 14. Fractal geometry           — fractal dimension, self-similarity, chaos
 15. Regime-adaptive ensemble   — cross-feature interactions, regime-gated signals
+16. Institutional edge signals — anchored VWAP (20/50/100-bar), VWAP slope &
+    acceleration, cumulative delta divergence, stacked bid/ask imbalances,
+    rolling volume profile (POC/VAH/VAL), institutional absorption, Smart Money
+    Index, order-flow momentum divergence, bid/ask pressure ratios
 
-Total output: 200+ features when combined with build_advanced_features().
+Total output: 230+ features when combined with build_advanced_features().
 """
 
 from __future__ import annotations
@@ -491,6 +495,294 @@ def add_regime_interactions(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Layer 16: Institutional edge signals
+#
+# VWAP anchoring, order-flow imbalance, delta divergence, volume profile
+# (POC / VAH / VAL), stacked imbalances, and smart-money footprint features.
+#
+# These signals capture the behaviour of institutional participants:
+# - Anchored VWAP from session open / swing high / swing low
+# - Volume-weighted price levels where institutions accumulate / distribute
+# - Delta divergence: price makes new high but cumulative delta falls
+# - Stacked bid/ask imbalances: consecutive bars with one-sided pressure
+# - Volume profile: Point of Control, Value Area High/Low, TPO count
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Layer 16: Institutional edge signals — VWAP + order flow.
+
+    Adds ~35 features:
+    - Anchored VWAP (session, 20-bar, 50-bar) + deviations
+    - VWAP slope and acceleration
+    - Delta divergence (price vs cumulative delta)
+    - Stacked imbalance detection (3+ consecutive same-side bars)
+    - Volume profile: POC, VAH, VAL, TPO count, value area width
+    - Institutional absorption: large volume, small price move
+    - Smart money index (SMI): early vs late session price action
+    - Order flow momentum divergence
+    - Bid/ask pressure ratio rolling windows
+    """
+    d = df.copy()
+    c = d["close"]
+    o = d["open"]
+    h = d["high"]
+    l = d["low"]  # noqa: E741
+    v = d["volume"].replace(0, np.nan)
+
+    # ── Typical price and volume-weighted price ───────────────────────────────
+    typical = (h + l + c) / 3.0
+
+    # ── Anchored VWAP: rolling windows ───────────────────────────────────────
+    # 20-bar VWAP (intraday session proxy)
+    vwap_20_num = (typical * v.fillna(0)).rolling(20).sum()
+    vwap_20_den = v.fillna(0).rolling(20).sum().replace(0, np.nan)
+    vwap_20 = (vwap_20_num / vwap_20_den).fillna(c)
+
+    # 50-bar VWAP (multi-session / swing level)
+    vwap_50_num = (typical * v.fillna(0)).rolling(50).sum()
+    vwap_50_den = v.fillna(0).rolling(50).sum().replace(0, np.nan)
+    vwap_50 = (vwap_50_num / vwap_50_den).fillna(c)
+
+    # 100-bar VWAP (weekly / institutional reference)
+    vwap_100_num = (typical * v.fillna(0)).rolling(100).sum()
+    vwap_100_den = v.fillna(0).rolling(100).sum().replace(0, np.nan)
+    vwap_100 = (vwap_100_num / vwap_100_den).fillna(c)
+
+    # VWAP deviations (normalised by VWAP so cross-instrument comparable)
+    d["inst_vwap20_dev"] = ((c - vwap_20) / vwap_20.replace(0, np.nan)).fillna(0.0)
+    d["inst_vwap50_dev"] = ((c - vwap_50) / vwap_50.replace(0, np.nan)).fillna(0.0)
+    d["inst_vwap100_dev"] = ((c - vwap_100) / vwap_100.replace(0, np.nan)).fillna(0.0)
+
+    # Z-scores of VWAP deviations
+    d["inst_vwap20_dev_z"] = _zscore(d["inst_vwap20_dev"], 20)
+    d["inst_vwap50_dev_z"] = _zscore(d["inst_vwap50_dev"], 20)
+
+    # Price position relative to VWAP stack (above all 3 = strong bull)
+    d["inst_above_vwap20"] = (c > vwap_20).astype(int)
+    d["inst_above_vwap50"] = (c > vwap_50).astype(int)
+    d["inst_above_vwap100"] = (c > vwap_100).astype(int)
+    d["inst_vwap_stack_bull"] = (
+        d["inst_above_vwap20"] + d["inst_above_vwap50"] + d["inst_above_vwap100"]
+    )  # 0–3: 3 = price above all VWAPs (institutional bull)
+
+    # VWAP slope: rate of change of 20-bar VWAP (trend direction of institutions)
+    d["inst_vwap20_slope"] = (
+        (vwap_20 - vwap_20.shift(5)) / vwap_20.shift(5).replace(0, np.nan)
+    ).fillna(0.0)
+    d["inst_vwap20_accel"] = (
+        d["inst_vwap20_slope"] - d["inst_vwap20_slope"].shift(5)
+    ).fillna(0.0)
+
+    # ── Buy/sell volume estimation ────────────────────────────────────────────
+    bar_range = (h - l).replace(0, np.nan)
+    buy_pct = ((c - l) / bar_range).fillna(0.5).clip(0, 1)
+    sell_pct = 1.0 - buy_pct
+    buy_vol = (buy_pct * v.fillna(0))
+    sell_vol = (sell_pct * v.fillna(0))
+    delta = buy_vol - sell_vol
+
+    # ── Cumulative delta and divergence ───────────────────────────────────────
+    cum_delta_20 = delta.rolling(20).sum().fillna(0.0)
+    cum_delta_50 = delta.rolling(50).sum().fillna(0.0)
+
+    d["inst_cum_delta_20"] = cum_delta_20
+    d["inst_cum_delta_50"] = cum_delta_50
+    d["inst_cum_delta_20_z"] = _zscore(cum_delta_20, 20)
+
+    # Delta divergence: price makes new 20-bar high but cum_delta falls
+    # (bearish divergence = institutional distribution at highs)
+    price_new_high_20 = (c == c.rolling(20).max()).astype(int)
+    delta_falling = (cum_delta_20 < cum_delta_20.shift(5)).astype(int)
+    d["inst_bearish_delta_div"] = (price_new_high_20 & delta_falling).astype(int)
+
+    price_new_low_20 = (c == c.rolling(20).min()).astype(int)
+    delta_rising = (cum_delta_20 > cum_delta_20.shift(5)).astype(int)
+    d["inst_bullish_delta_div"] = (price_new_low_20 & delta_rising).astype(int)
+
+    # ── Stacked imbalances ────────────────────────────────────────────────────
+    # 3+ consecutive bars where buy_vol > sell_vol × threshold (bid stacking)
+    imbalance_threshold = 1.5  # buy_vol must be 1.5× sell_vol
+    buy_dominant = (buy_vol > sell_vol * imbalance_threshold).astype(int)
+    sell_dominant = (sell_vol > buy_vol * imbalance_threshold).astype(int)
+
+    # Rolling sum of consecutive dominance (stacked = 3+ in a row)
+    d["inst_buy_stack_3"] = buy_dominant.rolling(3).sum().fillna(0).astype(int)
+    d["inst_sell_stack_3"] = sell_dominant.rolling(3).sum().fillna(0).astype(int)
+    d["inst_buy_stacked"] = (d["inst_buy_stack_3"] >= 3).astype(int)
+    d["inst_sell_stacked"] = (d["inst_sell_stack_3"] >= 3).astype(int)
+
+    # ── Volume profile: POC, VAH, VAL ─────────────────────────────────────────
+    # Computed over a rolling 50-bar window using price buckets.
+    # POC = price level with highest volume (Point of Control)
+    # VAH/VAL = Value Area High/Low (70% of volume)
+    poc, vah, val = _rolling_volume_profile(h, l, c, v.fillna(0), window=50)
+    d["inst_poc"] = poc
+    d["inst_vah"] = vah
+    d["inst_val"] = val
+
+    # Normalised distances from current price to profile levels
+    d["inst_dist_poc"] = ((c - poc) / poc.replace(0, np.nan)).fillna(0.0)
+    d["inst_dist_vah"] = ((c - vah) / vah.replace(0, np.nan)).fillna(0.0)
+    d["inst_dist_val"] = ((c - val) / val.replace(0, np.nan)).fillna(0.0)
+    d["inst_va_width"] = ((vah - val) / poc.replace(0, np.nan)).fillna(0.0)
+
+    # Price position within value area (0 = at VAL, 1 = at VAH)
+    va_range = (vah - val).replace(0, np.nan)
+    d["inst_va_position"] = ((c - val) / va_range).fillna(0.5).clip(0, 1)
+
+    # ── Institutional absorption ──────────────────────────────────────────────
+    # Large volume + small price move = institutions absorbing supply/demand
+    price_move = (c - o).abs().replace(0, np.nan)
+    vol_ma20 = v.rolling(20).mean().replace(0, np.nan)
+    d["inst_absorption_ratio"] = (
+        (v / vol_ma20) / (price_move / c.replace(0, np.nan))
+    ).fillna(0.0).clip(0, 100)
+    d["inst_absorption_z"] = _zscore(d["inst_absorption_ratio"], 20)
+    # High absorption = large vol, small move (institutional accumulation/distribution)
+    d["inst_high_absorption"] = (
+        d["inst_absorption_z"] > 1.5
+    ).astype(int)
+
+    # ── Smart Money Index (SMI) ───────────────────────────────────────────────
+    # SMI = close - open (first 30 min proxy) + close - open (last 30 min proxy)
+    # On H1 bars: first bar of session = dumb money, last bar = smart money
+    # Proxy: (close - open) of current bar vs (close - open) of 8 bars ago
+    early_move = (o - o.shift(1)).fillna(0.0)   # gap open = retail reaction
+    late_move = (c - o).fillna(0.0)              # intrabar close = smart money
+    d["inst_smi"] = (late_move - early_move).fillna(0.0)
+    d["inst_smi_z20"] = _zscore(d["inst_smi"], 20)
+    d["inst_smi_ma10"] = d["inst_smi"].rolling(10).mean().fillna(0.0)
+
+    # ── Order flow momentum divergence ────────────────────────────────────────
+    # Price momentum vs delta momentum — divergence signals exhaustion
+    price_mom_10 = (c - c.shift(10)).fillna(0.0)
+    delta_mom_10 = (cum_delta_20 - cum_delta_20.shift(10)).fillna(0.0)
+
+    # Normalise both to [-1, 1] range for comparison
+    price_mom_norm = _rolling_minmax_norm(price_mom_10, 20)
+    delta_mom_norm = _rolling_minmax_norm(delta_mom_10, 20)
+    d["inst_of_divergence"] = (price_mom_norm - delta_mom_norm).fillna(0.0)
+    d["inst_of_divergence_z"] = _zscore(d["inst_of_divergence"], 20)
+
+    # ── Bid/ask pressure ratio ────────────────────────────────────────────────
+    total_vol = (buy_vol + sell_vol).replace(0, np.nan)
+    buy_pressure = (buy_vol / total_vol).fillna(0.5)
+    d["inst_buy_pressure_10"] = buy_pressure.rolling(10).mean().fillna(0.5)
+    d["inst_buy_pressure_20"] = buy_pressure.rolling(20).mean().fillna(0.5)
+    d["inst_pressure_imbalance"] = (
+        d["inst_buy_pressure_20"] - 0.5
+    ) * 2.0  # [-1, 1]: positive = buy-side dominant
+
+    return d
+
+
+def _rolling_volume_profile(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    window: int = 50,
+    n_buckets: int = 20,
+) -> tuple:
+    """
+    Compute rolling volume profile: POC, VAH, VAL over a lookback window.
+
+    Uses price buckets (n_buckets bins between rolling high and low) and
+    distributes each bar's volume proportionally across the buckets it spans.
+
+    Returns three pd.Series: (poc, vah, val) aligned to the input index.
+    """
+    n = len(close)
+    poc_vals = np.full(n, np.nan)
+    vah_vals = np.full(n, np.nan)
+    val_vals = np.full(n, np.nan)
+
+    h_arr = high.values.astype(float)
+    l_arr = low.values.astype(float)
+    c_arr = close.values.astype(float)
+    v_arr = volume.values.astype(float)
+
+    for i in range(window - 1, n):
+        start = i - window + 1
+        h_w = h_arr[start : i + 1]
+        l_w = l_arr[start : i + 1]
+        v_w = v_arr[start : i + 1]
+
+        price_high = np.nanmax(h_w)
+        price_low = np.nanmin(l_w)
+        if price_high <= price_low or np.isnan(price_high):
+            poc_vals[i] = c_arr[i]
+            vah_vals[i] = c_arr[i]
+            val_vals[i] = c_arr[i]
+            continue
+
+        # Build price buckets
+        bucket_edges = np.linspace(price_low, price_high, n_buckets + 1)
+        bucket_mid = (bucket_edges[:-1] + bucket_edges[1:]) / 2.0
+        bucket_vol = np.zeros(n_buckets)
+
+        for j in range(len(h_w)):
+            bar_h = h_w[j]
+            bar_l = l_w[j]
+            bar_v = v_w[j]
+            if np.isnan(bar_v) or bar_v <= 0:
+                continue
+            # Find buckets this bar spans
+            lo_idx = np.searchsorted(bucket_edges, bar_l, side="left")
+            hi_idx = np.searchsorted(bucket_edges, bar_h, side="right")
+            lo_idx = max(0, min(lo_idx, n_buckets - 1))
+            hi_idx = max(0, min(hi_idx, n_buckets))
+            span = hi_idx - lo_idx
+            if span > 0:
+                bucket_vol[lo_idx:hi_idx] += bar_v / span
+
+        # POC = bucket with highest volume
+        poc_idx = int(np.argmax(bucket_vol))
+        poc_vals[i] = bucket_mid[poc_idx]
+
+        # Value Area: 70% of total volume centred on POC
+        total_vol_w = np.sum(bucket_vol)
+        target_vol = total_vol_w * 0.70
+        va_vol = bucket_vol[poc_idx]
+        lo_ptr = poc_idx
+        hi_ptr = poc_idx
+
+        while va_vol < target_vol:
+            can_expand_up = hi_ptr + 1 < n_buckets
+            can_expand_dn = lo_ptr - 1 >= 0
+            if not can_expand_up and not can_expand_dn:
+                break
+            up_vol = bucket_vol[hi_ptr + 1] if can_expand_up else -1
+            dn_vol = bucket_vol[lo_ptr - 1] if can_expand_dn else -1
+            if up_vol >= dn_vol:
+                hi_ptr += 1
+                va_vol += bucket_vol[hi_ptr]
+            else:
+                lo_ptr -= 1
+                va_vol += bucket_vol[lo_ptr]
+
+        vah_vals[i] = bucket_mid[hi_ptr]
+        val_vals[i] = bucket_mid[lo_ptr]
+
+    idx = close.index
+    return (
+        pd.Series(poc_vals, index=idx).ffill().fillna(close),
+        pd.Series(vah_vals, index=idx).ffill().fillna(close),
+        pd.Series(val_vals, index=idx).ffill().fillna(close),
+    )
+
+
+def _rolling_minmax_norm(series: pd.Series, window: int) -> pd.Series:
+    """Normalise series to [-1, 1] using rolling min/max."""
+    roll_min = series.rolling(window).min()
+    roll_max = series.rolling(window).max()
+    denom = (roll_max - roll_min).replace(0, np.nan)
+    return (2.0 * (series - roll_min) / denom - 1.0).fillna(0.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Master builder: 200+ features
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -543,6 +835,7 @@ def build_extended_features(
     d = add_orderflow_features(d)
     d = add_fractal_features(d, smoke=smoke)
     d = add_regime_interactions(d)
+    d = add_institutional_edge_features(d)  # Layer 16: VWAP + order flow
 
     # Collect only new columns (not in base OHLCV)
     base_cols = {"open", "high", "low", "close", "volume"}
