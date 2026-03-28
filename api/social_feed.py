@@ -58,46 +58,8 @@ def _save_opted_in() -> None:
     db_set("social_feed:opted_in", list(_opted_in), changed_by="social_feed")
 
 
-# ── Seed demo data ────────────────────────────────────────────────────────────
-
-
-def _seed_demo():
-    import random
-
-    random.seed(7)
-    symbols = ["XAU/USD", "EUR/USD", "GBP/USD", "USD/JPY", "BTC/USD"]
-    directions = ["BUY", "SELL"]
-    usernames = ["AlgoTrader_X", "GoldHunter", "FXWizard", "PropKing", "QuietEdge"]
-    for i in range(12):
-        sid = f"demo-sig-{i:03d}"
-        sym = random.choice(symbols)
-        direction = random.choice(directions)
-        conf = round(70 + random.random() * 25, 1)
-        pnl = round((random.random() - 0.4) * 350, 2)
-        copies = random.randint(0, 18)
-        _feed_items[sid] = {
-            "signal_id": sid,
-            "symbol": sym,
-            "direction": direction,
-            "confidence": conf,
-            "entry_price": round(2300 + random.random() * 100, 2)
-            if "XAU" in sym
-            else round(1.05 + random.random() * 0.05, 5),
-            "pnl": pnl,
-            "copies": copies,
-            "username": random.choice(usernames),
-            "trader_id": f"trader-{i:03d}",
-            "thumbs_up": random.randint(0, 24),
-            "thumbs_down": random.randint(0, 6),
-            "comment_count": random.randint(0, 5),
-            "is_public": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        _reactions[sid] = {}
-        _comments[sid] = []
-
-
-_seed_demo()
+# Feed starts empty — items are added by _publish_signal() when the signal
+# engine emits high-confidence signals from opted-in users.
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -274,12 +236,17 @@ async def get_leaderboard(
     """
     Return ranked trader performance for the leaderboard.
 
-    Reads from the profiles store when available; falls back to a
-    deterministic demo dataset so the UI always renders.
+    Data sources (in priority order):
+    1. Persisted leaderboard snapshot in db_store (written by a background job)
+    2. Live TraderProfile records from the profile manager (opted-in users only)
+
+    Returns an empty list when no real data is available — the frontend
+    must handle this case and show an appropriate empty state.
 
     Fields per entry:
-      id, name, return_3m, sharpe, followers, win_rate, trades, prize
+      id, rank, name, return_3m, sharpe, followers, win_rate, trades
     """
+    # ── 1. Persisted leaderboard snapshot ────────────────────────────────────
     try:
         from api.db_store import db_get as _db_get
 
@@ -288,44 +255,32 @@ async def get_leaderboard(
         if entries:
             return entries[:limit]
     except Exception as exc:
-        logger.debug("Leaderboard DB read failed (non-fatal): %s", exc)
+        logger.debug("Leaderboard DB read failed: %s", exc)
 
-    # Deterministic demo fallback — always returns data so the UI renders
-    import hashlib as _hashlib
+    # ── 2. Live profile store — opted-in traders only ─────────────────────────
+    try:
+        from social.profiles import TraderProfileManager as _TPM
 
-    demo_traders = [
-        ("AuricAlpha", 42.3, 2.81, 1240, 63.2, 312, "$5,000"),
-        ("GoldHunter", 38.7, 2.54, 987, 61.8, 278, "$3,000"),
-        ("MacroEdge", 35.1, 2.33, 834, 60.4, 251, "$2,000"),
-        ("VaultBreaker", 31.8, 2.12, 712, 59.1, 229, "$1,500"),
-        ("TrendRider", 28.4, 1.98, 623, 58.7, 204, "$1,000"),
-        ("AlphaWave", 25.9, 1.87, 541, 57.3, 187, "$750"),
-        ("SilverFox", 23.2, 1.74, 478, 56.8, 168, "$500"),
-        ("NightOwl", 20.7, 1.63, 412, 55.4, 152, "$400"),
-        ("DawnTrader", 18.1, 1.52, 356, 54.9, 138, "$300"),
-        ("QuietStorm", 15.6, 1.41, 298, 53.7, 124, "$200"),
-    ]
+        mgr = _TPM()
+        profiles = mgr.list_profiles(public_only=True)
+        if profiles:
+            ranked = sorted(profiles, key=lambda p: p.sharpe_ratio, reverse=True)
+            result = []
+            for i, p in enumerate(ranked[:limit], 1):
+                result.append({
+                    "id": p.trader_id,
+                    "rank": i,
+                    "name": p.username,
+                    "return_3m": round(p.total_pnl / max(p.total_trades, 1), 2),
+                    "sharpe": round(p.sharpe_ratio, 2),
+                    "followers": p.total_followers,
+                    "win_rate": round(p.win_rate, 1),
+                    "trades": p.total_trades,
+                })
+            if result:
+                return result
+    except Exception as exc:
+        logger.debug("Profile store leaderboard failed: %s", exc)
 
-    # Scale returns by period
-    scale = {"monthly": 1.0, "quarterly": 2.8, "all": 8.5}.get(period, 1.0)
-
-    result = []
-    for i, (name, ret, sharpe, followers, wr, trades, prize) in enumerate(
-        demo_traders[:limit], 1
-    ):
-        uid = _hashlib.md5(name.encode(), usedforsecurity=False).hexdigest()[:8]  # noqa: S324
-        result.append(
-            {
-                "id": uid,
-                "rank": i,
-                "name": name,
-                "return": round(ret * scale, 1),
-                "return_3m": round(ret, 1),
-                "sharpe": round(sharpe, 2),
-                "followers": followers,
-                "win_rate": wr,
-                "trades": trades,
-                "prize": prize,
-            }
-        )
-    return result
+    # No real data yet — return empty list with a status hint
+    return []
