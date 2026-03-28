@@ -14,10 +14,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 
+// Derive the WebSocket URL from the current page origin so it works through
+// the Vite dev-server proxy (/ws → ws://localhost:8000) and in production
+// without hardcoding a port.  VITE_WS_URL overrides everything when set.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const WS_URL =
-  ((import.meta as any).env?.VITE_WS_URL as string | undefined) ??
-  `ws://${window.location.hostname}:8000/ws/live`;
+const _envWsUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+const WS_URL: string = _envWsUrl ?? (() => {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}/ws/live`;
+})();
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const INITIAL_RECONNECT_MS  = 1_000;
