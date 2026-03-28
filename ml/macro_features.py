@@ -161,12 +161,16 @@ def add_macro_features(
     """
     df = ohlcv.copy()
 
-    if df.index.tz is not None:
-        df.index = df.index.tz_localize(None)
+    # Preserve original tz so we can restore it before returning.
+    # All internal operations use tz-naive indices to avoid
+    # "Cannot join tz-naive with tz-aware DatetimeIndex" errors.
+    df_tz = df.index.tz
+    if df_tz is not None:
+        df.index = df.index.tz_convert("UTC").tz_localize(None)
     df.index = pd.to_datetime(df.index)
     # Only normalise to midnight when the index is already daily-frequency
     # (all times identical) — normalising sub-daily data creates duplicates.
-    if (df.index.time == df.index[0].time()).all():
+    if len(df.index) > 0 and (df.index.time == df.index[0].time()).all():
         df.index = df.index.normalize()
     if df.index.duplicated().any():
         df = df[~df.index.duplicated(keep="last")]
@@ -174,18 +178,25 @@ def add_macro_features(
     if macro_df is None or macro_df.empty:
         for col in MACRO_COLUMNS:
             df[col] = 0.0
+        if df_tz is not None:
+            df.index = df.index.tz_localize(df_tz)
         return df
 
     macro = macro_df.copy()
     if macro.index.tz is not None:
-        macro.index = macro.index.tz_localize(None)
+        macro.index = macro.index.tz_convert("UTC").tz_localize(None)
     macro.index = pd.to_datetime(macro.index)
-    if (macro.index.time == macro.index[0].time()).all():
+    if len(macro.index) > 0 and (macro.index.time == macro.index[0].time()).all():
         macro.index = macro.index.normalize()
     if macro.index.duplicated().any():
         macro = macro[~macro.index.duplicated(keep="last")]
-    # Reindex to OHLCV dates: ffill only, then zero-fill remaining NaN
+    # Reindex to OHLCV dates: ffill only, then zero-fill remaining NaN.
+    # After reindex both df and macro are tz-naive; restore df_tz on both
+    # so arithmetic between df-derived and macro-derived series stays consistent.
     macro = macro.reindex(df.index, method="ffill").fillna(0.0)
+    if df_tz is not None:
+        df.index = df.index.tz_localize(df_tz)
+        macro.index = macro.index.tz_localize(df_tz)
 
     def _zscore(s: pd.Series, w: int) -> pd.Series:
         mu = s.rolling(w).mean()
