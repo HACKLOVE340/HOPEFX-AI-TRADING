@@ -444,7 +444,7 @@ Instead:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree to the [Contributor License Agreement (CLA)](../CLA.md). Your contributions will be licensed under AGPL-3.0 and may also be included in commercial releases under the terms described in [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
 
 ## Questions?
 

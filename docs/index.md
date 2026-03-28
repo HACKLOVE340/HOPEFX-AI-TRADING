@@ -73,4 +73,4 @@ HOPEFX is a self-hosted algorithmic trading framework that combines:
 
 ## License
 
-MIT License. See [LICENSE](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE).
+AGPL-3.0. See [LICENSE](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE). Commercial use requires a separate license — see [LICENSE-COMMERCIAL.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE-COMMERCIAL.md).
