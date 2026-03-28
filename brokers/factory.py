@@ -18,7 +18,10 @@ tick → signal → risk → execute pipeline through MT5Bridge.
 
 import logging
 import os
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Optional
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +171,96 @@ class BrokerFactory:
             "name": name,
             "class": broker_class.__name__,
         }
+
+    # ── YAML-config-based factory ──────────────────────────────────────────────
+
+    @classmethod
+    def get_broker_from_yaml(
+        cls,
+        name: Optional[str] = None,
+        config_path: str = "config/brokers.yaml",
+    ):
+        """
+        Instantiate a broker using credentials from ``config/brokers.yaml``.
+
+        This is the preferred entry point for the new typed broker classes
+        (MT5Broker, OandaBroker, IBKRBroker).  The existing ``create_broker``
+        classmethod continues to work for the legacy connector registry.
+
+        Parameters
+        ----------
+        name:
+            Key in the ``brokers`` section of the YAML file (e.g. ``prop_mt5``).
+            Falls back to the ``default`` key, then to the ``BROKER`` env var.
+        config_path:
+            Path to the YAML config file (relative to CWD or absolute).
+
+        Returns
+        -------
+        MT5Broker | OandaBroker | IBKRBroker instance, or None on failure.
+        """
+        cfg = cls._load_yaml_config(config_path)
+        if cfg is None:
+            return None
+
+        brokers_section: Dict = cfg.get("brokers", {})
+        resolved_name = (
+            name
+            or os.getenv("BROKER")
+            or brokers_section.get("default", "prop_mt5")
+        )
+
+        broker_cfg = brokers_section.get(resolved_name)
+        if broker_cfg is None:
+            logger.error(
+                "Broker '%s' not found in %s. Available: %s",
+                resolved_name,
+                config_path,
+                [k for k in brokers_section if k != "default"],
+            )
+            return None
+
+        broker_type: str = broker_cfg.get("type", "").lower()
+
+        try:
+            if broker_type == "mt5":
+                from brokers.mt5_broker import MT5Broker
+                logger.info("Creating MT5Broker for profile '%s'", resolved_name)
+                return MT5Broker(broker_cfg)
+
+            if broker_type == "oanda":
+                from brokers.oanda_broker import OandaBroker
+                logger.info("Creating OandaBroker for profile '%s'", resolved_name)
+                return OandaBroker(broker_cfg)
+
+            if broker_type == "ibkr":
+                from brokers.ibkr_broker import IBKRBroker
+                logger.info("Creating IBKRBroker for profile '%s'", resolved_name)
+                return IBKRBroker(broker_cfg)
+
+            logger.error(
+                "Unsupported broker type '%s' for profile '%s'. "
+                "Supported: mt5, oanda, ibkr",
+                broker_type,
+                resolved_name,
+            )
+            return None
+
+        except ImportError as exc:
+            logger.error(
+                "Cannot import broker class for type '%s': %s. "
+                "Ensure the required SDK is installed.",
+                broker_type,
+                exc,
+            )
+            return None
+
+    @staticmethod
+    def _load_yaml_config(path: str) -> Optional[Dict]:
+        """Load and return the YAML config, or None if the file is missing."""
+        config_path = Path(path)
+        if not config_path.exists():
+            logger.error("Broker config not found: %s", config_path.resolve())
+            return None
+        with config_path.open("r") as fh:
+            return yaml.safe_load(fh)
