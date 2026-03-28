@@ -761,6 +761,46 @@ async def trigger_retrain(
 
 
 @router.get(
+    "/signal-filter/stats",
+    summary="Signal filter EV statistics — rolling win rate, avg win/loss, EV gate status",
+)
+async def signal_filter_stats(
+    symbol: Optional[str] = None,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return rolling expected value statistics from the production signal quality filter.
+
+    The EV gate blocks signals when win_rate × avg_win + (1-win_rate) × avg_loss <= 0.
+    This endpoint shows whether the filter has enough trade outcomes (n >= 10) to
+    make reliable EV estimates and whether the current edge is positive.
+
+    Parameters
+    ----------
+    symbol : optional symbol (e.g. XAUUSD). Omit for global stats.
+    """
+    try:
+        from ml.signal_filter import get_signal_filter
+        filt = get_signal_filter()
+        stats = filt.ev_stats(symbol)
+        return {
+            "symbol": symbol or "global",
+            "stats": stats,
+            "filter_config": {
+                "ev_min_threshold": float(os.getenv("EV_MIN_THRESHOLD", "0.0")),
+                "ev_window": int(os.getenv("EV_WINDOW", "50")),
+                "threshold_long": float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58")),
+                "threshold_short": float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42")),
+                "regime_filter_enabled": os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true",
+                "mtf_confluence_required": os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true",
+                "sizing_method": os.getenv("POSITION_SIZING_METHOD", "volatility"),
+            },
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get(
     "/health",
     response_model=MLHealthResponse,
     summary="ML model health check",
