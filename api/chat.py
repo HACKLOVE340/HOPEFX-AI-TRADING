@@ -136,3 +136,47 @@ async def clear_chat_history(
             logger.debug("Chat history clear failed for session %s: %s", key, exc)
         del _agents[key]
     return {"cleared": True, "session_id": key}
+
+
+@router.get("/status", summary="AI chat readiness check")
+async def chat_status(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the readiness state of the AI chat endpoint.
+
+    Checks:
+    - OPENAI_API_KEY is configured
+    - LLMAgent module is importable
+    - OpenAI model name in use
+    - Active session count for the authenticated user
+
+    Does not make a live API call — purely a configuration check.
+    Any authenticated user may call this.
+    """
+    from datetime import datetime, timezone
+
+    api_key_set = bool(os.getenv("OPENAI_API_KEY", ""))
+    model = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+    llm_available = False
+    llm_error: Optional[str] = None
+    try:
+        from brain.llm_agent import LLMAgent  # noqa: F401
+        llm_available = True
+    except ImportError as exc:
+        llm_error = str(exc)
+
+    # Count active sessions for this user
+    user_sessions = [k for k in _agents if k.startswith(f"{user.sub}:") or k == user.sub]
+
+    ready = api_key_set and llm_available
+
+    return {
+        "ready": ready,
+        "api_key_configured": api_key_set,
+        "llm_available": llm_available,
+        "model": model,
+        "active_sessions": len(user_sessions),
+        "max_history_turns": int(os.getenv("CHAT_MAX_HISTORY_TURNS", "20")),
+        "error": llm_error,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }

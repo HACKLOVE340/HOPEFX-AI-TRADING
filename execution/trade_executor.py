@@ -319,7 +319,7 @@ class TradeExecutor:
         self._execution_callbacks.append(callback)
 
     async def _notify_callbacks(self, result: ExecutionResult, signal: Dict):
-        """Notify all callbacks"""
+        """Notify all registered callbacks and the InferenceEngine fill hook."""
         for callback in self._execution_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
@@ -328,6 +328,70 @@ class TradeExecutor:
                     callback(result, signal)
             except Exception as e:
                 logger.error(f"Callback error: {e}")
+
+        # ── InferenceEngine online-learning fill notification ─────────────────
+        # On every filled order, notify the InferenceEngine so it can update
+        # the online learner with the outcome label (1 = profitable, 0 = loss).
+        # This is best-effort — a failure here must never block execution.
+        if result.success and result.status in (OrderStatus.FILLED, OrderStatus.PARTIAL):
+            await self._notify_inference_engine_fill(result, signal)
+
+    async def _notify_inference_engine_fill(
+        self, result: ExecutionResult, signal: Dict
+    ) -> None:
+        """
+        Notify InferenceEngine of a confirmed fill for online learning.
+
+        Determines the outcome label from the closed P&L when available,
+        or defers to a neutral label (0.5 → skipped) when the trade is
+        still open.  Only closed positions with a known P&L are used for
+        online learning to avoid label leakage.
+        """
+        try:
+            from ml.inference_engine import get_inference_engine
+
+            engine = get_inference_engine()
+
+            # Resolve P&L: prefer explicit pnl in signal, else look up position
+            pnl: Optional[float] = signal.get("realized_pnl")
+            if pnl is None:
+                position_id = signal.get("position_id") or result.order_id
+                if position_id and hasattr(self.position_tracker, "get_position"):
+                    pos = self.position_tracker.get_position(position_id)
+                    if pos is not None:
+                        pnl = getattr(pos, "realized_pnl", None)
+
+            # Only update when we have a definitive outcome
+            if pnl is None:
+                return
+
+            label = 1 if pnl > 0 else 0
+
+            # Build a minimal feature row from the signal for the online learner.
+            # The engine's update_online() accepts any DataFrame with numeric cols.
+            import pandas as _pd
+            features = _pd.DataFrame(
+                [
+                    {
+                        "entry_price": result.average_price,
+                        "filled_qty": result.filled_quantity,
+                        "commission": result.commission,
+                        "latency_ms": result.latency_ms,
+                        "confidence": float(signal.get("confidence", 0.0)),
+                        "direction_long": 1 if signal.get("action", "buy") == "buy" else 0,
+                    }
+                ]
+            )
+
+            engine.update_online(features, label)
+            logger.debug(
+                "InferenceEngine fill notify: symbol=%s pnl=%.4f label=%d",
+                signal.get("symbol", "?"),
+                pnl,
+                label,
+            )
+        except Exception as exc:
+            logger.debug("InferenceEngine fill notify failed (non-fatal): %s", exc)
 
     async def cancel_all_pending(self) -> List[str]:
         """Cancel all pending orders"""
