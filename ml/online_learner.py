@@ -287,3 +287,214 @@ class EnsemblePredictor:
         self.weights = [w * (1 - initial_weight / total) for w in self.weights] + [
             initial_weight / total,
         ]
+
+
+# ── Sklearn-compatible incremental wrapper ────────────────────────────────────
+
+
+class SklearnOnlineLearner:
+    """
+    Sklearn-compatible incremental learner backed by SGDClassifier.
+
+    Provides ``partial_fit()`` so the HourlyTrainer can feed recent bars
+    without requiring PyTorch.  Falls back gracefully when sklearn is absent.
+
+    The learner is stateless across restarts unless ``persist_path`` is set,
+    in which case it is serialised to disk after every ``partial_fit`` call.
+    """
+
+    def __init__(
+        self,
+        symbol: str = "XAU_USD",
+        persist_path: Optional[str] = None,
+        n_features: int = 176,
+    ) -> None:
+        self.symbol = symbol
+        self.persist_path = persist_path
+        self.n_features = n_features
+        self._fitted = False
+        self._update_count = 0
+        self._model = None
+        self._scaler = None
+        self._init_model()
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _init_model(self) -> None:
+        try:
+            from sklearn.linear_model import SGDClassifier
+            from sklearn.preprocessing import StandardScaler as _SS
+
+            self._model = SGDClassifier(
+                loss="log_loss",
+                penalty="elasticnet",
+                alpha=1e-4,
+                l1_ratio=0.15,
+                max_iter=1,
+                tol=None,
+                warm_start=True,
+                random_state=42,
+                n_jobs=1,
+            )
+            self._scaler = _SS()
+        except ImportError:
+            import logging as _log
+
+            _log.getLogger(__name__).warning(
+                "sklearn not available — SklearnOnlineLearner is a no-op"
+            )
+
+    def _extract_features(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
+        """Extract a simple feature vector from OHLCV bars."""
+        try:
+            import pandas as pd  # noqa: F401
+
+            cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
+            if not cols:
+                return None
+            X = bars[cols].ffill().bfill().values.astype(float)
+            # Pad or truncate to n_features
+            n = X.shape[0] * X.shape[1]
+            flat = X.flatten()
+            if n < self.n_features:
+                flat = np.pad(flat, (0, self.n_features - n))
+            else:
+                flat = flat[: self.n_features]
+            return flat.reshape(1, -1)
+        except Exception:
+            return None
+
+    def _extract_label(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
+        """Binary label: 1 if last close > first close, else 0."""
+        try:
+            closes = bars["close"].values
+            return np.array([1 if closes[-1] > closes[0] else 0])
+        except Exception:
+            return None
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def partial_fit(self, bars: "pd.DataFrame") -> bool:
+        """
+        Incrementally update the model with new OHLCV bars.
+
+        Args:
+            bars: DataFrame with columns open/high/low/close/volume.
+
+        Returns:
+            True if the update succeeded, False otherwise.
+        """
+        if self._model is None:
+            return False
+        try:
+            X = self._extract_features(bars)
+            y = self._extract_label(bars)
+            if X is None or y is None:
+                return False
+
+            if not self._fitted:
+                self._scaler.fit(X)
+                self._fitted = True
+
+            X_scaled = self._scaler.transform(X)
+            self._model.partial_fit(X_scaled, y, classes=[0, 1])
+            self._update_count += 1
+
+            if self.persist_path:
+                self._save()
+
+            import logging as _log
+            _log.getLogger(__name__).debug(
+                "SklearnOnlineLearner[%s] partial_fit #%d OK",
+                self.symbol,
+                self._update_count,
+            )
+            return True
+        except Exception as exc:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc
+            )
+            return False
+
+    def predict_proba(self, bars: "pd.DataFrame") -> Optional[float]:
+        """Return P(up) for the given bars, or None if not yet fitted."""
+        if self._model is None or not self._fitted:
+            return None
+        try:
+            X = self._extract_features(bars)
+            if X is None:
+                return None
+            X_scaled = self._scaler.transform(X)
+            proba = self._model.predict_proba(X_scaled)
+            return float(proba[0, 1])
+        except Exception:
+            return None
+
+    def status(self) -> Dict:
+        return {
+            "symbol": self.symbol,
+            "fitted": self._fitted,
+            "update_count": self._update_count,
+            "persist_path": self.persist_path,
+        }
+
+    def _save(self) -> None:
+        import pickle as _pkl
+        import pathlib as _pl
+
+        path = _pl.Path(self.persist_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            _pkl.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str) -> "SklearnOnlineLearner":
+        import pickle as _pkl
+
+        with open(path, "rb") as f:
+            return _pkl.load(f)
+
+
+# ── Module-level singleton registry ──────────────────────────────────────────
+
+_learner_registry: Dict[str, SklearnOnlineLearner] = {}
+
+
+def get_online_learner(
+    symbol: str = "XAU_USD",
+    persist_path: Optional[str] = None,
+) -> SklearnOnlineLearner:
+    """
+    Return the SklearnOnlineLearner singleton for ``symbol``.
+
+    Creates and registers a new instance on first call.  If ``persist_path``
+    is provided and the file exists, the persisted learner is loaded instead
+    of creating a fresh one.
+
+    Called by HourlyTrainer._online_update() on every hourly cycle.
+    """
+    global _learner_registry  # noqa: PLW0603
+
+    if symbol not in _learner_registry:
+        if persist_path is None:
+            persist_path = f"ml/saved_models/online_learner_{symbol}.pkl"
+
+        import pathlib as _pl
+
+        p = _pl.Path(persist_path)
+        if p.exists():
+            try:
+                learner = SklearnOnlineLearner.load(str(p))
+                import logging as _log
+                _log.getLogger(__name__).info(
+                    "Loaded persisted OnlineLearner for %s from %s", symbol, p
+                )
+            except Exception:
+                learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
+        else:
+            learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
+
+        _learner_registry[symbol] = learner
+
+    return _learner_registry[symbol]

@@ -859,6 +859,17 @@ async def startup_event():
             required=False,
             deps=["signal_engine", "hourly_trainer"],
         )
+        # ── Daily online learner (ml/online_learner.py SklearnOnlineLearner) ──
+        # Pre-loads SklearnOnlineLearner singletons for each ML_SYMBOLS entry
+        # so HourlyTrainer._online_update() has zero cold-start latency.
+        # Also schedules a daily EWC regime-adaptation tick at 00:05 UTC.
+        # Gate: ML_HOURLY_ENABLED=true (same flag as HourlyTrainer).
+        .register(
+            "daily_online_learner",
+            F.init_daily_online_learner,
+            required=False,
+            deps=["hourly_trainer"],
+        )
         .register(
             "reconciler", F.init_reconciler, required=False, deps=["database", "broker"]
         )
