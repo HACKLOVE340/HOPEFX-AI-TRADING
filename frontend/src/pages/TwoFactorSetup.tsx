@@ -24,12 +24,12 @@ type Step = 'idle' | 'setup' | 'verify' | 'active' | 'backup';
 interface SetupData {
   secret: string;
   otpauth_uri: string;
-  qr_placeholder: string;
+  /** Backend returns qr_url (external QR image URL). */
+  qr_url: string;
 }
 
 const TwoFactorSetup: React.FC = () => {
-  const user   = useStore((s) => s.user);
-  const userId = user?.id ?? 'demo-user';
+  const user = useStore((s) => s.user);
 
   const [step, setStep]               = useState<Step>('idle');
   const [setupData, setSetupData]     = useState<SetupData | null>(null);
@@ -40,22 +40,23 @@ const TwoFactorSetup: React.FC = () => {
   const [loading, setLoading]         = useState(false);
   const [is2FAEnabled, set2FAEnabled] = useState(false);
 
-  // Check current 2FA status on mount — uses api instance (JWT injected automatically)
+  // Check current 2FA status on mount — JWT carries the user identity, no path param needed
   useEffect(() => {
-    api.get<{ enabled: boolean }>(`/api/2fa/status/${userId}`)
+    api.get<{ enabled: boolean }>('/api/2fa/status')
       .then((r) => set2FAEnabled(r.data.enabled ?? false))
       .catch(() => {});
-  }, [userId]);
+  }, []);
 
   const handleSetup = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post<SetupData>('/api/2fa/setup', { user_id: userId });
+      // Backend derives user identity from JWT — no body needed
+      const res = await api.post<SetupData>('/api/2fa/setup');
       setSetupData(res.data);
       setStep('setup');
     } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Setup failed');
+      setError((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? 'Setup failed');
     } finally {
       setLoading(false);
     }
@@ -66,7 +67,8 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/verify', { user_id: userId, code });
+      // Backend uses JWT for user identity; only the TOTP code is needed in the body
+      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/verify', { code });
       if (res.data.success) {
         set2FAEnabled(true);
         setStep('active');
@@ -75,7 +77,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(res.data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Verify failed');
+      setError((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? 'Verify failed');
     } finally {
       setLoading(false);
     }
@@ -85,11 +87,12 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get<{ codes: string[] }>(`/api/2fa/backup-codes/${userId}`);
+      // No path param — backend uses JWT to identify the user
+      const res = await api.get<{ codes: string[]; warning?: string }>('/api/2fa/backup-codes');
       setBackupCodes(res.data.codes ?? []);
       setStep('backup');
     } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Failed to get backup codes');
+      setError((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? 'Failed to get backup codes');
     } finally {
       setLoading(false);
     }
@@ -100,7 +103,8 @@ const TwoFactorSetup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/disable', { user_id: userId, code: disableCode });
+      // Backend uses JWT for user identity; only the TOTP code is needed in the body
+      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/disable', { code: disableCode });
       if (res.data.success) {
         set2FAEnabled(false);
         setStep('idle');
@@ -110,7 +114,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(res.data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Disable failed');
+      setError((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? 'Disable failed');
     } finally {
       setLoading(false);
     }
@@ -166,7 +170,7 @@ const TwoFactorSetup: React.FC = () => {
 
           <div style={s.qrContainer}>
             <img
-              src={setupData.qr_placeholder}
+              src={setupData.qr_url}
               alt="TOTP QR Code"
               style={{ width: 200, height: 200, borderRadius: 8 }}
             />
