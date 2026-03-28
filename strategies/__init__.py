@@ -16,6 +16,7 @@ from .ma_crossover import MovingAverageCrossover
 from .macd_strategy import MACDStrategy
 from .manager import StrategyManager
 from .mean_reversion import MeanReversionStrategy
+from .pullback_strategy import PullbackStrategy
 from .rsi_strategy import RSIStrategy
 from .smc_ict import SMCICTStrategy
 from .stochastic import StochasticStrategy
@@ -39,6 +40,7 @@ __all__ = [
     "StochasticStrategy",
     "SMCICTStrategy",
     "ITS8OSStrategy",
+    "PullbackStrategy",
 ]
 
 __version__ = "1.0.0"
