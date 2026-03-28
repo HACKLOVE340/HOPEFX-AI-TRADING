@@ -1003,15 +1003,53 @@ async def _tick(app_state: Any) -> None:
         )
 
         # 4. Build signal payload
+        entry_price = getattr(signal, "entry_price", data["close"])
+        sl_raw = getattr(signal, "stop_loss", None)
+        tp_raw = getattr(signal, "take_profit", None)
+
+        # Compute ATR-based SL/TP at publish time when strategy didn't provide them.
+        # This ensures every published signal carries real risk levels — not None —
+        # so ws_live.py, the event bus, and the execution path all see consistent data.
+        if sl_raw is None or tp_raw is None:
+            try:
+                highs = data.get("highs", [])
+                lows = data.get("lows", [])
+                closes_list = data.get("prices", [entry_price])
+                import numpy as _np_sl
+                sl_mult = float(os.getenv("SL_ATR_MULT", "1.5"))
+                tp_mult = float(os.getenv("TP_ATR_MULT", "3.0"))
+                if len(highs) >= 14 and len(lows) >= 14:
+                    h = _np_sl.array(highs[-15:], dtype=float)
+                    l = _np_sl.array(lows[-15:], dtype=float)  # noqa: E741
+                    c = _np_sl.array(closes_list[-15:], dtype=float)
+                    tr = _np_sl.maximum(
+                        h[1:] - l[1:],
+                        _np_sl.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
+                    )
+                    atr = float(_np_sl.mean(tr[-14:])) if len(tr) >= 14 else entry_price * 0.008
+                else:
+                    atr = entry_price * 0.008
+                is_long = direction.upper() == "BUY"
+                sl_raw = sl_raw if sl_raw is not None else (
+                    entry_price - atr * sl_mult if is_long else entry_price + atr * sl_mult
+                )
+                tp_raw = tp_raw if tp_raw is not None else (
+                    entry_price + atr * tp_mult if is_long else entry_price - atr * tp_mult
+                )
+            except Exception as _sl_exc:
+                logger.debug("Signal payload ATR SL/TP failed: %s", _sl_exc)
+                sl_raw = sl_raw or (entry_price * 0.985 if direction.upper() == "BUY" else entry_price * 1.015)
+                tp_raw = tp_raw or (entry_price * 1.03 if direction.upper() == "BUY" else entry_price * 0.97)
+
         signal_payload: Dict[str, Any] = {
             "symbol": symbol,
             "direction": direction,
             "confidence": base_confidence,
             "probability": ml_probability,
             "model_version": model_ver,
-            "entry_price": getattr(signal, "entry_price", data["close"]),
-            "stop_loss": getattr(signal, "stop_loss", None),
-            "take_profit": getattr(signal, "take_profit", None),
+            "entry_price": entry_price,
+            "stop_loss": round(sl_raw, 5) if sl_raw is not None else None,
+            "take_profit": round(tp_raw, 5) if tp_raw is not None else None,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "source": "strategy_brain",
         }

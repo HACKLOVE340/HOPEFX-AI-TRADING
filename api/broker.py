@@ -383,9 +383,28 @@ async def broker_status():
             for t in getattr(app_state, "background_tasks", [])
         )
 
+        # ── ML engine status ──────────────────────────────────────────────────
+        ml_engine: dict = {"status": "unavailable", "model_available": False}
+        try:
+            from ml.inference_engine import get_inference_engine
+            eng = get_inference_engine()
+            h = eng.health()
+            ml_engine = {
+                "status": h.get("status", "unavailable"),
+                "model_available": h.get("model_available", False),
+                "model_version": h.get("model_version", "none"),
+                "predict_count": h.get("predict_count", 0),
+                "fallback_rate": h.get("fallback_rate", 0.0),
+                "last_latency_ms": h.get("last_latency_ms", 0.0),
+                "pipeline": h.get("pipeline", {}),
+            }
+        except Exception as ml_exc:
+            ml_engine["error"] = str(ml_exc)
+
         return {
             "broker": broker_section,
             "data_feed": data_feed,
+            "ml_engine": ml_engine,
             "signal_engine_running": signal_engine_running,
             "checked_at": checked_at,
         }
@@ -395,6 +414,7 @@ async def broker_status():
         return {
             "broker": {"connected": False, "broker_type": "unknown", "error": str(exc)},
             "data_feed": {"active": False, "source": "unknown"},
+            "ml_engine": {"status": "unavailable"},
             "signal_engine_running": False,
             "checked_at": checked_at,
         }
