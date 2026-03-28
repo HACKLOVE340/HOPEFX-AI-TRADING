@@ -1410,3 +1410,302 @@ FEATURE_DRIFT_PSI = Gauge("hopefx_feature_drift_psi", "Feature PSI score", ["fea
 | 10 | RL A/B test: Sharpe ≥ +0.1 | `ml/rl_execution_layer.py` | ☐ |
 
 ---
+
+## 7. ML & Signals — Full Enhancement Catalogue
+
+This section covers every ML and signal enhancement required for world-top status,
+beyond what is covered in the phased roadmap above.
+
+### 7.1 — Hybrid Ensemble Architecture (XGBoost + LSTM/Transformer)
+
+**Why required:** XGBoost captures non-linear feature interactions but has no memory
+of sequence patterns. LSTM/Transformer captures temporal dependencies but overfits
+on small datasets. The hybrid captures both. QuantConnect's Alpha Streams and
+Two Sigma's production systems use stacked ensembles as standard.
+
+**Current state:** `research/pipeline/models_deep.py` has `HybridModel` (TCN+LSTM)
+and `TransformerPredictor`. `ml/models/ensemble.py` has stacking logic.
+Neither is wired to `ml/inference_engine.py`.
+
+**Target architecture:**
+
+```
+Level 0 (base learners):
+├── XGBoost (advanced_oos.pkl)          — 176 tabular features
+├── HybridModel (TCN+LSTM)              — 60-bar sequence, 176 features
+├── TransformerPredictor                — 60-bar sequence, 176 features
+└── RegimeConditionalModel              — regime-routed XGBoost
+
+Level 1 (meta-learner):
+└── LogisticRegression (isotonic cal.)  — stacks Level 0 probabilities
+    Input: [xgb_prob, hybrid_prob, transformer_prob, regime_prob]
+    Output: final_probability [0,1]
+```
+
+**File changes:**
+
+| File | Change | Effort |
+|------|--------|--------|
+| `ml/ensemble_stacker.py` | New — Level 1 meta-learner with isotonic calibration | 4h |
+| `ml/train_deep_ensemble.py` | New — trains all Level 0 models + meta-learner | 8h |
+| `ml/inference_engine.py` | Replace single-model predict with ensemble stack | 3h |
+| `ml/models/ensemble.py` | Extend with `StackedEnsemble` class | 2h |
+
+**Validation requirement:** Ensemble OOS accuracy must exceed best single model by
+≥ 1% before enabling. Track per-model contribution via SHAP on meta-learner.
+
+---
+
+### 7.2 — Multi-Model Router (Signal Confidence Routing)
+
+**Why required:** Different models excel in different regimes. A router that selects
+the best model per regime + confidence level outperforms any single model.
+
+**Implementation:**
+
+```python
+# ml/model_router.py (new)
+class ModelRouter:
+    """
+    Routes inference to the highest-confidence model for current regime.
+    Falls back to global XGBoost if regime-specific model unavailable.
+    """
+    def route(self, regime: str, features: np.ndarray,
+              available_models: dict) -> tuple[str, float]:
+        """Returns (model_name, probability)."""
+        candidates = []
+        for name, model in available_models.items():
+            if model.is_available_for_regime(regime):
+                prob = model.predict_proba(features)
+                conf = abs(prob - 0.5) * 2  # distance from 0.5 = confidence
+                candidates.append((name, prob, conf))
+
+        if not candidates:
+            return "fallback", 0.5
+
+        # Select highest confidence model
+        best = max(candidates, key=lambda x: x[2])
+        return best[0], best[1]
+```
+
+---
+
+### 7.3 — SHAP Explainability in Production
+
+**Why required:** Regulatory requirements (MiFID II Article 25, EU AI Act) require
+explainability for automated trading decisions. SHAP is the industry standard.
+Current `api/explain.py` has SHAP but it's not called on every live signal.
+
+**Files:** `api/explain.py`, `ml/inference_engine.py`, `database/models.py`
+
+**Changes:**
+
+```python
+# ml/inference_engine.py — add SHAP to every prediction:
+def predict(self, df, symbol="XAU_USD") -> dict:
+    ...
+    signal = self._threshold_signal(prob)
+
+    # SHAP explanation (async, non-blocking)
+    if _SHAP_ENABLED:
+        shap_values = self._explainer.shap_values(X)
+        top_features = self._get_top_shap_features(shap_values, X, n=5)
+        signal["explanation"] = {
+            "top_features": top_features,
+            "shap_sum": float(shap_values.sum()),
+            "model": "advanced_oos",
+        }
+
+    return signal
+```
+
+**Store SHAP values per signal in PostgreSQL** for audit trail and post-trade analysis.
+Expose via `/api/signals/{signal_id}/explanation`.
+
+---
+
+### 7.4 — Multi-Asset Expansion
+
+**Why required:** XAUUSD-only is a single-asset strategy. Institutional systems trade
+correlated assets to hedge and diversify. Gold correlates with: silver (0.85), oil (0.4),
+EUR/USD (-0.6 during risk-off), Bitcoin (0.3 in 2024).
+
+**Current state:** Multi-symbol backtest exists (`backtest/multi_symbol_backtest.py`)
+with 7 symbols. Live trading is XAUUSD-only.
+
+**Expansion plan:**
+
+| Symbol | Correlation to XAU | Phase | Rationale |
+|--------|-------------------|-------|-----------|
+| XAG_USD (Silver) | +0.85 | Phase 2 | Highest correlation, same drivers |
+| BCO_USD (Brent) | +0.40 | Phase 2 | Inflation/geopolitical hedge |
+| EUR_USD | -0.60 | Phase 2 | DXY inverse proxy |
+| GBP_USD | -0.55 | Phase 3 | Diversification |
+| BTC_USD | +0.30 | Phase 3 | Digital gold narrative |
+| SPX500 | -0.40 | Phase 3 | Risk-off hedge |
+
+**Portfolio constraint:** Total portfolio CVaR ≤ 3% equity regardless of number of
+symbols. Position sizing scales inversely with correlation to existing positions.
+
+---
+
+### 7.5 — Feature Engineering: Layer 17 (Microstructure) + Layer 18 (Alternative Data)
+
+**Current:** 176 features across Layers 1–16 (technical, macro, COT proxy, regime,
+institutional signals). Target: 200+ features with Layers 17–18.
+
+**Layer 17 — Microstructure (12 features):**
+
+```python
+# ml/features_extended.py — add Layer 17:
+LAYER_17_FEATURES = [
+    "tick_imbalance",          # buy/sell volume imbalance
+    "vwap_deviation",          # price vs VWAP
+    "spread_atr_ratio",        # bid-ask spread normalized
+    "large_trade_ratio",       # institutional order detection
+    "ob_imbalance",            # order book depth imbalance
+    "kyle_lambda",             # price impact per unit volume
+    "amihud_illiquidity",      # Amihud (2002) illiquidity ratio
+    "roll_spread",             # Roll (1984) effective spread estimate
+    "realized_variance_ratio", # short-term vs long-term variance
+    "trade_arrival_rate",      # trades per minute (activity proxy)
+    "price_impact_ratio",      # permanent vs temporary impact
+    "depth_weighted_midprice", # order-book weighted mid
+]
+```
+
+**Layer 18 — Alternative Data (8 features):**
+
+```python
+LAYER_18_FEATURES = [
+    "cot_net_speculative",     # real CFTC COT net positioning
+    "cot_index_3y",            # COT percentile rank (3-year)
+    "etf_flow_5d",             # GLD/IAU ETF flow (5-day sum)
+    "cb_reserve_change",       # central bank gold reserve change (monthly)
+    "google_trends_gold",      # search volume index
+    "options_pcr_gld",         # GLD put/call ratio
+    "baltic_dry_index",        # shipping index (risk-off proxy)
+    "news_sentiment_4h",       # LLM news sentiment (4h rolling)
+]
+```
+
+**Stationarity requirement:** All new features must pass ADF test (p < 0.05) before
+inclusion. Add to `ml/train_advanced.py --check-stationarity` validation step.
+
+---
+
+### 7.6 — Walk-Forward Optimization (WFO) Framework
+
+**Why required:** Static train/test splits overfit to the test period. Walk-forward
+optimization (used by QuantConnect, Amibroker, and all institutional backtesting
+platforms) continuously re-optimizes hyperparameters on expanding windows.
+
+**Files:** `ml/train_advanced.py`, `backtest/engine.py`
+
+**Implementation:**
+
+```python
+# ml/wfo.py (new)
+class WalkForwardOptimizer:
+    """
+    Anchored walk-forward optimization.
+    Train window: expanding (always includes all history).
+    Test window: fixed 3-month OOS period.
+    Re-optimize: every 3 months.
+    """
+    def run(self, df: pd.DataFrame, param_grid: dict,
+            train_start: str, test_months: int = 3,
+            n_folds: int = 8) -> pd.DataFrame:
+        results = []
+        for fold in range(n_folds):
+            test_end = pd.Timestamp(train_start) + pd.DateOffset(months=(fold+1)*test_months)
+            test_start = test_end - pd.DateOffset(months=test_months)
+            train_df = df[df.index < test_start]
+            test_df = df[(df.index >= test_start) & (df.index < test_end)]
+
+            # Grid search on train, evaluate on test
+            best_params = self._grid_search(train_df, param_grid)
+            oos_metrics = self._evaluate(test_df, best_params)
+            results.append({"fold": fold, "test_start": test_start,
+                            "test_end": test_end, **oos_metrics, **best_params})
+
+        return pd.DataFrame(results)
+```
+
+---
+
+### 7.7 — Model Versioning + Rollback
+
+**Why required:** Without model versioning, a bad retrain cannot be rolled back.
+MLflow is the industry standard for experiment tracking and model registry.
+
+**Files:** `ml/training.py`, `ml/train_advanced.py`, `ml/inference_engine.py`
+
+**MLflow integration:**
+
+```python
+# ml/training.py — add MLflow tracking:
+import mlflow
+import mlflow.xgboost
+
+def train_ml_pipeline(...):
+    with mlflow.start_run(run_name=f"xgboost_{datetime.now().strftime('%Y%m%d_%H%M')}"):
+        mlflow.log_params({"n_estimators": 500, "max_depth": 6, ...})
+        model = xgb.XGBClassifier(...)
+        model.fit(X_train, y_train)
+        mlflow.log_metrics({"oos_accuracy": oos_acc, "oos_f1": oos_f1, "sharpe": sharpe})
+        mlflow.xgboost.log_model(model, "model",
+                                  registered_model_name="hopefx_xgboost")
+```
+
+**Rollback procedure:**
+
+```bash
+# Roll back to previous model version:
+mlflow models download --model-uri "models:/hopefx_xgboost/2" --dst-path ml/saved_models/
+# Or via API:
+curl -X POST /api/ml/rollback -d '{"model": "xgboost", "version": 2}'
+```
+
+---
+
+### 7.8 — Continual Retraining Pipeline
+
+**Why required:** Models decay as market regimes shift. The `ml/hourly_trainer.py`
+exists but the daily full retrain is not automated.
+
+**Files:** `ml/run_training.py`, `data/scheduler.py`, `.github/workflows/`
+
+**Retraining schedule:**
+
+| Trigger | Action | File |
+|---------|--------|------|
+| Daily 22:00 UTC | Incremental SGD update | `ml/online_learner.py` |
+| Weekly Sunday | Full XGBoost retrain (last 3 years) | `ml/train_advanced.py` |
+| Monthly | Full 50-year retrain + OOS validation | `ml/train_advanced.py` |
+| PSI > 0.2 on any feature | Emergency retrain alert | `ml/feature_store.py` |
+| OOS accuracy drops > 3% | Auto-retrain + Sentry alert | `ml/inference_engine.py` |
+
+**Kubernetes CronJob for weekly retrain:**
+
+```yaml
+# helm/templates/cronjob-retrain.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hopefx-weekly-retrain
+spec:
+  schedule: "0 22 * * 0"  # Sunday 22:00 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: retrain
+            image: hopefx:latest
+            command: ["python", "ml/train_advanced.py",
+                      "--years", "3", "--oos-years", "1",
+                      "--register-mlflow", "--alert-on-degradation"]
+```
+
+---
