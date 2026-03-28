@@ -1,0 +1,50 @@
+# HOPEFX AI Trading — Data Feed Configuration
+# Manages primary and fallback real-time price sources for XAUUSD.
+#
+# Provider priority: goldapi → metalpriceapi → mt5_demo
+# Set API keys via environment variables (DATA_FEED_GOLDAPI_KEY, etc.)
+# or replace the placeholder strings below before deployment.
+
+data_feed:
+  primary: "goldapi"
+
+  # Ordered list of fallback providers tried when the active provider fails.
+  fallback_order:
+    - "goldapi"
+    - "metalpriceapi"
+    - "mt5_demo"
+
+  # How often to poll for a new price (seconds).
+  refresh_seconds: 1
+
+  # Per-request HTTP timeout (seconds).
+  timeout_seconds: 4
+
+  # Maximum retry attempts per provider before switching to the next.
+  max_retries: 3
+
+  # Number of consecutive failures before the circuit breaker opens.
+  circuit_breaker_threshold: 5
+
+  # Rolling price history kept in memory (number of ticks).
+  history_size: 5000
+
+  # ── Provider credentials ────────────────────────────────────────────────────
+  # Replace placeholder values or set the corresponding environment variables.
+
+  goldapi:
+    provider: "goldapi"
+    api_key: "${DATA_FEED_GOLDAPI_KEY:your_goldapi_key_here}"
+    url: "https://www.goldapi.io/api/XAU/USD"
+
+  metalpriceapi:
+    provider: "metalpriceapi"
+    api_key: "${DATA_FEED_METALPRICE_KEY:your_metalprice_key_here}"
+    url: "https://api.metalpriceapi.com/v1/latest?base=USD&currencies=XAU"
+
+  mt5_demo:
+    provider: "mt5"
+    login: "${MT5_DEMO_LOGIN:your_mt5_demo_login}"
+    password: "${MT5_DEMO_PASSWORD:your_mt5_demo_password}"
+    # Change to your prop firm demo server if preferred.
+    server: "${MT5_DEMO_SERVER:AMPGlobalUSA-Demo}"
