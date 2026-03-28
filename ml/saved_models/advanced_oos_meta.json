@@ -21,5 +21,8 @@
     "n_required_for_se_010": 216,
     "message": "Sharpe gate PASSED: N=756 >= 600, SE=0.053 <= 0.10"
   },
-  "sharpe_note": "N=756 OOS bars. Sharpe SE=0.053. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
+  "sharpe_note": "N=756 OOS bars. Sharpe SE=0.053. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.",
+  "validated_at": "2026-03-28T02:45:52.761392+00:00",
+  "validation_status": "PASSED",
+  "validation_notes": "OOS validation confirmed: 176-feature scaler matches feature_count. oos_accuracy=0.6733 (p=0.0, binomial one-sided). Sharpe gate PASSED: N=756 >= 600, SE=0.053 <= 0.10. ci_mode=False (production model). Model file: advanced_oos.pkl (XGBoost + isotonic calibration)."
 }
