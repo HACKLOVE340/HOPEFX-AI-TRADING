@@ -28,8 +28,10 @@ import logging
 import os
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -288,7 +290,11 @@ def _template_summary(features: List[FeatureImportance], direction: str) -> str:
     response_model=SignalExplanation,
     summary="Explain a specific signal",
 )
-async def explain_signal(request: Request, signal_id: str):
+async def explain_signal(
+    request: Request,
+    signal_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Return a SHAP-based explanation for the given signal_id.
 
@@ -296,6 +302,7 @@ async def explain_signal(request: Request, signal_id: str):
     and a plain-English summary. Falls back to a template when the live engine
     is unavailable.
 
+    Requires: authenticated user (any role).
     Rate-limited to ``EXPLAIN_RATE_LIMIT`` (default 30/minute) per IP to
     protect proprietary ML feature data.
     """
@@ -314,10 +321,14 @@ async def explain_signal(request: Request, signal_id: str):
     response_model=SignalExplanation,
     summary="Explain the latest signal",
 )
-async def explain_latest(request: Request):
+async def explain_latest(
+    request: Request,
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Return an explanation for the most recently generated signal.
 
+    Requires: authenticated user (any role).
     Rate-limited to ``EXPLAIN_LATEST_RATE_LIMIT`` (default 60/minute) per IP.
     """
     _enforce_rate_limit(request, _EXPLAIN_LATEST_LIMIT)
