@@ -22,18 +22,40 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) {
-      setError('Username and password are required.');
+      setError('Email and password are required.');
       return;
     }
     setError('');
     setLoading(true);
+
+    // Accept either email or username — if no @ treat as username and append
+    // the default domain so the backend's EmailStr validator is satisfied.
+    const raw = username.trim();
+    const email = raw.includes('@') ? raw : `${raw}@hopefx.io`;
+
     try {
-      const res = await authApi.login({ username: username.trim(), password });
+      const res = await authApi.login({ email, password });
       setAuth(res.data.access_token, res.data.user);
       navigate(from, { replace: true });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg ?? 'Invalid credentials. Please try again.');
+      // Safely extract a human-readable message from any error shape
+      const axiosErr = err as {
+        response?: { data?: { detail?: unknown } };
+        message?: string;
+      };
+      const detail = axiosErr?.response?.data?.detail;
+      let msg: string;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI validation errors: [{loc, msg, type}, ...]
+        msg = detail.map((d: { msg?: string }) => d?.msg ?? String(d)).join(', ');
+      } else if (detail && typeof detail === 'object') {
+        msg = JSON.stringify(detail);
+      } else {
+        msg = axiosErr?.message ?? 'Invalid credentials. Please try again.';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -50,15 +72,15 @@ const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} style={s.form}>
           <div style={s.field}>
-            <label style={s.label} htmlFor="username">Username or Email</label>
+            <label style={s.label} htmlFor="username">Email or Username</label>
             <input
               id="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               style={s.input}
-              placeholder="trader@hopefx.io"
-              autoComplete="username"
+              placeholder="admin@hopefx.io"
+              autoComplete="email"
               autoFocus
             />
           </div>
