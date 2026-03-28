@@ -355,21 +355,134 @@ def _max_drawdown(pnls: np.ndarray) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List[str]]:
+    """
+    Identify symbols with statistically implausible Sharpe ratios.
+
+    Thresholds (conservative):
+    - Sharpe > 5.0 is implausible for any real daily-bar strategy
+    - Win rate > 75% on > 50 trades is implausible for a direction model
+    - Both conditions together = almost certainly a data or look-ahead artefact
+
+    Returns (outlier_symbols, reasons) — parallel lists.
+    """
+    outliers: List[str] = []
+    reasons: List[str] = []
+    for r in symbol_results:
+        sym = r.get("symbol", "?")
+        sharpe = r.get("sharpe", 0.0)
+        win_rate = r.get("win_rate", 0.0)
+        n = r.get("n_trades", 0)
+        flags: List[str] = []
+        if sharpe > 5.0:
+            flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
+        if win_rate > 0.75 and n > 50:
+            flags.append(f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)")
+        if flags:
+            outliers.append(sym)
+            reasons.append("; ".join(flags))
+            logger.warning(
+                "Sharpe outlier detected: %s — %s. "
+                "Excluding from honest pooled Sharpe.",
+                sym, "; ".join(flags),
+            )
+    return outliers, reasons
+
+
+def _pool_pnls(symbol_results: List[Dict], exclude: Optional[List[str]] = None) -> Tuple[np.ndarray, int]:
+    """
+    Pool per-trade P&Ls across symbols, optionally excluding named symbols.
+
+    Resolution order for P&L data:
+    1. ``trades`` list — exact per-trade P&Ls (preferred)
+    2. Synthetic normal distribution from mean_pnl_pct + std_pnl_pct + n_trades
+       (used when the report was saved without the full trade list)
+    """
+    exclude_set = set(exclude or [])
+    all_pnls: List[float] = []
+    n_total = 0
+    rng = np.random.default_rng(42)  # deterministic seed for reproducibility
+
+    for r in symbol_results:
+        if r.get("symbol") in exclude_set:
+            continue
+        n = r.get("n_trades", 0)
+        if n == 0:
+            continue
+
+        if "trades" in r and r["trades"]:
+            # Exact per-trade P&Ls
+            all_pnls.extend([t["pnl_pct"] for t in r["trades"]])
+        elif r.get("mean_pnl_pct") is not None and r.get("std_pnl_pct") is not None:
+            # Synthetic — sample from reported distribution
+            mu = float(r["mean_pnl_pct"])
+            sigma = float(r["std_pnl_pct"])
+            synthetic = rng.normal(mu, sigma, size=n).tolist()
+            all_pnls.extend(synthetic)
+        # else: no P&L data available for this symbol — skip
+
+        n_total += n
+
+    return np.array(all_pnls) if all_pnls else np.array([]), n_total
+
+
+def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> Dict:
+    """Compute Sharpe, SE, gate status from a pooled P&L array."""
+    if n_total == 0 or len(pnls) == 0:
+        return {
+            "n_total_trades": 0,
+            "pooled_sharpe": 0.0,
+            "pooled_sharpe_se": float("inf"),
+            "sharpe_gate_passed": False,
+            "sharpe_credible": False,
+            "target_n": target_n,
+            "n_required_for_se_010": 0,
+            "message": "No trades.",
+        }
+    mean_pnl = float(pnls.mean())
+    std_pnl = float(pnls.std(ddof=1)) if len(pnls) > 1 else 1e-6
+    sharpe = mean_pnl / std_pnl * np.sqrt(252) if std_pnl > 0 else 0.0
+    sr = abs(sharpe)
+    se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
+    gate_passed = n_total >= target_n
+    credible = se <= 0.10
+    n_req = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
+    if gate_passed:
+        se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_req} for SE<=0.10)")
+        msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}. {se_note}"
+    else:
+        msg = (
+            f"Sharpe gate BLOCKED: N={n_total} < {target_n}. "
+            f"SE={se:.3f} (SE<=0.10 requires N>={n_req})."
+        )
+    return {
+        "n_total_trades": n_total,
+        "pooled_sharpe": round(float(sharpe), 4),
+        "pooled_sharpe_se": round(se, 4),
+        "pooled_mean_pnl": round(mean_pnl, 6),
+        "pooled_std_pnl": round(float(std_pnl), 6),
+        "sharpe_gate_passed": gate_passed,
+        "sharpe_credible": credible,
+        "target_n": target_n,
+        "n_required_for_se_010": n_req,
+        "message": msg,
+    }
+
+
 def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> Dict:
     """
     Pool all trades across symbols and compute pooled Sharpe + SE gate.
 
-    Pooling is valid when symbols are not perfectly correlated (XAU, BTC, ETH
-    have low pairwise correlation on daily returns).
+    Detects and flags implausible per-symbol Sharpe ratios (EUR/USD, GBP/USD
+    artefacts with Sharpe > 12) and reports two numbers:
+    1. ``pooled`` — all symbols including outliers (for reference)
+    2. ``pooled_honest`` — outliers excluded (the number to cite)
+
+    The gate check uses ``pooled_honest`` so inflated outliers cannot
+    cause a false gate pass.
     """
-    all_pnls = []
-    for r in symbol_results:
-        if "trades" in r:
-            all_pnls.extend([t["pnl_pct"] for t in r["trades"]])
-
-    n_total = sum(r.get("n_trades", 0) for r in symbol_results)
-
-    if n_total == 0 or not all_pnls:
+    n_total_all = sum(r.get("n_trades", 0) for r in symbol_results)
+    if n_total_all == 0:
         return {
             "n_total_trades": 0,
             "pooled_sharpe": 0.0,
@@ -377,50 +490,64 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
             "sharpe_gate_passed": False,
             "target_n": target_n,
             "message": "No trades generated across all symbols.",
+            "_validation": {"outliers": [], "honest_pooled": None},
         }
 
-    pnls = np.array(all_pnls)
-    mean_pnl = pnls.mean()
-    std_pnl = pnls.std(ddof=1) if len(pnls) > 1 else 1e-6
-    pooled_sharpe = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
+    # ── Detect outliers ───────────────────────────────────────────────────────
+    outlier_syms, outlier_reasons = _detect_sharpe_outliers(symbol_results)
 
-    # Sharpe SE: sqrt((1 + 0.5*SR²) / T)
-    sr = abs(pooled_sharpe)
-    se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
+    # ── Full pool (all symbols) ───────────────────────────────────────────────
+    pnls_all, n_all = _pool_pnls(symbol_results)
+    full_stats = _sharpe_stats(pnls_all, n_all, target_n)
 
-    gate_passed = n_total >= target_n
-    credible = se <= 0.10
-
-    n_required_for_se = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
-    if gate_passed:
-        se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_required_for_se} for SE<=0.10)")
-        msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}. {se_note}"
+    # ── Honest pool (outliers excluded) ──────────────────────────────────────
+    if outlier_syms:
+        pnls_honest, n_honest = _pool_pnls(symbol_results, exclude=outlier_syms)
+        honest_stats = _sharpe_stats(pnls_honest, n_honest, target_n)
+        honest_stats["excluded_symbols"] = outlier_syms
+        honest_stats["exclusion_reasons"] = {
+            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons)
+        }
     else:
-        msg = (
-            f"Sharpe gate BLOCKED: N={n_total} trades < {target_n}. "
-            f"SE={se:.3f} (SE<=0.10 requires N>={n_required_for_se})."
-        )
+        honest_stats = None
+
+    # ── Gate uses honest pool when outliers exist ─────────────────────────────
+    authoritative = honest_stats if honest_stats is not None else full_stats
 
     logger.info(
-        "Pooled: N=%d | Sharpe=%.2f | SE=%.3f | Gate=%s",
-        n_total,
-        pooled_sharpe,
-        se,
-        "PASSED" if gate_passed else "BLOCKED",
+        "Pooled (all): N=%d Sharpe=%.2f | Honest (excl %s): N=%d Sharpe=%.2f | Gate=%s",
+        full_stats["n_total_trades"],
+        full_stats["pooled_sharpe"],
+        ",".join(outlier_syms) if outlier_syms else "none",
+        authoritative["n_total_trades"],
+        authoritative["pooled_sharpe"],
+        "PASSED" if authoritative["sharpe_gate_passed"] else "BLOCKED",
     )
 
-    return {
-        "n_total_trades": n_total,
-        "pooled_sharpe": round(pooled_sharpe, 4),
-        "pooled_sharpe_se": round(se, 4),
-        "pooled_mean_pnl": round(float(mean_pnl), 6),
-        "pooled_std_pnl": round(float(std_pnl), 6),
-        "sharpe_gate_passed": gate_passed,
-        "sharpe_credible": credible,
-        "target_n": target_n,
-        "n_required_for_se_010": int(np.ceil((1 + 0.5 * sr**2) / 0.01)),
-        "message": msg,
+    result = dict(full_stats)
+    result["_validation"] = {
+        "outlier_symbols": outlier_syms,
+        "outlier_reasons": {
+            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons)
+        },
+        "honest_pooled": honest_stats,
+        "gate_uses_honest_pool": bool(outlier_syms),
+        "note": (
+            f"Symbols {outlier_syms} have implausible Sharpe ratios and are excluded "
+            f"from the honest pooled Sharpe. The gate check uses the honest pool. "
+            f"These results must be independently validated before citing."
+        ) if outlier_syms else "No outliers detected — full pool is authoritative.",
     }
+
+    # Override gate fields with honest pool values when outliers exist
+    if honest_stats is not None:
+        result["sharpe_gate_passed"] = honest_stats["sharpe_gate_passed"]
+        result["sharpe_credible"] = honest_stats["sharpe_credible"]
+        result["message"] = (
+            f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + honest_stats["message"]
+        )
+
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

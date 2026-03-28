@@ -55,14 +55,46 @@
   ],
   "pooled": {
     "n_total_trades": 628,
-    "pooled_sharpe": 4.0462,
-    "pooled_sharpe_se": 0.1209,
-    "pooled_mean_pnl": 0.006412,
-    "pooled_std_pnl": 0.025155,
-    "sharpe_gate_passed": true,
+    "pooled_sharpe": 4.3698,
+    "pooled_sharpe_se": 0.1296,
+    "pooled_mean_pnl": 0.007978,
+    "pooled_std_pnl": 0.028983,
+    "sharpe_gate_passed": false,
     "sharpe_credible": false,
     "target_n": 600,
-    "n_required_for_se_010": 919,
-    "message": "Sharpe gate BLOCKED: N=628 trades, SE=0.121. Need N>=600 (SE<=0.10 requires N>=919)."
+    "n_required_for_se_010": 1055,
+    "message": "[HONEST POOL \u2014 BTC/USD,ETH/USD excluded] Sharpe gate BLOCKED: N=302 < 600. SE=0.182 (SE<=0.10 requires N>=998).",
+    "_validation": {
+      "outlier_symbols": [
+        "BTC/USD",
+        "ETH/USD"
+      ],
+      "outlier_reasons": {
+        "BTC/USD": "Sharpe=6.43 > 5.0 (implausible for daily bars); win_rate=76.8% on 69 trades (implausible for direction model)",
+        "ETH/USD": "Sharpe=5.46 > 5.0 (implausible for daily bars)"
+      },
+      "honest_pooled": {
+        "n_total_trades": 302,
+        "pooled_sharpe": 4.2373,
+        "pooled_sharpe_se": 0.1818,
+        "pooled_mean_pnl": 0.003569,
+        "pooled_std_pnl": 0.01337,
+        "sharpe_gate_passed": false,
+        "sharpe_credible": false,
+        "target_n": 600,
+        "n_required_for_se_010": 998,
+        "message": "Sharpe gate BLOCKED: N=302 < 600. SE=0.182 (SE<=0.10 requires N>=998).",
+        "excluded_symbols": [
+          "BTC/USD",
+          "ETH/USD"
+        ],
+        "exclusion_reasons": {
+          "BTC/USD": "Sharpe=6.43 > 5.0 (implausible for daily bars); win_rate=76.8% on 69 trades (implausible for direction model)",
+          "ETH/USD": "Sharpe=5.46 > 5.0 (implausible for daily bars)"
+        }
+      },
+      "gate_uses_honest_pool": true,
+      "note": "Symbols ['BTC/USD', 'ETH/USD'] have implausible Sharpe ratios and are excluded from the honest pooled Sharpe. The gate check uses the honest pool. These results must be independently validated before citing."
+    }
   }
 }
