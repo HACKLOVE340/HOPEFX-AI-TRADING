@@ -83,9 +83,17 @@ def _decode_token(token: str) -> TokenPayload:
             except HTTPException:
                 raise
             except Exception as exc:
-                logger.warning(
-                    "Token blacklist check failed, allowing token (fail-open): %s",
+                # Fail-closed: if the blacklist store (Redis) is unavailable we
+                # cannot confirm the token has not been revoked.  Reject the
+                # request with 503 so a revoked credential can never authorize
+                # a trade through a Redis outage.
+                logger.critical(
+                    "Token blacklist unavailable — rejecting token to fail-closed: %s",
                     exc,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Auth service temporarily unavailable",
                 )
 
         return TokenPayload(**payload)
