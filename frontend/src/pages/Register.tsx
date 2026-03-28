@@ -73,7 +73,7 @@ const Register: React.FC = () => {
 
       // 3. Auto-login
       try {
-        const loginRes = await authApi.login({ username: username.trim(), password });
+        const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
         setAuth(loginRes.data.access_token, loginRes.data.user);
         navigate('/dashboard', { replace: true });
         return;

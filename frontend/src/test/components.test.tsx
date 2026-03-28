@@ -14,6 +14,21 @@ import AuthGuard from '../components/AuthGuard';
 
 const mockUser = { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' as const };
 
+/**
+ * Build a minimal valid JWT with an exp 1 hour in the future.
+ * AuthGuard now calls isTokenExpired() so tests must supply a real-shaped token.
+ */
+function makeMockJwt(overrides: Record<string, unknown> = {}): string {
+  const header  = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '');
+  const payload = btoa(JSON.stringify({
+    sub: '1',
+    type: 'access',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    ...overrides,
+  })).replace(/=/g, '');
+  return `${header}.${payload}.sig`;
+}
+
 function renderWithRouter(ui: React.ReactElement, { initialEntries = ['/'] } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -47,7 +62,7 @@ describe('AuthGuard', () => {
   });
 
   it('renders children when authenticated', () => {
-    useStore.getState().setAuth('tok', mockUser);
+    useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard><div>Protected Content</div></AuthGuard>} />
@@ -58,7 +73,7 @@ describe('AuthGuard', () => {
   });
 
   it('does not show login page when authenticated', () => {
-    useStore.getState().setAuth('tok', mockUser);
+    useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard><div>Protected</div></AuthGuard>} />
@@ -69,7 +84,7 @@ describe('AuthGuard', () => {
   });
 
   it('shows access denied for insufficient role', () => {
-    useStore.getState().setAuth('tok', mockUser); // trader role
+    useStore.getState().setAuth(makeMockJwt(), mockUser); // trader role
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="admin"><div>Admin Only</div></AuthGuard>} />
@@ -81,7 +96,7 @@ describe('AuthGuard', () => {
   });
 
   it('allows access when role is sufficient', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'admin' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'admin' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="admin"><div>Admin Content</div></AuthGuard>} />
@@ -92,7 +107,7 @@ describe('AuthGuard', () => {
   });
 
   it('superadmin can access admin-required routes', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'superadmin' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'superadmin' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="admin"><div>Admin Content</div></AuthGuard>} />
@@ -103,7 +118,7 @@ describe('AuthGuard', () => {
   });
 
   it('user role cannot access trader-required routes', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'user' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="trader"><div>Trader Content</div></AuthGuard>} />
@@ -114,7 +129,7 @@ describe('AuthGuard', () => {
   });
 
   it('trader can access trader-required routes', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'trader' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'trader' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="trader"><div>Trader Content</div></AuthGuard>} />
@@ -125,7 +140,7 @@ describe('AuthGuard', () => {
   });
 
   it('renders multiple children', () => {
-    useStore.getState().setAuth('tok', mockUser);
+    useStore.getState().setAuth(makeMockJwt(), mockUser);
     renderWithRouter(
       <Routes>
         <Route path="/" element={
@@ -142,7 +157,7 @@ describe('AuthGuard', () => {
   });
 
   it('access denied message mentions required role', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'user' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard requiredRole="superadmin"><div>Super</div></AuthGuard>} />
@@ -153,7 +168,7 @@ describe('AuthGuard', () => {
   });
 
   it('no requiredRole allows any authenticated user', () => {
-    useStore.getState().setAuth('tok', { ...mockUser, role: 'user' });
+    useStore.getState().setAuth(makeMockJwt(), { ...mockUser, role: 'user' });
     renderWithRouter(
       <Routes>
         <Route path="/" element={<AuthGuard><div>Open Content</div></AuthGuard>} />
@@ -161,6 +176,19 @@ describe('AuthGuard', () => {
       </Routes>
     );
     expect(screen.getByText('Open Content')).toBeInTheDocument();
+  });
+
+  it('redirects expired token to /login', () => {
+    // exp in the past → isTokenExpired returns true
+    useStore.getState().setAuth(makeMockJwt({ exp: Math.floor(Date.now() / 1000) - 60 }), mockUser);
+    renderWithRouter(
+      <Routes>
+        <Route path="/" element={<AuthGuard><div>Protected</div></AuthGuard>} />
+        <Route path="/login" element={<div>Login Page</div>} />
+      </Routes>
+    );
+    expect(screen.getByText('Login Page')).toBeInTheDocument();
+    expect(screen.queryByText('Protected')).not.toBeInTheDocument();
   });
 });
 
@@ -211,9 +239,9 @@ describe('Login page', () => {
     expect(screen.getByText(/HOPE/)).toBeInTheDocument();
   });
 
-  it('renders username input', async () => {
+  it('renders email input', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/username or email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
   });
 
   it('renders password input', async () => {
@@ -232,9 +260,9 @@ describe('Login page', () => {
     expect(screen.getByText(/required/i)).toBeInTheDocument();
   });
 
-  it('shows error when only username provided', async () => {
+  it('shows error when only email provided', async () => {
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: 'user' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'user@test.com' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
     expect(screen.getByText(/required/i)).toBeInTheDocument();
   });
@@ -246,12 +274,12 @@ describe('Login page', () => {
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: 'trader1' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'trader@hopefx.io' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass123' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith({ username: 'trader1', password: 'pass123' });
+      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass123' });
     });
   });
 
@@ -262,7 +290,7 @@ describe('Login page', () => {
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: 'trader1' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'trader@hopefx.io' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass123' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
@@ -278,7 +306,7 @@ describe('Login page', () => {
     });
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: 'bad' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'bad@test.com' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
@@ -292,7 +320,7 @@ describe('Login page', () => {
     vi.mocked(authApi.login).mockRejectedValueOnce(new Error('Network error'));
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: 'user' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'user@test.com' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
@@ -301,19 +329,19 @@ describe('Login page', () => {
     });
   });
 
-  it('trims whitespace from username', async () => {
+  it('normalises email to lowercase before sending', async () => {
     const { authApi } = await import('../hooks/useApi');
     vi.mocked(authApi.login).mockResolvedValueOnce({
       data: { access_token: 'tok', token_type: 'bearer', user: mockUser },
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/username or email/i), { target: { value: '  trader1  ' } });
+    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: '  Trader@HopeFX.io  ' } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(authApi.login).toHaveBeenCalledWith({ username: 'trader1', password: 'pass' });
+      expect(authApi.login).toHaveBeenCalledWith({ email: 'trader@hopefx.io', password: 'pass' });
     });
   });
 
