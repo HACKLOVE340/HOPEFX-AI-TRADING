@@ -201,6 +201,36 @@ class SignalFilter:
             "threshold": _EV_MIN,
         }
 
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Return aggregate filter statistics for health endpoints.
+
+        Includes global EV stats, per-symbol outcome counts, and
+        current gate configuration so operators can monitor signal
+        quality without querying individual symbols.
+        """
+        global_stats = self.ev_stats(None)
+        per_symbol: Dict[str, Any] = {}
+        for sym, dq in self._outcomes.items():
+            if dq:
+                per_symbol[sym] = self.ev_stats(sym)
+
+        return {
+            "global": global_stats,
+            "per_symbol": per_symbol,
+            "symbols_tracked": len(self._outcomes),
+            "global_outcomes_buffered": len(self._global_outcomes),
+            "config": {
+                "threshold_long": _THRESHOLD_LONG,
+                "threshold_short": _THRESHOLD_SHORT,
+                "ev_min": _EV_MIN,
+                "ev_window": _EV_WINDOW,
+                "min_confidence_abs": _MIN_CONFIDENCE_ABS,
+                "regime_filter_enabled": _REGIME_FILTER,
+                "mtf_confluence_required": _MTF_CONFLUENCE,
+            },
+        }
+
     # ── Gate implementations ──────────────────────────────────────────────────
 
     def _gate_confidence(self, direction: str, confidence: float) -> FilterResult:
