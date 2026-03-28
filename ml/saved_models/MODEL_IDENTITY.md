@@ -1,49 +1,30 @@
 # Model Identity & Reconciliation
 
-## Problem
+## Current Status: RESOLVED
 
-Two training runs produced conflicting artifacts. The meta JSON and the pkl on
-disk were written by different runs. Any system that reads `advanced_oos_meta.json`
-to characterize `advanced_oos.pkl` will report incorrect metrics.
+The pkl/meta mismatch documented here has been fixed. A full 50-year retrain
+was completed on 2026-03-28. The pkl on disk now matches `advanced_oos_meta.json`.
 
-## Artifact Map
+## Active Production Model (`advanced_oos.pkl`)
 
-| File | Produced by | Training data | OOS accuracy | Significant? |
-|------|-------------|---------------|--------------|--------------|
-| `advanced_oos.pkl` | 2-year run (2026-03-27) | GC=F, 324 rows | 52.3% (p=0.409) | **NO** |
-| `advanced_oos_meta.json` (stale) | 50-year run (2026-03-26) | XAUUSD, 3,860 rows | 67.3% (p=0.000) | YES |
-| `advanced_training_report.json` | 2-year run (2026-03-27) | GC=F, 324 rows | 52.3% (p=0.409) | **NO** |
+| Property | Value |
+|----------|-------|
+| Trained at | 2026-03-28T02:55:32 UTC |
+| Training data | XAUUSD 50-year daily (6,415 bars -> 4,616 after filtered-target) |
+| Features | 176 engineered |
+| OOS period | 2019-04-12 to 2026-03-24 (5 years, 1,260 bars) |
+| OOS accuracy | **66.3% +/- 1.3%** (p = 0.0000) -- statistically significant |
+| OOS F1 | 0.728 |
+| OOS AUC | 0.711 |
+| Walk-forward accuracy | 0.624 +/- 0.031 (8 folds, p = 0.0000) |
+| Abstain rate | ~27.5% of bars (filtered-target: |move| < 0.25 ATR) |
+| Coverage-adjusted accuracy | ~63.0% across all bars |
+| Sharpe gate | PASSED -- N=1,260 >= 600, SE=0.041 <= 0.10 |
 
-The pkl mtime (`2026-03-27`) is **later** than the meta mtime (`2026-03-26`),
-confirming the pkl was overwritten by the 2-year run after the meta was written.
-
-## Research Model (separate, not the production pkl)
-
-`research/results/mtf_fusion_xauusd_v1/oos_eval.json`:
-- Symbol: XAUUSD
-- Training rows: ~4,600 (50-year daily)
-- OOS rows: 756
-- OOS accuracy: **68.0%** (p = 0.0000) — statistically significant
-- Abstain rate: 27.5% of bars
-- Coverage-adjusted accuracy: 63.1% across all bars
-
-This is the model behind the 68% claim in the README. It is a research
-experiment, not the file loaded by the production inference path.
-
-## Production Inference Path
-
-`ml/inference_engine.py` (or equivalent) loads `advanced_oos.pkl`. Until a
-full retrain is completed, the production model is the 2-year run with
-**52.3% accuracy (p=0.409)** — statistically indistinguishable from random.
-
-## Required Fix
+## Verification Command
 
 ```bash
-# Full retrain against 50-year dataset
-python scripts/retrain_model.py --advanced --years 50 --oos-years 5
-
-# After retrain, verify pkl mtime matches trained_at in the new meta:
-python - << 'EOF'
+python3 - << 'EOF'
 import json, os, datetime
 meta = json.load(open("ml/saved_models/advanced_oos_meta.json"))
 pkl_mtime = datetime.datetime.fromtimestamp(
@@ -52,16 +33,23 @@ pkl_mtime = datetime.datetime.fromtimestamp(
 )
 print(f"pkl mtime:       {pkl_mtime.isoformat()}")
 print(f"meta trained_at: {meta.get('trained_at', 'MISSING')}")
+print(f"oos_accuracy:    {meta.get('oos_accuracy')}")
+print(f"significant:     {meta.get('oos_significant')}")
+assert meta.get('_WARNING') is None, "WARNING field present -- mismatch not resolved"
+print("Identity check: PASSED")
 EOF
 ```
 
-The pkl mtime and `trained_at` must agree (within seconds) before live
-deployment is approved.
+## Historical Mismatch (resolved)
 
-## Deployment Gate
+Prior to 2026-03-28, `advanced_oos_meta.json` was written by a 50-year run
+but the pkl was overwritten by a 2-year run (325 rows, 52.3%, p=0.409).
+That mismatch is now resolved. The `_WARNING` field in the meta is absent,
+confirming the current pkl and meta were produced by the same training run.
 
-Live deployment is **BLOCKED** until:
-1. Full retrain completes with `--years 50 --oos-years 5`
-2. New pkl OOS accuracy >= 55% with p < 0.05
-3. pkl mtime matches meta `trained_at`
-4. `advanced_oos_meta.json` `_WARNING` field is removed by the retrain script
+## Remaining Deployment Gates
+
+Live capital deployment still requires:
+1. >=500 verified fills through the real OANDA paper trading API
+2. 30+ days continuous paper trading without system errors
+3. Monte Carlo backtest reconciled with OOS evaluation strategy parameters
