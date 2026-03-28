@@ -88,6 +88,7 @@ from auth.router import router as auth_router  # noqa: E402
 from api.trading import router as trading_router  # noqa: E402
 from api.monetization import router as monetization_router  # noqa: E402
 from api.backtesting import router as backtesting_router  # noqa: E402
+from api.online_learner import router as online_learner_router  # noqa: E402
 from api.chat import router as chat_router  # noqa: E402
 from api.prop_firm import router as prop_firm_router  # noqa: E402
 from api.performance import router as performance_router  # noqa: E402
@@ -191,6 +192,7 @@ app.include_router(trading_router)
 app.include_router(admin_router)
 app.include_router(monetization_router)
 app.include_router(backtesting_router)
+app.include_router(online_learner_router)
 app.include_router(chat_router)
 app.include_router(prop_firm_router)
 app.include_router(performance_router)
