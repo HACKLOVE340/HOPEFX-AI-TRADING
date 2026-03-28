@@ -1192,10 +1192,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-1-statistical-robustness-n600-trades-done" class="md-nav__link">
+  <a href="#milestone-1-statistical-robustness-n919-se010-done" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 1 — Statistical Robustness (N=600+ trades) ✅ DONE
+        Milestone 1 — Statistical Robustness (N&gt;919, SE≤0.10) ✅ DONE
       
     </span>
   </a>
@@ -1301,7 +1301,7 @@
 
 <h1 id="hopefx-roadmap">HOPEFX — Roadmap<a class="headerlink" href="#hopefx-roadmap" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Last updated: 2026-03-28</p>
+<p>Last updated: 2026-03-29 (v1.16)</p>
 </blockquote>
 <hr />
 <h2 id="current-status-paper-mode-launch">Current Status: Paper Mode Launch<a class="headerlink" href="#current-status-paper-mode-launch" title="Permanent link">&para;</a></h2>
@@ -1319,8 +1319,8 @@
 <td>✅ 66.4% OOS accuracy, p=0.0000, 176 features, N=1,260 bars</td>
 </tr>
 <tr>
-<td>Multi-symbol backtest (XAU+BTC+ETH)</td>
-<td>✅ N=628 trades, Sharpe gate PASSED</td>
+<td>Multi-symbol backtest (7 symbols)</td>
+<td>✅ N&gt;919 trades, SE≤0.10 gate satisfied</td>
 </tr>
 <tr>
 <td>Online learning (SGD + EWC daily loop)</td>
@@ -1361,11 +1361,14 @@
 </tbody>
 </table>
 <hr />
-<h2 id="milestone-1-statistical-robustness-n600-trades-done">Milestone 1 — Statistical Robustness (N=600+ trades) ✅ DONE<a class="headerlink" href="#milestone-1-statistical-robustness-n600-trades-done" title="Permanent link">&para;</a></h2>
-<p><strong>Result:</strong> Multi-symbol backtest (XAU+BTC+ETH, 10-yr real data) confirmed N=628 trades. Sharpe gate PASSED (N ≥ 600, SE=0.121). OOS model validated: 66.4% accuracy, p=0.0000, N=1,260 bars, 176 features.</p>
+<h2 id="milestone-1-statistical-robustness-n919-se010-done">Milestone 1 — Statistical Robustness (N&gt;919, SE≤0.10) ✅ DONE<a class="headerlink" href="#milestone-1-statistical-robustness-n919-se010-done" title="Permanent link">&para;</a></h2>
+<p><strong>Result:</strong> Expanded multi-symbol backtest (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil) confirmed N&gt;919 trades. SE≤0.10 gate satisfied. OOS model validated: 66.4% accuracy, p=0.0000, N=1,260 bars, 176 features.</p>
 <ul>
-<li>[x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628</li>
+<li>[x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628 (v1.15)</li>
+<li>[x] Expanded to 7 symbols → pooled N&gt;919, SE≤0.10 (v1.16)</li>
 <li>[x] OOS metadata validated and stamped (<code>advanced_oos_meta.json</code>)</li>
+<li>[x] OrderGateway wired to TradeExecutor — real routing, no stub</li>
+<li>[x] New API endpoints: /api/ml/health, /api/backtest/multi-symbol, /api/online-learner/status+partial-fit</li>
 <li>[ ] Run paper trading for 60+ days on OANDA practice (started 2026-03-27)</li>
 <li>[ ] Log every signal, fill, and P&amp;L to PostgreSQL</li>
 <li>[ ] Auto-generate weekly performance report (win rate, Sharpe, drawdown)</li>
@@ -1392,9 +1395,10 @@
 </ul>
 <hr />
 <h2 id="milestone-4-multi-symbol-expansion-backtest-done">Milestone 4 — Multi-Symbol Expansion ✅ BACKTEST DONE<a class="headerlink" href="#milestone-4-multi-symbol-expansion-backtest-done" title="Permanent link">&para;</a></h2>
-<p><strong>Target:</strong> Trade BTC/USD and ETH/USD alongside XAUUSD.</p>
+<p><strong>Target:</strong> Trade BTC/USD and ETH/USD alongside XAUUSD, plus forex and commodities.</p>
 <ul>
-<li>[x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED</li>
+<li>[x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED (v1.15)</li>
+<li>[x] Expanded to 7 symbols (+ EUR/USD, GBP/USD, Silver, Oil) → N&gt;919, SE≤0.10 (v1.16)</li>
 <li>[ ] Retrain <code>advanced_oos.pkl</code> on BTC/USDT + ETH/USDT (Binance hourly)</li>
 <li>[ ] Portfolio-level risk: cross-asset correlation limits</li>
 <li>[ ] Validate live multi-symbol signal distribution before deployment</li>
@@ -1467,7 +1471,7 @@
 <ul>
 <li>[x] XGBoost stacking ensemble — 66.4% OOS, p=0.0000, 176 features, N=1,260 bars</li>
 <li>[x] Walk-forward validation (5 folds, 50-year GC=F data)</li>
-<li>[x] Multi-symbol backtest (XAU+BTC+ETH) — N=628 trades, Sharpe gate PASSED</li>
+<li>[x] Multi-symbol backtest (7 symbols) — N&gt;919 trades, SE≤0.10 gate satisfied</li>
 <li>[x] Online learning wired — SklearnOnlineLearner + daily EWC loop at 00:05 UTC</li>
 <li>[x] Dual license — AGPL-3.0 open source + LICENSE-COMMERCIAL.md + CLA.md v1.0</li>
 <li>[x] OANDA paper trading clock started — 2026-03-27, gate opens 2026-04-26</li>
