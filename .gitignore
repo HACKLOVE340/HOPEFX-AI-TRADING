@@ -157,3 +157,7 @@ trading_logs/
 # Kill switch runtime flag
 kill_switch.flag
 kill_switch.state.json
+
+# Downloaded OHLCV cache files (yfinance, large data)
+data/*Y.csv
+data/*_H1.csv

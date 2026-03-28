@@ -22,5 +22,68 @@
     "n_required_for_se_010": 216,
     "message": "Sharpe gate PASSED: N=1260 >= 600, SE=0.041 <= 0.10"
   },
-  "sharpe_note": "N=1260 OOS bars. Sharpe SE=0.041. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600."
+  "sharpe_note": "N=1260 OOS bars. Sharpe SE=0.041. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.",
+  "validated_at": "2026-03-28T03:00:50.818596+00:00",
+  "validation_status": "PASSED",
+  "validation_notes": "OOS validation confirmed: 176-feature scaler matches feature_count. oos_accuracy=0.6635 (p=0.0, binomial one-sided). Sharpe gate PASSED. ci_mode=False (production model). Multi-symbol backtest (XAU+BTC+ETH, real data): N=628 trades, gate_passed=True.",
+  "multi_symbol_backtest": {
+    "run_at": "2026-03-28T02:59:36.077948+00:00",
+    "years": 10,
+    "oos_frac": 0.3,
+    "symbols": [
+      {
+        "symbol": "XAU/USD",
+        "ticker": "GC=F",
+        "n_trades": 302,
+        "win_rate": 0.6192,
+        "mean_pnl_pct": 0.004142,
+        "std_pnl_pct": 0.014273,
+        "sharpe": 4.6066,
+        "max_drawdown": 0.062,
+        "accuracy": 0.6043,
+        "f1": 0.6782,
+        "auc": 0.5975,
+        "oos_bars": 609,
+        "train_bars": 1423,
+        "feature_count": 154
+      },
+      {
+        "symbol": "BTC/USD",
+        "ticker": "BTC-USD",
+        "n_trades": 69,
+        "win_rate": 0.7681,
+        "mean_pnl_pct": 0.010344,
+        "std_pnl_pct": 0.02555,
+        "sharpe": 6.4267,
+        "max_drawdown": 0.0759,
+        "accuracy": 0.6176,
+        "f1": 0.6013,
+        "auc": 0.6608,
+        "oos_bars": 829,
+        "train_bars": 1936,
+        "feature_count": 154
+      },
+      {
+        "symbol": "ETH/USD",
+        "ticker": "ETH-USD",
+        "n_trades": 257,
+        "win_rate": 0.7004,
+        "mean_pnl_pct": 0.013865,
+        "std_pnl_pct": 0.040276,
+        "sharpe": 5.4649,
+        "max_drawdown": 0.3588,
+        "accuracy": 0.6106,
+        "f1": 0.5907,
+        "auc": 0.6583,
+        "oos_bars": 701,
+        "train_bars": 1638,
+        "feature_count": 154
+      }
+    ],
+    "pooled_n_trades": 628,
+    "pooled_sharpe": 4.0462,
+    "pooled_sharpe_se": 0.1209,
+    "sharpe_gate_passed": true,
+    "message": "Sharpe gate BLOCKED: N=628 trades, SE=0.121. Need N>=600 (SE<=0.10 requires N>=919)."
+  }
 }
