@@ -1,35 +1,50 @@
-# HOPEFX AI Trading Framework - Docker Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1 — Build the React frontend
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS frontend-builder
 
+WORKDIR /build/frontend
+
+# Install deps first (layer-cached unless package.json changes)
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --silent
+
+# Copy source and build — output lands in /build/static (vite outDir: '../static')
+COPY frontend/ ./
+RUN npm run build
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2 — Python runtime
+# ─────────────────────────────────────────────────────────────────────────────
 FROM python:3.10-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-# libquickfix-dev: required to compile the quickfix C-extension (FIX protocol).
-#   Without it `pip install quickfix` silently falls back to a stub or fails
-#   at import time on first order submission.
-# libpq-dev: required to compile psycopg2 against PostgreSQL.
-# curl: used by the HEALTHCHECK command below.
+# System deps:
+#   gcc/g++         — compile C-extension wheels (e.g. quickfix, psycopg2)
+#   libquickfix-dev — FIX protocol C-extension
+#   libpq-dev       — psycopg2 PostgreSQL driver
+#   curl            — HEALTHCHECK
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libquickfix-dev \
     libpq-dev \
-    redis-tools \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Install Python dependencies (cached unless requirements.txt changes)
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application source
 COPY . .
 
-# Create required directories and a non-root user
+# Copy the compiled frontend bundle from stage 1
+COPY --from=frontend-builder /build/static ./static
+
+# Create runtime directories and a non-root user
 RUN mkdir -p logs data credentials state fix_store fix_logs \
     && useradd -m -u 1001 hopefx \
     && chown -R hopefx:hopefx /app
@@ -37,17 +52,13 @@ RUN mkdir -p logs data credentials state fix_store fix_logs \
 # Drop root before the process starts
 USER hopefx
 
-# Expose port (matches docker-compose.yml and API_PORT default)
 EXPOSE 8000
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV APP_ENV=production
 ENV API_PORT=8000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${API_PORT}/health || exit 1
 
-# Run the application
 CMD ["python", "app.py"]
