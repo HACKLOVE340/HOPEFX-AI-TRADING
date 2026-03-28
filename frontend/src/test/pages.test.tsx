@@ -42,7 +42,11 @@ vi.mock('../hooks/useApi', () => ({
   api: {
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: { request: { handlers: [{}], use: vi.fn() }, response: { handlers: [{}], use: vi.fn() } },
-    get: vi.fn(), post: vi.fn(), delete: vi.fn(),
+    get:    vi.fn().mockResolvedValue({ data: {} }),
+    post:   vi.fn().mockResolvedValue({ data: {} }),
+    put:    vi.fn().mockResolvedValue({ data: {} }),
+    patch:  vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
   },
 }));
 

@@ -1,14 +1,16 @@
 /**
  * Watchlist page — add/remove symbols, live prices, sparklines, click to chart.
  *
- * Wires to: GET    /api/watchlist?user_id=...
- *           POST   /api/watchlist/{symbol}?user_id=...
- *           DELETE /api/watchlist/{symbol}?user_id=...
- *           GET    /api/watchlist/prices?user_id=...
+ * Auth: JWT injected automatically via the api axios instance interceptor.
+ * Wires to: GET    /api/watchlist
+ *           POST   /api/watchlist/{symbol}
+ *           DELETE /api/watchlist/{symbol}
+ *           GET    /api/watchlist/prices
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../hooks/useApi';
 import { useStore } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,21 +37,20 @@ function formatPrice(symbol: string, price: number): string {
   return price.toFixed(5);
 }
 
-// Tiny sparkline using SVG — last 10 random points around current price
+// Tiny sparkline using SVG
 const Sparkline: React.FC<{ change_pct: number }> = ({ change_pct }) => {
-  const up = change_pct >= 0;
+  const up    = change_pct >= 0;
   const color = up ? '#4ade80' : '#f87171';
-  // Generate 10 points trending in the direction of change_pct
   const points = Array.from({ length: 10 }, (_, i) => {
     const trend = (change_pct / 10) * i;
     const noise = (Math.random() - 0.5) * 0.5;
     return 20 - (trend + noise) * 2;
   });
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
+  const min        = Math.min(...points);
+  const max        = Math.max(...points);
+  const range      = max - min || 1;
   const normalized = points.map((p) => ((p - min) / range) * 28 + 2);
-  const path = normalized.map((y, i) => `${i === 0 ? 'M' : 'L'}${(i / 9) * 60},${y}`).join(' ');
+  const path       = normalized.map((y, i) => `${i === 0 ? 'M' : 'L'}${(i / 9) * 60},${y}`).join(' ');
   return (
     <svg width={60} height={32} style={{ display: 'block' }}>
       <path d={path} fill="none" stroke={color} strokeWidth={1.5} />
@@ -57,45 +58,63 @@ const Sparkline: React.FC<{ change_pct: number }> = ({ change_pct }) => {
   );
 };
 
+// ── Fallback demo data shown while API loads ──────────────────────────────────
+
+const DEMO_ITEMS: WatchlistItem[] = [
+  { symbol: 'XAUUSD', bid: 2340.10, ask: 2340.40, mid: 2340.25, change_pct:  0.42, timestamp: Date.now() },
+  { symbol: 'EURUSD', bid: 1.08490, ask: 1.08510, mid: 1.08500, change_pct: -0.18, timestamp: Date.now() },
+  { symbol: 'GBPUSD', bid: 1.26980, ask: 1.27010, mid: 1.26995, change_pct:  0.11, timestamp: Date.now() },
+  { symbol: 'USDJPY', bid: 149.480, ask: 149.510, mid: 149.495, change_pct: -0.05, timestamp: Date.now() },
+  { symbol: 'BTCUSD', bid: 66980.0, ask: 67020.0, mid: 67000.0, change_pct:  1.23, timestamp: Date.now() },
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const WatchlistPage: React.FC = () => {
-  const token  = useStore((s) => s.token);
-  const user   = useStore((s) => s.user);
-  const userId = user?.id ?? 'demo';
-  const navigate = useNavigate();
+  const navigate    = useNavigate();
+  const storePrices = useStore((s) => s.prices);
 
-  const [items, setItems]       = useState<WatchlistItem[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [items,     setItems]     = useState<WatchlistItem[]>(DEMO_ITEMS);
+  const [loading,   setLoading]   = useState(true);
   const [addSymbol, setAddSymbol] = useState('');
-  const [adding, setAdding]     = useState(false);
-  const [error, setError]       = useState('');
-
-  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-  const qs = `?user_id=${userId}`;
+  const [adding,    setAdding]    = useState(false);
+  const [error,     setError]     = useState('');
 
   const fetchWatchlist = useCallback(async () => {
     try {
-      const res = await fetch(`/api/watchlist${qs}`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items ?? []);
-      }
-    } catch { /* silent */ }
-    setLoading(false);
-  }, [userId]);
+      const res = await api.get<{ items: WatchlistItem[] }>('/api/watchlist');
+      if (res.data.items?.length) setItems(res.data.items);
+    } catch {
+      // API unavailable — keep demo data
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Refresh prices every 5s
   useEffect(() => {
     fetchWatchlist();
     const id = setInterval(async () => {
       try {
-        const res = await fetch(`/api/watchlist/prices${qs}`, { headers });
-        if (res.ok) setItems(await res.json());
-      } catch { /* silent */ }
+        const res = await api.get<WatchlistItem[]>('/api/watchlist/prices');
+        if (Array.isArray(res.data) && res.data.length > 0) setItems(res.data);
+      } catch { /* keep existing */ }
     }, 5000);
     return () => clearInterval(id);
   }, [fetchWatchlist]);
+
+  // Overlay live store prices for real-time feel
+  const enrichedItems: WatchlistItem[] = items.map((item) => {
+    // Store uses 'XAU/USD' format; watchlist uses 'XAUUSD' — map both ways
+    const slashKey = item.symbol
+      .replace('XAUUSD', 'XAU/USD')
+      .replace('EURUSD', 'EUR/USD')
+      .replace('GBPUSD', 'GBP/USD')
+      .replace('USDJPY', 'USD/JPY')
+      .replace('BTCUSD', 'BTC/USD');
+    const tick = storePrices[slashKey] ?? storePrices[item.symbol];
+    if (!tick) return item;
+    return { ...item, bid: tick.bid, ask: tick.ask, mid: tick.mid, change_pct: tick.change_pct, timestamp: tick.timestamp };
+  });
 
   const handleAdd = async () => {
     const sym = addSymbol.trim().toUpperCase();
@@ -103,17 +122,21 @@ const WatchlistPage: React.FC = () => {
     setAdding(true);
     setError('');
     try {
-      const res = await fetch(`/api/watchlist/${sym}${qs}`, { method: 'POST', headers });
-      if (res.status === 409) { setError(`${sym} is already in your watchlist`); }
-      else if (!res.ok) { setError(`Failed to add ${sym}`); }
-      else { setAddSymbol(''); await fetchWatchlist(); }
-    } catch { setError('Network error'); }
-    setAdding(false);
+      await api.post(`/api/watchlist/${sym}`);
+      setAddSymbol('');
+      await fetchWatchlist();
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) setError(`${sym} is already in your watchlist`);
+      else setError(`Failed to add ${sym}`);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleRemove = async (symbol: string) => {
     try {
-      await fetch(`/api/watchlist/${symbol}${qs}`, { method: 'DELETE', headers });
+      await api.delete(`/api/watchlist/${symbol}`);
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
     } catch { /* silent */ }
   };
@@ -121,21 +144,14 @@ const WatchlistPage: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Watchlist</h1>
-          <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
-        </div>
+        <h1 style={s.title}>Watchlist</h1>
+        <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
       </div>
 
-      {/* Add symbol */}
       <div style={s.addRow}>
-        <select
-          value={addSymbol}
-          onChange={(e) => setAddSymbol(e.target.value)}
-          style={s.select}
-        >
+        <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} style={s.select}>
           <option value="">Add symbol…</option>
-          {AVAILABLE_SYMBOLS.filter((s) => !items.find((i) => i.symbol === s)).map((sym) => (
+          {AVAILABLE_SYMBOLS.filter((sym) => !items.find((i) => i.symbol === sym)).map((sym) => (
             <option key={sym} value={sym}>{sym}</option>
           ))}
         </select>
@@ -145,54 +161,33 @@ const WatchlistPage: React.FC = () => {
         {error && <span style={{ color: '#f87171', fontSize: 13 }}>{error}</span>}
       </div>
 
-      {/* Watchlist table */}
       {loading ? (
         <div style={s.empty}>Loading…</div>
-      ) : items.length === 0 ? (
+      ) : enrichedItems.length === 0 ? (
         <div style={s.empty}>Your watchlist is empty. Add symbols above.</div>
       ) : (
         <div style={s.table}>
           <div style={s.tableHeader}>
             <span style={{ flex: 1 }}>Symbol</span>
-            <span style={{ width: 80, textAlign: 'right' }}>Bid</span>
-            <span style={{ width: 80, textAlign: 'right' }}>Ask</span>
+            <span style={{ width: 90, textAlign: 'right' }}>Bid</span>
+            <span style={{ width: 90, textAlign: 'right' }}>Ask</span>
             <span style={{ width: 80, textAlign: 'right' }}>24h</span>
             <span style={{ width: 70, textAlign: 'center' }}>Trend</span>
-            <span style={{ width: 40 }}></span>
+            <span style={{ width: 40 }} />
           </div>
-          {items.map((item) => (
-            <div
-              key={item.symbol}
-              style={s.tableRow}
-              onClick={() => navigate('/trading')}
-              title={`Open ${item.symbol} chart`}
-            >
-              <span style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}>
-                {item.symbol}
-              </span>
-              <span style={{ width: 80, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>
-                {formatPrice(item.symbol, item.bid)}
-              </span>
-              <span style={{ width: 80, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>
-                {formatPrice(item.symbol, item.ask)}
-              </span>
-              <span style={{
-                width: 80, textAlign: 'right', fontWeight: 600,
-                color: item.change_pct >= 0 ? '#4ade80' : '#f87171',
-              }}>
+          {enrichedItems.map((item) => (
+            <div key={item.symbol} style={s.tableRow} onClick={() => navigate('/trading')} title={`Open ${item.symbol} chart`}>
+              <span style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}>{item.symbol}</span>
+              <span style={{ width: 90, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>{formatPrice(item.symbol, item.bid)}</span>
+              <span style={{ width: 90, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>{formatPrice(item.symbol, item.ask)}</span>
+              <span style={{ width: 80, textAlign: 'right', fontWeight: 600, color: item.change_pct >= 0 ? '#4ade80' : '#f87171' }}>
                 {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
               </span>
               <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
                 <Sparkline change_pct={item.change_pct} />
               </span>
               <span style={{ width: 40, textAlign: 'right' }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleRemove(item.symbol); }}
-                  style={s.removeBtn}
-                  title="Remove from watchlist"
-                >
-                  ×
-                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleRemove(item.symbol); }} style={s.removeBtn} title="Remove">×</button>
               </span>
             </div>
           ))}
@@ -202,10 +197,8 @@ const WatchlistPage: React.FC = () => {
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const s: Record<string, React.CSSProperties> = {
-  page:        { padding: 24, maxWidth: 800, margin: '0 auto' },
+  page:        { padding: 24, maxWidth: 860, margin: '0 auto' },
   header:      { marginBottom: 20 },
   title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },

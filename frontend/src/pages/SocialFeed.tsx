@@ -8,7 +8,6 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../hooks/useApi';
-import axios from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    axios.get(`/api/feed/${signalId}/comments`)
+    api.get(`/api/feed/${signalId}/comments`)
       .then((r) => setComments(r.data.comments || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -220,7 +219,7 @@ const SocialFeed: React.FC = () => {
     try {
       const params: Record<string, string | number> = { page: p, limit: 10 };
       if (sym !== 'All') params.symbol = sym;
-      const res = await axios.get('/api/feed', { params });
+      const res = await api.get('/api/feed', { params });
       setItems(res.data.items || []);
       setTotal(res.data.pages || 1);
       setPage(p);

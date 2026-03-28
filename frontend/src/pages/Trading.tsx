@@ -187,9 +187,10 @@ const Trading: React.FC = () => {
   const seriesRef         = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   const prices    = useStore((s) => s.prices);
-  const tick      = prices['XAUUSD'];
+  // Price simulator keys use 'XAU/USD' — normalise for lookup
+  const tick      = prices['XAU/USD'];
 
-  const [symbol]          = useState('XAUUSD');
+  const [symbol]          = useState('XAU/USD');
   const [positions, setPositions] = useState<Position[]>([]);
   const [account, setAccount]     = useState<AccountInfo | null>(null);
   const [timeframe, setTimeframe] = useState('1h');
@@ -230,12 +231,16 @@ const Trading: React.FC = () => {
     chartRef.current = chart;
     seriesRef.current = series;
 
-    fetch(`/api/trading/ohlcv/${symbol}?timeframe=${timeframe}&limit=200`)
+    // Encode symbol so 'XAU/USD' becomes 'XAU%2FUSD' in the URL
+    fetch(`/api/trading/ohlcv/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=200`)
       .then((r) => r.json())
       .then((data) => {
         const candles = Array.isArray(data) ? data : (data.data ?? []);
-        series.setData(candles.map((c: any) => ({
-          time: (typeof c.timestamp === 'number' ? c.timestamp : new Date(c.timestamp).getTime() / 1000) as any,
+        // lightweight-charts v5 expects UTCTimestamp (seconds since epoch)
+        series.setData(candles.map((c: { timestamp: number | string; open: number; high: number; low: number; close: number }) => ({
+          time: Math.floor(
+            typeof c.timestamp === 'number' ? c.timestamp : new Date(c.timestamp).getTime() / 1000
+          ) as import('lightweight-charts').UTCTimestamp,
           open: c.open, high: c.high, low: c.low, close: c.close,
         })));
       })
@@ -258,10 +263,10 @@ const Trading: React.FC = () => {
   useEffect(() => {
     if (tick && seriesRef.current) {
       const candle: CandlestickData = {
-        time: Math.floor(new Date(tick.timestamp).getTime() / 1000) as any,
-        open: tick.bid,
-        high: Math.max(tick.bid, tick.ask),
-        low: Math.min(tick.bid, tick.ask),
+        time: Math.floor(tick.timestamp / 1000) as import('lightweight-charts').UTCTimestamp,
+        open:  tick.bid,
+        high:  Math.max(tick.bid, tick.ask),
+        low:   Math.min(tick.bid, tick.ask),
         close: tick.ask,
       };
       seriesRef.current.update(candle);

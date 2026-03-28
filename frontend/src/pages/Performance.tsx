@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { api } from '../hooks/useApi';
 
 interface PublicPerformance {
   total_trades: number;
@@ -79,16 +80,21 @@ const Performance: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [perfRes, eqRes] = await Promise.all([
-        fetch('/api/performance/public'),
-        fetch('/api/performance/equity-curve'),
+      const [perfRes, eqRes] = await Promise.allSettled([
+        api.get<PublicPerformance>('/api/performance/public'),
+        api.get<EquityPoint[]>('/api/performance/equity-curve'),
       ]);
-      if (!perfRes.ok) throw new Error(`HTTP ${perfRes.status}`);
-      setData(await perfRes.json());
-      if (eqRes.ok) setEquity(await eqRes.json());
+      if (perfRes.status === 'fulfilled') {
+        setData(perfRes.value.data);
+      } else {
+        throw new Error((perfRes.reason as { message?: string })?.message ?? 'Failed to load');
+      }
+      if (eqRes.status === 'fulfilled' && Array.isArray(eqRes.value.data)) {
+        setEquity(eqRes.value.data);
+      }
       setLastUpdated(new Date().toLocaleTimeString());
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e as { message?: string })?.message ?? 'Unknown error');
     } finally {
       setLoading(false);
     }
