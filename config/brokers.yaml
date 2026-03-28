@@ -1,0 +1,57 @@
+# HOPEFX AI Trading — Broker Configuration
+#
+# Set the active broker with the BROKER environment variable, e.g.:
+#   BROKER=prop_mt5 python run.py
+#
+# Credentials should be supplied via environment variables.
+# The ${ENV_VAR:default} syntax is resolved at runtime; replace the
+# placeholder defaults before deploying to production.
+
+brokers:
+  # Active broker used when BROKER env var is not set.
+  default: "prop_mt5"
+
+  # ── MetaTrader 5 brokers ────────────────────────────────────────────────────
+
+  prop_mt5:
+    type: "mt5"
+    login: "${PROP_MT5_LOGIN:12345678}"
+    password: "${PROP_MT5_PASSWORD:your_prop_password}"
+    server: "${PROP_MT5_SERVER:YourPropFirm-Server}"
+    # Optional: path to MT5 terminal executable (leave blank for auto-detect).
+    terminal_path: ""
+    # Timeout for MT5 operations in milliseconds.
+    timeout_ms: 60000
+
+  amp_demo:
+    type: "mt5"
+    login: "${AMP_MT5_LOGIN:98765432}"
+    password: "${AMP_MT5_PASSWORD:your_amp_password}"
+    server: "${AMP_MT5_SERVER:AMPGlobalUSA-Demo}"
+    terminal_path: ""
+    timeout_ms: 60000
+
+  # ── OANDA ──────────────────────────────────────────────────────────────────
+  # login  = OANDA account number (e.g. 101-123-4567890-001)
+  # password = OANDA personal access token (used as Bearer token)
+  # server = "practice" for demo, "live" for real money
+
+  oanda_demo:
+    type: "oanda"
+    login: "${OANDA_ACCOUNT_ID:101-123-4567890-001}"
+    password: "${OANDA_API_TOKEN:your_oanda_api_token}"
+    server: "${OANDA_SERVER:practice}"
+
+  # ── Interactive Brokers ────────────────────────────────────────────────────
+  # Requires TWS or IB Gateway running locally.
+  # server = "paper" (port 7497) or "live" (port 7496)
+
+  ibkr_paper:
+    type: "ibkr"
+    login: "${IBKR_USERNAME:your_ibkr_username}"
+    password: "${IBKR_PASSWORD:your_ibkr_password}"
+    server: "${IBKR_SERVER:paper}"
+    # TWS / IB Gateway host (usually localhost).
+    host: "127.0.0.1"
+    # client_id must be unique per simultaneous connection.
+    client_id: 1
