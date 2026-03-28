@@ -4,9 +4,9 @@
 
 | Version | Security Updates |
 |---------|-----------------|
-| 1.15.x (current) | ✅ Active |
-| 1.14.x | ✅ Critical fixes only |
-| < 1.14 | ❌ Unsupported — upgrade to current |
+| 1.16.x (current) | ✅ Active |
+| 1.15.x | ✅ Critical fixes only |
+| < 1.15 | ❌ Unsupported — upgrade to current |
 
 ---
 
