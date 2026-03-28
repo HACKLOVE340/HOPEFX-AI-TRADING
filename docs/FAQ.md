@@ -47,13 +47,13 @@ See [COMPETITIVE_ANALYSIS.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/b
 
 ### Is HOPEFX really free?
 
-Yes! HOPEFX is completely free and open-source under the MIT license. You can:
-- Use it for personal or commercial trading
+HOPEFX is open-source under the **AGPL-3.0** license. You can:
+- Use it for personal trading at no cost
 - Modify the code to suit your needs
 - Run it on your own servers
-- Contribute to the project
+- Contribute to the project (see [CLA](../CLA.md))
 
-Optional premium features may be available in the future for enterprise users.
+Commercial use (proprietary products, SaaS, white-label) requires a separate Commercial License — see [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
 
 ---
 
@@ -431,11 +431,12 @@ python cli.py logs --level ERROR --tail 100
 
 ### Is HOPEFX free to use?
 
-Yes! HOPEFX is free and open-source (MIT license). You can:
-- Use for personal trading
-- Use for commercial purposes
+HOPEFX is open-source under **AGPL-3.0**. You can:
+- Use for personal trading at no cost
 - Modify the code
-- Distribute your modifications
+- Distribute your modifications (source must be disclosed under AGPL-3.0)
+
+Commercial use without AGPL-3.0 source disclosure requires a [Commercial License](../LICENSE-COMMERCIAL.md).
 
 ### Are there any premium features?
 
