@@ -403,38 +403,65 @@ async def init_broker(s: Any) -> Any:
 
 def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     """
-    Write data/oanda_paper_start.json on first OANDA connection.
+    Write data/oanda_paper_start.json on first real OANDA connection.
 
     The file records the UTC timestamp when the 30-day paper trading clock
-    started.  Subsequent restarts do NOT overwrite it — the clock keeps
-    running from the original start time.
+    started.  Subsequent restarts do NOT overwrite it once a real account_id
+    has been stamped — the clock keeps running from the original start time.
+
+    If the file exists but contains ``requires_real_account: true`` (i.e. it
+    was pre-seeded with a PENDING placeholder), it IS overwritten so the real
+    account prefix and live_gate_opens timestamp are recorded correctly.
     """
     import json
     import pathlib
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     stamp_path = pathlib.Path("data/oanda_paper_start.json")
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
 
     if stamp_path.exists():
-        # Clock already started — do not reset
         try:
             existing = json.loads(stamp_path.read_text())
+        except Exception:
+            existing = {}
+
+        # If a real account is already stamped, preserve the clock start time.
+        if not existing.get("requires_real_account", False):
             started = existing.get("started_utc", "unknown")
             logger.info(
-                "OANDA paper trading clock already running since %s",
+                "OANDA paper trading clock already running since %s (account=%s…)",
                 started,
+                existing.get("account_id", "?")[:8],
             )
-        except Exception:
-            pass
-        return
+            return
+
+        # File is a PENDING placeholder — overwrite with real account details.
+        # Preserve the original started_utc so the 30-day clock is not reset.
+        started_utc_str = existing.get("started_utc")
+    else:
+        started_utc_str = None
 
     now = datetime.now(timezone.utc)
+    if started_utc_str:
+        try:
+            from datetime import datetime as _dt
+            started_utc = _dt.fromisoformat(started_utc_str)
+        except Exception:
+            started_utc = now
+    else:
+        started_utc = now
+
+    target_days = 30
+    live_gate_opens = started_utc + timedelta(days=target_days)
+
     payload = {
+        "started_utc": started_utc.isoformat(),
+        "target_days": target_days,
         "account_id": account_id[:8] + "…",
         "environment": "practice" if practice else "live",
-        "started_utc": now.isoformat(),
-        "target_days": 30,
+        "live_gate_opens": live_gate_opens.isoformat(),
+        "requires_real_account": False,
         "note": (
             "30-day paper trading run started. "
             "Clock runs from started_utc. "
@@ -443,8 +470,10 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     }
     stamp_path.write_text(json.dumps(payload, indent=2))
     logger.info(
-        "OANDA paper trading clock started — target: 30 days from %s",
-        now.strftime("%Y-%m-%d %H:%M UTC"),
+        "OANDA paper trading clock stamped — account=%s… target: 30 days from %s, gate opens %s",
+        account_id[:8],
+        started_utc.strftime("%Y-%m-%d %H:%M UTC"),
+        live_gate_opens.strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
