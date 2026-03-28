@@ -579,6 +579,16 @@ async def _record_fill(
     except Exception:
         pass
 
+    # Paper trading gate fill counter — increments the Phase-3 fill counter so
+    # the gate knows how many paper trades have been completed.
+    try:
+        from research.pipeline.paper_trading_gate import get_gate as _get_gate
+
+        _pnl = float(getattr(result, "pnl", 0.0) or 0.0)
+        _get_gate().record_fill(pnl=_pnl)
+    except Exception as _gate_exc:
+        logger.debug("gate.record_fill skipped in _record_fill: %s", _gate_exc)
+
     # Online learner feedback — notify Phase-3 store of the confirmed fill so
     # it can update blend weights and accumulate training data.
     try:
