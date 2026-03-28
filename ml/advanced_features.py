@@ -374,7 +374,15 @@ def add_intermarket_features(
     macro = macro_df.copy()
     if macro.index.tz is not None:
         macro.index = macro.index.tz_localize(None)
-    macro.index = pd.to_datetime(macro.index).normalize()
+    macro.index = pd.to_datetime(macro.index)
+    # Normalising to midnight creates duplicate dates when macro_df has
+    # sub-daily frequency.  Only normalise if the index is already daily
+    # (all times are midnight) to avoid the duplicate-label reindex error.
+    if (macro.index.time == macro.index[0].time()).all():
+        macro.index = macro.index.normalize()
+    # Drop any remaining duplicates before reindexing
+    if macro.index.duplicated().any():
+        macro = macro[~macro.index.duplicated(keep="last")]
     macro = macro.reindex(d.index, method="ffill").fillna(0.0)
 
     gold_ret = d["close"].pct_change().fillna(0.0)
@@ -480,7 +488,13 @@ def add_cot_proxy_features(
         macro = macro_df.copy()
         if macro.index.tz is not None:
             macro.index = macro.index.tz_localize(None)
-        macro.index = pd.to_datetime(macro.index).normalize()
+        macro.index = pd.to_datetime(macro.index)
+        # Only normalise to midnight when the index is already daily-frequency
+        # (all times identical) — normalising sub-daily data creates duplicates.
+        if (macro.index.time == macro.index[0].time()).all():
+            macro.index = macro.index.normalize()
+        if macro.index.duplicated().any():
+            macro = macro[~macro.index.duplicated(keep="last")]
         macro = macro.reindex(d.index, method="ffill").fillna(0.0)
 
         gold_ret = d["close"].pct_change().fillna(0.0)

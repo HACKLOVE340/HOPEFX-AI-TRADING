@@ -82,13 +82,19 @@ class InferenceEngine:
         return self._predictor
 
     def _get_macro_df(self, ohlcv: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """Align MacroStore to the OHLCV index."""
+        """Align MacroStore to the OHLCV index, deduplicating the result index."""
         try:
             from ml.macro_store import macro_store
 
             if len(macro_store) == 0:
                 macro_store.load_defaults()
-            return macro_store.align_to_hourly(ohlcv)
+            macro_df = macro_store.align_to_hourly(ohlcv)
+            if macro_df is None or macro_df.empty:
+                return None
+            # Drop duplicate index entries that cause reindex failures downstream
+            if macro_df.index.duplicated().any():
+                macro_df = macro_df[~macro_df.index.duplicated(keep="last")]
+            return macro_df
         except Exception as exc:
             logger.debug("MacroStore alignment failed: %s", exc)
             return None
@@ -157,6 +163,11 @@ class InferenceEngine:
         """Build 200+ feature matrix, appending MTF columns."""
         try:
             from ml.features_extended import build_extended_features
+
+            # Deduplicate OHLCV index before feature building — duplicate
+            # timestamps cause reindex failures inside advanced_features.py
+            if ohlcv.index.duplicated().any():
+                ohlcv = ohlcv[~ohlcv.index.duplicated(keep="last")]
 
             X, _ = build_extended_features(
                 ohlcv,
