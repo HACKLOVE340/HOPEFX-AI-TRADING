@@ -10,6 +10,39 @@ import React from 'react';
 import { useStore } from '../store';
 import AuthGuard from '../components/AuthGuard';
 
+// Must be at module top level — vi.mock calls are hoisted by Vitest before
+// any test code runs, so placing them inside describe() causes a warning.
+vi.mock('../hooks/useApi', () => ({
+  authApi: {
+    login:  vi.fn(),
+    logout: vi.fn(),
+    me:     vi.fn(),
+  },
+  tradingApi: {
+    positions:     vi.fn().mockResolvedValue({ data: { positions: [] } }),
+    signals:       vi.fn().mockResolvedValue({ data: { signals: [] } }),
+    account:       vi.fn().mockResolvedValue({ data: null }),
+    placeOrder:    vi.fn(),
+    closePosition: vi.fn(),
+  },
+  mlApi: {
+    accuracy: vi.fn().mockResolvedValue({ data: { models: [] } }),
+    predict:  vi.fn(),
+    models:   vi.fn(),
+  },
+  backtestApi: {
+    run: vi.fn(), results: vi.fn(), list: vi.fn(),
+  },
+  api: {
+    defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
+    interceptors: {
+      request:  { handlers: [{}], use: vi.fn() },
+      response: { handlers: [{}], use: vi.fn() },
+    },
+    get: vi.fn(), post: vi.fn(), delete: vi.fn(),
+  },
+}));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const mockUser = { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' as const };
@@ -195,34 +228,6 @@ describe('AuthGuard', () => {
 // ─── Login page ───────────────────────────────────────────────────────────────
 
 describe('Login page', () => {
-  // Mock authApi to avoid real HTTP calls
-  vi.mock('../hooks/useApi', () => ({
-    authApi: {
-      login: vi.fn(),
-      logout: vi.fn(),
-      me: vi.fn(),
-    },
-    tradingApi: {
-      positions: vi.fn().mockResolvedValue({ data: { positions: [] } }),
-      signals:   vi.fn().mockResolvedValue({ data: { signals: [] } }),
-      account:   vi.fn().mockResolvedValue({ data: null }),
-      placeOrder: vi.fn(),
-      closePosition: vi.fn(),
-    },
-    mlApi: {
-      accuracy: vi.fn().mockResolvedValue({ data: { models: [] } }),
-      predict:  vi.fn(),
-      models:   vi.fn(),
-    },
-    backtestApi: {
-      run: vi.fn(), results: vi.fn(), list: vi.fn(),
-    },
-    api: {
-      defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
-      interceptors: { request: { handlers: [{}], use: vi.fn() }, response: { handlers: [{}], use: vi.fn() } },
-      get: vi.fn(), post: vi.fn(), delete: vi.fn(),
-    },
-  }));
 
   async function renderLogin() {
     const Login = (await import('../pages/Login')).default;
