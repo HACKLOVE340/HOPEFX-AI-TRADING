@@ -37,7 +37,7 @@ api.interceptors.response.use(
 
 // ─── Typed API helpers ────────────────────────────────────────────────────────
 
-export interface LoginPayload  { username: string; password: string }
+export interface LoginPayload  { email: string; password: string }
 export interface LoginResponse { access_token: string; token_type: string; user: import('../store').User }
 
 export const authApi = {
