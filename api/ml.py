@@ -368,6 +368,7 @@ class RetrainResponse(BaseModel):
 
 class MLHealthResponse(BaseModel):
     """Response schema for GET /api/ml/health."""
+
     status: str                          # "ok" | "degraded" | "unavailable"
     model_loaded: bool
     model_id: Optional[str]
@@ -376,17 +377,24 @@ class MLHealthResponse(BaseModel):
     last_trained_at: Optional[str]
     predict_count: int
     fallback_count: int
+    fallback_rate: float = 0.0
+    non_neutral_rate: float = 0.0        # fraction of last N signals that were directional
+    signal_window_size: int = 0          # number of signals in the rolling window
     last_latency_ms: float
+    uptime_seconds: Optional[float] = None
     calibrator_available: bool
     online_learning_enabled: bool
     mtf_fusion_enabled: bool
     threshold_long: float
     threshold_short: float
+    signal_filter: Dict[str, Any] = Field(default_factory=dict)
+    pipeline: Dict[str, Any] = Field(default_factory=dict)
     checked_at: str
 
 
 class MLEngineHealthResponse(BaseModel):
     """Response schema for GET /api/ml/engine-health (admin)."""
+
     status: str                          # "ok" | "degraded" | "unavailable"
     engine: Dict[str, Any]
     macro_store: Dict[str, Any]
@@ -868,8 +876,18 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
         model_available = engine_health.get("model_available", False)
 
+        # engine.health() now provides feature_count, oos_accuracy,
+        # last_trained_at directly — prefer those over the meta file parse
+        # (meta file is the fallback when engine hasn't run a predict yet)
+        if engine_health.get("feature_count", 0) > 0:
+            feature_count = engine_health["feature_count"]
+        if engine_health.get("oos_accuracy") is not None:
+            oos_accuracy = engine_health["oos_accuracy"]
+        if engine_health.get("last_trained_at"):
+            last_trained_at = engine_health["last_trained_at"]
+
         payload = MLHealthResponse(
-            status="ok" if model_available else "degraded",
+            status=engine_health.get("status", "ok" if model_available else "degraded"),
             model_loaded=model_available,
             model_id=engine_health.get("model_version", model_file),
             feature_count=feature_count,
@@ -877,13 +895,19 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
             last_trained_at=last_trained_at,
             predict_count=engine_health.get("predict_count", 0),
             fallback_count=engine_health.get("fallback_count", 0),
+            fallback_rate=engine_health.get("fallback_rate", 0.0),
+            non_neutral_rate=engine_health.get("non_neutral_rate", 0.0),
+            signal_window_size=engine_health.get("signal_window_size", 0),
             last_latency_ms=engine_health.get("last_latency_ms", 0.0),
+            uptime_seconds=engine_health.get("uptime_seconds"),
             calibrator_available=engine_health.get("calibrator_available", False),
             online_learning_enabled=engine_health.get("online_learning_enabled", False),
             mtf_fusion_enabled=engine_health.get("mtf_fusion_enabled", True),
             threshold_long=engine_health.get("threshold_long", 0.58),
             threshold_short=engine_health.get("threshold_short", 0.42),
-            checked_at=checked_at,
+            signal_filter=engine_health.get("signal_filter", {}),
+            pipeline=engine_health.get("pipeline", {}),
+            checked_at=engine_health.get("checked_at", checked_at),
         )
 
         if not model_available:
@@ -910,12 +934,18 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         last_trained_at=None,
         predict_count=0,
         fallback_count=0,
+        fallback_rate=0.0,
+        non_neutral_rate=0.0,
+        signal_window_size=0,
         last_latency_ms=0.0,
+        uptime_seconds=None,
         calibrator_available=False,
         online_learning_enabled=False,
         mtf_fusion_enabled=False,
         threshold_long=0.58,
         threshold_short=0.42,
+        signal_filter={},
+        pipeline={},
         checked_at=checked_at,
     )
 
@@ -984,24 +1014,31 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
         except Exception:
             pass
 
-        # Saved model files inventory
+        # Saved model files inventory (pkl + json metadata)
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
         model_files: Dict[str, float] = {}
         if saved_dir.exists():
-            model_files = {
-                f.name: round(f.stat().st_size / 1024, 1)
-                for f in saved_dir.glob("*.pkl")
-                if f.exists()
-            }
+            for ext in ("*.pkl", "*.json"):
+                for f in saved_dir.glob(ext):
+                    try:
+                        model_files[f.name] = round(f.stat().st_size / 1024, 1)
+                    except Exception:
+                        pass
 
         model_available = health.get("model_available", False)
+        engine_status = health.get("status", "ok" if model_available else "degraded")
+
+        # Enrich macro_status with series count from engine health
+        if "macro_series_count" in health.get("pipeline", {}):
+            macro_status["series_count"] = health["pipeline"]["macro_series_count"]
+
         payload = MLEngineHealthResponse(
-            status="ok" if model_available else "degraded",
+            status=engine_status,
             engine=health,
             macro_store=macro_status,
             mtf_store=mtf_status,
             saved_model_files_kb=model_files,
-            checked_at=checked_at,
+            checked_at=health.get("checked_at", checked_at),
         )
 
         if not model_available:
