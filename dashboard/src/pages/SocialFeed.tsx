@@ -1,43 +1,50 @@
 /**
- * Signal Feed / Social Feed — dashboard version (Tailwind)
- * Wires to: GET /api/social/feed  |  GET /api/trading/signals
+ * Signal Feed / Social Feed
+ * Wires to: GET /api/feed (paginated community signals from opted-in traders)
  */
-import { useState, useEffect } from 'react'
-import { Radio, TrendingUp, TrendingDown, Minus, Heart, MessageCircle, Share2, RefreshCw } from 'lucide-react'
-import axios from 'axios'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Radio, TrendingUp, TrendingDown, Minus,
+  Heart, MessageCircle, Share2, RefreshCw,
+  AlertTriangle, Loader2,
+} from 'lucide-react'
+import { useStore } from '../store/useStore'
 
 interface FeedItem {
-  id: string
-  type: 'signal' | 'trade' | 'analysis'
-  author: string
-  avatar: string
-  timestamp: string
+  signal_id: string
   symbol: string
-  direction: 'long' | 'short' | 'neutral'
-  confidence?: number
-  entry?: number
-  sl?: number
-  tp?: number
-  content: string
-  likes: number
-  comments: number
-  liked: boolean
+  direction: 'BUY' | 'SELL' | 'HOLD' | 'long' | 'short' | 'neutral'
+  confidence: number
+  entry_price?: number
+  pnl?: number
+  copies?: number
+  username: string
+  trader_id: string
+  thumbs_up: number
+  thumbs_down: number
+  comment_count: number
+  is_public: boolean
+  created_at: string
 }
 
-const MOCK_FEED: FeedItem[] = [
-  { id: '1', type: 'signal', author: 'HopeFX AI', avatar: 'H', timestamp: '2m ago', symbol: 'XAU/USD', direction: 'long', confidence: 72.4, entry: 2341.20, sl: 2328.50, tp: 2368.00, content: 'ML ensemble signal: LONG XAU/USD. COT proxy shows central bank demand signature. Regime: trending. ATR stop at 1.5×.', likes: 14, comments: 3, liked: false },
-  { id: '2', type: 'trade', author: 'AlgoTrader_99', avatar: 'A', timestamp: '18m ago', symbol: 'EUR/USD', direction: 'short', confidence: 65.1, entry: 1.0842, sl: 1.0870, tp: 1.0790, content: 'Shorting EUR/USD on DXY strength. NFP tomorrow — tight stop.', likes: 7, comments: 1, liked: true },
-  { id: '3', type: 'analysis', author: 'MacroView', avatar: 'M', timestamp: '1h ago', symbol: 'XAU/USD', direction: 'neutral', content: 'Gold consolidating at 2340 support. Watch for breakout above 2360 or breakdown below 2320. COT data shows net longs at 6-month high.', likes: 22, comments: 8, liked: false },
-  { id: '4', type: 'signal', author: 'HopeFX AI', avatar: 'H', timestamp: '3h ago', symbol: 'BTC/USD', direction: 'long', confidence: 61.8, entry: 67240, sl: 65800, tp: 70500, content: 'BTC/USD breakout signal. Volume anomaly detected (+2.3σ). Regime: trending. Lower confidence — reduce size.', likes: 31, comments: 12, liked: false },
-  { id: '5', type: 'trade', author: 'GoldBull_FX', avatar: 'G', timestamp: '5h ago', symbol: 'XAU/USD', direction: 'long', entry: 2335.00, sl: 2322.00, tp: 2361.00, content: 'Closed XAU/USD long +$26.00 (+1.11%). Held 9.2 hours. Model called it right again.', likes: 18, comments: 5, liked: true },
-]
+type FilterType = 'all' | 'BUY' | 'SELL' | 'HOLD'
+type FetchState = 'idle' | 'loading' | 'ok' | 'empty' | 'error'
 
-const DirectionBadge = ({ dir }: { dir: 'long' | 'short' | 'neutral' }) => {
+// Normalise direction to frontend display values
+function normaliseDir(d: string): 'long' | 'short' | 'neutral' {
+  const u = d.toUpperCase()
+  if (u === 'BUY' || u === 'LONG')  return 'long'
+  if (u === 'SELL' || u === 'SHORT') return 'short'
+  return 'neutral'
+}
+
+const DirectionBadge = ({ dir }: { dir: string }) => {
+  const norm = normaliseDir(dir)
   const cfg = {
     long:    { icon: TrendingUp,   cls: 'bg-green-500/20 text-green-400 border-green-500/30',  label: 'LONG' },
     short:   { icon: TrendingDown, cls: 'bg-red-500/20 text-red-400 border-red-500/30',        label: 'SHORT' },
     neutral: { icon: Minus,        cls: 'bg-slate-500/20 text-slate-400 border-slate-500/30',  label: 'NEUTRAL' },
-  }[dir]
+  }[norm]
   const Icon = cfg.icon
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-bold ${cfg.cls}`}>
@@ -47,29 +54,53 @@ const DirectionBadge = ({ dir }: { dir: 'long' | 'short' | 'neutral' }) => {
 }
 
 export default function SocialFeed() {
-  const [feed, setFeed] = useState<FeedItem[]>(MOCK_FEED)
-  const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'signal' | 'trade' | 'analysis'>('all')
+  const token = useStore((s) => s.token)
+  const [feed, setFeed]           = useState<FeedItem[]>([])
+  const [fetchState, setFetchState] = useState<FetchState>('idle')
+  const [errorMsg, setErrorMsg]   = useState('')
+  const [filter, setFilter]       = useState<FilterType>('all')
+  // Local reaction state (optimistic updates)
+  const [reactions, setReactions] = useState<Record<string, 'up' | 'down' | null>>({})
 
-  const refresh = async () => {
-    setLoading(true)
+  const fetchFeed = useCallback(async () => {
+    setFetchState('loading')
+    setErrorMsg('')
     try {
-      const res = await axios.get('/api/social/feed')
-      setFeed(res.data.items ?? MOCK_FEED)
+      const res = await fetch('/api/feed?limit=50')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      const items: FeedItem[] = data.items ?? []
+      setFeed(items)
+      setFetchState(items.length === 0 ? 'empty' : 'ok')
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
+      setFetchState('error')
+    }
+  }, [])
+
+  useEffect(() => { fetchFeed() }, [fetchFeed])
+
+  const react = async (signalId: string, reaction: 'up' | 'down') => {
+    if (!token) return
+    const prev = reactions[signalId] ?? null
+    const next = prev === reaction ? null : reaction
+    // Optimistic update
+    setReactions((r) => ({ ...r, [signalId]: next }))
+    try {
+      await fetch(`/api/feed/${signalId}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reaction }),
+      })
     } catch {
-      setFeed(MOCK_FEED)
-    } finally {
-      setLoading(false)
+      // Revert on failure
+      setReactions((r) => ({ ...r, [signalId]: prev }))
     }
   }
 
-  const toggleLike = (id: string) => {
-    setFeed(prev => prev.map(item =>
-      item.id === id ? { ...item, liked: !item.liked, likes: item.liked ? item.likes - 1 : item.likes + 1 } : item
-    ))
-  }
-
-  const filtered = filter === 'all' ? feed : feed.filter(f => f.type === filter)
+  const filtered = filter === 'all'
+    ? feed
+    : feed.filter((f) => normaliseDir(f.direction) === normaliseDir(filter))
 
   return (
     <div className="space-y-6">
@@ -78,82 +109,158 @@ export default function SocialFeed() {
           <Radio className="w-7 h-7 text-amber-400" />
           <div>
             <h1 className="text-2xl font-bold text-slate-100">Signal Feed</h1>
-            <p className="text-sm text-slate-400">Live ML signals, trades, and market analysis.</p>
+            <p className="text-sm text-slate-400">
+              Live signals from opted-in traders. No synthetic data.
+            </p>
           </div>
         </div>
-        <button onClick={refresh} disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        <button
+          onClick={fetchFeed}
+          disabled={fetchState === 'loading'}
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${fetchState === 'loading' ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
       {/* Filter tabs */}
       <div className="flex gap-2">
-        {(['all', 'signal', 'trade', 'analysis'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
-              filter === f ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-            }`}>
-            {f}
+        {(['all', 'BUY', 'SELL', 'HOLD'] as FilterType[]).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              filter === f
+                ? 'bg-amber-500 text-slate-900'
+                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {f === 'all' ? 'All' : f}
           </button>
         ))}
       </div>
 
-      {/* Feed */}
-      <div className="space-y-4">
-        {filtered.map(item => (
-          <div key={item.id} className="bg-slate-900 rounded-xl border border-slate-800 p-5">
-            <div className="flex items-start gap-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                item.author === 'HopeFX AI' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'
-              }`}>
-                {item.avatar}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-slate-200 text-sm">{item.author}</span>
-                  {item.author === 'HopeFX AI' && (
-                    <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full">AI</span>
-                  )}
-                  <span className="text-xs text-slate-600">{item.timestamp}</span>
-                  <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">{item.symbol}</span>
-                  <DirectionBadge dir={item.direction} />
-                  {item.confidence && (
-                    <span className="text-xs text-slate-500">{item.confidence.toFixed(1)}% conf</span>
-                  )}
-                </div>
+      {/* Loading */}
+      {fetchState === 'loading' && (
+        <div className="flex items-center justify-center py-16 gap-3 text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Loading feed…</span>
+        </div>
+      )}
 
-                <p className="text-sm text-slate-300 mt-2 leading-relaxed">{item.content}</p>
+      {/* Error */}
+      {fetchState === 'error' && (
+        <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Could not load feed: {errorMsg}</span>
+          <button
+            onClick={fetchFeed}
+            className="ml-auto flex items-center gap-1 hover:text-red-300 transition-colors"
+          >
+            <RefreshCw className="w-3 h-3" /> Retry
+          </button>
+        </div>
+      )}
 
-                {(item.entry || item.sl || item.tp) && (
-                  <div className="flex gap-4 mt-3 text-xs">
-                    {item.entry && <span className="text-slate-400">Entry: <span className="text-slate-200 font-medium">{item.entry.toLocaleString()}</span></span>}
-                    {item.sl    && <span className="text-red-400">SL: <span className="font-medium">{item.sl.toLocaleString()}</span></span>}
-                    {item.tp    && <span className="text-green-400">TP: <span className="font-medium">{item.tp.toLocaleString()}</span></span>}
+      {/* Empty state */}
+      {fetchState === 'empty' && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
+          <Radio className="w-10 h-10 opacity-30" />
+          <p className="font-medium">No signals in the feed yet</p>
+          <p className="text-sm text-slate-600 text-center max-w-sm">
+            Signals appear here when opted-in traders generate high-confidence
+            predictions. Go to Settings → Feed to opt in.
+          </p>
+        </div>
+      )}
+
+      {/* Feed items */}
+      {fetchState === 'ok' && (
+        <div className="space-y-4">
+          {filtered.length === 0 ? (
+            <p className="text-center text-slate-500 py-8">
+              No {filter} signals in the feed.
+            </p>
+          ) : (
+            filtered.map((item) => {
+              const myReaction = reactions[item.signal_id] ?? null
+              const thumbsUp   = item.thumbs_up   + (myReaction === 'up'   ? 1 : 0)
+              const thumbsDown = item.thumbs_down + (myReaction === 'down' ? 1 : 0)
+              return (
+                <div key={item.signal_id} className="bg-slate-900 rounded-xl border border-slate-800 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      {item.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-200 text-sm">{item.username}</span>
+                        <span className="text-xs text-slate-600">
+                          {new Date(item.created_at).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
+                          {item.symbol}
+                        </span>
+                        <DirectionBadge dir={item.direction} />
+                        <span className="text-xs text-slate-500">
+                          {item.confidence.toFixed(1)}% conf
+                        </span>
+                      </div>
+
+                      {(item.entry_price || item.pnl !== undefined) && (
+                        <div className="flex gap-4 mt-2 text-xs">
+                          {item.entry_price && (
+                            <span className="text-slate-400">
+                              Entry:{' '}
+                              <span className="text-slate-200 font-medium">
+                                {item.entry_price.toLocaleString()}
+                              </span>
+                            </span>
+                          )}
+                          {item.pnl !== undefined && (
+                            <span className={item.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              P&L:{' '}
+                              <span className="font-medium">
+                                {item.pnl >= 0 ? '+' : ''}${item.pnl.toFixed(2)}
+                              </span>
+                            </span>
+                          )}
+                          {item.copies !== undefined && item.copies > 0 && (
+                            <span className="text-slate-500">{item.copies} copies</span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-4 mt-3">
+                        <button
+                          onClick={() => react(item.signal_id, 'up')}
+                          className={`flex items-center gap-1.5 text-xs transition-colors ${
+                            myReaction === 'up'
+                              ? 'text-green-400'
+                              : 'text-slate-500 hover:text-green-400'
+                          }`}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${myReaction === 'up' ? 'fill-current' : ''}`} />
+                          {thumbsUp}
+                        </button>
+                        <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-400 transition-colors">
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          {item.comment_count}
+                        </button>
+                        <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-green-400 transition-colors">
+                          <Share2 className="w-3.5 h-3.5" />
+                          Share
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-
-                <div className="flex items-center gap-4 mt-3">
-                  <button onClick={() => toggleLike(item.id)}
-                    className={`flex items-center gap-1.5 text-xs transition-colors ${item.liked ? 'text-red-400' : 'text-slate-500 hover:text-red-400'}`}>
-                    <Heart className={`w-3.5 h-3.5 ${item.liked ? 'fill-current' : ''}`} />
-                    {item.likes}
-                  </button>
-                  <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-400 transition-colors">
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    {item.comments}
-                  </button>
-                  <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-green-400 transition-colors">
-                    <Share2 className="w-3.5 h-3.5" />
-                    Share
-                  </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+              )
+            })
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   BarChart2,
+  WifiOff,
 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -33,7 +34,7 @@ const navItems = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
-  const { connected, latency } = useWebSocket()
+  const { connected, latency, noLiveFeed, noLiveFeedMessage } = useWebSocket()
   const { isDark, toggle: toggleTheme } = useTheme()
 
   return (
@@ -109,6 +110,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         <main className="flex-1 min-h-screen overflow-auto">
+          {/* No live feed banner — shown when broker is disconnected */}
+          {noLiveFeed && (
+            <div className="flex items-center gap-3 bg-amber-500/10 border-b border-amber-500/20 px-6 py-2 text-sm text-amber-400">
+              <WifiOff className="w-4 h-4 shrink-0" />
+              <span>{noLiveFeedMessage || 'No live broker connection. Prices are not updating.'}</span>
+              <Link
+                to="/settings"
+                className="ml-auto underline underline-offset-2 hover:text-amber-300 transition-colors whitespace-nowrap"
+              >
+                Connect broker →
+              </Link>
+            </div>
+          )}
           <div className="p-6 lg:p-8">
             {children}
           </div>

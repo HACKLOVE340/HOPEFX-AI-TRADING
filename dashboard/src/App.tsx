@@ -39,6 +39,7 @@ import WhitelabelAdmin      from './pages/WhitelabelAdmin'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   const navigate = useNavigate()
@@ -54,51 +55,53 @@ function App() {
   }, [])
 
   return (
-    <Routes>
-      {/* ── Public full-screen pages ─────────────────────────────────────── */}
-      <Route path="/"           element={<LandingPage />} />
-      <Route path="/landing"    element={<LandingPage />} />
-      <Route path="/login"      element={<Login />} />
-      <Route path="/register"   element={<Register />} />
-      <Route path="/onboarding" element={<Onboarding />} />
-      <Route path="/status"     element={<StatusPage />} />
+    <ErrorBoundary label="App">
+      <Routes>
+        {/* ── Public full-screen pages ───────────────────────────────────── */}
+        <Route path="/"           element={<LandingPage />} />
+        <Route path="/landing"    element={<LandingPage />} />
+        <Route path="/login"      element={<Login />} />
+        <Route path="/register"   element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/status"     element={<StatusPage />} />
 
-      {/* ── Public pages inside Layout ───────────────────────────────────── */}
-      <Route path="/marketplace" element={<Layout><Marketplace /></Layout>} />
-      <Route path="/affiliate"   element={<Layout><Affiliate /></Layout>} />
-      <Route path="/checkout"    element={<Layout><CryptoCheckout /></Layout>} />
-      <Route path="/leaderboard" element={<Layout><Leaderboard /></Layout>} />
-      <Route path="/profile/:id" element={<Layout><Profile /></Layout>} />
+        {/* ── Public pages inside Layout ─────────────────────────────────── */}
+        <Route path="/marketplace" element={<Layout><ErrorBoundary label="Marketplace"><Marketplace /></ErrorBoundary></Layout>} />
+        <Route path="/affiliate"   element={<Layout><ErrorBoundary label="Affiliate"><Affiliate /></ErrorBoundary></Layout>} />
+        <Route path="/checkout"    element={<Layout><ErrorBoundary label="Checkout"><CryptoCheckout /></ErrorBoundary></Layout>} />
+        <Route path="/leaderboard" element={<Layout><ErrorBoundary label="Leaderboard"><Leaderboard /></ErrorBoundary></Layout>} />
+        <Route path="/profile/:id" element={<Layout><ErrorBoundary label="Profile"><Profile /></ErrorBoundary></Layout>} />
 
-      {/* ── Authenticated pages inside Layout ───────────────────────────── */}
-      <Route path="/dashboard"    element={<AuthGuard><Layout><Dashboard /></Layout></AuthGuard>} />
-      <Route path="/trading"      element={<AuthGuard><Layout><Trading /></Layout></AuthGuard>} />
-      <Route path="/prop-firm"    element={<AuthGuard><Layout><PropFirmTracker /></Layout></AuthGuard>} />
-      <Route path="/copy-trading" element={<AuthGuard><Layout><CopyTrading /></Layout></AuthGuard>} />
-      <Route path="/wallet"       element={<AuthGuard><Layout><Wallet /></Layout></AuthGuard>} />
-      <Route path="/performance"  element={<AuthGuard><Layout><Performance /></Layout></AuthGuard>} />
-      <Route path="/settings"     element={<AuthGuard><Layout><Settings /></Layout></AuthGuard>} />
-      <Route path="/ai-strategy"  element={<AuthGuard><Layout><AIStrategyGenerator /></Layout></AuthGuard>} />
-      <Route path="/2fa-setup"    element={<AuthGuard><Layout><TwoFactorSetup /></Layout></AuthGuard>} />
-      <Route path="/calendar"     element={<AuthGuard><Layout><EconomicCalendar /></Layout></AuthGuard>} />
-      <Route path="/watchlist"    element={<AuthGuard><Layout><WatchlistPage /></Layout></AuthGuard>} />
-      <Route path="/alerts"       element={<AuthGuard><Layout><PriceAlerts /></Layout></AuthGuard>} />
-      <Route path="/journal"      element={<AuthGuard><Layout><TradeJournal /></Layout></AuthGuard>} />
+        {/* ── Authenticated pages inside Layout ─────────────────────────── */}
+        <Route path="/dashboard"    element={<AuthGuard><Layout><ErrorBoundary label="Dashboard"><Dashboard /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/trading"      element={<AuthGuard><Layout><ErrorBoundary label="Trading"><Trading /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/prop-firm"    element={<AuthGuard><Layout><ErrorBoundary label="Prop Firm"><PropFirmTracker /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/copy-trading" element={<AuthGuard><Layout><ErrorBoundary label="Copy Trading"><CopyTrading /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/wallet"       element={<AuthGuard><Layout><ErrorBoundary label="Wallet"><Wallet /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/performance"  element={<AuthGuard><Layout><ErrorBoundary label="Performance"><Performance /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/settings"     element={<AuthGuard><Layout><ErrorBoundary label="Settings"><Settings /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/ai-strategy"  element={<AuthGuard><Layout><ErrorBoundary label="AI Strategy"><AIStrategyGenerator /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/2fa-setup"    element={<AuthGuard><Layout><ErrorBoundary label="2FA Setup"><TwoFactorSetup /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/calendar"     element={<AuthGuard><Layout><ErrorBoundary label="Calendar"><EconomicCalendar /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/watchlist"    element={<AuthGuard><Layout><ErrorBoundary label="Watchlist"><WatchlistPage /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/alerts"       element={<AuthGuard><Layout><ErrorBoundary label="Alerts"><PriceAlerts /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/journal"      element={<AuthGuard><Layout><ErrorBoundary label="Journal"><TradeJournal /></ErrorBoundary></Layout></AuthGuard>} />
 
-      {/* ── Extended pages ───────────────────────────────────────────────── */}
-      <Route path="/risk-calc"    element={<AuthGuard><Layout><RiskCalculator /></Layout></AuthGuard>} />
-      <Route path="/walk-forward" element={<AuthGuard><Layout><WalkForward /></Layout></AuthGuard>} />
-      <Route path="/profile"      element={<AuthGuard><Layout><Profile /></Layout></AuthGuard>} />
-      <Route path="/feed"         element={<AuthGuard><Layout><SocialFeed /></Layout></AuthGuard>} />
-      <Route path="/admin"        element={<AuthGuard><Layout><AdminPanel /></Layout></AuthGuard>} />
-      <Route path="/ab-testing"   element={<AuthGuard><Layout><ABTesting /></Layout></AuthGuard>} />
-      <Route path="/correlation"  element={<AuthGuard><Layout><CorrelationDashboard /></Layout></AuthGuard>} />
-      <Route path="/indicators"   element={<AuthGuard><Layout><CustomIndicators /></Layout></AuthGuard>} />
-      <Route path="/whitelabel"   element={<AuthGuard><Layout><WhitelabelAdmin /></Layout></AuthGuard>} />
+        {/* ── Extended pages ─────────────────────────────────────────────── */}
+        <Route path="/risk-calc"    element={<AuthGuard><Layout><ErrorBoundary label="Risk Calculator"><RiskCalculator /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/walk-forward" element={<AuthGuard><Layout><ErrorBoundary label="Walk Forward"><WalkForward /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/profile"      element={<AuthGuard><Layout><ErrorBoundary label="Profile"><Profile /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/feed"         element={<AuthGuard><Layout><ErrorBoundary label="Social Feed"><SocialFeed /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/admin"        element={<AuthGuard><Layout><ErrorBoundary label="Admin"><AdminPanel /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/ab-testing"   element={<AuthGuard><Layout><ErrorBoundary label="A/B Testing"><ABTesting /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/correlation"  element={<AuthGuard><Layout><ErrorBoundary label="Correlation"><CorrelationDashboard /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/indicators"   element={<AuthGuard><Layout><ErrorBoundary label="Indicators"><CustomIndicators /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/whitelabel"   element={<AuthGuard><Layout><ErrorBoundary label="Whitelabel"><WhitelabelAdmin /></ErrorBoundary></Layout></AuthGuard>} />
 
-      {/* ── Fallback ─────────────────────────────────────────────────────── */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* ── Fallback ───────────────────────────────────────────────────── */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   )
 }
 
