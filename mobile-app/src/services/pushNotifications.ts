@@ -137,6 +137,11 @@ class PushNotificationService {
     await Notifications.setBadgeCountAsync(0);
   }
 
+  async getPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status as 'granted' | 'denied' | 'undetermined';
+  }
+
   get token(): string | null {
     return this._expoPushToken;
   }

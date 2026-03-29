@@ -6,9 +6,9 @@ import { MainTabParamList } from '../types';
 import { COLORS } from '../utils/theme';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { TradingNavigator } from './TradingNavigator';
-import { PortfolioScreen } from '../screens/PortfolioScreen';
+import { PortfolioNavigator } from './PortfolioNavigator';
 import { SignalsScreen } from '../screens/SignalsScreen';
-import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { SettingsNavigator } from './SettingsNavigator';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -46,9 +46,9 @@ export function MainTabNavigator() {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Trading"   component={TradingNavigator} />
-      <Tab.Screen name="Portfolio" component={PortfolioScreen} />
+      <Tab.Screen name="Portfolio" component={PortfolioNavigator} />
       <Tab.Screen name="Signals"   component={SignalsScreen} />
-      <Tab.Screen name="Settings"  component={SettingsScreen} />
+      <Tab.Screen name="Settings"  component={SettingsNavigator} />
     </Tab.Navigator>
   );
 }

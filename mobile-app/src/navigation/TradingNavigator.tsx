@@ -7,6 +7,8 @@ import { TradingScreen } from '../screens/trading/TradingScreen';
 import { PlaceOrderScreen } from '../screens/trading/PlaceOrderScreen';
 import { OrderDetailScreen } from '../screens/trading/OrderDetailScreen';
 import { PositionDetailScreen } from '../screens/trading/PositionDetailScreen';
+import { WatchlistScreen } from '../screens/WatchlistScreen';
+import { OrdersScreen } from '../screens/trading/OrdersScreen';
 
 const Stack = createNativeStackNavigator<TradingStackParamList>();
 
@@ -40,6 +42,16 @@ export function TradingNavigator() {
         name="PositionDetail"
         component={PositionDetailScreen}
         options={{ title: 'Position Details' }}
+      />
+      <Stack.Screen
+        name="Watchlist"
+        component={WatchlistScreen}
+        options={{ title: 'Watchlist' }}
+      />
+      <Stack.Screen
+        name="Orders"
+        component={OrdersScreen}
+        options={{ title: 'Orders' }}
       />
     </Stack.Navigator>
   );

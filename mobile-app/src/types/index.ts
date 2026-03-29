@@ -158,11 +158,24 @@ export type MainTabParamList = {
   Settings: undefined;
 };
 
+export type PortfolioStackParamList = {
+  PortfolioHome: undefined;
+  Performance: undefined;
+};
+
+export type SettingsStackParamList = {
+  SettingsHome: undefined;
+  Notifications: undefined;
+  Alerts: undefined;
+};
+
 export type TradingStackParamList = {
   TradingHome: undefined;
   PlaceOrder: { symbol: string; side?: OrderSide };
   OrderDetail: { orderId: string };
   PositionDetail: { positionId: string };
+  Watchlist: undefined;
+  Orders: undefined;
 };
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────

@@ -1,15 +1,22 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useTradingStore } from '../store/tradingStore';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { Card } from '../components/Card';
 import { COLORS, SPACING, RADIUS } from '../utils/theme';
 import { formatCurrency, formatPnl, formatPct, formatDateTime } from '../utils/formatters';
 import { apiClient } from '../services/apiClient';
+import { PortfolioStackParamList } from '../types';
+
+type PortfolioNav = NativeStackNavigationProp<PortfolioStackParamList>;
 
 export function PortfolioScreen() {
+  const navigation = useNavigation<PortfolioNav>();
   const { account, trades, fetchAccount, fetchTrades, isLoading } = useTradingStore();
   const [performance, setPerformance] = useState<Record<string, unknown> | null>(null);
 
@@ -35,7 +42,16 @@ export function PortfolioScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={load} tintColor={COLORS.accent} />}
       >
-        <Text style={styles.pageTitle}>Portfolio</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.pageTitle}>Portfolio</Text>
+          <TouchableOpacity
+            style={styles.perfBtn}
+            onPress={() => navigation.navigate('Performance')}
+          >
+            <Ionicons name="analytics-outline" size={16} color={COLORS.accent} />
+            <Text style={styles.perfBtnText}>Analytics</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Account summary */}
         <Card style={styles.summaryCard} elevated>
@@ -110,7 +126,10 @@ const statStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xl },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   pageTitle: { color: COLORS.text, fontSize: 24, fontWeight: '800' },
+  perfBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: SPACING.sm, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.accent },
+  perfBtnText: { color: COLORS.accent, fontSize: 13, fontWeight: '700' },
   summaryCard: { gap: SPACING.md },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-around' },
   statsCard: { gap: SPACING.md },

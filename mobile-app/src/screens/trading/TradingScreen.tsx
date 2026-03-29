@@ -53,25 +53,33 @@ export function TradingScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Symbol selector */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.symbolBar}
-        contentContainerStyle={styles.symbolBarContent}
-      >
-        {SYMBOLS.map((sym) => (
-          <TouchableOpacity
-            key={sym}
-            style={[styles.symbolChip, selectedSymbol === sym && styles.symbolChipActive]}
-            onPress={() => setSelectedSymbol(sym)}
-          >
-            <Text style={[styles.symbolChipText, selectedSymbol === sym && styles.symbolChipTextActive]}>
-              {sym}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Top bar: symbol selector + watchlist button */}
+      <View style={styles.topBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.symbolBar}
+          contentContainerStyle={styles.symbolBarContent}
+        >
+          {SYMBOLS.map((sym) => (
+            <TouchableOpacity
+              key={sym}
+              style={[styles.symbolChip, selectedSymbol === sym && styles.symbolChipActive]}
+              onPress={() => setSelectedSymbol(sym)}
+            >
+              <Text style={[styles.symbolChipText, selectedSymbol === sym && styles.symbolChipTextActive]}>
+                {sym}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <TouchableOpacity
+          style={styles.watchlistBtn}
+          onPress={() => navigation.navigate('Watchlist')}
+        >
+          <Ionicons name="star-outline" size={20} color={COLORS.accent} />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         style={styles.scroll}
@@ -264,7 +272,9 @@ function OrderRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  symbolBar: { maxHeight: 52, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  topBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  symbolBar: { flex: 1, maxHeight: 52 },
+  watchlistBtn: { paddingHorizontal: SPACING.md, height: 52, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: COLORS.border },
   symbolBarContent: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm },
   symbolChip: { paddingHorizontal: SPACING.md, paddingVertical: 6, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.border },
   symbolChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
