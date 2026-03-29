@@ -151,13 +151,11 @@ class OANDATransactionClient:
             pages = data.get("pages", [])
             if pages:
                 # pages is a list of URLs; advance to next page
-                next_page = None
                 for page_url in pages:
                     # Find the page after the current one by checking if we've
                     # seen all transactions on this page
                     if transactions and str(transactions[-1]["id"]) in page_url:
                         continue
-                    next_page = page_url
                     break
                 # Simpler: if we got a full page, check lastTransactionID
                 path = None

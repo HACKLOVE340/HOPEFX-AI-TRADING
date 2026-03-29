@@ -22,7 +22,7 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -305,7 +305,6 @@ async def broker_status():
 
             try:
                 if hasattr(broker, "get_account_info"):
-                    import asyncio as _asyncio
                     import inspect as _inspect
                     if _inspect.iscoroutinefunction(broker.get_account_info):
                         info = await broker.get_account_info()
@@ -477,7 +476,6 @@ async def stamp_oanda_clock(req: StampOandaRequest):
 
     Requires: admin role.
     """
-    from api.auth import get_current_user, require_role
     # Inline auth check — admin only
     if not req.account_id:
         from fastapi import HTTPException

@@ -275,7 +275,6 @@ class HOPEFXBrain:
         Returns Regime enum value.
         """
         try:
-            import pandas as pd
             if not _NP:
                 return Regime.UNKNOWN
 
@@ -477,16 +476,6 @@ class HOPEFXBrain:
         - If strategy is neutral → use ML signal at reduced confidence
         - If they disagree → hold (conflicting signals)
         """
-        # Encode directions as numeric: long=+1, short=-1, neutral=0
-        def _enc(d: str) -> float:
-            return 1.0 if d == "long" else (-1.0 if d == "short" else 0.0)
-
-        ml_enc  = _enc(ml_direction)
-        str_enc = _enc(strategy_direction)
-
-        # Weighted vote
-        vote = _ML_WEIGHT * ml_enc * ml_confidence + _STRATEGY_WEIGHT * str_enc * strategy_confidence
-
         if ml_direction == "neutral" and strategy_direction == "neutral":
             return "hold", 0.0, "both_neutral"
 
