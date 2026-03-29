@@ -243,23 +243,26 @@ class AnomalyWeighter:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def save(self, path: str | Path) -> None:
-        import pickle
+        import joblib
 
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
+        joblib.dump(self, path, compress=3)
         logger.info("AnomalyWeighter saved → %s", path)
 
     @classmethod
     def load(cls, path: str | Path) -> "AnomalyWeighter":
+        import joblib
         import pickle
 
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
+        try:
+            obj = joblib.load(path)
+        except Exception:
+            with open(path, "rb") as f:
+                obj = pickle.load(f)
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
         logger.info("AnomalyWeighter loaded ← %s", path)

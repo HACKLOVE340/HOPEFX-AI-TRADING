@@ -129,16 +129,23 @@ def check_ml_model() -> None:
         _err(f"{model_path} not found — run ml/run_training.py first")
         return
 
-    # Attempt to load the model to catch pickle version mismatches early
+    # Attempt to load the model to catch version mismatches early.
+    # Use joblib (the serialisation format used by train_advanced.py) with a
+    # pickle fallback so the check works regardless of how the model was saved.
     try:
-        import pickle
-        with open(model_path, "rb") as fh:
-            model = pickle.load(fh)
+        try:
+            import joblib
+            model = joblib.load(model_path)
+        except Exception:
+            import pickle
+            with open(model_path, "rb") as fh:
+                model = pickle.load(fh)
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
     except Exception as exc:
         _err(
             f"advanced_oos.pkl failed to load: {exc}\n"
-            "         Likely a Python version mismatch. Retrain on Python 3.10."
+            "         Likely a Python version mismatch. Retrain on Python 3.10:\n"
+            "           docker compose run --rm app python ml/train_advanced.py"
         )
 
     if meta_path.exists():

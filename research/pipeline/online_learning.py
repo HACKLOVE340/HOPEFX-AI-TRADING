@@ -54,6 +54,7 @@ from collections import deque
 from pathlib import Path
 from typing import Deque, Dict, List, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -550,14 +551,16 @@ class IncrementalXGBoost:
     def save(self, path: str | Path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
+        joblib.dump(self, path, compress=3)
         logger.info("IncrementalXGBoost saved → %s", path)
 
     @classmethod
     def load(cls, path: str | Path) -> "IncrementalXGBoost":
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
+        try:
+            obj = joblib.load(path)
+        except Exception:
+            with open(path, "rb") as f:
+                obj = pickle.load(f)
         logger.info("IncrementalXGBoost loaded ← %s", path)
         return obj
 

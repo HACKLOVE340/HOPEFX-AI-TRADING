@@ -51,6 +51,7 @@ import pickle
 from pathlib import Path
 from typing import Dict, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
@@ -389,13 +390,15 @@ class RegimeRouter:
     def save(self, path: str | Path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
+        joblib.dump(self, path, compress=3)
         logger.info("RegimeRouter saved → %s", path)
 
     @classmethod
     def load(cls, path: str | Path) -> "RegimeRouter":
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
+        try:
+            obj = joblib.load(path)
+        except Exception:
+            with open(path, "rb") as f:
+                obj = pickle.load(f)
         logger.info("RegimeRouter loaded ← %s", path)
         return obj
