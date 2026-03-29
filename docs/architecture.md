@@ -1,17 +1,9 @@
 # HOPEFX AI Trading — System Architecture
 
-## Flaws Fixed
+> Last updated: 2026-07-14 (v1.17)
 
-| # | File | Flaw | Fix |
-|---|------|------|-----|
-| 1 | `auth/routes.py` | Hardcoded `SECRET_KEY='your_secret_key'` + `fake_hash_password` backdoor | **Deleted** |
-| 2 | `mobile/api.py`, `api_v2.py` | `allow_origins=["*"]` + `allow_credentials=True` — violates CORS spec, enables credential theft | Replaced with env-driven allowlist (`MOBILE_CORS_ORIGINS`), `allow_credentials=False` |
-| 3 | `requirements.txt` | Unpinned `bcrypt>=4.0.0`, `PyJWT>=2.8.0` | Pinned exactly: `bcrypt==4.1.3`, `PyJWT==2.8.0`, `cryptography==42.0.8` |
-| 4 | `config/vault.py` | `except: pass` in `secure_delete()` silently swallowed keyring wipe failures | Raises `VaultError`; `_fernet` zeroed in `finally` |
-| 5 | `market_data/mt5_live_feed.py` | Silent exceptions throughout; no health surface | Full rewrite: every exception logged + Sentry; `FeedHealth` dataclass; `permanently_failed` flag |
-| 6 | `risk/manager.py` | No pre-trade gate; single boolean `can_trade` check | `risk/pre_trade_gate.py`: 8 sequential checks, `TradeBlocked`/`RiskManagerError` — zero fallback |
-| 7 | App startup | No env validation — boots silently with missing `SECRET_KEY`/`DB_PASSWORD` | `config/startup_validator.py`: `sys.exit(1)` on any missing/weak required var |
-| 8 | Broker | OANDA as primary; no IBKR FIX path | IBKR-only: `IBKRConnector` (ib_insync) + `IBKRFIXBridge` (FIX 4.4) |
+This document describes the production architecture of HOPEFX AI Trading.
+For a history of fixes and before/after ratings, see `docs/COMPREHENSIVE_FIXES.md`.
 
 ---
 
