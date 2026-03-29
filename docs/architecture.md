@@ -379,3 +379,230 @@ kubectl create secret generic hopefx-secrets \
 ---
 
 **Deployment readiness: BLOCKED** — IBKR live credentials, `SECRET_KEY`, and `DB_PASSWORD` must be provisioned in Kubernetes Secrets before any live capital deployment; paper trading is ready immediately.
+
+---
+
+## Full Module Map
+
+### Entry Points
+
+| File | Purpose |
+|------|---------|
+| `app.py` | FastAPI application, lifespan, ComponentRegistry startup |
+| `main.py` | CLI entry point (`python main.py`) |
+| `cli.py` | Command-line interface (`hopefx` commands) |
+| `run.py` | Alternative runner |
+| `connect_to_life.py` | Supervisor over HopeFXEngine (production process manager) |
+
+### API Layer (`api/`)
+
+| Module | Prefix | Description |
+|--------|--------|-------------|
+| `admin.py` | `/api/admin` | Admin dashboard, KYC, logs, activity |
+| `alerts.py` | `/api/alerts` | Alert CRUD, pause/resume |
+| `auth.py` | `/api/auth` | Login, refresh, logout, me |
+| `backtesting.py` | `/api/backtest` | Run backtests, walk-forward, results |
+| `advanced_trading.py` | `/api` | A/B tests, indicators, correlation, COT, Monte Carlo |
+| `billing.py` | `/api/billing` | Stripe, Flutterwave, affiliate |
+| `brain.py` | `/api/brain` | AI strategy generation and deployment |
+| `broker.py` | `/api/broker` | Broker status, test-connection, switch |
+| `calendar.py` | `/api/calendar` | Economic calendar, FOMC, auto-pause |
+| `chat.py` | `/api/chat` | AI trading assistant |
+| `explain.py` | `/api/explain` | SHAP explainability |
+| `journal.py` | `/api/journal` | Trade journal CRUD |
+| `macro.py` | `/api/macro` | Macro data snapshot, history, features |
+| `ml.py` | `/api/ml` | ML accuracy, predict, health, retrain |
+| `mobile.py` | `/api/mobile` | Push notification registration |
+| `monetization.py` | `/api/monetization` | Pricing, subscriptions, access codes |
+| `online_learner.py` | `/api/online-learner` | SGD online learner status and partial-fit |
+| `payments.py` | `/api/payments` | Crypto payment addresses and status |
+| `performance.py` | `/api/performance` | Equity curve, summary metrics |
+| `platform.py` | `/api/platform` | Platform-level endpoints |
+| `profiles.py` | `/api/profiles` | Trader profiles, follow/unfollow |
+| `prop_firm.py` | `/api/risk` | Risk/prop firm status |
+| `settings.py` | `/api/settings` | Notification settings |
+| `signals.py` | `/api/signals` | Signal latest, history, performance |
+| `social_feed.py` | `/api/feed`, `/api/social` | Social feed, leaderboard |
+| `status.py` | `/api/status` | Paper trading clock, Sharpe progress |
+| `trading.py` | `/api/trading` | Orders, positions, account, trades |
+| `two_factor.py` | `/api/2fa` | TOTP setup, verify, disable |
+| `watchlist.py` | `/api/watchlist` | Watchlist CRUD (DB-backed) |
+| `websocket_server.py` | `/ws` | WebSocket manager, channels |
+| `whitelabel_admin.py` | `/api/whitelabel` | White-label admin |
+
+### Brain (`brain/`)
+
+| Module | Purpose |
+|--------|---------|
+| `hopefx_brain.py` | `HOPEFXBrain` — orchestrates all subsystems |
+| `brain.py` | Core brain logic |
+| `cognitive_engine.py` | Cognitive decision engine |
+| `llm_agent.py` | LLM-powered strategy agent |
+
+### Core (`core/`)
+
+| Module | Purpose |
+|--------|---------|
+| `component_registry.py` | Dependency-ordered startup of all components |
+| `startup_factories.py` | Component factories (MacroStore, signal engine, etc.) |
+| `signal_engine.py` | Strategy → ML → risk → order pipeline (6 sub-functions) |
+| `position_reconciler.py` | Reconciles positions between OMS and broker |
+| `event_bus.py` | Internal pub/sub event bus |
+| `main_loop.py` | Main trading loop |
+| `strategy_orchestra.py` | Multi-strategy orchestration |
+| `circuit_breaker.py` | Engine circuit breaker (3 failures/60s → open) |
+| `metrics.py` | Prometheus metrics definitions |
+| `email_service.py` | SendGrid email service |
+| `env_validator.py` | Startup environment validation |
+| `live_trading_gate.py` | 30-day paper trading gate enforcement |
+
+### ML (`ml/`)
+
+| Module | Purpose |
+|--------|---------|
+| `train_advanced.py` | Advanced model training (176 features, 50-year data, OOS eval) |
+| `train_with_macro.py` | Basic model training with macro walk-forward |
+| `advanced_features.py` | 122-feature pipeline (COT, regime, macro) |
+| `live_inference.py` | `AdvancedModelPredictor` + Redis feature cache |
+| `macro_store.py` | Daily macro series → hourly alignment |
+| `macro_bootstrap.py` | yfinance fetch + daily 18:00 UTC refresh scheduler |
+| `macro_features.py` | Macro feature engineering (DXY, VIX, yields, SPX) |
+| `regime_conditional.py` | Regime-conditional XGBoost (trending vs mean-reverting) |
+| `online_learner.py` | `SklearnOnlineLearner` (SGD + EWC, hourly updates) |
+| `training.py` | `FeatureEngineer`, `WalkForwardValidator`, `XGBoostPredictor` |
+
+### Execution (`execution/`)
+
+| Module | Purpose |
+|--------|---------|
+| `engine.py` | `ExecutionEngine` (async, <50ms target) |
+| `async_engine.py` | Async execution engine |
+| `fix_adapter.py` | FIX 4.4 adapter with circuit breaker and heartbeat |
+| `fix_router.py` | FIX message routing |
+| `oms.py` | Order Management System (full order lifecycle) |
+| `order_gateway.py` | `OrderGateway` → delegates to `TradeExecutor` |
+| `position_tracker.py` | Real-time position tracking |
+| `trade_executor.py` | `TradeExecutor` — routes to broker |
+| `tca.py` | Transaction Cost Analysis (fill cost per trade) |
+| `throttler.py` | Order rate throttler |
+| `redis_state.py` | Redis-backed execution state |
+
+### Risk (`risk/`)
+
+| Module | Purpose |
+|--------|---------|
+| `manager.py` | `RiskManager` — Kelly criterion, drawdown, daily loss |
+| `pre_trade_gate.py` | 8-check pre-trade gate (no fallback) |
+| `advanced_analytics.py` | VaR, ES, CVaR, Sharpe, slippage Monte Carlo |
+
+### Brokers (`brokers/`)
+
+| Module | Broker | Notes |
+|--------|--------|-------|
+| `oanda.py` | OANDA | Region routing (us/eu/sg), practice + live |
+| `interactive_brokers.py` | IBKR | ib_insync + FIX 4.4 bridge |
+| `alpaca.py` | Alpaca | Stocks + crypto |
+| `binance.py` | Binance | Crypto |
+| `mt5.py` | MetaTrader 5 | Windows only |
+| `paper_trading.py` | Paper | Default broker, no credentials needed |
+| `universal.py` | Universal | Factory pattern for multi-broker |
+| `base.py` | Base | Abstract broker interface |
+
+### Strategies (`strategies/`)
+
+| Module | Strategy | Type |
+|--------|----------|------|
+| `ma_crossover.py` | Moving Average Crossover | Trend following |
+| `ema_crossover.py` | EMA Crossover | Trend following |
+| `rsi_strategy.py` | RSI | Momentum |
+| `macd_strategy.py` | MACD | Momentum |
+| `bollinger_bands.py` | Bollinger Bands | Mean reversion |
+| `breakout.py` | Breakout | Trend following |
+| `mean_reversion.py` | Mean Reversion | Statistical |
+| `stochastic.py` | Stochastic | Momentum |
+| `smc_ict.py` | SMC/ICT | Institutional |
+| `strategy_brain.py` | Strategy Brain | AI consensus |
+| `manager.py` | StrategyManager | Orchestration |
+| `base.py` | BaseStrategy | Abstract base |
+
+### Monitoring (`monitoring/`)
+
+| Module | Purpose |
+|--------|---------|
+| `sentry_config.py` | Sentry: FastAPI/SQLAlchemy/Redis integrations, PII scrubbing, ML fallback alerts |
+
+### Notifications (`notifications/`)
+
+| Module | Purpose |
+|--------|---------|
+| `discord_bot.py` | Rich signal embeds, rate-limited, fallback warnings |
+| `telegram_bot.py` | Telegram alerts |
+| `alert_engine.py` | Multi-channel alert routing |
+| `manager.py` | Notification manager |
+
+### Data (`data/`)
+
+| Module | Purpose |
+|--------|---------|
+| `scheduler.py` | `DataScheduler` — all 9 timeframes (M1→M) |
+| `depth_of_market.py` | DOM service |
+
+### Database (`database/`)
+
+| Module | Purpose |
+|--------|---------|
+| `models.py` | All SQLAlchemy models (User, Trade, Position, WatchlistEntry, etc.) |
+
+---
+
+## Startup Sequence
+
+The `ComponentRegistry` in `core/component_registry.py` starts components
+in dependency order. The sequence on `uvicorn app:app` startup:
+
+```
+1. config/startup_validator.py    — validate required env vars (sys.exit on failure)
+2. database/                      — SQLAlchemy engine + session factory
+3. alembic                        — verify migrations are current
+4. redis                          — connect (optional, degrades gracefully)
+5. ml/macro_bootstrap.py          — fetch macro CSVs from yfinance (non-blocking)
+6. ml/macro_store.py              — load macro series into memory
+7. ml/__init__.py                 — load advanced_oos.pkl (fallback to xgb_macro.pkl)
+8. core/signal_engine.py          — wire MacroStore + AdvancedPredictor
+9. strategies/manager.py          — register all enabled strategies
+10. brain/hopefx_brain.py         — start HOPEFXBrain
+11. execution/engine.py           — start ExecutionEngine
+12. brokers/                      — connect to configured broker
+13. data/scheduler.py             — start DataScheduler (all timeframes)
+14. notifications/                — start alert engine + Discord bot
+15. monitoring/sentry_config.py   — init Sentry with all integrations
+16. api/                          — register all 30+ routers
+17. websocket_server.py           — start WebSocket manager
+```
+
+If any step 1–8 fails, the application exits with a clear error message.
+Steps 9–17 log warnings and continue (degraded mode).
+
+---
+
+## Feature Flags
+
+All features are controlled by environment variables in `config/feature_flags.py`.
+Set any flag to `true` or `false` in `.env` to enable/disable at runtime.
+
+Key flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `FEATURE_LIVE_TRADING` | `false` | Enable real order execution |
+| `ML_HOURLY_ENABLED` | `false` | Enable SGD online learning (hourly updates) |
+| `FEATURE_MTF_FUSION` | `true` | Multi-timeframe fusion (Phase 1 research) |
+| `FEATURE_ANOMALY_WEIGHTING` | `false` | Anomaly-weighted signals (Phase 2, after 30-day paper) |
+| `FEATURE_ONLINE_LEARNING` | `false` | Online learner store (Phase 3, after 90-day paper) |
+| `FEATURE_DEEP_ENSEMBLE` | `false` | LSTM/Transformer ensemble (Phase 4, after OOS ≥ 70%) |
+| `LSTM_SIGNAL_ENABLED` | `false` | LSTM as optional signal layer in HOPEFXBrain |
+| `FEATURE_SOCIAL_TRADING` | `true` | Social feed and copy trading |
+| `FEATURE_PAPER_TRADING` | `true` | Paper trading simulator |
+| `FEATURE_RISK_MANAGER` | `true` | Risk manager (always keep true) |
+
+See `docs/archive/FEATURES.md` for the complete flag registry (57 flags).
