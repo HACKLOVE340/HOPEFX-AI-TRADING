@@ -24,7 +24,7 @@ async def test_event_bus(tmp_path):
     local-fallback path: subscribe_local() + publish() routes through
     _local_bus when Redis is unreachable.
     """
-    from core.event_bus import CH_TICK, EventBus
+    from core.event_bus import CH_TICK
 
     bus = EventBus()
     # Force degraded mode so publish() routes through the local fallback
