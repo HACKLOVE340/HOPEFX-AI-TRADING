@@ -70,21 +70,25 @@ class AMLGate:
 
         # ── Rule 1: Single withdrawal cap ─────────────────────────────────────
         if amount > SINGLE_WITHDRAWAL_CAP:
-            return AMLDecision(
+            decision = AMLDecision(
                 allowed=False,
                 reason=f"Withdrawal of {amount} {currency} exceeds single-transaction cap of {SINGLE_WITHDRAWAL_CAP}",
                 risk_score=1.0,
                 flags=["EXCEEDS_SINGLE_CAP"],
             )
+            self._emit_block_event(user_id, amount, currency, decision)
+            return decision
 
         # ── Rule 2: KYC required above threshold ──────────────────────────────
         if amount > KYC_THRESHOLD and kyc_status != "approved":
-            return AMLDecision(
+            decision = AMLDecision(
                 allowed=False,
                 reason=f"KYC approval required for withdrawals above {KYC_THRESHOLD} {currency}",
                 risk_score=0.9,
                 flags=["KYC_REQUIRED"],
             )
+            self._emit_block_event(user_id, amount, currency, decision)
+            return decision
 
         # ── DB-dependent rules ────────────────────────────────────────────────
         if self._sf:
@@ -163,6 +167,39 @@ class AMLGate:
         return AMLDecision(
             allowed=True, reason="Approved", risk_score=risk_score, flags=flags
         )
+
+    def _emit_block_event(
+        self,
+        user_id: str,
+        amount,
+        currency: str,
+        decision: "AMLDecision",
+    ) -> None:
+        """
+        Write an AML_BLOCK event to the transactional outbox.
+
+        Called whenever a withdrawal is blocked so the event is guaranteed to
+        reach the compliance event bus even if Redis is temporarily unavailable.
+        """
+        try:
+            from core.outbox import write_outbox_event_standalone
+
+            write_outbox_event_standalone(
+                event_type="AML_BLOCK",
+                channel="hopefx:compliance",
+                payload={
+                    "type": "aml_block",
+                    "user_id": user_id,
+                    "amount": str(amount),
+                    "currency": currency,
+                    "reason": decision.reason,
+                    "risk_score": decision.risk_score,
+                    "flags": decision.flags,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except Exception as exc:
+            logger.warning("AML outbox write failed (non-fatal): %s", exc)
 
     def _check_db_rules(
         self,

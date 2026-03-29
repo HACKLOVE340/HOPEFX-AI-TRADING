@@ -552,6 +552,24 @@ async def init_strategy_brain(s: Any) -> Any:
     return brain
 
 
+async def init_outbox_relay(s: Any) -> Any:
+    """
+    Start the OutboxRelay background task.
+
+    The relay polls outbox_events every OUTBOX_RELAY_INTERVAL_SECONDS and
+    publishes unpublished rows to Redis pub/sub.  This guarantees at-least-once
+    delivery of critical compliance events (kill switch, AML block, order fill)
+    even when Redis was temporarily unavailable at the time of the state change.
+    """
+    from core.outbox import get_relay
+
+    relay = get_relay()
+    task = asyncio.create_task(relay.run(), name="outbox_relay")
+    s.background_tasks.append(task)
+    logger.info("OutboxRelay started (background task)")
+    return relay
+
+
 async def init_event_store(s: Any) -> Any:
     from events.event_store import get_event_store
 
@@ -1393,6 +1411,7 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["hourly_trainer"],
         )
+        .register("outbox_relay", F.init_outbox_relay, required=False, deps=["database"])
         .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
         .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])

@@ -468,14 +468,16 @@ class KillSwitch:
 
     def _publish_event(self, reason: str) -> None:
         """
-        Publish a KILL_SWITCH breach event to the Redis EventBus (CH_BREACH).
+        Publish a KILL_SWITCH breach event.
 
-        Uses the Redis-backed EventBus so the signal propagates to all pods in
-        the cluster.  Falls back to the legacy in-process event bus when the
-        Redis bus is not available.
+        Write path (guaranteed delivery):
+          1. Write to outbox_events table (transactional outbox) — survives
+             Redis downtime; OutboxRelay delivers once Redis recovers.
+          2. Attempt immediate publish to Redis EventBus (cross-pod, low latency).
+          3. Fall back to legacy in-process event bus if Redis is unavailable.
 
-        Previously this used DomainEvent.create() + the in-memory
-        MemoryMappedEventStore, which only worked within a single process.
+        The outbox write is the source of truth — the direct Redis publish is
+        a best-effort optimisation to reduce latency when Redis is healthy.
         """
         payload = {
             "type": "kill_switch",
@@ -483,7 +485,19 @@ class KillSwitch:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        # ── Primary path: Redis EventBus (cross-pod) ──────────────────────────
+        # ── Step 1: Write to transactional outbox (at-least-once guarantee) ──
+        try:
+            from core.outbox import write_outbox_event_standalone  # noqa: PLC0415
+
+            write_outbox_event_standalone(
+                event_type="KILL_SWITCH",
+                channel="hopefx:breach",
+                payload=payload,
+            )
+        except Exception as _ob_exc:
+            logger.warning("Kill switch outbox write failed (non-fatal): %s", _ob_exc)
+
+        # ── Step 2: Immediate Redis publish (best-effort, low latency) ────────
         try:
             from core.event_bus import bus as _redis_bus  # noqa: PLC0415
 
@@ -493,7 +507,6 @@ class KillSwitch:
                 logger.info("Kill switch breach event scheduled on Redis CH_BREACH")
                 return
             except RuntimeError:
-                # No running event loop — best-effort fire-and-forget
                 import inspect as _inspect
                 result = _redis_bus.publish_breach(payload)
                 if _inspect.iscoroutine(result):
@@ -502,11 +515,11 @@ class KillSwitch:
         except Exception as exc:
             logger.warning(
                 "Could not publish kill-switch event to Redis bus: %s — "
-                "falling back to legacy in-process bus",
+                "falling back to legacy in-process bus (outbox will retry)",
                 exc,
             )
 
-        # ── Fallback: legacy in-process event bus ─────────────────────────────
+        # ── Step 3: Fallback — legacy in-process event bus ────────────────────
         if self._event_bus is None:
             return
         try:
