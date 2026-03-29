@@ -1,0 +1,372 @@
+/**
+ * AuditLog — browse, filter, and export the platform audit trail.
+ *
+ * Backend: GET /api/admin/audit-log?page=&limit=&user_id=&event_type=
+ *          GET /api/admin/audit-log/export  (CSV download)
+ *
+ * Access: admin role only (enforced by AuthGuard + backend).
+ */
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { api } from '../hooks/useApi';
+import {
+  PageHeader,
+  DataTable,
+  type Column,
+  Badge,
+  type BadgeVariant,
+  Spinner,
+  ErrorBanner,
+  EmptyState,
+} from '../components';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface AuditEvent {
+  event_id: string;
+  user_id: string;
+  event_type: string;
+  detail: string;
+  ip_address: string;
+  created_at: string;
+}
+
+interface AuditResponse {
+  events: AuditEvent[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const EVENT_CATEGORIES: Record<string, BadgeVariant> = {
+  login:        'success',
+  'login.failed': 'danger',
+  logout:       'neutral',
+  'trade.placed': 'info',
+  'trade.closed': 'info',
+  'settings.changed': 'warning',
+  'user.banned': 'danger',
+  'withdrawal.requested': 'warning',
+  startup:      'neutral',
+  'signal.copied': 'info',
+};
+
+function eventVariant(type: string): BadgeVariant {
+  for (const [key, variant] of Object.entries(EVENT_CATEGORIES)) {
+    if (type.includes(key)) return variant;
+  }
+  return 'neutral';
+}
+
+function fmtDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+// ── Columns ───────────────────────────────────────────────────────────────────
+
+const COLUMNS: Column<AuditEvent>[] = [
+  {
+    key: 'created_at',
+    header: 'Timestamp',
+    width: '180px',
+    sortKey: 'created_at',
+    sortable: true,
+    render: (row) => (
+      <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>
+        {fmtDate(row.created_at)}
+      </span>
+    ),
+  },
+  {
+    key: 'user_id',
+    header: 'User',
+    width: '130px',
+    sortKey: 'user_id',
+    sortable: true,
+    render: (row) => (
+      <span style={{ color: '#60a5fa', fontFamily: 'monospace', fontSize: 12 }}>
+        {row.user_id}
+      </span>
+    ),
+  },
+  {
+    key: 'event_type',
+    header: 'Event',
+    width: '160px',
+    sortKey: 'event_type',
+    sortable: true,
+    render: (row) => (
+      <Badge variant={eventVariant(row.event_type)}>
+        {row.event_type}
+      </Badge>
+    ),
+  },
+  {
+    key: 'detail',
+    header: 'Detail',
+    render: (row) => (
+      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{row.detail}</span>
+    ),
+  },
+  {
+    key: 'ip_address',
+    header: 'IP',
+    width: '130px',
+    render: (row) => (
+      <span style={{ color: '#64748b', fontFamily: 'monospace', fontSize: 12 }}>
+        {row.ip_address || '—'}
+      </span>
+    ),
+  },
+];
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
+
+const AuditLog: React.FC = () => {
+  const [events, setEvents]     = useState<AuditEvent[]>([]);
+  const [total, setTotal]       = useState(0);
+  const [page, setPage]         = useState(1);
+  const [pages, setPages]       = useState(1);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [filterUser, setFilterUser]   = useState('');
+  const [filterType, setFilterType]   = useState('');
+  const [exporting, setExporting]     = useState(false);
+
+  const fetchAudit = useCallback(async (pg: number, uid: string, etype: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        page: String(pg),
+        limit: String(PAGE_SIZE),
+      });
+      if (uid.trim())   params.set('user_id', uid.trim());
+      if (etype.trim()) params.set('event_type', etype.trim());
+
+      const res = await api.get<AuditResponse>(`/admin/audit-log?${params}`);
+      setEvents(res.data.events);
+      setTotal(res.data.total);
+      setPage(res.data.page);
+      setPages(res.data.pages);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load audit log';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    void fetchAudit(1, filterUser, filterType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSearch = () => {
+    void fetchAudit(1, filterUser, filterType);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a   = document.createElement('a');
+      a.href    = url;
+      a.download = `audit_log_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div style={s.page}>
+      <PageHeader
+        title="Audit Log"
+        subtitle={`${total.toLocaleString()} events total`}
+        actions={
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={s.exportBtn}
+          >
+            {exporting ? <Spinner size="sm" /> : '⬇ Export CSV'}
+          </button>
+        }
+      />
+
+      {/* Filters */}
+      <div style={s.filters}>
+        <input
+          type="text"
+          placeholder="Filter by user ID…"
+          value={filterUser}
+          onChange={(e) => setFilterUser(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          style={s.input}
+        />
+        <input
+          type="text"
+          placeholder="Filter by event type…"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          style={s.input}
+        />
+        <button onClick={handleSearch} style={s.searchBtn}>
+          Search
+        </button>
+        <button
+          onClick={() => {
+            setFilterUser('');
+            setFilterType('');
+            void fetchAudit(1, '', '');
+          }}
+          style={s.clearBtn}
+        >
+          Clear
+        </button>
+      </div>
+
+      {error && (
+        <ErrorBanner
+          message={error}
+          onDismiss={() => setError(null)}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {!loading && events.length === 0 && !error ? (
+        <EmptyState
+          icon="🔍"
+          title="No audit events found"
+          description="Try adjusting your filters or check back after some activity."
+        />
+      ) : (
+        <DataTable<AuditEvent>
+          columns={COLUMNS}
+          data={events}
+          rowKey={(r) => r.event_id}
+          loading={loading}
+          pageSize={PAGE_SIZE}
+          emptyMessage="No events match your filters"
+        />
+      )}
+
+      {/* Manual pagination (server-side) */}
+      {pages > 1 && !loading && (
+        <div style={s.pagination}>
+          <span style={{ color: '#64748b', fontSize: 12 }}>
+            Page {page} of {pages}
+          </span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              disabled={page <= 1}
+              onClick={() => void fetchAudit(page - 1, filterUser, filterType)}
+              style={s.pageBtn}
+            >
+              ‹ Prev
+            </button>
+            <button
+              disabled={page >= pages}
+              onClick={() => void fetchAudit(page + 1, filterUser, filterType)}
+              style={s.pageBtn}
+            >
+              Next ›
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const s: Record<string, React.CSSProperties> = {
+  page: {
+    padding: '24px 28px',
+    maxWidth: 1200,
+  },
+  filters: {
+    display: 'flex',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  input: {
+    background: 'var(--surface, #1e293b)',
+    border: '1px solid var(--border, #334155)',
+    borderRadius: 6,
+    color: 'var(--text, #f1f5f9)',
+    fontSize: 13,
+    padding: '7px 12px',
+    width: 220,
+    outline: 'none',
+  },
+  searchBtn: {
+    background: '#3b82f6',
+    border: 'none',
+    borderRadius: 6,
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 600,
+    padding: '7px 16px',
+  },
+  clearBtn: {
+    background: 'transparent',
+    border: '1px solid var(--border, #334155)',
+    borderRadius: 6,
+    color: 'var(--text-muted, #94a3b8)',
+    cursor: 'pointer',
+    fontSize: 13,
+    padding: '7px 12px',
+  },
+  exportBtn: {
+    alignItems: 'center',
+    background: 'transparent',
+    border: '1px solid var(--border, #334155)',
+    borderRadius: 6,
+    color: 'var(--text-muted, #94a3b8)',
+    cursor: 'pointer',
+    display: 'flex',
+    fontSize: 13,
+    gap: 6,
+    padding: '7px 14px',
+  },
+  pagination: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 12,
+    justifyContent: 'flex-end',
+    marginTop: 12,
+  },
+  pageBtn: {
+    background: 'transparent',
+    border: '1px solid var(--border, #334155)',
+    borderRadius: 6,
+    color: '#94a3b8',
+    cursor: 'pointer',
+    fontSize: 12,
+    padding: '5px 12px',
+  },
+};
+
+export default AuditLog;
