@@ -56,27 +56,44 @@ class HSMVault:
 
     def initialize(
         self, password: Optional[str] = None, hardware_token: Optional[str] = None
-    ):
+    ) -> None:
         """
-        Initialize vault with master key derivation.
-        For hardware HSM, uses PKCS#11 interface.
+        Derive or generate the master key and mark the vault ready.
+
+        hsm_type='software'  — PBKDF2 from *password*, or random key saved to disk.
+        hsm_type='yubikey'   — YubiKey HSM via yubihsm library.
+        hsm_type='cloudhsm'  — raises NotImplementedError until vendor SDK is wired.
+
+        Raises
+        ------
+        ValueError          : Unknown hsm_type.
+        NotImplementedError : cloudhsm path not yet implemented.
+        RuntimeError        : Key derivation or persistence failed.
         """
         if self.hsm_type == "software":
-            # Software HSM: Derive from password + hardware binding
             if password:
                 self._master_key = self._derive_key_software(password, hardware_token)
             else:
-                # Generate new random master key
                 self._master_key = secrets.token_bytes(32)
                 self._save_master_key()
 
         elif self.hsm_type == "yubikey":
-            # YubiKey HSM integration
             self._master_key = self._derive_key_yubikey(hardware_token)
 
         elif self.hsm_type == "cloudhsm":
-            # AWS CloudHSM or Azure Dedicated HSM
+            # _derive_key_cloud raises NotImplementedError — _initialized stays False
             self._master_key = self._derive_key_cloud(hardware_token)
+
+        else:
+            raise ValueError(
+                f"Unknown hsm_type {self.hsm_type!r}. "
+                "Valid values: 'software', 'yubikey', 'cloudhsm'."
+            )
+
+        if not self._master_key:
+            raise RuntimeError(
+                f"Master key derivation returned empty bytes for hsm_type={self.hsm_type!r}"
+            )
 
         self._initialized = True
         logger.info("HSMVault initialised: %s", self.hsm_type)
