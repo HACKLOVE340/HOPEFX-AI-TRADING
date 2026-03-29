@@ -325,6 +325,229 @@ class DataLineageStore:
             logger.warning("DataLineageStore.query error: %s", exc)
             return []
 
+    def query_by_lineage_id(self, lineage_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a single record by its content-addressed lineage_id.
+
+        Returns the record dict or None if not found.
+        lineage_id is the SHA-256 content hash assigned at write time.
+        """
+        if not self._conn:
+            return None
+        try:
+            cursor = self._conn.execute(
+                """
+                SELECT id, record_type, schema_version, lineage_id, source,
+                       symbol, timestamp, payload, created_at
+                FROM lineage_records
+                WHERE lineage_id = ?
+                LIMIT 1
+                """,
+                (lineage_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "id":             row[0],
+                "record_type":    row[1],
+                "schema_version": row[2],
+                "lineage_id":     row[3],
+                "source":         row[4],
+                "symbol":         row[5],
+                "timestamp":      row[6],
+                "payload":        json.loads(row[7]),
+                "created_at":     row[8],
+            }
+        except Exception as exc:
+            logger.warning("DataLineageStore.query_by_lineage_id error: %s", exc)
+            return None
+
+    def query_by_source(
+        self,
+        source: str,
+        record_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return records from a specific data source.
+
+        Parameters
+        ----------
+        source      : Source name (e.g. 'goldapi', 'finnhub', 'fred')
+        record_type : Optional filter (TICK / NEWS / MACRO / SIGNAL / QUALITY)
+        limit       : Maximum records to return (default 100)
+        """
+        return self.query(
+            record_type=record_type,
+            source=source,
+            limit=limit,
+        )
+
+    def query_by_time_range(
+        self,
+        start: datetime,
+        end: Optional[datetime] = None,
+        record_type: Optional[str] = None,
+        symbol: Optional[str] = None,
+        limit: int = 500,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return records within a UTC time range.
+
+        Parameters
+        ----------
+        start       : Inclusive lower bound (UTC datetime)
+        end         : Inclusive upper bound (UTC datetime, default: now)
+        record_type : Optional type filter
+        symbol      : Optional symbol filter
+        limit       : Maximum records to return (default 500)
+
+        Records are returned in ascending timestamp order.
+        """
+        if not self._conn:
+            return []
+
+        end = end or datetime.now(timezone.utc)
+        clauses: List[str] = ["timestamp >= ?", "timestamp <= ?"]
+        params:  List[Any] = [start.isoformat(), end.isoformat()]
+
+        if record_type:
+            clauses.append("record_type = ?")
+            params.append(record_type)
+        if symbol:
+            clauses.append("symbol = ?")
+            params.append(symbol)
+
+        where = "WHERE " + " AND ".join(clauses)
+        sql = f"""
+            SELECT id, record_type, schema_version, lineage_id, source,
+                   symbol, timestamp, payload, created_at
+            FROM lineage_records
+            {where}
+            ORDER BY timestamp ASC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        try:
+            cursor = self._conn.execute(sql, params)
+            return [
+                {
+                    "id":             r[0],
+                    "record_type":    r[1],
+                    "schema_version": r[2],
+                    "lineage_id":     r[3],
+                    "source":         r[4],
+                    "symbol":         r[5],
+                    "timestamp":      r[6],
+                    "payload":        json.loads(r[7]),
+                    "created_at":     r[8],
+                }
+                for r in cursor.fetchall()
+            ]
+        except Exception as exc:
+            logger.warning("DataLineageStore.query_by_time_range error: %s", exc)
+            return []
+
+    def export_to_postgres(
+        self,
+        pg_url: str,
+        record_type: Optional[str] = None,
+        since: Optional[datetime] = None,
+        batch_size: int = 1000,
+    ) -> int:
+        """
+        Dual-write: copy SQLite records to a PostgreSQL database.
+
+        This is the production path for long-term audit storage.
+        Set LINEAGE_DB_URL=postgresql://... in .env to enable automatic
+        dual-write on startup (handled by the orchestrator).
+
+        Parameters
+        ----------
+        pg_url      : PostgreSQL connection URL
+        record_type : Optional filter (copies all types if None)
+        since       : Only copy records newer than this timestamp
+        batch_size  : INSERT batch size (default 1000)
+
+        Returns the number of rows inserted.
+
+        Schema (auto-created if missing):
+            CREATE TABLE IF NOT EXISTS lineage_records (
+                id TEXT PRIMARY KEY,
+                record_type TEXT, schema_version TEXT,
+                lineage_id TEXT, source TEXT, symbol TEXT,
+                timestamp TEXT, payload JSONB, created_at TEXT
+            );
+        """
+        try:
+            import psycopg2  # type: ignore
+            import psycopg2.extras  # type: ignore
+        except ImportError:
+            logger.warning(
+                "DataLineageStore.export_to_postgres: psycopg2 not installed. "
+                "Run: pip install psycopg2-binary"
+            )
+            return 0
+
+        records = self.query(
+            record_type=record_type,
+            since=since,
+            limit=batch_size,
+        )
+        if not records:
+            return 0
+
+        try:
+            conn = psycopg2.connect(pg_url)
+            cur  = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lineage_records (
+                    id             TEXT PRIMARY KEY,
+                    record_type    TEXT,
+                    schema_version TEXT,
+                    lineage_id     TEXT,
+                    source         TEXT,
+                    symbol         TEXT,
+                    timestamp      TEXT,
+                    payload        JSONB,
+                    created_at     TEXT
+                )
+            """)
+            rows = [
+                (
+                    r["id"], r["record_type"], r["schema_version"],
+                    r["lineage_id"], r["source"], r["symbol"],
+                    r["timestamp"],
+                    json.dumps(r["payload"]),
+                    r["created_at"],
+                )
+                for r in records
+            ]
+            psycopg2.extras.execute_values(
+                cur,
+                """
+                INSERT INTO lineage_records
+                    (id, record_type, schema_version, lineage_id, source,
+                     symbol, timestamp, payload, created_at)
+                VALUES %s
+                ON CONFLICT (id) DO NOTHING
+                """,
+                rows,
+            )
+            conn.commit()
+            inserted = cur.rowcount
+            cur.close()
+            conn.close()
+            logger.info(
+                "DataLineageStore.export_to_postgres: inserted %d rows", inserted
+            )
+            return inserted
+        except Exception as exc:
+            logger.error("DataLineageStore.export_to_postgres error: %s", exc)
+            return 0
+
     def count(self, record_type: Optional[str] = None) -> int:
         if not self._conn:
             return 0
