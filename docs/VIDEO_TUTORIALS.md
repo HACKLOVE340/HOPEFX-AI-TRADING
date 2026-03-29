@@ -1,41 +1,156 @@
 # Video Tutorials
 
-> Complete guide to the HOPEFX video tutorial series.
-> Each episode includes a full script outline, screen recording guide, and all commands shown.
+> Complete production guide to the HOPEFX video tutorial series.
+> Each episode includes: script outline, chapter markers, screen recording spec,
+> thumbnail description, YouTube description template, and subscription gating note.
+> Last updated: 2026-07-14
+
+---
+
+## Subscription Gating
+
+| Episode | Plan Required | Reason |
+|---------|--------------|--------|
+| 1–3 | None (public) | Marketing / onboarding |
+| 4–6 | Starter+ | Requires running platform |
+| 7 | Enterprise+ | SMC/ICT strategy |
+| 8–9 | Professional+ | ML features |
+| 10 | Starter+ | Broker integration |
+| 11 | Starter+ | Risk management |
+| 12 | Professional+ | Production deployment |
+| 13 | Professional+ | Prop firm mode |
+| 14 | Professional+ | Social trading |
+| 15 | Professional+ | Grafana dashboards |
+
+Episodes 1–3 are publicly available on YouTube. Episodes 4+ are gated behind
+the subscriber portal at `https://your-domain.com/tutorials`.
+
+---
+
+## Production Recording Specifications
+
+### Equipment
+- **Resolution:** 1920×1080 minimum (4K preferred for future-proofing)
+- **Frame rate:** 30fps (60fps for terminal animations)
+- **Audio:** Condenser microphone, -12dB to -6dB peak, no background noise
+- **Screen:** Dark terminal theme, font size 18pt minimum
+- **Browser:** Chrome, dark mode, zoom 100%
+
+### Software
+- **Recording:** OBS Studio (free) or Camtasia
+- **Editing:** DaVinci Resolve (free) or Premiere Pro
+- **Captions:** Auto-generate in YouTube, then manually correct
+- **Thumbnails:** 1280×720px, Canva or Figma template
+
+### Pre-Recording Checklist
+- [ ] Terminal font: JetBrains Mono or Fira Code, 18pt
+- [ ] Screen resolution: 1920×1080
+- [ ] Close all notifications (macOS: Do Not Disturb; Windows: Focus Assist)
+- [ ] Pre-type all commands in a script file — no live typing errors
+- [ ] Test every command before recording
+- [ ] `.env` configured with test credentials (never real keys on screen)
+- [ ] App running and health check passing
+- [ ] Browser bookmarks hidden
+
+### Post-Recording Checklist
+- [ ] Add chapter markers at every section timestamp (see format below)
+- [ ] Add captions/subtitles (auto-generate then correct)
+- [ ] Add end screen: next episode link + GitHub link (last 20 seconds)
+- [ ] Pin GitHub link in video description
+- [ ] Add to playlist: "HOPEFX AI Trading Tutorials"
+- [ ] Set thumbnail (see per-episode thumbnail spec)
+- [ ] Add to subscriber portal with plan gate
+
+### Chapter Marker Format (YouTube)
+
+Paste into the YouTube description:
+
+```
+0:00 Introduction
+1:00 [Section name]
+4:00 [Section name]
+8:00 [Section name]
+12:00 [Section name]
+```
+
+YouTube auto-creates chapter navigation when timestamps start at `0:00` and
+there are at least 3 timestamps.
+
+---
+
+## YouTube Description Template
+
+Use this template for every episode. Replace `[EPISODE_N]`, `[TITLE]`, etc.:
+
+```
+HOPEFX AI Trading — Episode [EPISODE_N]: [TITLE]
+
+[One-sentence description of what the viewer will learn.]
+
+CHAPTERS:
+0:00 Introduction
+[timestamps]
+
+LINKS:
+GitHub: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING
+Documentation: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/tree/main/docs
+Pricing: https://hopefx.com/pricing
+Previous episode: [URL]
+Next episode: [URL]
+
+COMMANDS USED IN THIS EPISODE:
+[paste all commands shown]
+
+SUBSCRIBE for weekly trading automation tutorials.
+
+#AlgorithmicTrading #PythonTrading #AITrading #ForexBot #GoldTrading
+```
 
 ---
 
 ## Series Overview
 
-| # | Title | Level | Duration | Status |
-|---|-------|-------|----------|--------|
-| 1 | Introduction to HOPEFX | Beginner | 15 min | Script ready |
-| 2 | Installation & Setup | Beginner | 20 min | Script ready |
-| 3 | Your First Backtest | Beginner | 25 min | Script ready |
-| 4 | Interactive Charting | Beginner–Intermediate | 30 min | Script ready |
-| 5 | Technical Indicators Deep Dive | Intermediate | 45 min | Script ready |
-| 6 | Building Your First Strategy | Intermediate | 45 min | Script ready |
-| 7 | SMC/ICT Strategy | Advanced | 60 min | Script ready |
-| 8 | ML Trading Introduction | Intermediate | 35 min | Script ready |
-| 9 | Training the ML Model | Advanced | 50 min | Script ready |
-| 10 | Connecting OANDA | Beginner | 30 min | Script ready |
-| 11 | Risk Management Masterclass | All levels | 50 min | Script ready |
-| 12 | Deploying to Production | Advanced | 40 min | Script ready |
-| 13 | Prop Firm Challenge Guide | Intermediate | 45 min | Script ready |
-| 14 | Social Trading & Copy Trading | Intermediate | 30 min | Script ready |
-| 15 | Monitoring with Grafana | Advanced | 35 min | Script ready |
+| # | Title | Level | Duration | Plan | Status |
+|---|-------|-------|----------|------|--------|
+| 1 | Introduction to HOPEFX | Beginner | 15 min | Public | Script ready |
+| 2 | Installation & Setup | Beginner | 20 min | Public | Script ready |
+| 3 | Your First Backtest | Beginner | 25 min | Public | Script ready |
+| 4 | Interactive Charting | Beginner–Intermediate | 30 min | Starter+ | Script ready |
+| 5 | Technical Indicators Deep Dive | Intermediate | 45 min | Starter+ | Script ready |
+| 6 | Building Your First Strategy | Intermediate | 45 min | Starter+ | Script ready |
+| 7 | SMC/ICT Strategy | Advanced | 60 min | Enterprise+ | Script ready |
+| 8 | ML Trading Introduction | Intermediate | 35 min | Professional+ | Script ready |
+| 9 | Training the ML Model | Advanced | 50 min | Elite | Script ready |
+| 10 | Connecting OANDA | Beginner | 30 min | Starter+ | Script ready |
+| 11 | Risk Management Masterclass | All levels | 50 min | Starter+ | Script ready |
+| 12 | Deploying to Production | Advanced | 40 min | Professional+ | Script ready |
+| 13 | Prop Firm Challenge Guide | Intermediate | 45 min | Professional+ | Script ready |
+| 14 | Social Trading & Copy Trading | Intermediate | 30 min | Professional+ | Script ready |
+| 15 | Monitoring with Grafana | Advanced | 35 min | Professional+ | Script ready |
 
 ---
 
 ## Episode 1 — Introduction to HOPEFX
 
-**Duration:** 15 min | **Level:** Beginner
+**Duration:** 15 min | **Level:** Beginner | **Plan:** Public (no subscription required)
 
-### What to Show
-- Open the GitHub repository page
-- Show the README badges (CI, tests, Python version)
-- Show the architecture diagram
-- Show the `/docs` Swagger UI running locally
+### Thumbnail
+Dark background, gold candlestick chart, text: "HOPEFX AI Trading — 66.4% OOS Accuracy"
+Accent colour: `#26a69a` (teal). Include the HOPEFX logo top-left.
+
+### Chapter Markers
+```
+0:00 Introduction
+1:00 What is HOPEFX?
+4:00 Architecture overview
+8:00 Live demo
+12:00 What's next
+```
+
+### Screen Recording Plan
+- Open the GitHub repository page — show README badges (CI green, Python 3.10–3.12)
+- Show the architecture diagram from `docs/index.md`
+- Show the Swagger UI at `http://localhost:8000/docs`
 - Show a live signal response from `/api/signals/latest`
 
 ### Script Outline
@@ -80,12 +195,26 @@ open http://localhost:8000/docs
 
 ## Episode 2 — Installation & Setup
 
-**Duration:** 20 min | **Level:** Beginner
+**Duration:** 20 min | **Level:** Beginner | **Plan:** Public (no subscription required)
 
-### What to Show
-- Terminal on Ubuntu 22.04 (or macOS)
-- VS Code with the repository open
-- Browser showing `/health` endpoint
+### Thumbnail
+Split screen: terminal on left (dark), browser on right showing `/health` green.
+Text: "Install HOPEFX in 5 minutes". Accent: `#26a69a`.
+
+### Chapter Markers
+```
+0:00 Introduction
+2:00 Prerequisites check
+2:30 Clone and install
+8:00 Environment configuration
+13:00 Database setup and first run
+17:00 Verify the installation
+```
+
+### Screen Recording Plan
+- Terminal on Ubuntu 22.04 (or macOS) — JetBrains Mono 18pt, dark theme
+- VS Code with the repository open (show `.env.example`)
+- Browser showing `http://localhost:8000/health` — green status
 
 ### Script Outline
 
@@ -135,12 +264,26 @@ open http://localhost:8000/docs
 
 ## Episode 3 — Your First Backtest
 
-**Duration:** 25 min | **Level:** Beginner
+**Duration:** 25 min | **Level:** Beginner | **Plan:** Public (no subscription required)
 
-### What to Show
-- Terminal running the backtest
-- JSON output with metrics
-- Equity curve chart (if available)
+### Thumbnail
+Equity curve chart on dark background, text: "Backtest 50 Years of Gold Data".
+Show a rising equity curve with a drawdown dip. Accent: `#26a69a`.
+
+### Chapter Markers
+```
+0:00 Introduction
+3:00 What is backtesting?
+3:30 Smoke test (30 seconds)
+10:00 Real data backtest
+18:00 Backtest via the API
+22:00 Interpreting results
+```
+
+### Screen Recording Plan
+- Terminal running `python ml/train_advanced.py --smoke` — show output
+- Terminal running `python real_data_backtest.py --symbol XAUUSD --years 5`
+- Browser showing the backtest API response (formatted JSON)
 
 ### Script Outline
 
@@ -188,12 +331,25 @@ curl -X POST http://localhost:8000/api/backtest/run \
 
 ## Episode 4 — Interactive Charting
 
-**Duration:** 30 min | **Level:** Beginner–Intermediate
+**Duration:** 30 min | **Level:** Beginner–Intermediate | **Plan:** Starter+
 
-### What to Show
-- Browser with Plotly charts
-- Dark mode and light mode
-- Adding indicators to a chart
+### Thumbnail
+Full-screen Plotly candlestick chart with Bollinger Bands and RSI panel.
+Text: "Professional Charts in Python". Dark background, teal accent.
+
+### Chapter Markers
+```
+0:00 Introduction
+5:00 Creating a candlestick chart
+15:00 Adding indicators
+22:00 Themes and export
+22:30 Real-time chart via WebSocket
+```
+
+### Screen Recording Plan
+- Browser showing a Plotly chart with XAUUSD H1 data
+- VS Code showing the chart engine code
+- Show dark mode and light mode toggle
 
 ### Script Outline
 
@@ -241,7 +397,25 @@ Show connecting to `ws://localhost:8000/ws/prices` and updating the chart live.
 
 ## Episode 5 — Technical Indicators Deep Dive
 
-**Duration:** 45 min | **Level:** Intermediate
+**Duration:** 45 min | **Level:** Intermediate | **Plan:** Starter+
+
+### Thumbnail
+Grid of 4 indicator charts (RSI, MACD, Bollinger Bands, Ichimoku).
+Text: "All 20+ Indicators Explained". Dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+0:30 Moving averages (SMA, EMA, WMA)
+10:00 Oscillators (RSI, MACD, Stochastic)
+20:00 Volatility (Bollinger Bands, ATR, Keltner)
+30:00 Trend (ADX, Ichimoku)
+38:00 Volume (OBV, VWAP, Volume Profile)
+```
+
+### Screen Recording Plan
+- Jupyter notebook or VS Code showing each indicator calculation
+- Plotly chart showing each indicator overlaid on XAUUSD H1
 
 ### Indicators Covered
 
@@ -286,7 +460,25 @@ df['volume_profile'] = ind.volume_profile(bins=20)
 
 ## Episode 6 — Building Your First Strategy
 
-**Duration:** 45 min | **Level:** Intermediate
+**Duration:** 45 min | **Level:** Intermediate | **Plan:** Starter+
+
+### Thumbnail
+VS Code showing strategy code on left, backtest equity curve on right.
+Text: "Build a Trading Strategy in Python". Teal accent.
+
+### Chapter Markers
+```
+0:00 Introduction
+8:00 Strategy structure (BaseStrategy)
+20:00 Signal generation logic
+30:00 Register and test the strategy
+30:30 Backtest the strategy
+```
+
+### Screen Recording Plan
+- VS Code: write `MyRSIStrategy` from scratch
+- Terminal: run the strategy against the paper broker
+- Browser: show backtest results via API
 
 ### What to Build
 A simple RSI + EMA crossover strategy from scratch.
@@ -356,7 +548,28 @@ curl -X POST http://localhost:8000/api/backtest/run \
 
 ## Episode 7 — SMC/ICT Strategy
 
-**Duration:** 60 min | **Level:** Advanced
+**Duration:** 60 min | **Level:** Advanced | **Plan:** Enterprise+
+
+### Thumbnail
+Annotated XAUUSD chart showing order blocks (blue boxes), FVGs (green zones),
+and a liquidity sweep arrow. Text: "Smart Money Concepts in Python".
+
+### Chapter Markers
+```
+0:00 Introduction
+15:00 Smart Money Concepts theory
+15:30 Order blocks
+20:00 Fair value gaps
+25:00 Liquidity sweeps
+30:00 Using the built-in SMC strategy
+45:00 ITS-8-OS (8 Optimal Setups)
+55:00 Combining SMC with ML
+```
+
+### Screen Recording Plan
+- Annotated chart showing each SMC concept
+- VS Code: `SMCICTStrategy` configuration and usage
+- Terminal: signal output with setup type and confluence score
 
 ### Concepts Covered
 
@@ -405,7 +618,25 @@ Show how SMC signals feed into the Strategy Brain alongside ML probability.
 
 ## Episode 8 — ML Trading Introduction
 
-**Duration:** 35 min | **Level:** Intermediate
+**Duration:** 35 min | **Level:** Intermediate | **Plan:** Professional+
+
+### Thumbnail
+Neural network diagram overlaid on a gold price chart.
+Text: "66.4% OOS Accuracy — How It Works". Dark background, teal accent.
+
+### Chapter Markers
+```
+0:00 Introduction
+8:00 Why ML for trading?
+8:30 The production model
+18:00 Feature categories (176 features)
+28:00 The abstain mechanism
+```
+
+### Screen Recording Plan
+- Browser: `/api/ml/accuracy` response
+- Browser: `/api/ml/feature-importance` response (show top 20 features)
+- Terminal: `python -c "from ml.models import load_model; m = load_model(); print(m)"`
 
 ### Script Outline
 
@@ -447,7 +678,26 @@ Only high-conviction signals reach execution. This is why win rate > 50%.
 
 ## Episode 9 — Training the ML Model
 
-**Duration:** 50 min | **Level:** Advanced
+**Duration:** 50 min | **Level:** Advanced | **Plan:** Elite
+
+### Thumbnail
+Terminal showing training progress with accuracy metrics.
+Text: "Train Your Own AI Trading Model". Dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+5:00 When to retrain
+5:30 Smoke test first
+20:00 Full production retrain
+40:00 Verify the new model
+48:00 Fallback behaviour
+```
+
+### Screen Recording Plan
+- Terminal: `python ml/train_advanced.py --smoke` — show full output
+- Terminal: `python ml/train_advanced.py --years 50 --oos-years 3` — show progress
+- Browser: `/api/ml/accuracy` before and after retrain
 
 ### Script Outline
 
@@ -491,7 +741,26 @@ and fires a Sentry fatal alert + Discord critical alert.
 
 ## Episode 10 — Connecting OANDA
 
-**Duration:** 30 min | **Level:** Beginner
+**Duration:** 30 min | **Level:** Beginner | **Plan:** Starter+
+
+### Thumbnail
+OANDA portal screenshot on left, terminal showing validation output on right.
+Text: "Connect OANDA in 10 Minutes". Teal accent on dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+5:00 Create a free OANDA practice account
+12:00 Configure credentials in .env
+20:00 Validate connectivity
+28:00 The 30-day paper trading gate
+```
+
+### Screen Recording Plan
+- Browser: OANDA registration page (practice account)
+- Browser: OANDA portal → Manage API Access → Generate Token
+- Terminal: `python scripts/validate_oanda.py` — show full passing output
+- Browser: `http://localhost:8000/api/broker/status`
 
 ### Script Outline
 
@@ -542,7 +811,27 @@ Show `docs/live_trading_gate.md`.
 
 ## Episode 11 — Risk Management Masterclass
 
-**Duration:** 50 min | **Level:** All levels
+**Duration:** 50 min | **Level:** All levels | **Plan:** Starter+
+
+### Thumbnail
+Risk dashboard showing drawdown gauge, daily P&L, and kill switch status.
+Text: "Never Blow Your Account Again". Red accent on dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+10:00 Position sizing (Kelly criterion)
+20:00 Daily loss limits and drawdown protection
+30:00 The 8-step pre-trade gate (CVaR)
+40:00 Kill switch — activate and deactivate
+40:30 VaR and CVaR explained
+```
+
+### Screen Recording Plan
+- `.env` file showing risk parameters
+- Browser: `/api/risk/status` response
+- Terminal: kill switch activation and deactivation
+- Browser: `/api/trading/risk-metrics` — show CVaR, VaR, drawdown
 
 ### Script Outline
 
@@ -595,7 +884,26 @@ Explain VaR 95% (1-day), ES 99%, and why CVaR is used as the pre-trade gate.
 
 ## Episode 12 — Deploying to Production
 
-**Duration:** 40 min | **Level:** Advanced
+**Duration:** 40 min | **Level:** Advanced | **Plan:** Professional+
+
+### Thumbnail
+Server terminal on left, Grafana dashboard on right.
+Text: "Deploy HOPEFX to a VPS". Dark background, teal accent.
+
+### Chapter Markers
+```
+0:00 Introduction
+8:00 Pre-deployment checklist
+20:00 Docker Compose deployment
+30:00 Nginx + TLS (Let's Encrypt)
+30:30 Monitoring with Grafana and Prometheus
+```
+
+### Screen Recording Plan
+- Terminal on a fresh Ubuntu 22.04 VPS (use a cloud provider demo)
+- `docker compose up -d` — show all services starting
+- Browser: Nginx + HTTPS working at `https://yourdomain.com/health`
+- Browser: Grafana dashboard at `https://yourdomain.com/grafana`
 
 ### Script Outline
 
@@ -641,7 +949,26 @@ curl http://localhost:9090/metrics | grep hopefx_
 
 ## Episode 13 — Prop Firm Challenge Guide
 
-**Duration:** 45 min | **Level:** Intermediate
+**Duration:** 45 min | **Level:** Intermediate | **Plan:** Professional+
+
+### Thumbnail
+FTMO challenge dashboard showing profit target progress.
+Text: "Pass Your Prop Firm Challenge with AI". Green progress bar on dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+10:00 Prop firm rules overview (FTMO, MyFF, The5ers, TopStep)
+25:00 Configure prop firm mode in .env
+40:00 Monitor challenge progress via API
+40:30 Strategy for passing the challenge
+```
+
+### Screen Recording Plan
+- Browser: FTMO challenge rules page (for reference)
+- `.env` file: prop firm configuration
+- Browser: `/api/risk/status` showing challenge progress metrics
+- Terminal: kill switch firing when daily loss limit approaches
 
 ### Script Outline
 
@@ -677,7 +1004,26 @@ Show: current drawdown, daily loss, profit progress, days remaining.
 
 ## Episode 14 — Social Trading & Copy Trading
 
-**Duration:** 30 min | **Level:** Intermediate
+**Duration:** 30 min | **Level:** Intermediate | **Plan:** Professional+
+
+### Thumbnail
+Leaderboard table showing trader rankings with Sharpe ratios and win rates.
+Text: "Copy the Best Traders Automatically". Teal accent on dark background.
+
+### Chapter Markers
+```
+0:00 Introduction
+8:00 Opt in to the social feed
+18:00 Browse the leaderboard
+25:00 Follow a trader and view their signals
+25:30 Auto copy trading setup
+```
+
+### Screen Recording Plan
+- Browser: `/api/social/leaderboard` — show trader rankings
+- Browser: `/api/profiles/trader123/signals` — show signal feed
+- Terminal: opt-in and follow API calls
+- Browser: copy trading configuration
 
 ### Script Outline
 
@@ -716,7 +1062,27 @@ the system can automatically mirror it (scaled to your account size).
 
 ## Episode 15 — Monitoring with Grafana
 
-**Duration:** 35 min | **Level:** Advanced
+**Duration:** 35 min | **Level:** Advanced | **Plan:** Professional+
+
+### Thumbnail
+Grafana dashboard showing equity curve, win rate gauge, and ML accuracy panel.
+Text: "Monitor Your Trading Bot 24/7". Dark background, teal accent.
+
+### Chapter Markers
+```
+0:00 Introduction
+8:00 Start Grafana and Prometheus
+15:00 Trading Performance dashboard walkthrough
+22:00 ML Model Metrics dashboard
+28:00 System Health dashboard
+30:00 Setting up alerts (Telegram + email)
+```
+
+### Screen Recording Plan
+- Browser: Grafana at `http://localhost:3000`
+- Show all 4 dashboards: Trading Performance, ML Metrics, System Health, Broker Connectivity
+- Show creating a Grafana alert rule for drawdown > 5%
+- Show Telegram notification arriving on phone
 
 ### Script Outline
 
@@ -753,31 +1119,88 @@ Show creating a Grafana alert: "notify Discord if drawdown > 5%".
 
 ## Recording Checklist
 
-Before recording each episode:
-- [ ] Terminal font size: 18pt minimum
-- [ ] Screen resolution: 1920×1080
-- [ ] Dark terminal theme (easier to read)
-- [ ] Close all notifications
-- [ ] Have all commands pre-typed in a script file
-- [ ] Test all commands before recording
-- [ ] Have `.env` configured with test credentials
+### Before Recording
+- [ ] Terminal font: JetBrains Mono or Fira Code, 18pt minimum
+- [ ] Screen resolution: 1920×1080 (4K preferred)
+- [ ] Dark terminal theme (Dracula, One Dark, or Tokyo Night)
+- [ ] Close all notifications (macOS: Do Not Disturb; Windows: Focus Assist)
+- [ ] Pre-type all commands in a `.sh` script — no live typing errors on camera
+- [ ] Test every command end-to-end before recording
+- [ ] `.env` configured with test credentials (never real API keys on screen)
+- [ ] App running and `curl http://localhost:8000/health` returning green
+- [ ] Browser bookmarks bar hidden
+- [ ] OBS recording profile set: 1920×1080, 30fps, CBR 8000kbps
 
-After recording:
-- [ ] Add chapter markers at each section timestamp
-- [ ] Add captions/subtitles
-- [ ] Add end screen with links to next episode and GitHub
-- [ ] Pin the GitHub link in the video description
+### After Recording
+- [ ] Edit out mistakes, long pauses (> 3s), and loading screens
+- [ ] Add chapter markers at every section timestamp (format: `0:00 Section name`)
+- [ ] Add captions/subtitles (auto-generate in YouTube, then manually correct)
+- [ ] Add end screen (last 20 seconds): next episode card + GitHub subscribe button
+- [ ] Pin GitHub link in video description
+- [ ] Set custom thumbnail (1280×720px, see per-episode thumbnail spec above)
+- [ ] Add to playlist: "HOPEFX AI Trading Tutorials"
+- [ ] Gate episodes 4+ behind subscriber portal with plan check
+- [ ] Update series overview table status from "Script ready" to "Published"
+
+### Audio Quality Checklist
+- [ ] Record in a quiet room (no HVAC, no traffic)
+- [ ] Microphone peak level: -12dB to -6dB (not clipping, not too quiet)
+- [ ] Apply noise gate in post (threshold: -40dB)
+- [ ] Apply light compression (ratio 3:1, attack 10ms, release 100ms)
+- [ ] Normalize to -14 LUFS for YouTube
 
 ---
 
 ## Resources for Each Episode
 
 All code shown in these tutorials is in the repository:
-- Strategies: `strategies/`
-- ML training: `ml/train_advanced.py`
-- Backtesting: `real_data_backtest.py`, `backtesting/`
-- API examples: `docs/API_REFERENCE.md`
-- Configuration: `.env.example`
+
+| Resource | Location |
+|----------|----------|
+| Strategies | `strategies/` |
+| ML training | `ml/train_advanced.py` |
+| Backtesting | `real_data_backtest.py`, `backtesting/` |
+| API examples | `docs/API_REFERENCE.md` |
+| Configuration | `.env.example` |
+| Risk management | `risk/` |
+| Broker connectors | `brokers/` |
+| Grafana dashboards | `grafana/dashboards/` |
+| Deployment | `docker-compose.yml`, `helm/hopefx/` |
+
+### Useful Commands for Demos
+
+```bash
+# Start the full stack
+docker compose up -d
+
+# Get a JWT token for API demos
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "demo", "password": "demo_password"}' \
+  | python3 -m json.tool
+
+# Export TOKEN for subsequent calls
+export TOKEN="paste_token_here"
+
+# Health check
+curl -s http://localhost:8000/health | python3 -m json.tool
+
+# Latest signal
+curl -s http://localhost:8000/api/signals/latest \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+
+# ML accuracy
+curl -s http://localhost:8000/api/ml/accuracy \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+
+# Risk status
+curl -s http://localhost:8000/api/risk/status \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+
+# Account info
+curl -s http://localhost:8000/api/trading/account \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+```
 
 ---
 
