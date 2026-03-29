@@ -1671,6 +1671,50 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#paid-platform-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paid Platform Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributor-license-agreement_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributor License Agreement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-accept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We Accept
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-requires-discussion-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Requires Discussion First
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2070,6 +2114,50 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#paid-platform-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Paid Platform Context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributor-license-agreement_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributor License Agreement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-accept" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We Accept
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-requires-discussion-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Requires Discussion First
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2208,6 +2296,44 @@ with details. See <a href="../SECURITY/">SECURITY.md</a> for the full disclosure
 <h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
 <p>Contributions are licensed under AGPL-3.0 and may be included in commercial releases
 per the <a href="./CLA.md">CLA</a> and <a href="./LICENSE-COMMERCIAL.md">LICENSE-COMMERCIAL.md</a>.</p>
+<hr />
+<h2 id="paid-platform-context">Paid Platform Context<a class="headerlink" href="#paid-platform-context" title="Permanent link">&para;</a></h2>
+<p>HOPEFX is a <strong>paid subscription platform</strong>. The source code is open under AGPL-3.0,
+but the hosted service requires a subscription. When contributing:</p>
+<ul>
+<li>Do not add features that bypass subscription checks</li>
+<li>Do not remove or weaken the <code>require_plan</code> middleware</li>
+<li>Do not add free-tier access to Pro/Elite features</li>
+<li>Do not commit real API keys, license keys, or subscriber data</li>
+</ul>
+<p>If you are building on top of HOPEFX commercially (SaaS, white-label, proprietary),
+you need a Commercial License — see <a href="../LICENSE-COMMERCIAL.md">LICENSE-COMMERCIAL.md</a>.</p>
+<hr />
+<h2 id="contributor-license-agreement_1">Contributor License Agreement<a class="headerlink" href="#contributor-license-agreement_1" title="Permanent link">&para;</a></h2>
+<p>Before your first pull request is merged, include this statement in the PR description:</p>
+<blockquote>
+<p>"I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."</p>
+</blockquote>
+<p>The CLA enables the dual-license model (AGPL-3.0 open source + commercial).
+Without the CLA, your PR cannot be merged.</p>
+<hr />
+<h2 id="what-we-accept">What We Accept<a class="headerlink" href="#what-we-accept" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Bug fixes with regression tests</li>
+<li>New broker connectors (add to <code>brokers/</code>)</li>
+<li>New trading strategies (add to <code>strategies/</code>)</li>
+<li>ML feature engineering improvements (add to <code>ml/</code>)</li>
+<li>Documentation improvements</li>
+<li>Performance improvements with benchmarks</li>
+</ul>
+<h2 id="what-requires-discussion-first">What Requires Discussion First<a class="headerlink" href="#what-requires-discussion-first" title="Permanent link">&para;</a></h2>
+<p>Open a GitHub Issue before working on:
+- Changes to the risk engine or kill switch
+- Changes to the subscription/billing system
+- Changes to the ML training pipeline
+- New external dependencies
+- Breaking API changes
+- New pricing tiers or feature gates</p>
 
 
 

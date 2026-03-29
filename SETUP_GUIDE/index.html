@@ -827,6 +827,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#subscription-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscription-gated-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription-Gated Features
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2095,6 +2117,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#subscription-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscription-gated-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription-Gated Features
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2285,6 +2329,88 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>python<span class="w"> </span>scripts/validate_oanda.py
 </code></pre></div>
 <p>This tests API key validity, account reachability, and XAU_USD pricing availability.</p>
+<hr />
+<h2 id="subscription-validation">Subscription Validation<a class="headerlink" href="#subscription-validation" title="Permanent link">&para;</a></h2>
+<p>After installing, activate your subscription license key:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Add to .env</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nv">HOPEFX_LICENSE_KEY</span><span class="o">=</span>your_license_key_here
+</code></pre></div>
+<p>Validate at startup:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+</code></pre></div></p>
+<p>Without a valid license key, all trading endpoints return <code>403 Subscription Required</code>.
+The <code>/health</code> endpoint and <code>/docs</code> remain accessible without a key.</p>
+<p>To get a license key, subscribe at the pricing page or request a trial via GitHub Issues
+(label: <code>trial-request</code>).</p>
+<hr />
+<h2 id="subscription-gated-features">Subscription-Gated Features<a class="headerlink" href="#subscription-gated-features" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Starter</th>
+<th>Pro</th>
+<th>Elite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Signals (XAUUSD)</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Multi-symbol signals</td>
+<td>—</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Backtesting (1 year)</td>
+<td>✅</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Backtesting (10 years)</td>
+<td>—</td>
+<td>✅</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Backtesting (50 years)</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Prop firm mode</td>
+<td>—</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>API access</td>
+<td>—</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Online learning</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Model retraining</td>
+<td>—</td>
+<td>—</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../MONETIZATION/">MONETIZATION.md</a> for the full feature matrix.</p>
 
 
 
