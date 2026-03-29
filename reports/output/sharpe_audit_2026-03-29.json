@@ -1,0 +1,133 @@
+{
+  "audit_type": "symbol_sharpe_audit",
+  "generated_at": "2026-03-29T18:15:56.307718+00:00",
+  "reference_symbol": "XAUUSD",
+  "n_reference": 500,
+  "psi_thresholds": {
+    "stable": 0.1,
+    "monitor": 0.25
+  },
+  "ks_p_threshold": 0.05,
+  "sharpe_plausibility_threshold": 5.0,
+  "results": [
+    {
+      "symbol": "EURUSD",
+      "n_reference": 500,
+      "n_comparison": 500,
+      "known_sharpe": 12.48,
+      "audited_at": "2026-03-29T18:15:55.547911+00:00",
+      "psi": 1.541262,
+      "psi_verdict": "MAJOR_SHIFT",
+      "ks_statistic": 0.48,
+      "ks_p_value": 0.0,
+      "ks_verdict": "DIFFERENT",
+      "ref_mean": 0.6652,
+      "ref_std": 0.1429,
+      "cmp_mean": 0.8221,
+      "cmp_std": 0.118,
+      "mean_drift_sigma": 1.098,
+      "lookahead_checks": {
+        "autocorr_lag1": -0.0573,
+        "autocorr_suspicious": false,
+        "sign_predictability": 1.0,
+        "sign_pred_suspicious": true,
+        "rolling_sharpe_min": 32.161,
+        "rolling_sharpe_never_negative": true,
+        "rolling_sharpe_always_high": true
+      },
+      "sharpe_upper_bound": 5.34,
+      "sharpe_plausible": false,
+      "sharpe_exceeds_bound": true,
+      "flags": [
+        "PSI_MAJOR_SHIFT",
+        "KS_DISTRIBUTION_MISMATCH",
+        "SHARPE_IMPLAUSIBLE",
+        "SHARPE_EXCEEDS_THEORETICAL_BOUND",
+        "HIGH_SIGN_PREDICTABILITY",
+        "ROLLING_SHARPE_NEVER_DROPS"
+      ],
+      "passed": false,
+      "verdict": "FAIL (PSI_MAJOR_SHIFT, KS_DISTRIBUTION_MISMATCH, SHARPE_IMPLAUSIBLE, SHARPE_EXCEEDS_THEORETICAL_BOUND, HIGH_SIGN_PREDICTABILITY, ROLLING_SHARPE_NEVER_DROPS)"
+    },
+    {
+      "symbol": "GBPUSD",
+      "n_reference": 500,
+      "n_comparison": 500,
+      "known_sharpe": 16.36,
+      "audited_at": "2026-03-29T18:15:56.261173+00:00",
+      "psi": 3.004089,
+      "psi_verdict": "MAJOR_SHIFT",
+      "ks_statistic": 0.616,
+      "ks_p_value": 0.0,
+      "ks_verdict": "DIFFERENT",
+      "ref_mean": 0.6652,
+      "ref_std": 0.1429,
+      "cmp_mean": 0.8663,
+      "cmp_std": 0.1008,
+      "mean_drift_sigma": 1.407,
+      "lookahead_checks": {
+        "autocorr_lag1": 0.016,
+        "autocorr_suspicious": false,
+        "sign_predictability": 0.996,
+        "sign_pred_suspicious": true,
+        "rolling_sharpe_min": 41.858,
+        "rolling_sharpe_never_negative": true,
+        "rolling_sharpe_always_high": true
+      },
+      "sharpe_upper_bound": 5.34,
+      "sharpe_plausible": false,
+      "sharpe_exceeds_bound": true,
+      "flags": [
+        "PSI_MAJOR_SHIFT",
+        "KS_DISTRIBUTION_MISMATCH",
+        "SHARPE_IMPLAUSIBLE",
+        "SHARPE_EXCEEDS_THEORETICAL_BOUND",
+        "HIGH_SIGN_PREDICTABILITY",
+        "ROLLING_SHARPE_NEVER_DROPS"
+      ],
+      "passed": false,
+      "verdict": "FAIL (PSI_MAJOR_SHIFT, KS_DISTRIBUTION_MISMATCH, SHARPE_IMPLAUSIBLE, SHARPE_EXCEEDS_THEORETICAL_BOUND, HIGH_SIGN_PREDICTABILITY, ROLLING_SHARPE_NEVER_DROPS)"
+    },
+    {
+      "symbol": "XAUUSD",
+      "n_reference": 500,
+      "n_comparison": 500,
+      "known_sharpe": null,
+      "audited_at": "2026-03-29T18:15:56.291390+00:00",
+      "psi": 0.0,
+      "psi_verdict": "STABLE",
+      "ks_statistic": 0.0,
+      "ks_p_value": 1.0,
+      "ks_verdict": "SAME_DIST",
+      "ref_mean": 0.6652,
+      "ref_std": 0.1429,
+      "cmp_mean": 0.6652,
+      "cmp_std": 0.1429,
+      "mean_drift_sigma": 0.0,
+      "lookahead_checks": {
+        "autocorr_lag1": -0.0507,
+        "autocorr_suspicious": false,
+        "sign_predictability": 0.992,
+        "sign_pred_suspicious": true,
+        "rolling_sharpe_min": 20.769,
+        "rolling_sharpe_never_negative": true,
+        "rolling_sharpe_always_high": true
+      },
+      "sharpe_upper_bound": 5.34,
+      "sharpe_plausible": true,
+      "sharpe_exceeds_bound": false,
+      "flags": [
+        "HIGH_SIGN_PREDICTABILITY",
+        "ROLLING_SHARPE_NEVER_DROPS"
+      ],
+      "passed": false,
+      "verdict": "FAIL (HIGH_SIGN_PREDICTABILITY, ROLLING_SHARPE_NEVER_DROPS)"
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "overall": "FAIL"
+  }
+}
