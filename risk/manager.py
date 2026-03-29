@@ -615,4 +615,14 @@ class RiskManager:
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
-risk_manager = RiskManager()
+# Wired to the orchestrator singleton so data quality, sentiment, and macro
+# features are sourced from the authoritative data layer at every size call.
+def _make_risk_manager() -> RiskManager:
+    try:
+        from data_layer.orchestrator import orchestrator
+        return RiskManager(orchestrator=orchestrator)
+    except Exception:
+        return RiskManager()
+
+
+risk_manager = _make_risk_manager()
