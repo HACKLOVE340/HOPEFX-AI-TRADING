@@ -26,6 +26,55 @@ from .pricing import SubscriptionTier, BillingCycle
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Prometheus metrics — optional, degrades gracefully when prometheus_client
+# is not installed.
+# ---------------------------------------------------------------------------
+try:
+    from prometheus_client import Gauge, Counter  # type: ignore
+
+    _PROM_MRR = Gauge(
+        "hopefx_mrr_usd",
+        "Monthly Recurring Revenue in USD",
+    )
+    _PROM_ARR = Gauge(
+        "hopefx_arr_usd",
+        "Annual Recurring Revenue in USD",
+    )
+    _PROM_CHURN = Gauge(
+        "hopefx_churn_rate_pct",
+        "Subscription churn rate as a percentage",
+    )
+    _PROM_ACTIVE_SUBS = Gauge(
+        "hopefx_active_subscriptions",
+        "Number of active subscriptions",
+    )
+    _PROM_NEW_SUBS = Counter(
+        "hopefx_new_subscriptions_total",
+        "Total new subscriptions since startup",
+    )
+    _PROM_CANCELLATIONS = Counter(
+        "hopefx_subscription_cancellations_total",
+        "Total subscription cancellations since startup",
+    )
+    _PROM_TRIAL_CONVERSIONS = Counter(
+        "hopefx_trial_conversions_total",
+        "Total trial-to-paid conversions since startup",
+    )
+    _PROM_PAYMENT_FAILURES = Counter(
+        "hopefx_payment_failures_total",
+        "Total payment failures since startup",
+    )
+    _PROM_AFFILIATE_COMMISSIONS = Counter(
+        "hopefx_affiliate_commissions_paid_total",
+        "Total affiliate commissions paid in USD since startup",
+    )
+    _PROM_AVAILABLE = True
+    logger.debug("monetization.analytics: Prometheus metrics registered")
+except ImportError:
+    _PROM_AVAILABLE = False
+    logger.debug("prometheus_client not installed — monetization metrics disabled")
+
 
 class RevenueSource(str, Enum):
     """Revenue source categories"""
@@ -173,7 +222,11 @@ class RevenueAnalytics:
         amount: Decimal,
         previous_tier: Optional[SubscriptionTier] = None,
     ) -> None:
-        """Record subscription event (new, upgrade, downgrade, cancel)"""
+        """
+        Record a subscription lifecycle event and update Prometheus counters.
+
+        event_type: "new" | "upgrade" | "downgrade" | "cancel" | "renewal" | "trial_conversion"
+        """
         event = {
             "event_type": event_type,
             "user_id": user_id,
@@ -185,8 +238,8 @@ class RevenueAnalytics:
         }
         self._subscription_events.append(event)
 
-        # Record revenue for new/upgrade subscriptions
-        if event_type in ["new", "upgrade", "renewal"]:
+        # Record revenue for new/upgrade/renewal subscriptions
+        if event_type in ("new", "upgrade", "renewal"):
             self.record_revenue(
                 source=RevenueSource.SUBSCRIPTION,
                 amount=amount,
@@ -195,6 +248,20 @@ class RevenueAnalytics:
                 description=f"Subscription {event_type}",
                 metadata={"billing_cycle": billing_cycle.value},
             )
+
+        # Update Prometheus counters
+        if _PROM_AVAILABLE:
+            try:
+                if event_type == "new":
+                    _PROM_NEW_SUBS.inc()
+                elif event_type == "cancel":
+                    _PROM_CANCELLATIONS.inc()
+                elif event_type == "trial_conversion":
+                    _PROM_TRIAL_CONVERSIONS.inc()
+                # Refresh gauges after every event
+                self._refresh_prometheus_gauges()
+            except Exception as exc:
+                logger.debug("analytics.prometheus_update_failed: %s", exc)
 
     def _update_daily_snapshot(self, entry: RevenueEntry) -> None:
         """Update daily revenue snapshot"""
@@ -633,6 +700,66 @@ class RevenueAnalytics:
                 ).items()
             },
         }
+
+
+    # ------------------------------------------------------------------
+    # Prometheus helpers
+    # ------------------------------------------------------------------
+
+    def _refresh_prometheus_gauges(self) -> None:
+        """Recompute and push MRR, ARR, churn, and active subscription gauges."""
+        if not _PROM_AVAILABLE:
+            return
+        try:
+            growth = self.get_growth_metrics()
+            subs = self.get_subscription_metrics()
+            _PROM_MRR.set(float(growth.mrr))
+            _PROM_ARR.set(float(growth.arr))
+            _PROM_CHURN.set(growth.churn_rate)
+            _PROM_ACTIVE_SUBS.set(subs.active_subscriptions)
+        except Exception as exc:
+            logger.debug("analytics._refresh_prometheus_gauges failed: %s", exc)
+
+    def push_prometheus_metrics(self) -> None:
+        """
+        Explicitly refresh all monetization Prometheus gauges.
+
+        Call this from the daily scheduler or after any bulk import.
+        Individual events update counters automatically via record_subscription_event().
+        """
+        self._refresh_prometheus_gauges()
+        logger.debug("analytics.prometheus_metrics_pushed")
+
+    def record_payment_failure(self, user_id: str = "", amount: float = 0.0) -> None:
+        """
+        Record a payment failure event.
+
+        Increments the hopefx_payment_failures_total Prometheus counter.
+        """
+        logger.warning(
+            "analytics.payment_failure user=%s amount=%s", user_id, amount
+        )
+        if _PROM_AVAILABLE:
+            try:
+                _PROM_PAYMENT_FAILURES.inc()
+            except Exception as exc:
+                logger.debug("analytics.payment_failure_metric_failed: %s", exc)
+
+    def record_affiliate_commission(self, amount: float, affiliate_id: str = "") -> None:
+        """
+        Record an affiliate commission payout.
+
+        Increments hopefx_affiliate_commissions_paid_total by the payout amount.
+        """
+        logger.info(
+            "analytics.affiliate_commission affiliate=%s amount=%s",
+            affiliate_id, amount,
+        )
+        if _PROM_AVAILABLE:
+            try:
+                _PROM_AFFILIATE_COMMISSIONS.inc(amount)
+            except Exception as exc:
+                logger.debug("analytics.affiliate_commission_metric_failed: %s", exc)
 
 
 # Global revenue analytics instance
