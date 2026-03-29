@@ -189,7 +189,105 @@ class AdvancedPredictor:
         self._predict_count: int = 0
         self._abstain_count: int = 0
         self._version: str = "advanced_oos_v1"
+        # Integrity state: None = unchecked, True = passed, False = failed
+        self._integrity_ok: Optional[bool] = None
+        self._integrity_msg: str = ""
         self._load_meta()
+
+    # ── Integrity check ───────────────────────────────────────────────────────
+
+    def _verify_integrity(self) -> bool:
+        """
+        Verify the model artifact's SHA-256 digest before loading.
+
+        Strategy (in order):
+          1. Ask ModelRegistry for the registered digest of the active version.
+          2. Fall back to scanning registry.json directly if the registry
+             singleton is unavailable.
+          3. If no digest is recorded anywhere, emit a warning and allow load
+             (fail-open so a fresh deploy without a registry still works).
+
+        Sets ``self._integrity_ok`` and ``self._integrity_msg``.
+        Returns True when the check passes or is skipped (no digest on record).
+        Returns False only when a digest IS recorded and does NOT match.
+        """
+        if not self._model_path.exists():
+            self._integrity_ok = False
+            self._integrity_msg = f"Artifact missing: {self._model_path}"
+            return False
+
+        # ── Attempt registry lookup ───────────────────────────────────────────
+        expected_digest: Optional[str] = None
+        source = "unknown"
+        try:
+            from ml.model_registry import get_registry, sha256_file as _sha256
+
+            reg = get_registry()
+            # Check active version first
+            active = reg.active_version()
+            if active:
+                artifact = Path(active["file"])
+                if artifact.resolve() == self._model_path.resolve():
+                    expected_digest = active.get("sha256", "")
+                    source = f"registry[active={active['name']}]"
+            # Fall back: scan all versions for a matching file path
+            if not expected_digest:
+                for entry in reg.list_versions().values():
+                    if Path(entry["file"]).resolve() == self._model_path.resolve():
+                        expected_digest = entry.get("sha256", "")
+                        source = f"registry[{entry['name']}]"
+                        break
+        except Exception as exc:
+            logger.debug("Integrity check: registry lookup failed (%s)", exc)
+
+        # ── No digest on record — warn and allow ──────────────────────────────
+        if not expected_digest:
+            self._integrity_ok = True
+            self._integrity_msg = (
+                f"No SHA-256 on record for {self._model_path.name}; "
+                "skipping integrity check. Register the model via ModelRegistry."
+            )
+            logger.warning("AdvancedPredictor: %s", self._integrity_msg)
+            return True
+
+        # ── Compute actual digest ─────────────────────────────────────────────
+        try:
+            from ml.model_registry import sha256_file as _sha256
+            actual = _sha256(self._model_path)
+        except Exception as exc:
+            self._integrity_ok = False
+            self._integrity_msg = f"SHA-256 computation failed: {exc}"
+            logger.error("AdvancedPredictor: %s", self._integrity_msg)
+            return False
+
+        if actual != expected_digest:
+            self._integrity_ok = False
+            self._integrity_msg = (
+                f"SHA-256 MISMATCH for {self._model_path.name} "
+                f"(source={source}): "
+                f"expected {expected_digest[:16]}… got {actual[:16]}…"
+            )
+            logger.critical(
+                "AdvancedPredictor: INTEGRITY FAILURE — %s", self._integrity_msg
+            )
+            # Fire Sentry alert if available
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_message(
+                    f"Model integrity failure: {self._integrity_msg}",
+                    level="fatal",
+                )
+            except Exception:
+                pass
+            return False
+
+        self._integrity_ok = True
+        self._integrity_msg = (
+            f"Integrity OK ({source}): {self._model_path.name} "
+            f"sha256={actual[:16]}…"
+        )
+        logger.info("AdvancedPredictor: %s", self._integrity_msg)
+        return True
 
     # ── Meta ──────────────────────────────────────────────────────────────────
 
@@ -209,12 +307,27 @@ class AdvancedPredictor:
     # ── Model loading ─────────────────────────────────────────────────────────
 
     def _load(self) -> bool:
-        """Lazy-load model. Returns True on success."""
+        """
+        Lazy-load model. Returns True on success.
+
+        Runs a SHA-256 integrity check before deserialising the artifact.
+        A recorded digest mismatch is treated as a hard failure — the model
+        is not loaded and predict() returns neutral for every call.
+        """
         if self._model is not None:
             return True
         with self._lock:
             if self._model is not None:
                 return True
+
+            # ── Pre-load integrity check ──────────────────────────────────────
+            if not self._verify_integrity():
+                logger.error(
+                    "AdvancedPredictor: refusing to load — integrity check failed: %s",
+                    self._integrity_msg,
+                )
+                return False
+
             try:
                 import joblib
 
@@ -519,6 +632,9 @@ class AdvancedPredictor:
             "oos_accuracy": self._meta.get("oos_accuracy"),
             "oos_auc": self._meta.get("oos_auc"),
             "sharpe_gate": self._meta.get("sharpe_gate", {}),
+            # Integrity check result (None = not yet checked)
+            "integrity_ok": self._integrity_ok,
+            "integrity_msg": self._integrity_msg,
         }
 
 
