@@ -496,6 +496,54 @@ async def live_trading_gate_status():
         }
 
 
+@router.get(
+    "/api/status/sharpe-progress",
+    summary="Sharpe SE progress toward N=250 (robust Sharpe threshold)",
+    tags=["Status"],
+)
+async def sharpe_progress():
+    """
+    Returns the current Sharpe standard-error progress toward N=250 trades.
+
+    SE formula: 1 / sqrt(2 * (N - 1))  — valid for iid trade returns.
+
+    Milestones
+    ----------
+    N=48  (baseline) → SE ≈ ±0.103
+    N=100            → SE ≈ ±0.071
+    N=250 (target)   → SE ≈ ±0.045  (robust — Sharpe is statistically reliable)
+
+    The trade_count increments on every closed fill (non-zero PnL) logged
+    via monitoring.trade_logger.TradeLogger.log_fill().
+
+    Returns
+    -------
+    trade_count     : int   — closed trades with non-zero PnL accumulated
+    n_needed        : int   — trades still needed to reach N=250
+    sharpe_se       : float — current SE (null if N < 2)
+    target_n        : int   — 250
+    target_se       : float — SE at N=250 (≈ 0.045)
+    pct_complete    : float — progress toward target (0–100)
+    sharpe          : float — current trade-level Sharpe (0 if N < 2)
+    """
+    try:
+        from monitoring.trade_logger import get_trade_logger
+        tl = get_trade_logger()
+        return tl.sharpe_progress()
+    except Exception as exc:
+        logger.warning("sharpe_progress endpoint failed: %s", exc)
+        return {
+            "trade_count": 0,
+            "n_needed": 250,
+            "sharpe_se": None,
+            "target_n": 250,
+            "target_se": 0.045,
+            "pct_complete": 0.0,
+            "sharpe": 0.0,
+            "error": str(exc),
+        }
+
+
 @router.post(
     "/api/status/paper-trading/gate/fill",
     summary="Record a confirmed OANDA fill into the phase gate",
