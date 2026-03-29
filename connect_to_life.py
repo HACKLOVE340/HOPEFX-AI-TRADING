@@ -61,7 +61,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
@@ -78,6 +78,9 @@ DD_HARD_STOP_PCT: float = float(os.environ.get("DD_HARD_STOP_PCT", "0.03"))
 POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "5"))
 DAILY_REPORT_HOUR_UTC: int = 0
 CHECKPOINT_FILE: str = "state/connect_to_life_checkpoint.json"
+
+# Nuclear supervisor — controls whether it is active
+NUCLEAR_SUPERVISOR_ENABLED: bool = os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +152,7 @@ class LifeSupervisor:
     - Sends Telegram alerts on breach and daily summary at midnight
     - Writes a checkpoint on clean shutdown
     - Handles OS signals for graceful termination
+    - Runs NuclearHopeFXSupervisor for RL-powered event response
     """
 
     def __init__(self) -> None:
@@ -162,6 +166,16 @@ class LifeSupervisor:
         self._reporter = DailyReporter(self._tg_token, self._tg_chat)
         self._shutdown_event = asyncio.Event()
         self._exit_code: int = 0
+
+        # Nuclear supervisor (RL-powered event response)
+        self._nuclear_supervisor = None
+        if NUCLEAR_SUPERVISOR_ENABLED:
+            try:
+                from brain.nuclear_supervisor import get_nuclear_supervisor
+                self._nuclear_supervisor = get_nuclear_supervisor()
+                logger.info("NuclearHopeFXSupervisor loaded and ready")
+            except Exception as exc:
+                logger.warning("NuclearHopeFXSupervisor unavailable: %s", exc)
 
     # ── public entry point ────────────────────────────────────────────────────
 
@@ -191,11 +205,19 @@ class LifeSupervisor:
 
         logger.info("HopeFXEngine task started — supervising")
 
+        # Wire nuclear supervisor event callback into the engine if supported
+        if self._nuclear_supervisor is not None:
+            self._wire_nuclear_supervisor()
+
         # Send startup Telegram notification
+        nuclear_status = (
+            "RL-supervisor=ON" if self._nuclear_supervisor is not None
+            else "RL-supervisor=OFF"
+        )
         await _telegram(
             self._tg_token, self._tg_chat,
             f"🟢 HOPEFX started — mode={self._trading_mode} "
-            f"DD_limit={DD_HARD_STOP_PCT*100:.0f}%",
+            f"DD_limit={DD_HARD_STOP_PCT*100:.0f}% {nuclear_status}",
         )
 
         # Supervision loop
@@ -206,6 +228,84 @@ class LifeSupervisor:
         await self._checkpoint()
 
         return self._exit_code
+
+    # ── nuclear supervisor wiring ─────────────────────────────────────────────
+
+    def _wire_nuclear_supervisor(self) -> None:
+        """
+        Register the nuclear event callback with the engine's news feed.
+
+        The engine exposes an optional ``register_news_callback(coro)`` hook.
+        If that hook is absent we fall back to a polling approach that reads
+        news events from the engine's internal queue each supervision cycle.
+        """
+        if self._engine is None or self._nuclear_supervisor is None:
+            return
+
+        if hasattr(self._engine, "register_news_callback"):
+            try:
+                self._engine.register_news_callback(self.on_news_event)
+                logger.info("Nuclear supervisor wired via register_news_callback")
+                return
+            except Exception as exc:
+                logger.warning("register_news_callback failed: %s — using poll mode", exc)
+
+        # Fallback: polling mode — _supervise will call _poll_news_events()
+        logger.info("Nuclear supervisor in poll mode (no register_news_callback on engine)")
+
+    async def on_news_event(self, event: Dict[str, Any]) -> None:
+        """
+        Callback invoked by the engine (or news feed) on each new event.
+
+        The event dict must contain at minimum ``text``.  Optional keys:
+        ``volatility``, ``sentiment``, ``current_exposure``.
+
+        If current_exposure is not provided we read it from the risk
+        orchestrator so the RL agent always has an accurate portfolio view.
+        """
+        if self._nuclear_supervisor is None:
+            return
+
+        # Enrich with live exposure if not already present
+        if "current_exposure" not in event:
+            try:
+                from risk.orchestrator import risk_orchestrator
+                event["current_exposure"] = await risk_orchestrator.get_current_exposure()
+            except Exception:
+                event["current_exposure"] = 0.5
+
+        try:
+            result = await self._nuclear_supervisor.on_new_event(event)
+            action = result.get("action_taken", "unknown")
+
+            # If nuclear mode was triggered, enforce DD stop immediately
+            if action == "nuclear":
+                logger.critical(
+                    "Nuclear mode triggered by event — initiating emergency shutdown"
+                )
+                self._exit_code = 1
+                self._shutdown_event.set()
+        except Exception as exc:
+            logger.error("Nuclear supervisor event processing error: %s", exc)
+
+    async def _poll_news_events(self) -> None:
+        """
+        Poll-mode fallback: drain any pending news events from the engine's
+        internal queue and forward them to the nuclear supervisor.
+        """
+        if self._engine is None or self._nuclear_supervisor is None:
+            return
+
+        queue = getattr(self._engine, "_news_queue", None)
+        if queue is None:
+            return
+
+        while not queue.empty():
+            try:
+                event = queue.get_nowait()
+                await self.on_news_event(event)
+            except Exception:
+                break
 
     # ── supervision loop ──────────────────────────────────────────────────────
 
@@ -236,17 +336,29 @@ class LifeSupervisor:
             # ── daily report ───────────────────────────────────────────────
             await self._reporter.maybe_send(status)
 
+            # ── nuclear supervisor poll (fallback mode) ────────────────────
+            await self._poll_news_events()
+
             # ── heartbeat log ──────────────────────────────────────────────
             if time.monotonic() - heartbeat_ts >= 60:
+                nuclear_info = ""
+                if self._nuclear_supervisor is not None:
+                    ns = self._nuclear_supervisor.get_status()
+                    nuclear_info = (
+                        f" nuclear_level={ns['nuclear_level']}"
+                        f" paused={ns['trading_paused']}"
+                        f" rl={'on' if ns['rl_agent_loaded'] else 'off'}"
+                    )
                 logger.info(
                     "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f "
-                    "dd=%.2f%% fills=%d broker=%s",
+                    "dd=%.2f%% fills=%d broker=%s%s",
                     status.get("equity", 0),
                     status.get("balance", 0),
                     status.get("daily_pnl", 0),
                     dd_pct,
                     status.get("fill_count", 0),
                     status.get("broker", "?"),
+                    nuclear_info,
                 )
                 heartbeat_ts = time.monotonic()
 
@@ -314,6 +426,13 @@ class LifeSupervisor:
                     pass
         logger.info("Engine stopped.")
 
+        # Stop notifications manager cleanly
+        try:
+            from notifications import notifications
+            await notifications.stop()
+        except Exception:
+            pass
+
     async def _breach_shutdown(self, dd_frac: float) -> None:
         """Hard stop triggered by daily drawdown exceeding the limit."""
         msg = (
@@ -333,6 +452,14 @@ class LifeSupervisor:
     async def _checkpoint(self) -> None:
         """Persist final status to disk for post-restart recovery."""
         status = self._read_status()
+        nuclear_state: dict = {}
+        if self._nuclear_supervisor is not None:
+            try:
+                nuclear_state = self._nuclear_supervisor.get_status()
+                # Remove non-serialisable last_event nested dict for simplicity
+                nuclear_state.pop("last_event", None)
+            except Exception:
+                pass
         state = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "trading_mode": self._trading_mode,
@@ -342,6 +469,7 @@ class LifeSupervisor:
             "drawdown_pct": status.get("drawdown_pct", 0.0),
             "fill_count": status.get("fill_count", 0),
             "exit_code": self._exit_code,
+            "nuclear": nuclear_state,
         }
         try:
             pathlib.Path(CHECKPOINT_FILE).parent.mkdir(parents=True, exist_ok=True)
