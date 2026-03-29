@@ -31,17 +31,23 @@ app_state = None
 activity_log: list = []
 _ACTIVITY_MAX = 50
 
-# Path for persisted risk settings
+# Legacy JSON file path — kept for one-time migration on first startup
 _RISK_SETTINGS_FILE = Path("config/risk_settings.json")
 
-# Current in-memory risk settings
-_risk_settings: Dict[str, Any] = {
+# Redis/DB config store key for risk settings
+_RISK_SETTINGS_KEY = "risk_settings"
+
+# Default risk settings — used when no persisted value exists
+_RISK_SETTINGS_DEFAULTS: Dict[str, Any] = {
     "max_risk_per_trade": 2.0,
     "max_open_positions": 5,
     "paper_trading_mode": True,
     "max_daily_loss": 5.0,
     "max_drawdown": 10.0,
 }
+
+# In-process cache — refreshed on every read from the shared store
+_risk_settings: Dict[str, Any] = dict(_RISK_SETTINGS_DEFAULTS)
 
 _start_time = time.time()
 
@@ -59,39 +65,75 @@ def log_activity(message: str) -> None:
     logger.info("ADMIN: %s", message)
 
 
-def _load_persisted_risk_settings() -> Dict[str, Any]:
-    """Load risk settings from disk. Returns {} on missing/invalid file."""
+def _get_risk_settings() -> Dict[str, Any]:
+    """
+    Read risk settings from the shared config store (Redis → DB → defaults).
+
+    Always reads from the shared store so all pods see the same value.
+    Updates the in-process cache as a side effect.
+    """
+    global _risk_settings
     try:
-        if not _RISK_SETTINGS_FILE.exists():
-            return {}
-        return json.loads(_RISK_SETTINGS_FILE.read_text())
+        from core.config_store import config_store
+
+        stored = config_store.get(_RISK_SETTINGS_KEY)
+        if stored:
+            _risk_settings = {**_RISK_SETTINGS_DEFAULTS, **stored}
+            return dict(_risk_settings)
     except Exception as exc:
-        logger.warning(
-            "Failed to load persisted risk settings from %s: %s",
-            _RISK_SETTINGS_FILE,
-            exc,
-        )
-        return {}
+        logger.warning("_get_risk_settings: config_store read failed: %s", exc)
+    return dict(_risk_settings)
+
+
+def _save_risk_settings(settings: Dict[str, Any], changed_by: str = "system") -> bool:
+    """Persist risk settings to the shared config store (Redis + DB)."""
+    try:
+        from core.config_store import config_store
+
+        return config_store.set(_RISK_SETTINGS_KEY, settings, changed_by=changed_by)
+    except Exception as exc:
+        logger.error("_save_risk_settings failed: %s", exc)
+        return False
 
 
 def apply_persisted_risk_settings() -> None:
     """
-    Load risk settings persisted from a previous run and apply them to the
-    in-memory store and, if available, the live RiskManager instance.
+    Load risk settings from the shared store and apply them at startup.
 
+    Also migrates any legacy JSON file to the shared store on first run.
     Called once at startup by app.py after app_state is initialised.
     """
     global _risk_settings
-    persisted = _load_persisted_risk_settings()
+
+    # One-time migration: if the legacy JSON file exists and the shared store
+    # has no value yet, migrate the file contents to the store.
+    try:
+        from core.config_store import config_store
+
+        if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
+            try:
+                legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
+                if legacy:
+                    config_store.set(_RISK_SETTINGS_KEY, legacy, changed_by="migration")
+                    logger.info(
+                        "apply_persisted_risk_settings: migrated %d keys from %s to config_store",
+                        len(legacy),
+                        _RISK_SETTINGS_FILE,
+                    )
+            except Exception as mig_exc:
+                logger.warning("Risk settings migration failed (non-fatal): %s", mig_exc)
+    except Exception:
+        pass
+
+    persisted = _get_risk_settings()
     if not persisted:
         logger.debug("apply_persisted_risk_settings: no persisted settings found")
         return
 
     _risk_settings.update(persisted)
     logger.info(
-        "apply_persisted_risk_settings: restored %d keys from %s",
+        "apply_persisted_risk_settings: restored %d keys from shared config store",
         len(persisted),
-        _RISK_SETTINGS_FILE,
     )
 
     # Push into the live RiskManager if it is already initialised.
@@ -104,7 +146,8 @@ def apply_persisted_risk_settings() -> None:
                         setattr(rm, key, value)
                         logger.debug(
                             "apply_persisted_risk_settings: set risk_manager.%s = %s",
-                            key, value,
+                            key,
+                            value,
                         )
     except Exception as exc:
         logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
@@ -239,12 +282,26 @@ async def update_risk_settings(
     settings: Dict,
     user: TokenPayload = Depends(require_role("admin")),
 ):
-    """Update risk settings. Requires: role >= 'admin'."""
+    """
+    Update risk settings in the shared config store and push to the live
+    RiskManager on this pod.  Other pods pick up the change on their next
+    read from the shared store.
+    Requires: role >= 'admin'.
+    """
     if not app_state or not app_state.risk_manager:
         raise HTTPException(status_code=503, detail="Risk manager not available")
+
+    # Merge with current settings and persist
+    current = _get_risk_settings()
+    current.update(settings)
+    _save_risk_settings(current, changed_by=user.sub)
+    _risk_settings.update(current)
+
+    # Apply to live RiskManager on this pod
     for key, value in settings.items():
         if hasattr(app_state.risk_manager.config, key):
             setattr(app_state.risk_manager.config, key, value)
+
     log_activity(f"Risk settings updated by {user.sub}: {list(settings.keys())}")
     return {"status": "success", "settings": settings}
 
@@ -421,8 +478,14 @@ def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
 @router.get("/settings")
 @router.get("/settings-data")
 def get_settings(user: TokenPayload = Depends(require_role("admin"))):
-    """Read current risk settings. Requires: role >= 'admin'."""
-    return dict(_risk_settings)
+    """
+    Read current risk settings from the shared config store.
+
+    Always reads from Redis/DB so the response reflects the latest value
+    regardless of which pod last wrote it.
+    Requires: role >= 'admin'.
+    """
+    return _get_risk_settings()
 
 
 @router.post("/settings")
@@ -431,11 +494,33 @@ def save_settings(
     payload: Dict[str, Any],
     user: TokenPayload = Depends(require_role("admin")),
 ):
-    """Update risk settings. Requires: role >= 'admin'."""
+    """
+    Update risk settings in the shared config store (Redis + DB).
+
+    Changes are immediately visible to all pods.
+    Requires: role >= 'admin'.
+    """
     try:
-        _risk_settings.update(payload)
-        log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
-        return {"status": "ok", "saved": list(payload.keys())}
+        current = _get_risk_settings()
+        current.update(payload)
+        ok = _save_risk_settings(current, changed_by=user.sub)
+        if ok:
+            # Update local cache
+            _risk_settings.update(current)
+            # Push to live RiskManager on this pod
+            try:
+                if app_state is not None:
+                    rm = getattr(app_state, "risk_manager", None)
+                    if rm is not None:
+                        for key, value in payload.items():
+                            if hasattr(rm, key):
+                                setattr(rm, key, value)
+            except Exception as rm_exc:
+                logger.warning("save_settings: RiskManager update failed: %s", rm_exc)
+            log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
+            return {"status": "ok", "saved": list(payload.keys())}
+        else:
+            return {"status": "error", "detail": "Config store write failed"}
     except Exception as exc:
         logger.error("save_settings failed: %s", exc, exc_info=True)
         return {"status": "error", "detail": str(exc)}
