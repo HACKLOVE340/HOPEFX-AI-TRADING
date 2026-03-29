@@ -153,7 +153,8 @@ export const apiClient = {
   },
 
   async verifyTwoFactor(code: string): Promise<AuthTokens> {
-    const res = await _axios.post<AuthTokens>('/api/auth/2fa/verify', { code });
+    // Backend endpoint: POST /api/auth/2fa/confirm (confirm = verify after scanning QR)
+    const res = await _axios.post<AuthTokens>('/api/auth/2fa/confirm', { code });
     _accessToken = res.data.access_token;
     _refreshToken = res.data.refresh_token;
     return res.data;
@@ -173,15 +174,39 @@ export const apiClient = {
   // ── Market data ────────────────────────────────────────────────────────────
 
   async getQuote(symbol: string): Promise<Quote> {
-    const res = await _axios.get<Quote>(`/api/trading/price/${symbol}`);
-    return res.data;
+    // Backend: GET /api/trading/prices → Dict[symbol, {bid, ask, last, timestamp}]
+    const res = await _axios.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/api/trading/prices');
+    const raw = res.data[symbol];
+    if (!raw) throw new Error(`No price data for ${symbol}`);
+    const mid = (raw.bid + raw.ask) / 2;
+    return {
+      symbol,
+      bid: raw.bid,
+      ask: raw.ask,
+      mid,
+      spread: raw.ask - raw.bid,
+      timestamp: new Date(raw.timestamp * 1000).toISOString(),
+      change_pct: 0, // not provided by this endpoint
+    };
   },
 
   async getQuotes(symbols: string[]): Promise<Quote[]> {
-    const res = await _axios.get<Quote[]>('/api/trading/prices', {
-      params: { symbols: symbols.join(',') },
-    });
-    return res.data;
+    const res = await _axios.get<Record<string, { bid: number; ask: number; last: number; timestamp: number }>>('/api/trading/prices');
+    return symbols
+      .filter((s) => res.data[s])
+      .map((s) => {
+        const raw = res.data[s];
+        const mid = (raw.bid + raw.ask) / 2;
+        return {
+          symbol: s,
+          bid: raw.bid,
+          ask: raw.ask,
+          mid,
+          spread: raw.ask - raw.bid,
+          timestamp: new Date(raw.timestamp * 1000).toISOString(),
+          change_pct: 0,
+        };
+      });
   },
 
   // ── Orders ─────────────────────────────────────────────────────────────────
@@ -200,14 +225,40 @@ export const apiClient = {
   },
 
   async getOrders(status?: string): Promise<Order[]> {
-    const res = await _axios.get<Order[]>('/api/trading/orders', {
-      params: status ? { status } : undefined,
-    });
-    return res.data;
+    // Backend stores orders inside positions; use /api/trading/trades for history
+    // and /api/trading/positions for open orders. This shim returns open positions
+    // as pending orders when status is 'open'/'pending', trades otherwise.
+    if (!status || status === 'open' || status === 'pending') {
+      const res = await _axios.get<Position[]>('/api/trading/positions');
+      // Map positions to Order shape for the mobile store
+      return res.data.map((p) => ({
+        id: p.id,
+        symbol: p.symbol,
+        side: p.side,
+        type: 'market' as const,
+        quantity: p.quantity,
+        status: 'open' as const,
+        created_at: p.opened_at,
+        fill_price: p.entry_price,
+      }));
+    }
+    const res = await _axios.get<Trade[]>('/api/trading/trades', { params: { limit: 50 } });
+    return res.data.map((t) => ({
+      id: t.id,
+      symbol: t.symbol,
+      side: t.side,
+      type: 'market' as const,
+      quantity: t.quantity,
+      status: 'filled' as const,
+      created_at: t.opened_at,
+      filled_at: t.closed_at,
+      fill_price: t.exit_price,
+    }));
   },
 
   async cancelOrder(orderId: string): Promise<void> {
-    await _axios.delete(`/api/trading/order/${orderId}`);
+    // Backend: DELETE /api/trading/positions/{position_id} closes/cancels a position
+    await _axios.delete(`/api/trading/positions/${orderId}`);
   },
 
   // ── Positions ──────────────────────────────────────────────────────────────
@@ -218,7 +269,8 @@ export const apiClient = {
   },
 
   async closePosition(positionId: string): Promise<void> {
-    await _axios.post(`/api/trading/position/${positionId}/close`);
+    // Backend: DELETE /api/trading/positions/{position_id}
+    await _axios.delete(`/api/trading/positions/${positionId}`);
   },
 
   // ── Trade history ──────────────────────────────────────────────────────────
@@ -240,8 +292,9 @@ export const apiClient = {
   },
 
   async getSignalHistory(symbol: string, limit = 20): Promise<Signal[]> {
-    const res = await _axios.get<Signal[]>(`/api/signals/history/${symbol}`, {
-      params: { limit },
+    // Backend: GET /api/signals/history (no symbol path param — use query param)
+    const res = await _axios.get<Signal[]>('/api/signals/history', {
+      params: { symbol, limit },
     });
     return res.data;
   },
@@ -264,7 +317,8 @@ export const apiClient = {
   // ── Performance ────────────────────────────────────────────────────────────
 
   async getPerformance(period = '30d'): Promise<Record<string, unknown>> {
-    const res = await _axios.get('/api/performance/summary', { params: { period } });
+    // Backend: GET /api/trading/performance/summary
+    const res = await _axios.get('/api/trading/performance/summary', { params: { period } });
     return res.data;
   },
 
