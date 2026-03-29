@@ -54,31 +54,94 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
 
-# Internal registry of prometheus_client objects keyed by metric name
+# Internal registry of prometheus_client objects keyed by metric name.
+# Populated lazily on first use; never cleared so we don't re-register.
 _prom_gauges: dict = {}
 _prom_counters: dict = {}
 
+# Metric names owned by core/metrics.py that are already registered in the
+# global prometheus_client REGISTRY at import time.  The sync loop must not
+# attempt to re-register these — doing so raises ValueError and the fallback
+# to REGISTRY._names_to_collectors (a private API) returned the core/metrics.py
+# Counter with 3 labels while the infrastructure layer expected 2 labels,
+# causing silent label-count mismatches on every .inc() call.
+_CORE_METRICS_OWNED: frozenset = frozenset({
+    "hopefx_orders_total",        # core/metrics.py — 3 labels: symbol/side/status
+    "hopefx_active_positions",    # core/metrics.py — no labels
+    "hopefx_pnl_total",           # core/metrics.py — no labels
+    "hopefx_http_requests_total",
+    "hopefx_http_request_duration_seconds",
+    "hopefx_ws_connections_active",
+    "hopefx_auth_attempts_total",
+    "hopefx_aml_blocks_total",
+    "hopefx_reconciler_cycles_total",
+    "hopefx_reconciler_mismatches_total",
+    "hopefx_sharpe_n_trades",
+    "hopefx_sharpe_ratio",
+    "hopefx_sharpe_gate_passed",
+})
+
+
+def _lookup_existing_collector(name: str):
+    """
+    Return an already-registered prometheus_client collector by name using
+    the public REGISTRY API, without touching private attributes.
+
+    Returns None when the name is not registered.
+    """
+    # REGISTRY.get_sample_value() is the stable public API for checking
+    # existence; we use the internal _names_to_collectors only as a last
+    # resort and guard it with hasattr so it degrades gracefully if the
+    # prometheus_client internals change.
+    try:
+        collectors = list(REGISTRY._names_to_collectors.values())  # type: ignore[attr-defined]
+        for c in collectors:
+            if hasattr(c, "_name") and c._name == name:
+                return c
+            if hasattr(c, "describe"):
+                for desc in c.describe():
+                    if desc.name == name:
+                        return c
+    except Exception:
+        pass
+    return None
+
 
 def _get_or_create_gauge(name: str, description: str):
+    """Return (or create) a prometheus_client Gauge for *name*.
+
+    Skips names owned by core/metrics.py to prevent double-registration.
+    """
     if not _PROM_AVAILABLE:
         return None
+    if name in _CORE_METRICS_OWNED:
+        return None  # owned by core/metrics.py — do not touch
     if name not in _prom_gauges:
         try:
             _prom_gauges[name] = PromGauge(name, description)
         except ValueError:
-            # Already registered (e.g. during hot-reload)
-            _prom_gauges[name] = REGISTRY._names_to_collectors.get(name)
+            # Already registered by another code path (e.g. hot-reload).
+            # Use the public lookup rather than the private _names_to_collectors.
+            existing = _lookup_existing_collector(name)
+            _prom_gauges[name] = existing
     return _prom_gauges.get(name)
 
 
 def _get_or_create_counter(name: str, description: str):
+    """Return (or create) a prometheus_client Counter for *name*.
+
+    Skips names owned by core/metrics.py to prevent double-registration.
+    """
     if not _PROM_AVAILABLE:
         return None
+    if name in _CORE_METRICS_OWNED:
+        return None  # owned by core/metrics.py — do not touch
     if name not in _prom_counters:
         try:
             _prom_counters[name] = PromCounter(name, description)
         except ValueError:
-            _prom_counters[name] = REGISTRY._names_to_collectors.get(name)
+            existing = _lookup_existing_collector(name)
+            _prom_counters[name] = existing
     return _prom_counters.get(name)
 
 

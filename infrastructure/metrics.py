@@ -344,8 +344,16 @@ class MetricsRegistry:
             "hopefx_fix_last_heartbeat_timestamp",
             "Unix timestamp of the last FIX session heartbeat",
         )
+        # ── Names below are prefixed "hopefx_infra_" to avoid colliding with ──
+        # ── the canonical prometheus_client registrations in core/metrics.py. ──
+        # ── core/metrics.py owns: hopefx_orders_total (3 labels: symbol/side/status),
+        # ──   hopefx_active_positions, hopefx_pnl_total.
+        # ── This registry tracks the same concepts internally but under distinct
+        # ── names so prometheus_monitoring.py can sync both without a ValueError.
         self.create_counter(
-            "hopefx_orders_total", "Total orders submitted", ["symbol", "side"]
+            "hopefx_infra_orders_total",
+            "Total orders submitted (infrastructure layer; 2 labels)",
+            ["symbol", "side"],
         )
         self.create_histogram(
             "hopefx_order_latency_ms_bucket",
@@ -363,10 +371,12 @@ class MetricsRegistry:
         )
         self.create_gauge("hopefx_equity", "Current account equity in account currency")
         self.create_gauge(
-            "hopefx_active_positions", "Number of currently open positions"
+            "hopefx_infra_active_positions",
+            "Number of currently open positions (infrastructure layer)",
         )
         self.create_gauge(
-            "hopefx_pnl_realized", "Realized P&L for the current trading day"
+            "hopefx_infra_pnl_realized",
+            "Realized P&L for the current trading day (infrastructure layer)",
         )
         self.create_gauge(
             "hopefx_drawdown_current", "Current drawdown as a percentage (0–100)"
