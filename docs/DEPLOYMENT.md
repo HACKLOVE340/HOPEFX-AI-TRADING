@@ -1,16 +1,16 @@
-# DEPLOYMENT GUIDE
+# Deployment Guide
 
-Complete deployment guide for HOPEFX AI Trading Framework in production.
+> Current version: **v1.16** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
 
 ## Prerequisites
 
-- Linux server (Ubuntu 20.04+ recommended)
-- Python 3.8+
-- Redis
-- PostgreSQL (for production)
-- Docker (optional, recommended)
-- 2+ GB RAM
-- 10+ GB disk space
+- Linux server (Ubuntu 22.04+ recommended)
+- Python 3.10, 3.11, or 3.12
+- Redis 7+
+- PostgreSQL 16+ (for production; SQLite used automatically in development)
+- Docker + Docker Compose (recommended)
+- 4+ GB RAM (8 GB recommended for ML training)
+- 20+ GB disk space
 
 ## Deployment Options
 
@@ -76,13 +76,13 @@ docker-compose logs -f hopefx-app
 
 ```bash
 # Check health
-curl http://localhost:5000/health
+curl http://localhost:8000/health
 
 # Check admin panel
-open http://localhost:5000/admin
+open http://localhost:8000/admin
 
 # Check API docs
-open http://localhost:5000/docs
+open http://localhost:8000/docs
 ```
 
 ---
@@ -182,7 +182,7 @@ sudo ufw enable
 sudo ufw allow 22/tcp
 
 # Allow application port (use reverse proxy in production)
-sudo ufw allow 5000/tcp
+sudo ufw allow 8000/tcp
 
 # Check status
 sudo ufw status
@@ -205,7 +205,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -242,10 +242,10 @@ chmod 600 .env
 
 ```bash
 # Check application health
-curl http://localhost:5000/health
+curl http://localhost:8000/health
 
 # View system metrics
-curl http://localhost:5000/admin/api/system-info
+curl http://localhost:8000/admin/api/system-info
 ```
 
 ### 2. Log Monitoring
@@ -417,6 +417,106 @@ sudo nano /etc/logrotate.d/hopefx
         systemctl reload hopefx-trading > /dev/null 2>&1 || true
     endscript
 }
+```
+
+---
+
+## Email Deliverability
+
+HOPEFX sends transactional alerts via SendGrid (primary) with raw SMTP as a
+fallback. Without proper DNS authentication, emails from a server IP land in
+spam. Follow these steps before enabling live alerts.
+
+### 1. SendGrid setup
+
+1. Create a free SendGrid account at <https://sendgrid.com>.
+2. Go to **Settings → Sender Authentication → Domain Authentication** and
+   authenticate your sending domain (e.g. `hopefx.io`).
+3. Copy the API key from **Settings → API Keys** and set it in your environment:
+
+```env
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxx
+SMTP_FROM=alerts@mail.hopefx.io
+```
+
+4. Configure the **Event Webhook** under **Settings → Mail Settings →
+   Event Webhook**:
+   - URL: `https://your-domain.com/api/email/webhook`
+   - Events to enable: **Bounce**, **Spam Report**, **Unsubscribe**
+   - This automatically suppresses future sends to bounced/unsubscribed
+     addresses via the `email_suppressions` database table.
+
+### 2. Required DNS records
+
+Add these records to your domain's DNS. Replace `[YOUR_DOMAIN]` with your
+actual domain (e.g. `hopefx.io`).
+
+**SPF** — authorises SendGrid to send on your behalf:
+
+```
+Type:  TXT
+Name:  @  (or mail.[YOUR_DOMAIN] for subdomain sending)
+Value: v=spf1 include:sendgrid.net ~all
+```
+
+**DKIM** — cryptographic signature proving the email was not tampered with:
+
+```
+# SendGrid generates the DKIM keys during Domain Authentication.
+# Copy the two CNAME records from the SendGrid dashboard and add them to DNS.
+# Example (values will differ for your account):
+Type:  CNAME
+Name:  s1._domainkey.[YOUR_DOMAIN]
+Value: s1.domainkey.u12345678.wl123.sendgrid.net
+
+Type:  CNAME
+Name:  s2._domainkey.[YOUR_DOMAIN]
+Value: s2.domainkey.u12345678.wl123.sendgrid.net
+```
+
+**DMARC** — policy that tells receiving servers what to do with unauthenticated
+mail. Start with `p=none` (monitor only) and tighten to `p=quarantine` once
+SPF and DKIM are confirmed passing:
+
+```
+Type:  TXT
+Name:  _dmarc.[YOUR_DOMAIN]
+Value: v=DMARC1; p=quarantine; rua=mailto:dmarc@[YOUR_DOMAIN]
+```
+
+**Sending subdomain recommendation:**
+
+Use `mail.[YOUR_DOMAIN]` (e.g. `mail.hopefx.io`) as the sending domain rather
+than the root domain. This isolates transactional email reputation from your
+main domain and simplifies SPF alignment.
+
+```env
+SMTP_FROM=alerts@mail.hopefx.io
+```
+
+### 3. Verify DNS propagation
+
+After adding records, verify with:
+
+```bash
+# SPF
+dig TXT mail.hopefx.io +short
+
+# DMARC
+dig TXT _dmarc.hopefx.io +short
+
+# DKIM (replace s1 with your selector)
+dig CNAME s1._domainkey.hopefx.io +short
+```
+
+Or use <https://mxtoolbox.com/SuperTool.aspx> for a browser-based check.
+
+### 4. Test send
+
+```bash
+# Confirm the /health endpoint reports email as healthy
+curl -s https://your-domain.com/health | python3 -m json.tool | grep email
+# Expected: "email": "healthy"
 ```
 
 ---

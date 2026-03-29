@@ -331,5 +331,5 @@ print(f"Modified: {status['modified']}")
 ## Additional Resources
 
 - [SECURITY.md](./SECURITY.md) - Security best practices
-- [requirements.txt](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/requirements.txt) - Dependencies
-- [.env.example](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/.env.example) - Environment variable template
+- [requirements.txt](./requirements.txt) - Dependencies
+- [.env.example](./.env.example) - Environment variable template
