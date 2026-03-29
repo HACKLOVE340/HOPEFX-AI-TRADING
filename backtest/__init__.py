@@ -4,12 +4,23 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-backtest/ — legacy module alias.
+backtest/ — compatibility shim package.
 
-The canonical backtesting package is `backtesting/`.  This package exists
-because `backtest/engine.py` has a richer BacktestConfig/SimulatedBroker API
-used by the test suite.  Both packages are maintained in parallel until the
-test suite is migrated to `backtesting/`.
+All backtesting code now lives in backtesting/ (canonical).
+This package re-exports from backtesting.engine_config so that
+existing imports (from backtest.engine import ...) continue to work.
 
-Do not add new code here.  New backtesting work goes in `backtesting/`.
+New code should import from backtesting directly:
+
+    from backtesting.engine_config import BacktestConfig, BacktestEngine, SimulatedBroker
+    from backtesting import BacktestConfig, BacktestEngine, SimulatedBroker
 """
+
+from backtesting.engine_config import (  # noqa: F401
+    BacktestConfig,
+    BacktestEngine,
+    BacktestResult,
+    HistoricalDataLoader,
+    SimulatedBroker,
+    run_backtest,
+)

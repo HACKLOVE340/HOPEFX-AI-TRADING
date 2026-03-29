@@ -22,7 +22,7 @@ import time
 
 # Import components to test
 try:
-    from enhanced_backtest_engine import (
+    from backtesting.enhanced_engine import (
         EnhancedBacktestEngine,
         TickData,
         TransactionCostModel,

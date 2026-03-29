@@ -86,7 +86,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
     Raises ValueError when the strategy is not registered or data is unavailable.
     """
     try:
-        from backtest.engine import BacktestEngine  # noqa: PLC0415
+        from backtesting.engine_config import BacktestEngine  # noqa: PLC0415
         engine = BacktestEngine()
         result = engine.run(
             strategy=strategy_name,
