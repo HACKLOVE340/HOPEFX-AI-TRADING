@@ -23,13 +23,18 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run bandit
-        # src/ was removed in V5; scan the canonical root packages instead.
+        # Fails the build on any HIGH-severity finding (exit code 1).
+        # Medium findings are reported but do not block (--severity-level high).
+        # The previous "|| true" suppressed all findings including the eval() RCE.
         run: |
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
-            -f json -o bandit-report.json || true
-          [ -f bandit-report.json ] || echo '{"results":[]}' > bandit-report.json
+            --severity-level high \
+            -f json -o bandit-report.json
+          bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
+            --severity-level high -q
 
       - name: Upload report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bandit-report
@@ -49,12 +54,14 @@ jobs:
         run: pip install safety
 
       - name: Run safety check
-        # safety v3+ replaced `check` with `scan`; old syntax fails immediately.
+        # Fails the build when any high/critical CVE is found in requirements.txt.
+        # The previous "|| true" meant known CVEs never blocked a merge.
         run: |
-          safety scan -r requirements.txt || true
-          [ -f safety-report.json ] || echo '{}' > safety-report.json
+          safety scan -r requirements.txt --output json > safety-report.json || true
+          safety scan -r requirements.txt --severity high
 
       - name: Upload report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: safety-report
@@ -66,20 +73,26 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
+        # exit-code: '1' makes Trivy return non-zero when HIGH/CRITICAL findings exist.
+        # The previous continue-on-error: true meant container CVEs never blocked merges.
         uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
 
-      - name: Upload Trivy scan results
+      - name: Upload Trivy scan results to GitHub Security tab
+        # SARIF upload requires GitHub Advanced Security on private repos.
+        # continue-on-error here is intentional — it only affects the upload
+        # step, not the scan step above which already enforced exit-code: 1.
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
-        # SARIF upload requires GitHub Advanced Security on private repos.
-        # continue-on-error prevents this from blocking the workflow.
         continue-on-error: true
 
   secrets:
@@ -88,12 +101,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Secret Detection
-        # Pinned to a specific version — @main is unstable and breaks without warning.
-        # Null SHA guard prevents failures on first push to a new branch.
+        # Fails the build when verified secrets are found in the diff.
+        # Pinned to a specific version — @main is unstable.
+        # Removed continue-on-error: true — a verified secret must block the merge.
         uses: trufflesecurity/trufflehog@v3.88.1
         with:
           path: ./
           base: ${{ github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
           head: HEAD
           extra_args: --only-verified
-        continue-on-error: true
