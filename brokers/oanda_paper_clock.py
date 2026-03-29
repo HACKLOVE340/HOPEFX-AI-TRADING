@@ -44,6 +44,11 @@ logger = logging.getLogger(__name__)
 _STAMP_PATH = Path(os.getenv("OANDA_PAPER_STAMP_PATH", "data/oanda_paper_start.json"))
 _TARGET_DAYS = 30
 
+# Sharpe tracker configuration (overridable via env)
+_SHARPE_TARGET_N: int = int(os.getenv("SHARPE_TARGET_N", "600"))
+_SHARPE_TARGET_SR: float = float(os.getenv("SHARPE_TARGET_SR", "1.5"))
+_SHARPE_ANNUALISE: int = int(os.getenv("SHARPE_ANNUALISE", "252"))
+
 
 class OandaPaperClock:
     """
@@ -56,6 +61,25 @@ class OandaPaperClock:
     def __init__(self, stamp_path: Optional[Path] = None) -> None:
         self._stamp_path = stamp_path or _STAMP_PATH
         self._stamp_path.parent.mkdir(parents=True, exist_ok=True)
+        # Sharpe progress tracker — updated on every confirmed fill
+        self._sharpe_tracker = self._init_sharpe_tracker()
+
+    def _init_sharpe_tracker(self):
+        """Initialise the SharpeProgressTracker, returning a stub on import failure."""
+        try:
+            from ml.train_advanced import SharpeProgressTracker
+            return SharpeProgressTracker(
+                target_n=_SHARPE_TARGET_N,
+                target_sharpe=_SHARPE_TARGET_SR,
+                annualise=_SHARPE_ANNUALISE,
+            )
+        except Exception as exc:
+            logger.warning(
+                "OandaPaperClock: SharpeProgressTracker unavailable (%s); "
+                "fill recording disabled",
+                exc,
+            )
+            return None
 
     # ── Clock start ───────────────────────────────────────────────────────────
 
@@ -144,6 +168,78 @@ class OandaPaperClock:
             logger.error("OandaPaperClock: failed to write stamp: %s", exc)
             return False
 
+    # ── Fill recording ────────────────────────────────────────────────────────
+
+    def record_fill(
+        self,
+        trade_return: float,
+        symbol: str = "UNKNOWN",
+    ) -> Dict[str, Any]:
+        """
+        Record a confirmed fill's fractional P&L and update the Sharpe tracker.
+
+        Called by the execution layer on every closed paper trade.  Updates
+        the rolling Sharpe ratio and publishes three Prometheus gauges:
+          hopefx_sharpe_n_trades
+          hopefx_sharpe_ratio
+          hopefx_sharpe_gate_passed
+
+        Parameters
+        ----------
+        trade_return : Fractional P&L (e.g. 0.012 = +1.2%).
+        symbol       : Instrument symbol for log context.
+
+        Returns
+        -------
+        The SharpeProgressTracker status dict, or an empty dict if the
+        tracker is unavailable.
+        """
+        if self._sharpe_tracker is None:
+            return {}
+
+        status = self._sharpe_tracker.update(float(trade_return))
+
+        # ── Prometheus ────────────────────────────────────────────────────────
+        try:
+            from core.metrics import SHARPE_N_TRADES, SHARPE_RATIO, SHARPE_GATE_PASSED
+            SHARPE_N_TRADES.set(status["n_trades"])
+            SHARPE_RATIO.set(status["sharpe"])
+            SHARPE_GATE_PASSED.set(1.0 if status["gate_passed"] else 0.0)
+        except Exception as exc:
+            logger.debug("OandaPaperClock: Prometheus update failed: %s", exc)
+
+        # ── Structured log ────────────────────────────────────────────────────
+        logger.info(
+            "OandaPaperClock fill: symbol=%s return=%.4f n=%d sharpe=%.3f "
+            "se=%.3f gate=%s pct=%.1f%%",
+            symbol,
+            trade_return,
+            status["n_trades"],
+            status["sharpe"],
+            status["sharpe_se"],
+            status["gate_passed"],
+            status["pct_to_gate"],
+        )
+
+        return status
+
+    def sharpe_status(self) -> Dict[str, Any]:
+        """
+        Return the current SharpeProgressTracker snapshot.
+
+        Returns an empty dict if the tracker was not initialised.
+        """
+        if self._sharpe_tracker is None:
+            return {
+                "available": False,
+                "note": "SharpeProgressTracker not initialised",
+            }
+        snap = self._sharpe_tracker.status()
+        snap["available"] = True
+        return snap
+
+    # ── Gate sync ─────────────────────────────────────────────────────────────
+
     def _sync_gate(self, start_dt: datetime) -> None:
         """Sync start time to PaperTradingGate singleton."""
         try:
@@ -188,6 +284,7 @@ class OandaPaperClock:
                 "environment": None,
                 "account_id": None,
                 "note": note,
+                "sharpe_progress": self.sharpe_status(),
             }
 
         try:
@@ -220,6 +317,7 @@ class OandaPaperClock:
                         "BROKER_OANDA_ACCOUNT, then restart the server. "
                         "The account_id will be stamped on first successful connection."
                     ),
+                    "sharpe_progress": self.sharpe_status(),
                 }
 
             started_str = data.get("started_utc", "")
@@ -248,6 +346,7 @@ class OandaPaperClock:
                     if complete
                     else f"{elapsed:.1f} days elapsed, {remaining:.1f} days remaining."
                 ),
+                "sharpe_progress": self.sharpe_status(),
             }
         except Exception as exc:
             logger.warning("OandaPaperClock.status: read error: %s", exc)
@@ -262,6 +361,7 @@ class OandaPaperClock:
                 "account_id": None,
                 "pending_real_account": False,
                 "note": f"Clock read error: {exc}",
+                "sharpe_progress": self.sharpe_status(),
             }
 
     def is_complete(self) -> bool:

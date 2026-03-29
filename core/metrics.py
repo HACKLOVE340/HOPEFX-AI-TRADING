@@ -96,6 +96,19 @@ if _PROM_AVAILABLE:
         "hopefx_reconciler_mismatches_total",
         "Position mismatches detected by reconciler",
     )
+    # ── Sharpe progress tracker ───────────────────────────────────────────────
+    SHARPE_N_TRADES = Gauge(
+        "hopefx_sharpe_n_trades",
+        "Number of paper trades recorded by SharpeProgressTracker",
+    )
+    SHARPE_RATIO = Gauge(
+        "hopefx_sharpe_ratio",
+        "Rolling annualised Sharpe ratio from SharpeProgressTracker",
+    )
+    SHARPE_GATE_PASSED = Gauge(
+        "hopefx_sharpe_gate_passed",
+        "1 when the Sharpe credibility gate has passed, 0 otherwise",
+    )
 else:
     # Stub objects so callers don't need to guard every call
     class _Stub:
@@ -124,6 +137,7 @@ else:
     HTTP_REQUESTS = HTTP_LATENCY = ORDERS_TOTAL = ACTIVE_POSITIONS = _Stub()
     PNL_TOTAL = WS_CONNECTIONS = AUTH_ATTEMPTS = AML_BLOCKS = _Stub()
     RECONCILER_CYCLES = RECONCILER_MISMATCHES = _Stub()
+    SHARPE_N_TRADES = SHARPE_RATIO = SHARPE_GATE_PASSED = _Stub()
 
 
 # ── Middleware helper ─────────────────────────────────────────────────────────
