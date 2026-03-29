@@ -500,6 +500,71 @@ class MacroCalendarEngine:
         except Exception as exc:
             logger.debug("MacroCalendarEngine Redis error: %s", exc)
 
+    def get_event_by_id(self, event_id: str) -> Optional[MacroEvent]:
+        """Return a single event by its event_id, or None if not found."""
+        for e in self._events:
+            if e.event_id == event_id:
+                return e
+        return None
+
+    def get_events_by_impact(
+        self,
+        impact: MacroImpact,
+        hours_ahead: float = 48.0,
+        hours_back: float = 48.0,
+    ) -> List[MacroEvent]:
+        """
+        Return events matching `impact` within a time window.
+
+        Parameters
+        ----------
+        impact      : MacroImpact level to filter on
+        hours_ahead : How far forward to look (default 48h)
+        hours_back  : How far back to look (default 48h)
+
+        Returns events sorted by scheduled_at ascending.
+        """
+        now    = datetime.now(timezone.utc)
+        lo     = now - timedelta(hours=hours_back)
+        hi     = now + timedelta(hours=hours_ahead)
+        return sorted(
+            [e for e in self._events if e.impact == impact and lo <= e.scheduled_at <= hi],
+            key=lambda e: e.scheduled_at,
+        )
+
+    def snapshot(self) -> Dict[str, Any]:
+        """
+        Return a full calendar snapshot for caching and health endpoints.
+
+        Includes current ML features, upcoming HIGH events, and health info.
+        """
+        return {
+            "health":         self.health(),
+            "ml_features":    self.get_ml_features(),
+            "upcoming_high":  [
+                {
+                    "event_id":    e.event_id,
+                    "name":        e.name,
+                    "country":     e.country,
+                    "scheduled_at": e.scheduled_at.isoformat(),
+                    "impact":      e.impact.value,
+                    "gold_impact_score": e.gold_impact_score,
+                }
+                for e in self.get_events_by_impact(MacroImpact.HIGH, hours_ahead=48.0, hours_back=0.0)
+            ],
+            "recent_high": [
+                {
+                    "event_id":    e.event_id,
+                    "name":        e.name,
+                    "scheduled_at": e.scheduled_at.isoformat(),
+                    "surprise_pct": e.surprise_pct,
+                    "actual":      e.actual,
+                    "forecast":    e.forecast,
+                }
+                for e in self.get_events_by_impact(MacroImpact.HIGH, hours_ahead=0.0, hours_back=24.0)
+            ],
+        }
+
     def health(self) -> Dict[str, Any]:
         return {
             "event_count":    len(self._events),
