@@ -1,3 +1,6 @@
+# Kill switch flag — runtime state, never commit
+kill_switch.flag
+
 # FIX session config with live credentials — never commit
 fix.cfg.local
 
