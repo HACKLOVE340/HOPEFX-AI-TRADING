@@ -111,6 +111,8 @@ class KillSwitch:
         self._callbacks: List[Callable[[str], None]] = []
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
+        # Background task that subscribes to Redis CH_BREACH for cross-pod propagation
+        self._redis_sub_task: Optional[asyncio.Task] = None
 
         # Restore persisted state from the previous process before checking
         # the env-var, so that a restart after an activation does not silently
@@ -207,13 +209,18 @@ class KillSwitch:
             return
         self._running = True
 
-        # Wire up event-bus subscription
+        # Wire up legacy in-process event-bus subscription (kept for backward compat)
         if self._event_bus is not None:
             try:
                 self._event_bus.subscribe("KILL_SWITCH", self.on_bus_event)
                 logger.info("Kill switch subscribed to event bus KILL_SWITCH events")
             except Exception as exc:
                 logger.warning("Could not subscribe to event bus: %s", exc)
+
+        # Start Redis breach subscription for cross-pod kill propagation
+        self._redis_sub_task = asyncio.create_task(
+            self._redis_breach_listener(), name="kill_switch_redis_sub"
+        )
 
         self._task = asyncio.create_task(self._poll_loop(), name="kill_switch_poll")
         logger.info(
@@ -223,14 +230,15 @@ class KillSwitch:
         )
 
     async def stop(self) -> None:
-        """Stop background polling."""
+        """Stop background polling and Redis subscription."""
         self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._task, self._redis_sub_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         logger.info("Kill switch polling stopped")
 
     def status(self) -> dict:
@@ -459,30 +467,113 @@ class KillSwitch:
                 logger.warning("Could not remove kill switch file %s: %s", path, exc)
 
     def _publish_event(self, reason: str) -> None:
-        """Schedule a KILL_SWITCH event publication on the running event loop."""
+        """
+        Publish a KILL_SWITCH breach event to the Redis EventBus (CH_BREACH).
+
+        Uses the Redis-backed EventBus so the signal propagates to all pods in
+        the cluster.  Falls back to the legacy in-process event bus when the
+        Redis bus is not available.
+
+        Previously this used DomainEvent.create() + the in-memory
+        MemoryMappedEventStore, which only worked within a single process.
+        """
+        payload = {
+            "type": "kill_switch",
+            "reason": reason,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # ── Primary path: Redis EventBus (cross-pod) ──────────────────────────
+        try:
+            from core.event_bus import bus as _redis_bus  # noqa: PLC0415
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_redis_bus.publish_breach(payload))
+                logger.info("Kill switch breach event scheduled on Redis CH_BREACH")
+                return
+            except RuntimeError:
+                # No running event loop — best-effort fire-and-forget
+                import inspect as _inspect
+                result = _redis_bus.publish_breach(payload)
+                if _inspect.iscoroutine(result):
+                    result.close()
+                return
+        except Exception as exc:
+            logger.warning(
+                "Could not publish kill-switch event to Redis bus: %s — "
+                "falling back to legacy in-process bus",
+                exc,
+            )
+
+        # ── Fallback: legacy in-process event bus ─────────────────────────────
+        if self._event_bus is None:
+            return
         try:
             from core.event_bus import DomainEvent  # noqa: PLC0415
 
             event = DomainEvent.create(
                 "KILL_SWITCH",
                 "kill_switch",
-                {"reason": reason, "timestamp": datetime.now(timezone.utc).isoformat()},
+                payload,
                 priority=0,
             )
-            # publish() may be a coroutine; schedule it without blocking the
-            # synchronous activation path.
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(self._event_bus.publish(event))
             except RuntimeError:
-                # No running loop (e.g. tests) – call only if synchronous
                 import inspect as _inspect
-
                 result = self._event_bus.publish(event)
                 if _inspect.iscoroutine(result):
-                    result.close()  # prevent "coroutine was never awaited" warning
+                    result.close()
         except Exception as exc:
-            logger.warning("Could not publish kill-switch event: %s", exc)
+            logger.warning("Could not publish kill-switch event (fallback): %s", exc)
+
+    async def _redis_breach_listener(self) -> None:
+        """
+        Subscribe to CH_BREACH on the Redis EventBus and activate the kill
+        switch when a kill_switch breach event arrives from another pod.
+
+        This is the cross-pod propagation path.  Without this loop, activating
+        the kill switch on Pod A does not affect Pods B and C.
+        """
+        try:
+            from core.event_bus import bus as _redis_bus, CH_BREACH  # noqa: PLC0415
+        except ImportError:
+            logger.warning("Kill switch: could not import Redis EventBus — cross-pod propagation disabled")
+            return
+
+        # Ensure the bus is connected before subscribing
+        try:
+            await _redis_bus.connect()
+        except Exception as exc:
+            logger.warning("Kill switch: Redis EventBus connect failed (%s) — cross-pod propagation disabled", exc)
+            return
+
+        logger.info("Kill switch: listening for breach events on Redis CH_BREACH")
+        try:
+            async for message in _redis_bus.subscribe(CH_BREACH):
+                if not self._running:
+                    break
+                try:
+                    msg_type = message.get("type", "")
+                    if msg_type != "kill_switch":
+                        continue
+                    reason = message.get("reason", "remote kill switch activation")
+                    if not self._active:
+                        logger.warning(
+                            "Kill switch: received remote activation via Redis CH_BREACH — reason: %s",
+                            reason,
+                        )
+                        # activate() is idempotent; it will not re-publish since
+                        # we are already in the activated state from the remote pod.
+                        self._activate_internal(f"[remote] {reason}")
+                except Exception as exc:
+                    logger.warning("Kill switch: error processing breach message: %s", exc)
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.error("Kill switch: Redis breach listener exited unexpectedly: %s", exc)
 
     def set_event_bus(self, event_bus) -> None:
         """

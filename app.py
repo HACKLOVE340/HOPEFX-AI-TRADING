@@ -283,7 +283,24 @@ except Exception as _ws_live_err:
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
 #   from app import kill_switch
-kill_switch = KillSwitch()
+#
+# The Redis EventBus is wired in here so that:
+#   1. activate() publishes to CH_BREACH (Redis pub/sub) — all pods receive it
+#   2. _redis_breach_listener() subscribes to CH_BREACH — this pod receives
+#      activations triggered on other pods
+# Without this wiring, the kill switch only works within a single process.
+try:
+    from core.event_bus import bus as _event_bus
+    kill_switch = KillSwitch(event_bus=_event_bus)
+    logger.info("KillSwitch wired to Redis EventBus for cross-pod propagation")
+except Exception as _ks_bus_err:
+    logger.warning(
+        "KillSwitch: could not wire Redis EventBus (%s) — "
+        "kill switch will only work within this pod",
+        _ks_bus_err,
+    )
+    kill_switch = KillSwitch()
+
 _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
