@@ -16,6 +16,14 @@ without modification. New code should import from backtesting directly:
     )
 """
 
+import warnings
+
+warnings.warn(
+    "backtest.engine is a compatibility shim. Import from backtesting directly.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from backtesting.engine_config import (  # noqa: F401
     BacktestConfig,
     BacktestEngine,
