@@ -838,3 +838,199 @@ async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
     result = stripe_integration.handle_webhook(event_type, event_data)
 
     return {"received": True, "event_type": event_type, "result": result}
+
+
+# ==========================
+# Strategy Submission & Audit
+# ==========================
+
+from monetization.marketplace_submission import submission_manager, SubmissionStatus  # noqa: E402
+from monetization.revenue_split import revenue_engine, TransactionType  # noqa: E402
+
+
+class SubmitStrategyRequest(BaseModel):
+    creator_id: str
+    name: str = Field(..., min_length=3, max_length=100)
+    description: str = Field(..., min_length=100)
+    strategy_code: str = Field(..., min_length=10)
+    backtest_results: Dict[str, Any]
+    price_monthly: float = Field(0.0, ge=0)
+    price_yearly: float = Field(0.0, ge=0)
+    category: str = "algorithmic"
+    tags: List[str] = []
+
+
+class ManualReviewRequest(BaseModel):
+    reviewer_id: str
+    notes: str = ""
+
+
+@router.post("/marketplace/submit", status_code=status.HTTP_201_CREATED)
+async def submit_strategy(request: SubmitStrategyRequest):
+    """
+    Submit a strategy for marketplace listing.
+
+    Runs automated audit (syntax, security, backtest gates).
+    Auto-approves if all checks pass; rejects otherwise.
+    Rejected strategies can be manually approved by an admin.
+    """
+    sub = submission_manager.submit(
+        creator_id=request.creator_id,
+        name=request.name,
+        description=request.description,
+        strategy_code=request.strategy_code,
+        backtest_results=request.backtest_results,
+        price_monthly=request.price_monthly,
+        price_yearly=request.price_yearly,
+        category=request.category,
+        tags=request.tags,
+    )
+    return sub.to_dict()
+
+
+@router.get("/marketplace/submissions/{submission_id}")
+async def get_submission(submission_id: str):
+    """Get a strategy submission and its audit report."""
+    sub = submission_manager.get(submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return sub.to_dict()
+
+
+@router.get("/marketplace/submissions/creator/{creator_id}")
+async def list_creator_submissions(creator_id: str):
+    """List all submissions by a creator."""
+    subs = submission_manager.list_by_creator(creator_id)
+    return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
+
+
+@router.get("/marketplace/submissions/pending")
+async def list_pending_submissions():
+    """List all submissions awaiting manual review (admin only)."""
+    subs = submission_manager.list_pending()
+    return {"submissions": [s.to_dict() for s in subs], "total": len(subs)}
+
+
+@router.post("/marketplace/submissions/{submission_id}/approve")
+async def approve_submission(submission_id: str, body: ManualReviewRequest):
+    """Manually approve a strategy submission (admin only)."""
+    ok = submission_manager.manual_approve(
+        submission_id, body.reviewer_id, body.notes
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return {"approved": True, "submission_id": submission_id}
+
+
+@router.post("/marketplace/submissions/{submission_id}/reject")
+async def reject_submission(submission_id: str, body: ManualReviewRequest):
+    """Manually reject a strategy submission (admin only)."""
+    ok = submission_manager.manual_reject(
+        submission_id, body.reviewer_id, body.notes
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return {"rejected": True, "submission_id": submission_id}
+
+
+# ==========================
+# Revenue Split & Payouts
+# ==========================
+
+
+class RecordSaleRequest(BaseModel):
+    strategy_id: str
+    creator_id: str
+    buyer_id: str
+    gross_amount: float = Field(..., gt=0)
+    currency: str = "USD"
+    transaction_type: str = "purchase"
+    stripe_payment_intent_id: Optional[str] = None
+
+
+class RegisterStripeAccountRequest(BaseModel):
+    creator_id: str
+    stripe_account_id: str
+
+
+@router.post("/marketplace/sales")
+async def record_sale(request: RecordSaleRequest):
+    """
+    Record a marketplace sale and compute the revenue split.
+
+    Platform takes 20%, creator receives 80%.
+    Creator's pending balance is credited immediately.
+    """
+    try:
+        txn_type = TransactionType(request.transaction_type)
+    except ValueError:
+        txn_type = TransactionType.PURCHASE
+
+    txn = revenue_engine.record_sale(
+        strategy_id=request.strategy_id,
+        creator_id=request.creator_id,
+        buyer_id=request.buyer_id,
+        gross_amount=request.gross_amount,
+        currency=request.currency,
+        transaction_type=txn_type,
+        stripe_payment_intent_id=request.stripe_payment_intent_id,
+    )
+    return txn.to_dict()
+
+
+@router.get("/marketplace/creators/{creator_id}/balance")
+async def get_creator_balance(creator_id: str):
+    """Get a creator's pending payout balance and earnings summary."""
+    bal = revenue_engine.get_creator_balance(creator_id)
+    return {
+        "creator_id": bal.creator_id,
+        "pending_usd": float(bal.pending_usd),
+        "total_earned_usd": float(bal.total_earned_usd),
+        "total_paid_usd": float(bal.total_paid_usd),
+        "last_payout_at": bal.last_payout_at.isoformat() if bal.last_payout_at else None,
+        "stripe_account_linked": bal.stripe_account_id is not None,
+        "payout_eligible": bal.is_payout_eligible,
+    }
+
+
+@router.get("/marketplace/creators/{creator_id}/transactions")
+async def get_creator_transactions(creator_id: str):
+    """List all sale transactions for a creator."""
+    txns = revenue_engine.get_creator_transactions(creator_id)
+    return {"transactions": [t.to_dict() for t in txns], "total": len(txns)}
+
+
+@router.get("/marketplace/creators/{creator_id}/payouts")
+async def get_creator_payouts(creator_id: str):
+    """List all payout records for a creator."""
+    payouts = revenue_engine.get_creator_payouts(creator_id)
+    return {"payouts": [p.to_dict() for p in payouts], "total": len(payouts)}
+
+
+@router.post("/marketplace/creators/stripe-account")
+async def register_stripe_account(request: RegisterStripeAccountRequest):
+    """Link a creator's Stripe Connect account for payouts."""
+    revenue_engine.register_stripe_account(
+        request.creator_id, request.stripe_account_id
+    )
+    return {"linked": True, "creator_id": request.creator_id}
+
+
+@router.post("/marketplace/payouts/process")
+async def process_payouts():
+    """
+    Trigger weekly payout processing for all eligible creators (admin only).
+
+    Eligibility: pending balance >= $10 AND Stripe Connect account linked.
+    """
+    payouts = revenue_engine.process_weekly_payouts()
+    return {
+        "payouts_processed": len(payouts),
+        "payouts": [p.to_dict() for p in payouts],
+    }
+
+
+@router.get("/marketplace/platform/revenue")
+async def get_platform_revenue():
+    """Get aggregate platform revenue metrics (admin only)."""
+    return revenue_engine.get_platform_revenue()
