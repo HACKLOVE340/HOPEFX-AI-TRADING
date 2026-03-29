@@ -367,7 +367,19 @@ async def init_broker(s: Any) -> Any:
                     oanda_account[:8],
                 )
                 # ── 30-day paper trading clock ────────────────────────────────
-                _stamp_oanda_paper_start(oanda_account, oanda_practice)
+                # Use OandaPaperClock.maybe_start() — handles PENDING
+                # placeholder overwrite and gate sync correctly.
+                try:
+                    from brokers.oanda_paper_clock import get_clock as _get_clock
+                    _get_clock().maybe_start(
+                        account_id=oanda_account,
+                        environment="practice" if oanda_practice else "live",
+                    )
+                except Exception as _clk_exc:
+                    logger.warning(
+                        "OandaPaperClock.maybe_start failed (non-fatal): %s", _clk_exc
+                    )
+                    _stamp_oanda_paper_start(oanda_account, oanda_practice)
                 return b
             else:
                 logger.warning(
@@ -398,6 +410,19 @@ async def init_broker(s: Any) -> Any:
         logger.info("Paper trading broker connected (balance=%.2f)", bal)
 
     log_activity("Paper Trading Broker connected")
+
+    # ── OANDA account PENDING guard ───────────────────────────────────────────
+    # Warn loudly if the 30-day clock is running but no real account is connected.
+    # This runs regardless of broker type so the warning is always visible.
+    try:
+        from brokers.oanda_paper_clock import validate_oanda_account_at_startup
+        validation = validate_oanda_account_at_startup()
+        s.oanda_account_validation = validation
+        for w in validation.get("warnings", []):
+            log_activity(f"⚠ OANDA: {w}")
+    except Exception as _val_exc:
+        logger.debug("OANDA account validation skipped: %s", _val_exc)
+
     return b
 
 

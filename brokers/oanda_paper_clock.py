@@ -390,3 +390,103 @@ def get_clock() -> OandaPaperClock:
     if _clock is None:
         _clock = OandaPaperClock()
     return _clock
+
+
+# ── Startup validation ────────────────────────────────────────────────────────
+
+
+def validate_oanda_account_at_startup() -> Dict[str, Any]:
+    """
+    Validate OANDA account state at server startup.
+
+    Called from startup_factories.init_broker() after the broker is
+    initialised.  Logs a prominent warning when:
+
+    1. The stamp file has ``requires_real_account: true`` (PENDING) — meaning
+       the 30-day clock is running but no real fills are being collected.
+    2. BROKER_TYPE=oanda but credentials are missing — the clock will never
+       start.
+    3. The stamp file is missing entirely — clock has not been seeded.
+
+    Returns a dict with keys:
+      account_verified  bool   — True only when a real account_id is stamped
+      account_id        str    — masked account_id or "PENDING"
+      elapsed_days      float  — days elapsed since clock start
+      remaining_days    float  — days until live gate opens
+      warnings          list   — human-readable warning strings
+    """
+    clock = get_clock()
+    status = clock.status()
+    warnings: list = []
+
+    account_id = status.get("account_id") or "PENDING"
+    pending = status.get("pending_real_account", False) or account_id == "PENDING"
+    broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+    has_token = bool(
+        os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
+    )
+    has_account = bool(
+        os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
+    )
+
+    if pending:
+        elapsed = status.get("elapsed_days", 0.0)
+        remaining = status.get("remaining_days", float(_TARGET_DAYS))
+        warnings.append(
+            f"OANDA paper account is PENDING — no real fills are being collected. "
+            f"Clock has been running {elapsed:.1f} days ({remaining:.1f} days remain). "
+            f"Set BROKER_TYPE=oanda, BROKER_OANDA_TOKEN, and BROKER_OANDA_ACCOUNT "
+            f"then restart to connect a real practice account."
+        )
+        logger.warning(
+            "⚠ OANDA account PENDING — %s days elapsed, %s days remain. "
+            "No real fills until credentials are set.",
+            round(elapsed, 1),
+            round(remaining, 1),
+        )
+
+    if broker_type == "oanda" and not has_token:
+        warnings.append(
+            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN is not set. "
+            "The broker will fall back to paper simulation."
+        )
+        logger.warning(
+            "⚠ BROKER_TYPE=oanda but BROKER_OANDA_TOKEN not set — "
+            "falling back to paper simulation."
+        )
+
+    if broker_type == "oanda" and has_token and not has_account:
+        warnings.append(
+            "BROKER_OANDA_TOKEN is set but BROKER_OANDA_ACCOUNT is missing. "
+            "Set BROKER_OANDA_ACCOUNT to your practice account ID."
+        )
+        logger.warning(
+            "⚠ BROKER_OANDA_TOKEN set but BROKER_OANDA_ACCOUNT missing."
+        )
+
+    if not status.get("started", False):
+        warnings.append(
+            "OANDA paper trading clock has not started. "
+            "Connect OANDA credentials to begin the 30-day paper run."
+        )
+
+    result = {
+        "account_verified": not pending and status.get("started", False),
+        "account_id": account_id,
+        "elapsed_days": status.get("elapsed_days", 0.0),
+        "remaining_days": status.get("remaining_days", float(_TARGET_DAYS)),
+        "live_gate_opens": status.get("live_gate_opens"),
+        "warnings": warnings,
+        "broker_type": broker_type,
+        "credentials_present": has_token and has_account,
+    }
+
+    if not warnings:
+        logger.info(
+            "OANDA account verified: %s (%s) — %.1f days elapsed",
+            account_id,
+            status.get("environment", "practice"),
+            status.get("elapsed_days", 0.0),
+        )
+
+    return result
