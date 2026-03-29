@@ -1266,6 +1266,131 @@ class AdvancedRiskAnalytics:
 
         return annual_return / max_dd
 
+    def calculate_var_garch(
+        self,
+        returns: np.ndarray,
+        confidence_level: float = None,
+        time_horizon: int = 10,
+        portfolio_value: float = None,
+    ) -> "VaRResult":
+        """
+        Compute multi-day VaR using GARCH(1,1) conditional volatility forecast.
+
+        Fits GARCH(1,1) via MLE on the return series, then iterates the variance
+        recursion h steps ahead to obtain the conditional variance forecast.
+        This is the industry standard for multi-day VaR on assets with volatility
+        clustering (XAUUSD, equities, crypto).
+
+        The h-step forecast uses:
+            sigma2_{t+h} = omega/(1-alpha-beta)
+                         + (alpha+beta)^h * (sigma2_t - omega/(1-alpha-beta))
+
+        Args:
+            returns: Daily return series (minimum 100 observations required,
+                     252+ recommended for stable MLE estimates).
+            confidence_level: VaR confidence level (default from config).
+            time_horizon: Forecast horizon in days.
+            portfolio_value: Optional portfolio value for dollar VaR.
+
+        Returns:
+            VaRResult with method='garch11' and scaling_approximate=False.
+        """
+        from scipy import stats as _stats
+        from scipy.optimize import minimize as _minimize
+
+        confidence_level = confidence_level or self.var_confidence
+        arr = np.asarray(returns, dtype=float)
+
+        if len(arr) < 100:
+            raise ValueError(
+                f"calculate_var_garch requires >= 100 observations, got {len(arr)}. "
+                "Use calculate_var_ewma or calculate_var_multiday for shorter series."
+            )
+
+        # ── GARCH(1,1) negative log-likelihood ──────────────────────────────
+        def _neg_loglik(params: np.ndarray) -> float:
+            omega, alpha, beta = params
+            if omega <= 0 or alpha < 0 or beta < 0 or alpha + beta >= 1.0:
+                return 1e10
+            n = len(arr)
+            sigma2 = np.empty(n)
+            sigma2[0] = omega / max(1 - alpha - beta, 1e-10)
+            for t in range(1, n):
+                sigma2[t] = omega + alpha * arr[t - 1] ** 2 + beta * sigma2[t - 1]
+                if sigma2[t] <= 0:
+                    return 1e10
+            ll = -0.5 * np.sum(np.log(sigma2) + arr ** 2 / sigma2)
+            return -ll
+
+        # Initial guess: small omega, typical alpha/beta for FX/gold
+        sample_var = float(np.var(arr, ddof=1))
+        x0 = np.array([sample_var * 0.05, 0.08, 0.88])
+        bounds = [(1e-8, None), (1e-6, 0.5), (1e-6, 0.9999)]
+
+        result = _minimize(
+            _neg_loglik,
+            x0,
+            method="L-BFGS-B",
+            bounds=bounds,
+            options={"maxiter": 500, "ftol": 1e-9},
+        )
+
+        converged = result.success
+        omega, alpha, beta = result.x if converged else x0
+
+        # ── Compute current conditional variance ─────────────────────────────
+        n = len(arr)
+        sigma2_t = omega / max(1 - alpha - beta, 1e-10)
+        for t in range(1, n):
+            sigma2_t = omega + alpha * arr[t - 1] ** 2 + beta * sigma2_t
+            sigma2_t = max(sigma2_t, 1e-10)
+
+        # ── h-step ahead variance forecast (sum of conditional variances) ────
+        persistence = alpha + beta
+        long_run_var = omega / max(1 - persistence, 1e-10)
+
+        if time_horizon == 1:
+            sigma2_forecast = sigma2_t
+        else:
+            sigma2_forecast = 0.0
+            sigma2_i = sigma2_t
+            for _ in range(time_horizon):
+                sigma2_forecast += sigma2_i
+                sigma2_i = long_run_var + persistence * (sigma2_i - long_run_var)
+                sigma2_i = max(sigma2_i, 1e-10)
+
+        sigma_forecast = float(np.sqrt(sigma2_forecast))
+        alpha_level = 1.0 - confidence_level
+        z = float(_stats.norm.ppf(alpha_level))
+        mu_h = float(np.mean(arr)) * time_horizon
+        var_garch = float(-(mu_h + z * sigma_forecast))
+        var_garch = max(var_garch, 0.0)
+
+        val = (abs(var_garch * portfolio_value) if portfolio_value else var_garch)
+
+        if not converged:
+            import warnings as _w
+            _w.warn(
+                "calculate_var_garch: MLE did not converge — using initial parameter "
+                "guess. Result may be inaccurate. Increase series length or check for "
+                "outliers.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+        return VaRResult(
+            var_value=val,
+            confidence_level=confidence_level,
+            time_horizon=time_horizon,
+            method="garch11",
+            scaling_approximate=not converged,
+            scaling_note=(
+                "" if converged else
+                f"GARCH(1,1) MLE did not converge (omega={omega:.2e}, "
+                f"alpha={alpha:.4f}, beta={beta:.4f}). Result is approximate."
+            ),
+        )
+
     def calculate_all_metrics(
         self,
         returns: np.ndarray,
@@ -1292,6 +1417,18 @@ class AdvancedRiskAnalytics:
         )
         cvar = self.calculate_cvar(returns, portfolio_value=portfolio_value)
 
+        # Multi-day VaR (10-day) — correct methods, no sqrt(t)
+        var_multiday_10 = None
+        var_garch_10 = None
+        if len(returns) >= 30:
+            var_multiday_10 = self.calculate_var_multiday(
+                returns, time_horizon=10, portfolio_value=portfolio_value
+            )
+        if len(returns) >= 100:
+            var_garch_10 = self.calculate_var_garch(
+                returns, time_horizon=10, portfolio_value=portfolio_value
+            )
+
         # Drawdown analysis
         drawdown = self.analyze_drawdowns(equity_curve)
 
@@ -1304,6 +1441,8 @@ class AdvancedRiskAnalytics:
             "var_historical_95": var_hist.var_value,
             "var_parametric_95": var_param.var_value,
             "var_monte_carlo_95": var_mc.var_value,
+            "var_multiday_10d": var_multiday_10.var_value if var_multiday_10 else None,
+            "var_garch_10d": var_garch_10.var_value if var_garch_10 else None,
             "cvar_95": cvar,
             "max_drawdown": drawdown.max_drawdown,
             "max_drawdown_duration": drawdown.max_drawdown_duration,
