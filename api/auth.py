@@ -26,6 +26,19 @@ logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=True)
 
+# ---------------------------------------------------------------------------
+# Router re-export
+# ---------------------------------------------------------------------------
+# api/auth.py is a *dependency* module (get_current_user, require_role, etc.).
+# The actual HTTP endpoints live in auth/router.py.  Re-export that router here
+# so that code doing `from api.auth import router` works without change.
+try:
+    from auth.router import router  # noqa: F401  (re-export)
+except Exception as _router_import_err:  # pragma: no cover
+    from fastapi import APIRouter as _APIRouter
+    router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
+    logger.warning("auth.router unavailable, using empty stub: %s", _router_import_err)
+
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
 

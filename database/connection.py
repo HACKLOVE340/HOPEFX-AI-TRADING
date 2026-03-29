@@ -391,3 +391,81 @@ def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
     global _db_manager
     _db_manager = DatabaseManager(connection_string, **kwargs)
     return _db_manager
+
+
+# ---------------------------------------------------------------------------
+# FastAPI / SQLAlchemy compatibility shims
+# ---------------------------------------------------------------------------
+# These module-level names are the conventional FastAPI pattern used throughout
+# the codebase (get_db, engine, SessionLocal).  They are backed by a lazy
+# singleton so the first import does not require DATABASE_URL to be set.
+
+import os as _os
+
+def _default_db_url() -> str:
+    return _os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{_os.path.join(_os.path.dirname(__file__), '..', 'hopefx.db')}",
+    )
+
+
+def _get_or_init_manager() -> "DatabaseManager":
+    """Return the global manager, initialising it with defaults if needed."""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager(_default_db_url())
+    return _db_manager
+
+
+if SQLALCHEMY_AVAILABLE:
+    from sqlalchemy.orm import sessionmaker as _sessionmaker
+
+    class _LazyEngine:
+        """Proxy that forwards attribute access to the real engine."""
+        def __getattr__(self, name: str):
+            return getattr(_get_or_init_manager()._engine, name)
+
+        def connect(self):
+            return _get_or_init_manager()._engine.connect()
+
+        def begin(self):
+            return _get_or_init_manager()._engine.begin()
+
+        def dispose(self):
+            return _get_or_init_manager()._engine.dispose()
+
+    engine = _LazyEngine()
+
+    class _LazySessionLocal:
+        """Proxy that creates sessions via the global manager."""
+        def __call__(self):
+            return _get_or_init_manager()._session_factory()
+
+        def __getattr__(self, name: str):
+            return getattr(_get_or_init_manager()._session_factory, name)
+
+    SessionLocal = _LazySessionLocal()
+
+    def get_db():
+        """
+        FastAPI dependency that yields a SQLAlchemy session.
+
+        Usage::
+
+            @router.get("/items")
+            def list_items(db: Session = Depends(get_db)):
+                ...
+        """
+        db = _get_or_init_manager()._session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+else:
+    # Stubs when SQLAlchemy is not installed (test / CI environments).
+    engine = None  # type: ignore[assignment]
+    SessionLocal = None  # type: ignore[assignment]
+
+    def get_db():  # type: ignore[misc]
+        raise RuntimeError("SQLAlchemy is not installed — database features unavailable.")
