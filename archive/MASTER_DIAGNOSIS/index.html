@@ -1,0 +1,3145 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="AI-powered gold and forex trading platform — guides, API reference, and tutorials.">
+      
+      
+      
+        <link rel="canonical" href="https://docs.hopefx.io/archive/MASTER_DIAGNOSIS/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/banner.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>HOPEFX — Master Diagnosis & Inventory - HOPEFX Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+  
+  
+
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-XXXXXXXXXX"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-XXXXXXXXXX",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+  
+    <script>"undefined"!=typeof __md_analytics&&__md_analytics()</script>
+  
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#hopefx-master-diagnosis-inventory" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="HOPEFX Documentation" class="md-header__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HOPEFX Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              HOPEFX — Master Diagnosis &amp; Inventory
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../INSTALLATION/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../DEPLOYMENT/" class="md-tabs__link">
+          
+  
+  
+  Deployment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../API_GUIDE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../model_performance/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Model Performance
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../API_REFERENCE/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../ci_cd_pipeline/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CI/CD Pipeline
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../FAQ/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../CONTRIBUTING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../SECURITY/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Security
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../DEBUGGING/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Debugging
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../SECURE_ENV_TEMPLATE.md" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HOPEFX Documentation" class="md-nav__button md-logo" aria-label="HOPEFX Documentation" data-md-component="logo">
+      
+  <img src="../../assets/banner.svg" alt="logo">
+
+    </a>
+    HOPEFX Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    HOPEFX-AI-TRADING
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SETUP_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../oanda_paper_trading_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OANDA Paper Trading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../live_trading_gate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Live Trading Gate (30-day)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Deployment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT_CHECKLIST.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPLOYMENT_INFRASTRUCTURE.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ORDER_FLOW_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Order Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SAMPLE_STRATEGIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOBILE_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mobile Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSET_DIVERSIFICATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset Diversification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MONETIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monetization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMUNITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Community
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ENTERPRISE_ARCHITECTURE.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enterprise Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FEATURES.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../WORDMAP.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wordmap (Module Index)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANALYSIS_AND_ROADMAP.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analysis & Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ENHANCEMENT_PLAN.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enhancement Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci_cd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEBUGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURE_ENV_TEMPLATE.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secure Env Template
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../IMPLEMENTATION_SUMMARY.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation Summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRODUCTION_FIXES.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production Fixes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DIAGNOSTIC_REPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostic Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CRITICAL_FLAWS.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Critical Flaws Audit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-have-archive-80-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We Have (Archive — 80+ documents)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What We Have (Archive — 80+ documents)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status-reports-summaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Reports &amp; Summaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implementation-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Guides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-summaries-historical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix Summaries (Historical)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cicd-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI/CD &amp; Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-completion-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase Completion Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#roadmap-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap &amp; Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker-connectivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker &amp; Connectivity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#payments-monetization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payments &amp; Monetization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#misc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Misc
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-have-main-docs-30-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We Have (Main docs/ — 30 files)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whats-missing-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's Missing (Gaps)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What&#39;s Missing (Gaps)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#missing-documents-need-to-create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing Documents (need to create)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-in-existing-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing in Existing Documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whats-useful-in-archive-should-be-promotedreferenced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's Useful in Archive (should be promoted/referenced)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#video-tutorials-whats-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Video Tutorials — What's Needed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-fix-order-simple-complex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Fix Order (Simple → Complex)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Priority Fix Order (Simple → Complex)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-simple-fixes-update-content-fix-stubs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 1 — Simple fixes (update content, fix stubs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-medium-fixes-expand-thin-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2 — Medium fixes (expand thin docs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-large-fixes-consolidate-rewrite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 3 — Large fixes (consolidate + rewrite)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-4-new-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 4 — New documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#archive-health-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Archive Health Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="hopefx-master-diagnosis-inventory">HOPEFX — Master Diagnosis &amp; Inventory<a class="headerlink" href="#hopefx-master-diagnosis-inventory" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Deep audit of all docs/archive and docs/ files.
+Last updated: 2026-07-14</p>
+</blockquote>
+<hr />
+<h2 id="what-we-have-archive-80-documents">What We Have (Archive — 80+ documents)<a class="headerlink" href="#what-we-have-archive-80-documents" title="Permanent link">&para;</a></h2>
+<h3 id="status-reports-summaries">Status Reports &amp; Summaries<a class="headerlink" href="#status-reports-summaries" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EVERYTHING_WE_HAVE.md</td>
+<td>Full repo inventory (Feb 2026)</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPLETE_PLATFORM_ANALYSIS.md</td>
+<td>Feature matrix vs competitors</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPREHENSIVE_STATUS_REPORT.md</td>
+<td>Phase-by-phase work log</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPREHENSIVE_DEEP_DIVE_SUMMARY.md</td>
+<td>Deep dive phases 1–3</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPLETE_DEEP_DIVE_PHASES_1-3.md</td>
+<td>Detailed phase breakdown</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>CURRENT_STATUS.md / CURRENT_STATUS_FINAL.md</td>
+<td>Point-in-time snapshots</td>
+<td>Archive only</td>
+</tr>
+<tr>
+<td>FINAL_STATUS.md / FINAL_STATUS.txt</td>
+<td>Final state snapshots</td>
+<td>Archive only</td>
+</tr>
+<tr>
+<td>OVERALL_STATUS.md / OVERALL_FRAMEWORK_STATUS.md</td>
+<td>Framework status</td>
+<td>Archive only</td>
+</tr>
+</tbody>
+</table>
+<h3 id="implementation-guides">Implementation Guides<a class="headerlink" href="#implementation-guides" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>COMPLETE_IMPLEMENTATION_GUIDE.md</td>
+<td>Full implementation walkthrough</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPLETE_IMPLEMENTATION_STATUS.md</td>
+<td>What's done vs pending</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>IMPLEMENTATION_ROADMAP.md</td>
+<td>Phase roadmap</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>IMPLEMENTATION_SUMMARY.md</td>
+<td>Summary of all phases</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>SMC_ITS_ML_IMPLEMENTATION.md</td>
+<td>SMC/ICT + ML strategy details</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>ENTERPRISE_ARCHITECTURE.md</td>
+<td>Enterprise components</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fix-summaries-historical">Fix Summaries (Historical)<a class="headerlink" href="#fix-summaries-historical" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRITICAL_FLAWS.md</td>
+<td>V14 audit — all P1–P7 fixed</td>
+<td>✅ All resolved</td>
+</tr>
+<tr>
+<td>BUGS_FIXED_SUMMARY.md</td>
+<td>Bug fix log</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>FIXES_SUMMARY.md</td>
+<td>Fix summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PRODUCTION_FIXES.md</td>
+<td>Production-specific fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>SECURITY_FIXES_SUMMARY.md</td>
+<td>Security fix log</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>TEST_FAILURES_FIXED.md</td>
+<td>Test fix log</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>TEST_FAILURES_FIXED_COMPREHENSIVE.md</td>
+<td>Comprehensive test fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>CONTINUE_FIXING_SUMMARY.md</td>
+<td>Continuation fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>EXECUTIVE_SUMMARY_ALL_FIXES.md</td>
+<td>Executive summary</td>
+<td>Historical</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cicd-testing">CI/CD &amp; Testing<a class="headerlink" href="#cicd-testing" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CI_FIX_SUMMARY.md</td>
+<td>CI pipeline fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>CI_STATUS_CHECK.txt</td>
+<td>CI status snapshot</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>CI_VERIFICATION_COMPLETE.txt</td>
+<td>CI verification</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>FINAL_CI_STATUS.md</td>
+<td>Final CI state</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>ALL_TEST_FIXES_COMPLETE.md</td>
+<td>All test fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>TEST_COVERAGE_REPORT.md</td>
+<td>Coverage report</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>TEST_FIXES_SUMMARY.md</td>
+<td>Test fix summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>NOTIFICATION_TESTS_FIXED.md</td>
+<td>Notification test fixes</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>NOTIFICATION_TEST_MOCK_FIX.md</td>
+<td>Mock fix details</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>FIX_TEST_CALCULATE_POSITION_SIZE.md</td>
+<td>Position size test fix</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>INTEGRATION_TESTING_PLAN.md</td>
+<td>Integration test plan</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>INTEGRATION_STATUS_FINAL.md</td>
+<td>Integration status</td>
+<td>Historical</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phase-completion-docs">Phase Completion Docs<a class="headerlink" href="#phase-completion-docs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PHASE2_COMPLETE.md</td>
+<td>Phase 2 done</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE3_COMPLETE_FINAL.md</td>
+<td>Phase 3 done</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE3_CONTINUATION_SUMMARY.md</td>
+<td>Phase 3 continuation</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE3_IMPLEMENTATION_COMPLETE.md</td>
+<td>Phase 3 implementation</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE3_STATUS.md</td>
+<td>Phase 3 status</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE4_SUMMARY.md</td>
+<td>Phase 4 summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE5_COMPLETE.md</td>
+<td>Phase 5 done</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE5_NEWS_INTEGRATION_COMPLETE.md</td>
+<td>News integration</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PHASE6_COMPLETE.md</td>
+<td>Phase 6 done</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>DEEP_DIVE_PHASE_2_COMPLETE.md</td>
+<td>Deep dive phase 2</td>
+<td>Historical</td>
+</tr>
+</tbody>
+</table>
+<h3 id="roadmap-next-steps">Roadmap &amp; Next Steps<a class="headerlink" href="#roadmap-next-steps" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ANALYSIS_AND_ROADMAP.md</td>
+<td>Full architecture + roadmap (v16)</td>
+<td>✅ <strong>Primary reference</strong></td>
+</tr>
+<tr>
+<td>ROADMAP.md</td>
+<td>Roadmap snapshot</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>WHATS_NEXT_ROADMAP.md</td>
+<td>Next steps guide</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>WHATS_NEXT_SUMMARY.txt</td>
+<td>Summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>NEXT_STEPS.md</td>
+<td>Next steps</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>NEXT_STEPS_COMPREHENSIVE.md</td>
+<td>Comprehensive next steps</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>NEXT_ACTIONS_PRIORITY.md</td>
+<td>Priority actions</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>README_WHATS_NEXT.md</td>
+<td>What's next readme</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>ENHANCEMENT_PLAN.md</td>
+<td>Enhancement plan</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<h3 id="broker-connectivity">Broker &amp; Connectivity<a class="headerlink" href="#broker-connectivity" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BROKER_CONNECTIVITY_COMPLETE.md</td>
+<td>Broker connectivity</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>UNIVERSAL_BROKER_CONNECTIVITY.md</td>
+<td>Universal broker</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>MAIN_INTEGRATION.md</td>
+<td>Main integration</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<h3 id="payments-monetization">Payments &amp; Monetization<a class="headerlink" href="#payments-monetization" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WALLET_PAYMENT_IMPLEMENTATION_SUMMARY.md</td>
+<td>Wallet/payment impl</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>WALLET_PAYMENT_SYSTEM.md</td>
+<td>Payment system</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>ENHANCED_MONETIZATION_IMPLEMENTATION.md</td>
+<td>Monetization impl</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<h3 id="security-compliance">Security &amp; Compliance<a class="headerlink" href="#security-compliance" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SECURITY.md</td>
+<td>Security guide</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>SECURE_ENV_TEMPLATE.md</td>
+<td>Env template</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>CODACY_SETUP_GUIDE.md</td>
+<td>Codacy setup</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>CODE_QUALITY_REPORT.md</td>
+<td>Code quality</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<h3 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DEPLOYMENT_CHECKLIST.md</td>
+<td>Pre-deploy checklist</td>
+<td>✅ <strong>Critical</strong></td>
+</tr>
+<tr>
+<td>DEPLOYMENT_INFRASTRUCTURE.md</td>
+<td>Infrastructure setup</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>SETUP_COMPLETE.md</td>
+<td>Setup completion</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>SETUP_STATUS.txt</td>
+<td>Setup status</td>
+<td>Historical</td>
+</tr>
+</tbody>
+</table>
+<h3 id="misc">Misc<a class="headerlink" href="#misc" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Content</th>
+<th>Useful?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>COMPETITIVE_ANALYSIS.md</td>
+<td>vs MT5/TradingView/etc</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>KEY_STRENGTHS_TRADING_PLATFORMS.md</td>
+<td>Platform strengths</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>FEATURES.md</td>
+<td>Feature registry</td>
+<td>✅ <strong>Primary reference</strong></td>
+</tr>
+<tr>
+<td>WORDMAP.md</td>
+<td>Full project wordmap</td>
+<td>✅ <strong>Primary reference</strong></td>
+</tr>
+<tr>
+<td>SMC_ITS_ML_IMPLEMENTATION.md</td>
+<td>SMC/ICT details</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>COMPLETE_PHASE_INVENTORY.md</td>
+<td>Phase inventory</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>INVENTORY_COMPLETE.md</td>
+<td>Inventory</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>FRAMEWORK_COMPLETE.md</td>
+<td>Framework status</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>FRAMEWORK_PROGRESS_SUMMARY.md</td>
+<td>Progress summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>FRAMEWORK_STATUS.md</td>
+<td>Framework status</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>TASK_COMPLETION_STATUS.md</td>
+<td>Task status</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>TASK_COMPLETION_SUMMARY.md</td>
+<td>Task summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PULL_REQUEST.md</td>
+<td>PR template</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>banner.md</td>
+<td>Banner</td>
+<td>✅ Reference</td>
+</tr>
+<tr>
+<td>coverage_output.txt</td>
+<td>Coverage output</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>test_results.txt</td>
+<td>Test results</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>INTEGRATION_SUMMARY.txt</td>
+<td>Integration summary</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>HTTPX_DEPENDENCY_FIX.md</td>
+<td>httpx fix</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>HTTPX_FIX_VERIFICATION.txt</td>
+<td>httpx verification</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>PYTHON_311_FIX_SUMMARY.md</td>
+<td>Python 3.11 fix</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>EXIT_CODE_1_FIX_SUMMARY.md</td>
+<td>Exit code fix</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>HEALTH_ENDPOINT_FIXES.md</td>
+<td>Health endpoint</td>
+<td>Historical</td>
+</tr>
+<tr>
+<td>DEBUGGING.md</td>
+<td>Debugging guide</td>
+<td>✅ Reference</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="what-we-have-main-docs-30-files">What We Have (Main docs/ — 30 files)<a class="headerlink" href="#what-we-have-main-docs-30-files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Lines</th>
+<th>Quality</th>
+<th>Issues</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>index.md</td>
+<td>~60</td>
+<td>Good</td>
+<td>Missing: troubleshooting link, changelog link</td>
+</tr>
+<tr>
+<td>README.md (root)</td>
+<td>200+</td>
+<td>Excellent</td>
+<td>Up to date</td>
+</tr>
+<tr>
+<td>API.md</td>
+<td>153</td>
+<td>Partial</td>
+<td>Only covers Order Flow API — not the full API</td>
+</tr>
+<tr>
+<td>API_GUIDE.md</td>
+<td>625</td>
+<td>Good</td>
+<td>Overlaps with API_REFERENCE.md</td>
+</tr>
+<tr>
+<td>API_REFERENCE.md</td>
+<td>396</td>
+<td>Partial</td>
+<td>Only covers Order Flow — missing trading/auth/ML endpoints</td>
+</tr>
+<tr>
+<td>ASSET_DIVERSIFICATION.md</td>
+<td>550</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>COMMUNITY.md</td>
+<td>~200</td>
+<td>Stub</td>
+<td>Placeholder links (discord.gg/hopefx not real)</td>
+</tr>
+<tr>
+<td>COMPREHENSIVE_FIXES.md</td>
+<td>~80</td>
+<td>Outdated</td>
+<td>Ratings from March 2026, not updated</td>
+</tr>
+<tr>
+<td>CONTRIBUTING.md</td>
+<td>151</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>DEBUGGING.md</td>
+<td>335</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>DEPLOYMENT.md</td>
+<td>581</td>
+<td>Good</td>
+<td>Missing: K8s Helm section, VPS systemd section</td>
+</tr>
+<tr>
+<td>DIAGNOSTIC_REPORT.md</td>
+<td>~200</td>
+<td>Excellent</td>
+<td>All P1–P5 resolved</td>
+</tr>
+<tr>
+<td>FAQ.md</td>
+<td>482</td>
+<td>Good</td>
+<td>Missing: ML FAQ, broker FAQ</td>
+</tr>
+<tr>
+<td>INSTALLATION.md</td>
+<td>178</td>
+<td>Thin</td>
+<td>Missing: Docker install, Windows guide, troubleshooting</td>
+</tr>
+<tr>
+<td>MOBILE_GUIDE.md</td>
+<td>733</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>MONETIZATION.md</td>
+<td>633</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>ORDER_FLOW_GUIDE.md</td>
+<td>336</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>QUICKSTART.md</td>
+<td>97</td>
+<td>Thin</td>
+<td>Too short — missing broker setup, first trade</td>
+</tr>
+<tr>
+<td>ROADMAP.md</td>
+<td>131</td>
+<td>Outdated</td>
+<td>Doesn't reflect v1.16 state</td>
+</tr>
+<tr>
+<td>SAMPLE_STRATEGIES.md</td>
+<td>914</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>SECURITY.md</td>
+<td>110</td>
+<td>Thin</td>
+<td>Missing: JWT config, CORS, secrets rotation</td>
+</tr>
+<tr>
+<td>SETUP_GUIDE.md</td>
+<td>250</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>VIDEO_TUTORIALS.md</td>
+<td>~400</td>
+<td>Stub</td>
+<td>All links say "Coming Soon" — no real content</td>
+</tr>
+<tr>
+<td>WORLD_MONITOR_INTEGRATION.md</td>
+<td>~200</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>architecture.md</td>
+<td>381</td>
+<td>Good</td>
+<td>Missing: full module map, startup sequence</td>
+</tr>
+<tr>
+<td>ci_cd_pipeline.md</td>
+<td>126</td>
+<td>Thin</td>
+<td>Missing: GitHub Actions details, secrets setup</td>
+</tr>
+<tr>
+<td>live_trading_gate.md</td>
+<td>163</td>
+<td>Excellent</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>model_performance.md</td>
+<td>134</td>
+<td>Excellent</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>oanda_paper_trading_setup.md</td>
+<td>133</td>
+<td>Good</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>roadmap.md</td>
+<td>131</td>
+<td>Outdated</td>
+<td>Needs v1.16 sync</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="whats-missing-gaps">What's Missing (Gaps)<a class="headerlink" href="#whats-missing-gaps" title="Permanent link">&para;</a></h2>
+<h3 id="missing-documents-need-to-create">Missing Documents (need to create)<a class="headerlink" href="#missing-documents-need-to-create" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>docs/CHANGELOG.md</strong> — version history not in docs/ (only root CHANGELOG.md)</li>
+<li><strong>docs/TROUBLESHOOTING.md</strong> — no dedicated troubleshooting guide</li>
+<li><strong>docs/BROKER_SETUP.md</strong> — broker-specific setup consolidated</li>
+<li><strong>docs/ML_GUIDE.md</strong> — ML pipeline user guide (train, evaluate, deploy)</li>
+<li><strong>docs/PROP_FIRM_GUIDE.md</strong> — prop firm challenge guide (FTMO, MyFF, The5ers)</li>
+<li><strong>docs/BACKTESTING_GUIDE.md</strong> — how to run and interpret backtests</li>
+<li><strong>docs/RISK_MANAGEMENT.md</strong> — risk parameter guide</li>
+<li><strong>docs/WEBHOOKS.md</strong> — webhook/alert integration guide</li>
+<li><strong>docs/GRAFANA_SETUP.md</strong> — monitoring dashboard setup</li>
+</ol>
+<h3 id="missing-in-existing-documents">Missing in Existing Documents<a class="headerlink" href="#missing-in-existing-documents" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>VIDEO_TUTORIALS.md</strong> — all 22 episodes have "Coming Soon" links; no scripts, no timestamps, no actual content</li>
+<li><strong>API_REFERENCE.md</strong> — only covers Order Flow API; missing: auth, trading, ML, signals, broker, mobile, social, payments endpoints</li>
+<li><strong>QUICKSTART.md</strong> — 97 lines; missing: broker connection, first live signal, first backtest run</li>
+<li><strong>INSTALLATION.md</strong> — missing: Docker Compose install path, Windows-specific steps, common errors</li>
+<li><strong>SECURITY.md</strong> — missing: JWT secret rotation, CORS configuration, API key management, rate limiting</li>
+<li><strong>DEPLOYMENT.md</strong> — missing: Helm chart values, VPS systemd setup, SSL/TLS config</li>
+<li><strong>COMMUNITY.md</strong> — all social links are placeholders</li>
+<li><strong>COMPREHENSIVE_FIXES.md</strong> — ratings from March 2026, not updated to reflect current state</li>
+<li><strong>roadmap.md</strong> — doesn't reflect v1.16 milestones (multi-symbol backtest done, N&gt;919)</li>
+<li><strong>architecture.md</strong> — missing: startup sequence, ComponentRegistry order, feature flag wiring</li>
+</ol>
+<h3 id="whats-useful-in-archive-should-be-promotedreferenced">What's Useful in Archive (should be promoted/referenced)<a class="headerlink" href="#whats-useful-in-archive-should-be-promotedreferenced" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>ANALYSIS_AND_ROADMAP.md</strong> — most complete architecture + roadmap document</li>
+<li><strong>DEPLOYMENT_CHECKLIST.md</strong> — production deployment checklist (critical)</li>
+<li><strong>FEATURES.md</strong> — complete feature registry with env vars</li>
+<li><strong>WORDMAP.md</strong> — full project wordmap (108 endpoints, all modules)</li>
+<li><strong>COMPETITIVE_ANALYSIS.md</strong> — competitor comparison</li>
+<li><strong>WALLET_PAYMENT_SYSTEM.md</strong> — payment system details</li>
+<li><strong>INTEGRATION_TESTING_PLAN.md</strong> — integration test plan</li>
+<li><strong>SECURE_ENV_TEMPLATE.md</strong> — env template</li>
+</ol>
+<h3 id="video-tutorials-whats-needed">Video Tutorials — What's Needed<a class="headerlink" href="#video-tutorials-whats-needed" title="Permanent link">&para;</a></h3>
+<p>The VIDEO_TUTORIALS.md lists 22 episodes all marked "Coming Soon". What's needed:
+- Episode scripts (what to say, what to show)
+- Screen recording outlines (what to click, what to type)
+- Timestamps for each section
+- Code snippets that match the video
+- Links to actual YouTube videos (when recorded)
+- Thumbnail descriptions
+- Chapter markers</p>
+<hr />
+<h2 id="priority-fix-order-simple-complex">Priority Fix Order (Simple → Complex)<a class="headerlink" href="#priority-fix-order-simple-complex" title="Permanent link">&para;</a></h2>
+<h3 id="tier-1-simple-fixes-update-content-fix-stubs">Tier 1 — Simple fixes (update content, fix stubs)<a class="headerlink" href="#tier-1-simple-fixes-update-content-fix-stubs" title="Permanent link">&para;</a></h3>
+<ol>
+<li>docs/COMMUNITY.md — fix placeholder links</li>
+<li>docs/COMPREHENSIVE_FIXES.md — update ratings</li>
+<li>docs/roadmap.md — sync to v1.16</li>
+<li>docs/index.md — add missing navigation links</li>
+</ol>
+<h3 id="tier-2-medium-fixes-expand-thin-docs">Tier 2 — Medium fixes (expand thin docs)<a class="headerlink" href="#tier-2-medium-fixes-expand-thin-docs" title="Permanent link">&para;</a></h3>
+<ol>
+<li>docs/QUICKSTART.md — expand to full working guide</li>
+<li>docs/INSTALLATION.md — add Docker, Windows, troubleshooting</li>
+<li>docs/SECURITY.md — add JWT, CORS, secrets rotation</li>
+<li>docs/ci_cd_pipeline.md — add GitHub Actions details</li>
+</ol>
+<h3 id="tier-3-large-fixes-consolidate-rewrite">Tier 3 — Large fixes (consolidate + rewrite)<a class="headerlink" href="#tier-3-large-fixes-consolidate-rewrite" title="Permanent link">&para;</a></h3>
+<ol>
+<li>docs/API_REFERENCE.md — full API reference (all 108 endpoints)</li>
+<li>docs/DEPLOYMENT.md — add Helm, VPS, SSL sections</li>
+<li>docs/architecture.md — add startup sequence, module map</li>
+<li>docs/VIDEO_TUTORIALS.md — add scripts, timestamps, real content</li>
+</ol>
+<h3 id="tier-4-new-documents">Tier 4 — New documents<a class="headerlink" href="#tier-4-new-documents" title="Permanent link">&para;</a></h3>
+<ol>
+<li>docs/TROUBLESHOOTING.md — new</li>
+<li>docs/ML_GUIDE.md — new</li>
+<li>docs/PROP_FIRM_GUIDE.md — new</li>
+<li>docs/BACKTESTING_GUIDE.md — new</li>
+<li>docs/RISK_MANAGEMENT.md — new</li>
+<li>docs/GRAFANA_SETUP.md — new</li>
+</ol>
+<hr />
+<h2 id="archive-health-summary">Archive Health Summary<a class="headerlink" href="#archive-health-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Count</th>
+<th>Keep</th>
+<th>Archive-only</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status snapshots</td>
+<td>15</td>
+<td>0</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Fix summaries</td>
+<td>18</td>
+<td>0</td>
+<td>18</td>
+</tr>
+<tr>
+<td>Phase completion</td>
+<td>10</td>
+<td>0</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Implementation guides</td>
+<td>8</td>
+<td>8</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Roadmap/next steps</td>
+<td>9</td>
+<td>5</td>
+<td>4</td>
+</tr>
+<tr>
+<td>Broker/connectivity</td>
+<td>3</td>
+<td>3</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>3</td>
+<td>3</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Security/compliance</td>
+<td>4</td>
+<td>4</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Deployment</td>
+<td>3</td>
+<td>2</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Competitive/features</td>
+<td>4</td>
+<td>4</td>
+<td>0</td>
+</tr>
+<tr>
+<td>CI/CD/testing</td>
+<td>12</td>
+<td>3</td>
+<td>9</td>
+</tr>
+<tr>
+<td>Misc</td>
+<td>10</td>
+<td>5</td>
+<td>5</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>103</strong></td>
+<td><strong>37</strong></td>
+<td><strong>66</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The archive is healthy. 66 historical documents are correctly archived.
+37 documents remain useful as reference material.</p>
+<hr />
+<p><em>Generated: 2026-07-14 | Auditor: Ona</em></p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
