@@ -110,6 +110,7 @@ TFSelector.displayName = 'TFSelector';
 
 interface CoreChartProps {
   onChartClick?: (ctx: ChartClickContext) => void;
+  onChartReady?: (chart: IChartApi, series: ISeriesApi<'Candlestick'>) => void;
   signals?: MLSignal[];
   levels?: SupportResistanceLevel[];
   height?: number;
@@ -117,19 +118,23 @@ interface CoreChartProps {
 
 const CoreChart: React.FC<CoreChartProps> = ({
   onChartClick,
+  onChartReady,
   signals = [],
   levels = [],
   height = CHART_DIMS.mainHeight,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef     = useRef<IChartApi | null>(null);
-  const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const bidRef       = useRef<ISeriesApi<'Line'> | null>(null);
-  const askRef       = useRef<ISeriesApi<'Line'> | null>(null);
-  const markersRef   = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
-  const barsRef      = useRef<OHLCVBar[]>([]);
-  const rafRef       = useRef<number>(0);
+  const containerRef     = useRef<HTMLDivElement>(null);
+  const chartRef         = useRef<IChartApi | null>(null);
+  const candleRef        = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volRef           = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const bidRef           = useRef<ISeriesApi<'Line'> | null>(null);
+  const askRef           = useRef<ISeriesApi<'Line'> | null>(null);
+  const markersRef       = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const barsRef          = useRef<OHLCVBar[]>([]);
+  const rafRef           = useRef<number>(0);
+  // Stable ref so the chart-init effect doesn't re-run when the callback identity changes
+  const onChartReadyRef  = useRef(onChartReady);
+  useEffect(() => { onChartReadyRef.current = onChartReady; }, [onChartReady]);
 
   const symbol     = useChartBotStore((s) => s.symbol);
   const timeframe  = useChartBotStore((s) => s.timeframe);
@@ -222,13 +227,16 @@ const CoreChart: React.FC<CoreChartProps> = ({
       crosshairMarkerVisible: false,
     });
 
-    chartRef.current  = chart;
-    candleRef.current = candle;
-    volRef.current    = vol;
-    bidRef.current    = bid;
-    askRef.current    = ask;
+    chartRef.current   = chart;
+    candleRef.current  = candle;
+    volRef.current     = vol;
+    bidRef.current     = bid;
+    askRef.current     = ask;
     // v5: markers are a plugin, not a series method
     markersRef.current = createSeriesMarkers(candle);
+
+    // Notify parent so AIOverlays can get coordinate-conversion refs
+    onChartReadyRef.current?.(chart, candle);
 
     // Crosshair move handler
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
