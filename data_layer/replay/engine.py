@@ -42,7 +42,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import pandas as pd
 
@@ -251,6 +251,168 @@ class MarketReplayEngine:
             return orchestrator.get_ml_features(as_of=as_of)
         except Exception as exc:
             logger.debug("MarketReplayEngine.get_replay_features error: %s", exc)
+            return {}
+
+    async def replay_ohlcv_with_features(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime,
+        timeframe: str = "H1",
+        macro_df: Optional[Any] = None,
+    ) -> Optional[Any]:
+        """
+        Build a fully-featured OHLCV DataFrame for backtesting.
+
+        Fetches Dukascopy OHLCV data for the given range, normalises it,
+        then injects all data-layer ML features (microstructure, sentiment,
+        macro calendar) at each bar using causal as_of filtering.
+
+        This is the primary entry point for the backtesting pipeline.
+        Zero look-ahead bias: features at bar t use only data available
+        strictly before bar t's close time.
+
+        Parameters
+        ----------
+        symbol    : Instrument symbol (e.g. 'XAUUSD')
+        start     : Replay start (UTC, inclusive)
+        end       : Replay end (UTC, inclusive)
+        timeframe : Dukascopy timeframe string (default 'H1')
+        macro_df  : Optional pre-loaded macro DataFrame to merge
+
+        Returns a pd.DataFrame with OHLCV + all ML features, or None on error.
+        """
+        try:
+            import pandas as pd
+            from data_layer.normalization.pipeline import normalization_pipeline
+            from ml.features_extended import build_extended_features_with_data_layer
+
+            logger.info(
+                "MarketReplayEngine: building replay OHLCV %s %s→%s [%s]",
+                symbol, start.date(), end.date(), timeframe,
+            )
+
+            # 1. Fetch raw OHLCV from Dukascopy
+            ohlcv = await self.build_ohlcv_dataframe(
+                symbol=symbol,
+                start=start,
+                end=end,
+                timeframe=timeframe,
+            )
+            if ohlcv is None or ohlcv.empty:
+                logger.warning(
+                    "MarketReplayEngine: no OHLCV data for %s %s→%s",
+                    symbol, start.date(), end.date(),
+                )
+                return None
+
+            # 2. Normalise
+            ohlcv = normalization_pipeline.normalize_ohlcv(ohlcv)
+
+            # 3. Inject extended ML features (causal)
+            featured = build_extended_features_with_data_layer(
+                ohlcv=ohlcv,
+                macro_df=macro_df,
+            )
+
+            logger.info(
+                "MarketReplayEngine: replay complete — %d bars, %d features",
+                len(featured), len(featured.columns),
+            )
+            return featured
+
+        except Exception as exc:
+            logger.error("MarketReplayEngine.replay_ohlcv_with_features error: %s", exc)
+            return None
+
+    async def replay_bar_by_bar(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime,
+        timeframe: str = "H1",
+        callback: Optional[Any] = None,
+    ) -> int:
+        """
+        Replay OHLCV bars one at a time, calling `callback(bar, features)` for each.
+
+        Enforces strict causal ordering: features injected at bar t use only
+        data with timestamp < bar t's open time.
+
+        Parameters
+        ----------
+        symbol    : Instrument symbol
+        start     : Replay start (UTC)
+        end       : Replay end (UTC)
+        timeframe : Dukascopy timeframe string
+        callback  : Async or sync callable(bar: pd.Series, features: dict).
+                    If None, bars are counted but not processed.
+
+        Returns the number of bars replayed.
+        """
+        import asyncio
+        import inspect
+
+        try:
+            import pandas as pd
+            from data_layer.normalization.pipeline import normalization_pipeline
+
+            ohlcv = await self.build_ohlcv_dataframe(
+                symbol=symbol, start=start, end=end, timeframe=timeframe,
+            )
+            if ohlcv is None or ohlcv.empty:
+                return 0
+
+            ohlcv = normalization_pipeline.normalize_ohlcv(ohlcv)
+            count = 0
+
+            for ts, bar in ohlcv.iterrows():
+                self._replay_cursor = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+                features = self.get_replay_features(as_of=self._replay_cursor)
+
+                if callback is not None:
+                    try:
+                        if inspect.iscoroutinefunction(callback):
+                            await callback(bar, features)
+                        else:
+                            callback(bar, features)
+                    except Exception as cb_exc:
+                        logger.debug(
+                            "MarketReplayEngine.replay_bar_by_bar callback error at %s: %s",
+                            ts, cb_exc,
+                        )
+                count += 1
+
+            self._replay_cursor = None
+            logger.info(
+                "MarketReplayEngine.replay_bar_by_bar: replayed %d bars for %s",
+                count, symbol,
+            )
+            return count
+
+        except Exception as exc:
+            logger.error("MarketReplayEngine.replay_bar_by_bar error: %s", exc)
+            return 0
+
+    def get_feature_snapshot(self, as_of: Optional[datetime] = None) -> Dict[str, float]:
+        """
+        Return a complete ML feature snapshot at a given time.
+
+        If as_of is None, returns current live features from the orchestrator.
+        If as_of is set, returns causally-filtered historical features.
+
+        This is the canonical method for feature retrieval in both live
+        inference and backtesting — callers should never import individual
+        engines directly.
+        """
+        target = as_of or self._replay_cursor
+        if target is not None:
+            return self.get_replay_features(as_of=target)
+        try:
+            from data_layer.orchestrator import orchestrator
+            return orchestrator.get_ml_features()
+        except Exception as exc:
+            logger.debug("MarketReplayEngine.get_feature_snapshot error: %s", exc)
             return {}
 
     def health(self) -> dict:
