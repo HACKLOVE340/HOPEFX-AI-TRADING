@@ -406,7 +406,7 @@ class Gatekeeper:
         if self._orch is None:
             return 0.0
         try:
-            return self._orch.get_current_impact_score()
+            return self._orch.get_macro_impact_score()
         except Exception:
             return 0.0
 
