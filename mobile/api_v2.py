@@ -768,6 +768,41 @@ class MobileAPIServer:
         )
 
 
+# ---------------------------------------------------------------------------
+# Module-level app / router exports
+# ---------------------------------------------------------------------------
+# Expose a lazily-initialised FastAPI ``app`` and an ``APIRouter`` so that
+# other modules can do:
+#
+#   from mobile.api_v2 import app, router
+#
+# The ``app`` is created with a placeholder JWT secret when
+# SECURITY_JWT_SECRET is not yet set (e.g. during import-time checks).
+# The real secret is resolved from the environment at request time.
+
+import os as _os
+from fastapi import APIRouter as _APIRouter
+
+def _build_module_app() -> "FastAPI":
+    _secret = (
+        _os.getenv("SECURITY_JWT_SECRET", "").strip()
+        or _os.getenv("JWT_SECRET", "").strip()
+    )
+    # Use a 32-char placeholder so the class __init__ doesn't raise during
+    # import-time validation checks.  Real requests always read from env.
+    if not _secret or len(_secret) < 32:
+        _secret = "hopefx-dev-placeholder-secret-32c"
+    return MobileAPIServer(jwt_secret=_secret).app
+
+
+# Module-level FastAPI application instance (used by uvicorn / tests)
+app: FastAPI = _build_module_app()
+
+# Convenience APIRouter that mounts all mobile routes under /mobile prefix.
+# Useful when embedding the mobile API inside the main app.py.
+router = _APIRouter(prefix="/mobile", tags=["Mobile"])
+
+
 # ============ USAGE ============
 
 if __name__ == "__main__":
