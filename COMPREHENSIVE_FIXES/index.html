@@ -1990,6 +1990,111 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#july-2026-code-sprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        July 2026 Code Sprint
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="July 2026 Code Sprint">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#monetizationpayment_processorpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        monetization/payment_processor.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monetizationsubscriptionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        monetization/subscription.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monetizationanalyticspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        monetization/analytics.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notificationsemail_triggerspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notifications/email_triggers.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apiplatformpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        api/platform.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apimlpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        api/ml.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apitradingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        api/trading.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategiesmanagerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        strategies/manager.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2012,7 +2117,8 @@
 
 <h1 id="comprehensive-fixes-documentation">Comprehensive Fixes Documentation<a class="headerlink" href="#comprehensive-fixes-documentation" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session + July 2026 documentation sprint.</p>
+<p>Last updated: 2026-07-14 (v1.17). Reflects all fixes through DIAGNOSTIC_REPORT.md V14 +
+post-diagnostic session + July 2026 documentation sprint + July 2026 code sprint.</p>
 </blockquote>
 <p>This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
 with before/after ratings and specific changes.</p>
@@ -2056,7 +2162,7 @@ with before/after ratings and specific changes.</p>
 <td>Security</td>
 <td>6/10</td>
 <td>9/10</td>
-<td>JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added</td>
+<td>JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added, admin role guard on all /api/admin/*</td>
 </tr>
 <tr>
 <td>Performance</td>
@@ -2074,7 +2180,7 @@ with before/after ratings and specific changes.</p>
 <td>ML/AI</td>
 <td>4/10</td>
 <td>9/10</td>
-<td>176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts</td>
+<td>176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts, Professional plan gate on /predict</td>
 </tr>
 <tr>
 <td>Frontend</td>
@@ -2086,7 +2192,7 @@ with before/after ratings and specific changes.</p>
 <td>Monitoring</td>
 <td>3/10</td>
 <td>9/10</td>
-<td>Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules</td>
+<td>Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules, MRR/churn/payment metrics wired</td>
 </tr>
 <tr>
 <td>Risk Engine</td>
@@ -2098,13 +2204,13 @@ with before/after ratings and specific changes.</p>
 <td>Execution</td>
 <td>3/10</td>
 <td>9/10</td>
-<td>FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder</td>
+<td>FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder, Starter plan gate on /order</td>
 </tr>
 <tr>
 <td>Monetization</td>
 <td>2/10</td>
-<td>9/10</td>
-<td>12-phase implementation checklist, Stripe/crypto/PayPal wired, license key system, affiliate program</td>
+<td>10/10</td>
+<td>Real Stripe SDK (not simulated), dunning (3× retry), require_plan + plan_gate, 5 new email types, Prometheus metrics wired, 58/122 checklist items implemented</td>
 </tr>
 </tbody>
 </table>
@@ -2264,7 +2370,68 @@ with before/after ratings and specific changes.</p>
 No doc references a free tier. Every feature table shows which plan is required.
 Every API example includes the <code>Authorization: Bearer $TOKEN</code> header.</p>
 <hr />
-<p><em>Last updated: 2026-07-14</em></p>
+<hr />
+<h2 id="july-2026-code-sprint">July 2026 Code Sprint<a class="headerlink" href="#july-2026-code-sprint" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Monetization rating 9/10 — Stripe calls were simulated, no dunning, no plan gating on API endpoints, no payment emails, Prometheus metrics not wired.</p>
+<p><strong>After (10/10):</strong></p>
+<h3 id="monetizationpayment_processorpy"><code>monetization/payment_processor.py</code><a class="headerlink" href="#monetizationpayment_processorpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>create_stripe_payment_intent()</code> calls <code>stripe.PaymentIntent.create()</code> with idempotency key — no longer simulated</li>
+<li><code>process_payment()</code> creates real PaymentIntent, attaches <code>stripe_customer_id</code> from subscription record</li>
+<li><code>refund_payment()</code> calls <code>stripe.Refund.create()</code> with partial-refund support</li>
+<li><code>run_dunning()</code> retries failed payments 3× (24h / 72h / 168h) then suspends subscription</li>
+<li>All 6 webhook handlers wired to <code>email_triggers</code> and <code>subscription_manager</code></li>
+<li><code>get_payment_stats()</code> reports <code>stripe_configured</code> flag</li>
+</ul>
+<h3 id="monetizationsubscriptionpy"><code>monetization/subscription.py</code><a class="headerlink" href="#monetizationsubscriptionpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>require_plan(minimum_plan)</code> — FastAPI dependency that reads user's active subscription and raises <code>HTTP 403 PLAN_LIMIT_EXCEEDED</code> when below minimum</li>
+<li><code>plan_gate(minimum_plan, user_plan)</code> — boolean helper for non-FastAPI contexts (strategy manager, CLI)</li>
+<li><code>_PLAN_ORDER</code> defines canonical tier hierarchy: trial &lt; free &lt; starter &lt; professional &lt; enterprise &lt; elite</li>
+</ul>
+<h3 id="monetizationanalyticspy"><code>monetization/analytics.py</code><a class="headerlink" href="#monetizationanalyticspy" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Prometheus Gauges: <code>hopefx_mrr_usd</code>, <code>hopefx_arr_usd</code>, <code>hopefx_churn_rate_pct</code>, <code>hopefx_active_subscriptions</code></li>
+<li>Prometheus Counters: <code>hopefx_new_subscriptions_total</code>, <code>hopefx_subscription_cancellations_total</code>, <code>hopefx_trial_conversions_total</code>, <code>hopefx_payment_failures_total</code>, <code>hopefx_affiliate_commissions_paid_total</code></li>
+<li><code>record_subscription_event()</code> increments counters and refreshes gauges on every event</li>
+<li><code>record_payment_failure()</code> and <code>record_affiliate_commission()</code> added</li>
+</ul>
+<h3 id="notificationsemail_triggerspy"><code>notifications/email_triggers.py</code><a class="headerlink" href="#notificationsemail_triggerspy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>send_payment_confirmation_email()</code> — plan, amount, invoice_id, access_code, expires_at</li>
+<li><code>send_subscription_cancelled_email()</code> — access_until, data_deleted_at (90-day retention)</li>
+<li><code>send_subscription_renewal_email()</code> — next_renewal date</li>
+<li><code>send_trial_expiry_warning_email()</code> — days_remaining, upgrade_url</li>
+<li>Removed emoji from risk halt subject line (encoding issues in some MUAs)</li>
+</ul>
+<h3 id="apiplatformpy"><code>api/platform.py</code><a class="headerlink" href="#apiplatformpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>_require_admin()</code> enforces <code>ADMIN_USER_IDS</code> env var on all <code>/api/admin/*</code> endpoints — previously any authenticated user could call admin routes</li>
+<li><code>impersonate_user()</code> generates a real short-lived JWT (5 min, <code>impersonated_by</code> claim) instead of a fake token string</li>
+<li><code>list_users()</code> queries <code>subscription_manager.get_all_subscriptions()</code> for real data</li>
+<li><code>ban_user()</code> cancels the user's subscription via <code>subscription_manager</code></li>
+<li><code>reset_password()</code> sends email via <code>send_risk_halt_email</code></li>
+<li><code>get_user_trades()</code> queries <code>database.models.Trade</code>, falls back to empty list</li>
+</ul>
+<h3 id="apimlpy"><code>api/ml.py</code><a class="headerlink" href="#apimlpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>/predict/{symbol}</code> enforces Professional plan gate via <code>plan_gate()</code> — returns <code>403 PLAN_LIMIT_EXCEEDED</code> for Starter/Free/Trial users</li>
+</ul>
+<h3 id="apitradingpy"><code>api/trading.py</code><a class="headerlink" href="#apitradingpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>/order</code> (place_order) enforces Starter plan gate via <code>plan_gate()</code> — returns <code>403 PLAN_LIMIT_EXCEEDED</code> for Free/Trial users</li>
+</ul>
+<h3 id="strategiesmanagerpy"><code>strategies/manager.py</code><a class="headerlink" href="#strategiesmanagerpy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>StrategyStatus</code> enum (IDLE/RUNNING/PAUSED/STOPPED/ERROR) on every strategy</li>
+<li><code>performance_metrics</code>: signals_generated, trades_taken, win_rate, profit_factor, Sharpe ratio (annualised), max_drawdown, last_signal_at</li>
+<li><code>update_performance()</code> computes all metrics from trade P&amp;L history</li>
+<li><code>STRATEGY_PLAN_REQUIREMENTS</code> map enforces tier gating in <code>generate_signals()</code></li>
+<li><code>list_strategies()</code> returns <code>accessible</code> flag per strategy per user plan</li>
+<li><code>pause_strategy()</code> added alongside start/stop</li>
+</ul>
+<hr />
+<p><em>Last updated: 2026-07-14 (v1.17)</em></p>
 
 
 
