@@ -43,7 +43,7 @@ _LIVE_BASE = "https://api-fxtrade.oanda.com"
 _DEFAULT_TIMEOUT = 10
 
 
-def _resolve_env(value: Any) -> str:
+def _resolve_env(value: object) -> str:
     """Expand ``${ENV_VAR:default}`` placeholders."""
     if not isinstance(value, str):
         return str(value) if value is not None else ""

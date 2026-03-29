@@ -62,7 +62,7 @@ def _load_config() -> None:
         _config = {}
 
 
-def check_prop_firm_rules(account_info: Any) -> None:
+def check_prop_firm_rules(account_info: object) -> None:
     """
     Enforce prop-firm drawdown rules before an order is placed.
 

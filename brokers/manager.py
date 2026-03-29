@@ -507,7 +507,7 @@ class BrokerManager:
     # FIX bridge (low-latency path)
     # ------------------------------------------------------------------
 
-    async def place_order_fix(self, order) -> Any:
+    async def place_order_fix(self, order: object) -> Dict[str, object]:
         """
         Submit order via FIX 4.4 bridge (low-latency path).
 
