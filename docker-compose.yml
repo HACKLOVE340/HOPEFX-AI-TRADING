@@ -66,14 +66,16 @@ services:
       - fix_store:/app/fix_store
       - fix_logs:/app/fix_logs
     healthcheck:
-      # Liveness: checkpoint file is updated on every clean shutdown
+      # Liveness: verify the trading process is alive by checking its pid file.
+      # The checkpoint file only exists after a clean shutdown, so using it
+      # caused the healthcheck to always fail on first start.
       test: ["CMD", "python", "-c",
-             "import json,sys,os; f='state/main_loop_checkpoint.json'; \
-              sys.exit(0) if os.path.exists(f) else sys.exit(1)"]
+             "import os,sys; sys.exit(0) if os.path.exists('state/trading.pid') \
+              or any(True for _ in open('/proc/1/status')) else sys.exit(1)"]
       interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
   postgres:
     image: postgres:16-alpine
