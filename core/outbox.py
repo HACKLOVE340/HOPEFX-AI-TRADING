@@ -1,0 +1,282 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""
+core/outbox.py
+==============
+Transactional outbox for at-least-once delivery of critical compliance events.
+
+Pattern
+-------
+1. The caller writes an OutboxEvent row in the SAME DB transaction as the
+   state change (kill switch activation, AML block, order fill).
+2. OutboxRelay polls the outbox table every RELAY_INTERVAL_SECONDS and
+   publishes unpublished rows to Redis pub/sub.
+3. On successful publish, published_at is set.  Rows are never deleted so
+   the outbox doubles as an audit trail.
+
+This guarantees that even if Redis is down at the moment of the state change,
+the event will be delivered once Redis recovers — no event is silently lost.
+
+Usage
+-----
+    # In the same DB session as your state change:
+    from core.outbox import write_outbox_event
+    write_outbox_event(session, event_type="KILL_SWITCH", channel="hopefx:breach",
+                       payload={"reason": "drawdown exceeded", "activated_by": "risk"})
+
+    # Start the relay background task at startup:
+    from core.outbox import OutboxRelay
+    relay = OutboxRelay()
+    asyncio.create_task(relay.run())
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+RELAY_INTERVAL_SECONDS: float = float(os.getenv("OUTBOX_RELAY_INTERVAL_SECONDS", "2.0"))
+MAX_ATTEMPTS: int = int(os.getenv("OUTBOX_MAX_ATTEMPTS", "10"))
+BATCH_SIZE: int = int(os.getenv("OUTBOX_BATCH_SIZE", "50"))
+
+
+# ── Write helper ──────────────────────────────────────────────────────────────
+
+
+def write_outbox_event(
+    session,
+    event_type: str,
+    channel: str,
+    payload: Dict[str, Any],
+) -> None:
+    """
+    Write a single OutboxEvent row using an existing SQLAlchemy session.
+
+    Call this inside the same ``session.commit()`` block as the state change
+    so the event and the state change are atomic.
+
+    Parameters
+    ----------
+    session    : Active SQLAlchemy session (not yet committed).
+    event_type : Human-readable event type (e.g. "KILL_SWITCH", "AML_BLOCK").
+    channel    : Redis pub/sub channel to publish to (e.g. "hopefx:breach").
+    payload    : JSON-serialisable dict — the event body.
+    """
+    try:
+        from database.models import OutboxEvent
+
+        row = OutboxEvent(
+            event_type=event_type,
+            channel=channel,
+            payload=json.dumps(payload),
+            created_at=datetime.now(timezone.utc),
+            attempts=0,
+        )
+        session.add(row)
+        # Do NOT commit here — the caller owns the transaction.
+        logger.debug("outbox: queued %s → %s", event_type, channel)
+    except Exception as exc:
+        logger.error("outbox: failed to queue %s: %s", event_type, exc)
+
+
+def write_outbox_event_standalone(
+    event_type: str,
+    channel: str,
+    payload: Dict[str, Any],
+) -> bool:
+    """
+    Write an OutboxEvent in its own DB transaction.
+
+    Use this when you don't have an existing session (e.g. from a background
+    task or a path that doesn't already hold a DB session).
+
+    Returns True on success, False on failure.
+    """
+    session = _get_db_session()
+    if session is None:
+        logger.warning(
+            "outbox: DB unavailable — event %s not persisted", event_type
+        )
+        return False
+    try:
+        from database.models import OutboxEvent
+
+        row = OutboxEvent(
+            event_type=event_type,
+            channel=channel,
+            payload=json.dumps(payload),
+            created_at=datetime.now(timezone.utc),
+            attempts=0,
+        )
+        session.add(row)
+        session.commit()
+        logger.debug("outbox: standalone queued %s → %s", event_type, channel)
+        return True
+    except Exception as exc:
+        session.rollback()
+        logger.error("outbox: standalone write failed for %s: %s", event_type, exc)
+        return False
+    finally:
+        session.close()
+
+
+# ── Relay worker ──────────────────────────────────────────────────────────────
+
+
+class OutboxRelay:
+    """
+    Background worker that relays unpublished OutboxEvent rows to Redis.
+
+    Polls the outbox table every RELAY_INTERVAL_SECONDS.  On each tick:
+    - Fetches up to BATCH_SIZE rows where published_at IS NULL and
+      attempts < MAX_ATTEMPTS, ordered by created_at ASC.
+    - Publishes each row's payload to its Redis channel.
+    - Sets published_at on success; increments attempts + last_error on failure.
+
+    The relay is idempotent — if it crashes mid-batch, unpublished rows will
+    be retried on the next tick.
+    """
+
+    def __init__(self) -> None:
+        self._running = False
+
+    async def run(self) -> None:
+        """Run the relay loop until cancelled."""
+        self._running = True
+        logger.info(
+            "OutboxRelay started (interval=%.1fs batch=%d max_attempts=%d)",
+            RELAY_INTERVAL_SECONDS,
+            BATCH_SIZE,
+            MAX_ATTEMPTS,
+        )
+        while self._running:
+            try:
+                await self._relay_batch()
+            except asyncio.CancelledError:
+                logger.info("OutboxRelay stopped")
+                return
+            except Exception as exc:
+                logger.warning("OutboxRelay tick error: %s", exc)
+            await asyncio.sleep(RELAY_INTERVAL_SECONDS)
+
+    def stop(self) -> None:
+        self._running = False
+
+    async def _relay_batch(self) -> None:
+        """Fetch and publish one batch of unpublished events."""
+        session = _get_db_session()
+        if session is None:
+            return
+
+        try:
+            from database.models import OutboxEvent
+
+            rows = (
+                session.query(OutboxEvent)
+                .filter(
+                    OutboxEvent.published_at.is_(None),
+                    OutboxEvent.attempts < MAX_ATTEMPTS,
+                )
+                .order_by(OutboxEvent.created_at.asc())
+                .limit(BATCH_SIZE)
+                .all()
+            )
+
+            if not rows:
+                return
+
+            redis_client = _get_redis()
+
+            for row in rows:
+                try:
+                    if redis_client is not None:
+                        redis_client.publish(row.channel, row.payload)
+                    else:
+                        # Redis unavailable — fall back to in-process event bus
+                        await _publish_in_process(row.channel, row.payload)
+
+                    row.published_at = datetime.now(timezone.utc)
+                    logger.debug(
+                        "outbox: published id=%d type=%s channel=%s",
+                        row.id,
+                        row.event_type,
+                        row.channel,
+                    )
+                except Exception as pub_exc:
+                    row.attempts = (row.attempts or 0) + 1
+                    row.last_error = str(pub_exc)[:500]
+                    logger.warning(
+                        "outbox: publish failed id=%d attempt=%d: %s",
+                        row.id,
+                        row.attempts,
+                        pub_exc,
+                    )
+
+            session.commit()
+
+        except Exception as exc:
+            session.rollback()
+            logger.error("OutboxRelay._relay_batch error: %s", exc)
+        finally:
+            session.close()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _get_db_session():
+    """Return a SQLAlchemy session from app_state, or None."""
+    try:
+        from app import app_state
+
+        if app_state and app_state.db_session_factory:
+            return app_state.db_session_factory()
+    except Exception:
+        pass
+    return None
+
+
+def _get_redis():
+    """Return a synchronous Redis client, or None."""
+    try:
+        import redis as _redis
+
+        url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        client = _redis.from_url(url, decode_responses=True, socket_timeout=2)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
+async def _publish_in_process(channel: str, payload: str) -> None:
+    """Fallback: publish via the async Redis event bus."""
+    try:
+        from core.event_bus import bus
+
+        data = json.loads(payload)
+        await bus.publish(channel, data)
+    except Exception as exc:
+        logger.warning("outbox: in-process fallback publish failed: %s", exc)
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+
+_relay: Optional[OutboxRelay] = None
+
+
+def get_relay() -> OutboxRelay:
+    """Return the module-level OutboxRelay singleton."""
+    global _relay
+    if _relay is None:
+        _relay = OutboxRelay()
+    return _relay
