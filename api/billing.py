@@ -125,32 +125,98 @@ def _tier_features(tier: str) -> list:
 @router.post("/webhook/stripe", include_in_schema=True)
 async def stripe_webhook(request: Request):
     """
-    Stripe webhook receiver.
+    Stripe webhook receiver — production client with signature verification.
 
-    Handles: checkout.session.completed, customer.subscription.deleted,
-    invoice.payment_failed.
+    Handles: payment_intent.succeeded, payment_intent.payment_failed,
+    customer.subscription.*, invoice.paid, invoice.payment_failed,
+    radar.early_fraud_warning.created.
 
     Configure in Stripe Dashboard → Webhooks → Add endpoint:
       URL: https://app.hopefx.io/api/billing/webhook/stripe
+      Events: payment_intent.*, customer.subscription.*, invoice.*, radar.*
     """
+    from monetization.stripe_live import get_stripe_client
+
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
 
+    client = get_stripe_client()
+    event = client.verify_webhook(payload, sig)
+
+    if event is None:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
+
+    result = client.handle_webhook_event(event)
+
+    # Also forward to legacy subscription manager for backward compat
     try:
         mgr = _get_subscription_manager()
-        result = mgr.handle_stripe_webhook(payload, sig)
-        return {"received": True, "result": result}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except RuntimeError as exc:
-        logger.warning(
-            "Stripe webhook received but stripe package unavailable: %s",
-            exc,
+        mgr.handle_stripe_webhook(payload, sig)
+    except Exception:
+        pass
+
+    return {"received": True, "event_type": event.get("type"), "result": result}
+
+
+@router.get("/stripe/config")
+async def stripe_config():
+    """
+    Return safe Stripe configuration for the frontend (no secret keys).
+    Used by the checkout page to initialise Stripe.js.
+    """
+    from monetization.stripe_live import get_stripe_client
+    return get_stripe_client().get_config()
+
+
+class CreatePaymentIntentRequest(BaseModel):
+    customer_id: str
+    amount_usd: float
+    currency: str = "USD"
+    description: str = "HopeFX subscription"
+    metadata: Optional[dict] = None
+    user_ip: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+
+@router.post("/stripe/payment-intent")
+async def create_payment_intent(
+    body: CreatePaymentIntentRequest,
+    request: Request,
+):
+    """
+    Create a Stripe PaymentIntent with Radar fraud scoring and multi-currency support.
+
+    Supported currencies: USD, EUR, GBP, AED, NGN, JPY, CHF, CAD, AUD, SGD.
+    Returns client_secret for frontend Stripe.js confirmation.
+    """
+    from decimal import Decimal
+    from monetization.stripe_live import get_stripe_client
+
+    client = get_stripe_client()
+    user_ip = body.user_ip or request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")
+
+    result = client.create_payment_intent(
+        customer_id=body.customer_id,
+        amount_usd=Decimal(str(body.amount_usd)),
+        currency=body.currency,
+        description=body.description,
+        metadata=body.metadata,
+        user_ip=user_ip,
+        user_agent=user_agent,
+        idempotency_key=body.idempotency_key,
+    )
+
+    if not result.success:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": result.error_code,
+                "message": result.error_message,
+            },
         )
-        return {"received": True, "note": "stripe package not installed"}
-    except Exception as exc:
-        logger.error("Stripe webhook error: %s", exc)
-        raise HTTPException(status_code=500, detail="Webhook processing error")
+
+    return result.to_dict()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
