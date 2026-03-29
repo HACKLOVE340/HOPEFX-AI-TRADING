@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="This is the API documentation for HOPEFX, an AI trading platform.">
+        <meta name="description" content="AI-powered gold and forex trading platform — guides, API reference, and tutorials.">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>HOPEFX API - HOPEFX Documentation</title>
+        <title>API Overview - HOPEFX Documentation</title>
       
     
     
@@ -83,6 +83,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#api-overview" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -114,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              HOPEFX API
+              API Overview
             
           </span>
         </div>
@@ -1783,6 +1788,259 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get a Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subscription-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#health-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health &amp; Status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signal-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Signal Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trading-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trading Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ml-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ML Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#broker-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backtest-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backtest Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monetization-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monetization Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#social-trading-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Social Trading Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mobile-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mobile Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#macro-market-data-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Macro &amp; Market Data Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#websocket-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Responses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interactive-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interactive Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -1802,161 +2060,992 @@
   
 
 
-  <h1>HOPEFX API</h1>
-
+<h1 id="api-overview">API Overview<a class="headerlink" href="#api-overview" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>HOPEFX REST API — base URL: <code>https://your-domain.com</code> (or <code>http://localhost:8000</code> locally).
+All endpoints require a valid JWT unless noted. Trading endpoints also require an active subscription.
+Last updated: 2026-07-14</p>
+</blockquote>
+<hr />
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p>All requests (except <code>/health</code>, <code>/docs</code>, <code>/openapi.json</code>) require:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Authorization: Bearer &lt;access_token&gt;
+</code></pre></div>
+<h3 id="get-a-token">Get a Token<a class="headerlink" href="#get-a-token" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>POST<span class="w"> </span>/api/auth/login
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Content-Type:<span class="w"> </span>application/json
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">{</span><span class="s2">&quot;username&quot;</span>:<span class="w"> </span><span class="s2">&quot;your_user&quot;</span>,<span class="w"> </span><span class="s2">&quot;password&quot;</span>:<span class="w"> </span><span class="s2">&quot;your_pass&quot;</span><span class="o">}</span>
+</code></pre></div>
+<p>Response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;expires_in&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1800</span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="subscription-requirement">Subscription Requirement<a class="headerlink" href="#subscription-requirement" title="Permanent link">&para;</a></h3>
+<p>Trading, signal, ML, and backtest endpoints additionally require a valid
+<code>HOPEFX_LICENSE_KEY</code> set in the server's <code>.env</code>. Without it, these endpoints
+return <code>403 Subscription Required</code>.</p>
+<p>Plan-gated endpoints return <code>403 Plan Limit Exceeded</code> with:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PLAN_LIMIT_EXCEEDED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;required_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;professional&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;current_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;starter&quot;</span><span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h2 id="core-endpoints">Core Endpoints<a class="headerlink" href="#core-endpoints" title="Permanent link">&para;</a></h2>
+<h3 id="health-status">Health &amp; Status<a class="headerlink" href="#health-status" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>None</td>
+<td>Component health check</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/metrics</code></td>
+<td>None</td>
+<td>Prometheus metrics</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/status</code></td>
+<td>JWT</td>
+<td>Full platform status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/status/paper-trading</code></td>
+<td>JWT</td>
+<td>Paper trading clock</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/calendar/today</code></td>
+<td>JWT</td>
+<td>Market calendar (open/closed)</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Health check</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>curl<span class="w"> </span>http://localhost:8000/health
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Full status</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>curl<span class="w"> </span>http://localhost:8000/api/status<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="authentication-endpoints">Authentication Endpoints<a class="headerlink" href="#authentication-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/login</code></td>
+<td>None</td>
+<td>Get JWT token</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/refresh</code></td>
+<td>JWT</td>
+<td>Refresh access token</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/logout</code></td>
+<td>JWT</td>
+<td>Invalidate token</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/auth/me</code></td>
+<td>JWT</td>
+<td>Current user profile</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/register</code></td>
+<td>None</td>
+<td>Create account</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/2fa/enable</code></td>
+<td>JWT</td>
+<td>Enable TOTP 2FA (Professional+)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/2fa/verify</code></td>
+<td>JWT</td>
+<td>Verify TOTP code</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/2fa/disable</code></td>
+<td>JWT</td>
+<td>Disable 2FA</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/password/change</code></td>
+<td>JWT</td>
+<td>Change password</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/auth/password/reset</code></td>
+<td>None</td>
+<td>Request password reset</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="signal-endpoints">Signal Endpoints<a class="headerlink" href="#signal-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/signals/latest</code></td>
+<td>Starter+</td>
+<td>Latest signal for a symbol</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/signals/history</code></td>
+<td>Starter+</td>
+<td>Signal history (paginated)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/signals/performance</code></td>
+<td>Starter+</td>
+<td>Signal win rate and metrics</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/signals/feed</code></td>
+<td>Professional+</td>
+<td>Social signal feed</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/signals/subscribe</code></td>
+<td>Starter+</td>
+<td>Subscribe to signal alerts</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Latest signal</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>curl<span class="w"> </span><span class="s2">&quot;http://localhost:8000/api/signals/latest?symbol=XAUUSD&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Signal history (last 50)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>curl<span class="w"> </span><span class="s2">&quot;http://localhost:8000/api/signals/history?symbol=XAUUSD&amp;limit=50&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<p>Response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;direction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BUY&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.72</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">&quot;ml_probability&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.68</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;strategy_brain&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-14T10:30:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="nt">&quot;entry&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2345.50</span><span class="p">,</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="nt">&quot;stop_loss&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2330.00</span><span class="p">,</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="nt">&quot;take_profit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2375.00</span><span class="p">,</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="nt">&quot;risk_reward&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2.0</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h2 id="trading-endpoints">Trading Endpoints<a class="headerlink" href="#trading-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/trading/account</code></td>
+<td>Starter+</td>
+<td>Account balance and equity</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/trading/positions</code></td>
+<td>Starter+</td>
+<td>Open positions</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/trading/trades</code></td>
+<td>Starter+</td>
+<td>Trade history</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/trading/brain-state</code></td>
+<td>Starter+</td>
+<td>Strategy Brain state</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/trading/risk-metrics</code></td>
+<td>Starter+</td>
+<td>CVaR, VaR, drawdown</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/trading/reconcile</code></td>
+<td>Starter+</td>
+<td>Trigger OMS reconciliation</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/trading/emergency-stop</code></td>
+<td>Starter+</td>
+<td>Activate kill switch</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/trading/positions</code></td>
+<td>Starter+</td>
+<td>Close all positions</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Account info</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>http://localhost:8000/api/trading/account<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Risk metrics</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>curl<span class="w"> </span>http://localhost:8000/api/trading/risk-metrics<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Emergency stop</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/trading/emergency-stop<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Kill-Switch-Token: </span><span class="nv">$HOPEFX_KILL_SWITCH_TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="ml-endpoints">ML Endpoints<a class="headerlink" href="#ml-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/ml/health</code></td>
+<td>Professional+</td>
+<td>Model health and feature count</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/ml/accuracy</code></td>
+<td>Professional+</td>
+<td>OOS accuracy and metadata</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/ml/regime</code></td>
+<td>Professional+</td>
+<td>Current market regime</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/ml/feature-importance</code></td>
+<td>Professional+</td>
+<td>Top feature importances</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/ml/predict/{symbol}</code></td>
+<td>Professional+</td>
+<td>Run inference on latest data</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/ml/fallback-status</code></td>
+<td>Professional+</td>
+<td>Whether fallback model is active</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/ml/retrain</code></td>
+<td>Elite</td>
+<td>Trigger model retrain</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/online-learner/status</code></td>
+<td>Elite</td>
+<td>Online learner state</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/online-learner/partial-fit</code></td>
+<td>Elite</td>
+<td>Manual partial fit</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Model health</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>curl<span class="w"> </span>http://localhost:8000/api/ml/health<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Run prediction</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/ml/predict/XAUUSD<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Feature importance</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>curl<span class="w"> </span>http://localhost:8000/api/ml/feature-importance<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="broker-endpoints">Broker Endpoints<a class="headerlink" href="#broker-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/broker/status</code></td>
+<td>Starter+</td>
+<td>Broker connection status</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/broker/test-connection</code></td>
+<td>Starter+</td>
+<td>Test broker connectivity</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/broker/fix/status</code></td>
+<td>Professional+</td>
+<td>FIX session state (IBKR)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/broker/instruments</code></td>
+<td>Starter+</td>
+<td>Available instruments</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/broker/spread/{symbol}</code></td>
+<td>Starter+</td>
+<td>Current bid/ask spread</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Broker status</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>curl<span class="w"> </span>http://localhost:8000/api/broker/status<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Test connection</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/broker/test-connection<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="backtest-endpoints">Backtest Endpoints<a class="headerlink" href="#backtest-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/backtest/run</code></td>
+<td>Starter+</td>
+<td>Run a single-symbol backtest</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/backtest/multi-symbol</code></td>
+<td>Professional+</td>
+<td>Multi-symbol backtest</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backtest/results/latest</code></td>
+<td>Starter+</td>
+<td>Latest backtest results</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backtest/results/{id}</code></td>
+<td>Starter+</td>
+<td>Specific backtest result</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/backtest/history</code></td>
+<td>Starter+</td>
+<td>Backtest run history</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Run backtest</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/backtest/run<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s1">    &quot;symbol&quot;: &quot;XAUUSD&quot;,</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">    &quot;strategy&quot;: &quot;ma_crossover&quot;,</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">    &quot;years&quot;: 3,</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">    &quot;initial_capital&quot;: 100000</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">  }&#39;</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Multi-symbol backtest</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/backtest/multi-symbol<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="s1">    &quot;symbols&quot;: [&quot;XAUUSD&quot;, &quot;BTCUSD&quot;, &quot;EURUSD&quot;],</span>
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="s1">    &quot;years&quot;: 10,</span>
+<a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="s1">    &quot;oos_frac&quot;: 0.3</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<hr />
+<h2 id="risk-endpoints">Risk Endpoints<a class="headerlink" href="#risk-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/risk/status</code></td>
+<td>Starter+</td>
+<td>Risk engine status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/risk/halt</code></td>
+<td>Starter+</td>
+<td>Kill switch state</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/risk/halt</code></td>
+<td>Starter+</td>
+<td>Clear kill switch (requires token)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/risk/limits</code></td>
+<td>Starter+</td>
+<td>Configured risk limits</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/risk/limits</code></td>
+<td>Starter+</td>
+<td>Update risk limits</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Risk status</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>curl<span class="w"> </span>http://localhost:8000/api/risk/status<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Clear kill switch</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>DELETE<span class="w"> </span>http://localhost:8000/api/risk/halt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;X-Kill-Switch-Token: </span><span class="nv">$HOPEFX_KILL_SWITCH_TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="monetization-endpoints">Monetization Endpoints<a class="headerlink" href="#monetization-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/pricing</code></td>
+<td>None</td>
+<td>All subscription tiers</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/pricing/{tier}</code></td>
+<td>None</td>
+<td>Specific tier details</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/monetization/subscribe</code></td>
+<td>JWT</td>
+<td>Create subscription</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/subscription/me</code></td>
+<td>JWT</td>
+<td>Current subscription status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/subscription/{user_id}</code></td>
+<td>JWT</td>
+<td>User subscription</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/monetization/subscription/{id}/cancel</code></td>
+<td>JWT</td>
+<td>Cancel subscription</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/subscription/{user_id}/limits</code></td>
+<td>JWT</td>
+<td>Feature limits</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/monetization/activate-code</code></td>
+<td>JWT</td>
+<td>Activate license key</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/validate-code/{code}</code></td>
+<td>JWT</td>
+<td>Validate license key</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/invoices/{user_id}</code></td>
+<td>JWT</td>
+<td>List invoices</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/invoices/{id}/pdf</code></td>
+<td>JWT</td>
+<td>Download invoice PDF</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/monetization/affiliate/signup</code></td>
+<td>JWT</td>
+<td>Join affiliate program</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/monetization/affiliate/dashboard</code></td>
+<td>JWT</td>
+<td>Affiliate earnings</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/billing/affiliate/generate-link</code></td>
+<td>JWT</td>
+<td>Get referral link</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/monetization/stripe/webhook</code></td>
+<td>Stripe</td>
+<td>Stripe event receiver</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="social-trading-endpoints">Social Trading Endpoints<a class="headerlink" href="#social-trading-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/social/leaderboard</code></td>
+<td>Professional+</td>
+<td>Trader rankings</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/feed/signals</code></td>
+<td>Professional+</td>
+<td>Social signal feed</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/feed/opt-in</code></td>
+<td>Professional+</td>
+<td>Share your signals</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/feed/opt-out</code></td>
+<td>Professional+</td>
+<td>Stop sharing signals</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/profiles/{username}</code></td>
+<td>Professional+</td>
+<td>Trader profile</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/profiles/{username}/follow</code></td>
+<td>Professional+</td>
+<td>Follow a trader</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/profiles/{username}/follow</code></td>
+<td>Professional+</td>
+<td>Unfollow a trader</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/profiles/{username}/signals</code></td>
+<td>Professional+</td>
+<td>Trader's signal history</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="mobile-endpoints">Mobile Endpoints<a class="headerlink" href="#mobile-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/api/mobile/register-push</code></td>
+<td>Professional+</td>
+<td>Register device for push</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/mobile/register-push</code></td>
+<td>Professional+</td>
+<td>Unregister device</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/mobile/test-push</code></td>
+<td>Professional+</td>
+<td>Send test notification</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/mobile/push-status</code></td>
+<td>Professional+</td>
+<td>Push registration status</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="macro-market-data-endpoints">Macro &amp; Market Data Endpoints<a class="headerlink" href="#macro-market-data-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/macro/snapshot</code></td>
+<td>Professional+</td>
+<td>Latest macro data (DXY, VIX, etc.)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/market-data/prices/{symbol}</code></td>
+<td>Starter+</td>
+<td>Current price</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/market-data/ohlcv/{symbol}</code></td>
+<td>Starter+</td>
+<td>OHLCV bars</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/market-data/history/{symbol}</code></td>
+<td>Starter+</td>
+<td>Historical data</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="admin-endpoints">Admin Endpoints<a class="headerlink" href="#admin-endpoints" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>Requires admin JWT (separate admin role).</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/logs</code></td>
+<td>Application logs</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/subscriptions</code></td>
+<td>All subscriptions</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/admin/generate-code</code></td>
+<td>Manual license key generation</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/admin/promo-codes</code></td>
+<td>Create promotional code</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/admin/revenue/summary</code></td>
+<td>Revenue summary</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/admin/users/{id}/override-plan</code></td>
+<td>Override user plan</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="websocket-endpoints">WebSocket Endpoints<a class="headerlink" href="#websocket-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Plan</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ws://host/ws/prices?token=&lt;jwt&gt;</code></td>
+<td>Starter+</td>
+<td>Real-time price stream</td>
+</tr>
+<tr>
+<td><code>ws://host/ws/signals?token=&lt;jwt&gt;</code></td>
+<td>Starter+</td>
+<td>Real-time signal stream</td>
+</tr>
+<tr>
+<td><code>ws://host/ws/positions?token=&lt;jwt&gt;</code></td>
+<td>Starter+</td>
+<td>Real-time position updates</td>
+</tr>
+<tr>
+<td><code>ws://host/ws/feed?token=&lt;jwt&gt;</code></td>
+<td>Professional+</td>
+<td>Social trading feed stream</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">ws</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WebSocket</span><span class="p">(</span><span class="sb">`ws://localhost:8000/ws/prices?token=</span><span class="si">${</span><span class="nx">token</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nx">ws</span><span class="p">.</span><span class="nx">onmessage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">symbol</span><span class="p">,</span><span class="w"> </span><span class="nx">bid</span><span class="p">,</span><span class="w"> </span><span class="nx">ask</span><span class="p">,</span><span class="w"> </span><span class="nx">timestamp</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">e</span><span class="p">.</span><span class="nx">data</span><span class="p">);</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`</span><span class="si">${</span><span class="nx">symbol</span><span class="si">}</span><span class="sb">: </span><span class="si">${</span><span class="nx">bid</span><span class="si">}</span><span class="sb">/</span><span class="si">${</span><span class="nx">ask</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="p">};</span>
+</code></pre></div>
+<hr />
+<h2 id="error-responses">Error Responses<a class="headerlink" href="#error-responses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td><code>VALIDATION_ERROR</code></td>
+<td>Invalid request body or parameters</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>UNAUTHORIZED</code></td>
+<td>Missing or expired JWT</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>SUBSCRIPTION_REQUIRED</code></td>
+<td>No valid license key</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>PLAN_LIMIT_EXCEEDED</code></td>
+<td>Feature requires higher plan</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>NOT_FOUND</code></td>
+<td>Resource does not exist</td>
+</tr>
+<tr>
+<td>422</td>
+<td><code>UNPROCESSABLE_ENTITY</code></td>
+<td>Request body failed validation</td>
+</tr>
+<tr>
+<td>429</td>
+<td><code>RATE_LIMIT_EXCEEDED</code></td>
+<td>Too many requests</td>
+</tr>
+<tr>
+<td>500</td>
+<td><code>INTERNAL_ERROR</code></td>
+<td>Server error (check Sentry)</td>
+</tr>
+</tbody>
+</table>
+<p>All error responses follow this format:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PLAN_LIMIT_EXCEEDED&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;This feature requires a Professional subscription or above.&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">&quot;required_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;professional&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">&quot;current_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;starter&quot;</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h2 id="rate-limits">Rate Limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Requests/minute</th>
+<th>WebSocket connections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Starter</td>
+<td>60</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Professional</td>
+<td>300</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Enterprise</td>
+<td>1,000</td>
+<td>50</td>
+</tr>
+<tr>
+<td>Elite</td>
+<td>Unlimited</td>
+<td>Unlimited</td>
+</tr>
+</tbody>
+</table>
+<p>Rate limit headers on every response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>X-RateLimit-Limit: 300
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>X-RateLimit-Remaining: 287
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>X-RateLimit-Reset: 1720000060
+</code></pre></div></p>
+<hr />
+<h2 id="interactive-documentation">Interactive Documentation<a class="headerlink" href="#interactive-documentation" title="Permanent link">&para;</a></h2>
 <ul>
-<li>url: https://api.hopefx.com/v1
-paths:
-  /auth/login:
-    post:
-      summary: User login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                username:
-                  type: string
-                password:
-                  type: string
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-        '401':
-          description: Invalid credentials</li>
+<li><strong>Swagger UI:</strong> <code>http://localhost:8000/docs</code></li>
+<li><strong>ReDoc:</strong> <code>http://localhost:8000/redoc</code></li>
+<li><strong>OpenAPI JSON:</strong> <code>http://localhost:8000/openapi.json</code></li>
 </ul>
-<p>/market_data/prices:
-    get:
-      summary: Get market prices
-      parameters:
-        - in: query
-          name: symbol
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  symbol:
-                    type: string
-                  price:
-                    type: number</p>
-<p>/trading/orders:
-    post:
-      summary: Place a new order
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                type:
-                  type: string
-                symbol:
-                  type: string
-                quantity:
-                  type: number
-      responses:
-        '201':
-          description: Order created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  orderId:
-                    type: string</p>
-<p>/portfolio:
-    get:
-      summary: Get portfolio details
-      responses:
-        '200':
-          description: Portfolio details retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  totalValue:
-                    type: number
-                  positions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        symbol:
-                          type: string
-                        quantity:
-                          type: number</p>
-<p>/backtesting/run:
-    post:
-      summary: Run a backtest
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                strategyId:
-                  type: string
-                startDate:
-                  type: string
-                  format: date
-                endDate:
-                  type: string
-                  format: date
-      responses:
-        '200':
-          description: Backtest results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  results:
-                    type: object</p>
-<p>/risk_management:
-    post:
-      summary: Set risk management rules
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                maxDrawdown:
-                  type: number
-                maxPositionSize:
-                  type: number
-      responses:
-        '200':
-          description: Risk management rules set</p>
+<p>For the full endpoint reference including request/response schemas, see <a href="../API_REFERENCE/">API_REFERENCE.md</a>.</p>
+<hr />
+<p><em>Last updated: 2026-07-14</em></p>
 
 
 
 
 
 
-
-  
-  
 
 
 
