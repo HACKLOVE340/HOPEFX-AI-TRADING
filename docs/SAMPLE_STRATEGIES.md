@@ -7,35 +7,70 @@
 
 ## Subscription Requirements
 
-Strategies are gated by subscription tier:
+Strategies are gated by subscription tier. Attempting to use a strategy above your
+plan returns `403 Plan Limit Exceeded` with `{"required_plan": "professional"}`.
 
-| Strategy | Starter | Pro | Elite |
-|----------|---------|-----|-------|
-| MA Crossover | ✅ | ✅ | ✅ |
-| EMA Crossover | ✅ | ✅ | ✅ |
-| RSI | ✅ | ✅ | ✅ |
-| MACD | — | ✅ | ✅ |
-| Bollinger Bands | — | ✅ | ✅ |
-| Breakout | — | ✅ | ✅ |
-| Mean Reversion | — | ✅ | ✅ |
-| Stochastic | — | ✅ | ✅ |
-| SMC/ICT | — | — | ✅ |
-| Strategy Brain (ML consensus) | — | — | ✅ |
-| Custom strategies | — | ✅ | ✅ |
+| Strategy | Trial | Starter | Professional | Enterprise | Elite |
+|----------|-------|---------|-------------|------------|-------|
+| MA Crossover | No | Yes | Yes | Yes | Yes |
+| EMA Crossover | No | Yes | Yes | Yes | Yes |
+| RSI Reversal | No | Yes | Yes | Yes | Yes |
+| Ichimoku | No | Yes | Yes | Yes | Yes |
+| MACD | No | No | Yes | Yes | Yes |
+| Bollinger Bands | No | No | Yes | Yes | Yes |
+| Breakout | No | No | Yes | Yes | Yes |
+| Mean Reversion | No | No | Yes | Yes | Yes |
+| Stochastic | No | No | Yes | Yes | Yes |
+| SMC/ICT | No | No | No | Yes | Yes |
+| Strategy Brain (ML consensus) | No | No | No | No | Yes |
+| Custom strategies | No | No | Yes | Yes | Yes |
+| Strategy Marketplace (buy) | No | No | Yes | Yes | Yes |
+| Strategy Marketplace (sell) | No | No | Yes | Yes | Yes |
 
-Attempting to use a strategy above your plan returns `403 Plan Limit Exceeded`.
+### How Gating Works
+
+The `require_plan` decorator on each strategy endpoint enforces the tier check:
+
+```python
+from monetization.subscription import require_plan
+
+@router.post("/api/strategies/smc_ict/signal")
+@require_plan("enterprise")   # Enterprise and above
+async def smc_ict_signal(request: SignalRequest, user=Depends(get_current_user)):
+    ...
+
+@router.post("/api/strategies/ma_crossover/signal")
+@require_plan("starter")      # All paid plans
+async def ma_crossover_signal(request: SignalRequest, user=Depends(get_current_user)):
+    ...
+```
+
+The `require_plan` check runs before any strategy logic. Blocked requests never
+reach the strategy code.
+
+### Checking Your Available Strategies
+
+```bash
+# List strategies available on your current plan
+curl http://localhost:8000/api/strategies/available \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check a specific strategy's plan requirement
+curl http://localhost:8000/api/strategies/smc_ict/info \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Strategy Overview](#strategy-overview)
 2. [Getting Started](#getting-started)
-3. [Trend Following Strategies](#trend-following-strategies)
-4. [Mean Reversion Strategies](#mean-reversion-strategies)
-5. [Momentum Strategies](#momentum-strategies)
-6. [Advanced Strategies](#advanced-strategies)
-7. [ML-Based Strategies](#ml-based-strategies)
+3. [Trend Following Strategies](#trend-following-strategies) — Starter+
+4. [Mean Reversion Strategies](#mean-reversion-strategies) — Starter+ / Professional+
+5. [Momentum Strategies](#momentum-strategies) — Professional+
+6. [Advanced Strategies](#advanced-strategies) — Enterprise+
+7. [ML-Based Strategies](#ml-based-strategies) — Elite
 8. [Strategy Best Practices](#strategy-best-practices)
 
 ---
@@ -164,6 +199,8 @@ while True:
 ---
 
 ## Trend Following Strategies
+
+> **Plan required:** Starter and above for MA Crossover, EMA Crossover, RSI, Ichimoku.
 
 ### 1. Simple Moving Average Crossover
 
@@ -345,6 +382,8 @@ class IchimokuStrategy(BaseStrategy):
 
 ## Mean Reversion Strategies
 
+> **Plan required:** Bollinger Bands and RSI Reversal require **Starter+**. Mean Reversion (statistical) requires **Professional+**.
+
 ### 4. Bollinger Bands Mean Reversion
 
 **Concept:** Buy when price touches lower band, sell at upper band.
@@ -470,6 +509,8 @@ class RSIReversalStrategy(BaseStrategy):
 
 ## Momentum Strategies
 
+> **Plan required:** Professional and above for MACD, Breakout, and Stochastic.
+
 ### 6. MACD Strategy
 
 **Concept:** Trade MACD line and signal line crossovers.
@@ -590,6 +631,8 @@ class BreakoutStrategy(BaseStrategy):
 ---
 
 ## Advanced Strategies
+
+> **Plan required:** Enterprise and above for SMC/ICT. Professional and above for custom strategies.
 
 ### 8. SMC/ICT Smart Money Concepts
 
@@ -771,6 +814,9 @@ class FibonacciStrategy(BaseStrategy):
 
 ## ML-Based Strategies
 
+> **Plan required:** Elite only for Strategy Brain (ML consensus) and custom ML model retraining.
+> Professional and above for ML predictions using the pre-trained production model.
+
 ### 10. LSTM Price Prediction
 
 **Concept:** Use neural network to predict next candle direction.
@@ -928,10 +974,37 @@ def generate_signal(self, data):
 
 ## Getting Help
 
-- **Discord:** `#trading-strategies` channel
-- **GitHub:** Submit issues or discussions
-- **Documentation:** [docs/](../docs/)
+- **Support email:** support@hopefx.io (response time depends on your plan — see [FAQ.md](FAQ.md))
+- **GitHub Issues:** Bug reports and feature requests
+- **Documentation:** [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md), [ML_GUIDE.md](ML_GUIDE.md), [RISK_MANAGEMENT.md](RISK_MANAGEMENT.md)
 
 ---
 
-*These sample strategies are for educational purposes. Always backtest and paper trade before using real money.*
+## Deploying a Strategy to Live Trading
+
+Before deploying any strategy with real money:
+
+1. **Backtest** — minimum 3 years of data, walk-forward validated
+   ```bash
+   python real_data_backtest.py --symbol XAU_USD --years 3 --strategy ma_crossover
+   ```
+
+2. **Paper trade** — minimum 30 days on OANDA practice account
+   ```bash
+   BROKER_TYPE=oanda OANDA_PRACTICE=true python app.py
+   ```
+
+3. **Review metrics** — Sharpe > 1.0, max drawdown < 15%, win rate > 50%
+
+4. **Set risk limits** — configure `DAILY_LOSS_LIMIT_PCT` and `MAX_DRAWDOWN_PCT`
+
+5. **Enable live trading** — only after 30 clean paper trading days
+   ```bash
+   FEATURE_LIVE_TRADING=true BROKER_TYPE=oanda OANDA_PRACTICE=false python app.py
+   ```
+
+See [live_trading_gate.md](live_trading_gate.md) for the full live trading checklist.
+
+---
+
+*These sample strategies are for educational purposes. Always backtest and paper trade before using real money. Past performance does not guarantee future results.*
