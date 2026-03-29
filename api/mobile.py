@@ -97,3 +97,77 @@ async def push_status(user: TokenPayload = Depends(get_current_user)):
         "fcm_enabled": push_manager.fcm_enabled,
         "devices": len(push_manager.get_tokens(user.sub)),
     }
+
+
+# ── React Native / Expo push token endpoint ───────────────────────────────────
+# The React Native app sends Expo push tokens (not raw FCM tokens).
+# This endpoint accepts the Expo token format and stores it alongside FCM tokens.
+
+class ExpoPushTokenBody(BaseModel):
+    token: str = Field(..., min_length=10, description="Expo push token (ExponentPushToken[...])")
+    platform: str = Field("android", description="'ios' or 'android'")
+    device_id: str = Field("unknown", description="Device model ID")
+
+
+@router.post("/push-token", summary="Register Expo push token (React Native)")
+async def register_expo_push_token(
+    body: ExpoPushTokenBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Register an Expo push token from the React Native mobile app.
+    Stores the token and maps it to the authenticated user.
+    """
+    push_manager.register_device(user.sub, body.token)
+    logger.info(
+        "Expo push token registered: user=%s platform=%s device=%s",
+        user.sub, body.platform, body.device_id,
+    )
+    return {
+        "registered": True,
+        "user_id": user.sub,
+        "platform": body.platform,
+        "device_id": body.device_id,
+    }
+
+
+# ── Notification preferences ──────────────────────────────────────────────────
+# In-memory store — swap for DB-backed store in production.
+
+_notification_prefs: dict[str, dict] = {}
+
+_DEFAULT_PREFS = {
+    "signals": True,
+    "trade_fills": True,
+    "price_alerts": True,
+    "daily_summary": True,
+    "risk_warnings": True,
+}
+
+
+class NotificationPrefsBody(BaseModel):
+    signals: bool | None = None
+    trade_fills: bool | None = None
+    price_alerts: bool | None = None
+    daily_summary: bool | None = None
+    risk_warnings: bool | None = None
+
+
+@router.get("/notification-prefs", summary="Get notification preferences")
+async def get_notification_prefs(user: TokenPayload = Depends(get_current_user)):
+    """Return the authenticated user's push notification preferences."""
+    return _notification_prefs.get(user.sub, _DEFAULT_PREFS.copy())
+
+
+@router.patch("/notification-prefs", summary="Update notification preferences")
+async def update_notification_prefs(
+    body: NotificationPrefsBody,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Partially update push notification preferences for the authenticated user."""
+    current = _notification_prefs.get(user.sub, _DEFAULT_PREFS.copy())
+    updates = body.model_dump(exclude_none=True)
+    current.update(updates)
+    _notification_prefs[user.sub] = current
+    logger.info("Notification prefs updated: user=%s prefs=%s", user.sub, current)
+    return current
