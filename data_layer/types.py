@@ -69,6 +69,10 @@ class GoldTick:
 
     All prices in USD per troy ounce.
     lineage_id links back to DataLineage record.
+
+    Note: spread is computed as ask - bid when not explicitly provided.
+    Because this is a frozen dataclass, spread must be passed explicitly
+    or computed before construction. Use GoldTick.make() for auto-spread.
     """
     symbol:      str            # always "XAU_USD"
     timestamp:   datetime       # UTC, microsecond precision
@@ -81,6 +85,11 @@ class GoldTick:
     spread:      float          = 0.0
     lineage_id:  str            = field(default_factory=lambda: str(uuid.uuid4()))
     raw:         Optional[Dict[str, Any]] = field(default=None, compare=False)
+
+    def __post_init__(self) -> None:
+        # Auto-compute spread when not explicitly set (spread == 0 but ask > bid)
+        if self.spread == 0.0 and self.ask > self.bid:
+            object.__setattr__(self, "spread", round(self.ask - self.bid, 6))
 
     def is_valid(self) -> bool:
         return (
@@ -130,6 +139,13 @@ class MicrostructureSnapshot:
     depth_imbalance:     float   = 0.0
     vwap:                float   = 0.0
     tick_count:          int     = 0
+
+    @property
+    def mid(self) -> float:
+        """Mid price computed from bid/ask."""
+        if self.bid > 0 and self.ask > 0:
+            return (self.bid + self.ask) / 2.0
+        return self.vwap
 
 
 # ── News article ──────────────────────────────────────────────────────────────
