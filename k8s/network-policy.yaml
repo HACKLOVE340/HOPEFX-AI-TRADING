@@ -1,0 +1,163 @@
+# ── NetworkPolicy — default deny + explicit allow ─────────────────────────────
+#
+# Security model:
+#   1. Default deny all ingress and egress for the hopefx namespace.
+#   2. Allow ingress to hopefx-api only from the ingress controller namespace.
+#   3. Allow hopefx-api egress to: PostgreSQL, Redis, OANDA (external), DNS.
+#   4. Allow hopefx-frontend ingress from ingress controller.
+#   5. Allow hopefx-frontend egress to hopefx-api only.
+#
+# Adjust namespace selectors to match your ingress controller's namespace label.
+
+---
+# Default deny all ingress and egress in the hopefx namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: hopefx
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Allow ingress to hopefx-api from the ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-api
+  namespace: hopefx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Ingress controller namespace (nginx-ingress or similar)
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        # Also allow from within the hopefx namespace (frontend → api)
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hopefx-frontend
+      ports:
+        - protocol: TCP
+          port: 8000
+
+---
+# Allow hopefx-api egress: PostgreSQL, Redis, DNS, OANDA (HTTPS)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-egress
+  namespace: hopefx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-api
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # PostgreSQL (in-cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hopefx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Redis (in-cluster)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hopefx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # External HTTPS (OANDA, Stripe, Sentry, etc.)
+    # Restrict to port 443 only — no arbitrary outbound
+    - ports:
+        - protocol: TCP
+          port: 443
+
+    # ZeroMQ MT5 bridge (if running in-cluster)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mt5-bridge
+      ports:
+        - protocol: TCP
+          port: 5555
+        - protocol: TCP
+          port: 5556
+
+---
+# Allow ingress to hopefx-frontend from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: hopefx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+
+---
+# Allow hopefx-frontend egress to hopefx-api and DNS only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-egress
+  namespace: hopefx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-frontend
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # hopefx-api
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hopefx-api
+      ports:
+        - protocol: TCP
+          port: 8000

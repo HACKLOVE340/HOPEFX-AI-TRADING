@@ -1,46 +1,51 @@
+# ── HopeFX API Service ────────────────────────────────────────────────────────
+# ClusterIP for internal traffic (Ingress terminates TLS externally).
+# Selectors match the Deployment pod labels exactly.
 apiVersion: v1
 kind: Service
 metadata:
-  name: example-service
-spec:
-  type: LoadBalancer
-  ports:
-    - port: 80
-      targetPort: 8080
-      protocol: TCP
-      name: http
-    - port: 443
-      targetPort: 8443
-      protocol: TCP
-      name: https
-  selector:
-    app: example-app
-    tier: frontend
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: example-clusterip-service
+  name: hopefx-api
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: hopefx-platform
+  annotations:
+    # Prometheus scrape via ServiceMonitor (if using kube-prometheus-stack)
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP
-  ports:
-    - port: 80
-      targetPort: 8080
-      protocol: TCP
-      name: http
   selector:
-    app: example-app
+    app.kubernetes.io/name: hopefx-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+      protocol: TCP
+    - name: ws
+      port: 8080
+      targetPort: 8000
+      protocol: TCP
+
 ---
+# ── HopeFX Frontend Service ───────────────────────────────────────────────────
 apiVersion: v1
 kind: Service
 metadata:
-  name: example-nodeport-service
+  name: hopefx-frontend
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: hopefx-platform
 spec:
-  type: NodePort
-  ports:
-    - port: 30000
-      targetPort: 8080
-      protocol: TCP
-      name: http
+  type: ClusterIP
   selector:
-    app: example-app
+    app.kubernetes.io/name: hopefx-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
