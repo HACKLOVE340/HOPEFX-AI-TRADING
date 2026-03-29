@@ -199,6 +199,13 @@ class RiskManager:
         # after a drawdown-triggered halt.
         self._restore_halt_state()
 
+        # ── Data layer integration ────────────────────────────────────────────
+        # The risk manager reads current gold price and macro impact score
+        # from the data_layer orchestrator when available.
+        # This is non-blocking — falls back gracefully if orchestrator not started.
+        self._dl_impact_cache: float = 0.0
+        self._dl_impact_ts: float = 0.0
+
     # ── Properties ────────────────────────────────────────────────────────────
 
     @property
@@ -1313,6 +1320,42 @@ class RiskManager:
             reason="OK",
         )
 
+    def get_current_gold_price(self) -> Optional[float]:
+        """
+        Return the current XAU/USD mid price from the data layer orchestrator.
+
+        Falls back to None if the orchestrator is not started or has no live tick.
+        Callers should use their own entry_price when this returns None.
+        """
+        import time
+        now = time.time()
+        # Cache for 5 seconds to avoid hammering the orchestrator
+        if now - self._dl_impact_ts < 5.0 and self._dl_impact_cache > 0:
+            return self._dl_impact_cache
+        try:
+            from data_layer.orchestrator import orchestrator
+            tick = orchestrator.get_latest_tick()
+            if tick and tick.mid > 0:
+                self._dl_impact_cache = tick.mid
+                self._dl_impact_ts = now
+                return tick.mid
+        except Exception:
+            pass
+        return None
+
+    def get_macro_impact_score(self) -> float:
+        """
+        Return the current macro calendar impact score [0, 1] from the data layer.
+
+        A score > 0.7 indicates a high-impact event is imminent or just released.
+        Risk manager uses this to reduce position size during volatile macro windows.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            return orchestrator.get_current_impact_score()
+        except Exception:
+            return 0.0
+
     def can_open_position(self, size: float) -> Tuple[bool, str]:
         """Check whether a new position can be opened."""
         cfg = self.config
@@ -1336,6 +1379,10 @@ class RiskManager:
             )
             if dd_pct >= cfg.max_drawdown:
                 return False, f"Max drawdown ({cfg.max_drawdown}%) reached"
+        # Data layer: block during extreme macro impact (score > 0.85)
+        impact = self.get_macro_impact_score()
+        if impact > 0.85:
+            return False, f"Macro impact score {impact:.2f} too high — waiting for event to pass"
         return True, "OK"
 
     def validate_trade(self, symbol: str, size: float, side: str) -> Tuple[bool, str]:

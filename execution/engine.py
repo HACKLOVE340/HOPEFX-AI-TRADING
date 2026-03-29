@@ -300,6 +300,41 @@ class ExecutionEngine:
         t0 = time.monotonic()
         self._total_orders += 1
 
+        # ── 0. Data layer safety check ────────────────────────────────────────
+        # Block execution if the data layer reports unsafe conditions
+        # (no live feed, extreme macro impact, blackout window).
+        # This is belt-and-suspenders — gatekeeper already checks this.
+        try:
+            from data_layer.orchestrator import orchestrator
+            if orchestrator._started and not orchestrator.is_safe_to_trade():
+                self._total_blocks += 1
+                return self._blocked_report(
+                    request,
+                    "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)",
+                    t0,
+                )
+            # Enrich request with current market price if not set
+            if request.price is None and request.order_type == "MARKET":
+                tick = orchestrator.get_latest_tick(request.symbol)
+                if tick and tick.mid > 0:
+                    request = ExecutionRequest(
+                        symbol=request.symbol,
+                        side=request.side,
+                        quantity=request.quantity,
+                        order_type=request.order_type,
+                        price=tick.mid,
+                        stop_price=request.stop_price,
+                        stop_loss=request.stop_loss,
+                        take_profit=request.take_profit,
+                        strategy_id=request.strategy_id,
+                        request_id=request.request_id,
+                        metadata={**request.metadata, "dl_mid": tick.mid,
+                                   "dl_source": tick.source.value,
+                                   "dl_confidence": tick.confidence},
+                    )
+        except Exception:
+            pass  # data layer unavailable — proceed without enrichment
+
         # ── 1. Kill switch ────────────────────────────────────────────────────
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
