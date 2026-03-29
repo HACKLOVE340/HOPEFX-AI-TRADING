@@ -75,20 +75,38 @@ class HopeFXWebSocket {
 
   private _open(): void {
     if (!this._token) return;
-    const url = `${WS_URL}?token=${encodeURIComponent(this._token)}`;
-    this._ws = new WebSocket(url);
+    // Backend does NOT accept token as query param.
+    // Auth is done via first message: { type: "auth", token: "Bearer <jwt>" }
+    this._ws = new WebSocket(WS_URL);
 
     this._ws.onopen = () => {
-      console.log('[WS] Connected');
+      console.log('[WS] Connected — sending auth');
       this._reconnectDelay = RECONNECT_BASE_MS;
+      // Send auth message immediately — backend closes with 4001 if not received
+      // within AUTH_TIMEOUT_SECONDS (default 10s)
+      this._ws!.send(JSON.stringify({
+        type: 'auth',
+        token: `Bearer ${this._token}`,
+      }));
+      // Subscribe to all channels after auth
+      this._ws!.send(JSON.stringify({
+        type: 'subscribe',
+        channels: ['prices', 'signals', 'positions', 'account'],
+      }));
       this._startPing();
     };
 
     this._ws.onmessage = (event) => {
       try {
-        const msg: WSMessage = JSON.parse(event.data as string);
-        if (msg.type === 'pong') return;
-        const listeners = this._listeners.get(msg.type);
+        const msg = JSON.parse(event.data as string) as { type: string; data?: unknown; [k: string]: unknown };
+        // Silently handle protocol messages
+        if (msg.type === 'pong' || msg.type === 'auth_ok') return;
+        // Respond to server heartbeat with ping
+        if (msg.type === 'heartbeat') {
+          this.send('ping', {});
+          return;
+        }
+        const listeners = this._listeners.get(msg.type as WSMessageType);
         listeners?.forEach((fn) => fn(msg.data));
       } catch (e) {
         console.warn('[WS] Parse error:', e);

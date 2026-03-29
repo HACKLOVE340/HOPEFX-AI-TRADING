@@ -244,6 +244,9 @@ class PositionResponse(BaseModel):
     entry_price: float
     current_price: float
     unrealized_pnl: float
+    # Extended fields for mobile app
+    unrealized_pnl_pct: float = 0.0
+    opened_at: str = ""
 
 
 class OrderResponse(BaseModel):
@@ -683,18 +686,26 @@ async def get_positions(
         )
 
     positions = await _broker_call("get_positions")
-    return [
-        PositionResponse(
+    result = []
+    for p in positions:
+        entry = float(getattr(p, "entry_price", 0) or 0)
+        current = float(getattr(p, "current_price", entry) or entry)
+        pnl = float(getattr(p, "unrealized_pnl", 0) or 0)
+        pnl_pct = ((current - entry) / entry * 100) if entry > 0 else 0.0
+        opened_at = getattr(p, "opened_at", None) or getattr(p, "created_at", None)
+        opened_at_str = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at or "")
+        result.append(PositionResponse(
             id=p.id,
             symbol=p.symbol,
-            side=p.side.value,
+            side=p.side.value if hasattr(p.side, "value") else str(p.side),
             quantity=p.quantity,
-            entry_price=p.entry_price,
-            current_price=p.current_price,
-            unrealized_pnl=p.unrealized_pnl,
-        )
-        for p in positions
-    ]
+            entry_price=entry,
+            current_price=current,
+            unrealized_pnl=pnl,
+            unrealized_pnl_pct=round(pnl_pct, 4),
+            opened_at=opened_at_str,
+        ))
+    return result
 
 
 @router.delete(
@@ -762,14 +773,59 @@ async def close_all_positions(
 async def get_account(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get account information. Requires: any authenticated user."""
+    """
+    Get account information. Requires: any authenticated user.
+
+    Returns a normalised dict compatible with the mobile app Account type:
+      account_id, balance, equity, margin_used, margin_available,
+      unrealized_pnl, daily_pnl, daily_pnl_pct, currency
+    """
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Broker not available",
         )
 
-    return await _broker_call("get_account_info")
+    raw = await _broker_call("get_account_info")
+
+    # Normalise to a consistent dict regardless of broker implementation
+    def _f(obj, *keys, default=0.0):
+        """Extract first matching attribute/key from obj, return default if missing."""
+        for k in keys:
+            v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    pass
+        return default
+
+    def _s(obj, *keys, default=""):
+        for k in keys:
+            v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
+            if v is not None:
+                return str(v)
+        return default
+
+    balance = _f(raw, "balance", "nav", "net_liquidation")
+    equity  = _f(raw, "equity", "balance", "nav") or balance
+    margin_used = _f(raw, "margin_used", "margin", "used_margin")
+    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
+    unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
+    daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
+    daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+
+    return {
+        "account_id": _s(raw, "account_id", "id", "accountId", default=user.sub),
+        "balance": round(balance, 2),
+        "equity": round(equity, 2),
+        "margin_used": round(margin_used, 2),
+        "margin_available": round(margin_avail, 2),
+        "unrealized_pnl": round(unrealized, 2),
+        "daily_pnl": round(daily_pnl, 2),
+        "daily_pnl_pct": round(daily_pnl_pct, 4),
+        "currency": _s(raw, "currency", "base_currency", default="USD"),
+    }
 
 
 @router.get(

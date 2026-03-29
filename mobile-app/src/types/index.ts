@@ -168,14 +168,24 @@ export type TradingStackParamList = {
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 export type WSMessageType =
-  | 'price_update'
-  | 'signal'
-  | 'order_update'
-  | 'position_update'
-  | 'account_update'
-  | 'alert'
+  // Backend canonical types (from api/ws_live.py)
+  | 'price_tick'       // live bid/ask tick
+  | 'signal'           // new AI signal
+  | 'position_update'  // position state change
+  | 'position_close'   // position closed
+  | 'account_update'   // account metrics update
+  | 'heartbeat'        // server keepalive
+  | 'error'            // server error
+  // Client → server
+  | 'auth'
+  | 'subscribe'
+  | 'unsubscribe'
   | 'ping'
-  | 'pong';
+  | 'pong'
+  // Legacy aliases kept for backward compat
+  | 'price_update'
+  | 'order_update'
+  | 'alert';
 
 export interface WSMessage<T = unknown> {
   type: WSMessageType;

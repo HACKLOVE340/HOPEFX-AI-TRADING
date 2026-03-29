@@ -140,42 +140,78 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   },
 
   subscribeToLive: () => {
-    // Subscribe to WebSocket price updates
-    const unsubPrice = wsClient.on<Quote>('price_update', (quote) => {
-      set((state) => ({
-        quotes: { ...state.quotes, [quote.symbol]: quote },
-      }));
+    // ── Price ticks ────────────────────────────────────────────────────────
+    // Backend sends { type: "price_tick", data: { symbol: "XAU/USD", bid, ask, ... } }
+    // Mobile store keys quotes by no-slash symbol (XAUUSD) for consistency.
+    const normalizeSymbol = (s: string) => s.replace('/', '');
+
+    const normalizeTick = (raw: Record<string, unknown>): Quote => {
+      const bid = Number(raw.bid ?? 0);
+      const ask = Number(raw.ask ?? 0);
+      const mid = Number(raw.mid ?? (bid + ask) / 2);
+      const rawSymbol = String(raw.symbol ?? '');
+      return {
+        symbol: normalizeSymbol(rawSymbol),
+        bid,
+        ask,
+        mid,
+        spread: Number(raw.spread ?? ask - bid),
+        // timestamp may be ms epoch (number) or ISO string
+        timestamp: typeof raw.timestamp === 'number'
+          ? new Date(raw.timestamp).toISOString()
+          : String(raw.timestamp ?? new Date().toISOString()),
+        change_pct: Number(raw.change_pct ?? 0),
+      };
+    };
+
+    const unsubPriceTick = wsClient.on<Record<string, unknown>>('price_tick', (raw) => {
+      const quote = normalizeTick(raw);
+      if (quote.symbol) {
+        set((state) => ({ quotes: { ...state.quotes, [quote.symbol]: quote } }));
+      }
     });
 
-    // Subscribe to position updates
-    const unsubPos = wsClient.on<Position[]>('position_update', (positions) => {
-      set({ positions });
+    // Legacy alias — some deployments may still send price_update
+    const unsubPriceUpdate = wsClient.on<Quote>('price_update', (quote) => {
+      if (quote?.symbol) {
+        set((state) => ({ quotes: { ...state.quotes, [quote.symbol]: quote } }));
+      }
     });
 
-    // Subscribe to order updates
-    const unsubOrder = wsClient.on<Order>('order_update', (order) => {
-      set((state) => ({
-        orders: state.orders.map((o) => (o.id === order.id ? order : o)),
-      }));
+    // ── Position updates ───────────────────────────────────────────────────
+    const unsubPos = wsClient.on<Position | Position[]>('position_update', (data) => {
+      if (Array.isArray(data)) {
+        set({ positions: data });
+      } else if (data?.id) {
+        set((state) => ({
+          positions: state.positions.map((p) => (p.id === data.id ? data : p)),
+        }));
+      }
     });
 
-    // Subscribe to account updates
+    // Position closed — remove from list
+    const unsubPosClose = wsClient.on<{ id: string }>('position_close', ({ id }) => {
+      set((state) => ({ positions: state.positions.filter((p) => p.id !== id) }));
+    });
+
+    // ── Account updates ────────────────────────────────────────────────────
     const unsubAccount = wsClient.on<Account>('account_update', (account) => {
-      set({ account });
+      if (account) set({ account });
     });
 
-    // Subscribe to new signals
+    // ── Signals ────────────────────────────────────────────────────────────
     const unsubSignal = wsClient.on<Signal>('signal', (signal) => {
-      set((state) => ({
-        signals: [signal, ...state.signals.slice(0, 49)],
-      }));
+      if (signal) {
+        set((state) => ({ signals: [signal, ...state.signals.slice(0, 49)] }));
+      }
     });
 
     // Return combined unsubscribe
     return () => {
-      unsubPrice();
+      unsubPriceTick();
+      unsubPriceUpdate();
       unsubPos();
-      unsubOrder();
+      unsubPosClose();
       unsubAccount();
       unsubSignal();
     };
