@@ -14,11 +14,13 @@ Includes multiple FREE data sources:
 - CoinGecko (crypto - no API key needed)
 """
 
-import pandas as pd
-from typing import Dict, List, Any
-from datetime import datetime
+import abc
 import logging
 import os
+from datetime import datetime
+from typing import Any, Dict, List
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -31,24 +33,14 @@ except ImportError:
     logger.warning("yfinance not installed. Yahoo Finance source unavailable.")
 
 
-class DataSource:
-    """Base class for data sources."""
+class DataSource(abc.ABC):
+    """Abstract base class for backtesting data sources."""
 
+    @abc.abstractmethod
     def get_data(
         self, symbol: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
-        """
-        Get historical data for a symbol.
-
-        Args:
-            symbol: Trading symbol
-            start_date: Start date
-            end_date: End date
-
-        Returns:
-            DataFrame with OHLCV data
-        """
-        raise NotImplementedError("Subclasses must implement get_data()")
+        """Return OHLCV DataFrame for *symbol* between *start_date* and *end_date*."""
 
 
 class YahooFinanceSource(DataSource):

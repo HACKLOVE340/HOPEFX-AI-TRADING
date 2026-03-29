@@ -5,23 +5,23 @@
 # No commercial use without explicit permission.
 """Technical indicators for charting."""
 
+import abc
 import logging
 from typing import Dict, List, Type
 
 logger = logging.getLogger(__name__)
 
 
-class Indicator:
-    """Base indicator class."""
+class Indicator(abc.ABC):
+    """Abstract base class for all technical indicators."""
 
     def __init__(self, name: str, period: int = 14):
         self.name = name
         self.period = period
 
+    @abc.abstractmethod
     def calculate(self, data: List[float]) -> List[float]:
-        raise NotImplementedError(
-            f"{self.__class__.__name__}.calculate() not implemented"
-        )
+        """Compute indicator values over *data*. Must return a list of the same length."""
 
 
 class SMA(Indicator):
