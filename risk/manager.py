@@ -75,6 +75,68 @@ class RiskLevel:
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 @dataclass
+class PositionSizingResult:
+    """
+    Result of a position sizing calculation.
+
+    Returned by RiskManager.size_order() and consumed by:
+      - execution/hopefx_engine.py  (quantity field)
+      - execution/smart_router.py   (quantity field)
+      - risk/__init__.py            (re-exported as PositionSize alias)
+    """
+    symbol:          str
+    direction:       str
+    quantity:        float          # position size in units (oz for gold)
+    notional_usd:    float          # USD value of position
+    stop_loss_usd:   float          # absolute stop loss price
+    take_profit_usd: float          # absolute take profit price
+    risk_usd:        float          # max loss on this trade
+    kelly_f:         float = 0.0    # raw Kelly fraction used
+    quality_f:       float = 1.0    # data quality scaling factor
+    sentiment_f:     float = 1.0    # sentiment scaling factor
+    impact_f:        float = 1.0    # macro impact scaling factor
+    dd_f:            float = 1.0    # drawdown scaling factor
+    lineage_id:      str   = ""
+    created_at:      "datetime" = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+    # Convenience: allow attribute access as .size (legacy callers)
+    @property
+    def size(self) -> float:
+        return self.quantity
+
+    @property
+    def lot_size(self) -> float:
+        return self.quantity
+
+
+@dataclass
+class RiskAssessment:
+    """
+    Full risk assessment for a proposed trade.
+
+    Produced by RiskManager.assess() and consumed by Gatekeeper.
+    """
+    symbol:          str
+    direction:       str
+    approved:        bool
+    risk_level:      str            # RiskLevel constant
+    reason:          str            # human-readable approval/rejection reason
+    sizing:          "Optional[PositionSizingResult]" = None
+    data_quality:    float = 1.0
+    sentiment_score: float = 0.0
+    impact_score:    float = 0.0
+    drawdown_pct:    float = 0.0
+    daily_dd_pct:    float = 0.0
+    open_positions:  int   = 0
+    var_95:          float = 0.0
+    timestamp:       "datetime" = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+
+@dataclass
 class RiskConfig:
     """Risk management configuration — mirrors env vars for runtime inspection."""
     max_position_size_pct: float = _MAX_POSITION_PCT
@@ -183,7 +245,90 @@ class RiskManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def size_order(self, signal) -> SizedOrder:
+    def assess(self, signal) -> "RiskAssessment":
+        """
+        Full risk assessment for a proposed trade signal.
+
+        Returns RiskAssessment with approved=True/False and full context.
+        Consumed by Gatekeeper and execution pipeline.
+        """
+        data_quality    = self._get_data_quality(signal)
+        features        = self._get_orchestrator_features(signal)
+        sentiment_score = float(features.get("news_sentiment_score", 0.0))
+        impact_score    = float(features.get("macro_impact_score",   0.0))
+
+        # Check halt conditions
+        if self._halt:
+            return RiskAssessment(
+                symbol        = getattr(signal, "symbol", "XAU_USD"),
+                direction     = getattr(signal, "direction", "long"),
+                approved      = False,
+                risk_level    = RiskLevel.CRITICAL,
+                reason        = f"halted:{self._halt_reason}",
+                data_quality  = data_quality,
+                sentiment_score = sentiment_score,
+                impact_score  = impact_score,
+                drawdown_pct  = self._state.current_drawdown * 100,
+                daily_dd_pct  = self._state.daily_drawdown * 100,
+                open_positions = self._state.open_positions,
+                var_95        = self.value_at_risk(),
+            )
+
+        if self._state.daily_drawdown >= _MAX_DAILY_LOSS_PCT:
+            return RiskAssessment(
+                symbol        = getattr(signal, "symbol", "XAU_USD"),
+                direction     = getattr(signal, "direction", "long"),
+                approved      = False,
+                risk_level    = RiskLevel.CRITICAL,
+                reason        = f"daily_dd:{self._state.daily_drawdown*100:.2f}%",
+                data_quality  = data_quality,
+                drawdown_pct  = self._state.current_drawdown * 100,
+                daily_dd_pct  = self._state.daily_drawdown * 100,
+                open_positions = self._state.open_positions,
+            )
+
+        if data_quality < _MIN_DATA_QUALITY:
+            return RiskAssessment(
+                symbol        = getattr(signal, "symbol", "XAU_USD"),
+                direction     = getattr(signal, "direction", "long"),
+                approved      = False,
+                risk_level    = RiskLevel.HIGH,
+                reason        = f"data_quality:{data_quality:.3f}",
+                data_quality  = data_quality,
+                sentiment_score = sentiment_score,
+                impact_score  = impact_score,
+            )
+
+        # Compute sizing
+        sizing = self.size_order(signal)
+        approved = sizing.quantity > 0
+
+        # Determine risk level
+        dd = self._state.current_drawdown
+        if dd > _MAX_DRAWDOWN_PCT * 0.8:
+            risk_level = RiskLevel.HIGH
+        elif dd > _MAX_DRAWDOWN_PCT * 0.5:
+            risk_level = RiskLevel.MEDIUM
+        else:
+            risk_level = RiskLevel.LOW
+
+        return RiskAssessment(
+            symbol          = getattr(signal, "symbol", "XAU_USD"),
+            direction       = getattr(signal, "direction", "long"),
+            approved        = approved,
+            risk_level      = risk_level,
+            reason          = "approved" if approved else "zero_size",
+            sizing          = sizing if approved else None,
+            data_quality    = data_quality,
+            sentiment_score = sentiment_score,
+            impact_score    = impact_score,
+            drawdown_pct    = self._state.current_drawdown * 100,
+            daily_dd_pct    = self._state.daily_drawdown * 100,
+            open_positions  = self._state.open_positions,
+            var_95          = self.value_at_risk(),
+        )
+
+    def size_order(self, signal) -> "PositionSizingResult":
         """
         Compute position size for a signal.
 
@@ -197,13 +342,12 @@ class RiskManager:
         order_id   = str(uuid.uuid4())
         lineage_id = str(uuid.uuid4())
 
-        def _zero(reason: str = "") -> SizedOrder:
+        def _zero(reason: str = "") -> PositionSizingResult:
             if reason:
                 logger.warning("RiskManager: zero-size — %s", reason)
-            return SizedOrder(
-                order_id=order_id, symbol=symbol, direction=direction,
-                quantity=0.0, notional_usd=0.0, kelly_f=0.0,
-                quality_f=0.0, sentiment_f=0.0, impact_f=0.0, dd_f=0.0,
+            return PositionSizingResult(
+                symbol=symbol, direction=direction,
+                quantity=0.0, notional_usd=0.0,
                 stop_loss_usd=0.0, take_profit_usd=0.0, risk_usd=0.0,
                 lineage_id=lineage_id,
             )
@@ -260,8 +404,7 @@ class RiskManager:
         take_profit_usd = mid_price + tp_dist   if direction == "long" else mid_price - tp_dist
         risk_usd        = quantity * atr_proxy
 
-        sized = SizedOrder(
-            order_id        = order_id,
+        sized = PositionSizingResult(
             symbol          = symbol,
             direction       = direction,
             quantity        = round(quantity, 4),
@@ -402,7 +545,7 @@ class RiskManager:
 
     # ── Lineage ───────────────────────────────────────────────────────────────
 
-    def _write_sizing_lineage(self, sized: SizedOrder) -> None:
+    def _write_sizing_lineage(self, sized: "PositionSizingResult") -> None:
         if self._lineage is None:
             return
         try:
