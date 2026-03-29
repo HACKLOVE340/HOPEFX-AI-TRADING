@@ -133,12 +133,18 @@ class TestIndicator:
         assert indicator.name == "SMA"
         assert indicator.period == 20
 
-    def test_base_indicator_not_implemented(self):
-        """Test that base Indicator.calculate raises NotImplementedError."""
-        indicator = Indicator("test", 10)
+    def test_base_indicator_is_abstract(self):
+        """Indicator is an ABC — instantiating it directly raises TypeError."""
+        with pytest.raises(TypeError):
+            Indicator("test", 10)  # type: ignore[abstract]
 
-        with pytest.raises(NotImplementedError):
-            indicator.calculate([1, 2, 3])
+    def test_incomplete_subclass_raises_type_error(self):
+        """A subclass that omits calculate() raises TypeError at construction."""
+        class IncompleteIndicator(Indicator):
+            pass  # calculate not implemented
+
+        with pytest.raises(TypeError):
+            IncompleteIndicator("test", 10)  # type: ignore[abstract]
 
 
 class TestSMA:

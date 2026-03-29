@@ -491,28 +491,52 @@ class TestNewsArticle:
 class TestNewsProvider:
     """Tests for NewsProvider base class."""
 
-    def test_base_provider_initialization(self):
-        """Test base provider initialization."""
+    def test_base_provider_is_abstract(self):
+        """NewsProvider is an ABC — instantiating it directly raises TypeError."""
         from news.providers import NewsProvider
 
-        provider = NewsProvider(api_key="test_key")
+        with pytest.raises(TypeError):
+            NewsProvider(api_key="test_key")  # type: ignore[abstract]
+
+    def test_incomplete_subclass_missing_both_raises_type_error(self):
+        """A subclass missing both abstract methods raises TypeError."""
+        from news.providers import NewsProvider
+
+        class IncompleteProvider(NewsProvider):
+            pass  # get_news and format_article not implemented
+
+        with pytest.raises(TypeError):
+            IncompleteProvider()  # type: ignore[abstract]
+
+    def test_incomplete_subclass_missing_one_raises_type_error(self):
+        """A subclass missing one abstract method still raises TypeError."""
+        from news.providers import NewsProvider, NewsArticle
+
+        class PartialProvider(NewsProvider):
+            def get_news(self, **kwargs):
+                return []
+            # format_article not implemented
+
+        with pytest.raises(TypeError):
+            PartialProvider()  # type: ignore[abstract]
+
+    def test_concrete_subclass_stores_api_key(self):
+        """A fully implemented subclass stores api_key correctly."""
+        from news.providers import NewsProvider, NewsArticle
+
+        class ConcreteProvider(NewsProvider):
+            def get_news(self, **kwargs):
+                return []
+
+            def format_article(self, raw_article):
+                return NewsArticle(
+                    title="", content="", source="", url="",
+                    published_at=None, sentiment_score=0.0,
+                    relevance_score=0.0, symbols=[],
+                )
+
+        provider = ConcreteProvider(api_key="test_key")
         assert provider.api_key == "test_key"
-
-    def test_get_news_not_implemented(self):
-        """Test base get_news raises NotImplementedError."""
-        from news.providers import NewsProvider
-
-        provider = NewsProvider()
-        with pytest.raises(NotImplementedError):
-            provider.get_news()
-
-    def test_format_article_not_implemented(self):
-        """Test base format_article raises NotImplementedError."""
-        from news.providers import NewsProvider
-
-        provider = NewsProvider()
-        with pytest.raises(NotImplementedError):
-            provider.format_article({})
 
 
 class TestNewsAPIProvider:
