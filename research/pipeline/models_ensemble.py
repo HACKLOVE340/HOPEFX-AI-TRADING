@@ -42,6 +42,7 @@ import threading
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
@@ -426,8 +427,7 @@ class EnsemblePredictor:
     def save(self, path: str | Path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
+        joblib.dump(self, path, compress=3)
         logger.info("Ensemble saved → %s", path)
 
     @classmethod
@@ -435,8 +435,11 @@ class EnsemblePredictor:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
-        with open(path, "rb") as f:
-            obj = pickle.load(f)
+        try:
+            obj = joblib.load(path)
+        except Exception:
+            with open(path, "rb") as f:
+                obj = pickle.load(f)
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
         logger.info("Ensemble loaded ← %s", path)
@@ -565,11 +568,14 @@ class DeepEnsembleStore:
                     logger.warning("DeepEnsembleStore: %s", self._gate_failure_reason)
                     return False
 
-            # Load optional scaler
+            # Load optional scaler — try joblib first, fall back to pickle
             if self.scaler_path and self.scaler_path.exists():
                 try:
-                    with open(self.scaler_path, "rb") as f:
-                        self._scaler = pickle.load(f)
+                    try:
+                        self._scaler = joblib.load(self.scaler_path)
+                    except Exception:
+                        with open(self.scaler_path, "rb") as f:
+                            self._scaler = pickle.load(f)
                     logger.debug(
                         "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
                     )
