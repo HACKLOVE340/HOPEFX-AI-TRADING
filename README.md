@@ -293,7 +293,7 @@ All settings load from environment variables. See [`.env.example`](.env.example)
 | `IBKR_HOST` | IBKR only | TWS/Gateway host (default: `127.0.0.1`) |
 | `IBKR_PORT` | IBKR only | `7497` (paper) or `7496` (live) |
 
-Feature flags are controlled via `FEATURE_*` env vars — see [`FEATURES.md`](FEATURES.md).
+Feature flags are controlled via `FEATURE_*` env vars — see [`docs/FEATURES.md`](docs/archive/FEATURES.md).
 
 ---
 
