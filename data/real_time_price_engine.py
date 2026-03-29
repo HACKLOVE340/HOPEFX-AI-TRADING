@@ -8,6 +8,7 @@ HOPEFX Real-Time Price Engine
 WebSocket and REST hybrid data feed with automatic failover
 """
 
+import abc
 import asyncio
 import json
 import logging
@@ -81,8 +82,17 @@ class OHLCV:
         }
 
 
-class PriceFeedBase:
-    """Base class for price feeds"""
+class PriceFeedBase(abc.ABC):
+    """
+    Abstract base class for all price feed implementations.
+
+    Concrete subclasses must implement ``connect``, ``disconnect``, and
+    ``get_ohlcv``.  Attempting to instantiate a subclass with any of these
+    unimplemented raises ``TypeError`` at construction time.
+
+    ``register_callback``, ``_notify_callbacks``, and ``get_last_price``
+    are concrete helpers shared by all implementations.
+    """
 
     def __init__(self, symbols: List[str], config: Dict[str, Any]):
         self.symbols = symbols
@@ -92,33 +102,35 @@ class PriceFeedBase:
         self._last_prices: Dict[str, Tick] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self):
-        raise NotImplementedError
+    @abc.abstractmethod
+    async def connect(self) -> None:
+        """Open the feed connection and begin streaming prices."""
 
-    async def disconnect(self):
-        raise NotImplementedError
+    @abc.abstractmethod
+    async def disconnect(self) -> None:
+        """Close the feed connection and release resources."""
 
-    def register_callback(self, callback: Callable[[Tick], None]):
-        """Register price update callback"""
+    def register_callback(self, callback: Callable[[Tick], None]) -> None:
+        """Register a callback invoked on every new price tick."""
         self._callbacks.append(callback)
 
-    def _notify_callbacks(self, tick: Tick):
-        """Notify all registered callbacks"""
+    def _notify_callbacks(self, tick: Tick) -> None:
+        """Invoke all registered callbacks with the latest tick."""
         for callback in self._callbacks:
             try:
                 callback(tick)
-            except Exception as e:
-                logger.error(f"Callback error: {e}")
+            except Exception as exc:
+                logger.error("Price callback error: %s", exc)
 
     def get_last_price(self, symbol: str) -> Optional[Tick]:
-        """Get last known price"""
+        """Return the most recent tick for *symbol*, or None if unseen."""
         return self._last_prices.get(symbol)
 
+    @abc.abstractmethod
     async def get_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 100
     ) -> List[OHLCV]:
-        """Get historical OHLCV data"""
-        raise NotImplementedError
+        """Return up to *limit* OHLCV bars for *symbol* at *timeframe*."""
 
 
 class WebSocketPriceFeed(PriceFeedBase):
