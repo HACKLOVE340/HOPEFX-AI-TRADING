@@ -1,10 +1,10 @@
 # HOPEFX — Roadmap
 
-> Last updated: 2026-03-29 (v1.16)
+> Last updated: 2026-07-14 (v1.17)
 
 ---
 
-## Current Status: Paper Mode Launch
+## Current Status: Paper Mode Active
 
 The platform is live in paper trading mode on OANDA practice.
 
@@ -15,21 +15,24 @@ The platform is live in paper trading mode on OANDA practice.
 | Online learning (SGD + EWC daily loop) | ✅ Wired — enable with `ML_HOURLY_ENABLED=true` |
 | Dual license (AGPL-3.0 + commercial) | ✅ LICENSE-COMMERCIAL.md + CLA.md |
 | Risk engine (CVaR, kill switch, drawdown gate) | ✅ Production |
-| OANDA paper broker | 🟡 Active — clock started 2026-03-27, gate opens 2026-04-26 |
+| OANDA paper broker | Active — clock started 2026-03-27 |
 | Signal engine (regime-gated ML inference) | ✅ Wired |
 | Execution (OMS, position tracker, smart router) | ✅ Wired |
 | Observability (Prometheus, Sentry, Discord) | ✅ Production |
-| REST + WebSocket API | ✅ Stable |
-| Test suite (2,560+ tests, 70% coverage) | ✅ CI green |
+| REST + WebSocket API (108 endpoints) | ✅ Stable |
+| Test suite (2,560+ tests) | ✅ CI green |
+| Documentation (30 main docs + 103 archive) | ✅ Complete |
 
 ---
 
-## Milestone 1 — Statistical Robustness (N>919, SE≤0.10) ✅ DONE
+## Milestone 1 — Statistical Robustness ✅ DONE
 
-**Result:** Expanded multi-symbol backtest (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil) confirmed N>919 trades. SE≤0.10 gate satisfied. OOS model validated: 66.4% accuracy, p=0.0000, N=1,260 bars, 176 features.
+**Result:** Multi-symbol backtest (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil)
+confirmed N>919 trades. SE≤0.10 gate satisfied. OOS model validated: 66.4% accuracy, p=0.0000,
+N=1,260 bars, 176 features.
 
-- [x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628 (v1.15)
-- [x] Expanded to 7 symbols → pooled N>919, SE≤0.10 (v1.16)
+- [x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628
+- [x] Expanded to 7 symbols → pooled N>919, SE≤0.10
 - [x] OOS metadata validated and stamped (`advanced_oos_meta.json`)
 - [x] OrderGateway wired to TradeExecutor — real routing, no stub
 - [x] New API endpoints: /api/ml/health, /api/backtest/multi-symbol, /api/online-learner/status+partial-fit
@@ -44,11 +47,18 @@ The platform is live in paper trading mode on OANDA practice.
 
 **Target:** First real-money trade on OANDA live account.
 
-- [ ] Complete paper trading milestone (200+ trades)
+Prerequisites:
+- [ ] Complete 30-day paper trading run (gate: `data/oanda_paper_start.json`)
+- [ ] 200+ paper trades logged with zero execution errors
 - [ ] Security audit: rotate all API keys, review JWT config
 - [ ] Set `OANDA_ENVIRONMENT=live` and `FEATURE_LIVE_TRADING=true`
 - [ ] Start with 0.01 lot size, scale up after 50 live trades
 - [ ] Monitor daily drawdown gate — halt if −2% daily DD hit
+
+Check gate status:
+```bash
+python scripts/enable_live_trading.py --check-only
+```
 
 ---
 
@@ -67,8 +77,8 @@ The platform is live in paper trading mode on OANDA practice.
 
 **Target:** Trade BTC/USD and ETH/USD alongside XAUUSD, plus forex and commodities.
 
-- [x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED (v1.15)
-- [x] Expanded to 7 symbols (+ EUR/USD, GBP/USD, Silver, Oil) → N>919, SE≤0.10 (v1.16)
+- [x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED
+- [x] Expanded to 7 symbols (+ EUR/USD, GBP/USD, Silver, Oil) → N>919, SE≤0.10
 - [ ] Retrain `advanced_oos.pkl` on BTC/USDT + ETH/USDT (Binance hourly)
 - [ ] Portfolio-level risk: cross-asset correlation limits
 - [ ] Validate live multi-symbol signal distribution before deployment
@@ -86,7 +96,20 @@ The platform is live in paper trading mode on OANDA practice.
 
 ---
 
-## Milestone 6 — White-Label API
+## Milestone 6 — Web Frontend
+
+**Target:** React/Vue dashboard connected to the REST + WebSocket API.
+
+- [ ] React or Vue.js project scaffold in `frontend/`
+- [ ] Real-time WebSocket chart (price + signals)
+- [ ] Live P&L dashboard
+- [ ] Strategy control panel (start/stop/configure)
+- [ ] Risk monitor (drawdown, CVaR, kill switch status)
+- [ ] Social trading feed (copy trading, leaderboards)
+
+---
+
+## Milestone 7 — White-Label API
 
 **Target:** Expose HOPEFX as a signal API for third-party consumers.
 
@@ -94,38 +117,86 @@ The platform is live in paper trading mode on OANDA practice.
 - [ ] Rate limiting per tier (free: 10 req/min, pro: 100 req/min)
 - [ ] Stripe billing integration for pro tier
 - [ ] SLA: 99.9% uptime, < 200ms p99 latency
+- [ ] White-label branding config in `whitelabel/`
+
+---
+
+## Milestone 8 — Mobile App
+
+**Target:** iOS and Android apps via React Native.
+
+- [ ] React Native project scaffold
+- [ ] Core screens: Dashboard, Chart, Positions, Alerts
+- [ ] Push notifications via FCM/APNs
+- [ ] Biometric authentication
+- [ ] Offline mode with cached signals
+- [ ] App Store + Google Play submission
+
+---
+
+## Research Pipeline (Feature-Flagged)
+
+All four research phases are wired in `core/signal_engine.py` and activate
+after their respective paper trading gates are met.
+
+| Phase | Component | Flag | Gate |
+|-------|-----------|------|------|
+| 1 | MTFFusionStore | `FEATURE_MTF_FUSION` | On by default |
+| 2 | AnomalyWeightStore | `FEATURE_ANOMALY_WEIGHTING` | After 30-day paper run |
+| 3 | OnlineLearnerStore | `FEATURE_ONLINE_LEARNING` | After 90-day paper run + 500 fills |
+| 4 | DeepEnsembleStore | `FEATURE_DEEP_ENSEMBLE` | After LSTM OOS ≥ 70% |
+
+See `research/README.md` for gate conditions and enable instructions.
 
 ---
 
 ## Type Safety (Ongoing)
 
-~974 mypy errors exist across 167 files. Tracked here, fixed incrementally.
-
-| Package | Error count | Target |
-|---------|-------------|--------|
-| `api/` | ~180 | Q3 2026 |
-| `ml/` | ~220 | Q3 2026 |
-| `risk/` | ~90 | Q2 2026 |
-| `brokers/` | ~80 | Q2 2026 |
-| `core/` | ~60 | Q2 2026 |
-| Others | ~344 | Q4 2026 |
-
-Once a package reaches zero errors it is added to the blocking mypy check in `ci.yml`.
+- [ ] Add `mypy` to CI with `--strict` on `api/`, `risk/`, `ml/`
+- [ ] Replace remaining `Any` type hints in `brokers/`
+- [ ] Add `py.typed` marker to all public packages
 
 ---
 
-## Done
+## VaR Remaining Work
 
-- [x] XGBoost stacking ensemble — 66.4% OOS, p=0.0000, 176 features, N=1,260 bars
-- [x] Walk-forward validation (5 folds, 50-year GC=F data)
-- [x] Multi-symbol backtest (7 symbols) — N>919 trades, SE≤0.10 gate satisfied
-- [x] Online learning wired — SklearnOnlineLearner + daily EWC loop at 00:05 UTC
-- [x] Dual license — AGPL-3.0 open source + LICENSE-COMMERCIAL.md + CLA.md v1.0
-- [x] OANDA paper trading clock started — 2026-03-27, gate opens 2026-04-26
-- [x] CVaR order gate + kill switch
-- [x] IBKR TWS/Gateway connector with mock-free tests
-- [x] FIX protocol adapter with circuit breaker
-- [x] Sentry production config + ML fallback alerts
-- [x] Discord rich signal embeds
-- [x] Pre-commit hooks (ruff, bandit) — all passing
-- [x] CI matrix: Python 3.10, 3.11, 3.12
+`calculate_var_historical` and `calculate_var_parametric` still use sqrt(t) for
+multi-day scaling. Use `calculate_var_multiday` or `calculate_var_ewma` for
+production risk limits on XAUUSD. This is documented but not yet enforced.
+
+- [ ] Replace sqrt(t) in all remaining VaR paths
+- [ ] Add GARCH(1,1) volatility model for VaR
+
+---
+
+## Running the ML Pipeline
+
+```bash
+# Production model (176 features, 50-year data, 3-year OOS)
+python ml/train_advanced.py --years 50 --oos-years 3
+
+# Basic model (65 features, macro walk-forward)
+python ml/train_with_macro.py --years 50 --oos-years 3
+
+# Multi-symbol backtest (7 symbols, 10-year real data)
+python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
+
+# Fetch latest XAUUSD H1 bars
+python -m data.scheduler
+```
+
+## Running Tests
+
+```bash
+# Full suite
+pytest tests/ --ignore=tests/integration/test_redis.py -q
+# Expected: 2560 passed, 0 failed
+
+# With coverage
+pytest tests/ --cov=. --cov-report=term-missing -q
+
+# Specific suites
+pytest tests/test_auth_gates.py -q
+pytest tests/unit/ -q
+pytest tests/integration/ -q
+```
