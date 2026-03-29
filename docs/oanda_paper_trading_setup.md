@@ -3,9 +3,50 @@
 Get HOPEFX running against a real broker API in paper (practice) mode.
 No real money involved — OANDA practice accounts are free and instant.
 
-> **Subscription required:** OANDA broker integration requires a HOPEFX Starter subscription or above.
-> Paper trading mode (no broker) is available to all subscribers.
-> See [MONETIZATION.md](MONETIZATION.md) for plan details.
+---
+
+## Subscription Requirement
+
+OANDA broker integration requires a **HOPEFX Starter subscription or above**.
+
+| Feature | Trial | Starter | Professional | Enterprise | Elite |
+|---------|-------|---------|-------------|------------|-------|
+| Paper trading (no broker) | Limited | Yes | Yes | Yes | Yes |
+| OANDA practice account | No | Yes | Yes | Yes | Yes |
+| OANDA live account | No | Yes | Yes | Yes | Yes |
+| Multi-broker (OANDA + others) | No | No | Yes (3) | Yes (unlimited) | Yes (unlimited) |
+
+Without a valid Starter+ subscription, the `BROKER_TYPE=oanda` setting is ignored and
+the app falls back to the internal paper broker. All OANDA API endpoints return
+`403 Subscription Required`.
+
+To subscribe: [hopefx.com/pricing](https://hopefx.com/pricing)
+To request a trial: open a GitHub Issue with label `trial-request`
+
+---
+
+---
+
+## Step 0 — Verify your subscription
+
+Before connecting OANDA, confirm your HOPEFX license key is valid and your plan
+includes broker access:
+
+```bash
+python scripts/manage_secrets.py validate
+# Expected: ✓ HOPEFX_LICENSE_KEY: valid (plan=starter, expires=2026-08-14)
+
+curl http://localhost:8000/api/monetization/subscription/me \
+  -H "Authorization: Bearer $TOKEN"
+# Expected: {"plan": "starter", "status": "active", ...}
+```
+
+If the license key is missing or expired, set it in `.env`:
+```bash
+HOPEFX_LICENSE_KEY=HOPEFX-START-XXXXXXXX-XXXX
+```
+
+Then restart the app before proceeding.
 
 ---
 
@@ -112,16 +153,15 @@ you can enable live trading (Task 22).
 
 ## Troubleshooting
 
-**`401 Unauthorized`** — API token is wrong or expired. Regenerate in OANDA portal.
-
-**`Account not found`** — Account ID format must be `001-001-XXXXXXX-001`.
-Copy it exactly from the OANDA dashboard.
-
-**`Instrument not tradeable`** — Use OANDA instrument codes: `XAU_USD` not `XAUUSD`.
-Full list: [https://developer.oanda.com/rest-live-v20/instrument-ep/](https://developer.oanda.com/rest-live-v20/instrument-ep/)
-
-**No prices updating** — Check `BROKER_OANDA_TOKEN` and `BROKER_OANDA_ACCOUNT`
-are set (the app also reads these aliases). Both env var names work.
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `403 Subscription Required` | No valid license key | Set `HOPEFX_LICENSE_KEY` in `.env` and restart |
+| `403 Plan Limit Exceeded` | Trial plan cannot use OANDA | Upgrade to Starter or above |
+| `401 Unauthorized` (OANDA) | API token wrong or expired | Regenerate token in OANDA portal |
+| `Account not found` | Wrong account ID format | Must be `001-001-XXXXXXX-001` — copy exactly from OANDA dashboard |
+| `Instrument not tradeable` | Wrong instrument code | Use `XAU_USD` not `XAUUSD` — see [OANDA instrument list](https://developer.oanda.com/rest-live-v20/instrument-ep/) |
+| No prices updating | Wrong env var name | Check both `OANDA_API_KEY` and `BROKER_OANDA_TOKEN` — both aliases work |
+| App uses paper broker despite OANDA config | Subscription not active | Run `python scripts/manage_secrets.py validate` |
 
 ---
 
