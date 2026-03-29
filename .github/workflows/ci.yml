@@ -31,8 +31,7 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Dependency vulnerability scan
-        # --strict removed: any single CVE would block all merges.
-        # Vulnerabilities are reported but do not fail the build.
+        # Report CVEs but do not block merges — tracked separately in security dashboard.
         run: pip-audit --requirement=requirements.txt --desc || true
       - name: Scan with Trivy (supply-chain)
         uses: aquasecurity/trivy-action@v0.29.0
@@ -43,14 +42,68 @@ jobs:
           exit-code: "0"
           severity: CRITICAL,HIGH
 
+  typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # Strict gate: risk analytics (VaR / GARCH)
+      - name: mypy strict — risk/analytics.py + risk/advanced_analytics.py
+        run: |
+          mypy risk/analytics.py risk/advanced_analytics.py \
+            --strict \
+            --ignore-missing-imports \
+            --allow-untyped-decorators \
+            --no-error-summary
+
+      # Strict gate: api/, risk/, ml/ — all three packages per roadmap
+      - name: mypy strict — api/
+        run: |
+          mypy api/ \
+            --strict \
+            --ignore-missing-imports \
+            --allow-untyped-decorators \
+            --no-error-summary
+
+      - name: mypy strict — risk/
+        run: |
+          mypy risk/ \
+            --strict \
+            --ignore-missing-imports \
+            --allow-untyped-decorators \
+            --no-error-summary
+
+      - name: mypy strict — ml/
+        run: |
+          mypy ml/ \
+            --strict \
+            --ignore-missing-imports \
+            --allow-untyped-decorators \
+            --no-error-summary
+
+      # Non-strict: remaining packages (surface regressions, don't block)
+      - name: mypy — auth/ brokers/ config/ core/ execution/ strategies/
+        run: |
+          mypy auth/ brokers/ config/ core/ execution/ strategies/ \
+            --ignore-missing-imports \
+            --no-error-summary || true
+
   test:
     runs-on: ubuntu-latest
-    # Removed needs: [pre-commit] so tests run independently of linting.
     permissions:
       contents: read
     strategy:
       matrix:
-        # Matches requires-python = ">=3.10" in pyproject.toml
         python-version: ["3.10", "3.11", "3.12"]
 
     services:
@@ -81,25 +134,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt
 
-      - name: Run mypy (strict gate — risk/analytics.py, risk/advanced_analytics.py)
-        # --strict is enforced on the two core risk modules that compute VaR/GARCH.
-        # These are the highest-impact files for institutional credibility.
-        # Remaining packages run non-strict to surface regressions without blocking
-        # merges while the annotation backlog is cleared (tracked in docs/roadmap.md).
-        run: |
-          mypy risk/analytics.py risk/advanced_analytics.py \
-            --strict \
-            --ignore-missing-imports \
-            --allow-untyped-decorators \
-            --no-error-summary || true
-          mypy api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
-            --ignore-missing-imports || true
-
-      - name: Run ruff
-        # Lint and format-check the canonical root packages
+      - name: Run ruff (lint + format check)
         run: |
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
@@ -118,7 +155,6 @@ jobs:
             --asyncio-mode=auto
 
       - name: Security scan (bandit)
-        # Scan root packages; report only, never fail CI
         run: |
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             -f json -o bandit-report.json || true
@@ -128,3 +164,67 @@ jobs:
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test
+
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [frontend]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npx playwright test
+        env:
+          VITE_API_URL: http://localhost:8000/api
+          CI: "true"
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
