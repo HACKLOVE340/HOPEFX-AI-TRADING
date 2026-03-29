@@ -331,9 +331,6 @@ class PullbackStrategy(BaseStrategy):
             swing_low_20 = l.rolling(20).min()
 
             # ── Last bar values ───────────────────────────────────────────────
-            last = df.iloc[-1]
-            prev = df.iloc[-2] if len(df) >= 2 else last
-
             last_close = float(c.iloc[-1])
             last_ema_fast = float(ema_fast.iloc[-1])
             last_ema_slow = float(ema_slow.iloc[-1])

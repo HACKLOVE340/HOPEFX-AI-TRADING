@@ -294,7 +294,6 @@ class FIXRouter:
         )
 
         t0 = time.monotonic()
-        loop = asyncio.get_running_loop()
 
         # FIXAdapter.send_order is async-compatible (returns a coroutine or future)
         report: FIXFillReport = await self._adapter.send_order(fix_order)

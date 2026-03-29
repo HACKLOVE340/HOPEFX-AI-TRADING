@@ -596,7 +596,6 @@ async def _price_broadcaster() -> None:
     3. no_live_feed status    — when neither source has data
     """
     try:
-        from core.event_bus import bus as _bus  # noqa: PLC0415
         # If EventBus connects successfully it takes over; on failure we fall
         # through to the direct-poll path below.
         await _eventbus_tick_broadcaster()

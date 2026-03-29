@@ -21,7 +21,7 @@ import pytest
 _ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT))
 
-import scripts.fill_tracker as ft
+import scripts.fill_tracker as ft  # noqa: E402
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -220,8 +220,6 @@ def test_gate_file_phase3_not_overwritten_once_set():
 
 def test_main_report_only_exits_1_when_gate_not_passed(capsys):
     """--report with empty ledger exits 1 (gate not passed)."""
-    exit_code = ft.main.__wrapped__() if hasattr(ft.main, "__wrapped__") else None
-    # Call via sys.argv patch
     with patch("sys.argv", ["fill_tracker.py", "--report"]):
         code = ft.main()
     assert code == 1

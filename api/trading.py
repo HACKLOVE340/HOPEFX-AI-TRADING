@@ -16,10 +16,12 @@ Auth is enforced via Depends(require_role(...)) from api.auth.
 
 import csv
 import io
+import json as _json
 import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path as _Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -94,9 +96,6 @@ def _check_kill_switch() -> None:
 # Both gates are bypassed when BROKER_TYPE=paper (paper trading is always
 # allowed) or APP_ENV=test so the test suite is not affected.
 # ---------------------------------------------------------------------------
-import json as _json
-from pathlib import Path as _Path
-
 _OOS_META_PATH = _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
 _deployment_gate_cache: dict = {}   # {path_mtime: result} — avoids re-reading on every order
 

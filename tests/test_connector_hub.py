@@ -23,9 +23,7 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timezone, timedelta
-from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -115,7 +113,7 @@ class TestEventBus:
 
     @pytest.mark.asyncio
     async def test_metrics_increments_on_publish(self):
-        from core.event_bus import EventBus, CH_ORDER
+        from core.event_bus import EventBus
 
         bus = EventBus()
         bus._degraded = True  # use local path
@@ -158,7 +156,6 @@ class TestStalenessGuard:
         guard = _StalenessGuard()
         guard.touch()
 
-        breaches: list = []
         with patch("data.market_ingest.bus") as mock_bus:
             mock_bus.publish_breach = AsyncMock()
             await guard.check()
