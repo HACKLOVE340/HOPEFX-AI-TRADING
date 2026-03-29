@@ -60,12 +60,19 @@ def _admin_headers() -> dict:
 
 @pytest.fixture(scope="module")
 def client():
-    """Create a single test client for the module (avoids repeated lifespan start/stop)."""
+    """Create a single test client for the module.
+
+    Uses TestClient without the context-manager lifespan to avoid hanging on
+    Redis/DB connection attempts in CI/devcontainer where those services are
+    unavailable.  The app is fully functional for HTTP-level tests; only
+    background startup tasks (event bus, scheduler) are skipped.
+    """
     os.environ.setdefault(
         "SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long"
     )
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+    # Instantiate without entering the lifespan context so Redis/DB timeouts
+    # do not block the test suite.
+    yield TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.mark.integration
