@@ -12,167 +12,252 @@ Steps applied to every tick (in order)
 2. Price rounding           — 4 decimal places for XAU/USD
 3. Spread floor             — minimum spread = 0.01 (1 cent)
 4. Mid recomputation        — mid = (bid + ask) / 2 (never trust raw mid)
-5. Volume normalisation     — log-scale volume for ML features
-6. OHLCV integrity check    — high >= max(open,close), low <= min(open,close)
-7. Gap detection            — flag bars with > 3× average gap (session open)
-8. Returns computation      — log returns for stationarity
+5. Source validation        — reject unknown FeedSource values
 
-All operations are vectorised (numpy) for OHLCV DataFrames.
+Steps applied to OHLCV DataFrames (vectorised)
+-----------------------------------------------
+1. Column normalisation     — lowercase, rename aliases
+2. Timestamp index          — ensure UTC DatetimeIndex, sort ascending
+3. Duplicate removal        — keep last bar per timestamp
+4. OHLCV integrity          — high >= max(open,close), low <= min(open,close)
+5. Price floor              — drop bars with close <= 0
+6. Volume normalisation     — log1p(volume), fill NaN with 0
+7. Gap detection            — flag bars with gap > 3× rolling average gap
+8. Log returns              — log(close/prev_close), causal (shift(1))
+9. OHLCV validity flag      — 1 if all OHLCV values are finite and positive
+
+All OHLCV operations are vectorised (numpy/pandas) for performance.
 Single-tick operations are pure Python for minimal latency.
 """
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-from data_layer.types import GoldTick
+from data_layer.types import FeedSource, GoldTick, TickQuality
 
 logger = logging.getLogger(__name__)
 
-_MIN_SPREAD   = 0.01    # $0.01 minimum spread for XAU/USD
-_PRICE_ROUND  = 4       # decimal places
-_LOG_VOL_CLIP = 20.0    # clip log volume at this value
+import os
+_PRICE_DECIMALS   = int(os.getenv("NORM_PRICE_DECIMALS",   "4"))
+_MIN_SPREAD       = float(os.getenv("NORM_MIN_SPREAD",     "0.01"))
+_MAX_SPREAD_PCT   = float(os.getenv("NORM_MAX_SPREAD_PCT", "0.01"))   # 1%
+_GAP_MULTIPLIER   = float(os.getenv("NORM_GAP_MULTIPLIER", "3.0"))
+_GAP_WINDOW       = int(os.getenv("NORM_GAP_WINDOW",       "20"))
+_MIN_GOLD_PRICE   = float(os.getenv("NORM_MIN_GOLD_PRICE", "100.0"))
+
+# Column name aliases — normalise to standard names
+_COL_ALIASES = {
+    "Open":   "open",  "High":   "high",  "Low":   "low",
+    "Close":  "close", "Volume": "volume","Adj Close": "close",
+    "open_price": "open", "high_price": "high", "low_price": "low",
+    "close_price": "close", "vol": "volume", "qty": "volume",
+}
 
 
 class NormalizationPipeline:
     """
-    Cleans and normalises ticks and OHLCV DataFrames.
+    Stateless normalisation pipeline for ticks and OHLCV DataFrames.
 
-    Stateless — safe to call from multiple threads.
+    All methods are pure functions — no internal state mutated.
+    Thread-safe by design.
     """
 
     # ── Tick normalisation ────────────────────────────────────────────────────
 
     def normalize_tick(self, tick: GoldTick) -> GoldTick:
         """
-        Apply all normalisation steps to a single tick.
+        Normalise a validated GoldTick.
 
-        Returns a new GoldTick with corrected fields.
-        Never raises — returns the original tick on any error.
+        Steps:
+          1. Ensure timestamp is UTC-aware
+          2. Round prices to NORM_PRICE_DECIMALS
+          3. Enforce minimum spread
+          4. Recompute mid from bid/ask
+          5. Clamp confidence to [0, 1]
+
+        Returns a new GoldTick (frozen dataclass — no mutation).
         """
-        try:
-            # 1. Ensure UTC timestamp
-            ts = tick.timestamp
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+        # 1. UTC timestamp
+        ts = tick.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
 
-            # 2. Round prices
-            bid = round(tick.bid, _PRICE_ROUND)
-            ask = round(tick.ask, _PRICE_ROUND)
+        # 2. Round prices
+        bid = round(tick.bid, _PRICE_DECIMALS)
+        ask = round(tick.ask, _PRICE_DECIMALS)
 
-            # 3. Spread floor
-            if ask - bid < _MIN_SPREAD:
-                half = _MIN_SPREAD / 2
-                mid  = (bid + ask) / 2
-                bid  = round(mid - half, _PRICE_ROUND)
-                ask  = round(mid + half, _PRICE_ROUND)
+        # 3. Enforce minimum spread
+        if ask - bid < _MIN_SPREAD:
+            half = _MIN_SPREAD / 2.0
+            mid_raw = (bid + ask) / 2.0
+            bid = round(mid_raw - half, _PRICE_DECIMALS)
+            ask = round(mid_raw + half, _PRICE_DECIMALS)
 
-            # 4. Recompute mid
-            mid    = round((bid + ask) / 2, _PRICE_ROUND)
-            spread = round(ask - bid, _PRICE_ROUND)
+        # 4. Recompute mid
+        mid = round((bid + ask) / 2.0, _PRICE_DECIMALS)
 
-            return GoldTick(
-                symbol     = tick.symbol,
-                timestamp  = ts,
-                bid        = bid,
-                ask        = ask,
-                mid        = mid,
-                source     = tick.source,
-                quality    = tick.quality,
-                confidence = tick.confidence,
-                spread     = spread,
-                lineage_id = tick.lineage_id,
-                raw        = tick.raw,
-            )
-        except Exception as exc:
-            logger.debug("NormalizationPipeline.normalize_tick error: %s", exc)
+        # 5. Clamp confidence
+        confidence = max(0.0, min(1.0, tick.confidence))
+
+        # Only create new object if something changed
+        if (ts == tick.timestamp and bid == tick.bid and ask == tick.ask
+                and mid == tick.mid and confidence == tick.confidence):
             return tick
 
-    # ── OHLCV DataFrame normalisation ─────────────────────────────────────────
+        return GoldTick(
+            symbol     = tick.symbol,
+            timestamp  = ts,
+            bid        = bid,
+            ask        = ask,
+            mid        = mid,
+            source     = tick.source,
+            quality    = tick.quality,
+            confidence = confidence,
+            spread     = round(ask - bid, _PRICE_DECIMALS),
+            lineage_id = tick.lineage_id,
+            raw        = tick.raw,
+        )
+
+    # ── OHLCV normalisation ───────────────────────────────────────────────────
 
     def normalize_ohlcv(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Clean and normalise an OHLCV DataFrame.
+        Normalise an OHLCV DataFrame for the ML pipeline.
 
-        Expected columns: open, high, low, close, volume
-        Expected index:   DatetimeIndex (UTC)
+        Input:  Any DataFrame with OHLCV columns (various naming conventions)
+        Output: Clean DataFrame with columns:
+                  open, high, low, close, volume,
+                  log_return, log_volume, gap_flag, ohlcv_valid
+                and UTC DatetimeIndex sorted ascending.
 
-        Returns a cleaned DataFrame with additional columns:
-          log_return, log_volume, gap_flag, ohlcv_valid
+        All operations are vectorised. NaN-safe.
         """
-        if df.empty:
-            return df
+        if df is None or df.empty:
+            return pd.DataFrame()
 
-        df = df.copy()
+        d = df.copy()
 
-        # 1. Ensure UTC index
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC")
+        # ── 1. Column normalisation ────────────────────────────────────────
+        d = d.rename(columns=_COL_ALIASES)
+        d.columns = [c.lower().strip() for c in d.columns]
+
+        required = {"open", "high", "low", "close"}
+        missing  = required - set(d.columns)
+        if missing:
+            logger.warning("NormalizationPipeline: missing columns %s", missing)
+            return pd.DataFrame()
+
+        if "volume" not in d.columns:
+            d["volume"] = 0.0
+
+        # ── 2. Timestamp index ─────────────────────────────────────────────
+        if not isinstance(d.index, pd.DatetimeIndex):
+            # Try common timestamp column names
+            for col in ("open_time", "timestamp", "date", "time", "datetime"):
+                if col in d.columns:
+                    d[col] = pd.to_datetime(d[col], utc=True, errors="coerce")
+                    d = d.set_index(col)
+                    break
+            else:
+                # Last resort: try converting the existing index
+                try:
+                    d.index = pd.to_datetime(d.index, utc=True)
+                except Exception:
+                    logger.warning("NormalizationPipeline: cannot parse timestamp index")
+                    return pd.DataFrame()
+
+        # Ensure UTC
+        if d.index.tz is None:
+            d.index = d.index.tz_localize("UTC")
         else:
-            df.index = df.index.tz_convert("UTC")
+            d.index = d.index.tz_convert("UTC")
 
-        # 2. Sort ascending (causal order)
-        df = df.sort_index()
+        d = d.sort_index()
 
-        # 3. Drop rows with zero/negative prices
-        price_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
-        for col in price_cols:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        df = df.dropna(subset=price_cols)
-        df = df[(df[price_cols] > 0).all(axis=1)]
+        # ── 3. Duplicate removal ───────────────────────────────────────────
+        if d.index.duplicated().any():
+            d = d[~d.index.duplicated(keep="last")]
 
-        # 4. OHLCV integrity: high >= max(open,close), low <= min(open,close)
-        if all(c in df.columns for c in ("open", "high", "low", "close")):
-            df["high"]  = df[["high", "open", "close"]].max(axis=1)
-            df["low"]   = df[["low",  "open", "close"]].min(axis=1)
-            df["ohlcv_valid"] = (
-                (df["high"] >= df["open"]) &
-                (df["high"] >= df["close"]) &
-                (df["low"]  <= df["open"]) &
-                (df["low"]  <= df["close"])
-            ).astype(float)
+        # ── 4. Numeric coercion ────────────────────────────────────────────
+        for col in ("open", "high", "low", "close", "volume"):
+            d[col] = pd.to_numeric(d[col], errors="coerce")
 
-        # 5. Volume normalisation
-        if "volume" in df.columns:
-            df["volume"]     = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
-            df["log_volume"] = np.log1p(df["volume"]).clip(upper=_LOG_VOL_CLIP)
+        # ── 5. Price floor — drop bars with non-positive close ─────────────
+        d = d[d["close"] > _MIN_GOLD_PRICE].copy()
+        if d.empty:
+            return pd.DataFrame()
 
-        # 6. Log returns (stationary, causal)
-        if "close" in df.columns:
-            df["log_return"] = np.log(df["close"] / df["close"].shift(1)).fillna(0)
+        # ── 6. OHLCV integrity enforcement ─────────────────────────────────
+        # high must be >= max(open, close)
+        d["high"] = np.maximum(d["high"], np.maximum(d["open"], d["close"]))
+        # low must be <= min(open, close)
+        d["low"]  = np.minimum(d["low"],  np.minimum(d["open"], d["close"]))
+        # Ensure high >= low
+        swap_mask = d["high"] < d["low"]
+        if swap_mask.any():
+            d.loc[swap_mask, ["high", "low"]] = (
+                d.loc[swap_mask, ["low", "high"]].values
+            )
 
-        # 7. Gap detection (session open gaps)
-        if "close" in df.columns and "open" in df.columns:
-            gap_pct = (df["open"] - df["close"].shift(1)).abs() / df["close"].shift(1)
-            avg_gap = gap_pct.rolling(20).mean().fillna(0)
-            df["gap_flag"] = (gap_pct > avg_gap * 3).astype(float)
+        # ── 7. Volume normalisation ────────────────────────────────────────
+        d["volume"]     = d["volume"].fillna(0.0).clip(lower=0.0)
+        d["log_volume"] = np.log1p(d["volume"])
 
-        # 8. Remove duplicate index entries (keep last)
-        df = df[~df.index.duplicated(keep="last")]
+        # ── 8. Gap detection ───────────────────────────────────────────────
+        # Gap = |open - prev_close| / prev_close
+        prev_close = d["close"].shift(1)
+        gap_pct    = (d["open"] - prev_close).abs() / prev_close.replace(0, np.nan)
+        rolling_gap_mean = gap_pct.rolling(_GAP_WINDOW, min_periods=3).mean()
+        d["gap_flag"] = (
+            (gap_pct > rolling_gap_mean * _GAP_MULTIPLIER)
+            & gap_pct.notna()
+        ).astype(int)
+        d["gap_flag"] = d["gap_flag"].fillna(0).astype(int)
 
-        return df
+        # ── 9. Log returns (causal — uses shift(1)) ────────────────────────
+        d["log_return"] = np.log(
+            d["close"] / d["close"].shift(1).replace(0, np.nan)
+        )
+        d["log_return"] = d["log_return"].replace(
+            [np.inf, -np.inf], np.nan
+        ).fillna(0.0)
 
-    def compute_returns(self, df: pd.DataFrame, periods: list = None) -> pd.DataFrame:
-        """
-        Add multi-period log return columns to an OHLCV DataFrame.
+        # ── 10. OHLCV validity flag ────────────────────────────────────────
+        ohlcv_cols = ["open", "high", "low", "close"]
+        d["ohlcv_valid"] = (
+            d[ohlcv_cols].notna().all(axis=1)
+            & (d[ohlcv_cols] > 0).all(axis=1)
+            & np.isfinite(d[ohlcv_cols]).all(axis=1)
+        ).astype(int)
 
-        periods: list of bar counts, e.g. [1, 5, 10, 20]
-        """
-        if df.empty or "close" not in df.columns:
-            return df
+        # ── 11. Final NaN/inf cleanup ──────────────────────────────────────
+        numeric_cols = d.select_dtypes(include=[np.number]).columns
+        d[numeric_cols] = (
+            d[numeric_cols]
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0.0)
+        )
 
-        periods = periods or [1, 5, 10, 20]
-        df = df.copy()
-        for p in periods:
-            df[f"ret_{p}"] = np.log(
-                df["close"] / df["close"].shift(p)
-            ).fillna(0)
-        return df
+        return d
+
+    def validate_ohlcv_shape(
+        self, df: pd.DataFrame, min_bars: int = 50
+    ) -> bool:
+        """Return True if DataFrame has sufficient clean bars for ML."""
+        if df is None or df.empty:
+            return False
+        if len(df) < min_bars:
+            return False
+        required = {"open", "high", "low", "close", "log_return"}
+        if not required.issubset(df.columns):
+            return False
+        valid_count = int(df.get("ohlcv_valid", pd.Series([1] * len(df))).sum())
+        return valid_count >= min_bars * 0.8  # 80% valid bars required
 
 
 # Module-level singleton
