@@ -808,6 +808,128 @@ else:
         __table__ = type("T", (), {"columns": []})()
 
 
+# ── Crypto payment table ──────────────────────────────────────────────────────
+# Replaces the in-memory _pending dict in api/payments.py.
+# Survives pod restarts; safe across replicas.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class CryptoPayment(Base):
+        """Persistent crypto payment record."""
+
+        __tablename__ = "crypto_payments"
+
+        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        payment_id = Column(String(100), unique=True, nullable=False, index=True)
+        user_id = Column(String(128), nullable=False, index=True)
+        plan_id = Column(String(100), nullable=False)
+        currency = Column(String(10), nullable=False)   # BTC | ETH | USDT
+        network = Column(String(20), nullable=False)    # BTC | ERC20 | TRC20 | BEP20
+        address = Column(String(200), nullable=False)
+        amount_usd = Column(Float, nullable=False)
+        amount_crypto = Column(Float, nullable=False)
+        rate_usd = Column(Float, nullable=False)        # USD price per coin at creation
+        status = Column(
+            String(20), nullable=False, default="pending", index=True
+        )  # pending | confirming | complete | expired | failed
+        confirmations = Column(Integer, default=0)
+        confirmations_required = Column(Integer, nullable=False)
+        # Webhook / on-chain data
+        tx_hash = Column(String(200), nullable=True)
+        webhook_payload = Column(Text, nullable=True)   # raw JSON from processor
+        created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+        expires_at = Column(DateTime(timezone=True), nullable=False)
+        confirmed_at = Column(DateTime(timezone=True), nullable=True)
+        updated_at = Column(
+            DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "payment_id": self.payment_id,
+                "user_id": self.user_id,
+                "plan_id": self.plan_id,
+                "currency": self.currency,
+                "network": self.network,
+                "address": self.address,
+                "amount_usd": self.amount_usd,
+                "amount_crypto": self.amount_crypto,
+                "rate_usd": self.rate_usd,
+                "status": self.status,
+                "confirmations": self.confirmations,
+                "confirmations_required": self.confirmations_required,
+                "tx_hash": self.tx_hash,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+                "confirmed_at": self.confirmed_at.isoformat() if self.confirmed_at else None,
+            }
+
+else:
+
+    class CryptoPayment:  # type: ignore[no-redef]
+        __tablename__ = "crypto_payments"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── Transactional outbox table ────────────────────────────────────────────────
+# Critical events (kill switch, AML block, order fill) are written here in the
+# same DB transaction as the state change, then relayed to Redis pub/sub by the
+# OutboxRelay background task.  Guarantees at-least-once delivery even when
+# Redis is temporarily unavailable.
+
+if SQLALCHEMY_AVAILABLE:
+
+    class OutboxEvent(Base):
+        """Transactional outbox for at-least-once event delivery."""
+
+        __tablename__ = "outbox_events"
+
+        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        event_type = Column(String(100), nullable=False, index=True)
+        channel = Column(String(100), nullable=False)   # Redis pub/sub channel
+        payload = Column(Text, nullable=False)           # JSON
+        created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+        published_at = Column(DateTime(timezone=True), nullable=True)
+        attempts = Column(Integer, default=0)
+        last_error = Column(Text, nullable=True)
+
+        __table_args__ = (
+            Index("idx_outbox_unpublished", "published_at", "created_at"),
+        )
+
+else:
+
+    class OutboxEvent:  # type: ignore[no-redef]
+        __tablename__ = "outbox_events"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── Key-value config store ────────────────────────────────────────────────────
+# Replaces in-memory dicts for risk settings, auto-pause config, etc.
+# Shared across all pods; reads are cheap (indexed by key).
+
+if SQLALCHEMY_AVAILABLE:
+
+    class ConfigStore(Base):
+        """Generic key-value config store backed by the database."""
+
+        __tablename__ = "config_store"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        key = Column(String(200), unique=True, nullable=False, index=True)
+        value_json = Column(Text, nullable=False)
+        changed_by = Column(String(128), nullable=True)
+        updated_at = Column(
+            DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        )
+
+else:
+
+    class ConfigStore:  # type: ignore[no-redef]
+        __tablename__ = "config_store"
+        __table__ = type("T", (), {"columns": []})()
+
+
 def _add_enum_value(enum_cls, name, value):
     """Add a new member to an existing Enum if it doesn't already exist."""
     if name in enum_cls._member_map_:
