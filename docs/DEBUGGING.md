@@ -1,335 +1,386 @@
 # Debugging Guide
 
-## Issues Fixed
+> How to diagnose and fix issues in a running HOPEFX instance.
+> Last updated: 2026-07-14
 
-This document describes the issues that were identified and fixed in the HOPEFX AI Trading application.
+---
 
-### Critical Security Issues (FIXED)
+## Log Levels
 
-#### 1. Hardcoded Encryption Salt
-**Problem:** The encryption system used a hardcoded, publicly visible salt value.
-```python
-# BEFORE (INSECURE)
-salt=b'hopefx_ai_trading'  # Static salt - vulnerable
-```
+Set the log level in `.env`:
 
-**Solution:** Now uses environment variable with secure fallback
-```python
-# AFTER (SECURE)
-salt = os.getenv('CONFIG_SALT')  # Environment-specific
-if not salt:
-    salt_bytes = hashlib.sha256(self.master_key.encode()).digest()[:16]
-```
-
-**Impact:**
-- **Before:** Anyone with the source code could attempt to decrypt encrypted credentials
-- **After:** Unique salt per installation significantly increases security
-
-**Files Changed:** `config/config_manager.py`
-
-#### 2. Weak Password Hashing
-**Problem:** Used plain SHA256 for password hashing (vulnerable to rainbow table attacks)
-```python
-# BEFORE (INSECURE)
-return hashlib.sha256(password.encode()).hexdigest()
-```
-
-**Solution:** Implemented PBKDF2-HMAC-SHA256 with random salt and 100,000 iterations
-```python
-# AFTER (SECURE)
-kdf = PBKDF2(
-    algorithm=hashes.SHA256(),
-    length=32,
-    salt=salt,  # Random 16-byte salt
-    iterations=100000,
-)
-return f"{salt.hex()}${hash_bytes.hex()}"
-```
-
-**Impact:**
-- **Before:** Passwords vulnerable to precomputed hash attacks
-- **After:** Industry-standard password hashing with salt and high iteration count
-
-**Files Changed:** `config/config_manager.py`
-
-### High Priority Issues (FIXED)
-
-#### 3. Threading Race Condition in Cache Statistics
-**Problem:** Statistics tracking was not thread-safe
-```python
-# BEFORE (UNSAFE)
-self._stats_lock = None  # Declared but never initialized
-self.stats.total_hits += 1  # Race condition in concurrent access
-```
-
-**Solution:** Properly initialized lock and protected all statistics operations
-```python
-# AFTER (SAFE)
-self._stats_lock = threading.Lock()
-
-with self._stats_lock:
-    self.stats.total_hits += 1
-```
-
-**Impact:**
-- **Before:** Concurrent cache access could corrupt statistics counters
-- **After:** Thread-safe statistics tracking
-
-**Files Changed:** `cache/market_data_cache.py`
-
-**Functions Protected with Thread Safety:**
-- `get_ohlcv()` - cache hits/misses tracking
-- `get_tick()` - cache hits/misses tracking
-- `get_ticks()` - cache hits/misses tracking
-- `invalidate_ohlcv()` - eviction count
-- `invalidate_tick()` - eviction count
-- `invalidate_symbol()` - eviction count
-- `clear_all()` - eviction count
-- `get_statistics()` - reading stats
-- `reset_statistics()` - resetting stats
-
-#### 4. Redis Connection Failure
-**Problem:** Single connection attempt with no retry logic
-```python
-# BEFORE (FRAGILE)
-self.redis_client = redis.Redis(...)
-self.redis_client.ping()  # Single attempt - fails if Redis not ready
-```
-
-**Solution:** Implemented configurable retry logic
-```python
-# AFTER (RESILIENT)
-def _connect_with_retry(self, ..., max_retries=3, retry_delay=1.0):
-    for attempt in range(1, max_retries + 1):
-        try:
-            client = redis.Redis(...)
-            client.ping()
-            return client
-        except (ConnectionError, RedisTimeoutError) as e:
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-            else:
-                raise
-```
-
-**Impact:**
-- **Before:** Application crashed if Redis wasn't immediately available
-- **After:** Resilient connection with configurable retries
-
-**Files Changed:** `cache/market_data_cache.py`
-
-### Medium Priority Issues (FIXED)
-
-#### 5. Duplicate Class Names
-**Problem:** Two different `TickData` classes in different modules
-```python
-# cache/market_data_cache.py
-class TickData:  # Dataclass for caching
-
-# database/models.py
-class TickData(Base):  # SQLAlchemy model
-```
-
-**Solution:** Renamed cache version to `CachedTickData`
-```python
-# cache/market_data_cache.py
-class CachedTickData:  # Clear distinction
-```
-
-**Impact:**
-- **Before:** Import confusion, potential name conflicts
-- **After:** Clear separation of concerns
-
-**Files Changed:** `cache/market_data_cache.py`
-
-## Remaining Issues
-
-### Medium Priority
-
-#### 1. Database Migration Strategy
-**Issue:** No Alembic or migration tool configured
-**Impact:** Schema changes difficult to manage across environments
-**Recommendation:**
 ```bash
-pip install alembic
-alembic init alembic
-# Configure alembic.ini and env.py
-alembic revision --autogenerate -m "Initial migration"
+LOG_LEVEL=DEBUG    # DEBUG | INFO | WARNING | ERROR | CRITICAL
 ```
 
-#### 2. Improved Error Handling
-**Issue:** Generic `except Exception` catches hide specific errors
-**Impact:** Harder to debug issues
-**Example locations in current code:**
-- `cache/market_data_cache.py`: Various exception handlers in cache operations
-- `config/config_manager.py`: Exception handlers in encryption and config loading
+In production, use `INFO`. Use `DEBUG` only when actively diagnosing an issue —
+it generates significant output and may log sensitive data.
 
-**Recommendation:**
-```python
-# Instead of:
-except Exception as e:
-    logger.error(f"Error: {e}")
+---
 
-# Use specific exceptions:
-except (ConnectionError, RedisTimeoutError) as e:
-    logger.error(f"Redis connection error: {e}")
-except json.JSONDecodeError as e:
-    logger.error(f"Invalid JSON data: {e}")
-```
+## Reading Logs
 
-### Low Priority
+### Docker Compose
 
-#### 3. Requirements Optimization
-**Issue:** Large number of dependencies with some overlap
-- Both TensorFlow (2.15.0) and PyTorch (2.1.1)
-- Multiple data analysis libraries
-
-**Recommendation:**
-- Audit actual usage
-- Consider optional dependency groups
-- Pin all versions for reproducibility
-
-#### 4. Test Infrastructure
-**Issue:** No test files found
-**Recommendation:**
 ```bash
-# Create test structure
-mkdir tests
-touch tests/__init__.py
-touch tests/test_config_manager.py
-touch tests/test_cache.py
-touch tests/test_models.py
+# All services
+docker compose logs -f
+
+# App only
+docker compose logs -f app
+
+# Last 200 lines
+docker compose logs --tail=200 app
+
+# Filter for errors
+docker compose logs app 2>&1 | grep -E "ERROR|CRITICAL|Exception"
 ```
 
-Example test:
-```python
-# tests/test_config_manager.py
-import pytest
-import os
-from config.config_manager import ConfigManager, EncryptionManager
+### systemd (VPS)
 
-def test_encryption_roundtrip():
-    os.environ['CONFIG_ENCRYPTION_KEY'] = 'test-key-32-chars-minimum-here'
-    em = EncryptionManager()
-
-    original = "sensitive-data"
-    encrypted = em.encrypt(original)
-    decrypted = em.decrypt(encrypted)
-
-    assert decrypted == original
-    assert encrypted != original
-```
-
-## Testing the Fixes
-
-### 1. Test Encryption Security
-```python
-import os
-os.environ['CONFIG_ENCRYPTION_KEY'] = 'my-secure-key-at-least-32-chars'
-os.environ['CONFIG_SALT'] = 'random-salt-value'
-
-from config.config_manager import EncryptionManager
-
-em = EncryptionManager()
-password = "test123"
-hashed = em.hash_password(password)
-print(f"Hashed: {hashed}")
-print(f"Verify correct: {em.verify_password('test123', hashed)}")
-print(f"Verify wrong: {em.verify_password('wrong', hashed)}")
-```
-
-### 2. Test Thread Safety
-```python
-import threading
-from cache.market_data_cache import MarketDataCache
-
-# Note: Requires Redis to be running
-cache = MarketDataCache()
-
-def worker():
-    for i in range(1000):
-        cache.get_ohlcv('BTC/USD', Timeframe.ONE_MINUTE)
-
-threads = [threading.Thread(target=worker) for _ in range(10)]
-for t in threads:
-    t.start()
-for t in threads:
-    t.join()
-
-stats = cache.get_statistics()
-print(f"Total hits: {stats.total_hits}")
-print(f"Total misses: {stats.total_misses}")
-# Should be exactly 10,000 total
-```
-
-### 3. Test Redis Retry Logic
 ```bash
-# Stop Redis
-sudo systemctl stop redis
-
-# Try to connect (will retry 3 times)
-python -c "from cache.market_data_cache import MarketDataCache; MarketDataCache(max_retries=3, retry_delay=2)"
-
-# Start Redis during retry window
-sudo systemctl start redis
+journalctl -u hopefx-trading -f
+journalctl -u hopefx-trading --since "1 hour ago"
+journalctl -u hopefx-trading -p err   # errors only
 ```
 
-## Verification Checklist
+### Admin API
 
-- [x] Encryption uses environment-specific salt
-- [x] Password hashing uses PBKDF2 with salt
-- [x] Cache statistics are thread-safe
-- [x] Redis connection has retry logic
-- [x] No duplicate class names
-- [ ] Database migrations configured
-- [ ] Error handling improved
-- [ ] Test suite created
-- [ ] Dependencies optimized
-
-## Performance Notes
-
-### Changes That May Affect Performance
-
-1. **Thread Locks in Cache**: Minor overhead (~nanoseconds per operation)
-   - **Trade-off:** Safety vs. performance
-   - **Verdict:** Safety is critical; overhead is negligible
-
-2. **Redis Connection Retries**: Adds delay on failures only
-   - **Impact:** Only on connection failures, not normal operations
-   - **Benefit:** Application stays up instead of crashing
-
-3. **PBKDF2 Password Hashing**: Slower than SHA256 (intentional)
-   - **Why:** Makes brute-force attacks harder
-   - **Impact:** Only on password operations, not trading paths
-
-## Monitoring Recommendations
-
-### What to Monitor
-
-1. **Cache Statistics**
-```python
-cache = MarketDataCache()
-stats = cache.get_statistics()
-print(f"Hit rate: {stats.hit_rate:.2f}%")
+```bash
+curl http://localhost:8000/api/admin/logs \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-2. **Redis Connection Health**
-```python
-cache = MarketDataCache()
-is_healthy = cache.health_check()
+---
+
+## Health Check Breakdown
+
+```bash
+curl http://localhost:8000/health | python3 -m json.tool
 ```
 
-3. **Configuration Loading**
-```python
-from config.config_manager import get_config_manager
-manager = get_config_manager()
-status = manager.get_status()
-print(f"Config loaded: {status['loaded']}")
-print(f"Modified: {status['modified']}")
+```json
+{
+  "status": "healthy",
+  "environment": "production",
+  "components": {
+    "database": "healthy",
+    "redis": "healthy",
+    "ml_model": "healthy",
+    "broker": "oanda_practice",
+    "kill_switch": "inactive",
+    "online_learner": "active"
+  }
+}
 ```
 
-## Additional Resources
+| Component | Unhealthy Cause | Fix |
+|-----------|----------------|-----|
+| `database` | DB unreachable or migrations not run | Check `DATABASE_URL`, run `alembic upgrade head` |
+| `redis` | Redis not running | `sudo systemctl start redis-server` |
+| `ml_model` | `advanced_oos.pkl` missing or corrupt | Run `python ml/train_advanced.py --smoke` |
+| `broker` | Broker credentials invalid | Check `BROKER_OANDA_TOKEN`, run `python scripts/validate_oanda.py` |
+| `kill_switch` | Kill switch is active | Check `risk/halt_state.json`, investigate cause before clearing |
+| `online_learner` | `ML_HOURLY_ENABLED=false` | Enable if needed, or ignore if not using online learning |
 
-- [SECURITY.md](./SECURITY.md) - Security best practices
-- [requirements.txt](./requirements.txt) - Dependencies
-- [.env.example](./.env.example) - Environment variable template
+---
+
+## Diagnosing Signal Issues
+
+### No signals being generated
+
+```bash
+# Check signal engine status
+curl http://localhost:8000/api/signals/latest \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check ML model
+curl http://localhost:8000/api/ml/health \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check regime
+curl http://localhost:8000/api/ml/regime \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check broker data feed
+curl http://localhost:8000/api/broker/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Common causes:
+- ML model is abstaining (confidence below threshold) — normal on 27.5% of bars
+- Kill switch is active — check `GET /api/risk/status`
+- Broker data feed is stale — check `GET /api/broker/status`
+- Market is closed — check `GET /api/calendar/today`
+
+### Signals not reaching the broker
+
+```bash
+# Check execution engine
+curl http://localhost:8000/api/trading/brain-state \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check risk status
+curl http://localhost:8000/api/risk/status \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check recent orders
+curl http://localhost:8000/api/trading/trades \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Common causes:
+- CVaR gate blocking orders — check `risk_metrics.cvar_pct` vs `CVAR_LIMIT_PCT`
+- Daily loss limit hit — check `daily_loss_pct` vs `DAILY_LOSS_LIMIT_PCT`
+- `FEATURE_LIVE_TRADING=false` — orders go to paper broker, not real broker
+
+---
+
+## Diagnosing ML Issues
+
+### Model accuracy degraded
+
+```bash
+# Check current model
+curl http://localhost:8000/api/ml/accuracy \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check if fallback is active
+# If model_id is "xgb_macro" instead of "advanced_oos", fallback is active
+```
+
+If fallback is active:
+```bash
+# Check logs for the cause
+docker compose logs app | grep "ML model"
+
+# Retrain
+python ml/train_advanced.py --smoke   # Quick test first
+python ml/train_advanced.py --years 50 --oos-years 3  # Full retrain
+```
+
+### Macro features missing
+
+```bash
+# Check macro store
+curl http://localhost:8000/api/macro/snapshot \
+  -H "Authorization: Bearer $TOKEN"
+
+# Force refresh
+python -m ml.macro_bootstrap
+
+# Check data files
+ls -la data/macro/
+```
+
+### Online learner not updating
+
+```bash
+# Check status
+curl http://localhost:8000/api/online-learner/status \
+  -H "Authorization: Bearer $TOKEN"
+
+# Verify flag is set
+grep ML_HOURLY_ENABLED .env
+
+# Check logs for hourly update
+docker compose logs app | grep "online_learner"
+```
+
+---
+
+## Diagnosing Broker Issues
+
+### OANDA connectivity
+
+```bash
+# Full validation
+python scripts/validate_oanda.py
+
+# Quick API test
+curl http://localhost:8000/api/broker/test-connection \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check account balance
+curl http://localhost:8000/api/trading/account \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Position mismatch (OMS vs broker)
+
+If the OMS shows positions that don't match the broker:
+
+```bash
+# Trigger reconciliation
+curl -X POST http://localhost:8000/api/trading/reconcile \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check reconciliation log
+docker compose logs app | grep "reconcil"
+```
+
+The `PositionReconciler` runs automatically every 5 minutes. If mismatches persist,
+check `core/position_reconciler.py` logs for the specific discrepancy.
+
+---
+
+## Diagnosing Database Issues
+
+### Slow queries
+
+```bash
+# Enable query logging in .env
+SQLALCHEMY_ECHO=true
+
+# Check slow query log (PostgreSQL)
+sudo -u postgres psql hopefx_db -c "
+SELECT query, mean_exec_time, calls
+FROM pg_stat_statements
+ORDER BY mean_exec_time DESC
+LIMIT 10;"
+```
+
+### Migration state
+
+```bash
+# Check current revision
+alembic current
+
+# Check pending migrations
+alembic history --verbose
+
+# Apply all pending
+alembic upgrade head
+```
+
+### Database size
+
+```bash
+# PostgreSQL
+sudo -u postgres psql hopefx_db -c "\l+"
+
+# SQLite
+ls -lh hopefx.db
+```
+
+---
+
+## Diagnosing Redis Issues
+
+```bash
+# Check Redis is running
+redis-cli ping   # Expected: PONG
+
+# Check memory usage
+redis-cli info memory | grep used_memory_human
+
+# Check feature cache hit rate
+redis-cli info stats | grep keyspace_hits
+
+# Flush feature cache (forces recompute on next tick)
+redis-cli flushdb   # WARNING: clears all Redis data for this DB
+```
+
+---
+
+## Diagnosing API Issues
+
+### Slow API responses
+
+```bash
+# Check Prometheus metrics
+curl http://localhost:9090/metrics | grep hopefx_api_latency
+
+# Check p99 latency
+curl http://localhost:8000/metrics | grep hopefx_request_duration_seconds
+```
+
+Target: p99 < 200ms. If above:
+1. Check Redis is running (feature cache miss adds ~200ms)
+2. Check database query time
+3. Check if ML model is loading on every request (should be cached in memory)
+
+### 500 errors
+
+```bash
+# Check Sentry for the full traceback
+# Or check logs
+docker compose logs app | grep "500\|Internal Server Error\|Traceback"
+```
+
+---
+
+## Diagnosing Risk Engine Issues
+
+### Kill switch fired unexpectedly
+
+```bash
+# Check halt state
+cat risk/halt_state.json
+
+# Check risk status
+curl http://localhost:8000/api/risk/status \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check logs around the time it fired
+docker compose logs app | grep "kill switch\|halt\|HALT"
+```
+
+The halt state file shows: timestamp, reason, and which limit was breached.
+
+### CVaR gate blocking all orders
+
+```bash
+# Check current CVaR
+curl http://localhost:8000/api/trading/risk-metrics \
+  -H "Authorization: Bearer $TOKEN"
+
+# If CVaR is too high, close some positions
+curl -X DELETE http://localhost:8000/api/trading/positions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Enabling Debug Mode
+
+For deep debugging, enable structured debug logging:
+
+```bash
+# .env
+LOG_LEVEL=DEBUG
+SQLALCHEMY_ECHO=true
+BROKER_DEBUG=true
+```
+
+Then restart and watch logs:
+```bash
+docker compose restart app
+docker compose logs -f app | grep -E "DEBUG|signal_engine|risk|broker"
+```
+
+Disable debug mode before returning to production — it logs sensitive data.
+
+---
+
+## Useful One-Liners
+
+```bash
+# Count errors in last hour
+docker compose logs app --since 1h | grep -c ERROR
+
+# Find the last exception
+docker compose logs app | grep -A 20 "Traceback" | tail -25
+
+# Check all component statuses at once
+curl -s http://localhost:8000/health | python3 -m json.tool
+
+# Watch signal generation in real time
+docker compose logs -f app | grep "signal\|BUY\|SELL\|NEUTRAL"
+
+# Watch order placement in real time
+docker compose logs -f app | grep "order\|fill\|TradeBlocked"
+
+# Check kill switch state
+cat risk/halt_state.json 2>/dev/null || echo "Kill switch not active"
+```

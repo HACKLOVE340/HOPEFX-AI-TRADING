@@ -1,6 +1,29 @@
 # HOPEFX Sample Trading Strategies
 
-> Ready-to-use trading strategies with explanations and example code
+> Ready-to-use trading strategies with explanations and example code.
+> Last updated: 2026-07-14
+
+---
+
+## Subscription Requirements
+
+Strategies are gated by subscription tier:
+
+| Strategy | Starter | Pro | Elite |
+|----------|---------|-----|-------|
+| MA Crossover | ✅ | ✅ | ✅ |
+| EMA Crossover | ✅ | ✅ | ✅ |
+| RSI | ✅ | ✅ | ✅ |
+| MACD | — | ✅ | ✅ |
+| Bollinger Bands | — | ✅ | ✅ |
+| Breakout | — | ✅ | ✅ |
+| Mean Reversion | — | ✅ | ✅ |
+| Stochastic | — | ✅ | ✅ |
+| SMC/ICT | — | — | ✅ |
+| Strategy Brain (ML consensus) | — | — | ✅ |
+| Custom strategies | — | ✅ | ✅ |
+
+Attempting to use a strategy above your plan returns `403 Plan Limit Exceeded`.
 
 ---
 

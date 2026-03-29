@@ -3,6 +3,10 @@
 Get HOPEFX running against a real broker API in paper (practice) mode.
 No real money involved — OANDA practice accounts are free and instant.
 
+> **Subscription required:** OANDA broker integration requires a HOPEFX Starter subscription or above.
+> Paper trading mode (no broker) is available to all subscribers.
+> See [MONETIZATION.md](MONETIZATION.md) for plan details.
+
 ---
 
 ## Step 1 — Create a free OANDA practice account

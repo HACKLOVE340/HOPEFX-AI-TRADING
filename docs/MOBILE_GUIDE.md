@@ -1,43 +1,127 @@
-# HOPEFX Mobile Development Guide
+# Mobile Guide
 
-> Building mobile-first trading experiences
-
----
-
-## 📱 Mobile Overview
-
-HOPEFX provides mobile trading through:
-1. **Progressive Web App (PWA)** - Works on any device
-2. **Mobile-Optimized API** - REST and WebSocket
-3. **Push Notifications** - Real-time alerts
-4. **Native App Templates** - Flutter/React Native ready
+> HOPEFX mobile access: PWA, React Native app, and mobile API.
+> Last updated: 2026-07-14
 
 ---
 
-## 🌐 Progressive Web App (PWA)
+## Subscription Requirement
 
-### Features
+Mobile access requires an active HOPEFX subscription (Starter and above).
+All mobile API endpoints validate your JWT token, which is tied to your subscription.
+Expired or cancelled subscriptions return `403 Subscription Required`.
 
-The HOPEFX PWA provides a native-like experience:
+---
 
-- ✅ Works offline
-- ✅ Installable on home screen
-- ✅ Push notifications
-- ✅ Fast loading
-- ✅ Responsive design
-- ✅ Touch-optimized
+## Access Methods
 
-### Installation
+### 1. Progressive Web App (PWA)
 
-**For Users:**
+The PWA works on any device with a modern browser. No app store required.
 
-1. Navigate to `https://your-hopefx-domain/`
-2. Click "Add to Home Screen" (iOS) or install prompt (Android)
-3. Launch from home screen like a native app
+**Install on iOS:**
+1. Open `https://your-hopefx-domain/` in Safari
+2. Tap the Share button → "Add to Home Screen"
+3. Launch from your home screen
 
-**For Developers:**
+**Install on Android:**
+1. Open `https://your-hopefx-domain/` in Chrome
+2. Tap the install prompt or Menu → "Add to Home Screen"
+3. Launch from your home screen
 
-The PWA is configured in `mobile/pwa/manifest.json`:
+Features: offline signal cache, push notifications, touch-optimised charts, dark mode.
+
+### 2. React Native App (Roadmap Milestone 8)
+
+A native iOS and Android app is planned. See [roadmap.md](roadmap.md).
+
+### 3. Mobile API
+
+All REST and WebSocket endpoints work from mobile. The `/api/mobile/` prefix
+provides mobile-specific endpoints (push registration, device management).
+
+---
+
+## Authentication on Mobile
+
+```javascript
+// Login and store token securely
+const response = await fetch('https://your-domain/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username: 'user', password: 'pass' })
+});
+const { access_token } = await response.json();
+
+// Store securely (never in localStorage for sensitive apps)
+// React Native: use expo-secure-store
+import * as SecureStore from 'expo-secure-store';
+await SecureStore.setItemAsync('hopefx_token', access_token);
+
+// Use in requests
+const token = await SecureStore.getItemAsync('hopefx_token');
+const signal = await fetch('https://your-domain/api/signals/latest', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+```
+
+---
+
+## Push Notifications
+
+Push notifications require a Pro subscription or above.
+
+### Register a Device
+
+```bash
+POST /api/mobile/register-push
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "device_token": "fcm_token_or_apns_token",
+  "platform": "android",   // or "ios"
+  "device_name": "My Phone"
+}
+```
+
+### Unregister
+
+```bash
+DELETE /api/mobile/register-push
+Authorization: Bearer <token>
+```
+
+### Test Push
+
+```bash
+POST /api/mobile/test-push
+Authorization: Bearer <token>
+```
+
+### Check Registration Status
+
+```bash
+GET /api/mobile/push-status
+Authorization: Bearer <token>
+```
+
+### Notification Types
+
+| Type | Trigger | Plan Required |
+|------|---------|---------------|
+| Signal alert | New BUY/SELL signal | Starter |
+| Price alert | Price crosses threshold | Starter |
+| Kill switch fired | Emergency stop activated | All |
+| Daily P&L summary | End of trading day | Pro |
+| Prop firm warning | Approaching daily loss limit | Pro |
+| ML model fallback | Production model failed | Elite |
+
+---
+
+## PWA Configuration
+
+The PWA manifest is at `mobile/pwa/manifest.json`:
 
 ```json
 {
@@ -49,685 +133,201 @@ The PWA is configured in `mobile/pwa/manifest.json`:
   "background_color": "#131722",
   "theme_color": "#26a69a",
   "icons": [
-    {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
 ```
 
-### Service Worker
+### Offline Support
 
-The service worker enables offline functionality:
+The service worker caches the last 50 signals and the current positions list.
+When offline, the app shows cached data with a "Last updated: X minutes ago" banner.
 
 ```javascript
 // mobile/pwa/service-worker.js
 const CACHE_NAME = 'hopefx-v1';
-const urlsToCache = [
-  '/',
-  '/static/css/main.css',
-  '/static/js/main.js',
-  '/manifest.json'
-];
+const STATIC_CACHE = ['/', '/static/css/main.css', '/static/js/main.js'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_CACHE)));
 });
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
+    caches.match(event.request).then(cached => cached || fetch(event.request))
   );
 });
 ```
 
 ---
 
-## 📲 Native App Development
+## React Native Integration
 
-### Flutter Template
-
-Build native iOS and Android apps with Flutter:
-
-```dart
-// lib/main.dart
-import 'package:flutter/material.dart';
-import 'package:hopefx_mobile/api/client.dart';
-import 'package:hopefx_mobile/screens/dashboard.dart';
-
-void main() {
-  runApp(HopeFXApp());
-}
-
-class HopeFXApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'HOPEFX Trading',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: Color(0xFF26a69a),
-        scaffoldBackgroundColor: Color(0xFF131722),
-      ),
-      home: DashboardScreen(),
-    );
-  }
-}
-```
-
-#### API Client
-
-```dart
-// lib/api/client.dart
-import 'package:dio/dio.dart';
-
-class HopeFXClient {
-  final Dio _dio;
-  final String baseUrl;
-
-  HopeFXClient({required this.baseUrl, required String apiKey})
-    : _dio = Dio(BaseOptions(
-        baseUrl: baseUrl,
-        headers: {'Authorization': 'Bearer $apiKey'},
-      ));
-
-  Future<Map<String, dynamic>> getPortfolio() async {
-    final response = await _dio.get('/api/v1/portfolio');
-    return response.data;
-  }
-
-  Future<Map<String, dynamic>> placeOrder({
-    required String symbol,
-    required String side,
-    required double quantity,
-  }) async {
-    final response = await _dio.post('/api/v1/orders', data: {
-      'symbol': symbol,
-      'side': side,
-      'type': 'market',
-      'quantity': quantity,
-    });
-    return response.data;
-  }
-
-  Stream<Map<String, dynamic>> priceStream(String symbol) {
-    // WebSocket implementation
-    return Stream.empty();
-  }
-}
-```
-
-#### Dashboard Screen
-
-```dart
-// lib/screens/dashboard.dart
-import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-
-class DashboardScreen extends StatefulWidget {
-  @override
-  _DashboardScreenState createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends State<DashboardScreen> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('HOPEFX Trading'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.notifications),
-            onPressed: () => Navigator.pushNamed(context, '/notifications'),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Portfolio Summary Card
-          PortfolioCard(),
-          // Price Chart
-          Expanded(child: PriceChart()),
-          // Quick Trade Buttons
-          TradeButtons(),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Charts'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
-      ),
-    );
-  }
-}
-```
-
-### React Native Template
-
-For React Native development:
-
-```jsx
-// App.js
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Provider } from 'react-redux';
-import { store } from './store';
-
-import DashboardScreen from './screens/Dashboard';
-import ChartsScreen from './screens/Charts';
-import HistoryScreen from './screens/History';
-import SettingsScreen from './screens/Settings';
-
-const Tab = createBottomTabNavigator();
-
-export default function App() {
-  return (
-    <Provider store={store}>
-      <NavigationContainer>
-        <Tab.Navigator
-          screenOptions={{
-            tabBarStyle: { backgroundColor: '#131722' },
-            tabBarActiveTintColor: '#26a69a',
-          }}
-        >
-          <Tab.Screen name="Dashboard" component={DashboardScreen} />
-          <Tab.Screen name="Charts" component={ChartsScreen} />
-          <Tab.Screen name="History" component={HistoryScreen} />
-          <Tab.Screen name="Settings" component={SettingsScreen} />
-        </Tab.Navigator>
-      </NavigationContainer>
-    </Provider>
-  );
-}
-```
-
-#### API Service
+For the planned native app (Milestone 8), the API client pattern:
 
 ```javascript
-// services/api.js
-import axios from 'axios';
+// api/client.js
+import * as SecureStore from 'expo-secure-store';
 
-const API_BASE = 'https://api.hopefx.com/v1';
+const BASE_URL = 'https://your-hopefx-domain';
 
-class HopeFXAPI {
-  constructor(apiKey) {
-    this.client = axios.create({
-      baseURL: API_BASE,
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+export async function apiGet(path) {
+  const token = await SecureStore.getItemAsync('hopefx_token');
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (res.status === 401) {
+    // Token expired — redirect to login
+    throw new Error('UNAUTHORIZED');
   }
-
-  async getPortfolio() {
-    const response = await this.client.get('/portfolio');
-    return response.data;
+  if (res.status === 403) {
+    // Subscription required or plan limit exceeded
+    throw new Error('SUBSCRIPTION_REQUIRED');
   }
-
-  async getPositions() {
-    const response = await this.client.get('/positions');
-    return response.data;
-  }
-
-  async placeOrder(order) {
-    const response = await this.client.post('/orders', order);
-    return response.data;
-  }
-
-  async closePosition(positionId) {
-    const response = await this.client.delete(`/positions/${positionId}`);
-    return response.data;
-  }
+  return res.json();
 }
 
-export default HopeFXAPI;
+export async function apiPost(path, body) {
+  const token = await SecureStore.getItemAsync('hopefx_token');
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
 ```
 
----
-
-## 🔔 Push Notifications
-
-### Setup
-
-```python
-# mobile/push_notifications.py
-from firebase_admin import messaging
-import firebase_admin
-from firebase_admin import credentials
-
-class PushNotificationManager:
-    """
-    Push notification manager for mobile apps
-    """
-
-    def __init__(self, credentials_path: str = None):
-        if credentials_path:
-            cred = credentials.Certificate(credentials_path)
-            firebase_admin.initialize_app(cred)
-
-    def send_trade_alert(self, token: str, signal: dict):
-        """Send trade signal notification"""
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=f"Trade Signal: {signal['action'].upper()}",
-                body=f"{signal['symbol']} - {signal['reason']}"
-            ),
-            data={
-                'type': 'trade_signal',
-                'symbol': signal['symbol'],
-                'action': signal['action'],
-                'strength': str(signal.get('strength', 0.5))
-            },
-            token=token,
-        )
-
-        response = messaging.send(message)
-        return response
-
-    def send_price_alert(self, token: str, symbol: str, price: float, threshold: float):
-        """Send price alert notification"""
-        direction = "above" if price >= threshold else "below"
-
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=f"Price Alert: {symbol}",
-                body=f"{symbol} is now {direction} {threshold:.2f}"
-            ),
-            data={
-                'type': 'price_alert',
-                'symbol': symbol,
-                'price': str(price),
-                'threshold': str(threshold)
-            },
-            token=token,
-        )
-
-        return messaging.send(message)
-
-    def send_position_update(self, token: str, position: dict):
-        """Send position update notification"""
-        pnl = position.get('unrealized_pnl', 0)
-        pnl_emoji = "📈" if pnl > 0 else "📉" if pnl < 0 else "➡️"
-
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=f"{pnl_emoji} Position Update",
-                body=f"{position['symbol']}: {pnl:+.2f}"
-            ),
-            data={
-                'type': 'position_update',
-                'position_id': position['id'],
-                'pnl': str(pnl)
-            },
-            token=token,
-        )
-
-        return messaging.send(message)
-```
-
-### Client-Side Integration
-
-**React Native:**
+### Real-Time Prices via WebSocket
 
 ```javascript
-// services/notifications.js
-import messaging from '@react-native-firebase/messaging';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// hooks/usePrices.js
+import { useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 
-export async function requestNotificationPermission() {
-  const authStatus = await messaging().requestPermission();
-  const enabled =
-    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+export function usePrices(symbol = 'XAUUSD') {
+  const [price, setPrice] = useState(null);
 
-  if (enabled) {
-    const token = await messaging().getToken();
-    await registerDeviceToken(token);
-  }
+  useEffect(() => {
+    let ws;
+    (async () => {
+      const token = await SecureStore.getItemAsync('hopefx_token');
+      ws = new WebSocket(`wss://your-domain/ws/prices?token=${token}`);
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.symbol === symbol) setPrice(data);
+      };
+    })();
+    return () => ws?.close();
+  }, [symbol]);
 
-  return enabled;
-}
-
-export async function registerDeviceToken(token) {
-  await AsyncStorage.setItem('pushToken', token);
-  // Send to backend
-  await api.post('/notifications/register', { token });
-}
-
-export function setupNotificationHandlers() {
-  // Foreground messages
-  messaging().onMessage(async remoteMessage => {
-    console.log('Notification received:', remoteMessage);
-    // Show in-app notification
-  });
-
-  // Background messages
-  messaging().setBackgroundMessageHandler(async remoteMessage => {
-    console.log('Background message:', remoteMessage);
-  });
+  return price;
 }
 ```
 
-**Flutter:**
+### Signal Feed Component
 
-```dart
-// lib/services/notifications.dart
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-class NotificationService {
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
-    FlutterLocalNotificationsPlugin();
-
-  Future<void> initialize() async {
-    // Request permission
-    await _messaging.requestPermission();
-
-    // Get token
-    final token = await _messaging.getToken();
-    await _registerToken(token!);
-
-    // Handle messages
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
-  }
-
-  void _handleForegroundMessage(RemoteMessage message) {
-    // Show local notification
-    _localNotifications.show(
-      message.hashCode,
-      message.notification?.title,
-      message.notification?.body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'hopefx_trading',
-          'Trading Alerts',
-          importance: Importance.high,
-        ),
-      ),
-    );
-  }
-}
-```
-
----
-
-## 📡 Mobile API
-
-### Optimized Endpoints
-
-The mobile API provides optimized endpoints for mobile clients:
-
-```python
-# mobile/api.py
-from fastapi import APIRouter, Depends
-from typing import Optional
-
-router = APIRouter(prefix="/mobile", tags=["Mobile"])
-
-@router.get("/dashboard")
-async def get_dashboard():
-    """
-    Get all dashboard data in a single request
-    Optimized for mobile to reduce API calls
-    """
-    return {
-        "portfolio": await get_portfolio_summary(),
-        "positions": await get_open_positions(),
-        "recent_signals": await get_recent_signals(limit=5),
-        "price": await get_current_price("XAUUSD"),
-        "alerts": await get_unread_alerts()
-    }
-
-@router.get("/chart/{symbol}")
-async def get_chart_data(
-    symbol: str,
-    timeframe: str = "1H",
-    limit: int = 100
-):
-    """
-    Get chart data optimized for mobile display
-    """
-    return {
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "candles": await get_ohlcv(symbol, timeframe, limit),
-        "indicators": {
-            "sma_20": await calculate_sma(symbol, 20),
-            "ema_50": await calculate_ema(symbol, 50)
-        }
-    }
-
-@router.post("/quick-trade")
-async def quick_trade(
-    symbol: str,
-    side: str,
-    risk_percent: float = 0.02
-):
-    """
-    One-tap trading with automatic position sizing
-    """
-    position_size = calculate_position_size(risk_percent)
-    return await place_order(symbol, side, position_size)
-```
-
-### WebSocket for Real-Time Data
-
-```python
-# mobile/websocket.py
-from fastapi import WebSocket
-
-@router.websocket("/ws/mobile")
-async def mobile_websocket(websocket: WebSocket):
-    await websocket.accept()
-
-    try:
-        while True:
-            # Send combined updates
-            data = {
-                "type": "update",
-                "portfolio": await get_portfolio_summary(),
-                "prices": await get_watched_prices(),
-                "positions": await get_position_updates()
-            }
-            await websocket.send_json(data)
-            await asyncio.sleep(1)
-    except WebSocketDisconnect:
-        pass
-```
-
----
-
-## 📊 Mobile UI Components
-
-### Chart Component
-
-```jsx
-// components/TradingChart.jsx
+```javascript
+// components/SignalCard.js
 import React from 'react';
-import { View, Dimensions } from 'react-native';
-import { LineChart, CandlestickChart } from 'react-native-wagmi-charts';
+import { View, Text, StyleSheet } from 'react-native';
 
-export function TradingChart({ data, type = 'candlestick' }) {
-  const { width } = Dimensions.get('window');
-
-  if (type === 'candlestick') {
-    return (
-      <CandlestickChart.Provider data={data}>
-        <CandlestickChart width={width} height={300}>
-          <CandlestickChart.Candles />
-          <CandlestickChart.Crosshair>
-            <CandlestickChart.Tooltip />
-          </CandlestickChart.Crosshair>
-        </CandlestickChart>
-      </CandlestickChart.Provider>
-    );
-  }
-
+export function SignalCard({ signal }) {
+  const isBuy = signal.direction === 'BUY';
   return (
-    <LineChart.Provider data={data}>
-      <LineChart width={width} height={300}>
-        <LineChart.Path color="#26a69a" />
-        <LineChart.CursorLine />
-        <LineChart.CursorCrosshair />
-      </LineChart>
-    </LineChart.Provider>
-  );
-}
-```
-
-### Trade Panel
-
-```jsx
-// components/TradePanel.jsx
-import React, { useState } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-
-export function TradePanel({ symbol, currentPrice, onTrade }) {
-  const [quantity, setQuantity] = useState(0.1);
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.priceDisplay}>
-        <Text style={styles.symbol}>{symbol}</Text>
-        <Text style={styles.price}>${currentPrice.toFixed(2)}</Text>
-      </View>
-
-      <View style={styles.quantitySelector}>
-        <TouchableOpacity onPress={() => setQuantity(q => Math.max(0.01, q - 0.01))}>
-          <Text style={styles.button}>-</Text>
-        </TouchableOpacity>
-        <Text style={styles.quantity}>{quantity.toFixed(2)}</Text>
-        <TouchableOpacity onPress={() => setQuantity(q => q + 0.01)}>
-          <Text style={styles.button}>+</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.tradeButtons}>
-        <TouchableOpacity
-          style={[styles.tradeButton, styles.buyButton]}
-          onPress={() => onTrade('buy', quantity)}
-        >
-          <Text style={styles.buttonText}>BUY</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tradeButton, styles.sellButton]}
-          onPress={() => onTrade('sell', quantity)}
-        >
-          <Text style={styles.buttonText}>SELL</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.card}>
+      <Text style={styles.symbol}>{signal.symbol}</Text>
+      <Text style={[styles.direction, isBuy ? styles.buy : styles.sell]}>
+        {signal.direction}
+      </Text>
+      <Text style={styles.confidence}>
+        Confidence: {(signal.confidence * 100).toFixed(0)}%
+      </Text>
+      <Text style={styles.rr}>R/R: {signal.risk_reward.toFixed(1)}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#1e222d',
-    padding: 16,
-    borderRadius: 8,
-  },
-  buyButton: {
-    backgroundColor: '#26a69a',
-  },
-  sellButton: {
-    backgroundColor: '#ef5350',
-  },
-  // ... more styles
+  card: { backgroundColor: '#1e222d', padding: 16, borderRadius: 8, marginBottom: 8 },
+  symbol: { color: '#d1d4dc', fontSize: 16, fontWeight: 'bold' },
+  direction: { fontSize: 24, fontWeight: 'bold', marginVertical: 4 },
+  buy: { color: '#26a69a' },
+  sell: { color: '#ef5350' },
+  confidence: { color: '#787b86', fontSize: 14 },
+  rr: { color: '#787b86', fontSize: 14 },
 });
 ```
 
 ---
 
-## 🔐 Security Considerations
-
-### Secure Storage
+## Biometric Authentication
 
 ```javascript
-// Store sensitive data securely
-import * as SecureStore from 'expo-secure-store';
-
-export async function saveApiKey(apiKey) {
-  await SecureStore.setItemAsync('apiKey', apiKey);
-}
-
-export async function getApiKey() {
-  return await SecureStore.getItemAsync('apiKey');
-}
-```
-
-### Biometric Authentication
-
-```javascript
-// Enable biometric login
 import * as LocalAuthentication from 'expo-local-authentication';
 
 export async function authenticateWithBiometrics() {
   const hasHardware = await LocalAuthentication.hasHardwareAsync();
   const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-  if (hasHardware && isEnrolled) {
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Authenticate to access HOPEFX',
-    });
-    return result.success;
-  }
+  if (!hasHardware || !isEnrolled) return false;
 
-  return false;
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: 'Authenticate to access HOPEFX',
+    fallbackLabel: 'Use PIN',
+  });
+  return result.success;
 }
 ```
 
 ---
 
-## 📦 Deployment
+## CORS for Mobile
+
+If your mobile app is hosted on a different domain, add it to the CORS allowlist:
+
+```bash
+MOBILE_CORS_ORIGINS=https://app.yourdomain.com,https://mobile.yourdomain.com
+```
+
+---
+
+## App Store Deployment (Milestone 8)
 
 ### iOS App Store
-
-1. Configure signing in Xcode
-2. Build release version
-3. Upload to App Store Connect
-4. Submit for review
+1. Configure signing in Xcode with your Apple Developer account
+2. Build release: `eas build --platform ios --profile production`
+3. Upload to App Store Connect: `eas submit --platform ios`
+4. Submit for review (typically 1–3 days)
 
 ### Google Play Store
-
-1. Generate signed APK/AAB
-2. Create Play Console listing
-3. Upload bundle
-4. Submit for review
+1. Generate signed AAB: `eas build --platform android --profile production`
+2. Upload to Play Console
+3. Submit for review (typically 1–3 days)
 
 ### PWA Deployment
-
 Ensure your server has:
-- HTTPS enabled
-- Valid SSL certificate
-- Proper CORS headers
-- Service worker registered
+- HTTPS with valid TLS certificate
+- `Content-Security-Policy` header set
+- Service worker served from root scope
+- `manifest.json` linked in `<head>`
 
 ---
 
-## 🆘 Support
+## Troubleshooting
 
-- **Documentation:** [docs/API_GUIDE.md](./API_GUIDE.md)
-- **Discord:** `#mobile-development`
-- **GitHub:** Issue tracker
+| Issue | Fix |
+|-------|-----|
+| Push notifications not arriving | Check `GET /api/mobile/push-status` — device may not be registered |
+| `403 Subscription Required` | Your subscription has expired — renew at `/api/monetization/pricing` |
+| PWA not installable | Must be served over HTTPS with a valid manifest.json |
+| WebSocket disconnects | Implement reconnect with exponential backoff (see `usePrices` hook above) |
+| Biometrics not working | Check `LocalAuthentication.hasHardwareAsync()` — not all devices support it |
 
 ---
 
-*Build amazing mobile trading experiences with HOPEFX!*
+*Last updated: 2026-07-14*
