@@ -46,7 +46,7 @@ const SignalCard = memo(({ signal, isSelected, onSelect, onTrade, trading }: Sig
     >
       {/* Top row: direction + confidence */}
       <div style={sc.topRow}>
-        <div style={sc.dirBadge(dirColor)}>
+        <div style={scDynamic.dirBadge(dirColor)}>
           <span style={sc.dirArrow}>{isLong ? '▲' : isNeutral ? '—' : '▼'}</span>
           <span style={sc.dirText}>{signal.direction.toUpperCase()}</span>
         </div>
@@ -70,7 +70,7 @@ const SignalCard = memo(({ signal, isSelected, onSelect, onTrade, trading }: Sig
         <PriceLevel label="ENTRY" value={signal.entry_price} color={COLORS.text.primary} />
         <PriceLevel label="SL"    value={signal.stop_loss}   color={COLORS.loss.base} />
         <PriceLevel label="TP"    value={signal.take_profit} color={COLORS.profit.base} />
-        <div style={sc.rrBadge(rr >= 2 ? COLORS.profit.base : rr >= 1 ? COLORS.neon.gold : COLORS.loss.base)}>
+        <div style={scDynamic.rrBadge(rr >= 2 ? COLORS.profit.base : rr >= 1 ? COLORS.neon.gold : COLORS.loss.base)}>
           R:R {rr.toFixed(1)}
         </div>
       </div>
@@ -295,53 +295,58 @@ const SignalFeed: React.FC = () => {
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Dynamic style helpers ────────────────────────────────────────────────────
 
-const sc: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CSSProperties)> = {
+const scDynamic = {
+  dirBadge: (color: string): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 4,
+    background: `${color}18`,
+    border: `1px solid ${color}44`,
+    borderRadius: 4, padding: '3px 7px', flexShrink: 0,
+  }),
+  rrBadge: (color: string): React.CSSProperties => ({
+    fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700,
+    color, background: `${color}18`,
+    border: `1px solid ${color}33`,
+    borderRadius: 4, padding: '2px 6px', marginLeft: 'auto',
+  }),
+};
+
+// ─── Static styles ────────────────────────────────────────────────────────────
+
+const sc: Record<string, React.CSSProperties> = {
   card: {
     border: `1px solid ${COLORS.bg.border}`,
     borderRadius: 6,
     padding: '10px 12px',
     transition: 'border-color 150ms ease, background 150ms ease',
-    userSelect: 'none' as const,
+    userSelect: 'none',
   },
   topRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  dirBadge: (color: unknown) => ({
-    display: 'flex', alignItems: 'center', gap: 4,
-    background: `${color as string}18`,
-    border: `1px solid ${color as string}44`,
-    borderRadius: 4, padding: '3px 7px', flexShrink: 0,
-  }),
   dirArrow: { fontSize: 10 },
   dirText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em' },
-  confSection: { flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 3 },
+  confSection: { flex: 1, display: 'flex', flexDirection: 'column', gap: 3 },
   confBarBg: { height: 3, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   confBarFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
   confLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, letterSpacing: '0.06em' },
   statusBadge: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, letterSpacing: '0.08em', flexShrink: 0 },
-  priceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' as const },
-  priceLevel: { display: 'flex', flexDirection: 'column' as const, gap: 1 },
+  priceRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' },
+  priceLevel: { display: 'flex', flexDirection: 'column', gap: 1 },
   priceLevelLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 7, color: COLORS.text.muted, letterSpacing: '0.1em' },
   priceLevelVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700 },
-  rrBadge: (color: unknown) => ({
-    fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700,
-    color: color as string, background: `${color as string}18`,
-    border: `1px solid ${color as string}33`,
-    borderRadius: 4, padding: '2px 6px', marginLeft: 'auto' as const,
-  }),
-  metaRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const },
+  metaRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   regimePill: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, letterSpacing: '0.06em' },
   modelLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted },
-  timeLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, marginLeft: 'auto' as const },
-  expanded: { marginTop: 10, display: 'flex', flexDirection: 'column' as const, gap: 8, borderTop: `1px solid ${COLORS.bg.border}`, paddingTop: 8 },
+  timeLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, marginLeft: 'auto' },
+  expanded: { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${COLORS.bg.border}`, paddingTop: 8 },
   reasoning: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, lineHeight: 1.5 },
-  features: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
+  features: { display: 'flex', flexDirection: 'column', gap: 4 },
   featuresLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.1em', marginBottom: 2 },
   featureRow: { display: 'flex', alignItems: 'center', gap: 6 },
-  featureName: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, width: 80, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+  featureName: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, width: 80, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   featureBarBg: { flex: 1, height: 3, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   featureBarFill: { height: '100%', borderRadius: 2 },
-  featureVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, width: 24, textAlign: 'right' as const },
+  featureVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, width: 24, textAlign: 'right' },
   tradeRow: { display: 'flex', gap: 6 },
   tradeBtn: { flex: 1, border: 'none', borderRadius: 5, cursor: 'pointer', fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700, padding: '8px 0', letterSpacing: '0.06em', transition: 'opacity 150ms ease' },
   buyBtn:  { background: COLORS.profit.muted, color: COLORS.profit.strong },

@@ -11,9 +11,8 @@
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { orchestratorWS } from '../services/orchestrator-ws';
+import { orchestratorWS, type EventMap } from '../services/orchestrator-ws';
 import { useStore } from '../../../store';
-import type { EventMap } from '../services/orchestrator-ws';
 
 // Re-export EventMap type for consumers
 export type { EventMap };

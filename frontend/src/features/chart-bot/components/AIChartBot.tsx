@@ -46,7 +46,7 @@ const RegimeBadge = memo(({ regime, confidence }: { regime: string; confidence: 
   const color = regimeColor(regime);
   return (
     <div style={{ ...ab.regimeBadge, background: `${color}18`, border: `1px solid ${color}44`, color }}>
-      <span style={ab.regimeDot(color)} />
+      <span style={abDynamic.regimeDot(color)} />
       {regimeLabel(regime)}
       <span style={{ ...ab.regimeConf, color: `${color}cc` }}>{formatConfidence(confidence)}</span>
     </div>
@@ -313,9 +313,20 @@ const AIChartBot: React.FC = () => {
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Dynamic style helpers ────────────────────────────────────────────────────
 
-const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CSSProperties)> = {
+const abDynamic = {
+  regimeDot: (color: string): React.CSSProperties => ({
+    width: 6, height: 6, borderRadius: '50%',
+    background: color,
+    boxShadow: `0 0 6px ${color}`,
+    flexShrink: 0,
+  }),
+};
+
+// ─── Static styles ────────────────────────────────────────────────────────────
+
+const ab: Record<string, React.CSSProperties> = {
   wrapper: {
     background: COLORS.bg.surface,
     border: `1px solid ${COLORS.bg.border}`,
@@ -364,23 +375,15 @@ const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
     fontSize: 9, padding: '3px 8px',
     letterSpacing: '0.06em',
   },
-  content: { flex: 1, overflowY: 'auto' as const },
-
-  // Analysis panel
-  analysisPanel: { padding: '12px 14px', display: 'flex', flexDirection: 'column' as const, gap: 12 },
-  topRow: { display: 'flex', gap: 8, flexWrap: 'wrap' as const },
+  content: { flex: 1, overflowY: 'auto' },
+  analysisPanel: { padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 },
+  topRow: { display: 'flex', gap: 8, flexWrap: 'wrap' },
   regimeBadge: {
     display: 'flex', alignItems: 'center', gap: 6,
     padding: '5px 10px', borderRadius: 6,
     fontFamily: '"JetBrains Mono", monospace',
     fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
   },
-  regimeDot: (color: unknown) => ({
-    width: 6, height: 6, borderRadius: '50%',
-    background: color as string,
-    boxShadow: `0 0 6px ${color as string}`,
-    flexShrink: 0,
-  }),
   regimeConf: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, marginLeft: 4 },
   actionBadge: {
     display: 'flex', alignItems: 'center', gap: 8,
@@ -390,7 +393,6 @@ const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
   confBar: { flex: 1, height: 4, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   confFill: { height: '100%', borderRadius: 2, transition: 'width 600ms ease' },
   confLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, letterSpacing: '0.06em', flexShrink: 0 },
-
   summaryBox: {
     background: COLORS.bg.elevated,
     border: `1px solid ${COLORS.bg.divider}`,
@@ -407,41 +409,36 @@ const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
     lineHeight: 1.6, margin: 0,
   },
   cursor: { color: COLORS.neon.purple, animation: 'blink 1s step-end infinite' },
-
-  section: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
+  section: { display: 'flex', flexDirection: 'column', gap: 4 },
   sectionLabel: {
     fontFamily: '"JetBrains Mono", monospace',
     fontSize: 8, color: COLORS.text.muted,
-    letterSpacing: '0.12em', textTransform: 'uppercase' as const,
+    letterSpacing: '0.12em', textTransform: 'uppercase',
   },
-  driverList: { margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' as const, gap: 4 },
+  driverList: { margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 },
   driverItem: {
     display: 'flex', alignItems: 'flex-start', gap: 6,
     fontFamily: '"Inter", sans-serif', fontSize: 11,
     color: COLORS.text.secondary, lineHeight: 1.4,
   },
   driverDot: { width: 4, height: 4, borderRadius: '50%', background: COLORS.neon.cyan, marginTop: 5, flexShrink: 0 },
-
   featureRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
-  featureName: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, width: 100, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+  featureName: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, width: 100, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   featureBarBg: { flex: 1, height: 4, background: COLORS.bg.elevated, borderRadius: 2, overflow: 'hidden' },
   featureBarFill: { height: '100%', borderRadius: 2, transition: 'width 400ms ease' },
-  featureImportance: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, width: 28, textAlign: 'right' as const },
-
+  featureImportance: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, width: 28, textAlign: 'right' },
   targetsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 },
-  targetItem: { borderRadius: 6, padding: '8px 10px', background: COLORS.bg.elevated, display: 'flex', flexDirection: 'column' as const, gap: 3 },
+  targetItem: { borderRadius: 6, padding: '8px 10px', background: COLORS.bg.elevated, display: 'flex', flexDirection: 'column', gap: 3 },
   targetLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em' },
   targetPrice: { fontFamily: '"JetBrains Mono", monospace', fontSize: 12, fontWeight: 700 },
   targetDiff:  { fontFamily: '"JetBrains Mono", monospace', fontSize: 9 },
-
   riskBox: {
-    background: `${COLORS.risk.bg}`,
+    background: COLORS.risk.bg,
     border: `1px solid ${COLORS.loss.border}`,
     borderRadius: 6, padding: '8px 12px',
   },
   riskText: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, lineHeight: 1.5, margin: '4px 0 0' },
-
-  warningsBox: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
+  warningsBox: { display: 'flex', flexDirection: 'column', gap: 4 },
   warning: {
     display: 'flex', alignItems: 'flex-start', gap: 6,
     fontFamily: '"Inter", sans-serif', fontSize: 10,
@@ -451,16 +448,12 @@ const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
     borderRadius: 4, padding: '5px 8px',
   },
   warnIcon: { flexShrink: 0, fontSize: 10 },
-  timestamp: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.06em', textAlign: 'right' as const },
-
-  // Click prompt
-  clickPrompt: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', padding: '32px 20px', gap: 12, textAlign: 'center' as const },
+  timestamp: { fontFamily: '"JetBrains Mono", monospace', fontSize: 8, color: COLORS.text.muted, letterSpacing: '0.06em', textAlign: 'right' },
+  clickPrompt: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 20px', gap: 12, textAlign: 'center' },
   promptIcon: { opacity: 0.7 },
   promptTitle: { fontFamily: '"JetBrains Mono", monospace', fontSize: 12, color: COLORS.text.secondary, margin: 0, letterSpacing: '0.04em' },
   promptSub: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.muted, margin: 0, lineHeight: 1.6, maxWidth: 260 },
-
-  // Loading
-  loadingPanel: { padding: '16px 14px', display: 'flex', flexDirection: 'column' as const, gap: 10 },
+  loadingPanel: { padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 10 },
   loadingHeader: { display: 'flex', alignItems: 'center', gap: 8 },
   loadingSpinner: {
     width: 14, height: 14, borderRadius: '50%',
@@ -472,15 +465,13 @@ const ab: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
   loadingPrice: { display: 'flex', gap: 10, alignItems: 'center' },
   loadingLabel: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, color: COLORS.text.muted, letterSpacing: '0.08em', width: 40 },
   loadingVal: { fontFamily: '"JetBrains Mono", monospace', fontSize: 12, color: COLORS.text.primary, fontWeight: 700 },
-  loadingSteps: { display: 'flex', flexDirection: 'column' as const, gap: 6, marginTop: 4 },
+  loadingSteps: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 },
   loadingStep: { display: 'flex', alignItems: 'center', gap: 8 },
   loadingStepDot: { width: 4, height: 4, borderRadius: '50%', background: COLORS.neon.purple, opacity: 0.6 },
   loadingStepText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: COLORS.text.muted },
-
-  // Error
-  errorBox: { padding: '16px 14px', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 10 },
+  errorBox: { padding: '16px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 },
   errorIcon: { fontSize: 20, color: COLORS.loss.base },
-  errorText: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, textAlign: 'center' as const },
+  errorText: { fontFamily: '"Inter", sans-serif', fontSize: 11, color: COLORS.text.secondary, textAlign: 'center' },
   retryBtn: {
     background: COLORS.bg.elevated,
     border: `1px solid ${COLORS.bg.divider}`,

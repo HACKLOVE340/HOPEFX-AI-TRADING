@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useRef, useState, memo, useCallback } from 'react';
-import { IChartApi, UTCTimestamp } from 'lightweight-charts';
+import { IChartApi, ISeriesApi, SeriesType, UTCTimestamp } from 'lightweight-charts';
 import { COLORS } from '../utils/design-tokens';
 import { formatPrice } from '../utils/formatters';
 import type { SupportResistanceLevel, TrendLine, ChartPattern } from '../types';
@@ -167,6 +167,8 @@ PatternBox.displayName = 'PatternBox';
 
 interface AIOverlaysProps {
   chart: IChartApi | null;
+  // A reference series is needed for priceToCoordinate (v5 API)
+  series?: ISeriesApi<SeriesType> | null;
   levels: SupportResistanceLevel[];
   trendlines: TrendLine[];
   patterns: ChartPattern[];
@@ -176,6 +178,7 @@ interface AIOverlaysProps {
 
 const AIOverlays: React.FC<AIOverlaysProps> = ({
   chart,
+  series,
   levels,
   trendlines,
   patterns,
@@ -189,12 +192,17 @@ const AIOverlays: React.FC<AIOverlaysProps> = ({
 
   const recompute = useCallback(() => {
     if (!chart) return;
+    // priceToCoordinate lives on ISeriesApi in v5; fall back gracefully if no series
+    const priceToY = (price: number): number | null => {
+      if (series) return series.priceToCoordinate(price);
+      return null;
+    };
 
     // Levels → y coordinates
     const newLevels: RenderedLevel[] = [];
     for (const lvl of levels) {
       try {
-        const y = chart.priceToCoordinate(lvl.price);
+        const y = priceToY(lvl.price);
         if (y !== null && y > 0 && y < containerHeight) {
           newLevels.push({ level: lvl, y });
         }
@@ -209,8 +217,8 @@ const AIOverlays: React.FC<AIOverlaysProps> = ({
         const ts = chart.timeScale();
         const x1 = ts.timeToCoordinate(line.startTime as UTCTimestamp);
         const x2 = ts.timeToCoordinate(line.endTime   as UTCTimestamp);
-        const y1 = chart.priceToCoordinate(line.startPrice);
-        const y2 = chart.priceToCoordinate(line.endPrice);
+        const y1 = priceToY(line.startPrice);
+        const y2 = priceToY(line.endPrice);
         if (x1 !== null && x2 !== null && y1 !== null && y2 !== null) {
           newTrendlines.push({ line, start: { x: x1, y: y1 }, end: { x: x2, y: y2 } });
         }
@@ -225,7 +233,7 @@ const AIOverlays: React.FC<AIOverlaysProps> = ({
         const ts = chart.timeScale();
         const x1 = ts.timeToCoordinate(pat.startTime as UTCTimestamp);
         const x2 = ts.timeToCoordinate(pat.endTime   as UTCTimestamp);
-        const y  = chart.priceToCoordinate((pat.targetPrice + pat.stopPrice) / 2);
+        const y  = priceToY((pat.targetPrice + pat.stopPrice) / 2);
         if (x1 !== null && x2 !== null && y !== null) {
           const px = Math.min(x1, x2);
           const pw = Math.abs(x2 - x1);
@@ -234,19 +242,20 @@ const AIOverlays: React.FC<AIOverlaysProps> = ({
       } catch { /* out of range */ }
     }
     setRenderedPatterns(newPatterns);
-  }, [chart, levels, trendlines, patterns, containerHeight]);
+  }, [chart, series, levels, trendlines, patterns, containerHeight]);
 
   // Recompute on data change or chart scroll/zoom
   useEffect(() => {
     if (!chart) return;
     recompute();
-    const unsub = chart.timeScale().subscribeVisibleTimeRangeChange(() => {
+    const handler = () => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(recompute);
-    });
+    };
+    chart.timeScale().subscribeVisibleTimeRangeChange(handler);
     return () => {
       cancelAnimationFrame(rafRef.current);
-      unsub();
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(handler);
     };
   }, [chart, recompute]);
 
