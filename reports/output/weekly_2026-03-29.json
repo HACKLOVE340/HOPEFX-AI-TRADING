@@ -1,0 +1,27 @@
+{
+  "report_id": "4533147f-b3f1-4ab5-a7fc-c0727fec45ee",
+  "week_start": "2026-03-22T14:16:57.175661+00:00",
+  "week_end": "2026-03-29T14:16:57.175661+00:00",
+  "generated_at": "2026-03-29T14:16:57.181291+00:00",
+  "total_trades": 25,
+  "winning_trades": 17,
+  "losing_trades": 8,
+  "win_rate": 0.68,
+  "avg_win": 56.7795,
+  "avg_loss": -44.8276,
+  "profit_factor": 2.692,
+  "expectancy": 24.2652,
+  "gross_pnl": 606.6307,
+  "net_pnl": 606.6307,
+  "total_return_pct": 6.0663,
+  "sharpe_ratio": 5.018,
+  "sortino_ratio": 10.217,
+  "max_drawdown_pct": -1.997,
+  "calmar_ratio": 157.961,
+  "starting_equity": 10000.0,
+  "ending_equity": 10606.63,
+  "symbols_traded": [
+    "XAU_USD"
+  ],
+  "note": ""
+}

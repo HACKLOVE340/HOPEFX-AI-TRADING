@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
+import asyncio as _asyncio  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
 
 # ── models ────────────────────────────────────────────────────────────────────
 
@@ -163,3 +166,83 @@ async def public_performance():
     """
     curve = _load_equity_curve()
     return _compute_public_stats(curve)
+
+
+@router.post(
+    "/weekly-report/generate",
+    summary="Trigger weekly performance report generation",
+)
+async def generate_weekly_report():
+    """
+    Manually trigger the weekly performance report.
+    Generates JSON + HTML output in reports/output/ and sends email if configured.
+    Normally runs automatically every Monday 08:00 UTC via APScheduler.
+    """
+    try:
+        from reports.weekly_report import (
+            WeeklyReportGenerator,
+            _load_trade_data,
+            _render_text,
+        )
+
+        trades, equity_curve, starting_equity = await _load_trade_data()
+        gen = WeeklyReportGenerator()
+        report = gen.generate(trades, equity_curve, starting_equity)
+        json_path = gen.save_json(report)
+        gen.save_html(report)
+        emailed = gen.send_email(report)
+
+        return {
+            "report_id": report.report_id,
+            "week_end": report.week_end.isoformat(),
+            "total_trades": report.total_trades,
+            "net_pnl": report.net_pnl,
+            "sharpe_ratio": report.sharpe_ratio,
+            "max_drawdown_pct": report.max_drawdown_pct,
+            "win_rate": report.win_rate,
+            "json_path": str(json_path),
+            "emailed": emailed,
+        }
+    except Exception as exc:
+        logger.error("Weekly report generation failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get(
+    "/weekly-report/latest",
+    summary="Get the most recent weekly performance report",
+)
+async def get_latest_weekly_report():
+    """
+    Return the most recently generated weekly report as JSON.
+    Returns 404 if no report has been generated yet.
+    """
+    import json as _json
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+
+    output_dir = _Path(__file__).parent.parent / "reports" / "output"
+    reports = sorted(output_dir.glob("weekly_*.json"), reverse=True)
+    if not reports:
+        raise HTTPException(
+            status_code=404,
+            detail="No weekly reports generated yet. POST /api/performance/weekly-report/generate to create one.",
+        )
+    data = _json.loads(reports[0].read_text())
+    return JSONResponse(content=data)
+
+
+@router.get(
+    "/weekly-report/list",
+    summary="List all generated weekly reports",
+)
+async def list_weekly_reports():
+    """Return a list of all generated weekly report filenames."""
+    output_dir = _Path(__file__).parent.parent / "reports" / "output"
+    reports = sorted(output_dir.glob("weekly_*.json"), reverse=True)
+    return {
+        "reports": [r.name for r in reports],
+        "total": len(reports),
+        "output_dir": str(output_dir),
+    }
