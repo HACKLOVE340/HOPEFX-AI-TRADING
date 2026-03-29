@@ -247,6 +247,51 @@ class MicrostructureEngine:
             self._session_open     = time.time()
             logger.debug("MicrostructureEngine: session reset")
 
+    def health(self) -> Dict[str, object]:
+        """
+        Return a health summary dict for monitoring and the orchestrator health endpoint.
+
+        Keys:
+          tick_count        : total ticks processed since startup
+          window_size       : current rolling window depth
+          cumulative_delta  : session cumulative volume delta
+          trade_pressure    : current EMA trade pressure
+          spread_ema_fast   : fast spread EMA
+          spread_ema_slow   : slow spread EMA
+          session_open_age_s: seconds since last session reset
+          has_data          : True when window has >= 10 ticks
+        """
+        with self._lock:
+            return {
+                "tick_count":         self._tick_count,
+                "window_size":        len(self._ticks),
+                "cumulative_delta":   round(self._cumulative_delta, 4),
+                "trade_pressure":     round(self._trade_pressure, 4),
+                "spread_ema_fast":    round(self._spread_ema_fast, 6),
+                "spread_ema_slow":    round(self._spread_ema_slow, 6),
+                "session_open_age_s": round(time.time() - self._session_open, 1)
+                                      if self._session_open > 0 else None,
+                "has_data":           len(self._ticks) >= 10,
+            }
+
+    def tick_rate(self, window_s: float = 60.0) -> float:
+        """
+        Estimate ticks per second over the last window_s seconds.
+
+        Uses the timestamps of ticks in the rolling window.
+        Returns 0.0 when insufficient data.
+        """
+        with self._lock:
+            if len(self._ticks) < 2:
+                return 0.0
+            ticks = list(self._ticks)
+            now = time.time()
+            recent = [t for t in ticks if (now - t.ts) <= window_s]
+            if len(recent) < 2:
+                return 0.0
+            elapsed = recent[-1].ts - recent[0].ts
+            return round(len(recent) / max(elapsed, 1e-9), 4)
+
     # ── Internal processing ───────────────────────────────────────────────────
 
     def _process_tick(self, tick: GoldTick) -> MicrostructureSnapshot:
