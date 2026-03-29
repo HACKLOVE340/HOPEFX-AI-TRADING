@@ -1,14 +1,84 @@
 # Contributing
 
-## Contributor License Agreement
-
-Before your first pull request is merged, you must agree to the [CLA](./CLA.md). The CLA enables the dual-license model (AGPL-3.0 open source + commercial). To sign, include this statement in your first PR description:
-
-> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
+> HOPEFX AI Trading is a paid subscription platform licensed under AGPL-3.0.
+> Read this document fully before opening a pull request.
+> Last updated: 2026-07-14
 
 ---
 
-## Development setup
+## Contents
+
+1. [Paid Platform Context](#paid-platform-context)
+2. [Contributor License Agreement](#contributor-license-agreement)
+3. [Commercial License Note](#commercial-license-note)
+4. [Development Setup](#development-setup)
+5. [Workflow](#workflow)
+6. [Code Style](#code-style)
+7. [Testing](#testing)
+8. [Commit Messages](#commit-messages)
+9. [Project Structure](#project-structure)
+10. [What We Accept](#what-we-accept)
+11. [Reporting Issues](#reporting-issues)
+12. [Security Vulnerabilities](#security-vulnerabilities)
+
+---
+
+## Paid Platform Context
+
+HOPEFX is a **commercial paid subscription platform**. The source code is open under
+AGPL-3.0, but the hosted service requires a subscription ($1,800–$10,000/month).
+
+When contributing, you must understand and respect this model:
+
+- **Do not** add features that bypass subscription checks
+- **Do not** remove or weaken the `require_plan` middleware in `monetization/subscription.py`
+- **Do not** add free-tier access to Professional/Enterprise/Elite features
+- **Do not** commit real API keys, license keys, broker tokens, or subscriber data
+- **Do not** add backdoors, debug overrides, or hardcoded credentials
+- **Do not** change pricing, tier names, or commission rates without a maintainer discussion
+
+Contributions that violate these rules will be closed without review.
+
+If you are building on top of HOPEFX commercially (SaaS, white-label, proprietary product),
+you need a Commercial License — see [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
+
+---
+
+## Contributor License Agreement
+
+Before your first pull request is merged, you must agree to the
+[Contributor License Agreement](../CLA.md).
+
+The CLA enables the dual-license model: AGPL-3.0 open source + commercial.
+Without the CLA, your PR cannot be merged regardless of code quality.
+
+**To sign:** Include this exact statement in your first PR description:
+
+> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
+
+The CLA grants HOPEFX the right to include your contribution in commercial releases
+while you retain copyright over your contribution.
+
+---
+
+## Commercial License Note
+
+The AGPL-3.0 license requires that any software that uses HOPEFX as a network service
+must also be released under AGPL-3.0. If you want to:
+
+- Build a proprietary SaaS product on top of HOPEFX
+- White-label HOPEFX without disclosing your source code
+- Sell HOPEFX as part of a closed-source product
+- Deploy HOPEFX for clients without releasing your modifications
+
+You need a **Commercial License**. See [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
+The Elite subscription plan includes the Commercial License.
+
+Contact sales@hopefx.io for commercial licensing enquiries.
+
+---
+
+## Development Setup
 
 ```bash
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
@@ -21,37 +91,57 @@ pip install -e ".[dev]"
 pre-commit install
 ```
 
+Verify the setup:
+```bash
+pre-commit run --all-files
+pytest tests/ -m "not slow" -q
+```
+
+Both must pass before you start making changes.
+
 ---
 
 ## Workflow
 
-1. Fork the repository and create a feature branch:
+1. **Fork** the repository and create a feature branch:
    ```bash
    git checkout -b feat/your-feature-name
    ```
+   Branch naming: `feat/`, `fix/`, `docs/`, `refactor/`, `test/`, `chore/`
 
-2. Make changes. Add tests for new behaviour.
+2. **Make changes.** Add tests for all new behaviour. Update documentation if the
+   change affects user-facing behaviour.
 
-3. Run the full check suite before pushing:
+3. **Run the full check suite** before pushing:
    ```bash
-   # Lint + format (ruff handles both — no black, no flake8)
+   # Lint + format
    ruff check . --fix
    ruff format .
 
-   # Tests (fast suite)
+   # Fast test suite
    pytest tests/ -m "not slow" -q
 
    # Security scan
-   bandit -r . -ll
+   bandit -r api/ auth/ brokers/ ml/ risk/ core/ -ll -q
+
+   # Dependency scan
+   pip-audit --requirement requirements.txt
    ```
 
-4. Commit with a conventional message (see below) and push.
+4. **Commit** with a conventional message (see [Commit Messages](#commit-messages)).
 
-5. Open a pull request. Describe what changed and why.
+5. **Open a pull request.** The PR description must:
+   - Explain what changed and why
+   - Reference any related issues (`Closes #123`)
+   - Include the CLA statement if this is your first PR
+   - Include test results if adding a new feature
+
+6. **CI must pass.** All three CI jobs (`pre-commit`, `dependency-scan`, `test`) must
+   be green before a maintainer will review.
 
 ---
 
-## Code style
+## Code Style
 
 All formatting and linting is handled by **ruff** (configured in `pyproject.toml`).
 Do not use black or flake8 — they are not in the toolchain.
@@ -60,139 +150,196 @@ Key conventions:
 - Line length: 100 characters
 - Double quotes for strings
 - Type hints required on all public function signatures
-- Google-style docstrings
+- Google-style docstrings on all public classes and functions
+- No `print()` statements — use `logging.getLogger(__name__)`
 
-Pre-commit hooks run `ruff check`, `ruff format --check`, and `bandit` automatically.
+Pre-commit hooks run `ruff check`, `ruff format --check`, and `bandit` automatically
+on every commit. Fix any issues before pushing.
 
 ---
 
 ## Testing
 
 ```bash
-# Fast suite (skips slow ML training tests)
+# Fast suite (skips slow ML training tests — runs in ~2 min)
 pytest tests/ -m "not slow" -q
 
 # Full suite including ML training (~10 min)
 pytest tests/ -q
 
-# With coverage
-pytest tests/ -m "not slow" --cov=. --cov-report=term-missing
+# With coverage report
+pytest tests/ -m "not slow" --cov=. --cov-report=term-missing -q
 
 # Single module
 pytest tests/test_risk_calculations.py -v
+
+# Single test
+pytest tests/test_risk_calculations.py::test_cvar_gate_blocks_order -v
 ```
 
-Tests live in `tests/`. Name files `test_*.py`, name functions `test_*`. Mock all
-external services (broker APIs, Redis, PostgreSQL) — tests must run offline.
+### Test Requirements
+
+- All new features must have unit tests
+- All bug fixes must have a regression test that fails before the fix and passes after
+- Tests must run offline — mock all external services (broker APIs, Redis, PostgreSQL)
+- Tests must not use real API keys, real broker accounts, or real money
+- Test files: `tests/test_*.py`. Test functions: `test_*`
+
+### Test Markers
+
+```python
+@pytest.mark.slow          # Skipped in fast suite (ML training, long backtests)
+@pytest.mark.integration   # Requires running services (Redis, PostgreSQL)
+@pytest.mark.broker        # Requires broker credentials (never run in CI)
+```
+
+### Coverage Target
+
+Line coverage target: **70%** (enforced in CI with `--cov-fail-under=70`).
+New code should aim for 90%+ coverage.
 
 ---
 
-## Commit messages
+## Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-type(scope): subject
+type(scope): subject line (max 72 chars)
 
-Optional body explaining motivation.
+Optional body explaining motivation. Wrap at 100 chars.
+Focus on WHY, not WHAT (the diff shows what changed).
 
 Closes #123
+Co-authored-by: Your Name <email@example.com>
 ```
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`
+**Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`, `security`
 
-Examples:
+**Scopes:** `ml`, `risk`, `broker`, `api`, `auth`, `backtest`, `execution`, `monetization`,
+`mobile`, `docs`, `ci`, `deps`
+
+**Examples:**
 ```
 feat(ml): add regime-conditional feature weighting
+
+Weights features by detected market regime (ranging/trending/volatile).
+Improves OOS accuracy by 1.2% on XAUUSD H1 (N=1260, p=0.003).
+
+Closes #247
+
 fix(risk): correct CVaR calculation for multi-day horizon
-docs(readme): update multi-symbol backtest results to N=919
+
+The previous implementation used a 1-day horizon for all positions.
+Multi-day positions now use sqrt(T) scaling per Basel III methodology.
+
+docs(setup): add subscription validation step to SETUP_GUIDE.md
+
 test(broker): add OANDA paper fill integration tests
+
+Mocks the OANDA v20 REST API to test order placement, fill handling,
+and position reconciliation without a real broker account.
 ```
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
-api/          REST endpoints (FastAPI routers)
-backtest/     Backtesting engine and multi-symbol runner
-brokers/      Broker connectors (OANDA, IBKR, paper, FIX)
-core/         Startup factories, component registry, app state
-execution/    OMS, TradeExecutor, OrderGateway, position tracker
-ml/           Model training, online learner, feature engineering
-risk/         RiskManager, CVaR gate, pre-trade gate, kill switch
-strategies/   Strategy implementations
-tests/        pytest test suite
-docs/         MkDocs documentation source
+api/            REST endpoints (FastAPI routers)
+auth/           Authentication, JWT, 2FA
+backtest/       Backtesting engine and multi-symbol runner
+brain/          Strategy Brain (ML consensus engine)
+brokers/        Broker connectors (OANDA, IBKR, Alpaca, Binance, paper, FIX)
+cache/          Redis cache layer and in-memory fallback
+charting/       Technical indicators and chart data
+compliance/     Regulatory compliance checks
+config/         Configuration loading and validation
+core/           Startup factories, ComponentRegistry, app state
+data/           Data feeds, schedulers, historical data
+database/       SQLAlchemy models and migrations
+execution/      OMS, TradeExecutor, OrderGateway, position tracker
+features/       Feature engineering pipeline
+ml/             Model training, online learner, macro features
+monetization/   Subscription management, billing, license keys
+monitoring/     Prometheus metrics, health checks
+news/           News feed integration and RAG pipeline
+notifications/  Telegram, email, Discord alerts
+payments/       Payment gateway integrations (Stripe, Flutterwave, crypto)
+portfolio/      Portfolio analytics and reporting
+risk/           RiskManager, CVaR gate, pre-trade gate, kill switch
+security/       Security middleware, rate limiting, audit logging
+social/         Social trading, copy trading, leaderboard
+strategies/     Strategy implementations (BaseStrategy + built-ins)
+tests/          pytest test suite
+docs/           MkDocs documentation source
 ```
-
----
-
-## Reporting issues
-
-Search existing issues before opening a new one. Include:
-- Python version (`python --version`)
-- OS
-- Full error traceback
-- Steps to reproduce
-
----
-
-## Security vulnerabilities
-
-Do **not** open public issues for security vulnerabilities. Email `security@hopefx.io`
-with details. See [SECURITY.md](SECURITY.md) for the full disclosure policy.
-
----
-
-## License
-
-Contributions are licensed under AGPL-3.0 and may be included in commercial releases
-per the [CLA](./CLA.md) and [LICENSE-COMMERCIAL.md](./LICENSE-COMMERCIAL.md).
-
----
-
-## Paid Platform Context
-
-HOPEFX is a **paid subscription platform**. The source code is open under AGPL-3.0,
-but the hosted service requires a subscription. When contributing:
-
-- Do not add features that bypass subscription checks
-- Do not remove or weaken the `require_plan` middleware
-- Do not add free-tier access to Pro/Elite features
-- Do not commit real API keys, license keys, or subscriber data
-
-If you are building on top of HOPEFX commercially (SaaS, white-label, proprietary),
-you need a Commercial License — see [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
-
----
-
-## Contributor License Agreement
-
-Before your first pull request is merged, include this statement in the PR description:
-
-> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
-
-The CLA enables the dual-license model (AGPL-3.0 open source + commercial).
-Without the CLA, your PR cannot be merged.
 
 ---
 
 ## What We Accept
 
+**Without prior discussion:**
 - Bug fixes with regression tests
-- New broker connectors (add to `brokers/`)
-- New trading strategies (add to `strategies/`)
-- ML feature engineering improvements (add to `ml/`)
-- Documentation improvements
+- New broker connectors (add to `brokers/`, follow `BaseBroker` interface)
+- New trading strategies (add to `strategies/`, follow `BaseStrategy` interface)
+- ML feature engineering improvements (add to `ml/feature_engineering.py`)
+- Documentation improvements and corrections
 - Performance improvements with benchmarks
+- Test coverage improvements
+- Dependency updates (open a separate PR per dependency)
 
-## What Requires Discussion First
-
-Open a GitHub Issue before working on:
+**Requires a GitHub Issue discussion first:**
 - Changes to the risk engine or kill switch
-- Changes to the subscription/billing system
-- Changes to the ML training pipeline
-- New external dependencies
-- Breaking API changes
+- Changes to the subscription/billing system or `require_plan` middleware
+- Changes to the ML training pipeline or model architecture
+- New external dependencies (justify why existing deps cannot be used)
+- Breaking API changes (must include migration guide)
 - New pricing tiers or feature gates
+- Changes to the database schema (must include Alembic migration)
+- Changes to authentication or security middleware
+
+**Not accepted:**
+- Features that bypass subscription checks
+- Removal of the `require_plan` decorator from any endpoint
+- Hardcoded credentials or API keys
+- Code that sends user data to third-party services without disclosure
+- Changes that weaken security (rate limiting, JWT validation, CORS)
+- Proprietary dependencies that conflict with AGPL-3.0
+
+---
+
+## Reporting Issues
+
+Search existing issues before opening a new one.
+
+Include in your issue:
+- Python version (`python --version`)
+- Operating system and version
+- Full error traceback (use a code block)
+- Steps to reproduce (minimal reproduction case preferred)
+- What you expected vs what happened
+
+For feature requests, explain the use case and why existing functionality does not cover it.
+
+---
+
+## Security Vulnerabilities
+
+**Do not open public issues for security vulnerabilities.**
+
+Report security issues via GitHub's private vulnerability reporting:
+Repository → Security → Report a vulnerability
+
+Or email security@hopefx.io with:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if you have one)
+
+We aim to acknowledge security reports within 48 hours and provide a fix within 14 days
+for critical issues. See [SECURITY.md](SECURITY.md) for the full disclosure policy.
+
+---
+
+*Last updated: 2026-07-14*
