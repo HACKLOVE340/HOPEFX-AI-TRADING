@@ -1798,10 +1798,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#current-status-paper-mode-launch" class="md-nav__link">
+  <a href="#current-status-paper-mode-active" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Current Status: Paper Mode Launch
+        Current Status: Paper Mode Active
       
     </span>
   </a>
@@ -1809,10 +1809,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-1-statistical-robustness-n919-se010-done" class="md-nav__link">
+  <a href="#milestone-1-statistical-robustness-done" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 1 — Statistical Robustness (N&gt;919, SE≤0.10) ✅ DONE
+        Milestone 1 — Statistical Robustness ✅ DONE
       
     </span>
   </a>
@@ -1864,10 +1864,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-6-white-label-api" class="md-nav__link">
+  <a href="#milestone-6-web-frontend" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 6 — White-Label API
+        Milestone 6 — Web Frontend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-7-white-label-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 7 — White-Label API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-8-mobile-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 8 — Mobile App
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#research-pipeline-feature-flagged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Research Pipeline (Feature-Flagged)
       
     </span>
   </a>
@@ -1886,10 +1919,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#done" class="md-nav__link">
+  <a href="#var-remaining-work" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Done
+        VaR Remaining Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-ml-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the ML Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Tests
       
     </span>
   </a>
@@ -1918,10 +1973,10 @@
 
 <h1 id="hopefx-roadmap">HOPEFX — Roadmap<a class="headerlink" href="#hopefx-roadmap" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Last updated: 2026-03-29 (v1.16)</p>
+<p>Last updated: 2026-07-14 (v1.17)</p>
 </blockquote>
 <hr />
-<h2 id="current-status-paper-mode-launch">Current Status: Paper Mode Launch<a class="headerlink" href="#current-status-paper-mode-launch" title="Permanent link">&para;</a></h2>
+<h2 id="current-status-paper-mode-active">Current Status: Paper Mode Active<a class="headerlink" href="#current-status-paper-mode-active" title="Permanent link">&para;</a></h2>
 <p>The platform is live in paper trading mode on OANDA practice.</p>
 <table>
 <thead>
@@ -1953,7 +2008,7 @@
 </tr>
 <tr>
 <td>OANDA paper broker</td>
-<td>🟡 Active — clock started 2026-03-27, gate opens 2026-04-26</td>
+<td>Active — clock started 2026-03-27</td>
 </tr>
 <tr>
 <td>Signal engine (regime-gated ML inference)</td>
@@ -1968,21 +2023,27 @@
 <td>✅ Production</td>
 </tr>
 <tr>
-<td>REST + WebSocket API</td>
+<td>REST + WebSocket API (108 endpoints)</td>
 <td>✅ Stable</td>
 </tr>
 <tr>
-<td>Test suite (2,560+ tests, 70% coverage)</td>
+<td>Test suite (2,560+ tests)</td>
 <td>✅ CI green</td>
+</tr>
+<tr>
+<td>Documentation (30 main docs + 103 archive)</td>
+<td>✅ Complete</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="milestone-1-statistical-robustness-n919-se010-done">Milestone 1 — Statistical Robustness (N&gt;919, SE≤0.10) ✅ DONE<a class="headerlink" href="#milestone-1-statistical-robustness-n919-se010-done" title="Permanent link">&para;</a></h2>
-<p><strong>Result:</strong> Expanded multi-symbol backtest (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil) confirmed N&gt;919 trades. SE≤0.10 gate satisfied. OOS model validated: 66.4% accuracy, p=0.0000, N=1,260 bars, 176 features.</p>
+<h2 id="milestone-1-statistical-robustness-done">Milestone 1 — Statistical Robustness ✅ DONE<a class="headerlink" href="#milestone-1-statistical-robustness-done" title="Permanent link">&para;</a></h2>
+<p><strong>Result:</strong> Multi-symbol backtest (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil)
+confirmed N&gt;919 trades. SE≤0.10 gate satisfied. OOS model validated: 66.4% accuracy, p=0.0000,
+N=1,260 bars, 176 features.</p>
 <ul>
-<li>[x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628 (v1.15)</li>
-<li>[x] Expanded to 7 symbols → pooled N&gt;919, SE≤0.10 (v1.16)</li>
+<li>[x] Multi-symbol backtest: XAU/USD N=302, BTC/USD N=69, ETH/USD N=257 → pooled N=628</li>
+<li>[x] Expanded to 7 symbols → pooled N&gt;919, SE≤0.10</li>
 <li>[x] OOS metadata validated and stamped (<code>advanced_oos_meta.json</code>)</li>
 <li>[x] OrderGateway wired to TradeExecutor — real routing, no stub</li>
 <li>[x] New API endpoints: /api/ml/health, /api/backtest/multi-symbol, /api/online-learner/status+partial-fit</li>
@@ -1994,13 +2055,16 @@
 <hr />
 <h2 id="milestone-2-live-oanda-run">Milestone 2 — Live OANDA Run<a class="headerlink" href="#milestone-2-live-oanda-run" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> First real-money trade on OANDA live account.</p>
-<ul>
-<li>[ ] Complete paper trading milestone (200+ trades)</li>
-<li>[ ] Security audit: rotate all API keys, review JWT config</li>
-<li>[ ] Set <code>OANDA_ENVIRONMENT=live</code> and <code>FEATURE_LIVE_TRADING=true</code></li>
-<li>[ ] Start with 0.01 lot size, scale up after 50 live trades</li>
-<li>[ ] Monitor daily drawdown gate — halt if −2% daily DD hit</li>
-</ul>
+<p>Prerequisites:
+- [ ] Complete 30-day paper trading run (gate: <code>data/oanda_paper_start.json</code>)
+- [ ] 200+ paper trades logged with zero execution errors
+- [ ] Security audit: rotate all API keys, review JWT config
+- [ ] Set <code>OANDA_ENVIRONMENT=live</code> and <code>FEATURE_LIVE_TRADING=true</code>
+- [ ] Start with 0.01 lot size, scale up after 50 live trades
+- [ ] Monitor daily drawdown gate — halt if −2% daily DD hit</p>
+<p>Check gate status:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/enable_live_trading.py<span class="w"> </span>--check-only
+</code></pre></div></p>
 <hr />
 <h2 id="milestone-3-mt5-export">Milestone 3 — MT5 Export<a class="headerlink" href="#milestone-3-mt5-export" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Export signals to MetaTrader 5 via ZeroMQ bridge.</p>
@@ -2014,8 +2078,8 @@
 <h2 id="milestone-4-multi-symbol-expansion-backtest-done">Milestone 4 — Multi-Symbol Expansion ✅ BACKTEST DONE<a class="headerlink" href="#milestone-4-multi-symbol-expansion-backtest-done" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Trade BTC/USD and ETH/USD alongside XAUUSD, plus forex and commodities.</p>
 <ul>
-<li>[x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED (v1.15)</li>
-<li>[x] Expanded to 7 symbols (+ EUR/USD, GBP/USD, Silver, Oil) → N&gt;919, SE≤0.10 (v1.16)</li>
+<li>[x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED</li>
+<li>[x] Expanded to 7 symbols (+ EUR/USD, GBP/USD, Silver, Oil) → N&gt;919, SE≤0.10</li>
 <li>[ ] Retrain <code>advanced_oos.pkl</code> on BTC/USDT + ETH/USDT (Binance hourly)</li>
 <li>[ ] Portfolio-level risk: cross-asset correlation limits</li>
 <li>[ ] Validate live multi-symbol signal distribution before deployment</li>
@@ -2030,76 +2094,121 @@
 <li>[ ] Deploy only if RL OOS accuracy ≥ 65% with p &lt; 0.05</li>
 </ul>
 <hr />
-<h2 id="milestone-6-white-label-api">Milestone 6 — White-Label API<a class="headerlink" href="#milestone-6-white-label-api" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-6-web-frontend">Milestone 6 — Web Frontend<a class="headerlink" href="#milestone-6-web-frontend" title="Permanent link">&para;</a></h2>
+<p><strong>Target:</strong> React/Vue dashboard connected to the REST + WebSocket API.</p>
+<ul>
+<li>[ ] React or Vue.js project scaffold in <code>frontend/</code></li>
+<li>[ ] Real-time WebSocket chart (price + signals)</li>
+<li>[ ] Live P&amp;L dashboard</li>
+<li>[ ] Strategy control panel (start/stop/configure)</li>
+<li>[ ] Risk monitor (drawdown, CVaR, kill switch status)</li>
+<li>[ ] Social trading feed (copy trading, leaderboards)</li>
+</ul>
+<hr />
+<h2 id="milestone-7-white-label-api">Milestone 7 — White-Label API<a class="headerlink" href="#milestone-7-white-label-api" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Expose HOPEFX as a signal API for third-party consumers.</p>
 <ul>
 <li>[ ] <code>/api/v1/signals</code> endpoint with API key auth</li>
 <li>[ ] Rate limiting per tier (free: 10 req/min, pro: 100 req/min)</li>
 <li>[ ] Stripe billing integration for pro tier</li>
 <li>[ ] SLA: 99.9% uptime, &lt; 200ms p99 latency</li>
+<li>[ ] White-label branding config in <code>whitelabel/</code></li>
 </ul>
 <hr />
-<h2 id="type-safety-ongoing">Type Safety (Ongoing)<a class="headerlink" href="#type-safety-ongoing" title="Permanent link">&para;</a></h2>
-<p>~974 mypy errors exist across 167 files. Tracked here, fixed incrementally.</p>
+<h2 id="milestone-8-mobile-app">Milestone 8 — Mobile App<a class="headerlink" href="#milestone-8-mobile-app" title="Permanent link">&para;</a></h2>
+<p><strong>Target:</strong> iOS and Android apps via React Native.</p>
+<ul>
+<li>[ ] React Native project scaffold</li>
+<li>[ ] Core screens: Dashboard, Chart, Positions, Alerts</li>
+<li>[ ] Push notifications via FCM/APNs</li>
+<li>[ ] Biometric authentication</li>
+<li>[ ] Offline mode with cached signals</li>
+<li>[ ] App Store + Google Play submission</li>
+</ul>
+<hr />
+<h2 id="research-pipeline-feature-flagged">Research Pipeline (Feature-Flagged)<a class="headerlink" href="#research-pipeline-feature-flagged" title="Permanent link">&para;</a></h2>
+<p>All four research phases are wired in <code>core/signal_engine.py</code> and activate
+after their respective paper trading gates are met.</p>
 <table>
 <thead>
 <tr>
-<th>Package</th>
-<th>Error count</th>
-<th>Target</th>
+<th>Phase</th>
+<th>Component</th>
+<th>Flag</th>
+<th>Gate</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>api/</code></td>
-<td>~180</td>
-<td>Q3 2026</td>
+<td>1</td>
+<td>MTFFusionStore</td>
+<td><code>FEATURE_MTF_FUSION</code></td>
+<td>On by default</td>
 </tr>
 <tr>
-<td><code>ml/</code></td>
-<td>~220</td>
-<td>Q3 2026</td>
+<td>2</td>
+<td>AnomalyWeightStore</td>
+<td><code>FEATURE_ANOMALY_WEIGHTING</code></td>
+<td>After 30-day paper run</td>
 </tr>
 <tr>
-<td><code>risk/</code></td>
-<td>~90</td>
-<td>Q2 2026</td>
+<td>3</td>
+<td>OnlineLearnerStore</td>
+<td><code>FEATURE_ONLINE_LEARNING</code></td>
+<td>After 90-day paper run + 500 fills</td>
 </tr>
 <tr>
-<td><code>brokers/</code></td>
-<td>~80</td>
-<td>Q2 2026</td>
-</tr>
-<tr>
-<td><code>core/</code></td>
-<td>~60</td>
-<td>Q2 2026</td>
-</tr>
-<tr>
-<td>Others</td>
-<td>~344</td>
-<td>Q4 2026</td>
+<td>4</td>
+<td>DeepEnsembleStore</td>
+<td><code>FEATURE_DEEP_ENSEMBLE</code></td>
+<td>After LSTM OOS ≥ 70%</td>
 </tr>
 </tbody>
 </table>
-<p>Once a package reaches zero errors it is added to the blocking mypy check in <code>ci.yml</code>.</p>
+<p>See <code>research/README.md</code> for gate conditions and enable instructions.</p>
 <hr />
-<h2 id="done">Done<a class="headerlink" href="#done" title="Permanent link">&para;</a></h2>
+<h2 id="type-safety-ongoing">Type Safety (Ongoing)<a class="headerlink" href="#type-safety-ongoing" title="Permanent link">&para;</a></h2>
 <ul>
-<li>[x] XGBoost stacking ensemble — 66.4% OOS, p=0.0000, 176 features, N=1,260 bars</li>
-<li>[x] Walk-forward validation (5 folds, 50-year GC=F data)</li>
-<li>[x] Multi-symbol backtest (7 symbols) — N&gt;919 trades, SE≤0.10 gate satisfied</li>
-<li>[x] Online learning wired — SklearnOnlineLearner + daily EWC loop at 00:05 UTC</li>
-<li>[x] Dual license — AGPL-3.0 open source + LICENSE-COMMERCIAL.md + CLA.md v1.0</li>
-<li>[x] OANDA paper trading clock started — 2026-03-27, gate opens 2026-04-26</li>
-<li>[x] CVaR order gate + kill switch</li>
-<li>[x] IBKR TWS/Gateway connector with mock-free tests</li>
-<li>[x] FIX protocol adapter with circuit breaker</li>
-<li>[x] Sentry production config + ML fallback alerts</li>
-<li>[x] Discord rich signal embeds</li>
-<li>[x] Pre-commit hooks (ruff, bandit) — all passing</li>
-<li>[x] CI matrix: Python 3.10, 3.11, 3.12</li>
+<li>[ ] Add <code>mypy</code> to CI with <code>--strict</code> on <code>api/</code>, <code>risk/</code>, <code>ml/</code></li>
+<li>[ ] Replace remaining <code>Any</code> type hints in <code>brokers/</code></li>
+<li>[ ] Add <code>py.typed</code> marker to all public packages</li>
 </ul>
+<hr />
+<h2 id="var-remaining-work">VaR Remaining Work<a class="headerlink" href="#var-remaining-work" title="Permanent link">&para;</a></h2>
+<p><code>calculate_var_historical</code> and <code>calculate_var_parametric</code> still use sqrt(t) for
+multi-day scaling. Use <code>calculate_var_multiday</code> or <code>calculate_var_ewma</code> for
+production risk limits on XAUUSD. This is documented but not yet enforced.</p>
+<ul>
+<li>[ ] Replace sqrt(t) in all remaining VaR paths</li>
+<li>[ ] Add GARCH(1,1) volatility model for VaR</li>
+</ul>
+<hr />
+<h2 id="running-the-ml-pipeline">Running the ML Pipeline<a class="headerlink" href="#running-the-ml-pipeline" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Production model (176 features, 50-year data, 3-year OOS)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>ml/train_advanced.py<span class="w"> </span>--years<span class="w"> </span><span class="m">50</span><span class="w"> </span>--oos-years<span class="w"> </span><span class="m">3</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Basic model (65 features, macro walk-forward)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>python<span class="w"> </span>ml/train_with_macro.py<span class="w"> </span>--years<span class="w"> </span><span class="m">50</span><span class="w"> </span>--oos-years<span class="w"> </span><span class="m">3</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Multi-symbol backtest (7 symbols, 10-year real data)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>python<span class="w"> </span>backtest/multi_symbol_backtest.py<span class="w"> </span>--years<span class="w"> </span><span class="m">10</span><span class="w"> </span>--oos-frac<span class="w"> </span><span class="m">0</span>.3
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Fetch latest XAUUSD H1 bars</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>python<span class="w"> </span>-m<span class="w"> </span>data.scheduler
+</code></pre></div>
+<h2 id="running-tests">Running Tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Full suite</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pytest<span class="w"> </span>tests/<span class="w"> </span>--ignore<span class="o">=</span>tests/integration/test_redis.py<span class="w"> </span>-q
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Expected: 2560 passed, 0 failed</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># With coverage</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>pytest<span class="w"> </span>tests/<span class="w"> </span>--cov<span class="o">=</span>.<span class="w"> </span>--cov-report<span class="o">=</span>term-missing<span class="w"> </span>-q
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Specific suites</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>pytest<span class="w"> </span>tests/test_auth_gates.py<span class="w"> </span>-q
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>pytest<span class="w"> </span>tests/unit/<span class="w"> </span>-q
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>pytest<span class="w"> </span>tests/integration/<span class="w"> </span>-q
+</code></pre></div>
 
 
 
