@@ -1,10 +1,23 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: app-config
+  name: hopefx-config
+  namespace: trading
+# Non-sensitive runtime configuration only.
+# Credentials and secrets belong in k8s-secrets.yaml (or an external
+# secrets manager such as AWS Secrets Manager / HashiCorp Vault).
 data:
-  REDIS_HOST: "redis://localhost:6379"
-  DATABASE_URL: "postgres://user:password@localhost:5432/mydatabase"
-  API_KEY: "your_api_key_here"
-  APP_SETTING_1: "some_setting"
-  APP_SETTING_2: "another_setting"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  APP_ENV: "production"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  OANDA_PRACTICE: "true"
+  BROKER_TYPE: "paper"
+  INITIAL_BALANCE: "100000"
+  ML_MIN_TRADE_PROB: "0.58"
+  RISK_MAX_DRAWDOWN_PCT: "0.10"
+  RISK_MAX_DAILY_LOSS_PCT: "0.05"
+  RISK_MAX_POSITION_SIZE_PCT: "0.02"
+  NEWS_BLACKOUT_BEFORE_MIN: "5"
+  NEWS_BLACKOUT_AFTER_MIN: "5"
