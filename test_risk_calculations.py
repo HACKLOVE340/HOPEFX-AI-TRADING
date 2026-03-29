@@ -29,10 +29,11 @@ class TestRiskCalculations(unittest.TestCase):
 
     def test_max_drawdown_pause(self):
         # Check max drawdown pause (10%)
+        # A drawdown of exactly 10% must trigger the pause (>= threshold).
         peak_equity = 1000
         current_equity = 900
         drawdown = (peak_equity - current_equity) / peak_equity
-        self.assertGreater(drawdown, 0.10)  # Drawdown should trigger pause
+        self.assertGreaterEqual(drawdown, 0.10)  # Drawdown should trigger pause
 
     def test_low_capital_mode(self):
         # Validate low-capital mode (<$50 equity -> 0.5% risk)
@@ -44,11 +45,13 @@ class TestRiskCalculations(unittest.TestCase):
         )  # Should be $0.15 position size for this risk
 
     def test_edge_cases(self):
-        # Tests with zero equity/infinite ATR
+        # Tests with zero equity / infinite ATR.
+        # Python returns 0.0 for 0 / inf — no exception is raised.
+        # The real guard is that position size collapses to zero, not a crash.
         equity = 0  # $0 equity
         atr = float("inf")  # Infinite ATR
-        with self.assertRaises(ZeroDivisionError):
-            equity / atr  # Should raise an error
+        result = equity / atr
+        self.assertEqual(result, 0.0)  # 0 / inf == 0.0 in IEEE 754
 
 
 if __name__ == "__main__":
