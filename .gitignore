@@ -109,6 +109,9 @@ docker-compose.override.yml
 # Kubernetes
 *.kubeconfig
 k8s-secrets/
+# Real k8s secret files with actual credentials (use *.local.yaml naming)
+k8s/*.local.yaml
+k8s/k8s-secrets.filled.yaml
 
 # Testing
 .coverage

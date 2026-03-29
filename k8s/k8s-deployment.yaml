@@ -20,25 +20,100 @@ spec:
       containers:
         - name: trading-app-container
           image: your-image:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          # Non-sensitive config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: hopefx-config
+          # Sensitive credentials from Secret — never put these in ConfigMap
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: DATABASE_URL
+            - name: SECURITY_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: SECURITY_JWT_SECRET
+            - name: CONFIG_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: CONFIG_ENCRYPTION_KEY
+            - name: HOPEFX_KILL_SWITCH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: HOPEFX_KILL_SWITCH_TOKEN
+            - name: OANDA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: OANDA_API_KEY
+            - name: OANDA_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: OANDA_ACCOUNT_ID
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: REDIS_PASSWORD
+                  optional: true
+            - name: FIX_SENDER_COMP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: FIX_SENDER_COMP_ID
+                  optional: true
+            - name: FIX_TARGET_COMP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: FIX_TARGET_COMP_ID
+                  optional: true
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: TELEGRAM_BOT_TOKEN
+                  optional: true
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: hopefx-secrets
+                  key: SENTRY_DSN
+                  optional: true
           resources:
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "1Gi"
+              cpu: "1000m"
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "250m"
           livenessProbe:
             httpGet:
-              path: /healthz
-              port: 8080
+              path: /health
+              port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /ready
-              port: 8080
-            initialDelaySeconds: 5
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
             periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
       imagePullSecrets:
         - name: regcred
 ---
