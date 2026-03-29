@@ -4,7 +4,23 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-Strategies package — exports all strategy classes and the StrategyBrain.
+strategies/ — Backtestable strategy classes (NOT the live signal engine)
+========================================================================
+This package contains all BaseStrategy subclasses used by the backtesting
+engine and paper trading simulator. Each class implements generate_signal()
+against historical OHLCV bars.
+
+DO NOT add live event-loop code here.
+The live ML signal producer lives in strategy/ (singular) → engine.py.
+
+Package map
+-----------
+  strategies/base.py          — BaseStrategy ABC, Signal, SignalType
+  strategies/manager.py       — StrategyManager (loads/runs strategies)
+  strategies/strategy_brain.py — StrategyBrain (regime-aware router)
+  strategies/<name>.py        — individual strategy implementations
+  strategy/engine.py          — StrategyEngine (live signal producer, separate package)
+  backtesting/                — canonical backtest engine
 """
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig, StrategyStatus
