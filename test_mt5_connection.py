@@ -3,7 +3,12 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-import MetaTrader5 as mt5
+
+# MetaTrader5 is Windows-only and not available on Linux/macOS CI runners.
+# Skip gracefully when absent rather than failing collection.
+import pytest
+mt5 = pytest.importorskip("MetaTrader5", reason="MetaTrader5 is Windows-only")
+
 import time
 import logging
 import os

@@ -3,9 +3,14 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+
+# TA-Lib requires a compiled C library not available in all environments.
+# Skip gracefully when it is absent rather than failing collection.
+import pytest
+talib = pytest.importorskip("talib", reason="TA-Lib C library not installed")
+
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-import talib
 
 
 # Load historical data
