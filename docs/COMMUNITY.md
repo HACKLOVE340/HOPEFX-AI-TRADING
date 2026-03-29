@@ -16,14 +16,32 @@ All development, issues, and discussions happen on GitHub.
 - **Pull Requests** — code contributions
 - **Releases** — version announcements
 
-### Discord
-Real-time community chat for traders and developers.
+### Telegram (Primary Community Channel)
 
-**Invite:** Set up at [discord.com/developers](https://discord.com/developers) — configure your own server or use the GitHub Discussions tab until a server is live.
+The official HOPEFX community channel is on Telegram.
 
-Suggested channel structure when you set up your server:
+**Join:** Contact support@hopefx.io for the invite link after subscribing.
+
+The platform posts trade signals and alerts to your own private Telegram bot.
+Configure in `.env`:
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token    # From @BotFather
+TELEGRAM_CHAT_ID=your_chat_id        # Your personal or group chat ID
 ```
-#welcome          — onboarding and rules
+
+Test after configuring:
+```bash
+curl -X POST http://localhost:8000/api/notifications/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Discord (Community Server)
+
+A Discord server is available for subscribers. Contact support@hopefx.io
+for the invite link after subscribing.
+
+Channel structure:
+```
 #announcements    — releases and updates (read-only)
 #general          — open discussion
 #trading-signals  — paper trading signal sharing
@@ -32,19 +50,8 @@ Suggested channel structure when you set up your server:
 #backtesting      — backtest results and analysis
 #prop-firm        — prop firm challenge discussion
 #coding-help      — technical support
-#bugs             — bug reports (link to GitHub Issues)
+#bugs             — link to GitHub Issues
 ```
-
-### Telegram
-For quick announcements and alerts.
-
-Set up a channel at [telegram.org](https://telegram.org) and link it in your `.env`:
-```bash
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_channel_id
-```
-
-The platform will post trade signals and alerts automatically once configured.
 
 ### YouTube
 Video tutorials covering installation, strategy development, ML training, and deployment.
