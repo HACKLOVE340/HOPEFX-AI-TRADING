@@ -508,6 +508,37 @@ class RiskManager:
                 logger.debug("RiskManager: orchestrator features fetch failed: %s", exc)
         return getattr(signal, "features", {})
 
+    # ── Public orchestrator convenience accessors ─────────────────────────────
+
+    def get_current_gold_price(self) -> Optional[float]:
+        """
+        Return the current consensus gold mid price from the orchestrator.
+
+        Returns None if the orchestrator is unavailable or no tick exists.
+        Used by downstream consumers (execution engine, UI) that need the
+        current price alongside risk metrics.
+        """
+        if self._orch is not None:
+            try:
+                return self._orch.get_current_gold_price()
+            except Exception as exc:
+                logger.debug("RiskManager.get_current_gold_price error: %s", exc)
+        return None
+
+    def get_macro_impact_score(self) -> float:
+        """
+        Return the current macro calendar impact score [0, 1].
+
+        Delegates to orchestrator.get_macro_impact_score().
+        Returns 0.0 (no impact) when orchestrator is unavailable.
+        """
+        if self._orch is not None:
+            try:
+                return self._orch.get_macro_impact_score()
+            except Exception as exc:
+                logger.debug("RiskManager.get_macro_impact_score error: %s", exc)
+        return 0.0
+
     # ── Halt ──────────────────────────────────────────────────────────────────
 
     def _halt_trading(self, reason: str) -> None:
