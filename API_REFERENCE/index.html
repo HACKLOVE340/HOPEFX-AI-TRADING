@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#order-flow-api-reference" class="md-skip">
+        <a href="#api-reference" class="md-skip">
           Skip to content
         </a>
       
@@ -1481,33 +1481,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#base-url" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Base URL
+        Authentication
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#time-sales-api-apitimesales" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Time &amp; Sales API (/api/timesales)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Time &amp; Sales API (/api/timesales)">
+    <nav class="md-nav" aria-label="Authentication">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolrecent" class="md-nav__link">
+  <a href="#post-apiauthlogin" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/recent
+        POST /api/auth/login
       
     </span>
   </a>
@@ -1515,10 +1504,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbollarge" class="md-nav__link">
+  <a href="#post-apiauthrefresh" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/large
+        POST /api/auth/refresh
       
     </span>
   </a>
@@ -1526,10 +1515,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolvelocity" class="md-nav__link">
+  <a href="#post-apiauthlogout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/velocity
+        POST /api/auth/logout
       
     </span>
   </a>
@@ -1537,43 +1526,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolaggressor" class="md-nav__link">
+  <a href="#get-apiauthme" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/aggressor
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolhistogram" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/{symbol}/histogram
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolstatistics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/{symbol}/statistics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalesstats" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/stats
+        GET /api/auth/me
       
     </span>
   </a>
@@ -1586,22 +1542,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#order-flow-api-apiorderflow" class="md-nav__link">
+  <a href="#two-factor-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Order Flow API (/api/orderflow)
+        Two-Factor Authentication
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Order Flow API (/api/orderflow)">
+    <nav class="md-nav" aria-label="Two-Factor Authentication">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolprofile" class="md-nav__link">
+  <a href="#post-api2fasetup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/profile
+        POST /api/2fa/setup
       
     </span>
   </a>
@@ -1609,10 +1565,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolanalysis" class="md-nav__link">
+  <a href="#post-api2faverify" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/analysis
+        POST /api/2fa/verify
       
     </span>
   </a>
@@ -1620,10 +1576,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolfootprint" class="md-nav__link">
+  <a href="#post-api2fadisable" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/footprint
+        POST /api/2fa/disable
       
     </span>
   </a>
@@ -1631,10 +1587,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbollevels" class="md-nav__link">
+  <a href="#get-api2fabackup-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/levels
+        GET /api/2fa/backup-codes
       
     </span>
   </a>
@@ -1642,10 +1598,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymboldelta" class="md-nav__link">
+  <a href="#get-api2fastatus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/delta
+        GET /api/2fa/status
       
     </span>
   </a>
@@ -1658,22 +1614,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#depth-of-market-api-apidom" class="md-nav__link">
+  <a href="#signals" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Depth of Market API (/api/dom)
+        Signals
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Depth of Market API (/api/dom)">
+    <nav class="md-nav" aria-label="Signals">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbol" class="md-nav__link">
+  <a href="#get-apisignalslatest" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}
+        GET /api/signals/latest
       
     </span>
   </a>
@@ -1681,10 +1637,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolanalysis" class="md-nav__link">
+  <a href="#get-apisignalshistory" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/analysis
+        GET /api/signals/history
       
     </span>
   </a>
@@ -1692,10 +1648,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolvisualization" class="md-nav__link">
+  <a href="#post-apisignalssubscribe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/visualization
+        POST /api/signals/subscribe
       
     </span>
   </a>
@@ -1703,21 +1659,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolhistory" class="md-nav__link">
+  <a href="#get-apisignalsperformance" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/history
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apidomsymbolimbalance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/dom/{symbol}/imbalance
+        GET /api/signals/performance
       
     </span>
   </a>
@@ -1730,22 +1675,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#streaming-api-apistream" class="md-nav__link">
+  <a href="#ml-models" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Streaming API (/api/stream)
+        ML Models
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Streaming API (/api/stream)">
+    <nav class="md-nav" aria-label="ML Models">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apistreamstats" class="md-nav__link">
+  <a href="#get-apimlaccuracy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/stats
+        GET /api/ml/accuracy
       
     </span>
   </a>
@@ -1753,10 +1698,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apistreamsymbolticks" class="md-nav__link">
+  <a href="#get-apimlmodels" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/{symbol}/ticks
+        GET /api/ml/models
       
     </span>
   </a>
@@ -1764,10 +1709,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apistreamsymbolbarstimeframe" class="md-nav__link">
+  <a href="#post-apimlpredictsymbol" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/{symbol}/bars/{timeframe}
+        POST /api/ml/predict/{symbol}
       
     </span>
   </a>
@@ -1775,10 +1720,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#websocket-apistreamsymbolws" class="md-nav__link">
+  <a href="#get-apimlhealth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        WebSocket /api/stream/{symbol}/ws
+        GET /api/ml/health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimlfeature-importance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ml/feature-importance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimlregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ml/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimlretrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/ml/retrain
       
     </span>
   </a>
@@ -1791,22 +1769,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dashboard-api-apidashboard" class="md-nav__link">
+  <a href="#online-learner" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dashboard API (/api/dashboard)
+        Online Learner
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Dashboard API (/api/dashboard)">
+    <nav class="md-nav" aria-label="Online Learner">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbolcomplete" class="md-nav__link">
+  <a href="#get-apionline-learnerstatus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/complete
+        GET /api/online-learner/status
       
     </span>
   </a>
@@ -1814,10 +1792,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbolbias" class="md-nav__link">
+  <a href="#post-apionline-learnerpartial-fit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/bias
+        POST /api/online-learner/partial-fit
       
     </span>
   </a>
@@ -1825,10 +1803,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbollevels" class="md-nav__link">
+  <a href="#get-apionline-learneraccuracy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/levels
+        GET /api/online-learner/accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apionline-learnerreset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/online-learner/reset
       
     </span>
   </a>
@@ -1841,22 +1830,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#data-models" class="md-nav__link">
+  <a href="#trading" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Data Models
+        Trading
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Data Models">
+    <nav class="md-nav" aria-label="Trading">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#executedtrade" class="md-nav__link">
+  <a href="#post-apitradingorder" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ExecutedTrade
+        POST /api/trading/order
       
     </span>
   </a>
@@ -1864,10 +1853,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#flowsignal" class="md-nav__link">
+  <a href="#get-apitradingpositions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        FlowSignal
+        GET /api/trading/positions
       
     </span>
   </a>
@@ -1875,10 +1864,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#aggressionmetrics" class="md-nav__link">
+  <a href="#delete-apitradingpositionsposition_id" class="md-nav__link">
     <span class="md-ellipsis">
       
-        AggressionMetrics
+        DELETE /api/trading/positions/{position_id}
       
     </span>
   </a>
@@ -1886,10 +1875,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#volumecluster" class="md-nav__link">
+  <a href="#delete-apitradingpositions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        VolumeCluster
+        DELETE /api/trading/positions
       
     </span>
   </a>
@@ -1897,10 +1886,87 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#deltadivergence" class="md-nav__link">
+  <a href="#get-apitradingaccount" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DeltaDivergence
+        GET /api/trading/account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingtrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingtradesexport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/trades/export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingbrain-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/brain-state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apitradingemergency-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/trading/emergency-stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingmarket-datasymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/market-data/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingrisk-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/risk-metrics
       
     </span>
   </a>
@@ -1909,6 +1975,1805 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-trading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Trading
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Trading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apiab-teststart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/ab-test/start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiab-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ab-test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiab-testtest_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ab-test/{test_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun_idshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/{run_id}/share
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestsharedslug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/shared/{slug}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiindicatorspreview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/indicators/preview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiindicators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/indicators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiindicators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/indicators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiindicatorsind_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/indicators/{ind_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicorrelation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicotgold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/cot/gold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun_idmonte-carlo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/{run_id}/monte-carlo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestrun_idmonte-carlo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/{run_id}/monte-carlo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Broker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apibrokertest-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/broker/test-connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibrokerstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/broker/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibrokeraccounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/broker/accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibrokerswitch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/broker/switch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backtesting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backtesting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backtesting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apibackteststrategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestwalk-forwardlatest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/walk-forward/latest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestwalk-forwardrun_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/walk-forward/{run_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestresults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestresultsrun_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/results/{run_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestmulti-symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/multi-symbol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestmulti-symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/multi-symbol
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-prop-firm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk / Prop Firm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Risk / Prop Firm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiriskstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/risk/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alerts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Alerts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apialerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertshistorytriggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/history/triggers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertsactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertsalert_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/{alert_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apialertsalert_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/alerts/{alert_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apialertsalert_idpause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/{alert_id}/pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apialertsalert_idresume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/{alert_id}/resume
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#economic-calendar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Economic Calendar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Economic Calendar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarupcoming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/upcoming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendartoday" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/today
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarhigh-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/high-impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apicalendarauto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/calendar/auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarauto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarfomc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/fomc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#macro-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Macro Data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Macro Data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrosnapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrohistory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrofeatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrogold-signal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/gold-signal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimacrostoreupdate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/macro/store/update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watchlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchlist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Watchlist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiwatchlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/watchlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiwatchlistsymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/watchlist/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiwatchlistsymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/watchlist/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiwatchlistprices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/watchlist/prices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#social-feed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Social Feed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Social Feed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedsignal_idreact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/{signal_id}/react
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedsignal_idcomment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/{signal_id}/comment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedsignal_idcomments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/{signal_id}/comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedopt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/opt-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedopt-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/opt-out
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedstatusme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/status/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apisocialleaderboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/social/leaderboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilesme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#put-apiprofilesme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PUT /api/profiles/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilestrader_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/{trader_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilestrader_idsignals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/{trader_id}/signals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiprofilestrader_idfollow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/profiles/{trader_id}/follow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiprofilestrader_idfollow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/profiles/{trader_id}/follow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiperformancesummary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/performance/summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiperformanceequity-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/performance/equity-curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trade-journal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade Journal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Trade Journal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournaltrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apijournaltrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/journal/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournaltradestrade_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/trades/{trade_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#patch-apijournaltradestrade_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PATCH /api/journal/trades/{trade_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournalstats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournalmistakes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/mistakes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#payments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Payments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apipaymentscryptoaddress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/payments/crypto/address
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apipaymentscryptostatuspayment_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/payments/crypto/status/{payment_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apipaymentscryptorates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/payments/crypto/rates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monetization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monetization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monetization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationpricing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/pricing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationpricingtier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/pricing/{tier}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationsubscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/subscribe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationsubscriptionuser_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/subscription/{user_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationsubscriptionsubscription_idcancel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/subscription/{subscription_id}/cancel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationsubscriptionuser_idlimits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/subscription/{user_id}/limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationactivate-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/activate-code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationvalidate-codecode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/validate-code/{code}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationaffiliatesignup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/affiliate/signup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#billing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Billing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Billing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apibillingsubscription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/billing/subscription
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingwebhookstripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/webhook/stripe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingaffiliategenerate-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/affiliate/generate-link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingauthactivate-free-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/auth/activate-free-tier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingpaymentsflutterwaveinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/payments/flutterwave/init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingpaymentsflutterwaveverify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/payments/flutterwave/verify
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibillingpaymentsflutterwavestatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/billing/payments/flutterwave/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mobile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mobile
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mobile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apimobileregister-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/mobile/register-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apimobileregister-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/mobile/register-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimobiletest-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/mobile/test-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimobilepush-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/mobile/push-status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-brain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI Brain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AI Brain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apibraingenerate-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/brain/generate-strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibraindeploy-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/brain/deploy-strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI Chat
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AI Chat">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apichatmessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/chat/message
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apichathistory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/chat/history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apichatstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/chat/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explainability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explainability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Explainability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiexplainsignalsignal_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/explain/signal/{signal_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiexplainmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/explain/model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apisettingsnotifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/settings/notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apisettingsnotifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/settings/notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apinotificationstest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/notifications/test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadmin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminstrategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminsettings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminmonitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminlogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiadminkycdecide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/admin/kyc/decide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminkycpending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/kyc/pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminkycuser_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/kyc/{user_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminactivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/activity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadmindashboard-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/dashboard-data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apistatuspaper-trading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/status/paper-trading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apistatussharpe-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/status/sharpe-progress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#websocket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WebSocket">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ws-wssignals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/signals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wsprices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/prices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wspositions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/positions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wsalerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/alerts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Responses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limits
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2283,33 +4148,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#base-url" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Base URL
+        Authentication
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#time-sales-api-apitimesales" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Time &amp; Sales API (/api/timesales)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Time &amp; Sales API (/api/timesales)">
+    <nav class="md-nav" aria-label="Authentication">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolrecent" class="md-nav__link">
+  <a href="#post-apiauthlogin" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/recent
+        POST /api/auth/login
       
     </span>
   </a>
@@ -2317,10 +4171,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbollarge" class="md-nav__link">
+  <a href="#post-apiauthrefresh" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/large
+        POST /api/auth/refresh
       
     </span>
   </a>
@@ -2328,10 +4182,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolvelocity" class="md-nav__link">
+  <a href="#post-apiauthlogout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/velocity
+        POST /api/auth/logout
       
     </span>
   </a>
@@ -2339,43 +4193,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolaggressor" class="md-nav__link">
+  <a href="#get-apiauthme" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/timesales/{symbol}/aggressor
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolhistogram" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/{symbol}/histogram
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalessymbolstatistics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/{symbol}/statistics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apitimesalesstats" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/timesales/stats
+        GET /api/auth/me
       
     </span>
   </a>
@@ -2388,22 +4209,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#order-flow-api-apiorderflow" class="md-nav__link">
+  <a href="#two-factor-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Order Flow API (/api/orderflow)
+        Two-Factor Authentication
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Order Flow API (/api/orderflow)">
+    <nav class="md-nav" aria-label="Two-Factor Authentication">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolprofile" class="md-nav__link">
+  <a href="#post-api2fasetup" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/profile
+        POST /api/2fa/setup
       
     </span>
   </a>
@@ -2411,10 +4232,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolanalysis" class="md-nav__link">
+  <a href="#post-api2faverify" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/analysis
+        POST /api/2fa/verify
       
     </span>
   </a>
@@ -2422,10 +4243,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbolfootprint" class="md-nav__link">
+  <a href="#post-api2fadisable" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/footprint
+        POST /api/2fa/disable
       
     </span>
   </a>
@@ -2433,10 +4254,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymbollevels" class="md-nav__link">
+  <a href="#get-api2fabackup-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/levels
+        GET /api/2fa/backup-codes
       
     </span>
   </a>
@@ -2444,10 +4265,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apiorderflowsymboldelta" class="md-nav__link">
+  <a href="#get-api2fastatus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/orderflow/{symbol}/delta
+        GET /api/2fa/status
       
     </span>
   </a>
@@ -2460,22 +4281,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#depth-of-market-api-apidom" class="md-nav__link">
+  <a href="#signals" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Depth of Market API (/api/dom)
+        Signals
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Depth of Market API (/api/dom)">
+    <nav class="md-nav" aria-label="Signals">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbol" class="md-nav__link">
+  <a href="#get-apisignalslatest" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}
+        GET /api/signals/latest
       
     </span>
   </a>
@@ -2483,10 +4304,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolanalysis" class="md-nav__link">
+  <a href="#get-apisignalshistory" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/analysis
+        GET /api/signals/history
       
     </span>
   </a>
@@ -2494,10 +4315,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolvisualization" class="md-nav__link">
+  <a href="#post-apisignalssubscribe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/visualization
+        POST /api/signals/subscribe
       
     </span>
   </a>
@@ -2505,21 +4326,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidomsymbolhistory" class="md-nav__link">
+  <a href="#get-apisignalsperformance" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dom/{symbol}/history
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#get-apidomsymbolimbalance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        GET /api/dom/{symbol}/imbalance
+        GET /api/signals/performance
       
     </span>
   </a>
@@ -2532,22 +4342,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#streaming-api-apistream" class="md-nav__link">
+  <a href="#ml-models" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Streaming API (/api/stream)
+        ML Models
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Streaming API (/api/stream)">
+    <nav class="md-nav" aria-label="ML Models">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apistreamstats" class="md-nav__link">
+  <a href="#get-apimlaccuracy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/stats
+        GET /api/ml/accuracy
       
     </span>
   </a>
@@ -2555,10 +4365,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apistreamsymbolticks" class="md-nav__link">
+  <a href="#get-apimlmodels" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/{symbol}/ticks
+        GET /api/ml/models
       
     </span>
   </a>
@@ -2566,10 +4376,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apistreamsymbolbarstimeframe" class="md-nav__link">
+  <a href="#post-apimlpredictsymbol" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/stream/{symbol}/bars/{timeframe}
+        POST /api/ml/predict/{symbol}
       
     </span>
   </a>
@@ -2577,10 +4387,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#websocket-apistreamsymbolws" class="md-nav__link">
+  <a href="#get-apimlhealth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        WebSocket /api/stream/{symbol}/ws
+        GET /api/ml/health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimlfeature-importance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ml/feature-importance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimlregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ml/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimlretrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/ml/retrain
       
     </span>
   </a>
@@ -2593,22 +4436,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dashboard-api-apidashboard" class="md-nav__link">
+  <a href="#online-learner" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dashboard API (/api/dashboard)
+        Online Learner
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Dashboard API (/api/dashboard)">
+    <nav class="md-nav" aria-label="Online Learner">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbolcomplete" class="md-nav__link">
+  <a href="#get-apionline-learnerstatus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/complete
+        GET /api/online-learner/status
       
     </span>
   </a>
@@ -2616,10 +4459,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbolbias" class="md-nav__link">
+  <a href="#post-apionline-learnerpartial-fit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/bias
+        POST /api/online-learner/partial-fit
       
     </span>
   </a>
@@ -2627,10 +4470,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#get-apidashboardsymbollevels" class="md-nav__link">
+  <a href="#get-apionline-learneraccuracy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GET /api/dashboard/{symbol}/levels
+        GET /api/online-learner/accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apionline-learnerreset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/online-learner/reset
       
     </span>
   </a>
@@ -2643,22 +4497,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#data-models" class="md-nav__link">
+  <a href="#trading" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Data Models
+        Trading
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Data Models">
+    <nav class="md-nav" aria-label="Trading">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#executedtrade" class="md-nav__link">
+  <a href="#post-apitradingorder" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ExecutedTrade
+        POST /api/trading/order
       
     </span>
   </a>
@@ -2666,10 +4520,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#flowsignal" class="md-nav__link">
+  <a href="#get-apitradingpositions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        FlowSignal
+        GET /api/trading/positions
       
     </span>
   </a>
@@ -2677,10 +4531,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#aggressionmetrics" class="md-nav__link">
+  <a href="#delete-apitradingpositionsposition_id" class="md-nav__link">
     <span class="md-ellipsis">
       
-        AggressionMetrics
+        DELETE /api/trading/positions/{position_id}
       
     </span>
   </a>
@@ -2688,10 +4542,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#volumecluster" class="md-nav__link">
+  <a href="#delete-apitradingpositions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        VolumeCluster
+        DELETE /api/trading/positions
       
     </span>
   </a>
@@ -2699,10 +4553,87 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#deltadivergence" class="md-nav__link">
+  <a href="#get-apitradingaccount" class="md-nav__link">
     <span class="md-ellipsis">
       
-        DeltaDivergence
+        GET /api/trading/account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingtrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingtradesexport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/trades/export
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingbrain-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/brain-state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apitradingemergency-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/trading/emergency-stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingmarket-datasymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/market-data/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apitradingrisk-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/trading/risk-metrics
       
     </span>
   </a>
@@ -2711,6 +4642,1805 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-trading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Trading
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Trading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apiab-teststart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/ab-test/start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiab-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ab-test
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiab-testtest_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/ab-test/{test_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun_idshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/{run_id}/share
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestsharedslug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/shared/{slug}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiindicatorspreview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/indicators/preview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiindicators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/indicators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiindicators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/indicators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiindicatorsind_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/indicators/{ind_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicorrelation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/correlation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicotgold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/cot/gold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun_idmonte-carlo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/{run_id}/monte-carlo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestrun_idmonte-carlo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/{run_id}/monte-carlo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Broker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apibrokertest-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/broker/test-connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibrokerstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/broker/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibrokeraccounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/broker/accounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibrokerswitch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/broker/switch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backtesting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backtesting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backtesting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apibackteststrategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestrun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestwalk-forwardlatest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/walk-forward/latest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestwalk-forwardrun_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/walk-forward/{run_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestresults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/results
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestresultsrun_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/results/{run_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibacktestmulti-symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/backtest/multi-symbol
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibacktestmulti-symbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/backtest/multi-symbol
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-prop-firm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk / Prop Firm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Risk / Prop Firm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiriskstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/risk/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alerts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Alerts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apialerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertshistorytriggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/history/triggers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertsactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apialertsalert_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/alerts/{alert_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apialertsalert_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/alerts/{alert_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apialertsalert_idpause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/{alert_id}/pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apialertsalert_idresume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/alerts/{alert_id}/resume
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#economic-calendar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Economic Calendar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Economic Calendar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarupcoming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/upcoming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendartoday" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/today
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarhigh-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/high-impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apicalendarauto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/calendar/auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarauto-pause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/auto-pause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarfomc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/fomc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apicalendarfomcregime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/calendar/fomc/regime
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#macro-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Macro Data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Macro Data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrosnapshot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/snapshot
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrohistory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrofeatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimacrogold-signal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/macro/gold-signal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimacrostoreupdate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/macro/store/update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watchlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchlist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Watchlist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiwatchlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/watchlist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiwatchlistsymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/watchlist/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiwatchlistsymbol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/watchlist/{symbol}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiwatchlistprices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/watchlist/prices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#social-feed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Social Feed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Social Feed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedsignal_idreact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/{signal_id}/react
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedsignal_idcomment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/{signal_id}/comment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedsignal_idcomments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/{signal_id}/comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedopt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/opt-in
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apifeedopt-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/feed/opt-out
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedstatusme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/status/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apifeedstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/feed/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apisocialleaderboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/social/leaderboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilesme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#put-apiprofilesme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PUT /api/profiles/me
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilestrader_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/{trader_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiprofilestrader_idsignals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/profiles/{trader_id}/signals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiprofilestrader_idfollow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/profiles/{trader_id}/follow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apiprofilestrader_idfollow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/profiles/{trader_id}/follow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiperformancesummary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/performance/summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiperformanceequity-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/performance/equity-curve
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trade-journal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trade Journal
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Trade Journal">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournaltrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apijournaltrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/journal/trades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournaltradestrade_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/trades/{trade_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#patch-apijournaltradestrade_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PATCH /api/journal/trades/{trade_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournalstats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apijournalmistakes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/journal/mistakes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#payments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Payments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Payments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apipaymentscryptoaddress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/payments/crypto/address
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apipaymentscryptostatuspayment_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/payments/crypto/status/{payment_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apipaymentscryptorates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/payments/crypto/rates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monetization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monetization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monetization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationpricing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/pricing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationpricingtier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/pricing/{tier}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationsubscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/subscribe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationsubscriptionuser_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/subscription/{user_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationsubscriptionsubscription_idcancel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/subscription/{subscription_id}/cancel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationsubscriptionuser_idlimits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/subscription/{user_id}/limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationactivate-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/activate-code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimonetizationvalidate-codecode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/monetization/validate-code/{code}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimonetizationaffiliatesignup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/monetization/affiliate/signup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#billing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Billing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Billing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apibillingsubscription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/billing/subscription
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingwebhookstripe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/webhook/stripe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingaffiliategenerate-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/affiliate/generate-link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingauthactivate-free-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/auth/activate-free-tier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingpaymentsflutterwaveinit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/payments/flutterwave/init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibillingpaymentsflutterwaveverify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/billing/payments/flutterwave/verify
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apibillingpaymentsflutterwavestatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/billing/payments/flutterwave/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mobile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mobile
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mobile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apimobileregister-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/mobile/register-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apimobileregister-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/mobile/register-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apimobiletest-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/mobile/test-push
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apimobilepush-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/mobile/push-status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-brain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI Brain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AI Brain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apibraingenerate-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/brain/generate-strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apibraindeploy-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/brain/deploy-strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI Chat
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AI Chat">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apichatmessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/chat/message
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete-apichathistory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DELETE /api/chat/history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apichatstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/chat/status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explainability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explainability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Explainability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiexplainsignalsignal_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/explain/signal/{signal_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiexplainmodel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/explain/model
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-apisettingsnotifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/settings/notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apisettingsnotifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/settings/notifications
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apinotificationstest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/notifications/test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadmin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminstrategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminsettings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminmonitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminlogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-apiadminkycdecide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /api/admin/kyc/decide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminkycpending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/kyc/pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminkycuser_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/kyc/{user_id}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadminactivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/activity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apiadmindashboard-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/admin/dashboard-data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apistatuspaper-trading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/status/paper-trading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-apistatussharpe-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /api/status/sharpe-progress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#websocket" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WebSocket">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ws-wssignals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/signals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wsprices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/prices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wspositions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/positions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ws-wsalerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WS /ws/alerts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Responses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate Limits
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2734,464 +6464,604 @@
   
 
 
-<h1 id="order-flow-api-reference">Order Flow API Reference<a class="headerlink" href="#order-flow-api-reference" title="Permanent link">&para;</a></h1>
-<h2 id="base-url">Base URL<a class="headerlink" href="#base-url" title="Permanent link">&para;</a></h2>
-<p>All endpoints are prefixed with the router prefix shown below.</p>
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Base URL: <code>http://localhost:8000</code> (development) | <code>https://yourdomain.com</code> (production)
+Interactive docs: <code>/docs</code> (Swagger UI) | <code>/redoc</code> (ReDoc)
+Last updated: 2026-07-14</p>
+</blockquote>
+<p>All endpoints except <code>/health</code>, <code>/docs</code>, <code>/openapi.json</code>, and <code>/redoc</code>
+require a valid JWT in the <code>Authorization: Bearer &lt;token&gt;</code> header.</p>
 <hr />
-<h2 id="time-sales-api-apitimesales">Time &amp; Sales API (<code>/api/timesales</code>)<a class="headerlink" href="#time-sales-api-apitimesales" title="Permanent link">&para;</a></h2>
-<h3 id="get-apitimesalessymbolrecent"><code>GET /api/timesales/{symbol}/recent</code><a class="headerlink" href="#get-apitimesalessymbolrecent" title="Permanent link">&para;</a></h3>
-<p>Get the most recent trades for a symbol.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>n</code> | int | 100 | Number of trades to return |</p>
-<p><strong>Response:</strong> Array of <code>ExecutedTrade</code> objects.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">[</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-01T10:00:00.000000&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">&quot;price&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1950.05</span><span class="p">,</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">&quot;size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">100.0</span><span class="p">,</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">&quot;side&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;buy&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">&quot;trade_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nt">&quot;is_aggressive_buy&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">&quot;is_aggressive_sell&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">&quot;is_large_trade&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">]</span>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<h3 id="post-apiauthlogin">POST /api/auth/login<a class="headerlink" href="#post-apiauthlogin" title="Permanent link">&para;</a></h3>
+<p>Authenticate and receive a JWT access token.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<hr />
-<h3 id="get-apitimesalessymbollarge"><code>GET /api/timesales/{symbol}/large</code><a class="headerlink" href="#get-apitimesalessymbollarge" title="Permanent link">&para;</a></h3>
-<p>Get large trades above a size threshold.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>min_size</code> | float | configured threshold | Minimum trade size |
-| <code>lookback_minutes</code> | int | 60 | Lookback window |</p>
-<hr />
-<h3 id="get-apitimesalessymbolvelocity"><code>GET /api/timesales/{symbol}/velocity</code><a class="headerlink" href="#get-apitimesalessymbolvelocity" title="Permanent link">&para;</a></h3>
-<p>Get trade velocity metrics.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>window_minutes</code> | int | 5 | Rolling window |</p>
-<p><strong>Response:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;trades_per_minute&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">12.5</span><span class="p">,</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;volume_per_minute&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">625.0</span><span class="p">,</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">&quot;avg_trade_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">50.0</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">&quot;buy_trades_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">62.0</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">&quot;sell_trades_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">38.0</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
+<strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;token_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;expires_in&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1800</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div></p>
+<h3 id="post-apiauthrefresh">POST /api/auth/refresh<a class="headerlink" href="#post-apiauthrefresh" title="Permanent link">&para;</a></h3>
+<p>Refresh an expired access token using a refresh token.</p>
+<h3 id="post-apiauthlogout">POST /api/auth/logout<a class="headerlink" href="#post-apiauthlogout" title="Permanent link">&para;</a></h3>
+<p>Invalidate the current token.</p>
+<h3 id="get-apiauthme">GET /api/auth/me<a class="headerlink" href="#get-apiauthme" title="Permanent link">&para;</a></h3>
+<p>Return the authenticated user's profile.</p>
 <hr />
-<h3 id="get-apitimesalessymbolaggressor"><code>GET /api/timesales/{symbol}/aggressor</code><a class="headerlink" href="#get-apitimesalessymbolaggressor" title="Permanent link">&para;</a></h3>
-<p>Get buy vs sell aggressor statistics.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>lookback_minutes</code> | int | 60 | Lookback window |</p>
+<h2 id="two-factor-authentication">Two-Factor Authentication<a class="headerlink" href="#two-factor-authentication" title="Permanent link">&para;</a></h2>
+<h3 id="post-api2fasetup">POST /api/2fa/setup<a class="headerlink" href="#post-api2fasetup" title="Permanent link">&para;</a></h3>
+<p>Generate a TOTP secret and QR code URI.</p>
+<h3 id="post-api2faverify">POST /api/2fa/verify<a class="headerlink" href="#post-api2faverify" title="Permanent link">&para;</a></h3>
+<p>Verify a TOTP code and enable 2FA.</p>
+<h3 id="post-api2fadisable">POST /api/2fa/disable<a class="headerlink" href="#post-api2fadisable" title="Permanent link">&para;</a></h3>
+<p>Disable 2FA (requires current TOTP code).</p>
+<h3 id="get-api2fabackup-codes">GET /api/2fa/backup-codes<a class="headerlink" href="#get-api2fabackup-codes" title="Permanent link">&para;</a></h3>
+<p>Return one-time backup codes.</p>
+<h3 id="get-api2fastatus">GET /api/2fa/status<a class="headerlink" href="#get-api2fastatus" title="Permanent link">&para;</a></h3>
+<p>Return whether 2FA is enabled for the current user.</p>
+<hr />
+<h2 id="signals">Signals<a class="headerlink" href="#signals" title="Permanent link">&para;</a></h2>
+<h3 id="get-apisignalslatest">GET /api/signals/latest<a class="headerlink" href="#get-apisignalslatest" title="Permanent link">&para;</a></h3>
+<p>Get the latest signal for a symbol.</p>
+<p><strong>Query params:</strong> <code>symbol</code> (default: <code>XAUUSD</code>)</p>
 <p><strong>Response:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;total_trades&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">&quot;buy_trades&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">93</span><span class="p">,</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">&quot;sell_trades&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">57</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">&quot;buy_volume&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">4650.0</span><span class="p">,</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">&quot;sell_volume&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2850.0</span><span class="p">,</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">&quot;buy_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">62.0</span><span class="p">,</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">&quot;sell_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">38.0</span><span class="p">,</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nt">&quot;net_aggression&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.24</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">}</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;direction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BUY&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.72</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">&quot;ml_probability&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.68</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;strategy_brain&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-14T10:30:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">&quot;entry&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2345.50</span><span class="p">,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">&quot;stop_loss&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2330.00</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nt">&quot;take_profit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2375.00</span><span class="p">,</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">&quot;risk_reward&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2.0</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="p">}</span>
 </code></pre></div></p>
+<h3 id="get-apisignalshistory">GET /api/signals/history<a class="headerlink" href="#get-apisignalshistory" title="Permanent link">&para;</a></h3>
+<p>Get historical signals.</p>
+<p><strong>Query params:</strong> <code>symbol</code>, <code>limit</code> (default: 100), <code>from_ts</code>, <code>to_ts</code></p>
+<h3 id="post-apisignalssubscribe">POST /api/signals/subscribe<a class="headerlink" href="#post-apisignalssubscribe" title="Permanent link">&para;</a></h3>
+<p>Subscribe to real-time signals via WebSocket channel.</p>
+<h3 id="get-apisignalsperformance">GET /api/signals/performance<a class="headerlink" href="#get-apisignalsperformance" title="Permanent link">&para;</a></h3>
+<p>Signal performance metrics (win rate, avg R/R, accuracy).</p>
 <hr />
-<h3 id="get-apitimesalessymbolhistogram"><code>GET /api/timesales/{symbol}/histogram</code><a class="headerlink" href="#get-apitimesalessymbolhistogram" title="Permanent link">&para;</a></h3>
-<p>Get price/volume distribution histogram.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>bins</code> | int | 20 | Number of price bins |
-| <code>lookback_minutes</code> | int | 60 | Lookback window |</p>
-<hr />
-<h3 id="get-apitimesalessymbolstatistics"><code>GET /api/timesales/{symbol}/statistics</code><a class="headerlink" href="#get-apitimesalessymbolstatistics" title="Permanent link">&para;</a></h3>
-<p>Get comprehensive trade statistics.</p>
-<hr />
-<h3 id="get-apitimesalesstats"><code>GET /api/timesales/stats</code><a class="headerlink" href="#get-apitimesalesstats" title="Permanent link">&para;</a></h3>
-<p>Get service-level statistics (symbols tracked, trade counts).</p>
-<hr />
-<h2 id="order-flow-api-apiorderflow">Order Flow API (<code>/api/orderflow</code>)<a class="headerlink" href="#order-flow-api-apiorderflow" title="Permanent link">&para;</a></h2>
-<h3 id="get-apiorderflowsymbolprofile"><code>GET /api/orderflow/{symbol}/profile</code><a class="headerlink" href="#get-apiorderflowsymbolprofile" title="Permanent link">&para;</a></h3>
-<p>Get volume profile for a symbol.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>buckets</code> | int | 50 | Number of price buckets |</p>
-<p><strong>Response:</strong> <code>VolumeProfile</code> object with POC, VAH, VAL and per-level data.</p>
-<hr />
-<h3 id="get-apiorderflowsymbolanalysis"><code>GET /api/orderflow/{symbol}/analysis</code><a class="headerlink" href="#get-apiorderflowsymbolanalysis" title="Permanent link">&para;</a></h3>
-<p>Get complete order flow analysis.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>lookback_minutes</code> | int | 60 | Analysis window |</p>
-<p><strong>Response:</strong> <code>OrderFlowAnalysis</code> object including delta, imbalance, S/R levels, signal.</p>
-<hr />
-<h3 id="get-apiorderflowsymbolfootprint"><code>GET /api/orderflow/{symbol}/footprint</code><a class="headerlink" href="#get-apiorderflowsymbolfootprint" title="Permanent link">&para;</a></h3>
-<p>Get footprint chart data.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>timeframe</code> | str | "5m" | Bar timeframe |
-| <code>bars</code> | int | 20 | Number of bars |</p>
-<hr />
-<h3 id="get-apiorderflowsymbollevels"><code>GET /api/orderflow/{symbol}/levels</code><a class="headerlink" href="#get-apiorderflowsymbollevels" title="Permanent link">&para;</a></h3>
-<p>Get key support/resistance levels from order flow.</p>
-<hr />
-<h3 id="get-apiorderflowsymboldelta"><code>GET /api/orderflow/{symbol}/delta</code><a class="headerlink" href="#get-apiorderflowsymboldelta" title="Permanent link">&para;</a></h3>
-<p>Get cumulative delta for a symbol.</p>
-<hr />
-<h2 id="depth-of-market-api-apidom">Depth of Market API (<code>/api/dom</code>)<a class="headerlink" href="#depth-of-market-api-apidom" title="Permanent link">&para;</a></h2>
-<h3 id="get-apidomsymbol"><code>GET /api/dom/{symbol}</code><a class="headerlink" href="#get-apidomsymbol" title="Permanent link">&para;</a></h3>
-<p>Get order book for a symbol.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>levels</code> | int | 10 | Number of levels |</p>
-<hr />
-<h3 id="get-apidomsymbolanalysis"><code>GET /api/dom/{symbol}/analysis</code><a class="headerlink" href="#get-apidomsymbolanalysis" title="Permanent link">&para;</a></h3>
-<p>Get comprehensive order book analysis (spread, imbalance, market bias).</p>
-<hr />
-<h3 id="get-apidomsymbolvisualization"><code>GET /api/dom/{symbol}/visualization</code><a class="headerlink" href="#get-apidomsymbolvisualization" title="Permanent link">&para;</a></h3>
-<p>Get DOM ladder visualization data.</p>
-<hr />
-<h3 id="get-apidomsymbolhistory"><code>GET /api/dom/{symbol}/history</code><a class="headerlink" href="#get-apidomsymbolhistory" title="Permanent link">&para;</a></h3>
-<p>Get historical order book snapshots.</p>
-<hr />
-<h3 id="get-apidomsymbolimbalance"><code>GET /api/dom/{symbol}/imbalance</code><a class="headerlink" href="#get-apidomsymbolimbalance" title="Permanent link">&para;</a></h3>
-<p>Get current order book imbalance (-1 to +1).</p>
-<hr />
-<h2 id="streaming-api-apistream">Streaming API (<code>/api/stream</code>)<a class="headerlink" href="#streaming-api-apistream" title="Permanent link">&para;</a></h2>
-<h3 id="get-apistreamstats"><code>GET /api/stream/stats</code><a class="headerlink" href="#get-apistreamstats" title="Permanent link">&para;</a></h3>
-<p>Get streaming service statistics.</p>
-<hr />
-<h3 id="get-apistreamsymbolticks"><code>GET /api/stream/{symbol}/ticks</code><a class="headerlink" href="#get-apistreamsymbolticks" title="Permanent link">&para;</a></h3>
-<p>Get recent ticks.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>n</code> | int | 100 | Number of ticks |</p>
-<hr />
-<h3 id="get-apistreamsymbolbarstimeframe"><code>GET /api/stream/{symbol}/bars/{timeframe}</code><a class="headerlink" href="#get-apistreamsymbolbarstimeframe" title="Permanent link">&para;</a></h3>
-<p>Get aggregated OHLCV bars.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>limit</code> | int | 100 | Number of bars |</p>
-<p><strong>Example:</strong> <code>GET /api/stream/XAUUSD/bars/5m?limit=50</code></p>
-<hr />
-<h3 id="websocket-apistreamsymbolws"><code>WebSocket /api/stream/{symbol}/ws</code><a class="headerlink" href="#websocket-apistreamsymbolws" title="Permanent link">&para;</a></h3>
-<p>Real-time WebSocket stream for a symbol.</p>
-<p><strong>Message format:</strong>
+<h2 id="ml-models">ML Models<a class="headerlink" href="#ml-models" title="Permanent link">&para;</a></h2>
+<h3 id="get-apimlaccuracy">GET /api/ml/accuracy<a class="headerlink" href="#get-apimlaccuracy" title="Permanent link">&para;</a></h3>
+<p>Return OOS accuracy and metadata for the loaded model.</p>
+<p><strong>Response:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;event_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tick&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-01T10:00:00.000000&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">&quot;bid&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1950.00</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">&quot;ask&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1950.10</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">&quot;last&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1950.05</span><span class="p">,</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">&quot;volume&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">100.0</span><span class="p">,</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">&quot;mid&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1950.05</span><span class="p">,</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">&quot;spread&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">}</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;model_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;advanced_oos&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;accuracy&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.664</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">&quot;oos_period_start&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2019-04-12&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">&quot;oos_period_end&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-24&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">&quot;oos_bars&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1260</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">&quot;p_value&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">176</span><span class="p">,</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">&quot;ci_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="p">}</span>
 </code></pre></div></p>
-<p>Event types: <code>tick</code>, <code>bar</code>, <code>connected</code>, <code>disconnected</code>.</p>
-<hr />
-<h2 id="dashboard-api-apidashboard">Dashboard API (<code>/api/dashboard</code>)<a class="headerlink" href="#dashboard-api-apidashboard" title="Permanent link">&para;</a></h2>
-<h3 id="get-apidashboardsymbolcomplete"><code>GET /api/dashboard/{symbol}/complete</code><a class="headerlink" href="#get-apidashboardsymbolcomplete" title="Permanent link">&para;</a></h3>
-<p>Get complete order flow analysis combining all subsystems.</p>
-<p><strong>Query Parameters:</strong>
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| <code>lookback_minutes</code> | int | 60 | Analysis window |</p>
+<h3 id="get-apimlmodels">GET /api/ml/models<a class="headerlink" href="#get-apimlmodels" title="Permanent link">&para;</a></h3>
+<p>List all loaded models and their status (production / fallback).</p>
+<h3 id="post-apimlpredictsymbol">POST /api/ml/predict/{symbol}<a class="headerlink" href="#post-apimlpredictsymbol" title="Permanent link">&para;</a></h3>
+<p>Run ML inference for a symbol.</p>
+<p><strong>Path param:</strong> <code>symbol</code> (e.g., <code>XAUUSD</code>)</p>
 <p><strong>Response:</strong>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-01T10:00:00&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;lookback_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="p">,</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">&quot;order_flow&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">&quot;institutional&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="nt">&quot;signals&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">&quot;smart_money_direction&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nt">&quot;signal_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="nt">&quot;advanced&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nt">&quot;aggression_metrics&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">&quot;volume_clusters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">&quot;delta_divergence&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nt">&quot;order_flow_oscillator&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="nt">&quot;stacked_imbalances&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="nt">&quot;pressure_gauges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span><span class="nt">&quot;time_and_sales&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="nt">&quot;statistics&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span><span class="nt">&quot;velocity&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span><span class="nt">&quot;aggressor_stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">  </span><span class="nt">&quot;dom&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">  </span><span class="nt">&quot;summary&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span><span class="nt">&quot;bias&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bullish&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">    </span><span class="nt">&quot;strength&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;moderate&quot;</span><span class="p">,</span>
-<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">    </span><span class="nt">&quot;supporting_signals&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;order_flow:bullish&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;oscillator:bullish&quot;</span><span class="p">],</span>
-<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">    </span><span class="nt">&quot;bullish_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
-<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">    </span><span class="nt">&quot;bearish_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
-<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="p">}</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;probability_up&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.68</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;direction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BUY&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">&quot;abstain&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">&quot;model_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;advanced_oos&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">&quot;features_used&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">176</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
 </code></pre></div></p>
+<h3 id="get-apimlhealth">GET /api/ml/health<a class="headerlink" href="#get-apimlhealth" title="Permanent link">&para;</a></h3>
+<p>ML subsystem health: model loaded, macro store populated, feature cache status.</p>
+<h3 id="get-apimlfeature-importance">GET /api/ml/feature-importance<a class="headerlink" href="#get-apimlfeature-importance" title="Permanent link">&para;</a></h3>
+<p>Top feature importances from the production model.</p>
+<h3 id="get-apimlregime">GET /api/ml/regime<a class="headerlink" href="#get-apimlregime" title="Permanent link">&para;</a></h3>
+<p>Current market regime (trending / ranging / volatile).</p>
+<h3 id="post-apimlretrain">POST /api/ml/retrain<a class="headerlink" href="#post-apimlretrain" title="Permanent link">&para;</a></h3>
+<p>Trigger a model retrain (admin only). Runs <code>ml/train_advanced.py</code> asynchronously.</p>
 <hr />
-<h3 id="get-apidashboardsymbolbias"><code>GET /api/dashboard/{symbol}/bias</code><a class="headerlink" href="#get-apidashboardsymbolbias" title="Permanent link">&para;</a></h3>
-<p>Get high-level market bias summary.</p>
+<h2 id="online-learner">Online Learner<a class="headerlink" href="#online-learner" title="Permanent link">&para;</a></h2>
+<h3 id="get-apionline-learnerstatus">GET /api/online-learner/status<a class="headerlink" href="#get-apionline-learnerstatus" title="Permanent link">&para;</a></h3>
+<p>Return online learner state: last update time, samples seen, current accuracy.</p>
+<h3 id="post-apionline-learnerpartial-fit">POST /api/online-learner/partial-fit<a class="headerlink" href="#post-apionline-learnerpartial-fit" title="Permanent link">&para;</a></h3>
+<p>Submit a labelled sample for incremental learning.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apionline-learneraccuracy">GET /api/online-learner/accuracy<a class="headerlink" href="#get-apionline-learneraccuracy" title="Permanent link">&para;</a></h3>
+<p>Online learner rolling accuracy (last 100 predictions).</p>
+<h3 id="post-apionline-learnerreset">POST /api/online-learner/reset<a class="headerlink" href="#post-apionline-learnerreset" title="Permanent link">&para;</a></h3>
+<p>Reset the online learner to the base model state (admin only).</p>
+<hr />
+<h2 id="trading">Trading<a class="headerlink" href="#trading" title="Permanent link">&para;</a></h2>
+<h3 id="post-apitradingorder">POST /api/trading/order<a class="headerlink" href="#post-apitradingorder" title="Permanent link">&para;</a></h3>
+<p>Place a market order.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">&quot;side&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;buy&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">&quot;units&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1000</span><span class="p">,</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">&quot;stop_loss&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2330.00</span><span class="p">,</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="nt">&quot;take_profit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2375.00</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apitradingpositions">GET /api/trading/positions<a class="headerlink" href="#get-apitradingpositions" title="Permanent link">&para;</a></h3>
+<p>List all open positions.</p>
+<h3 id="delete-apitradingpositionsposition_id">DELETE /api/trading/positions/{position_id}<a class="headerlink" href="#delete-apitradingpositionsposition_id" title="Permanent link">&para;</a></h3>
+<p>Close a specific position.</p>
+<h3 id="delete-apitradingpositions">DELETE /api/trading/positions<a class="headerlink" href="#delete-apitradingpositions" title="Permanent link">&para;</a></h3>
+<p>Close all open positions.</p>
+<h3 id="get-apitradingaccount">GET /api/trading/account<a class="headerlink" href="#get-apitradingaccount" title="Permanent link">&para;</a></h3>
+<p>Get broker account snapshot (balance, equity, margin).</p>
+<h3 id="get-apitradingtrades">GET /api/trading/trades<a class="headerlink" href="#get-apitradingtrades" title="Permanent link">&para;</a></h3>
+<p>Get trade history.</p>
+<h3 id="get-apitradingtradesexport">GET /api/trading/trades/export<a class="headerlink" href="#get-apitradingtradesexport" title="Permanent link">&para;</a></h3>
+<p>Export trade history as CSV.</p>
+<h3 id="get-apitradingbrain-state">GET /api/trading/brain-state<a class="headerlink" href="#get-apitradingbrain-state" title="Permanent link">&para;</a></h3>
+<p>Get the current HOPEFXBrain state (active strategies, consensus, regime).</p>
+<h3 id="post-apitradingemergency-stop">POST /api/trading/emergency-stop<a class="headerlink" href="#post-apitradingemergency-stop" title="Permanent link">&para;</a></h3>
+<p>Activate the kill switch — halts all trading immediately.</p>
+<h3 id="get-apitradingmarket-datasymbol">GET /api/trading/market-data/{symbol}<a class="headerlink" href="#get-apitradingmarket-datasymbol" title="Permanent link">&para;</a></h3>
+<p>Get current OHLCV data for a symbol.</p>
+<h3 id="get-apitradingregime">GET /api/trading/regime<a class="headerlink" href="#get-apitradingregime" title="Permanent link">&para;</a></h3>
+<p>Get current market regime analysis.</p>
+<h3 id="get-apitradingrisk-metrics">GET /api/trading/risk-metrics<a class="headerlink" href="#get-apitradingrisk-metrics" title="Permanent link">&para;</a></h3>
+<p>Get current risk metrics (VaR, CVaR, drawdown, exposure).</p>
+<hr />
+<h2 id="advanced-trading">Advanced Trading<a class="headerlink" href="#advanced-trading" title="Permanent link">&para;</a></h2>
+<h3 id="post-apiab-teststart">POST /api/ab-test/start<a class="headerlink" href="#post-apiab-teststart" title="Permanent link">&para;</a></h3>
+<p>Start an A/B test between two strategies.</p>
+<h3 id="get-apiab-test">GET /api/ab-test<a class="headerlink" href="#get-apiab-test" title="Permanent link">&para;</a></h3>
+<p>List all A/B tests.</p>
+<h3 id="get-apiab-testtest_id">GET /api/ab-test/{test_id}<a class="headerlink" href="#get-apiab-testtest_id" title="Permanent link">&para;</a></h3>
+<p>Get A/B test results.</p>
+<h3 id="post-apibacktestrun_idshare">POST /api/backtest/{run_id}/share<a class="headerlink" href="#post-apibacktestrun_idshare" title="Permanent link">&para;</a></h3>
+<p>Share a backtest result (generates a public slug).</p>
+<h3 id="get-apibacktestsharedslug">GET /api/backtest/shared/{slug}<a class="headerlink" href="#get-apibacktestsharedslug" title="Permanent link">&para;</a></h3>
+<p>Get a shared backtest result by slug.</p>
+<h3 id="post-apiindicatorspreview">POST /api/indicators/preview<a class="headerlink" href="#post-apiindicatorspreview" title="Permanent link">&para;</a></h3>
+<p>Preview a custom indicator on historical data.</p>
+<h3 id="get-apiindicators">GET /api/indicators<a class="headerlink" href="#get-apiindicators" title="Permanent link">&para;</a></h3>
+<p>List saved custom indicators.</p>
+<h3 id="post-apiindicators">POST /api/indicators<a class="headerlink" href="#post-apiindicators" title="Permanent link">&para;</a></h3>
+<p>Save a custom indicator.</p>
+<h3 id="delete-apiindicatorsind_id">DELETE /api/indicators/{ind_id}<a class="headerlink" href="#delete-apiindicatorsind_id" title="Permanent link">&para;</a></h3>
+<p>Delete a custom indicator.</p>
+<h3 id="get-apicorrelation">GET /api/correlation<a class="headerlink" href="#get-apicorrelation" title="Permanent link">&para;</a></h3>
+<p>Get cross-asset correlation matrix.</p>
+<h3 id="get-apicotgold">GET /api/cot/gold<a class="headerlink" href="#get-apicotgold" title="Permanent link">&para;</a></h3>
+<p>Get COT (Commitment of Traders) proxy data for gold.</p>
+<h3 id="post-apibacktestrun_idmonte-carlo">POST /api/backtest/{run_id}/monte-carlo<a class="headerlink" href="#post-apibacktestrun_idmonte-carlo" title="Permanent link">&para;</a></h3>
+<p>Run Monte Carlo simulation on a backtest result.</p>
+<h3 id="get-apibacktestrun_idmonte-carlo">GET /api/backtest/{run_id}/monte-carlo<a class="headerlink" href="#get-apibacktestrun_idmonte-carlo" title="Permanent link">&para;</a></h3>
+<p>Get Monte Carlo simulation results.</p>
+<hr />
+<h2 id="broker">Broker<a class="headerlink" href="#broker" title="Permanent link">&para;</a></h2>
+<h3 id="post-apibrokertest-connection">POST /api/broker/test-connection<a class="headerlink" href="#post-apibrokertest-connection" title="Permanent link">&para;</a></h3>
+<p>Test broker connectivity with current credentials.</p>
+<h3 id="get-apibrokerstatus">GET /api/broker/status<a class="headerlink" href="#get-apibrokerstatus" title="Permanent link">&para;</a></h3>
+<p>Current broker connection status, balance, and data feed health.</p>
+<h3 id="get-apibrokeraccounts">GET /api/broker/accounts<a class="headerlink" href="#get-apibrokeraccounts" title="Permanent link">&para;</a></h3>
+<p>List all configured broker accounts.</p>
+<h3 id="post-apibrokerswitch">POST /api/broker/switch<a class="headerlink" href="#post-apibrokerswitch" title="Permanent link">&para;</a></h3>
+<p>Switch the active broker.</p>
+<hr />
+<h2 id="backtesting">Backtesting<a class="headerlink" href="#backtesting" title="Permanent link">&para;</a></h2>
+<h3 id="get-apibackteststrategies">GET /api/backtest/strategies<a class="headerlink" href="#get-apibackteststrategies" title="Permanent link">&para;</a></h3>
+<p>List available strategies for backtesting.</p>
+<h3 id="post-apibacktestrun">POST /api/backtest/run<a class="headerlink" href="#post-apibacktestrun" title="Permanent link">&para;</a></h3>
+<p>Run a backtest.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ma_crossover&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">&quot;years&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">&quot;initial_capital&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100000</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">&quot;commission_bps&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">35</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">&quot;slippage_bps&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apibacktestwalk-forwardlatest">GET /api/backtest/walk-forward/latest<a class="headerlink" href="#get-apibacktestwalk-forwardlatest" title="Permanent link">&para;</a></h3>
+<p>Get the latest walk-forward validation results.</p>
+<h3 id="get-apibacktestwalk-forwardrun_id">GET /api/backtest/walk-forward/{run_id}<a class="headerlink" href="#get-apibacktestwalk-forwardrun_id" title="Permanent link">&para;</a></h3>
+<p>Get walk-forward results for a specific run.</p>
+<h3 id="get-apibacktestresults">GET /api/backtest/results<a class="headerlink" href="#get-apibacktestresults" title="Permanent link">&para;</a></h3>
+<p>List all backtest results.</p>
+<h3 id="get-apibacktestresultsrun_id">GET /api/backtest/results/{run_id}<a class="headerlink" href="#get-apibacktestresultsrun_id" title="Permanent link">&para;</a></h3>
+<p>Get a specific backtest result.</p>
+<h3 id="get-apibacktestmulti-symbol">GET /api/backtest/multi-symbol<a class="headerlink" href="#get-apibacktestmulti-symbol" title="Permanent link">&para;</a></h3>
+<p>Get multi-symbol backtest results (XAU+BTC+ETH+EUR/USD+GBP/USD+Silver+Oil).</p>
+<h3 id="post-apibacktestmulti-symbol">POST /api/backtest/multi-symbol<a class="headerlink" href="#post-apibacktestmulti-symbol" title="Permanent link">&para;</a></h3>
+<p>Run a new multi-symbol backtest.</p>
+<hr />
+<h2 id="risk-prop-firm">Risk / Prop Firm<a class="headerlink" href="#risk-prop-firm" title="Permanent link">&para;</a></h2>
+<h3 id="get-apiriskstatus">GET /api/risk/status<a class="headerlink" href="#get-apiriskstatus" title="Permanent link">&para;</a></h3>
+<p>Current risk status: drawdown, daily loss, CVaR, kill switch state.</p>
+<hr />
+<h2 id="alerts">Alerts<a class="headerlink" href="#alerts" title="Permanent link">&para;</a></h2>
+<h3 id="post-apialerts">POST /api/alerts/<a class="headerlink" href="#post-apialerts" title="Permanent link">&para;</a></h3>
+<p>Create a new alert.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">&quot;condition&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;price_above&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">&quot;threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2400.00</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">&quot;channels&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;discord&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;telegram&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;email&quot;</span><span class="p">]</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apialerts">GET /api/alerts/<a class="headerlink" href="#get-apialerts" title="Permanent link">&para;</a></h3>
+<p>List all alerts for the current user.</p>
+<h3 id="get-apialertshistorytriggers">GET /api/alerts/history/triggers<a class="headerlink" href="#get-apialertshistorytriggers" title="Permanent link">&para;</a></h3>
+<p>Get alert trigger history.</p>
+<h3 id="get-apialertsactive">GET /api/alerts/active<a class="headerlink" href="#get-apialertsactive" title="Permanent link">&para;</a></h3>
+<p>List currently active (untriggered) alerts.</p>
+<h3 id="get-apialertsalert_id">GET /api/alerts/{alert_id}<a class="headerlink" href="#get-apialertsalert_id" title="Permanent link">&para;</a></h3>
+<p>Get a specific alert.</p>
+<h3 id="delete-apialertsalert_id">DELETE /api/alerts/{alert_id}<a class="headerlink" href="#delete-apialertsalert_id" title="Permanent link">&para;</a></h3>
+<p>Delete an alert.</p>
+<h3 id="post-apialertsalert_idpause">POST /api/alerts/{alert_id}/pause<a class="headerlink" href="#post-apialertsalert_idpause" title="Permanent link">&para;</a></h3>
+<p>Pause an alert.</p>
+<h3 id="post-apialertsalert_idresume">POST /api/alerts/{alert_id}/resume<a class="headerlink" href="#post-apialertsalert_idresume" title="Permanent link">&para;</a></h3>
+<p>Resume a paused alert.</p>
+<hr />
+<h2 id="economic-calendar">Economic Calendar<a class="headerlink" href="#economic-calendar" title="Permanent link">&para;</a></h2>
+<h3 id="get-apicalendarupcoming">GET /api/calendar/upcoming<a class="headerlink" href="#get-apicalendarupcoming" title="Permanent link">&para;</a></h3>
+<p>Get upcoming economic events.</p>
+<p><strong>Query params:</strong> <code>days</code> (default: 7), <code>impact</code> (low/medium/high)</p>
+<h3 id="get-apicalendartoday">GET /api/calendar/today<a class="headerlink" href="#get-apicalendartoday" title="Permanent link">&para;</a></h3>
+<p>Get today's economic events.</p>
+<h3 id="get-apicalendarhigh-impact">GET /api/calendar/high-impact<a class="headerlink" href="#get-apicalendarhigh-impact" title="Permanent link">&para;</a></h3>
+<p>Get high-impact events for the next 7 days.</p>
+<h3 id="post-apicalendarauto-pause">POST /api/calendar/auto-pause<a class="headerlink" href="#post-apicalendarauto-pause" title="Permanent link">&para;</a></h3>
+<p>Configure auto-pause trading around high-impact events.</p>
+<h3 id="get-apicalendarauto-pause">GET /api/calendar/auto-pause<a class="headerlink" href="#get-apicalendarauto-pause" title="Permanent link">&para;</a></h3>
+<p>Get current auto-pause configuration.</p>
+<h3 id="get-apicalendarfomc">GET /api/calendar/fomc<a class="headerlink" href="#get-apicalendarfomc" title="Permanent link">&para;</a></h3>
+<p>Get upcoming FOMC meeting dates.</p>
+<h3 id="post-apicalendarfomcregime">POST /api/calendar/fomc/regime<a class="headerlink" href="#post-apicalendarfomcregime" title="Permanent link">&para;</a></h3>
+<p>Set FOMC regime mode (risk-on / risk-off).</p>
+<h3 id="get-apicalendarfomcregime">GET /api/calendar/fomc/regime<a class="headerlink" href="#get-apicalendarfomcregime" title="Permanent link">&para;</a></h3>
+<p>Get current FOMC regime status.</p>
+<h3 id="delete-apicalendarfomcregime">DELETE /api/calendar/fomc/regime<a class="headerlink" href="#delete-apicalendarfomcregime" title="Permanent link">&para;</a></h3>
+<p>Clear FOMC regime override.</p>
+<hr />
+<h2 id="macro-data">Macro Data<a class="headerlink" href="#macro-data" title="Permanent link">&para;</a></h2>
+<h3 id="get-apimacrosnapshot">GET /api/macro/snapshot<a class="headerlink" href="#get-apimacrosnapshot" title="Permanent link">&para;</a></h3>
+<p>Current macro snapshot: DXY, VIX, US10Y, US2Y, SPX, GLD.</p>
+<h3 id="get-apimacrohistory">GET /api/macro/history<a class="headerlink" href="#get-apimacrohistory" title="Permanent link">&para;</a></h3>
+<p>Historical macro data for a series.</p>
+<p><strong>Query params:</strong> <code>series</code> (dxy/vix/us10y/us2y/spx/gld), <code>days</code> (default: 90)</p>
+<h3 id="get-apimacrofeatures">GET /api/macro/features<a class="headerlink" href="#get-apimacrofeatures" title="Permanent link">&para;</a></h3>
+<p>Macro features formatted for ML inference.</p>
+<h3 id="get-apimacrogold-signal">GET /api/macro/gold-signal<a class="headerlink" href="#get-apimacrogold-signal" title="Permanent link">&para;</a></h3>
+<p>Geopolitical gold signal from World Monitor integration.</p>
+<h3 id="post-apimacrostoreupdate">POST /api/macro/store/update<a class="headerlink" href="#post-apimacrostoreupdate" title="Permanent link">&para;</a></h3>
+<p>Upsert a macro observation into MacroStore.</p>
+<hr />
+<h2 id="watchlist">Watchlist<a class="headerlink" href="#watchlist" title="Permanent link">&para;</a></h2>
+<p>All watchlist endpoints require JWT auth.</p>
+<h3 id="get-apiwatchlist">GET /api/watchlist<a class="headerlink" href="#get-apiwatchlist" title="Permanent link">&para;</a></h3>
+<p>Get the current user's watchlist.</p>
+<h3 id="post-apiwatchlistsymbol">POST /api/watchlist/{symbol}<a class="headerlink" href="#post-apiwatchlistsymbol" title="Permanent link">&para;</a></h3>
+<p>Add a symbol to the watchlist.</p>
+<h3 id="delete-apiwatchlistsymbol">DELETE /api/watchlist/{symbol}<a class="headerlink" href="#delete-apiwatchlistsymbol" title="Permanent link">&para;</a></h3>
+<p>Remove a symbol from the watchlist.</p>
+<h3 id="get-apiwatchlistprices">GET /api/watchlist/prices<a class="headerlink" href="#get-apiwatchlistprices" title="Permanent link">&para;</a></h3>
+<p>Get current prices for all watchlist symbols.</p>
+<hr />
+<h2 id="social-feed">Social Feed<a class="headerlink" href="#social-feed" title="Permanent link">&para;</a></h2>
+<h3 id="get-apifeed">GET /api/feed<a class="headerlink" href="#get-apifeed" title="Permanent link">&para;</a></h3>
+<p>Get the social signal feed (signals shared by opted-in users).</p>
+<h3 id="post-apifeedsignal_idreact">POST /api/feed/{signal_id}/react<a class="headerlink" href="#post-apifeedsignal_idreact" title="Permanent link">&para;</a></h3>
+<p>React to a signal (like/dislike).</p>
+<h3 id="post-apifeedsignal_idcomment">POST /api/feed/{signal_id}/comment<a class="headerlink" href="#post-apifeedsignal_idcomment" title="Permanent link">&para;</a></h3>
+<p>Comment on a signal.</p>
+<h3 id="get-apifeedsignal_idcomments">GET /api/feed/{signal_id}/comments<a class="headerlink" href="#get-apifeedsignal_idcomments" title="Permanent link">&para;</a></h3>
+<p>Get comments on a signal.</p>
+<h3 id="post-apifeedopt-in">POST /api/feed/opt-in<a class="headerlink" href="#post-apifeedopt-in" title="Permanent link">&para;</a></h3>
+<p>Opt in to sharing your signals on the social feed.</p>
+<h3 id="post-apifeedopt-out">POST /api/feed/opt-out<a class="headerlink" href="#post-apifeedopt-out" title="Permanent link">&para;</a></h3>
+<p>Opt out of the social feed.</p>
+<h3 id="get-apifeedstatusme">GET /api/feed/status/me<a class="headerlink" href="#get-apifeedstatusme" title="Permanent link">&para;</a></h3>
+<p>Get your social feed opt-in status.</p>
+<h3 id="get-apifeedstatus">GET /api/feed/status<a class="headerlink" href="#get-apifeedstatus" title="Permanent link">&para;</a></h3>
+<p>Get global social feed statistics.</p>
+<h3 id="get-apisocialleaderboard">GET /api/social/leaderboard<a class="headerlink" href="#get-apisocialleaderboard" title="Permanent link">&para;</a></h3>
+<p>Get the trader leaderboard (win rate, Sharpe, total return).</p>
+<hr />
+<h2 id="profiles">Profiles<a class="headerlink" href="#profiles" title="Permanent link">&para;</a></h2>
+<h3 id="get-apiprofilesme">GET /api/profiles/me<a class="headerlink" href="#get-apiprofilesme" title="Permanent link">&para;</a></h3>
+<p>Get the current user's profile.</p>
+<h3 id="put-apiprofilesme">PUT /api/profiles/me<a class="headerlink" href="#put-apiprofilesme" title="Permanent link">&para;</a></h3>
+<p>Update the current user's profile.</p>
+<h3 id="get-apiprofilestrader_id">GET /api/profiles/{trader_id}<a class="headerlink" href="#get-apiprofilestrader_id" title="Permanent link">&para;</a></h3>
+<p>Get a trader's public profile.</p>
+<h3 id="get-apiprofilestrader_idsignals">GET /api/profiles/{trader_id}/signals<a class="headerlink" href="#get-apiprofilestrader_idsignals" title="Permanent link">&para;</a></h3>
+<p>Get a trader's public signal history.</p>
+<h3 id="post-apiprofilestrader_idfollow">POST /api/profiles/{trader_id}/follow<a class="headerlink" href="#post-apiprofilestrader_idfollow" title="Permanent link">&para;</a></h3>
+<p>Follow a trader.</p>
+<h3 id="delete-apiprofilestrader_idfollow">DELETE /api/profiles/{trader_id}/follow<a class="headerlink" href="#delete-apiprofilestrader_idfollow" title="Permanent link">&para;</a></h3>
+<p>Unfollow a trader.</p>
+<hr />
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
+<h3 id="get-apiperformancesummary">GET /api/performance/summary<a class="headerlink" href="#get-apiperformancesummary" title="Permanent link">&para;</a></h3>
+<p>Performance summary: total return, Sharpe, win rate, max drawdown.</p>
+<h3 id="get-apiperformanceequity-curve">GET /api/performance/equity-curve<a class="headerlink" href="#get-apiperformanceequity-curve" title="Permanent link">&para;</a></h3>
+<p>Equity curve data points for charting.</p>
+<hr />
+<h2 id="trade-journal">Trade Journal<a class="headerlink" href="#trade-journal" title="Permanent link">&para;</a></h2>
+<h3 id="get-apijournaltrades">GET /api/journal/trades<a class="headerlink" href="#get-apijournaltrades" title="Permanent link">&para;</a></h3>
+<p>Get journal entries.</p>
+<p><strong>Query params:</strong> <code>limit</code>, <code>offset</code>, <code>symbol</code>, <code>from_date</code>, <code>to_date</code></p>
+<h3 id="post-apijournaltrades">POST /api/journal/trades<a class="headerlink" href="#post-apijournaltrades" title="Permanent link">&para;</a></h3>
+<p>Add a journal entry with notes and tags.</p>
+<h3 id="get-apijournaltradestrade_id">GET /api/journal/trades/{trade_id}<a class="headerlink" href="#get-apijournaltradestrade_id" title="Permanent link">&para;</a></h3>
+<p>Get a specific journal entry.</p>
+<h3 id="patch-apijournaltradestrade_id">PATCH /api/journal/trades/{trade_id}<a class="headerlink" href="#patch-apijournaltradestrade_id" title="Permanent link">&para;</a></h3>
+<p>Update a journal entry (add notes, tags, rating).</p>
+<h3 id="get-apijournalstats">GET /api/journal/stats<a class="headerlink" href="#get-apijournalstats" title="Permanent link">&para;</a></h3>
+<p>Journal statistics: most common mistakes, best/worst setups.</p>
+<h3 id="get-apijournalmistakes">GET /api/journal/mistakes<a class="headerlink" href="#get-apijournalmistakes" title="Permanent link">&para;</a></h3>
+<p>Get trades tagged as mistakes.</p>
+<hr />
+<h2 id="payments">Payments<a class="headerlink" href="#payments" title="Permanent link">&para;</a></h2>
+<h3 id="post-apipaymentscryptoaddress">POST /api/payments/crypto/address<a class="headerlink" href="#post-apipaymentscryptoaddress" title="Permanent link">&para;</a></h3>
+<p>Generate a crypto payment address (BTC/ETH/USDT).</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;currency&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;USDT&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;amount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">99.00</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pro&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apipaymentscryptostatuspayment_id">GET /api/payments/crypto/status/{payment_id}<a class="headerlink" href="#get-apipaymentscryptostatuspayment_id" title="Permanent link">&para;</a></h3>
+<p>Check payment status.</p>
+<h3 id="get-apipaymentscryptorates">GET /api/payments/crypto/rates<a class="headerlink" href="#get-apipaymentscryptorates" title="Permanent link">&para;</a></h3>
+<p>Get current crypto exchange rates.</p>
+<hr />
+<h2 id="monetization">Monetization<a class="headerlink" href="#monetization" title="Permanent link">&para;</a></h2>
+<h3 id="get-apimonetizationpricing">GET /api/monetization/pricing<a class="headerlink" href="#get-apimonetizationpricing" title="Permanent link">&para;</a></h3>
+<p>List all pricing tiers.</p>
+<h3 id="get-apimonetizationpricingtier">GET /api/monetization/pricing/{tier}<a class="headerlink" href="#get-apimonetizationpricingtier" title="Permanent link">&para;</a></h3>
+<p>Get details for a specific tier (free/starter/pro/enterprise).</p>
+<h3 id="post-apimonetizationsubscribe">POST /api/monetization/subscribe<a class="headerlink" href="#post-apimonetizationsubscribe" title="Permanent link">&para;</a></h3>
+<p>Subscribe to a plan.</p>
+<h3 id="get-apimonetizationsubscriptionuser_id">GET /api/monetization/subscription/{user_id}<a class="headerlink" href="#get-apimonetizationsubscriptionuser_id" title="Permanent link">&para;</a></h3>
+<p>Get subscription status.</p>
+<h3 id="post-apimonetizationsubscriptionsubscription_idcancel">POST /api/monetization/subscription/{subscription_id}/cancel<a class="headerlink" href="#post-apimonetizationsubscriptionsubscription_idcancel" title="Permanent link">&para;</a></h3>
+<p>Cancel a subscription.</p>
+<h3 id="get-apimonetizationsubscriptionuser_idlimits">GET /api/monetization/subscription/{user_id}/limits<a class="headerlink" href="#get-apimonetizationsubscriptionuser_idlimits" title="Permanent link">&para;</a></h3>
+<p>Get feature limits for the current subscription.</p>
+<h3 id="post-apimonetizationactivate-code">POST /api/monetization/activate-code<a class="headerlink" href="#post-apimonetizationactivate-code" title="Permanent link">&para;</a></h3>
+<p>Activate an access code.</p>
+<h3 id="get-apimonetizationvalidate-codecode">GET /api/monetization/validate-code/{code}<a class="headerlink" href="#get-apimonetizationvalidate-codecode" title="Permanent link">&para;</a></h3>
+<p>Validate an access code without activating it.</p>
+<h3 id="post-apimonetizationaffiliatesignup">POST /api/monetization/affiliate/signup<a class="headerlink" href="#post-apimonetizationaffiliatesignup" title="Permanent link">&para;</a></h3>
+<p>Sign up as an affiliate.</p>
+<hr />
+<h2 id="billing">Billing<a class="headerlink" href="#billing" title="Permanent link">&para;</a></h2>
+<h3 id="get-apibillingsubscription">GET /api/billing/subscription<a class="headerlink" href="#get-apibillingsubscription" title="Permanent link">&para;</a></h3>
+<p>Get current subscription and billing details.</p>
+<h3 id="post-apibillingwebhookstripe">POST /api/billing/webhook/stripe<a class="headerlink" href="#post-apibillingwebhookstripe" title="Permanent link">&para;</a></h3>
+<p>Stripe webhook endpoint (for Stripe to call — not for direct use).</p>
+<h3 id="post-apibillingaffiliategenerate-link">POST /api/billing/affiliate/generate-link<a class="headerlink" href="#post-apibillingaffiliategenerate-link" title="Permanent link">&para;</a></h3>
+<p>Generate an affiliate referral link.</p>
+<h3 id="post-apibillingauthactivate-free-tier">POST /api/billing/auth/activate-free-tier<a class="headerlink" href="#post-apibillingauthactivate-free-tier" title="Permanent link">&para;</a></h3>
+<p>Activate the free tier for a new user.</p>
+<h3 id="post-apibillingpaymentsflutterwaveinit">POST /api/billing/payments/flutterwave/init<a class="headerlink" href="#post-apibillingpaymentsflutterwaveinit" title="Permanent link">&para;</a></h3>
+<p>Initialize a Flutterwave payment.</p>
+<h3 id="post-apibillingpaymentsflutterwaveverify">POST /api/billing/payments/flutterwave/verify<a class="headerlink" href="#post-apibillingpaymentsflutterwaveverify" title="Permanent link">&para;</a></h3>
+<p>Verify a Flutterwave payment.</p>
+<h3 id="get-apibillingpaymentsflutterwavestatus">GET /api/billing/payments/flutterwave/status<a class="headerlink" href="#get-apibillingpaymentsflutterwavestatus" title="Permanent link">&para;</a></h3>
+<p>Get Flutterwave payment status.</p>
+<hr />
+<h2 id="mobile">Mobile<a class="headerlink" href="#mobile" title="Permanent link">&para;</a></h2>
+<h3 id="post-apimobileregister-push">POST /api/mobile/register-push<a class="headerlink" href="#post-apimobileregister-push" title="Permanent link">&para;</a></h3>
+<p>Register a device for push notifications.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;device_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;fcm_token_here&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;platform&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;android&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="delete-apimobileregister-push">DELETE /api/mobile/register-push<a class="headerlink" href="#delete-apimobileregister-push" title="Permanent link">&para;</a></h3>
+<p>Unregister a device from push notifications.</p>
+<h3 id="post-apimobiletest-push">POST /api/mobile/test-push<a class="headerlink" href="#post-apimobiletest-push" title="Permanent link">&para;</a></h3>
+<p>Send a test push notification to the current device.</p>
+<h3 id="get-apimobilepush-status">GET /api/mobile/push-status<a class="headerlink" href="#get-apimobilepush-status" title="Permanent link">&para;</a></h3>
+<p>Get push notification registration status.</p>
+<hr />
+<h2 id="ai-brain">AI Brain<a class="headerlink" href="#ai-brain" title="Permanent link">&para;</a></h2>
+<h3 id="post-apibraingenerate-strategy">POST /api/brain/generate-strategy<a class="headerlink" href="#post-apibraingenerate-strategy" title="Permanent link">&para;</a></h3>
+<p>Generate a new trading strategy using AI.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A mean reversion strategy for gold using RSI and Bollinger Bands&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="post-apibraindeploy-strategy">POST /api/brain/deploy-strategy<a class="headerlink" href="#post-apibraindeploy-strategy" title="Permanent link">&para;</a></h3>
+<p>Deploy a generated strategy to the live engine.</p>
+<hr />
+<h2 id="ai-chat">AI Chat<a class="headerlink" href="#ai-chat" title="Permanent link">&para;</a></h2>
+<h3 id="post-apichatmessage">POST /api/chat/message<a class="headerlink" href="#post-apichatmessage" title="Permanent link">&para;</a></h3>
+<p>Send a message to the AI trading assistant.</p>
+<p><strong>Request:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;What is the current gold trend?&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;session_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;abc123&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="delete-apichathistory">DELETE /api/chat/history<a class="headerlink" href="#delete-apichathistory" title="Permanent link">&para;</a></h3>
+<p>Clear conversation history for a session.</p>
+<h3 id="get-apichatstatus">GET /api/chat/status<a class="headerlink" href="#get-apichatstatus" title="Permanent link">&para;</a></h3>
+<p>AI chat readiness check (model loaded, API key configured).</p>
+<hr />
+<h2 id="explainability">Explainability<a class="headerlink" href="#explainability" title="Permanent link">&para;</a></h2>
+<h3 id="get-apiexplainsignalsignal_id">GET /api/explain/signal/{signal_id}<a class="headerlink" href="#get-apiexplainsignalsignal_id" title="Permanent link">&para;</a></h3>
+<p>Get SHAP explanation for a specific signal.</p>
+<h3 id="get-apiexplainmodel">GET /api/explain/model<a class="headerlink" href="#get-apiexplainmodel" title="Permanent link">&para;</a></h3>
+<p>Get global model feature importance with SHAP values.</p>
+<hr />
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<h3 id="post-apisettingsnotifications">POST /api/settings/notifications<a class="headerlink" href="#post-apisettingsnotifications" title="Permanent link">&para;</a></h3>
+<p>Save notification settings (channels, thresholds, quiet hours).</p>
+<h3 id="get-apisettingsnotifications">GET /api/settings/notifications<a class="headerlink" href="#get-apisettingsnotifications" title="Permanent link">&para;</a></h3>
+<p>Get current notification settings.</p>
+<h3 id="post-apinotificationstest">POST /api/notifications/test<a class="headerlink" href="#post-apinotificationstest" title="Permanent link">&para;</a></h3>
+<p>Send a test notification to all configured channels.</p>
+<hr />
+<h2 id="admin">Admin<a class="headerlink" href="#admin" title="Permanent link">&para;</a></h2>
+<h3 id="get-apiadmin">GET /api/admin/<a class="headerlink" href="#get-apiadmin" title="Permanent link">&para;</a></h3>
+<p>Admin dashboard (HTML).</p>
+<h3 id="get-apiadminstrategies">GET /api/admin/strategies<a class="headerlink" href="#get-apiadminstrategies" title="Permanent link">&para;</a></h3>
+<p>Strategy management page (HTML).</p>
+<h3 id="get-apiadminsettings">GET /api/admin/settings<a class="headerlink" href="#get-apiadminsettings" title="Permanent link">&para;</a></h3>
+<p>Settings page (HTML).</p>
+<h3 id="get-apiadminmonitoring">GET /api/admin/monitoring<a class="headerlink" href="#get-apiadminmonitoring" title="Permanent link">&para;</a></h3>
+<p>Monitoring page (HTML).</p>
+<h3 id="get-apiadminlogs">GET /api/admin/logs<a class="headerlink" href="#get-apiadminlogs" title="Permanent link">&para;</a></h3>
+<p>Get application logs.</p>
+<h3 id="post-apiadminkycdecide">POST /api/admin/kyc/decide<a class="headerlink" href="#post-apiadminkycdecide" title="Permanent link">&para;</a></h3>
+<p>Approve or reject a KYC submission.</p>
+<h3 id="get-apiadminkycpending">GET /api/admin/kyc/pending<a class="headerlink" href="#get-apiadminkycpending" title="Permanent link">&para;</a></h3>
+<p>List pending KYC submissions.</p>
+<h3 id="get-apiadminkycuser_id">GET /api/admin/kyc/{user_id}<a class="headerlink" href="#get-apiadminkycuser_id" title="Permanent link">&para;</a></h3>
+<p>Get KYC status for a user.</p>
+<h3 id="get-apiadminactivity">GET /api/admin/activity<a class="headerlink" href="#get-apiadminactivity" title="Permanent link">&para;</a></h3>
+<p>Get recent user activity.</p>
+<h3 id="get-apiadmindashboard-data">GET /api/admin/dashboard-data<a class="headerlink" href="#get-apiadmindashboard-data" title="Permanent link">&para;</a></h3>
+<p>Get admin dashboard metrics (users, revenue, trades).</p>
+<hr />
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<h3 id="get-health">GET /health<a class="headerlink" href="#get-health" title="Permanent link">&para;</a></h3>
+<p>Health check — returns status of all components.</p>
 <p><strong>Response:</strong>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;bias&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bullish&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">&quot;strength&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;moderate&quot;</span><span class="p">,</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">&quot;supporting_signals&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;order_flow:bullish&quot;</span><span class="p">],</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">&quot;bullish_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">&quot;bearish_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">&quot;environment&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;production&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">&quot;components&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">&quot;database&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">&quot;redis&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">&quot;ml_model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="nt">&quot;broker&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;oanda_practice&quot;</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="p">}</span>
 </code></pre></div></p>
+<h3 id="get-apistatuspaper-trading">GET /api/status/paper-trading<a class="headerlink" href="#get-apistatuspaper-trading" title="Permanent link">&para;</a></h3>
+<p>Paper trading clock status.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&quot;elapsed_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">&quot;remaining_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">18</span><span class="p">,</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">&quot;complete&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">&quot;started_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-27T00:00:00Z&quot;</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="get-apistatussharpe-progress">GET /api/status/sharpe-progress<a class="headerlink" href="#get-apistatussharpe-progress" title="Permanent link">&para;</a></h3>
+<p>Sharpe gate progress (N trades accumulated vs target).</p>
+<h3 id="get-metrics">GET /metrics<a class="headerlink" href="#get-metrics" title="Permanent link">&para;</a></h3>
+<p>Prometheus metrics endpoint.</p>
 <hr />
-<h3 id="get-apidashboardsymbollevels"><code>GET /api/dashboard/{symbol}/levels</code><a class="headerlink" href="#get-apidashboardsymbollevels" title="Permanent link">&para;</a></h3>
-<p>Get key support/resistance levels.</p>
+<h2 id="websocket">WebSocket<a class="headerlink" href="#websocket" title="Permanent link">&para;</a></h2>
+<h3 id="ws-wssignals">WS /ws/signals<a class="headerlink" href="#ws-wssignals" title="Permanent link">&para;</a></h3>
+<p>Real-time signal stream.</p>
+<p><strong>Message format:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="p">{</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;signal&quot;</span><span class="p">,</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">&quot;symbol&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;XAUUSD&quot;</span><span class="p">,</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">&quot;direction&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BUY&quot;</span><span class="p">,</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.72</span><span class="p">,</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-14T10:30:00Z&quot;</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="ws-wsprices">WS /ws/prices<a class="headerlink" href="#ws-wsprices" title="Permanent link">&para;</a></h3>
+<p>Real-time price tick stream.</p>
+<h3 id="ws-wspositions">WS /ws/positions<a class="headerlink" href="#ws-wspositions" title="Permanent link">&para;</a></h3>
+<p>Real-time position update stream.</p>
+<h3 id="ws-wsalerts">WS /ws/alerts<a class="headerlink" href="#ws-wsalerts" title="Permanent link">&para;</a></h3>
+<p>Real-time alert trigger stream.</p>
 <hr />
-<h2 id="data-models">Data Models<a class="headerlink" href="#data-models" title="Permanent link">&para;</a></h2>
-<h3 id="executedtrade"><code>ExecutedTrade</code><a class="headerlink" href="#executedtrade" title="Permanent link">&para;</a></h3>
+<h2 id="error-responses">Error Responses<a class="headerlink" href="#error-responses" title="Permanent link">&para;</a></h2>
+<p>All errors follow this format:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p">{</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&quot;detail&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Human-readable error message&quot;</span><span class="p">,</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">&quot;error_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;MACHINE_READABLE_CODE&quot;</span><span class="p">,</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-07-14T10:30:00Z&quot;</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="p">}</span>
+</code></pre></div>
 <table>
 <thead>
 <tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
+<th>HTTP Status</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>timestamp</code></td>
-<td>datetime</td>
-<td>Execution time</td>
+<td>400</td>
+<td>Bad request — invalid parameters</td>
 </tr>
 <tr>
-<td><code>symbol</code></td>
-<td>str</td>
-<td>Trading symbol</td>
+<td>401</td>
+<td>Unauthorized — missing or invalid JWT</td>
 </tr>
 <tr>
-<td><code>price</code></td>
-<td>float</td>
-<td>Execution price</td>
+<td>403</td>
+<td>Forbidden — insufficient permissions</td>
 </tr>
 <tr>
-<td><code>size</code></td>
-<td>float</td>
-<td>Trade size</td>
+<td>404</td>
+<td>Not found</td>
 </tr>
 <tr>
-<td><code>side</code></td>
-<td>str</td>
-<td>'buy' or 'sell'</td>
+<td>422</td>
+<td>Validation error — request body schema mismatch</td>
 </tr>
 <tr>
-<td><code>trade_id</code></td>
-<td>str?</td>
-<td>Unique ID (optional)</td>
+<td>429</td>
+<td>Rate limit exceeded</td>
 </tr>
 <tr>
-<td><code>is_aggressive_buy</code></td>
-<td>bool</td>
-<td>Lifted the ask</td>
+<td>500</td>
+<td>Internal server error</td>
 </tr>
 <tr>
-<td><code>is_aggressive_sell</code></td>
-<td>bool</td>
-<td>Hit the bid</td>
-</tr>
-<tr>
-<td><code>is_large_trade</code></td>
-<td>bool</td>
-<td>Above size threshold</td>
+<td>503</td>
+<td>Service unavailable — broker disconnected or kill switch active</td>
 </tr>
 </tbody>
 </table>
-<h3 id="flowsignal"><code>FlowSignal</code><a class="headerlink" href="#flowsignal" title="Permanent link">&para;</a></h3>
+<hr />
+<h2 id="rate-limits">Rate Limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
+<th>Endpoint Group</th>
+<th>Limit</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>symbol</code></td>
-<td>str</td>
-<td>Trading symbol</td>
+<td>Unauthenticated</td>
+<td>100 req/min</td>
 </tr>
 <tr>
-<td><code>timestamp</code></td>
-<td>datetime</td>
-<td>Detection time</td>
+<td>Authenticated</td>
+<td>1,000 req/min</td>
 </tr>
 <tr>
-<td><code>signal_type</code></td>
-<td>str</td>
-<td>'iceberg', 'volume_spike', 'absorption'</td>
+<td>Order placement (<code>/api/trading/order</code>)</td>
+<td>10 req/min</td>
 </tr>
 <tr>
-<td><code>strength</code></td>
-<td>str</td>
-<td>'strong', 'moderate', 'weak'</td>
+<td>ML inference (<code>/api/ml/predict</code>)</td>
+<td>30 req/min</td>
 </tr>
 <tr>
-<td><code>direction</code></td>
-<td>str</td>
-<td>'bullish', 'bearish', 'neutral'</td>
-</tr>
-<tr>
-<td><code>price_level</code></td>
-<td>float</td>
-<td>Price where signal detected</td>
-</tr>
-<tr>
-<td><code>volume</code></td>
-<td>float</td>
-<td>Volume at signal</td>
-</tr>
-<tr>
-<td><code>details</code></td>
-<td>dict</td>
-<td>Additional context</td>
+<td>Backtest runs (<code>/api/backtest/run</code>)</td>
+<td>5 req/min</td>
 </tr>
 </tbody>
 </table>
-<h3 id="aggressionmetrics"><code>AggressionMetrics</code><a class="headerlink" href="#aggressionmetrics" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>buy_aggression</code></td>
-<td>float</td>
-<td>Buy volume % (0-100)</td>
-</tr>
-<tr>
-<td><code>sell_aggression</code></td>
-<td>float</td>
-<td>Sell volume % (0-100)</td>
-</tr>
-<tr>
-<td><code>aggression_score</code></td>
-<td>float</td>
-<td>Net score (-100 to +100)</td>
-</tr>
-<tr>
-<td><code>dominant_side</code></td>
-<td>str</td>
-<td>'buyers', 'sellers', 'neutral'</td>
-</tr>
-<tr>
-<td><code>aggression_strength</code></td>
-<td>str</td>
-<td>'strong', 'moderate', 'weak'</td>
-</tr>
-</tbody>
-</table>
-<h3 id="volumecluster"><code>VolumeCluster</code><a class="headerlink" href="#volumecluster" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>price_level</code></td>
-<td>float</td>
-<td>Cluster price</td>
-</tr>
-<tr>
-<td><code>total_volume</code></td>
-<td>float</td>
-<td>Total volume at level</td>
-</tr>
-<tr>
-<td><code>buy_volume</code></td>
-<td>float</td>
-<td>Buy-side volume</td>
-</tr>
-<tr>
-<td><code>sell_volume</code></td>
-<td>float</td>
-<td>Sell-side volume</td>
-</tr>
-<tr>
-<td><code>cluster_type</code></td>
-<td>str</td>
-<td>'support', 'resistance', 'neutral'</td>
-</tr>
-<tr>
-<td><code>strength</code></td>
-<td>float</td>
-<td>Relative strength (0-1)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="deltadivergence"><code>DeltaDivergence</code><a class="headerlink" href="#deltadivergence" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>divergence_type</code></td>
-<td>str</td>
-<td>'bullish' or 'bearish'</td>
-</tr>
-<tr>
-<td><code>price_direction</code></td>
-<td>str</td>
-<td>'up', 'down', 'flat'</td>
-</tr>
-<tr>
-<td><code>delta_direction</code></td>
-<td>str</td>
-<td>'up', 'down', 'flat'</td>
-</tr>
-<tr>
-<td><code>strength</code></td>
-<td>float</td>
-<td>Divergence strength (0-1)</td>
-</tr>
-<tr>
-<td><code>confidence</code></td>
-<td>float</td>
-<td>Signal confidence (0-1)</td>
-</tr>
-</tbody>
-</table>
+<p>Rate limit headers on every response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>X-RateLimit-Limit: 1000
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>X-RateLimit-Remaining: 987
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>X-RateLimit-Reset: 1720000060
+</code></pre></div></p>
 
 
 
