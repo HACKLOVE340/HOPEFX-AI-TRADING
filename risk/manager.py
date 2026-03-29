@@ -4,1704 +4,441 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-HOPEFX Risk Manager
-Comprehensive risk management with position sizing, exposure limits, and drawdown control
-"""
+risk/manager.py
+================
+RiskManager — orchestrator-integrated position sizing and risk control.
 
-import json
+Design invariants
+-----------------
+- Data quality consumed from orchestrator.get_latest_tick().confidence.
+  Any trade where orchestrator reports quality below MIN_DATA_QUALITY is
+  hard-rejected before sizing even begins.
+- News sentiment from orchestrator.get_ml_features() gates position sizing:
+  high absolute sentiment → reduced size (uncertainty scaling).
+- Macro impact score from orchestrator gates max allowable position size.
+- All sizing decisions written to DataLineageStore.
+- No broker API called anywhere in this file.
+- Kelly criterion with fractional scaling for position sizing.
+- Drawdown-adaptive sizing: size scales down as drawdown increases.
+
+Position sizing formula
+-----------------------
+  base_size   = account_equity * kelly_f * KELLY_FRACTION
+  quality_f   = data_quality_confidence
+  sentiment_f = 1 - |sentiment_score| * SENT_SCALE
+  impact_f    = 1 - impact_score * IMPACT_SCALE
+  dd_f        = 1 - (current_dd / MAX_DD) * DD_SCALE
+  final_size  = base_size * quality_f * sentiment_f * impact_f * dd_f
+  final_size  = clamp(final_size, MIN_SIZE, MAX_SIZE)
+"""
+from __future__ import annotations
+
 import logging
 import os
-import signal
+import signal as _signal
 import sys
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# ── risk config (all env-overridable) ─────────────────────────────────────────
+_ACCOUNT_EQUITY      = float(os.getenv("RISK_ACCOUNT_EQUITY",       "100000"))
+_MAX_POSITION_PCT    = float(os.getenv("RISK_MAX_POSITION_PCT",      "0.05"))
+_MIN_POSITION_PCT    = float(os.getenv("RISK_MIN_POSITION_PCT",      "0.001"))
+_KELLY_FRACTION      = float(os.getenv("RISK_KELLY_FRACTION",        "0.25"))
+_MAX_DAILY_LOSS_PCT  = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT",    "0.05"))
+_MAX_DRAWDOWN_PCT    = float(os.getenv("RISK_MAX_DRAWDOWN_PCT",      "0.10"))
+_MAX_OPEN_POSITIONS  = int(os.getenv("RISK_MAX_OPEN_POSITIONS",      "3"))
+_MIN_DATA_QUALITY    = float(os.getenv("RISK_MIN_DATA_QUALITY",      "0.40"))
+_SENT_SIZE_SCALE     = float(os.getenv("RISK_SENT_SIZE_SCALE",       "0.40"))
+_IMPACT_SIZE_SCALE   = float(os.getenv("RISK_IMPACT_SIZE_SCALE",     "0.50"))
+_DD_SIZE_SCALE       = float(os.getenv("RISK_DD_SIZE_SCALE",         "0.80"))
+_VAR_WINDOW          = int(os.getenv("RISK_VAR_WINDOW",              "100"))
+_VAR_CONFIDENCE      = float(os.getenv("RISK_VAR_CONFIDENCE",        "0.95"))
 
-class RiskLevel(Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+
+# ── Enums ─────────────────────────────────────────────────────────────────────
+
+class RiskLevel:
+    LOW      = "low"
+    MEDIUM   = "medium"
+    HIGH     = "high"
     CRITICAL = "critical"
 
 
+# ── Data classes ──────────────────────────────────────────────────────────────
+
 @dataclass
 class RiskConfig:
-    """Risk management configuration"""
-
-    max_position_size_pct: float = float(
-        os.getenv("RISK_MAX_POSITION_SIZE_PCT", "0.05")
-    )  # 5% per position (env-overridable)
-    max_portfolio_exposure_pct: float = 0.5  # 50% total exposure
-    max_drawdown_pct: float = 0.10  # 10% max drawdown
-    daily_loss_limit_pct: float = 0.05  # 5% daily loss
-    max_leverage: float = 1.0
-    min_risk_reward: float = float(os.getenv("RISK_MIN_RR", "2.0"))  # 2:1 R:R minimum
-    max_correlation: float = 0.7
-    volatility_lookback: int = 20
-    kelly_fraction: float = float(
-        os.getenv("RISK_KELLY_FRACTION", "0.25")
-    )  # Quarter Kelly — safer than half-Kelly for live deployment
-    # Extended fields (used by test_risk_notification_extended)
-    max_risk_per_trade: float = 2.0
-    max_position_size: float = 10000.0
-    max_open_positions: int = 5
-    max_daily_loss: float = 5.0
-    max_drawdown: float = 10.0
-    default_stop_loss_pct: float = 2.0
-    default_take_profit_pct: float = 4.0
+    """Risk management configuration — mirrors env vars for runtime inspection."""
+    max_position_size_pct: float = _MAX_POSITION_PCT
+    min_position_size_pct: float = _MIN_POSITION_PCT
+    kelly_fraction:        float = _KELLY_FRACTION
+    max_daily_loss_pct:    float = _MAX_DAILY_LOSS_PCT
+    max_drawdown_pct:      float = _MAX_DRAWDOWN_PCT
+    max_open_positions:    int   = _MAX_OPEN_POSITIONS
+    min_data_quality:      float = _MIN_DATA_QUALITY
 
 
 @dataclass
-class PositionSizingResult:
-    """Position sizing calculation result"""
+class SizedOrder:
+    """Output of RiskManager.size_order()."""
+    order_id:        str
+    symbol:          str
+    direction:       str
+    quantity:        float
+    notional_usd:    float
+    kelly_f:         float
+    quality_f:       float
+    sentiment_f:     float
+    impact_f:        float
+    dd_f:            float
+    stop_loss_usd:   float
+    take_profit_usd: float
+    risk_usd:        float
+    lineage_id:      str
+    created_at:      datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    recommended_size: float
-    max_allowed_size: float
-    risk_amount: float
-    risk_pct: float
-    stop_loss_price: Optional[float]
-    take_profit_price: Optional[float]
-    approved: bool
-    reason: str
+
+@dataclass
+class RiskState:
+    """Mutable risk state — updated on every fill and equity update."""
+    account_equity:  float
+    peak_equity:     float
+    day_open_equity: float
+    open_positions:  int   = 0
+    daily_pnl:       float = 0.0
+    total_pnl:       float = 0.0
+    trade_day:       int   = 0
 
     @property
-    def size(self) -> float:
-        """Alias for recommended_size."""
-        return self.recommended_size
+    def current_drawdown(self) -> float:
+        if self.peak_equity <= 0:
+            return 0.0
+        return max(0.0, (self.peak_equity - self.account_equity) / self.peak_equity)
+
+    @property
+    def daily_drawdown(self) -> float:
+        if self.day_open_equity <= 0:
+            return 0.0
+        return max(0.0, (self.day_open_equity - self.account_equity) / self.day_open_equity)
+
+    def update_equity(self, equity: float) -> None:
+        today = datetime.now(timezone.utc).day
+        if today != self.trade_day:
+            self.day_open_equity = equity
+            self.trade_day       = today
+        self.account_equity = equity
+        if equity > self.peak_equity:
+            self.peak_equity = equity
 
 
-@dataclass
-class RiskAssessment:
-    """Overall risk assessment"""
-
-    level: RiskLevel
-    can_trade: bool
-    daily_pnl: float
-    daily_pnl_pct: float
-    current_drawdown: float
-    margin_used_pct: float
-    total_exposure_pct: float
-    largest_position_pct: float
-    messages: List[str] = field(default_factory=list)
-
+# ── RiskManager ───────────────────────────────────────────────────────────────
 
 class RiskManager:
     """
-    Production risk manager with:
-    - Kelly criterion position sizing
-    - Dynamic exposure limits
-    - Correlation-based risk reduction
-    - Drawdown circuit breakers
-    - Volatility-adjusted sizing
+    Orchestrator-integrated risk manager.
+
+    Wiring
+    ------
+    - Reads data quality from orchestrator.get_latest_tick().confidence
+    - Reads sentiment + macro features from orchestrator.get_ml_features()
+    - Writes all sizing decisions to lineage_store
+    - Never calls any broker for price data
+
+    Usage
+    -----
+        rm = RiskManager(orchestrator=orchestrator, lineage_store=lineage_store)
+        sized = rm.size_order(signal)
+        if sized.quantity > 0:
+            await router.route_and_execute(...)
     """
 
     def __init__(
         self,
-        config: RiskConfig = None,
-        initial_balance: float = 1_000_000.0,
-        halt_state_file: Optional[Path] = None,
-    ):
-        self.config = config or RiskConfig()
-
-        # State tracking
-        self.peak_equity = 0.0
-        self.current_drawdown = 0.0
-        self.daily_starting_equity = 0.0
-        self.daily_pnl = 0.0
-        self.daily_trades: int = 0
-        self.last_reset_date = datetime.now(timezone.utc).date()
-
-        # Extended balance tracking (used by test_risk_notification_extended)
-        self.initial_balance: float = initial_balance
-        self.current_balance: float = initial_balance
-        self.peak_balance: float = initial_balance
-
-        # Precise drawdown tracker with trailing HWM and partial fill support
-        try:
-            from risk.drawdown_tracker import DrawdownTracker
-            self._dd_tracker = DrawdownTracker(
-                initial_balance=initial_balance,
-                max_total_dd_pct=self.config.max_drawdown_pct,
-                max_daily_dd_pct=self.config.daily_loss_limit_pct,
-            )
-        except Exception as _dd_err:
-            logger.warning("DrawdownTracker init failed (non-fatal): %s", _dd_err)
-            self._dd_tracker = None
-
-        # Position tracking
-        self.open_positions: List[Dict] = []
-        self.position_history: List[Dict] = []
-        self.trade_history: List[Dict] = []
-        self.correlation_matrix: Dict[Tuple[str, str], float] = {}
-
-        # Circuit breakers
-        self._trading_halted = False
-        self._halt_reason: Optional[str] = None
-        self._halt_until: Optional[datetime] = None
-
-        # ── Loss-streak circuit breaker ───────────────────────────────────────
-        # Set by record_trade_outcome() and read by PreTradeGate._check_loss_streak.
-        # TradeExecutor also sets _streak_halted directly via its own tracker;
-        # the risk manager maintains a parallel copy so the gate can enforce it
-        # even when orders arrive through alternative code paths.
-        self._streak_halted: bool = False
-        self._streak_loss_count: int = 0
-        self._streak_halt_losses: int = int(os.getenv("STREAK_HALT_LOSSES", "3"))
-        self._streak_cooldown_minutes: float = float(
-            os.getenv("STREAK_COOLDOWN_MINUTES", "30")
+        orchestrator=None,
+        lineage_store=None,
+        config: Optional[RiskConfig] = None,
+    ) -> None:
+        self._orch    = orchestrator
+        self._lineage = lineage_store
+        self._config  = config or RiskConfig()
+        self._state   = RiskState(
+            account_equity  = _ACCOUNT_EQUITY,
+            peak_equity     = _ACCOUNT_EQUITY,
+            day_open_equity = _ACCOUNT_EQUITY,
+            trade_day       = datetime.now(timezone.utc).day,
         )
-        self._streak_halted_until: Optional[datetime] = None
+        self._pnl_history:    deque = deque(maxlen=_VAR_WINDOW)
+        self._sizing_history: List[Dict] = []
+        self._halt:           bool  = False
+        self._halt_reason:    str   = ""
+        self._install_signal_handlers()
 
-        # Two-tier drawdown alert state (Area 2)
-        self._amber_warned: bool = False
+    # ── Public API ────────────────────────────────────────────────────────────
 
-        # Rolling returns history for CVaR (Area 2) — 252 trading days
-        self._returns_history: deque = deque(maxlen=252)
-
-        # Per-symbol price history for live correlation (Area 2) — 60 bars
-        self._price_history: Dict[str, deque] = {}
-        self._price_update_counts: Dict[str, int] = {}
-
-        # CVaR (Expected Shortfall) daily limit as a fraction of portfolio value.
-        # When the rolling 95th-percentile tail loss exceeds this threshold,
-        # trading is halted for 24 hours.
-        #
-        # Default: 0.02 (2% of portfolio per day).  Set RISK_CVAR_DAILY_LIMIT=0
-        # explicitly to disable — the previous default of 0 left the gate
-        # permanently disabled in every deployment that did not set the env var.
-        #
-        # Recommended values:
-        #   Conservative: 0.01  (1%)
-        #   Standard:     0.02  (2%)  ← default
-        #   Aggressive:   0.05  (5%)
-        #   Disabled:     0     (not recommended for production)
-        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0.02"))
-
-        # Path for persisting halt state across restarts.
-        # Callers (e.g. tests) can supply a custom path via halt_state_file to
-        # avoid sharing state between test instances.
-        self._halt_state_file: Path = (
-            halt_state_file
-            if halt_state_file is not None
-            else Path(__file__).parent / "halt_state.json"
-        )
-
-        # Restore any halt that was active before the last restart.
-        # This prevents a process restart from silently resuming trading
-        # after a drawdown-triggered halt.
-        self._restore_halt_state()
-
-        # ── Data layer integration ────────────────────────────────────────────
-        # The risk manager reads current gold price and macro impact score
-        # from the data_layer orchestrator when available.
-        # This is non-blocking — falls back gracefully if orchestrator not started.
-        self._dl_impact_cache: float = 0.0
-        self._dl_impact_ts: float = 0.0
-
-    # ── Properties ────────────────────────────────────────────────────────────
-
-    @property
-    def current_equity(self) -> float:
+    def size_order(self, signal) -> SizedOrder:
         """
-        Current floating equity.
+        Compute position size for a signal.
 
-        Returns current_balance as the best available proxy.  When the
-        DrawdownTracker is active it tracks equity separately; callers that
-        need the precise floating equity should use get_drawdown_status().
+        All scaling factors derived from orchestrator data.
+        Returns SizedOrder with quantity=0 if any hard gate fails.
         """
-        return self.current_balance
+        symbol     = getattr(signal, "symbol",     "XAU_USD")
+        direction  = getattr(signal, "direction",  "long")
+        conf       = getattr(signal, "confidence", 0.0)
+        prob       = getattr(signal, "probability", 0.5)
+        order_id   = str(uuid.uuid4())
+        lineage_id = str(uuid.uuid4())
 
-    # ── Hard <1% risk-per-trade cap ───────────────────────────────────────────
-
-    @property
-    def max_risk_pct_per_trade(self) -> float:
-        """
-        Hard cap on risk per trade as a fraction of equity.
-
-        Reads MAX_RISK_PCT_PER_TRADE env var (default 0.01 = 1%).
-        This is the single source of truth used by:
-        - _apply_risk_limits() in position sizing
-        - PreTradeGate._check_risk_per_trade()
-        - TradeExecutor._clamp_size_to_risk_cap()
-        """
-        return float(os.getenv("MAX_RISK_PCT_PER_TRADE", "0.01"))
-
-    def update_equity(self, equity: float, balance: Optional[float] = None) -> None:
-        """
-        Update equity, drawdown, and rolling returns history.
-
-        Parameters
-        ----------
-        equity  : Floating equity (open P&L included)
-        balance : Closed balance (no open P&L). Defaults to equity if not given.
-                  Used by DrawdownTracker for "balance" mode (Goat Funded).
-        """
-        if balance is None:
-            balance = equity
-
-        # Check for new day
-        today = datetime.now(timezone.utc).date()
-        if today != self.last_reset_date:
-            self.daily_starting_equity = equity
-            self.daily_pnl = 0.0
-            self.last_reset_date = today
-
-        # Update daily P&L
-        self.daily_pnl = equity - self.daily_starting_equity
-
-        # Append daily return to rolling history for CVaR
-        if self.daily_starting_equity > 0:
-            daily_return = self.daily_pnl / self.daily_starting_equity
-            self._returns_history.append(daily_return)
-
-        # Update peak and drawdown (legacy — kept for backward compat)
-        if equity > self.peak_equity:
-            self.peak_equity = equity
-
-        if self.peak_equity > 0:
-            self.current_drawdown = (self.peak_equity - equity) / self.peak_equity
-
-        # Update precise DrawdownTracker (trailing HWM, equity vs balance mode)
-        if self._dd_tracker is not None:
-            try:
-                result = self._dd_tracker.update(equity=equity, balance=balance)
-                # Sync current_drawdown with the precise tracker
-                self.current_drawdown = result.total_drawdown_pct
-                if result.total_breach or result.daily_breach:
-                    reason = (
-                        f"Total drawdown {result.total_drawdown_pct:.2%}"
-                        if result.total_breach
-                        else f"Daily drawdown {result.daily_drawdown_pct:.2%}"
-                    )
-                    self._halt_trading(reason, duration_hours=24)
-                    return
-            except Exception as _exc:
-                logger.debug("DrawdownTracker update failed (non-fatal): %s", _exc)
-
-        # Check circuit breakers (legacy path)
-        self._check_circuit_breakers(equity)
-
-    def record_partial_fill(self, pnl: float, balance_after: Optional[float] = None) -> None:
-        """
-        Record a partial fill with its realised P&L.
-
-        Updates the DrawdownTracker so daily drawdown stays accurate across
-        multiple partial fills. Also updates daily_pnl.
-
-        Parameters
-        ----------
-        pnl           : Realised P&L of this fill (negative = loss)
-        balance_after : New closed balance after the fill (optional)
-        """
-        self.daily_pnl += pnl
-        if self._dd_tracker is not None:
-            try:
-                self._dd_tracker.record_fill(pnl=pnl, balance_after=balance_after)
-            except Exception as _exc:
-                logger.debug("DrawdownTracker record_fill failed: %s", _exc)
-        logger.debug(
-            "Partial fill recorded: pnl=%.2f  daily_pnl=%.2f", pnl, self.daily_pnl
-        )
-
-    def check_modify_order(
-        self,
-        current_equity: float,
-        new_stop_loss_distance: float,
-        lots: float,
-        account_balance: Optional[float] = None,
-        pip_value: float = 1.0,
-    ) -> Tuple[bool, str]:
-        """
-        Risk re-check before modifying an order's stop-loss.
-
-        Ensures the new SL does not increase risk beyond the per-trade limit
-        and that we are not already in a drawdown breach.
-
-        Returns (allowed: bool, reason: str)
-        """
-        if account_balance is None:
-            account_balance = current_equity
-
-        if self._dd_tracker is not None:
-            try:
-                return self._dd_tracker.check_modify(
-                    current_equity=current_equity,
-                    new_stop_loss_distance=new_stop_loss_distance,
-                    lots=lots,
-                    account_balance=account_balance,
-                    pip_value=pip_value,
-                )
-            except Exception as _exc:
-                logger.warning("check_modify_order tracker failed: %s", _exc)
-
-        # Fallback: simple risk % check
-        risk_amount = new_stop_loss_distance * lots * pip_value
-        risk_pct = risk_amount / account_balance if account_balance > 0 else 1.0
-        max_risk = self.config.max_position_size_pct
-        if risk_pct > max_risk:
-            return False, f"Modified SL risk {risk_pct:.2%} > max {max_risk:.2%}"
-        return True, "OK"
-
-    def get_drawdown_status(self) -> Dict[str, Any]:
-        """Return current drawdown status from the precise tracker."""
-        if self._dd_tracker is not None:
-            return self._dd_tracker.status()
-        return {
-            "total_hwm": self.peak_equity,
-            "total_drawdown_pct": round(self.current_drawdown * 100, 4),
-            "daily_open": self.daily_starting_equity,
-            "daily_drawdown_pct": round(
-                abs(self.daily_pnl / self.daily_starting_equity * 100)
-                if self.daily_starting_equity > 0 else 0.0, 4
-            ),
-            "drawdown_mode": "equity",
-        }
-
-    def _check_circuit_breakers(self, equity: float) -> None:
-        """Check and trigger circuit breakers with two-tier drawdown alerts."""
-        # ── CVaR check (Area 2) ───────────────────────────────────────────────
-        if self._cvar_daily_limit > 0 and len(self._returns_history) >= 10:
-            cvar = self._compute_cvar()
-            if cvar > self._cvar_daily_limit:
-                self._halt_trading(
-                    f"CVaR daily limit breached: CVaR={cvar:.4f} > limit={self._cvar_daily_limit:.4f}",
-                    duration_hours=24,
-                )
-                return
-
-        # ── Two-tier drawdown (Area 2) ────────────────────────────────────────
-        amber_threshold = self.config.max_drawdown_pct * 0.60  # 60% of limit
-        if self.current_drawdown >= self.config.max_drawdown_pct:
-            # RED — halt immediately
-            self._amber_warned = False  # reset for next cycle
-            self._halt_trading(
-                f"Max drawdown reached: {self.current_drawdown:.2%} > {self.config.max_drawdown_pct:.2%}",
-                duration_hours=24,
-            )
-            return
-        elif self.current_drawdown >= amber_threshold and not self._amber_warned:
-            # AMBER — warn but keep trading
-            self._amber_warned = True
-            logger.warning(
-                "AMBER drawdown alert: %.2f%% has reached 60%% of the %.2f%% limit — "
-                "monitor closely",
-                self.current_drawdown * 100,
-                self.config.max_drawdown_pct * 100,
-            )
-        elif self.current_drawdown < amber_threshold:
-            # Reset amber flag when drawdown recovers below threshold
-            self._amber_warned = False
-
-        # ── Daily loss limit ──────────────────────────────────────────────────
-        if self.daily_starting_equity > 0:
-            daily_loss_pct = abs(self.daily_pnl) / self.daily_starting_equity
-            if daily_loss_pct > self.config.daily_loss_limit_pct:
-                self._halt_trading(
-                    f"Daily loss limit reached: {daily_loss_pct:.2%}",
-                    duration_hours=1,
-                )
-                return
-
-        # ── Lift expired trading halt ─────────────────────────────────────────
-        if self._trading_halted and self._halt_until:
-            if datetime.now(timezone.utc) >= self._halt_until:
-                self._resume_trading()
-
-        # ── Lift expired streak halt ──────────────────────────────────────────
-        # check_streak_halt() auto-clears expired cooldowns as a side effect.
-        self.check_streak_halt()
-
-    def _compute_cvar(self, confidence: float = 0.95) -> float:
-        """
-        Compute CVaR (Expected Shortfall) from the rolling daily returns history.
-        Returns the expected loss (positive number) beyond the VaR threshold.
-        """
-        if len(self._returns_history) < 2:
-            return 0.0
-        returns = np.array(list(self._returns_history))
-        var_threshold = np.percentile(returns, (1 - confidence) * 100)
-        tail = returns[returns <= var_threshold]
-        if len(tail) == 0:
-            return abs(var_threshold)
-        return float(abs(np.mean(tail)))
-
-    def _halt_trading(self, reason: str, duration_hours: float = 1.0):
-        """
-        Halt trading and persist the halt state to disk.
-
-        Persisting to disk ensures that a process restart does not silently
-        resume trading after a drawdown-triggered halt.  The halt remains
-        active until either the duration expires or _resume_trading() is
-        called explicitly.
-
-        Also fires the system-wide KillSwitch so that the trading API
-        immediately blocks new orders — the risk manager's internal halt
-        flag alone is not checked by the order router.
-        """
-        self._trading_halted = True
-        self._halt_reason = reason
-        self._halt_until = (
-            datetime.now(timezone.utc) + timedelta(hours=duration_hours)
-            if duration_hours > 0
-            else None
-        )
-        logger.critical(
-            "TRADING HALTED: %s (until %s)",
-            reason,
-            self._halt_until.isoformat() if self._halt_until else "manual resume only",
-        )
-        self._persist_halt_state()
-
-        # Fire the system-wide kill switch so the order router blocks immediately.
-        # Imported lazily to avoid a circular dependency at module load time.
-        try:
-            from app import kill_switch as _ks  # noqa: PLC0415
-
-            if not _ks.is_active():
-                _ks.activate(f"[risk_manager] {reason}")
-        except Exception as _ks_exc:
-            # Never let kill-switch wiring failure suppress the local halt.
-            logger.error(
-                "Could not fire system kill switch from risk manager: %s", _ks_exc
+        def _zero(reason: str = "") -> SizedOrder:
+            if reason:
+                logger.warning("RiskManager: zero-size — %s", reason)
+            return SizedOrder(
+                order_id=order_id, symbol=symbol, direction=direction,
+                quantity=0.0, notional_usd=0.0, kelly_f=0.0,
+                quality_f=0.0, sentiment_f=0.0, impact_f=0.0, dd_f=0.0,
+                stop_loss_usd=0.0, take_profit_usd=0.0, risk_usd=0.0,
+                lineage_id=lineage_id,
             )
 
-    def _resume_trading(self):
-        """Resume trading and remove the persisted halt state."""
-        self._trading_halted = False
-        self._halt_reason = None
-        self._halt_until = None
-        logger.info("Trading resumed")
-        self._clear_halt_state()
+        if self._halt:
+            return _zero(f"halted:{self._halt_reason}")
 
-    def _persist_halt_state(self) -> None:
-        """Write halt state to JSON so the next process restart can restore it."""
-        state = {
-            "halted": self._trading_halted,
-            "reason": self._halt_reason,
-            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
-            "persisted_at": datetime.now(timezone.utc).isoformat(),
-        }
-        try:
-            self._halt_state_file.write_text(json.dumps(state, indent=2))
-        except OSError as exc:
-            logger.warning("Could not persist halt state: %s", exc)
+        if self._state.daily_drawdown >= _MAX_DAILY_LOSS_PCT:
+            self._halt_trading("daily_drawdown_limit")
+            return _zero("daily_drawdown_limit")
 
-    def _clear_halt_state(self) -> None:
-        """Remove the persisted halt state file after a successful resume."""
-        try:
-            if self._halt_state_file.exists():
-                self._halt_state_file.unlink()
-        except OSError as exc:
-            logger.warning("Could not remove halt state file: %s", exc)
+        if self._state.current_drawdown >= _MAX_DRAWDOWN_PCT:
+            self._halt_trading("max_drawdown_limit")
+            return _zero("max_drawdown_limit")
 
-    def _restore_halt_state(self) -> None:
-        """
-        Restore halt state from disk on startup.
+        if self._state.open_positions >= _MAX_OPEN_POSITIONS:
+            return _zero(f"max_open_positions:{self._state.open_positions}")
 
-        If the state file records an active halt whose expiry has not yet
-        passed, trading is re-halted immediately.  If the halt has expired,
-        the state file is removed and trading starts normally.
-        """
-        if not self._halt_state_file.exists():
-            return
-        try:
-            data = json.loads(self._halt_state_file.read_text())
-        except Exception as exc:
-            logger.warning("Could not read halt state file: %s", exc)
-            return
+        # ── Data quality gate — orchestrator is authoritative ──────────────
+        data_quality = self._get_data_quality(signal)
+        if data_quality < _MIN_DATA_QUALITY:
+            return _zero(f"data_quality:{data_quality:.3f}<{_MIN_DATA_QUALITY}")
 
-        if not data.get("halted"):
-            self._clear_halt_state()
-            return
+        # ── Pull features from orchestrator ────────────────────────────────
+        features        = self._get_orchestrator_features(signal)
+        sentiment_score = float(features.get("news_sentiment_score", 0.0))
+        impact_score    = float(features.get("macro_impact_score",   0.0))
 
-        halt_until_str = data.get("halt_until")
-        if halt_until_str:
-            halt_until = datetime.fromisoformat(halt_until_str)
-            if datetime.now(timezone.utc) >= halt_until:
-                # Halt has expired — clear and start normally
-                logger.info(
-                    "Persisted halt has expired (was until %s) — resuming trading",
-                    halt_until.isoformat(),
-                )
-                self._clear_halt_state()
-                return
-            self._halt_until = halt_until
-        else:
-            # Indefinite halt (duration_hours=0) — stays halted until manual resume
-            self._halt_until = None
+        # ── Scaling factors ────────────────────────────────────────────────
+        quality_f   = self._quality_factor(data_quality)
+        sentiment_f = self._sentiment_factor(sentiment_score)
+        impact_f    = self._impact_factor(impact_score)
+        dd_f        = self._drawdown_factor()
+        kelly_f     = self._kelly(prob, conf)
 
-        self._trading_halted = True
-        self._halt_reason = data.get("reason", "restored from persisted halt state")
-        logger.critical(
-            "Trading halt RESTORED from persisted state — reason: %s | halt_until: %s",
-            self._halt_reason,
-            self._halt_until.isoformat() if self._halt_until else "manual resume only",
+        # ── Size computation ───────────────────────────────────────────────
+        equity       = self._state.account_equity
+        max_notional = equity * _MAX_POSITION_PCT
+        min_notional = equity * _MIN_POSITION_PCT
+        base_notional  = equity * kelly_f * _KELLY_FRACTION
+        final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
+        final_notional = max(min_notional, min(final_notional, max_notional))
+
+        mid_price = getattr(signal, "tick_mid", 1900.0)
+        if mid_price <= 0:
+            mid_price = 1900.0
+        quantity = final_notional / mid_price
+
+        # ── Stop / TP ──────────────────────────────────────────────────────
+        spread      = getattr(signal, "tick_spread", 1.0)
+        atr_proxy   = max(spread * 10, mid_price * 0.005)
+        tp_dist     = atr_proxy * 2.0
+        stop_loss_usd   = mid_price - atr_proxy if direction == "long" else mid_price + atr_proxy
+        take_profit_usd = mid_price + tp_dist   if direction == "long" else mid_price - tp_dist
+        risk_usd        = quantity * atr_proxy
+
+        sized = SizedOrder(
+            order_id        = order_id,
+            symbol          = symbol,
+            direction       = direction,
+            quantity        = round(quantity, 4),
+            notional_usd    = round(final_notional, 2),
+            kelly_f         = round(kelly_f, 4),
+            quality_f       = round(quality_f, 4),
+            sentiment_f     = round(sentiment_f, 4),
+            impact_f        = round(impact_f, 4),
+            dd_f            = round(dd_f, 4),
+            stop_loss_usd   = round(stop_loss_usd, 4),
+            take_profit_usd = round(take_profit_usd, 4),
+            risk_usd        = round(risk_usd, 2),
+            lineage_id      = lineage_id,
         )
 
-    def assess_risk(self, account_info: Dict, positions: List[Any]) -> RiskAssessment:
-        """
-        Comprehensive risk assessment.
+        self._sizing_history.append({
+            "order_id":    order_id,
+            "symbol":      symbol,
+            "direction":   direction,
+            "quantity":    sized.quantity,
+            "notional":    sized.notional_usd,
+            "quality_f":   quality_f,
+            "sentiment_f": sentiment_f,
+            "impact_f":    impact_f,
+            "dd_f":        dd_f,
+            "kelly_f":     kelly_f,
+            "timestamp":   datetime.now(timezone.utc).isoformat(),
+        })
 
-        Invariant: equity must be > 0. If equity is zero or negative the method
-        halts trading immediately and returns a CRITICAL assessment so no orders
-        are submitted while the account is in an invalid state.
-        """
-        messages = []
+        self._write_sizing_lineage(sized)
 
-        # Check if trading halted
-        if self._trading_halted:
-            return RiskAssessment(
-                level=RiskLevel.CRITICAL,
-                can_trade=False,
-                daily_pnl=self.daily_pnl,
-                daily_pnl_pct=self.daily_pnl / self.daily_starting_equity
-                if self.daily_starting_equity > 0
-                else 0,
-                current_drawdown=self.current_drawdown,
-                margin_used_pct=0.0,
-                total_exposure_pct=0.0,
-                largest_position_pct=0.0,
-                messages=[f"Trading halted: {self._halt_reason}"],
-            )
-
-        equity = account_info.get("equity", 0)
-
-        # ── Invariant: equity must be positive (strictly negative is invalid; ───
-        # ── zero is allowed as a transient state at initialisation)  ────────────
-        if equity < 0:
-            logger.critical(
-                "INVARIANT VIOLATED: equity=%.2f is not positive — halting trading",
-                equity,
-            )
-            self._halt_trading(
-                f"equity invariant violated (equity={equity})",
-                duration_hours=24,
-            )
-            return RiskAssessment(
-                level=RiskLevel.CRITICAL,
-                can_trade=False,
-                daily_pnl=self.daily_pnl,
-                daily_pnl_pct=0.0,
-                current_drawdown=self.current_drawdown,
-                margin_used_pct=0.0,
-                total_exposure_pct=0.0,
-                largest_position_pct=0.0,
-                messages=[f"Equity invariant violated: equity={equity}"],
-            )
-        # ────────────────────────────────────────────────────────────────────
-
-        margin_used = account_info.get("margin_used", 0)
-
-        # Calculate metrics
-        margin_used_pct = (margin_used / equity) if equity > 0 else 0
-
-        total_exposure = sum(
-            p.get("quantity", 0) * p.get("current_price", 0) for p in positions
+        logger.info(
+            "SIZED %s %s qty=%.4f notional=$%.0f "
+            "kelly=%.3f qual=%.3f sent=%.3f imp=%.3f dd=%.3f",
+            direction, symbol, sized.quantity, sized.notional_usd,
+            kelly_f, quality_f, sentiment_f, impact_f, dd_f,
         )
-        total_exposure_pct = (total_exposure / equity) if equity > 0 else 0
+        return sized
 
-        largest_position = max(
-            (p.get("quantity", 0) * p.get("current_price", 0) for p in positions),
-            default=0,
-        )
-        largest_position_pct = (largest_position / equity) if equity > 0 else 0
+    # ── Equity / position updates ─────────────────────────────────────────────
 
-        daily_pnl_pct = (
-            (self.daily_pnl / self.daily_starting_equity)
-            if self.daily_starting_equity > 0
-            else 0
-        )
+    def on_fill(self, symbol: str, direction: str, quantity: float, fill_price: float) -> None:
+        self._state.open_positions += 1
 
-        # Determine risk level
-        risk_level = RiskLevel.LOW
-        can_trade = True
+    def on_close(self, symbol: str, pnl: float) -> None:
+        self._state.open_positions = max(0, self._state.open_positions - 1)
+        self._state.daily_pnl     += pnl
+        self._state.total_pnl     += pnl
+        self._pnl_history.append(pnl)
 
-        if self.current_drawdown > self.config.max_drawdown_pct * 0.8:
-            risk_level = RiskLevel.CRITICAL
-            can_trade = False
-            messages.append(f"Near max drawdown: {self.current_drawdown:.2%}")
-            # FCM push: drawdown warning to all users with registered devices
-            try:
-                from mobile.push_notifications import _device_tokens, push_manager
+    def update_equity(self, equity: float) -> None:
+        self._state.update_equity(equity)
 
-                for uid in list(_device_tokens.keys()):
-                    push_manager.send_drawdown_warning(
-                        user_id=uid,
-                        drawdown_pct=self.current_drawdown * 100,
-                        limit_pct=self.config.max_drawdown_pct * 100,
-                    )
-            except Exception as exc:
-                logger.debug("FCM drawdown push failed (non-critical): %s", exc)
-        elif margin_used_pct > 0.8:
-            risk_level = RiskLevel.HIGH
-            messages.append(f"High margin usage: {margin_used_pct:.2%}")
-        elif total_exposure_pct > self.config.max_portfolio_exposure_pct * 0.9:
-            risk_level = RiskLevel.HIGH
-            messages.append(f"High exposure: {total_exposure_pct:.2%}")
-        elif largest_position_pct > self.config.max_position_size_pct * 1.5:
-            risk_level = RiskLevel.MEDIUM
-            messages.append(f"Large position: {largest_position_pct:.2%}")
-        elif daily_pnl_pct < -self.config.daily_loss_limit_pct * 0.5:
-            risk_level = RiskLevel.MEDIUM
-            messages.append(f"Approaching daily loss limit: {daily_pnl_pct:.2%}")
+    # ── Scaling factors ───────────────────────────────────────────────────────
 
-        # ── CVaR live check (Area 2) ──────────────────────────────────────────
-        if self._cvar_daily_limit > 0 and len(self._returns_history) >= 10:
-            cvar = self._compute_cvar()
-            if cvar > self._cvar_daily_limit:
-                risk_level = RiskLevel.CRITICAL
-                can_trade = False
-                messages.append(
-                    f"CVaR {cvar:.4f} exceeds daily limit {self._cvar_daily_limit:.4f}",
-                )
+    def _quality_factor(self, data_quality: float) -> float:
+        lo = _MIN_DATA_QUALITY
+        hi = 1.0
+        if hi <= lo:
+            return 1.0
+        return 0.5 + 0.5 * (data_quality - lo) / (hi - lo)
 
-        if not messages:
-            messages.append("Risk within normal parameters")
+    def _sentiment_factor(self, sentiment_score: float) -> float:
+        return 1.0 - min(abs(sentiment_score), 1.0) * _SENT_SIZE_SCALE
 
-        return RiskAssessment(
-            level=risk_level,
-            can_trade=can_trade,
-            daily_pnl=self.daily_pnl,
-            daily_pnl_pct=daily_pnl_pct,
-            current_drawdown=self.current_drawdown,
-            margin_used_pct=margin_used_pct,
-            total_exposure_pct=total_exposure_pct,
-            largest_position_pct=largest_position_pct,
-            messages=messages,
-        )
+    def _impact_factor(self, impact_score: float) -> float:
+        return 1.0 - min(impact_score, 1.0) * _IMPACT_SIZE_SCALE
 
-    def check_cvar_pre_trade(self) -> Tuple[bool, str]:
-        """
-        Explicit CVaR gate for the order submission path.
+    def _drawdown_factor(self) -> float:
+        dd   = self._state.current_drawdown
+        frac = dd / max(_MAX_DRAWDOWN_PCT, 1e-9)
+        return max(0.1, 1.0 - frac * _DD_SIZE_SCALE)
 
-        Called directly in place_order() *before* broker execution so that
-        CVaR breaches block orders even when assess_risk() is bypassed or
-        the returns history has grown since the last assess_risk() call.
-
-        Returns:
-            (allowed, reason) — allowed=False means the order must be rejected.
-        """
-        if self._trading_halted:
-            return False, f"Trading halted: {self._halt_reason}"
-
-        if self._cvar_daily_limit <= 0:
-            # Explicitly disabled via RISK_CVAR_DAILY_LIMIT=0
-            return True, "CVaR limit disabled (RISK_CVAR_DAILY_LIMIT=0)"
-
-        if len(self._returns_history) < 10:
-            return True, "Insufficient history for CVaR (< 10 observations)"
-
-        cvar = self._compute_cvar()
-        if cvar > self._cvar_daily_limit:
-            reason = (
-                f"Pre-trade CVaR check failed: CVaR={cvar:.4f} exceeds "
-                f"daily limit={self._cvar_daily_limit:.4f}"
-            )
-            logger.warning("ORDER BLOCKED — %s", reason)
-            return False, reason
-
-        return True, f"CVaR={cvar:.4f} within limit={self._cvar_daily_limit:.4f}"
-
-    # ------------------------------------------------------------------
-    # Trade outcome recording and streak management
-    # ------------------------------------------------------------------
-
-    def record_trade_outcome(self, realized_pnl: float, symbol: str = "") -> None:
-        """
-        Record a completed trade outcome and update the loss-streak state.
-
-        Called by TradeExecutor after every position close.  Maintains a
-        parallel streak counter to the one in TradeExecutor so that the
-        PreTradeGate can enforce the streak halt even when orders arrive
-        through alternative code paths (e.g. direct API calls).
-
-        Parameters
-        ----------
-        realized_pnl : Realised P&L of the closed trade (negative = loss).
-        symbol       : Instrument symbol (for logging).
-        """
-        if realized_pnl > 0:
-            if self._streak_loss_count > 0:
-                logger.debug(
-                    "RiskManager streak reset: win after %d consecutive losses "
-                    "(symbol=%s)",
-                    self._streak_loss_count, symbol,
-                )
-            self._streak_loss_count = 0
-            # Clear streak halt if it was set
-            if self._streak_halted:
-                self._streak_halted = False
-                self._streak_halted_until = None
-                logger.info(
-                    "RiskManager streak halt cleared by winning trade (symbol=%s)",
-                    symbol,
-                )
-        else:
-            self._streak_loss_count += 1
-            logger.debug(
-                "RiskManager consecutive losses: %d / %d (symbol=%s)",
-                self._streak_loss_count, self._streak_halt_losses, symbol,
-            )
-            if self._streak_loss_count >= self._streak_halt_losses:
-                self._activate_streak_halt()
-
-    def _activate_streak_halt(self) -> None:
-        """
-        Activate the loss-streak halt.
-
-        Sets _streak_halted=True and schedules automatic expiry after
-        _streak_cooldown_minutes.  Idempotent — safe to call multiple times.
-        """
-        if self._streak_halted:
-            return  # already halted
-
-        self._streak_halted = True
-        self._streak_halted_until = datetime.now(timezone.utc) + timedelta(
-            minutes=self._streak_cooldown_minutes
-        )
-        logger.warning(
-            "STREAK CIRCUIT BREAKER (RiskManager): %d consecutive losses — "
-            "halting new entries until %s",
-            self._streak_loss_count,
-            self._streak_halted_until.isoformat(),
-        )
-
-    def check_streak_halt(self) -> bool:
-        """
-        Return True if the streak halt is currently active.
-
-        Automatically clears an expired halt so callers always get the
-        current state without needing to call a separate expiry check.
-        """
-        if not self._streak_halted:
-            return False
-
-        if self._streak_halted_until is not None:
-            if datetime.now(timezone.utc) >= self._streak_halted_until:
-                logger.info(
-                    "RiskManager streak cooldown expired after %.0f min — "
-                    "resuming trading",
-                    self._streak_cooldown_minutes,
-                )
-                self._streak_halted = False
-                self._streak_halted_until = None
-                self._streak_loss_count = 0
-                return False
-
-        return True
-
-    def get_risk_summary(self) -> Dict[str, Any]:
-        """
-        Return a concise risk state snapshot for monitoring and health endpoints.
-
-        Includes drawdown, daily P&L, halt state, streak state, and the
-        hard risk-per-trade cap so operators can verify configuration at a glance.
-        """
-        streak_remaining_min: Optional[float] = None
-        if self._streak_halted_until is not None:
-            delta = self._streak_halted_until - datetime.now(timezone.utc)
-            streak_remaining_min = max(0.0, round(delta.total_seconds() / 60, 1))
-
-        return {
-            "trading_halted": self._trading_halted,
-            "halt_reason": self._halt_reason,
-            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
-            "current_drawdown_pct": round(self.current_drawdown * 100, 4),
-            "drawdown_limit_pct": round(self.config.max_drawdown_pct * 100, 2),
-            "daily_pnl": round(self.daily_pnl, 4),
-            "daily_loss_limit_pct": round(self.config.daily_loss_limit_pct * 100, 2),
-            "streak_halted": self.check_streak_halt(),
-            "streak_loss_count": self._streak_loss_count,
-            "streak_halt_threshold": self._streak_halt_losses,
-            "streak_cooldown_remaining_min": streak_remaining_min,
-            "max_risk_pct_per_trade": round(self.max_risk_pct_per_trade * 100, 2),
-            "max_position_size_pct": round(self.config.max_position_size_pct * 100, 2),
-            "current_equity": round(self.current_equity, 2),
-            "peak_equity": round(self.peak_equity, 2),
-        }
-
-    # ------------------------------------------------------------------
-    # Position sizing helpers (Area 3 — split from _calculate_position_size_full)
-    # ------------------------------------------------------------------
-
-    def _compute_kelly_fraction(self, p: float, b: float) -> float:
-        """
-        Compute the Kelly fraction f* = (p*b - q) / b, scaled by kelly_fraction.
-
-        Args:
-            p: Win probability, clamped to [0.30, 0.75].
-            b: Win/loss ratio (reward / risk per share).
-
-        Returns:
-            Kelly fraction as a decimal (e.g. 0.05 = 5% of equity).
-        """
-        p = max(0.30, min(0.75, p))
+    @staticmethod
+    def _kelly(probability: float, confidence: float) -> float:
+        p = max(0.01, min(probability, 0.99))
         q = 1.0 - p
-        raw_kelly = (p * b - q) / b if b > 0 else 0.0
-        return max(0.0, raw_kelly * self.config.kelly_fraction)
+        b = max(0.5, confidence * 3.0)
+        kelly = (p * b - q) / b
+        return max(0.0, min(kelly, _MAX_POSITION_PCT))
 
-    def _apply_correlation_penalty(
-        self,
-        symbol: str,
-        positions: List[Dict],
-        base_pct: float,
-    ) -> float:
-        """
-        Reduce base_pct by the correlation penalty for the given symbol.
+    # ── Orchestrator data access ──────────────────────────────────────────────
 
-        Args:
-            symbol:    Instrument being sized.
-            positions: Current open positions.
-            base_pct:  Starting risk percentage before penalty.
+    def _get_data_quality(self, signal) -> float:
+        """Authoritative source: orchestrator tick confidence."""
+        if self._orch is not None:
+            try:
+                tick = self._orch.get_latest_tick()
+                if tick is not None:
+                    return tick.confidence
+            except Exception as exc:
+                logger.debug("RiskManager: orchestrator tick fetch failed: %s", exc)
+        return getattr(signal, "data_quality", 1.0)
 
-        Returns:
-            Adjusted risk percentage after correlation penalty.
-        """
-        penalty = self._calculate_correlation_penalty(symbol, positions)
-        return base_pct * (1.0 - penalty)
+    def _get_orchestrator_features(self, signal) -> Dict:
+        """Authoritative source: orchestrator ML features."""
+        if self._orch is not None:
+            try:
+                return self._orch.get_ml_features()
+            except Exception as exc:
+                logger.debug("RiskManager: orchestrator features fetch failed: %s", exc)
+        return getattr(signal, "features", {})
 
-    def _apply_risk_limits(self, pct: float, equity: float) -> float:
-        """
-        Clamp pct to the hard risk-per-trade cap and configured position size limit.
+    # ── Halt ──────────────────────────────────────────────────────────────────
 
-        The hard cap (MAX_RISK_PCT_PER_TRADE, default 1%) is the absolute ceiling.
-        The configured max_position_size_pct is applied as an additional limit so
-        the lower of the two always wins.
+    def _halt_trading(self, reason: str) -> None:
+        self._halt        = True
+        self._halt_reason = reason
+        logger.critical("RiskManager: TRADING HALTED — reason=%s", reason)
 
-        Args:
-            pct:    Proposed risk percentage (Kelly-adjusted, volatility-scaled).
-            equity: Current account equity (kept for signature compatibility).
+    def resume_trading(self) -> None:
+        """Manual resume — requires explicit operator action."""
+        self._halt        = False
+        self._halt_reason = ""
+        logger.warning("RiskManager: trading RESUMED by operator")
 
-        Returns:
-            Final risk percentage after all caps.
-        """
-        # Hard <1% per-trade cap — non-negotiable
-        hard_cap = self.max_risk_pct_per_trade
-        # Configured position size limit (may be lower than hard cap)
-        config_cap = self.config.max_position_size_pct
-        return min(pct, hard_cap, config_cap)
+    # ── VaR ───────────────────────────────────────────────────────────────────
 
-    def _calculate_position_size_full(
-        self,
-        symbol: str,
-        signal_strength: float,
-        entry_price: float,
-        stop_loss_price: float,
-        take_profit_price: float,
-        account_equity: float,
-        volatility: float,
-        existing_positions: List[Dict] = None,
-    ) -> PositionSizingResult:
-        """
-        Calculate optimal position size using Kelly criterion with safety factors
+    def value_at_risk(self) -> float:
+        if len(self._pnl_history) < 10:
+            return 0.0
+        arr = np.array(list(self._pnl_history))
+        return float(np.percentile(arr, (1 - _VAR_CONFIDENCE) * 100))
 
-        Args:
-            signal_strength: 0.0 to 1.0
-            entry_price: Planned entry price
-            stop_loss_price: Stop loss level
-            take_profit_price: Take profit level
-            account_equity: Current account equity
-            volatility: Annualized volatility (0.0 to 1.0)
-            existing_positions: Current positions for correlation check
-        """
+    # ── Signal handlers ───────────────────────────────────────────────────────
 
-        if existing_positions is None:
-            existing_positions = []
+    def _install_signal_handlers(self) -> None:
+        def _handle(signum, frame):
+            sig_name = _signal.Signals(signum).name
+            logger.warning("Signal %s received — halting trading.", sig_name)
+            self._halt_trading(f"OS_signal:{sig_name}")
+            sys.exit(0)
+        try:
+            _signal.signal(_signal.SIGTERM, _handle)
+            _signal.signal(_signal.SIGINT,  _handle)
+        except (OSError, ValueError):
+            pass  # not in main thread
 
-        # Validate inputs
-        if entry_price <= 0 or account_equity <= 0:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason="Invalid price or equity",
-            )
+    # ── Lineage ───────────────────────────────────────────────────────────────
 
-        # Check if trading halted
-        if self._trading_halted:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason=f"Trading halted: {self._halt_reason}",
-            )
-
-        # Calculate risk/reward
-        risk_per_share = abs(entry_price - stop_loss_price)
-        reward_per_share = abs(take_profit_price - entry_price)
-
-        if risk_per_share <= 0:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason="Invalid stop loss (must be different from entry)",
-            )
-
-        risk_reward = reward_per_share / risk_per_share
-
-        if risk_reward < self.config.min_risk_reward:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason=f"Risk/reward too low: {risk_reward:.2f} < {self.config.min_risk_reward}",
-            )
-
-        # Win probability: prefer signal['probability'] when available (Area 2).
-        # Bounds-clamp to [0.30, 0.75] to prevent degenerate Kelly fractions.
-        _raw_p = signal_strength
-        _prob_from_signal = getattr(self, "_last_signal_probability", None)
-        if _prob_from_signal is not None:
-            _raw_p = _prob_from_signal
-            self._last_signal_probability = None  # consume
-
-        # ── Helper 1: Kelly fraction ──────────────────────────────────────────
-        position_risk_pct = self._compute_kelly_fraction(
-            p=_raw_p if _raw_p is not None else 0.5,
-            b=risk_reward,
-        )
-
-        # Volatility and drawdown scaling (inline — not extracted, these are
-        # continuous adjustments rather than discrete limit checks)
-        volatility_factor = max(0.3, 1.0 - (volatility * 2))
-        position_risk_pct *= volatility_factor
-        drawdown_factor = max(0.5, 1.0 - (self.current_drawdown * 5))
-        position_risk_pct *= drawdown_factor
-
-        # ── Helper 2: correlation penalty ────────────────────────────────────
-        position_risk_pct = self._apply_correlation_penalty(
-            symbol,
-            existing_positions,
-            position_risk_pct,
-        )
-
-        # ── Helper 3: hard risk limits ────────────────────────────────────────
-        position_risk_pct = self._apply_risk_limits(position_risk_pct, account_equity)
-
-        # Calculate position size
-        risk_amount = account_equity * position_risk_pct
-        position_size = risk_amount / risk_per_share if risk_per_share > 0 else 0
-
-        # Determine lot granularity by instrument type:
-        #   Forex pairs (entry < 500)  → 1000-unit micro lots
-        #   Metals / indices (entry ≥ 500) → 1-unit lots (oz for gold)
-        if entry_price >= 500:
-            lot_size = 1
-            min_lots = 1
-        else:
-            lot_size = 1000
-            min_lots = 1000
-
-        position_size = max(int(position_size / lot_size) * lot_size, 0)
-
-        # Ensure minimum size
-        if position_size < min_lots:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason="Position size too small after rounding",
-            )
-
-        # Calculate max allowed based on exposure limits
-        current_exposure = sum(
-            p.get("quantity", 0) * p.get("current_price", 0) for p in existing_positions
-        )
-        max_additional_exposure = (
-            account_equity * self.config.max_portfolio_exposure_pct
-        ) - current_exposure
-        max_size_from_exposure = (
-            max_additional_exposure / entry_price if entry_price > 0 else 0
-        )
-
-        # Final position size is minimum of risk-based and exposure-based
-        final_size = min(position_size, max_size_from_exposure)
-
-        # Ensure we don't exceed max position size
-        max_position_value = account_equity * self.config.max_position_size_pct
-        max_size_from_position_limit = (
-            max_position_value / entry_price if entry_price > 0 else 0
-        )
-        final_size = min(final_size, max_size_from_position_limit)
-
-        # Round to lot granularity
-        final_size = max(int(final_size / lot_size) * lot_size, 0)
-
-        if final_size < min_lots:
-            return PositionSizingResult(
-                recommended_size=0,
-                max_allowed_size=0,
-                risk_amount=0,
-                risk_pct=0,
-                stop_loss_price=stop_loss_price,
-                take_profit_price=take_profit_price,
-                approved=False,
-                reason="Position size too small after applying limits",
-            )
-
-        actual_risk_amount = final_size * risk_per_share
-        actual_risk_pct = actual_risk_amount / account_equity
-
-        return PositionSizingResult(
-            recommended_size=final_size,
-            max_allowed_size=max_size_from_exposure,
-            risk_amount=actual_risk_amount,
-            risk_pct=actual_risk_pct,
-            stop_loss_price=stop_loss_price,
-            take_profit_price=take_profit_price,
-            approved=True,
-            reason=f"Kelly: {position_risk_pct:.2%}, Risk/Reward: {risk_reward:.2f}, "
-            f"VolFactor: {volatility_factor:.2f}, DD_Factor: {drawdown_factor:.2f}",
-        )
-
-    # ------------------------------------------------------------------
-    # Live price tracking and correlation (Area 2)
-    # ------------------------------------------------------------------
-
-    def update_price(self, symbol: str, price: float) -> None:
-        """
-        Record a new price tick for a symbol and recompute correlations every
-        60 updates per symbol.  Warns when any pair exceeds 0.85 correlation.
-        """
-        if symbol not in self._price_history:
-            self._price_history[symbol] = deque(maxlen=60)
-            self._price_update_counts[symbol] = 0
-
-        self._price_history[symbol].append(float(price))
-        self._price_update_counts[symbol] += 1
-
-        if self._price_update_counts[symbol] % 60 == 0:
-            self._recompute_correlations()
-
-    def _recompute_correlations(self) -> None:
-        """
-        Recompute pairwise Pearson correlations from the rolling 60-bar price
-        histories.  Logs a WARNING for any pair whose correlation exceeds 0.85.
-        """
-        symbols = [s for s, h in self._price_history.items() if len(h) >= 10]
-        if len(symbols) < 2:
+    def _write_sizing_lineage(self, sized: SizedOrder) -> None:
+        if self._lineage is None:
             return
-
-        returns: Dict[str, np.ndarray] = {}
-        for sym in symbols:
-            prices = np.array(list(self._price_history[sym]))
-            if len(prices) > 1:
-                returns[sym] = np.diff(prices) / prices[:-1]
-
-        syms = list(returns.keys())
-        for i in range(len(syms)):
-            for j in range(i + 1, len(syms)):
-                s1, s2 = syms[i], syms[j]
-                r1, r2 = returns[s1], returns[s2]
-                min_len = min(len(r1), len(r2))
-                if min_len < 5:
-                    continue
-                corr = float(np.corrcoef(r1[-min_len:], r2[-min_len:])[0, 1])
-                self.correlation_matrix[(s1, s2)] = corr
-                if abs(corr) > 0.85:
-                    logger.warning(
-                        "High correlation detected: %s / %s = %.3f — "
-                        "consider reducing combined exposure",
-                        s1,
-                        s2,
-                        corr,
-                    )
-
-    def _calculate_correlation_penalty(
-        self,
-        symbol: str,
-        positions: List[Dict],
-    ) -> float:
-        """Calculate position size reduction due to correlation"""
-        if not positions:
-            return 0.0
-
-        # Simplified: check if same symbol or related pairs
-        correlated_exposure = 0.0
-
-        for pos in positions:
-            pos_symbol = pos.get("symbol", "")
-
-            # Same symbol = full correlation
-            if pos_symbol == symbol:
-                correlated_exposure += pos.get("quantity", 0) * pos.get(
-                    "current_price",
-                    0,
-                )
-                continue
-
-            # Check for related pairs (e.g., EURUSD and GBPUSD both have USD)
-            if self._symbols_related(symbol, pos_symbol):
-                correlated_exposure += (
-                    pos.get("quantity", 0) * pos.get("current_price", 0) * 0.5
-                )
-
-        # Penalty increases with correlated exposure
-        if correlated_exposure > 0:
-            return min(0.5, correlated_exposure / 100000)  # Cap at 50% reduction
-
-        return 0.0
-
-    def _symbols_related(self, sym1: str, sym2: str) -> bool:
-        """Check if two symbols are related (share a currency)"""
-        # Extract currencies (simplified)
-        currencies1 = set([sym1[:3], sym1[3:]]) if len(sym1) == 6 else set([sym1])
-        currencies2 = set([sym2[:3], sym2[3:]]) if len(sym2) == 6 else set([sym2])
-
-        return len(currencies1 & currencies2) > 0
-
-    def filter_signals(self, signals: List[Dict], account_state: Any) -> List[Dict]:
-        """
-        Filter and size trading signals through risk management
-        """
-        if not signals:
-            return []
-
-        # Update equity from account state
-        if hasattr(account_state, "equity"):
-            self.update_equity(account_state.equity)
-
-        filtered_signals = []
-
-        for signal in signals:  # noqa: F402
-            # Basic validation
-            if not all(
-                k in signal for k in ["symbol", "action", "entry_price", "stop_loss"]
-            ):
-                logger.warning(f"Invalid signal format: {signal}")
-                continue
-
-            # Skip if action is close (handled separately)
-            if signal["action"] == "close":
-                filtered_signals.append(signal)
-                continue
-
-            # Pass ML probability into Kelly calculation when available (Area 2)
-            if "probability" in signal:
-                raw_p = signal["probability"]
-                self._last_signal_probability = max(0.30, min(0.75, float(raw_p)))
-
-            # Calculate position size
-            sizing = self.calculate_position_size(
-                symbol=signal["symbol"],
-                signal_strength=signal.get("strength", 0.5),
-                entry_price=signal["entry_price"],
-                stop_loss_price=signal["stop_loss"],
-                take_profit_price=signal.get(
-                    "take_profit",
-                    signal["entry_price"] * 1.02,
+        try:
+            self._lineage.record_signal(
+                direction     = f"SIZE:{sized.direction}",
+                confidence    = sized.kelly_f,
+                probability   = sized.quality_f,
+                features_hash = sized.lineage_id[:16],
+                model_version = (
+                    f"risk:q={sized.quality_f:.2f}"
+                    f",s={sized.sentiment_f:.2f}"
+                    f",i={sized.impact_f:.2f}"
+                    f",d={sized.dd_f:.2f}"
                 ),
-                account_equity=getattr(account_state, "equity", 100000),
-                volatility=signal.get("volatility", 0.1),
-                existing_positions=getattr(
-                    account_state,
-                    "active_positions",
-                    {},
-                ).values(),
+                lineage_id    = sized.lineage_id,
+                symbol        = sized.symbol,
             )
+        except Exception as exc:
+            logger.debug("RiskManager lineage write failed: %s", exc)
 
-            if not sizing.approved:
-                logger.info(f"Signal rejected for {signal['symbol']}: {sizing.reason}")
-                continue
+    # ── Diagnostics ───────────────────────────────────────────────────────────
 
-            # Add sizing to signal
-            signal["size"] = sizing.recommended_size
-            signal["risk_amount"] = sizing.risk_amount
-            signal["risk_pct"] = sizing.risk_pct
-            signal["stop_loss"] = sizing.stop_loss_price
-            signal["take_profit"] = sizing.take_profit_price
-
-            filtered_signals.append(signal)
-
-            logger.info(
-                f"Signal approved: {signal['symbol']} | "
-                f"Size: {sizing.recommended_size} | "
-                f"Risk: {sizing.risk_pct:.2%} | "
-                f"R/R: {abs(sizing.take_profit_price - signal['entry_price']) / abs(sizing.stop_loss_price - signal['entry_price']):.2f}",
-            )
-
-        return filtered_signals
-
-    # ------------------------------------------------------------------
-    # Extended API (test_risk_notification_extended)
-    # ------------------------------------------------------------------
-
-    def calculate_position_size(
-        self,
-        symbol: str = "",
-        entry_price: float = 0.0,
-        method: str = "risk",
-        amount: float = None,
-        percent: float = None,
-        stop_loss: float = None,
-        price: float = None,
-        # Full-signature kwargs from PositionSizingResult path
-        signal_strength: float = None,
-        stop_loss_price: float = None,
-        take_profit_price: float = None,
-        account_equity: float = None,
-        volatility: float = None,
-        existing_positions=None,
-        **kw,
-    ) -> "PositionSizingResult":
-        """Unified position sizing — delegates to full implementation when called with signal_strength."""
-        if signal_strength is not None:
-            # Full PositionSizingResult path (used by integration tests)
-            return self._calculate_position_size_full(
-                symbol=symbol,
-                signal_strength=signal_strength,
-                entry_price=entry_price or price or 1.0,
-                stop_loss_price=stop_loss_price or stop_loss or 0.0,
-                take_profit_price=take_profit_price or 0.0,
-                account_equity=account_equity or self.current_balance,
-                volatility=volatility or 0.1,
-                existing_positions=existing_positions or [],
-            )
-        # Simple path
-        entry = price or entry_price or 1.0
-        cfg = self.config
-        if method == "fixed":
-            size = (amount or 1000.0) / max(entry, 1.0)
-        elif method == "percent":
-            pct = percent or (cfg.max_risk_per_trade / 100.0)
-            size = self.current_balance * pct / max(entry, 1.0)
-        elif method == "risk":
-            sl = stop_loss or kw.get("stop_loss")
-            if sl and sl != entry:
-                risk_amt = self.current_balance * (cfg.max_risk_per_trade / 100.0)
-                size = risk_amt / abs(entry - sl)
-            else:
-                size = (
-                    self.current_balance
-                    * (cfg.max_risk_per_trade / 100.0)
-                    / max(entry, 1.0)
-                )
-        else:
-            size = self.current_balance * 0.01 / max(entry, 1.0)
-        size = max(size, 0.01)
-        # Return PositionSizingResult so callers always get .approved
-        return PositionSizingResult(
-            recommended_size=size,
-            max_allowed_size=size * 2,
-            risk_amount=size * entry * (cfg.max_risk_per_trade / 100.0),
-            risk_pct=cfg.max_risk_per_trade / 100.0,
-            stop_loss_price=stop_loss or 0.0,
-            take_profit_price=0.0,
-            approved=True,
-            reason="OK",
-        )
-
-    def get_current_gold_price(self) -> Optional[float]:
-        """
-        Return the current XAU/USD mid price from the data layer orchestrator.
-
-        Falls back to None if the orchestrator is not started or has no live tick.
-        Callers should use their own entry_price when this returns None.
-        """
-        import time
-        now = time.time()
-        # Cache for 5 seconds to avoid hammering the orchestrator
-        if now - self._dl_impact_ts < 5.0 and self._dl_impact_cache > 0:
-            return self._dl_impact_cache
-        try:
-            from data_layer.orchestrator import orchestrator
-            tick = orchestrator.get_latest_tick()
-            if tick and tick.mid > 0:
-                self._dl_impact_cache = tick.mid
-                self._dl_impact_ts = now
-                return tick.mid
-        except Exception:
-            pass
-        return None
-
-    def get_macro_impact_score(self) -> float:
-        """
-        Return the current macro calendar impact score [0, 1] from the data layer.
-
-        A score > 0.7 indicates a high-impact event is imminent or just released.
-        Risk manager uses this to reduce position size during volatile macro windows.
-        """
-        try:
-            from data_layer.orchestrator import orchestrator
-            return orchestrator.get_current_impact_score()
-        except Exception:
-            return 0.0
-
-    def can_open_position(self, size: float) -> Tuple[bool, str]:
-        """Check whether a new position can be opened."""
-        cfg = self.config
-        if len(self.open_positions) >= cfg.max_open_positions:
-            return False, f"Max open positions ({cfg.max_open_positions}) reached"
-        if size > cfg.max_position_size:
-            return (
-                False,
-                f"Position size {size} exceeds maximum {cfg.max_position_size}",
-            )
-        daily_loss_pct = (
-            abs(self.daily_pnl) / self.current_balance * 100
-            if self.current_balance
-            else 0
-        )
-        if self.daily_pnl < 0 and daily_loss_pct >= cfg.max_daily_loss:
-            return False, f"Daily loss limit ({cfg.max_daily_loss}%) reached"
-        if self.peak_balance > 0:
-            dd_pct = (
-                (self.peak_balance - self.current_balance) / self.peak_balance * 100
-            )
-            if dd_pct >= cfg.max_drawdown:
-                return False, f"Max drawdown ({cfg.max_drawdown}%) reached"
-        # Data layer: block during extreme macro impact (score > 0.85)
-        impact = self.get_macro_impact_score()
-        if impact > 0.85:
-            return False, f"Macro impact score {impact:.2f} too high — waiting for event to pass"
-        return True, "OK"
-
-    def validate_trade(self, symbol: str, size: float, side: str) -> Tuple[bool, str]:
-        """Validate a trade before execution."""
-        return self.can_open_position(size)
-
-    def register_position(self, position: Dict) -> None:
-        self.open_positions.append(position)
-
-    def close_position(self, position_id: str, pnl: float = 0.0) -> None:
-        self.open_positions = [
-            p for p in self.open_positions if p.get("id") != position_id
-        ]
-        self.current_balance += pnl
-        self.daily_pnl += pnl
-        if self.current_balance > self.peak_balance:
-            self.peak_balance = self.current_balance
-
-    def check_risk_limits(self) -> Tuple[bool, List[str]]:
-        """Return (within_limits, list_of_violations)."""
-        violations: List[str] = []
-        cfg = self.config
-        daily_loss_pct = (
-            abs(self.daily_pnl) / self.current_balance * 100
-            if self.current_balance and self.daily_pnl < 0
-            else 0
-        )
-        if daily_loss_pct >= cfg.max_daily_loss:
-            violations.append(
-                f"Daily loss {daily_loss_pct:.1f}% exceeds limit {cfg.max_daily_loss}%",
-            )
-        if self.peak_balance > 0:
-            dd_pct = (
-                (self.peak_balance - self.current_balance) / self.peak_balance * 100
-            )
-            if dd_pct >= cfg.max_drawdown:
-                violations.append(
-                    f"Drawdown {dd_pct:.1f}% exceeds limit {cfg.max_drawdown}%",
-                )
-        return len(violations) == 0, violations
-
-    def calculate_stop_loss(
-        self,
-        entry: float,
-        side: str,
-        percent: float = None,
-    ) -> float:
-        pct = (percent or self.config.default_stop_loss_pct) / 100.0
-        if side.upper() in ("BUY", "LONG"):
-            return entry * (1 - pct)
-        return entry * (1 + pct)
-
-    def calculate_take_profit(
-        self,
-        entry: float,
-        side: str,
-        percent: float = None,
-    ) -> float:
-        pct = (percent or self.config.default_take_profit_pct) / 100.0
-        if side.upper() in ("BUY", "LONG"):
-            return entry * (1 + pct)
-        return entry * (1 - pct)
-
-    def reset_daily_pnl(self) -> None:
-        self.daily_pnl = 0.0
-        self.daily_trades = 0
-
-    def reset_daily_stats(self) -> None:
-        self.reset_daily_pnl()
-
-    def check_drawdown(
-        self,
-        equity_curve=None,
-        max_dd: float = None,
-    ) -> "RiskCheckResult":
-        """Check drawdown against limit. Accepts equity_curve array or uses internal state."""
-        import numpy as _np
-
-        if equity_curve is not None:
-            arr = _np.asarray(equity_curve, dtype=float)
-            if len(arr) < 2:
-                return RiskCheckResult(passed=True, message="Insufficient data")
-            peak = _np.maximum.accumulate(arr)
-            dd = (arr - peak) / peak
-            max_drawdown = float(_np.min(dd))
-        else:
-            if self.peak_balance <= 0:
-                return RiskCheckResult(passed=True, message="No peak balance")
-            max_drawdown = (
-                -(self.peak_balance - self.current_balance) / self.peak_balance
-            )
-        limit = -(max_dd if max_dd is not None else self.config.max_drawdown / 100.0)
-        passed = max_drawdown >= limit
-        return RiskCheckResult(
-            passed=passed,
-            message=f"Drawdown {max_drawdown:.2%} {'within' if passed else 'exceeds'} limit {limit:.2%}",
-            details={"drawdown": max_drawdown, "limit": limit},
-        )
-
-    @property
-    def kill_switch_active(self) -> bool:
-        return self._trading_halted
-
-    def check_kill_switch(
-        self,
-        daily_pnl: float = None,
-        account_value: float = None,
-        threshold: float = None,
-    ) -> bool:
-        """Return True if kill switch should trigger (trading should stop)."""
-        if (
-            daily_pnl is not None
-            and account_value is not None
-            and threshold is not None
-        ):
-            if account_value > 0:
-                loss_pct = abs(daily_pnl) / account_value if daily_pnl < 0 else 0
-                if loss_pct >= threshold:
-                    self._trading_halted = True
-                    return True
-        return self._trading_halted
-
-    def check_price_tolerance(
-        self,
-        order,
-        current_price: float = None,
-        tolerance: float = None,
-    ) -> "RiskCheckResult":
-        """Check if order price is within tolerance of current market price."""
-        if isinstance(order, dict):
-            order_price = order.get("price", current_price)
-        else:
-            order_price = getattr(order, "price", current_price)
-        if order_price is None or current_price is None:
-            return RiskCheckResult(passed=True, message="No price to check")
-        tol = tolerance if tolerance is not None else 0.005
-        diff = abs(order_price - current_price) / current_price if current_price else 0
-        passed = diff <= tol
-        return RiskCheckResult(
-            passed=passed,
-            message=f"Price tolerance {'OK' if passed else 'exceeded'}: diff {diff:.4%} vs limit {tol:.4%}",
-            details={
-                "order_price": order_price,
-                "current_price": current_price,
-                "diff_pct": diff,
-            },
-        )
-
-    def check_correlation_risk(
-        self,
-        positions: List,
-        max_correlation: float = 0.80,
-    ) -> "RiskCheckResult":
-        """Check portfolio correlation risk (simplified heuristic)."""
-        # Heuristic: EUR/GBP pairs are highly correlated
-        symbols = [getattr(p, "symbol", "") for p in positions]
-        eur_pairs = [s for s in symbols if s.startswith("EUR")]
-        gbp_pairs = [s for s in symbols if s.startswith("GBP")]
-        high_corr = len(eur_pairs) > 0 and len(gbp_pairs) > 0
-        level = RiskLevel.HIGH if high_corr else RiskLevel.MEDIUM
-        return RiskCheckResult(
-            passed=not high_corr,
-            risk_level=level,
-            message=f"Correlation risk: {'high' if high_corr else 'medium'} between {symbols}",
-        )
-
-    def check_concentration(
-        self,
-        positions: List,
-        account,
-        max_single: float = 0.40,
-    ) -> "RiskCheckResult":
-        """Check single-position concentration."""
-        balance = getattr(account, "balance", 100000.0) or 100000.0
-        violations = []
-        for p in positions:
-            mv = getattr(p, "market_value", None) or (getattr(p, "size", 0) or 0)
-            pct = mv / balance if balance > 0 else 0
-            if pct > max_single:
-                sym = getattr(p, "symbol", "?")
-                violations.append(f"{sym}: {pct:.1%}")
-        passed = len(violations) == 0
-        return RiskCheckResult(
-            passed=passed,
-            risk_level=RiskLevel.LOW if passed else RiskLevel.HIGH,
-            message=f"Position concentration {'OK' if passed else 'exceeded: ' + ', '.join(violations)}",
-        )
-
-    def check_position_size(self, trade, max_pct: float = None) -> "RiskCheckResult":
-        """Check if trade size is within allowed percentage of account balance."""
-        if isinstance(trade, dict):
-            size = trade.get("size", 0)
-        else:
-            size = getattr(trade, "size", getattr(trade, "quantity", 0))
-        balance = self.current_balance or 10000.0
-        pct = size / balance if balance > 0 else 0
-        limit = max_pct if max_pct is not None else self.config.max_position_size_pct
-        passed = pct <= limit
-        return RiskCheckResult(
-            passed=passed,
-            risk_level=RiskLevel.LOW if passed else RiskLevel.CRITICAL,
-            message=f"Position size {pct:.2%} {'within' if passed else 'exceeds'} limit {limit:.2%}",
-            details={"size": size, "balance": balance, "pct": pct, "limit": limit},
-        )
-
-    def update_daily_pnl(self, amount: float) -> None:
-        self.daily_pnl += amount
-
-    def get_risk_metrics(self) -> Dict[str, Any]:
-        dd = (
-            (self.peak_balance - self.current_balance) / self.peak_balance * 100
-            if self.peak_balance
-            else 0
-        )
+    def metrics(self) -> Dict[str, Any]:
         return {
-            "current_balance": self.current_balance,
-            "peak_balance": self.peak_balance,
-            "daily_pnl": self.daily_pnl,
-            "current_drawdown": dd,
-            "open_positions": len(self.open_positions),
-        }
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get risk manager status"""
-        return {
-            "trading_halted": self._trading_halted,
-            "halt_reason": self._halt_reason,
-            "halt_until": self._halt_until.isoformat() if self._halt_until else None,
-            "current_drawdown": self.current_drawdown,
-            "peak_equity": self.peak_equity,
-            "daily_pnl": self.daily_pnl,
-            "daily_pnl_pct": self.daily_pnl / self.daily_starting_equity
-            if self.daily_starting_equity > 0
-            else 0,
-            "current_balance": self.current_balance,
-            "peak_balance": self.peak_balance,
-            "open_positions": len(self.open_positions),
-            "config": {
-                "max_position_size_pct": self.config.max_position_size_pct,
-                "max_drawdown_pct": self.config.max_drawdown_pct,
-                "daily_loss_limit_pct": self.config.daily_loss_limit_pct,
-                "max_risk_per_trade": self.config.max_risk_per_trade,
-                "max_open_positions": self.config.max_open_positions,
-            },
+            "account_equity":   round(self._state.account_equity, 2),
+            "peak_equity":      round(self._state.peak_equity, 2),
+            "current_drawdown": round(self._state.current_drawdown * 100, 3),
+            "daily_drawdown":   round(self._state.daily_drawdown * 100, 3),
+            "daily_pnl":        round(self._state.daily_pnl, 2),
+            "total_pnl":        round(self._state.total_pnl, 2),
+            "open_positions":   self._state.open_positions,
+            "var_95":           round(self.value_at_risk(), 2),
+            "halt":             self._halt,
+            "halt_reason":      self._halt_reason,
         }
 
 
-# ── Aliases expected by tests ─────────────────────────────────────────────────
-from dataclasses import dataclass as _dc  # noqa: E402
-from dataclasses import field as _field  # noqa: E402
-
-
-@_dc
-class PositionSizeResult:
-    """Simple result returned by RiskManager.calculate_position_size."""
-
-    size: float
-    method: str = "risk"
-    entry_price: float = 0.0
-
-
-@_dc
-class RiskCheckResult:
-    """Result of a single risk check — used by tests."""
-
-    passed: bool
-    risk_level: "RiskLevel" = None
-    message: str = ""
-    details: dict = _field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.risk_level is None:
-            self.risk_level = RiskLevel.LOW if self.passed else RiskLevel.HIGH
-
-
-# ── Graceful shutdown on invariant violations / panics ───────────────────────
-
-
-def _graceful_shutdown(reason: str, exit_code: int = 1) -> None:
-    """
-    Halt all trading and exit the process cleanly.
-
-    Called when an invariant is violated (e.g. negative equity) or an
-    unrecoverable error is detected.  Sends SIGTERM to the process group
-    so any spawned subprocesses also receive the signal, then exits.
-    """
-    logger.critical("GRACEFUL SHUTDOWN initiated: %s", reason)
-    try:
-        import atexit
-
-        atexit._run_exitfuncs()  # noqa: SLF001
-    except Exception as exc:
-        logger.critical("atexit handlers failed during graceful shutdown: %s", exc)
-    try:
-        os.kill(os.getpid(), signal.SIGTERM)
-    except Exception as exc:
-        logger.critical("Failed to send SIGTERM during graceful shutdown: %s", exc)
-    sys.exit(exit_code)
-
-
-def install_invariant_signal_handlers(risk_manager: "RiskManager") -> None:
-    """
-    Install OS-level signal handlers that trigger a graceful shutdown when
-    SIGTERM or SIGINT is received, giving the risk manager a chance to halt
-    trading before the process exits.
-
-    Args:
-        risk_manager: The active :class:`RiskManager` instance.
-    """
-
-    def _handle(signum, frame):
-        sig_name = signal.Signals(signum).name
-        logger.warning(
-            "Signal %s received — halting trading and shutting down.",
-            sig_name,
-        )
-        risk_manager._halt_trading(f"OS signal {sig_name}", duration_hours=0)
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, _handle)
-    signal.signal(signal.SIGINT, _handle)
-    logger.info("Invariant signal handlers installed (SIGTERM, SIGINT).")
+# ── Module-level singleton ────────────────────────────────────────────────────
+risk_manager = RiskManager()
