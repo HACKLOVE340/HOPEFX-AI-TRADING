@@ -1216,10 +1216,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#discord" class="md-nav__link">
+  <a href="#telegram-primary-community-channel" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Discord
+        Telegram (Primary Community Channel)
       
     </span>
   </a>
@@ -1227,10 +1227,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#telegram" class="md-nav__link">
+  <a href="#discord-community-server" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Telegram
+        Discord (Community Server)
       
     </span>
   </a>
@@ -2015,10 +2015,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#discord" class="md-nav__link">
+  <a href="#telegram-primary-community-channel" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Discord
+        Telegram (Primary Community Channel)
       
     </span>
   </a>
@@ -2026,10 +2026,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#telegram" class="md-nav__link">
+  <a href="#discord-community-server" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Telegram
+        Discord (Community Server)
       
     </span>
   </a>
@@ -2164,28 +2164,32 @@
 <li><strong>Pull Requests</strong> — code contributions</li>
 <li><strong>Releases</strong> — version announcements</li>
 </ul>
-<h3 id="discord">Discord<a class="headerlink" href="#discord" title="Permanent link">&para;</a></h3>
-<p>Real-time community chat for traders and developers.</p>
-<p><strong>Invite:</strong> Set up at <a href="https://discord.com/developers">discord.com/developers</a> — configure your own server or use the GitHub Discussions tab until a server is live.</p>
-<p>Suggested channel structure when you set up your server:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>#welcome          — onboarding and rules
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>#announcements    — releases and updates (read-only)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>#general          — open discussion
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>#trading-signals  — paper trading signal sharing
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>#strategies       — strategy development and ideas
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>#ml-ai            — machine learning discussion
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>#backtesting      — backtest results and analysis
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>#prop-firm        — prop firm challenge discussion
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>#coding-help      — technical support
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>#bugs             — bug reports (link to GitHub Issues)
+<h3 id="telegram-primary-community-channel">Telegram (Primary Community Channel)<a class="headerlink" href="#telegram-primary-community-channel" title="Permanent link">&para;</a></h3>
+<p>The official HOPEFX community channel is on Telegram.</p>
+<p><strong>Join:</strong> Contact support@hopefx.io for the invite link after subscribing.</p>
+<p>The platform posts trade signals and alerts to your own private Telegram bot.
+Configure in <code>.env</code>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">TELEGRAM_BOT_TOKEN</span><span class="o">=</span>your_bot_token<span class="w">    </span><span class="c1"># From @BotFather</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">TELEGRAM_CHAT_ID</span><span class="o">=</span>your_chat_id<span class="w">        </span><span class="c1"># Your personal or group chat ID</span>
 </code></pre></div></p>
-<h3 id="telegram">Telegram<a class="headerlink" href="#telegram" title="Permanent link">&para;</a></h3>
-<p>For quick announcements and alerts.</p>
-<p>Set up a channel at <a href="https://telegram.org">telegram.org</a> and link it in your <code>.env</code>:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">TELEGRAM_BOT_TOKEN</span><span class="o">=</span>your_bot_token
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">TELEGRAM_CHAT_ID</span><span class="o">=</span>your_channel_id
+<p>Test after configuring:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/notifications/test<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
 </code></pre></div></p>
-<p>The platform will post trade signals and alerts automatically once configured.</p>
+<h3 id="discord-community-server">Discord (Community Server)<a class="headerlink" href="#discord-community-server" title="Permanent link">&para;</a></h3>
+<p>A Discord server is available for subscribers. Contact support@hopefx.io
+for the invite link after subscribing.</p>
+<p>Channel structure:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>#announcements    — releases and updates (read-only)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>#general          — open discussion
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>#trading-signals  — paper trading signal sharing
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>#strategies       — strategy development and ideas
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>#ml-ai            — machine learning discussion
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>#backtesting      — backtest results and analysis
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>#prop-firm        — prop firm challenge discussion
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>#coding-help      — technical support
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>#bugs             — link to GitHub Issues
+</code></pre></div></p>
 <h3 id="youtube">YouTube<a class="headerlink" href="#youtube" title="Permanent link">&para;</a></h3>
 <p>Video tutorials covering installation, strategy development, ML training, and deployment.</p>
 <p>See <a href="../VIDEO_TUTORIALS/">VIDEO_TUTORIALS.md</a> for the full episode list and scripts.</p>
@@ -2193,27 +2197,27 @@
 <h2 id="contributing-code">Contributing Code<a class="headerlink" href="#contributing-code" title="Permanent link">&para;</a></h2>
 <p>See <a href="../CONTRIBUTING/">CONTRIBUTING.md</a> for the full contribution guide.</p>
 <p><strong>Quick summary:</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># 1. Fork the repository on GitHub</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># 2. Clone your fork</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/YOUR_USERNAME/HOPEFX-AI-TRADING.git
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">cd</span><span class="w"> </span>HOPEFX-AI-TRADING
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># 3. Create a feature branch</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/your-feature-name
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># 4. Install dev dependencies</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements-dev.txt
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>pre-commit<span class="w"> </span>install
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># 5. Make your changes and run tests</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>pytest<span class="w"> </span>tests/<span class="w"> </span>-q
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># 6. Commit and push</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>git<span class="w"> </span>add<span class="w"> </span>.
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: describe your change&quot;</span>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>feature/your-feature-name
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># 7. Open a Pull Request on GitHub</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># 1. Fork the repository on GitHub</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># 2. Clone your fork</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/YOUR_USERNAME/HOPEFX-AI-TRADING.git
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">cd</span><span class="w"> </span>HOPEFX-AI-TRADING
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># 3. Create a feature branch</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/your-feature-name
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># 4. Install dev dependencies</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements-dev.txt
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>pre-commit<span class="w"> </span>install
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># 5. Make your changes and run tests</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>pytest<span class="w"> </span>tests/<span class="w"> </span>-q
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># 6. Commit and push</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>git<span class="w"> </span>add<span class="w"> </span>.
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: describe your change&quot;</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>feature/your-feature-name
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># 7. Open a Pull Request on GitHub</span>
 </code></pre></div>
 <p><strong>What we welcome:</strong>
 - New trading strategies (add to <code>strategies/</code>)
