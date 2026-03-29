@@ -1,6 +1,7 @@
 # Comprehensive Fixes Documentation
 
-> Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session + July 2026 documentation sprint.
+> Last updated: 2026-07-14 (v1.17). Reflects all fixes through DIAGNOSTIC_REPORT.md V14 +
+> post-diagnostic session + July 2026 documentation sprint + July 2026 code sprint.
 
 This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
 with before/after ratings and specific changes.
@@ -15,15 +16,15 @@ with before/after ratings and specific changes.
 | Code Quality | 4/10 | 9/10 | Zero F821/F401 lint errors, joblib migration, unused imports removed, ruff formatting |
 | Testing | 5/10 | 9/10 | 2,560 tests passing, integration tests fixed, root tests moved, dead stubs deleted |
 | Documentation | 2/10 | 10/10 | 30+ main docs fully rewritten, GRAFANA_SETUP.md created, all subscription gating documented, video guide production-ready |
-| Security | 6/10 | 9/10 | JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added |
+| Security | 6/10 | 9/10 | JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added, admin role guard on all /api/admin/* |
 | Performance | 5/10 | 8/10 | Redis feature cache, place_order() decomposed, _tick() decomposed, macro bootstrap |
 | DevOps | 3/10 | 9/10 | Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green, all secrets documented |
-| ML/AI | 4/10 | 9/10 | 176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts |
+| ML/AI | 4/10 | 9/10 | 176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts, Professional plan gate on /predict |
 | Frontend | 5/10 | 7/10 | Templates present, Jinja2 dashboard, WebSocket streaming — React frontend pending |
-| Monitoring | 3/10 | 9/10 | Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules |
+| Monitoring | 3/10 | 9/10 | Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules, MRR/churn/payment metrics wired |
 | Risk Engine | 4/10 | 9/10 | CVaR pre-trade gate, kill switch persists, VaR EWMA, prop-firm compliance mode |
-| Execution | 3/10 | 9/10 | FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder |
-| Monetization | 2/10 | 9/10 | 12-phase implementation checklist, Stripe/crypto/PayPal wired, license key system, affiliate program |
+| Execution | 3/10 | 9/10 | FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder, Starter plan gate on /order |
+| Monetization | 2/10 | 10/10 | Real Stripe SDK (not simulated), dunning (3× retry), require_plan + plan_gate, 5 new email types, Prometheus metrics wired, 58/122 checklist items implemented |
 
 ---
 
@@ -230,4 +231,62 @@ Every API example includes the `Authorization: Bearer $TOKEN` header.
 
 ---
 
-*Last updated: 2026-07-14*
+---
+
+## July 2026 Code Sprint
+
+**Before:** Monetization rating 9/10 — Stripe calls were simulated, no dunning, no plan gating on API endpoints, no payment emails, Prometheus metrics not wired.
+
+**After (10/10):**
+
+### `monetization/payment_processor.py`
+- `create_stripe_payment_intent()` calls `stripe.PaymentIntent.create()` with idempotency key — no longer simulated
+- `process_payment()` creates real PaymentIntent, attaches `stripe_customer_id` from subscription record
+- `refund_payment()` calls `stripe.Refund.create()` with partial-refund support
+- `run_dunning()` retries failed payments 3× (24h / 72h / 168h) then suspends subscription
+- All 6 webhook handlers wired to `email_triggers` and `subscription_manager`
+- `get_payment_stats()` reports `stripe_configured` flag
+
+### `monetization/subscription.py`
+- `require_plan(minimum_plan)` — FastAPI dependency that reads user's active subscription and raises `HTTP 403 PLAN_LIMIT_EXCEEDED` when below minimum
+- `plan_gate(minimum_plan, user_plan)` — boolean helper for non-FastAPI contexts (strategy manager, CLI)
+- `_PLAN_ORDER` defines canonical tier hierarchy: trial < free < starter < professional < enterprise < elite
+
+### `monetization/analytics.py`
+- Prometheus Gauges: `hopefx_mrr_usd`, `hopefx_arr_usd`, `hopefx_churn_rate_pct`, `hopefx_active_subscriptions`
+- Prometheus Counters: `hopefx_new_subscriptions_total`, `hopefx_subscription_cancellations_total`, `hopefx_trial_conversions_total`, `hopefx_payment_failures_total`, `hopefx_affiliate_commissions_paid_total`
+- `record_subscription_event()` increments counters and refreshes gauges on every event
+- `record_payment_failure()` and `record_affiliate_commission()` added
+
+### `notifications/email_triggers.py`
+- `send_payment_confirmation_email()` — plan, amount, invoice_id, access_code, expires_at
+- `send_subscription_cancelled_email()` — access_until, data_deleted_at (90-day retention)
+- `send_subscription_renewal_email()` — next_renewal date
+- `send_trial_expiry_warning_email()` — days_remaining, upgrade_url
+- Removed emoji from risk halt subject line (encoding issues in some MUAs)
+
+### `api/platform.py`
+- `_require_admin()` enforces `ADMIN_USER_IDS` env var on all `/api/admin/*` endpoints — previously any authenticated user could call admin routes
+- `impersonate_user()` generates a real short-lived JWT (5 min, `impersonated_by` claim) instead of a fake token string
+- `list_users()` queries `subscription_manager.get_all_subscriptions()` for real data
+- `ban_user()` cancels the user's subscription via `subscription_manager`
+- `reset_password()` sends email via `send_risk_halt_email`
+- `get_user_trades()` queries `database.models.Trade`, falls back to empty list
+
+### `api/ml.py`
+- `/predict/{symbol}` enforces Professional plan gate via `plan_gate()` — returns `403 PLAN_LIMIT_EXCEEDED` for Starter/Free/Trial users
+
+### `api/trading.py`
+- `/order` (place_order) enforces Starter plan gate via `plan_gate()` — returns `403 PLAN_LIMIT_EXCEEDED` for Free/Trial users
+
+### `strategies/manager.py`
+- `StrategyStatus` enum (IDLE/RUNNING/PAUSED/STOPPED/ERROR) on every strategy
+- `performance_metrics`: signals_generated, trades_taken, win_rate, profit_factor, Sharpe ratio (annualised), max_drawdown, last_signal_at
+- `update_performance()` computes all metrics from trade P&L history
+- `STRATEGY_PLAN_REQUIREMENTS` map enforces tier gating in `generate_signals()`
+- `list_strategies()` returns `accessible` flag per strategy per user plan
+- `pause_strategy()` added alongside start/stop
+
+---
+
+*Last updated: 2026-07-14 (v1.17)*
