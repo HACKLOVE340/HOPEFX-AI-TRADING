@@ -580,6 +580,27 @@ class FeatureFlags:
         ),
     )
 
+    LSTM_SIGNAL_ENABLED = _FeatureDef(
+        "LSTM_SIGNAL_ENABLED",
+        default=False,
+        status=FeatureStatus.EXPERIMENTAL,
+        description=(
+            "P3 research: wire the research/pipeline LSTM (DeepPredictor, "
+            "architecture='lstm') as an optional secondary signal layer in "
+            "HOPEFXBrain.process_bar(). "
+            "When enabled, the LSTM probability is blended with the XGBoost "
+            "probability: blended = (1 - w) * xgb_prob + w * lstm_prob, "
+            "where w = LSTM_SIGNAL_WEIGHT (default 0.0 — set to e.g. 0.3). "
+            "Prerequisites: "
+            "(1) Train a DeepPredictor model using research/pipeline/models_deep.py "
+            "and save to ml/saved_models/lstm_signal.pt. "
+            "(2) Evaluate OOS accuracy — only enable if LSTM improves Sharpe. "
+            "(3) Set LSTM_SIGNAL_WEIGHT=0.3 (or desired blend weight). "
+            "Enable with LSTM_SIGNAL_ENABLED=true in .env. "
+            "Fails silently if model file is absent — XGBoost signal is unaffected."
+        ),
+    )
+
     # ── Experimental / Unreleased ─────────────────────────────────────────
 
     RESEARCH_MODULE = _FeatureDef(
