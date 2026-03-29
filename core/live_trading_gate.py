@@ -186,7 +186,27 @@ class LiveTradingGate:
         if report_path.exists():
             try:
                 report = json.loads(report_path.read_text())
-                pooled = report.get("pooled", {})
+                pooled = report.get("pooled")
+
+                # Treat a missing or non-dict pooled section as gate-blocked.
+                # An empty dict or None means the backtest ran but produced no
+                # pooled metrics — this is a data integrity problem, not a pass.
+                if not pooled or not isinstance(pooled, dict):
+                    logger.warning(
+                        "Sharpe gate: multi_symbol_report.json has no 'pooled' "
+                        "metrics section — treating as gate-blocked"
+                    )
+                    try:
+                        from monitoring.sentry_config import capture_sharpe_gate_alert
+                        capture_sharpe_gate_alert(n_trades=0, sharpe=0.0, se=999.0)
+                    except Exception:
+                        pass
+                    return False, (
+                        "Sharpe gate BLOCKED: multi_symbol_report.json exists but "
+                        "contains no 'pooled' metrics. "
+                        "Re-run: python backtest/multi_symbol_backtest.py --years 10"
+                    )
+
                 n_total = int(pooled.get("n_total_trades", 0))
                 gate_passed = bool(pooled.get("sharpe_gate_passed", False))
                 se = float(pooled.get("pooled_sharpe_se", 999.0))
