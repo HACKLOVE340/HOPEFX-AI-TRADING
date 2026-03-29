@@ -42,6 +42,10 @@ Minimum required variables (app will not start without these):
 # python -c "import secrets; print(secrets.token_urlsafe(48))"
 SECURITY_JWT_SECRET=<48-char random string>
 
+# Subscription license key — obtain from hopefx.com/pricing or trial-request issue
+# Without this, all trading endpoints return 403 Subscription Required
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
+
 # Application mode: development | production | test
 APP_ENV=development
 ```
@@ -73,6 +77,9 @@ Generate and validate all production secrets at once:
 python scripts/manage_secrets.py generate
 python scripts/manage_secrets.py validate
 ```
+
+The `validate` command checks every required secret and reports exactly what is missing
+or invalid. Fix all reported issues before proceeding to step 3.
 
 ---
 
@@ -253,38 +260,101 @@ This tests API key validity, account reachability, and XAU_USD pricing availabil
 
 ## Subscription Validation
 
-After installing, activate your subscription license key:
+HOPEFX requires a valid license key to access trading endpoints. Without one, the
+application starts but all `/api/trading/`, `/api/signals/`, and `/api/ml/` endpoints
+return `403 Subscription Required`. The `/health`, `/docs`, and `/metrics` endpoints
+remain accessible without a key.
 
-```bash
-# Add to .env
-HOPEFX_LICENSE_KEY=your_license_key_here
+### Step 1 — Obtain a license key
+
+Subscribe at [hopefx.com/pricing](https://hopefx.com/pricing) or request a 14-day
+trial via GitHub Issues (label: `trial-request`). Your license key is emailed on
+successful payment in the format:
+
+```
+HOPEFX-PRO-A7B9C2D4-X8Y2
 ```
 
-Validate at startup:
+### Step 2 — Add the key to `.env`
+
+```bash
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-A7B9C2D4-X8Y2
+```
+
+### Step 3 — Validate before starting
+
 ```bash
 python scripts/manage_secrets.py validate
 ```
 
-Without a valid license key, all trading endpoints return `403 Subscription Required`.
-The `/health` endpoint and `/docs` remain accessible without a key.
+Expected output:
+```
+✓ SECURITY_JWT_SECRET: set (48 chars)
+✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
+✓ CONFIG_ENCRYPTION_KEY: set
+✓ HOPEFX_KILL_SWITCH_TOKEN: set
+All required secrets are valid.
+```
 
-To get a license key, subscribe at the pricing page or request a trial via GitHub Issues
-(label: `trial-request`).
+If validation fails, the output shows exactly which key is missing or invalid.
+
+### Step 4 — Confirm at runtime
+
+After starting the app, confirm the license is active:
+
+```bash
+curl http://localhost:8000/api/monetization/subscription/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "plan": "professional",
+  "status": "active",
+  "expires_at": "2026-08-14T00:00:00Z",
+  "features": ["signals", "ml_predict", "backtesting_10yr", "api_access", "social_trading"]
+}
+```
+
+### License Key Renewal
+
+Keys are valid for 30 days (monthly billing) or 365 days (annual billing). The app
+checks key validity on startup and every 24 hours at runtime. When a key is within
+7 days of expiry, a warning is logged:
+
+```
+WARNING: License key expires in 5 days. Renew at hopefx.com/billing
+```
+
+After expiry, trading endpoints return `403 Subscription Required` until a new key
+is activated. Update `.env` with the new key and restart the app.
 
 ---
 
 ## Subscription-Gated Features
 
-| Feature | Starter | Pro | Elite |
-|---------|---------|-----|-------|
-| Signals (XAUUSD) | ✅ | ✅ | ✅ |
-| Multi-symbol signals | — | ✅ | ✅ |
-| Backtesting (1 year) | ✅ | — | — |
-| Backtesting (10 years) | — | ✅ | — |
-| Backtesting (50 years) | — | — | ✅ |
-| Prop firm mode | — | ✅ | ✅ |
-| API access | — | ✅ | ✅ |
-| Online learning | — | — | ✅ |
-| Model retraining | — | — | ✅ |
+| Feature | Trial | Starter | Professional | Enterprise | Elite |
+|---------|-------|---------|-------------|------------|-------|
+| Paper trading | Limited (50 trades) | Yes | Yes | Yes | Yes |
+| Live trading | No | 1 broker | 3 brokers | Unlimited | Unlimited |
+| Signals (XAUUSD) | No | Yes | Yes | Yes | Yes |
+| Multi-symbol signals | No | No | Yes | Yes | Yes |
+| ML predictions | No | No | Yes | Yes | Yes |
+| Backtesting (1 year) | No | Yes | Yes | Yes | Yes |
+| Backtesting (10 years) | No | No | Yes | Yes | Yes |
+| Backtesting (50 years) | No | No | No | Yes | Yes |
+| Prop firm mode | No | No | Yes | Yes | Yes |
+| Full API access (108 endpoints) | No | No | Yes | Yes | Yes |
+| Social trading | No | No | Yes | Yes | Yes |
+| Grafana dashboards | No | No | Yes | Yes | Yes |
+| News RAG integration | No | No | No | Yes | Yes |
+| Online learning | No | No | No | No | Yes |
+| Model retraining | No | No | No | No | Yes |
+| White-label | No | No | No | No | Yes |
 
-See [MONETIZATION.md](MONETIZATION.md) for the full feature matrix.
+Attempting to use a feature above your plan returns:
+```json
+{"error": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional", "current_plan": "starter"}
+```
+
+See [MONETIZATION.md](MONETIZATION.md) for the full feature matrix and pricing.
