@@ -42,7 +42,7 @@ const TwoFactorSetup: React.FC = () => {
 
   // Check current 2FA status on mount — JWT carries the user identity, no path param needed
   useEffect(() => {
-    api.get<{ enabled: boolean }>('/api/2fa/status')
+    api.get<{ enabled: boolean }>('/2fa/status')
       .then((r) => set2FAEnabled(r.data.enabled ?? false))
       .catch(() => {});
   }, []);
@@ -52,7 +52,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend derives user identity from JWT — no body needed
-      const res = await api.post<SetupData>('/api/2fa/setup');
+      const res = await api.post<SetupData>('/2fa/setup');
       setSetupData(res.data);
       setStep('setup');
     } catch (e: unknown) {
@@ -68,7 +68,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend uses JWT for user identity; only the TOTP code is needed in the body
-      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/verify', { code });
+      const res = await api.post<{ success: boolean; message?: string }>('/2fa/verify', { code });
       if (res.data.success) {
         set2FAEnabled(true);
         setStep('active');
@@ -88,7 +88,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // No path param — backend uses JWT to identify the user
-      const res = await api.get<{ codes: string[]; warning?: string }>('/api/2fa/backup-codes');
+      const res = await api.get<{ codes: string[]; warning?: string }>('/2fa/backup-codes');
       setBackupCodes(res.data.codes ?? []);
       setStep('backup');
     } catch (e: unknown) {
@@ -104,7 +104,7 @@ const TwoFactorSetup: React.FC = () => {
     setError('');
     try {
       // Backend uses JWT for user identity; only the TOTP code is needed in the body
-      const res = await api.post<{ success: boolean; message?: string }>('/api/2fa/disable', { code: disableCode });
+      const res = await api.post<{ success: boolean; message?: string }>('/2fa/disable', { code: disableCode });
       if (res.data.success) {
         set2FAEnabled(false);
         setStep('idle');

@@ -182,7 +182,7 @@ const Settings: React.FC = () => {
   // Load full settings (including credentials) from API on mount.
   // Credentials are never read from localStorage — only from the server.
   useEffect(() => {
-    api.get<NotificationSettings>('/api/settings/notifications')
+    api.get<NotificationSettings>('/settings/notifications')
       .then((res) => {
         const merged = { ...DEFAULT_SETTINGS, ...res.data };
         setSettings(merged);
@@ -202,7 +202,7 @@ const Settings: React.FC = () => {
   const handleSave = async () => {
     setSaveErr('');
     try {
-      await api.post('/api/settings/notifications', settings);
+      await api.post('/settings/notifications', settings);
       // Only cache non-sensitive prefs after a successful server save
       cacheLocalPrefs(settings);
       setSaved(true);

@@ -205,8 +205,8 @@ const WalkForward: React.FC = () => {
     setLoading(true);
     try {
       const endpoint = id
-        ? `/api/backtest/walk-forward/${id}`
-        : '/api/backtest/walk-forward/latest';
+        ? `/backtest/walk-forward/${id}`
+        : '/backtest/walk-forward/latest';
       const res = await api.get(endpoint);
       setData(res.data);
       setVisible(new Set(res.data.folds.map((f: FoldResult) => f.fold)));

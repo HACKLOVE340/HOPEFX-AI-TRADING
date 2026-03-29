@@ -62,7 +62,7 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      const res = await api.post<GenerateResponse>('/api/brain/generate-strategy', { prompt, symbol, timeframe });
+      const res = await api.post<GenerateResponse>('/brain/generate-strategy', { prompt, symbol, timeframe });
       setResult(res.data);
       setStage(res.data.success ? 'done' : 'error');
     } catch (err: unknown) {
@@ -84,7 +84,7 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      await api.post('/api/brain/deploy-strategy', {
+      await api.post('/brain/deploy-strategy', {
         strategy_name: result.strategy_name,
         strategy_code: result.strategy_code,
         symbol,

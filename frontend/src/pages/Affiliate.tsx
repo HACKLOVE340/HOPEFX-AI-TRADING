@@ -146,14 +146,13 @@ const Affiliate: React.FC = () => {
         has_affiliate_account: boolean;
         affiliate: AffiliateAccount;
         metrics: AffiliateMetrics;
-      }>(`/api/monetization/affiliate/${userId}`);
+      }>(`/monetization/affiliate/${userId}`);
       const data = res.data;
       if (data.has_affiliate_account) {
         setAccount(data.affiliate);
         setMetrics(data.metrics);
         try {
-          const rRes = await api.get<{ referrals: Referral[] }>(
-            `/api/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
+          const rRes = await api.get<{ referrals: Referral[] }>(`/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
           );
           setReferrals(rRes.data.referrals ?? []);
         } catch { /* non-fatal */ }
@@ -163,8 +162,7 @@ const Affiliate: React.FC = () => {
         setReferrals(MOCK_REFERRALS);
       }
       try {
-        const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>(
-          '/api/monetization/affiliate/leaderboard?limit=10'
+        const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>('/monetization/affiliate/leaderboard?limit=10'
         );
         const lData = lRes.data;
         setLeaderboard(Array.isArray(lData) ? lData : (lData as { leaderboard?: LeaderboardEntry[] }).leaderboard ?? []);
@@ -186,7 +184,7 @@ const Affiliate: React.FC = () => {
   const handleSignup = async () => {
     setSignupLoading(true);
     try {
-      await api.post('/api/monetization/affiliate/signup', { user_id: userId });
+      await api.post('/monetization/affiliate/signup', { user_id: userId });
       await loadData();
     } catch {
       setAccount(MOCK_ACCOUNT);

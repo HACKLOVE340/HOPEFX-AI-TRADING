@@ -65,10 +65,10 @@ const Wallet: React.FC = () => {
   const [msg, setMsg]                   = useState('');
 
   useEffect(() => {
-    api.get<{ balance: number }>('/api/payments/balance')
+    api.get<{ balance: number }>('/payments/balance')
       .then((r) => { if (r.data?.balance) setBalance(r.data.balance); })
       .catch(() => {});
-    api.get<Transaction[]>('/api/payments/transactions')
+    api.get<Transaction[]>('/payments/transactions')
       .then((r) => { if (r.data?.length) setTxs(r.data); })
       .catch(() => {});
   }, []);
@@ -78,7 +78,7 @@ const Wallet: React.FC = () => {
     setProcessing(true);
     setMsg('');
     try {
-      await api.post('/api/payments/deposit', { amount: parseFloat(amount) });
+      await api.post('/payments/deposit', { amount: parseFloat(amount) });
       setMsg(`Deposit of $${amount} initiated.`);
       setShowDeposit(false);
       setAmount('');
@@ -91,7 +91,7 @@ const Wallet: React.FC = () => {
     setProcessing(true);
     setMsg('');
     try {
-      await api.post('/api/payments/withdraw', { amount: parseFloat(amount) });
+      await api.post('/payments/withdraw', { amount: parseFloat(amount) });
       setMsg(`Withdrawal of $${amount} submitted.`);
       setShowWithdraw(false);
       setAmount('');

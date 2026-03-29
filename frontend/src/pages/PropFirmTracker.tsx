@@ -67,7 +67,7 @@ const PropFirmTracker: React.FC = () => {
 
   const fetchStatus = async () => {
     try {
-      const res = await api.get<PropFirmStatus>('/api/risk/prop-firm-status');
+      const res = await api.get<PropFirmStatus>('/risk/prop-firm-status');
       setStatus(res.data);
       setError(null);
     } catch (e: unknown) {

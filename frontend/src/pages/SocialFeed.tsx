@@ -60,7 +60,7 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    api.get(`/api/feed/${signalId}/comments`)
+    api.get(`/feed/${signalId}/comments`)
       .then((r) => setComments(r.data.comments || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -69,7 +69,7 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
   const submit = async () => {
     if (!text.trim()) return;
     try {
-      const res = await api.post(`/api/feed/${signalId}/comment`, { text });
+      const res = await api.post(`/feed/${signalId}/comment`, { text });
       setComments((prev) => [...prev, res.data]);
       setText('');
     } catch { /* ignore */ }
@@ -219,7 +219,7 @@ const SocialFeed: React.FC = () => {
     try {
       const params: Record<string, string | number> = { page: p, limit: 10 };
       if (sym !== 'All') params.symbol = sym;
-      const res = await api.get('/api/feed', { params });
+      const res = await api.get('/feed', { params });
       setItems(res.data.items || []);
       setTotal(res.data.pages || 1);
       setPage(p);
@@ -234,14 +234,14 @@ const SocialFeed: React.FC = () => {
 
   // Check opt-in status
   useEffect(() => {
-    api.get('/api/feed/status/me')
+    api.get('/feed/status/me')
       .then((r) => setOptedIn(r.data.opted_in))
       .catch(() => {});
   }, []);
 
   const handleReact = async (signalId: string, reaction: 'up' | 'down') => {
     try {
-      const res = await api.post(`/api/feed/${signalId}/react`, { reaction });
+      const res = await api.post(`/feed/${signalId}/react`, { reaction });
       setItems((prev) => prev.map((item) =>
         item.signal_id === signalId
           ? { ...item, thumbs_up: res.data.thumbs_up, thumbs_down: res.data.thumbs_down, your_reaction: res.data.your_reaction }
@@ -253,10 +253,10 @@ const SocialFeed: React.FC = () => {
   const toggleOptIn = async () => {
     try {
       if (optedIn) {
-        await api.post('/api/feed/opt-out');
+        await api.post('/feed/opt-out');
         setOptedIn(false);
       } else {
-        await api.post('/api/feed/opt-in');
+        await api.post('/feed/opt-in');
         setOptedIn(true);
       }
     } catch { /* ignore */ }

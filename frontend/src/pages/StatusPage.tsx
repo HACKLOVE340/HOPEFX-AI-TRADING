@@ -123,8 +123,8 @@ const StatusPage: React.FC = () => {
 
   const load = useCallback(async () => {
     const [statusRes, histRes] = await Promise.allSettled([
-      api.get<StatusData>('/api/status/json'),
-      api.get<{ history?: HistoryDay[] }>('/api/status/history'),
+      api.get<StatusData>('/status/json'),
+      api.get<{ history?: HistoryDay[] }>('/status/history'),
     ]);
     setData(statusRes.status === 'fulfilled' ? statusRes.value.data : MOCK_STATUS);
     setHistory(

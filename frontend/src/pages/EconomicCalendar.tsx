@@ -97,7 +97,7 @@ const EconomicCalendar: React.FC = () => {
 
   const fetchAutoPause = useCallback(async () => {
     try {
-      const res = await api.get<AutoPauseConfig>('/api/calendar/auto-pause');
+      const res = await api.get<AutoPauseConfig>('/calendar/auto-pause');
       setAutoPause(res.data);
     } catch { /* silent */ }
   }, []);
@@ -114,7 +114,7 @@ const EconomicCalendar: React.FC = () => {
     setSavingPause(true);
     const next = { ...autoPause, enabled: !autoPause.enabled };
     try {
-      const res = await api.post<AutoPauseConfig>('/api/calendar/auto-pause', next);
+      const res = await api.post<AutoPauseConfig>('/calendar/auto-pause', next);
       setAutoPause(res.data);
     } catch { /* silent */ }
     setSavingPause(false);

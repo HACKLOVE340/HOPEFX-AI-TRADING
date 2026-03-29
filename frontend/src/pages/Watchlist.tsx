@@ -82,7 +82,7 @@ const WatchlistPage: React.FC = () => {
 
   const fetchWatchlist = useCallback(async () => {
     try {
-      const res = await api.get<{ items: WatchlistItem[] }>('/api/watchlist');
+      const res = await api.get<{ items: WatchlistItem[] }>('/watchlist');
       if (res.data.items?.length) setItems(res.data.items);
     } catch {
       // API unavailable — keep demo data
@@ -95,7 +95,7 @@ const WatchlistPage: React.FC = () => {
     fetchWatchlist();
     const id = setInterval(async () => {
       try {
-        const res = await api.get<WatchlistItem[]>('/api/watchlist/prices');
+        const res = await api.get<WatchlistItem[]>('/watchlist/prices');
         if (Array.isArray(res.data) && res.data.length > 0) setItems(res.data);
       } catch { /* keep existing */ }
     }, 5000);
@@ -122,7 +122,7 @@ const WatchlistPage: React.FC = () => {
     setAdding(true);
     setError('');
     try {
-      await api.post(`/api/watchlist/${sym}`);
+      await api.post(`/watchlist/${sym}`);
       setAddSymbol('');
       await fetchWatchlist();
     } catch (err: unknown) {
@@ -136,7 +136,7 @@ const WatchlistPage: React.FC = () => {
 
   const handleRemove = async (symbol: string) => {
     try {
-      await api.delete(`/api/watchlist/${symbol}`);
+      await api.delete(`/watchlist/${symbol}`);
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
     } catch { /* silent */ }
   };

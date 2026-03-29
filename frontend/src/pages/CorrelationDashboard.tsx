@@ -43,8 +43,8 @@ const CorrelationDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [corrRes, cotRes] = await Promise.all([
-        api.get(`/api/correlation?window=${window}`),
-        api.get('/api/cot/gold'),
+        api.get(`/correlation?window=${window}`),
+        api.get('/cot/gold'),
       ]);
       setCorr(corrRes.data);
       setCot(cotRes.data);

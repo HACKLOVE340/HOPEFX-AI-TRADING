@@ -31,7 +31,7 @@ const Leaderboard: React.FC = () => {
   const [traders, setTraders] = useState<Trader[]>(FALLBACK);
 
   useEffect(() => {
-    api.get<Trader[]>(`/api/social/leaderboard?period=${period}`)
+    api.get<Trader[]>(`/social/leaderboard?period=${period}`)
       .then((r) => { if (r.data?.length) setTraders(r.data); })
       .catch(() => {});
   }, [period]);

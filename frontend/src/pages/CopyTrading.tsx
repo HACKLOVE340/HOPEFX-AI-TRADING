@@ -103,7 +103,7 @@ const CopyTrading: React.FC = () => {
   const [copyMsg, setCopyMsg]       = useState('');
 
   useEffect(() => {
-    api.get<Leader[]>('/api/social/leaderboard')
+    api.get<Leader[]>('/social/leaderboard')
       .then((r) => { if (r.data?.length) setLeaders(r.data); })
       .catch(() => {});
   }, []);
@@ -122,7 +122,7 @@ const CopyTrading: React.FC = () => {
     setCopying(true);
     setCopyMsg('');
     try {
-      await api.post(`/api/social/copy/${selected}`, { allocation_amount: allocation });
+      await api.post(`/social/copy/${selected}`, { allocation_amount: allocation });
       setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
     } catch (e: unknown) {
       setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
