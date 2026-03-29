@@ -4,12 +4,27 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-backtest/engine.py — legacy backtesting engine.
+backtest/engine.py — DEPRECATED: use backtesting/ instead
+==========================================================
+This module is kept ONLY because BacktestConfig and SimulatedBroker are
+imported by the test suite. Do NOT add new features here.
 
-NOTE: The canonical backtesting package is `backtesting/`.
-This module is kept because it provides BacktestConfig and SimulatedBroker
-classes used by the test suite.  New code should use `backtesting.engine`.
-Do not add new features here.
+Canonical backtesting engine: backtesting/engine.py
+  - Walk-forward CV:  backtesting/walk_forward.py
+  - CVaR / metrics:   backtesting/metrics.py
+  - Hyperopt:         backtesting/hyperopt.py
+  - Reports:          backtesting/reports.py
+
+Migration path for callers
+--------------------------
+  # Old (deprecated)
+  from backtest.engine import BacktestConfig, SimulatedBroker
+
+  # New (canonical)
+  from backtesting.engine import BacktestEngine
+  from backtesting.metrics import compute_metrics
+
+This file will be removed once all test imports are migrated.
 """
 
 import logging
