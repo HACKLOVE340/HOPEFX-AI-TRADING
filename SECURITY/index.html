@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#security-policy" class="md-skip">
+        <a href="#security-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -1589,33 +1589,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-versions" class="md-nav__link">
+  <a href="#secrets-management" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported Versions
+        Secrets Management
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-controls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security Controls
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Security Controls">
+    <nav class="md-nav" aria-label="Secrets Management">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#authentication-authorisation" class="md-nav__link">
+  <a href="#required-secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication &amp; Authorisation
+        Required Secrets
       
     </span>
   </a>
@@ -1623,10 +1612,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#network-transport" class="md-nav__link">
+  <a href="#secret-rotation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Network &amp; Transport
+        Secret Rotation
       
     </span>
   </a>
@@ -1634,32 +1623,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#data-protection" class="md-nav__link">
+  <a href="#secrets-in-production" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Data Protection
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cicd-supply-chain" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CI/CD &amp; Supply Chain
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#monitoring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Monitoring
+        Secrets in Production
       
     </span>
   </a>
@@ -1672,10 +1639,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#known-limitations" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known Limitations
+        Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jwt-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JWT Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#password-hashing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password Hashing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cors-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORS Configuration
       
     </span>
   </a>
@@ -1683,10 +1700,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reporting-a-vulnerability" class="md-nav__link">
+  <a href="#api-rate-limiting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reporting a Vulnerability
+        API Rate Limiting
       
     </span>
   </a>
@@ -1694,10 +1711,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-configuration-checklist-production" class="md-nav__link">
+  <a href="#https-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Configuration Checklist (Production)
+        HTTPS / TLS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kubernetes-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sentry-pii-scrubbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sentry PII Scrubbing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watchlist-and-chat-route-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchlist and Chat Route Protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-config-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault (Config Encryption)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#responsible-disclosure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Responsible Disclosure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-checklist-pre-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checklist (Pre-Production)
       
     </span>
   </a>
@@ -1967,33 +2061,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#supported-versions" class="md-nav__link">
+  <a href="#secrets-management" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported Versions
+        Secrets Management
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-controls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security Controls
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Security Controls">
+    <nav class="md-nav" aria-label="Secrets Management">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#authentication-authorisation" class="md-nav__link">
+  <a href="#required-secrets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication &amp; Authorisation
+        Required Secrets
       
     </span>
   </a>
@@ -2001,10 +2084,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#network-transport" class="md-nav__link">
+  <a href="#secret-rotation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Network &amp; Transport
+        Secret Rotation
       
     </span>
   </a>
@@ -2012,32 +2095,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#data-protection" class="md-nav__link">
+  <a href="#secrets-in-production" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Data Protection
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cicd-supply-chain" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CI/CD &amp; Supply Chain
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#monitoring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Monitoring
+        Secrets in Production
       
     </span>
   </a>
@@ -2050,10 +2111,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#known-limitations" class="md-nav__link">
+  <a href="#authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known Limitations
+        Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jwt-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JWT Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#password-hashing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password Hashing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cors-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CORS Configuration
       
     </span>
   </a>
@@ -2061,10 +2172,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reporting-a-vulnerability" class="md-nav__link">
+  <a href="#api-rate-limiting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reporting a Vulnerability
+        API Rate Limiting
       
     </span>
   </a>
@@ -2072,10 +2183,87 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-configuration-checklist-production" class="md-nav__link">
+  <a href="#https-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Configuration Checklist (Production)
+        HTTPS / TLS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kubernetes-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sentry-pii-scrubbing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sentry PII Scrubbing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#watchlist-and-chat-route-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchlist and Chat Route Protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-config-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault (Config Encryption)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#responsible-disclosure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Responsible Disclosure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-checklist-pre-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checklist (Pre-Production)
       
     </span>
   </a>
@@ -2102,253 +2290,260 @@
   
 
 
-<h1 id="security-policy">Security Policy<a class="headerlink" href="#security-policy" title="Permanent link">&para;</a></h1>
-<h2 id="supported-versions">Supported Versions<a class="headerlink" href="#supported-versions" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Version</th>
-<th>Security Updates</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1.16.x (current)</td>
-<td>✅ Active</td>
-</tr>
-<tr>
-<td>1.15.x</td>
-<td>✅ Critical fixes only</td>
-</tr>
-<tr>
-<td>&lt; 1.15</td>
-<td>❌ Unsupported — upgrade to current</td>
-</tr>
-</tbody>
-</table>
+<h1 id="security-guide">Security Guide<a class="headerlink" href="#security-guide" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Last updated: 2026-07-14</p>
+</blockquote>
+<p>This document covers all security-relevant configuration, known fixes applied,
+and the responsible disclosure process.</p>
 <hr />
-<h2 id="security-controls">Security Controls<a class="headerlink" href="#security-controls" title="Permanent link">&para;</a></h2>
-<h3 id="authentication-authorisation">Authentication &amp; Authorisation<a class="headerlink" href="#authentication-authorisation" title="Permanent link">&para;</a></h3>
+<h2 id="secrets-management">Secrets Management<a class="headerlink" href="#secrets-management" title="Permanent link">&para;</a></h2>
+<h3 id="required-secrets">Required Secrets<a class="headerlink" href="#required-secrets" title="Permanent link">&para;</a></h3>
+<p>Three secrets must be set before the application will start in any environment:</p>
 <table>
 <thead>
 <tr>
-<th>Control</th>
-<th>Status</th>
-<th>Detail</th>
+<th>Variable</th>
+<th>Purpose</th>
+<th>Minimum Length</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>JWT access + refresh tokens</td>
-<td>✅ Implemented</td>
-<td>HS256, configurable expiry</td>
-</tr>
-<tr>
-<td>RBAC (user / trader / admin / superadmin)</td>
-<td>✅ Implemented</td>
-<td>All sensitive routes gated</td>
-</tr>
-<tr>
-<td>TOTP 2FA</td>
-<td>✅ Implemented</td>
-<td>Full setup / verify / disable flow</td>
-</tr>
-<tr>
-<td>bcrypt password hashing</td>
-<td>✅ Implemented</td>
-<td>Cost factor 12</td>
-</tr>
-<tr>
-<td>Per-IP rate limiting</td>
-<td>✅ Implemented</td>
-<td>Redis-backed, in-memory fallback</td>
-</tr>
-<tr>
-<td>JWT secret rotation</td>
-<td>✅ Env-var driven</td>
 <td><code>SECURITY_JWT_SECRET</code></td>
+<td>Signs all JWT tokens</td>
+<td>32 characters</td>
+</tr>
+<tr>
+<td><code>CONFIG_ENCRYPTION_KEY</code></td>
+<td>Encrypts config vault (Fernet)</td>
+<td>32 characters</td>
+</tr>
+<tr>
+<td><code>HOPEFX_KILL_SWITCH_TOKEN</code></td>
+<td>Authenticates kill switch API calls</td>
+<td>32 characters</td>
 </tr>
 </tbody>
 </table>
-<h3 id="network-transport">Network &amp; Transport<a class="headerlink" href="#network-transport" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Control</th>
-<th>Status</th>
-<th>Detail</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>HTTPS enforcement</td>
-<td>⚠️ Infrastructure layer</td>
-<td>Uvicorn serves HTTP; TLS terminated at reverse proxy / load balancer</td>
-</tr>
-<tr>
-<td>CORS wildcard guard</td>
-<td>✅ Implemented (V15)</td>
-<td>Startup validator rejects <code>ALLOWED_ORIGINS=*</code> in production</td>
-</tr>
-<tr>
-<td>X-Forwarded-For spoofing</td>
-<td>✅ Fixed (V15)</td>
-<td>Header only accepted from <code>TRUSTED_PROXY_IPS</code></td>
-</tr>
-<tr>
-<td>CORS origin validation</td>
-<td>✅ Implemented</td>
-<td><code>MOBILE_CORS_ORIGINS</code> validated to https:// only</td>
-</tr>
-</tbody>
-</table>
-<h3 id="data-protection">Data Protection<a class="headerlink" href="#data-protection" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Control</th>
-<th>Status</th>
-<th>Detail</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>SQL injection</td>
-<td>✅ SQLAlchemy ORM</td>
-<td>Parameterised queries throughout</td>
-</tr>
-<tr>
-<td>PII scrubbing in logs</td>
-<td>✅ Implemented</td>
-<td>15 field names scrubbed before Sentry/log output</td>
-</tr>
-<tr>
-<td>Config encryption</td>
-<td>✅ Fernet + keyring</td>
-<td><code>CONFIG_ENCRYPTION_KEY</code> required in production</td>
-</tr>
-<tr>
-<td>Hardcoded credentials</td>
-<td>✅ Fixed</td>
-<td><code>docker-compose.yml</code> uses <code>${VAR:?error}</code></td>
-</tr>
-<tr>
-<td>Secrets in <code>.env</code></td>
-<td>⚠️ Template has <code>CHANGE_ME</code> markers</td>
-<td>Startup validator rejects placeholder values</td>
-</tr>
-</tbody>
-</table>
-<h3 id="cicd-supply-chain">CI/CD &amp; Supply Chain<a class="headerlink" href="#cicd-supply-chain" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Control</th>
-<th>Status</th>
-<th>Detail</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>TruffleHog secret scanning</td>
-<td>✅ CI</td>
-<td><code>.github/workflows/security-scan.yml</code></td>
-</tr>
-<tr>
-<td>Trivy container scanning</td>
-<td>✅ CI</td>
-<td>SARIF output, uploaded to GitHub Security</td>
-</tr>
-<tr>
-<td>CodeQL SAST</td>
-<td>✅ CI</td>
-<td>Python + Actions, weekly + on push</td>
-</tr>
-<tr>
-<td>bandit static analysis</td>
-<td>✅ CI</td>
-<td>Report-only (never blocks merge)</td>
-</tr>
-<tr>
-<td>pip-audit / safety</td>
-<td>✅ CI</td>
-<td>Dependency CVE scanning</td>
-</tr>
-</tbody>
-</table>
-<h3 id="monitoring">Monitoring<a class="headerlink" href="#monitoring" title="Permanent link">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Control</th>
-<th>Status</th>
-<th>Detail</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Sentry error tracking</td>
-<td>✅ Implemented</td>
-<td>Set <code>SENTRY_DSN</code> in production <code>.env</code></td>
-</tr>
-<tr>
-<td>Prometheus metrics</td>
-<td>✅ Implemented</td>
-<td>41 metrics, Grafana dashboards</td>
-</tr>
-<tr>
-<td>ML fallback alert</td>
-<td>✅ Implemented</td>
-<td>Sentry fatal + Discord when <code>advanced_oos.pkl</code> fails</td>
-</tr>
-<tr>
-<td>Online learner persistence</td>
-<td>✅ Implemented</td>
-<td><code>SklearnOnlineLearner</code> state persisted to <code>ml/saved_models/online_learner_{symbol}.pkl</code>; loaded at startup</td>
-</tr>
-</tbody>
-</table>
+<p>Generate each with:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import secrets; print(secrets.token_hex(32))&quot;</span>
+</code></pre></div></p>
+<p><code>config/startup_validator.py</code> calls <code>sys.exit(1)</code> at boot if any of these are
+missing, empty, or set to known placeholder values (<code>CHANGE_ME</code>, <code>your_secret</code>, etc.).</p>
+<h3 id="secret-rotation">Secret Rotation<a class="headerlink" href="#secret-rotation" title="Permanent link">&para;</a></h3>
+<p>To rotate <code>SECURITY_JWT_SECRET</code>:
+1. Generate a new secret
+2. Update <code>.env</code> (or your secrets manager)
+3. Restart the application — all existing JWT tokens are immediately invalidated
+4. Users must log in again</p>
+<p>To rotate <code>CONFIG_ENCRYPTION_KEY</code>:
+1. Decrypt all vault entries with the old key first
+2. Update the key
+3. Re-encrypt all vault entries with the new key
+4. Restart</p>
+<h3 id="secrets-in-production">Secrets in Production<a class="headerlink" href="#secrets-in-production" title="Permanent link">&para;</a></h3>
+<p>Never store secrets in:
+- <code>.env</code> files committed to git (<code>.env</code> is in <code>.gitignore</code>)
+- Docker Compose <code>environment:</code> blocks in plain text
+- Kubernetes ConfigMaps</p>
+<p>Use instead:
+- <strong>Docker Compose:</strong> <code>env_file: .env</code> (file not committed)
+- <strong>Kubernetes:</strong> <code>secretKeyRef</code> from a <code>Secret</code> object
+- <strong>Cloud:</strong> AWS Secrets Manager, GCP Secret Manager, Azure Key Vault
+- <strong>Self-hosted:</strong> HashiCorp Vault (wired via <code>config/vault.py</code>)</p>
+<p>Validate secrets before deploying:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+</code></pre></div></p>
 <hr />
-<h2 id="known-limitations">Known Limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>HTTPS not enforced at app level</strong> — TLS must be terminated at the infrastructure layer (nginx, AWS ALB, Cloudflare). Do not expose port 8000 directly to the internet.</li>
-<li><strong><code>ALLOWED_ORIGINS</code> default is <code>http://localhost:3000</code></strong> — must be set to your production domain before deploying. The startup validator rejects <code>*</code> in production.</li>
-<li><strong>Sentry DSN optional in dev</strong> — set <code>SENTRY_DSN</code> in production <code>.env</code> or error tracking is disabled.</li>
-<li><strong>Online learner pickle files</strong> — <code>ml/saved_models/online_learner_*.pkl</code> are serialised with Python's <code>pickle</code>. Do not load these files from untrusted sources. They are written only by the application itself and should not be exposed via any API endpoint.</li>
-</ol>
-<hr />
-<h2 id="reporting-a-vulnerability">Reporting a Vulnerability<a class="headerlink" href="#reporting-a-vulnerability" title="Permanent link">&para;</a></h2>
-<p><strong>Do not open a public GitHub issue for security vulnerabilities.</strong></p>
-<p>Report security issues privately:</p>
-<ol>
-<li>Go to the repository <strong>Security</strong> tab → <strong>"Report a vulnerability"</strong> (GitHub private advisory).</li>
-<li>Include: affected version, reproduction steps, impact assessment, and any suggested fix.</li>
-<li>You will receive an acknowledgement within 48 hours.</li>
-<li>Critical vulnerabilities (RCE, auth bypass, credential exposure) will be patched within 7 days.</li>
-<li>A CVE will be requested for confirmed vulnerabilities with CVSS ≥ 7.0.</li>
-</ol>
-<p>We follow responsible disclosure: reporters are credited in the release notes unless they prefer anonymity.</p>
-<hr />
-<h2 id="security-configuration-checklist-production">Security Configuration Checklist (Production)<a class="headerlink" href="#security-configuration-checklist-production" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Required — startup validator will reject placeholder values</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">SECURITY_JWT_SECRET</span><span class="o">=</span>&lt;<span class="m">48</span>-char<span class="w"> </span>random&gt;<span class="w">        </span><span class="c1"># python -c &quot;import secrets; print(secrets.token_urlsafe(48))&quot;</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">CONFIG_ENCRYPTION_KEY</span><span class="o">=</span>&lt;<span class="m">48</span>-char<span class="w"> </span>random&gt;
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nv">HOPEFX_KILL_SWITCH_TOKEN</span><span class="o">=</span>&lt;<span class="m">48</span>-char<span class="w"> </span>random&gt;
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql://user:pass@host:5432/db
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nv">REDIS_URL</span><span class="o">=</span>redis://host:6379/0
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Required — startup validator rejects * in production</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nv">ALLOWED_ORIGINS</span><span class="o">=</span>https://your-domain.com
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Recommended</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nv">SENTRY_DSN</span><span class="o">=</span>https://...@sentry.io/...
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="nv">TRUSTED_PROXY_IPS</span><span class="o">=</span><span class="m">10</span>.0.0.1,10.0.0.2<span class="w">      </span><span class="c1"># your load balancer IPs</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="nv">APP_ENV</span><span class="o">=</span>production
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<h3 id="jwt-configuration">JWT Configuration<a class="headerlink" href="#jwt-configuration" title="Permanent link">&para;</a></h3>
+<p>All API endpoints (except <code>/health</code>, <code>/docs</code>, <code>/openapi.json</code>) require a valid JWT.</p>
+<p>Token lifetime is controlled by:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">JWT_ACCESS_TOKEN_EXPIRE_MINUTES</span><span class="o">=</span><span class="m">30</span><span class="w">    </span><span class="c1"># default: 30 minutes</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nv">JWT_REFRESH_TOKEN_EXPIRE_DAYS</span><span class="o">=</span><span class="m">7</span><span class="w">       </span><span class="c1"># default: 7 days</span>
+</code></pre></div></p>
+<p>Tokens are signed with HS256 using <code>SECURITY_JWT_SECRET</code>.</p>
+<h3 id="getting-a-token">Getting a Token<a class="headerlink" href="#getting-a-token" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8000/api/auth/login<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;username&quot;: &quot;admin&quot;, &quot;password&quot;: &quot;your_password&quot;}&#39;</span>
 </code></pre></div>
-<p>Generate all secrets at once:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>generate
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+<p>Response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ...&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">&quot;token_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">&quot;expires_in&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1800</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p>Use the token in subsequent requests:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>http://localhost:8000/api/signals/latest<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer eyJ...&quot;</span>
+</code></pre></div></p>
+<h3 id="password-hashing">Password Hashing<a class="headerlink" href="#password-hashing" title="Permanent link">&para;</a></h3>
+<p>Passwords are hashed with <code>bcrypt</code> (cost factor 12). The <code>fake_hash_password</code>
+backdoor that existed in earlier versions has been removed. See <code>auth/routes.py</code>.</p>
+<p>Pinned versions:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>bcrypt==4.1.3
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>PyJWT==2.8.0
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>cryptography==42.0.8
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>passlib==1.7.4
+</code></pre></div></p>
+<hr />
+<h2 id="cors-configuration">CORS Configuration<a class="headerlink" href="#cors-configuration" title="Permanent link">&para;</a></h2>
+<p>CORS is configured via environment variables. Never use <code>allow_origins=["*"]</code>
+with <code>allow_credentials=True</code> — this violates the CORS spec and enables
+credential theft.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Comma-separated list of allowed origins</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">ALLOWED_ORIGINS</span><span class="o">=</span>https://yourdomain.com,https://app.yourdomain.com
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Mobile API origins (separate allowlist)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nv">MOBILE_CORS_ORIGINS</span><span class="o">=</span>https://mobile.yourdomain.com
 </code></pre></div>
+<p><code>allow_credentials</code> is <code>False</code> by default. Only set it to <code>True</code> if you
+explicitly need cookie-based auth and have a restricted origin allowlist.</p>
+<hr />
+<h2 id="api-rate-limiting">API Rate Limiting<a class="headerlink" href="#api-rate-limiting" title="Permanent link">&para;</a></h2>
+<p>Rate limiting is applied per IP and per authenticated user.</p>
+<p>Default limits (configurable in <code>.env</code>):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">RATE_LIMIT_DEFAULT</span><span class="o">=</span><span class="m">100</span>/minute<span class="w">          </span><span class="c1"># unauthenticated</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nv">RATE_LIMIT_AUTHENTICATED</span><span class="o">=</span><span class="m">1000</span>/minute<span class="w">   </span><span class="c1"># authenticated users</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nv">RATE_LIMIT_TRADING</span><span class="o">=</span><span class="m">10</span>/minute<span class="w">           </span><span class="c1"># order placement endpoints</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nv">RATE_LIMIT_ML</span><span class="o">=</span><span class="m">30</span>/minute<span class="w">                </span><span class="c1"># ML inference endpoints</span>
+</code></pre></div></p>
+<p>Rate limit headers are returned on every response:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>X-RateLimit-Limit: 100
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>X-RateLimit-Remaining: 87
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>X-RateLimit-Reset: 1720000060
+</code></pre></div></p>
+<p>When the limit is exceeded, the API returns <code>429 Too Many Requests</code>.</p>
+<hr />
+<h2 id="https-tls">HTTPS / TLS<a class="headerlink" href="#https-tls" title="Permanent link">&para;</a></h2>
+<p>The application itself does not terminate TLS. Use a reverse proxy:</p>
+<p><strong>Nginx (recommended):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">443</span><span class="w"> </span><span class="s">ssl</span><span class="p">;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">yourdomain.com</span><span class="p">;</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="kn">ssl_certificate</span><span class="w"> </span><span class="s">/etc/letsencrypt/live/yourdomain.com/fullchain.pem</span><span class="p">;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="kn">ssl_certificate_key</span><span class="w"> </span><span class="s">/etc/letsencrypt/live/yourdomain.com/privkey.pem</span><span class="p">;</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="kn">ssl_protocols</span><span class="w"> </span><span class="s">TLSv1.2</span><span class="w"> </span><span class="s">TLSv1.3</span><span class="p">;</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="kn">ssl_ciphers</span><span class="w"> </span><span class="s">HIGH:!aNULL:!MD5</span><span class="p">;</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://127.0.0.1:8000</span><span class="p">;</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$proxy_add_x_forwarded_for</span><span class="p">;</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-Proto</span><span class="w"> </span><span class="nv">$scheme</span><span class="p">;</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="p">}</span>
+</code></pre></div></p>
+<p>Set <code>TRUSTED_PROXY_IPS</code> to your Nginx IP so the application trusts
+<code>X-Forwarded-For</code> headers:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nv">TRUSTED_PROXY_IPS</span><span class="o">=</span><span class="m">127</span>.0.0.1
+</code></pre></div></p>
+<p><strong>Let's Encrypt (free TLS):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>certbot<span class="w"> </span>python3-certbot-nginx<span class="w"> </span>-y
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>sudo<span class="w"> </span>certbot<span class="w"> </span>--nginx<span class="w"> </span>-d<span class="w"> </span>yourdomain.com
+</code></pre></div></p>
+<hr />
+<h2 id="kubernetes-secrets">Kubernetes Secrets<a class="headerlink" href="#kubernetes-secrets" title="Permanent link">&para;</a></h2>
+<p>Never put credentials in <code>k8s/k8s-configmap.yaml</code>. Use a <code>Secret</code> object:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>hopefx-secrets<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">SECURITY_JWT_SECRET</span><span class="o">=</span>your_secret<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">CONFIG_ENCRYPTION_KEY</span><span class="o">=</span>your_key<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">HOPEFX_KILL_SWITCH_TOKEN</span><span class="o">=</span>your_token<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">DATABASE_URL</span><span class="o">=</span>postgresql://...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">REDIS_URL</span><span class="o">=</span>redis://...
+</code></pre></div>
+<p>The deployment (<code>k8s/k8s-deployment.yaml</code>) wires all credentials via
+<code>secretKeyRef</code>. Optional secrets use <code>optional: true</code> so missing keys
+don't crash pod startup.</p>
+<hr />
+<h2 id="sentry-pii-scrubbing">Sentry PII Scrubbing<a class="headerlink" href="#sentry-pii-scrubbing" title="Permanent link">&para;</a></h2>
+<p>Sentry is configured to scrub sensitive data before sending events.
+The <code>before_send</code> hook in <code>monitoring/sentry_config.py</code> removes these
+field names from all event payloads:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>password, token, secret, api_key, authorization, credit_card,
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ssn, account_number, routing_number, private_key, access_token,
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>refresh_token, jwt, bearer, oanda_token, ibkr_password
+</code></pre></div>
+<p>Health check and metrics endpoints are filtered from Sentry transactions
+to avoid quota waste.</p>
+<hr />
+<h2 id="watchlist-and-chat-route-protection">Watchlist and Chat Route Protection<a class="headerlink" href="#watchlist-and-chat-route-protection" title="Permanent link">&para;</a></h2>
+<p>Both routes previously had no authentication:</p>
+<ul>
+<li><code>api/watchlist.py</code> — user watchlists were publicly readable</li>
+<li><code>api/chat.py</code> — unprotected LLM endpoint (unlimited OpenAI bill risk)</li>
+</ul>
+<p>Both now require a valid JWT. Any request without <code>Authorization: Bearer &lt;token&gt;</code>
+returns <code>401 Unauthorized</code>.</p>
+<hr />
+<h2 id="vault-config-encryption">Vault (Config Encryption)<a class="headerlink" href="#vault-config-encryption" title="Permanent link">&para;</a></h2>
+<p><code>config/vault.py</code> encrypts sensitive config values at rest using Fernet
+symmetric encryption (AES-128-CBC + HMAC-SHA256).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">config.vault</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vault</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">vault</span> <span class="o">=</span> <span class="n">Vault</span><span class="p">()</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">vault</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s2">&quot;oanda_token&quot;</span><span class="p">,</span> <span class="s2">&quot;your_secret_token&quot;</span><span class="p">)</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">token</span> <span class="o">=</span> <span class="n">vault</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;oanda_token&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>The vault key is derived from <code>CONFIG_ENCRYPTION_KEY</code>. If <code>secure_delete()</code>
+fails (e.g., keyring unavailable), it now raises <code>VaultError</code> instead of
+silently swallowing the error. <code>_fernet</code> is zeroed in <code>finally</code> to prevent
+key material lingering in memory.</p>
+<hr />
+<h2 id="security-scanning">Security Scanning<a class="headerlink" href="#security-scanning" title="Permanent link">&para;</a></h2>
+<p>The CI pipeline runs these checks on every push:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Bandit — Python security linter</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>bandit<span class="w"> </span>-r<span class="w"> </span>api/<span class="w"> </span>auth/<span class="w"> </span>brokers/<span class="w"> </span>ml/<span class="w"> </span>risk/<span class="w"> </span>-ll
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># pip-audit — known CVEs in dependencies</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pip-audit
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># TruffleHog — secrets in git history</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>trufflehog<span class="w"> </span>git<span class="w"> </span>file://.<span class="w"> </span>--only-verified
+</code></pre></div>
+<p>Run locally:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pip<span class="w"> </span>install<span class="w"> </span>bandit<span class="w"> </span>pip-audit
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>bandit<span class="w"> </span>-r<span class="w"> </span>.<span class="w"> </span>-ll<span class="w"> </span>--exclude<span class="w"> </span>venv,tests
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>pip-audit
+</code></pre></div></p>
+<hr />
+<h2 id="responsible-disclosure">Responsible Disclosure<a class="headerlink" href="#responsible-disclosure" title="Permanent link">&para;</a></h2>
+<p>If you discover a security vulnerability:</p>
+<ol>
+<li><strong>Do not</strong> open a public GitHub Issue</li>
+<li>Email the details to the repository owner via GitHub's private vulnerability reporting:
+   <a href="https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/security/advisories/new">github.com/HACKLOVE340/HOPEFX-AI-TRADING/security/advisories/new</a></li>
+<li>Include: description, reproduction steps, impact assessment, suggested fix</li>
+<li>Allow 90 days for a fix before public disclosure</li>
+</ol>
+<p>We will acknowledge receipt within 48 hours and provide a fix timeline.</p>
+<hr />
+<h2 id="security-checklist-pre-production">Security Checklist (Pre-Production)<a class="headerlink" href="#security-checklist-pre-production" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[ ] <code>SECURITY_JWT_SECRET</code> is ≥ 32 chars and not a placeholder</li>
+<li>[ ] <code>CONFIG_ENCRYPTION_KEY</code> is ≥ 32 chars and not a placeholder</li>
+<li>[ ] <code>HOPEFX_KILL_SWITCH_TOKEN</code> is ≥ 32 chars and not a placeholder</li>
+<li>[ ] <code>DATABASE_URL</code> points to PostgreSQL (not SQLite)</li>
+<li>[ ] <code>ALLOWED_ORIGINS</code> is set to explicit <code>https://</code> domains (not <code>*</code>)</li>
+<li>[ ] <code>APP_ENV=production</code></li>
+<li>[ ] <code>SENTRY_DSN</code> is set</li>
+<li>[ ] TLS is terminated at the reverse proxy</li>
+<li>[ ] <code>TRUSTED_PROXY_IPS</code> is set to your load balancer IPs</li>
+<li>[ ] No secrets in git history (<code>trufflehog</code> clean)</li>
+<li>[ ] <code>bandit</code> reports no HIGH severity issues</li>
+<li>[ ] <code>pip-audit</code> reports no known CVEs</li>
+<li>[ ] Alembic migrations applied: <code>alembic upgrade head</code></li>
+<li>[ ] Kill switch token stored securely (not in <code>.env</code> on disk in production)</li>
+</ul>
+<p>Run the full pre-deploy validation:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>python<span class="w"> </span>deployment_guide.py
+</code></pre></div></p>
 
 
 
