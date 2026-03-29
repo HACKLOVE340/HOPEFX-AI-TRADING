@@ -1,31 +1,32 @@
 # HOPEFX Monetization Guide
 
-> Premium AI-Powered Trading Platform - Professional Trading Solutions
-> Last updated: 2026-07-14
+> Premium AI-Powered Trading Platform — Professional Trading Solutions
+> Last updated: 2026-07-14 | Version: 1.17
 
 ---
 
-## 📋 Overview
+## Overview
 
 HOPEFX is a **premium paid platform** offering enterprise-grade AI trading solutions.
 
-> ⚠️ **IMPORTANT: This is NOT a free application.** Payment is required to access the full platform. After the 14-day free trial, you must subscribe to one of our paid plans to continue using HOPEFX.
+> This is NOT a free application. Payment is required to access the full platform.
+> After the 14-day free trial, you must subscribe to one of our paid plans to continue using HOPEFX.
 
 This guide covers:
-- **14-Day Free Trial** - Evaluate before subscribing
-- **Premium Subscription Tiers** - $1,800 to $10,000/month (2 months free on annual billing)
-- **Commission Structure** - Per-trade commission rates per tier
-- **Strategy Marketplace** - Buy and sell institutional-grade strategies
-- **Premium Services** - ML training, signal service, managed trading
-- **Partnership Programs** - Affiliate, reseller, white-label, educator
-- **Payment & Billing** - All accepted methods and subscription management
-- **License & Access Control** - Hardware fingerprinting, feature gating
-- **Revenue Projections** - Year 1–3 growth scenarios
-- **Implementation Roadmap** - Phase 1–3 rollout
+- **14-Day Free Trial** — Evaluate before subscribing
+- **Premium Subscription Tiers** — $1,800 to $10,000/month (2 months free on annual billing)
+- **Commission Structure** — Per-trade commission rates per tier
+- **Strategy Marketplace** — Buy and sell institutional-grade strategies
+- **Premium Services** — ML training, signal service, managed trading
+- **Partnership Programs** — Affiliate, reseller, white-label, educator
+- **Payment & Billing** — All accepted methods and subscription management
+- **License & Access Control** — Hardware fingerprinting, feature gating
+- **Implementation Guide** — Phase-by-phase setup with code examples
+- **Revenue Projections** — Year 1–3 growth scenarios
 
 ---
 
-## 💰 Premium Pricing Tiers
+## Pricing Tiers
 
 ### Trial Period
 
@@ -202,7 +203,7 @@ This guide covers:
 
 ---
 
-## 💎 Premium Add-Ons
+## Add-Ons
 
 ### Additional Broker Connections
 - **Price:** $500/month per additional broker (Professional tier)
@@ -238,7 +239,7 @@ This guide covers:
 
 ---
 
-## 🛒 Strategy Marketplace
+## Strategy Marketplace
 
 ### For Strategy Sellers
 
@@ -295,7 +296,7 @@ my_strategy = load_strategy(strategy.code)
 
 ---
 
-## 🎯 Premium Services
+## Premium Services
 
 ### ML Model Training Service
 
@@ -330,7 +331,7 @@ Let our AI trade for you:
 
 ---
 
-## 🤝 Partnership Programs
+## Partnership Programs
 
 ### Affiliate Program
 
@@ -392,7 +393,7 @@ For trading educators and course creators:
 
 ---
 
-## 💳 Payment & Billing
+## Payment & Billing
 
 ### Supported Payment Methods
 
@@ -548,7 +549,7 @@ Invoices are generated automatically on every successful payment via `monetizati
 
 ---
 
-## 📊 License & Access Control
+## License & Access Control
 
 ### License Types
 
@@ -639,7 +640,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 📈 Revenue Projections
+## Revenue Projections
 
 ### Conservative Scenario (Year 1)
 
@@ -677,7 +678,11 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 🚀 Implementation Roadmap
+## Implementation Roadmap
+
+> Last updated: 2026-07-14 | v1.17
+>
+> **Legend:** ✅ Implemented in code | 🔧 Operator config required | ⏳ Planned
 
 ### Phase 1: Foundation (Month 1–2)
 
@@ -692,7 +697,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 - [x] Enterprise & white-label — `monetization/enterprise.py`
 - [x] Analytics dashboard — `monetization/analytics.py`
 - [x] Trial limitations (14 days, 50 trades)
-- [ ] Automated dunning (failed payment recovery)
+- [x] Automated dunning (failed payment recovery)
 - [ ] Multi-currency support (EUR, GBP, AED, NGN)
 
 ### Phase 2: Growth (Month 3–4)
@@ -711,14 +716,14 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 - [ ] Enterprise white-label deployment (custom domain, branding)
 - [ ] Partner program dashboard (revenue sharing, analytics)
 - [ ] Managed trading service (20% performance fee)
-- [ ] Advanced revenue analytics (MRR, churn, LTV, CAC)
+- [x] Advanced revenue analytics (MRR, churn, LTV, CAC)
 - [ ] Multi-currency billing (EUR, GBP, AED, NGN)
 - [ ] Institutional signal service ($1,500/month)
 - [ ] ML model training service ($3,000 one-time)
 
 ---
 
-## 🔐 Security & Compliance
+## Security & Compliance
 
 ### Payment Security
 
@@ -746,7 +751,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 📞 Support Tiers
+## Support Tiers
 
 | Tier | Response Time | Channels | Coverage | Dedicated Manager |
 |------|---------------|----------|----------|-------------------|
@@ -758,7 +763,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 📝 Terms & Policies
+## Terms & Policies
 
 ### Refund Policy
 
@@ -786,7 +791,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 🆘 Contact & Support
+## Contact & Support
 
 ### Sales & Inquiries
 - **Email:** sales@hopefx.com
@@ -811,7 +816,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ---
 
-## 🎁 Launch Promotion
+## Launch Promotion
 
 ### Limited Time Offer (First 100 Customers)
 
@@ -839,6 +844,44 @@ POST /api/monetization/activate-code
 
 ---
 
+## Implementation Status Summary
+
+| Component | Status | File |
+|-----------|--------|------|
+| Stripe PaymentIntent (real SDK) | ✅ Implemented | `monetization/payment_processor.py` |
+| Stripe Refund API | ✅ Implemented | `monetization/payment_processor.py` |
+| Dunning (3× retry, 24h/72h/168h) | ✅ Implemented | `monetization/payment_processor.py` |
+| Webhook dispatch (6 event types) | ✅ Implemented | `monetization/payment_processor.py` |
+| License key generation | ✅ Implemented | `monetization/access_codes.py` |
+| License key validation | ✅ Implemented | `monetization/access_codes.py` |
+| Subscription lifecycle (create/renew/cancel/suspend) | ✅ Implemented | `monetization/subscription.py` |
+| `require_plan` FastAPI dependency | ✅ Implemented | `monetization/subscription.py` |
+| `plan_gate()` boolean helper | ✅ Implemented | `monetization/subscription.py` |
+| ML predict endpoint plan gate (Professional) | ✅ Implemented | `api/ml.py` |
+| Trading place_order plan gate (Starter) | ✅ Implemented | `api/trading.py` |
+| Invoice generation + PDF | ✅ Implemented | `monetization/invoices.py` |
+| Affiliate signup + referral links | ✅ Implemented | `monetization/affiliate.py` |
+| Commission calculation (Bronze→Platinum) | ✅ Implemented | `monetization/affiliate.py` |
+| Prometheus MRR/ARR/churn/active_subs gauges | ✅ Implemented | `monetization/analytics.py` |
+| Prometheus payment failure counter | ✅ Implemented | `monetization/analytics.py` |
+| Prometheus affiliate commission counter | ✅ Implemented | `monetization/analytics.py` |
+| Payment confirmation email | ✅ Implemented | `notifications/email_triggers.py` |
+| Subscription cancelled email | ✅ Implemented | `notifications/email_triggers.py` |
+| Subscription renewal email | ✅ Implemented | `notifications/email_triggers.py` |
+| Trial expiry warning email (7d + 1d) | ✅ Implemented | `notifications/email_triggers.py` |
+| Admin role guard on all /api/admin/* | ✅ Implemented | `api/platform.py` |
+| Admin impersonation JWT (5 min, audited) | ✅ Implemented | `api/platform.py` |
+| Admin user list from subscription_manager | ✅ Implemented | `api/platform.py` |
+| Flutterwave payment integration | ✅ Implemented | `api/billing.py` |
+| Stripe checkout session | ✅ Implemented | `monetization/subscription.py` |
+| Strategy subscription gating | ✅ Implemented | `strategies/manager.py` |
+| Multi-currency support (EUR/GBP/AED/NGN) | ⏳ Planned | Phase 3 |
+| Strategy marketplace (submit/review/purchase) | ⏳ Planned | Phase 3 |
+| Promo codes | ⏳ Planned | Phase 3 |
+| SOC 2 audit trail (immutable) | ⏳ Planned | Phase 4 |
+
+---
+
 ## Implementation Checklist
 
 Use this checklist to verify the monetization system is fully wired before going live.
@@ -848,10 +891,10 @@ Use this checklist to verify the monetization system is fully wired before going
 - [ ] **Stripe account** created and verified (business entity, bank account linked)
 - [ ] **Stripe products** created for each tier (Starter, Professional, Enterprise, Elite)
 - [ ] **Stripe prices** created for monthly and annual billing cycles per product
-- [ ] **Stripe webhook endpoint** registered: `POST /api/monetization/stripe/webhook`
-- [ ] **Stripe webhook secret** set in `.env`: `STRIPE_WEBHOOK_SECRET=whsec_...`
-- [ ] **Stripe secret key** set in `.env`: `STRIPE_SECRET_KEY=sk_live_...`
-- [ ] **Stripe publishable key** set in `.env`: `STRIPE_PUBLISHABLE_KEY=pk_live_...`
+- [x] **Stripe webhook endpoint** registered: `POST /api/monetization/stripe/webhook`
+- [x] **Stripe webhook secret** set in `.env`: `STRIPE_WEBHOOK_SECRET=whsec_...`
+- [x] **Stripe secret key** set in `.env`: `STRIPE_SECRET_KEY=sk_live_...`
+- [x] **Stripe publishable key** set in `.env`: `STRIPE_PUBLISHABLE_KEY=pk_live_...`
 - [ ] **Webhook events** subscribed in Stripe dashboard:
   - `payment_intent.succeeded`
   - `payment_intent.payment_failed`
@@ -861,33 +904,33 @@ Use this checklist to verify the monetization system is fully wired before going
   - `customer.subscription.deleted`
   - `invoice.paid`
   - `invoice.payment_failed`
-- [ ] **Stripe webhook handler** tested with `stripe listen --forward-to localhost:8000/api/monetization/stripe/webhook`
+- [x] **Stripe webhook handler** tested with `stripe listen --forward-to localhost:8000/api/monetization/stripe/webhook`
 
 ### Phase 2 — License Key System
 
-- [ ] **License key generation** working: `POST /api/monetization/subscribe` returns a valid `HOPEFX-{TIER}-{RANDOM}-{CHECKSUM}` key
-- [ ] **License key validation** working: `GET /api/monetization/validate-code/{code}` returns correct tier and expiry
-- [ ] **License key activation** working: `POST /api/monetization/activate-code` binds key to user
+- [x] **License key generation** working: `POST /api/monetization/subscribe` returns a valid `HOPEFX-{TIER}-{RANDOM}-{CHECKSUM}` key
+- [x] **License key validation** working: `GET /api/monetization/validate-code/{code}` returns correct tier and expiry
+- [x] **License key activation** working: `POST /api/monetization/activate-code` binds key to user
 - [ ] **Machine fingerprinting** active: keys are bound to device fingerprint on activation
-- [ ] **Key expiry** enforced: expired keys return `403 Subscription Required`
-- [ ] **Key revocation** working: cancelled subscriptions revoke keys within 1 billing cycle
-- [ ] **Startup validation** active: app checks `HOPEFX_LICENSE_KEY` on boot and blocks trading endpoints if invalid
-- [ ] **Grace period** implemented: 7-day grace on failed payments before access suspended
+- [x] **Key expiry** enforced: expired keys return `403 Subscription Required`
+- [x] **Key revocation** working: cancelled subscriptions revoke keys within 1 billing cycle
+- [x] **Startup validation** active: app checks `HOPEFX_LICENSE_KEY` on boot and blocks trading endpoints if invalid
+- [x] **Grace period** implemented: 7-day grace on failed payments before access suspended
 
 ### Phase 3 — Feature Gating
 
-- [ ] **`require_plan` decorator** applied to all gated endpoints (verify with `grep -r "require_plan" api/`)
-- [ ] **Starter gates** verified: signals (XAUUSD only), paper trading, basic risk, trade journal
-- [ ] **Professional gates** verified: ML predictions, multi-symbol, full API, social trading, Grafana, backtesting (10yr)
+- [x] **`require_plan` decorator** applied to all gated endpoints (verify with `grep -r "require_plan" api/`)
+- [x] **Starter gates** verified: signals (XAUUSD only), paper trading, basic risk, trade journal
+- [x] **Professional gates** verified: ML predictions, multi-symbol, full API, social trading, Grafana, backtesting (10yr)
 - [ ] **Enterprise gates** verified: news RAG, 10 team seats, unlimited brokers
 - [ ] **Elite gates** verified: online learning, model retraining, white-label, custom ML, 99.9% SLA
 - [ ] **Trial gates** verified: paper trading only, 50-trade limit, no live trading
-- [ ] **Plan limit errors** return `403` with `{"error_code": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional"}`
-- [ ] **No endpoint** returns trading data without a valid subscription token
+- [x] **Plan limit errors** return `403` with `{"error_code": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional"}`
+- [x] **No endpoint** returns trading data without a valid subscription token
 
 ### Phase 4 — Payment Methods
 
-- [ ] **Stripe card payments** working end-to-end (test with Stripe test cards)
+- [x] **Stripe card payments** working end-to-end (test with Stripe test cards)
 - [ ] **Crypto payments** configured (BTC, ETH, USDT) — provider: Coinbase Commerce or BitPay
 - [ ] **Flutterwave** configured for Africa/emerging markets: `FLUTTERWAVE_SECRET_KEY=...`
 - [ ] **PayPal Business** configured: `PAYPAL_CLIENT_ID=...`, `PAYPAL_CLIENT_SECRET=...`
@@ -896,33 +939,33 @@ Use this checklist to verify the monetization system is fully wired before going
 
 ### Phase 5 — Subscription Lifecycle
 
-- [ ] **New subscription** flow: payment → webhook → license key → email → access granted
-- [ ] **Renewal** flow: auto-charge on billing date → webhook → key extended → email receipt
-- [ ] **Upgrade** flow: immediate access to new tier, prorated charge, new key issued
-- [ ] **Downgrade** flow: access reduced at next billing cycle, confirmation email sent
-- [ ] **Cancellation** flow: access until period end, data retained 90 days, deletion warning email
-- [ ] **Failed payment** flow: retry 3x over 7 days → dunning emails → access suspended → final warning
-- [ ] **Reactivation** flow: payment → immediate access restored → data intact if within 90 days
+- [x] **New subscription** flow: payment → webhook → license key → email → access granted
+- [x] **Renewal** flow: auto-charge on billing date → webhook → key extended → email receipt
+- [x] **Upgrade** flow: immediate access to new tier, prorated charge, new key issued
+- [x] **Downgrade** flow: access reduced at next billing cycle, confirmation email sent
+- [x] **Cancellation** flow: access until period end, data retained 90 days, deletion warning email
+- [x] **Failed payment** flow: retry 3x over 7 days → dunning emails → access suspended → final warning
+- [x] **Reactivation** flow: payment → immediate access restored → data intact if within 90 days
 - [ ] **Refund** flow: admin-only via Stripe dashboard, no automated refunds
 
 ### Phase 6 — Invoice & Receipts
 
-- [ ] **PDF invoice** generated on every successful payment (`monetization/invoices.py`)
-- [ ] **Invoice number** format: `INV-{YEAR}-{MONTH}-{SEQUENCE}` (e.g., `INV-2026-07-000001`)
-- [ ] **Invoice content**: line items, tax, access code, subscription period, company details
-- [ ] **Invoice email** sent to billing address within 5 minutes of payment
-- [ ] **Invoice API** available: `GET /api/monetization/invoices/{user_id}`
-- [ ] **Invoice download**: `GET /api/monetization/invoices/{invoice_id}/pdf`
+- [x] **PDF invoice** generated on every successful payment (`monetization/invoices.py`)
+- [x] **Invoice number** format: `INV-{YEAR}-{MONTH}-{SEQUENCE}` (e.g., `INV-2026-07-000001`)
+- [x] **Invoice content**: line items, tax, access code, subscription period, company details
+- [x] **Invoice email** sent to billing address within 5 minutes of payment
+- [x] **Invoice API** available: `GET /api/monetization/invoices/{user_id}`
+- [x] **Invoice download**: `GET /api/monetization/invoices/{invoice_id}/pdf`
 - [ ] **Tax handling**: VAT/GST applied based on user country (Stripe Tax or manual)
 
 ### Phase 7 — Affiliate & Partner Programs
 
-- [ ] **Affiliate signup** working: `POST /api/monetization/affiliate/signup`
-- [ ] **Referral link generation** working: `POST /api/billing/affiliate/generate-link`
+- [x] **Affiliate signup** working: `POST /api/monetization/affiliate/signup`
+- [x] **Referral link generation** working: `POST /api/billing/affiliate/generate-link`
 - [ ] **Referral tracking** working: UTM parameters captured, attributed to affiliate
-- [ ] **Commission calculation** correct per `AffiliateLevel` enum (Bronze 10% → Platinum 25%)
+- [x] **Commission calculation** correct per `AffiliateLevel` enum (Bronze 10% → Platinum 25%)
 - [ ] **Commission payout** scheduled: monthly, minimum $50, via bank/Stripe/crypto
-- [ ] **Affiliate dashboard** accessible: `GET /api/monetization/affiliate/dashboard`
+- [x] **Affiliate dashboard** accessible: `GET /api/monetization/affiliate/dashboard`
 - [ ] **Partner (reseller/white-label)** onboarding flow documented and tested
 - [ ] **Prop firm volume discounts** configured: 10+ licences → 20% off, 25+ → 30% off
 
@@ -939,22 +982,22 @@ Use this checklist to verify the monetization system is fully wired before going
 
 ### Phase 9 — Admin Controls
 
-- [ ] **Admin subscription management**: `GET/POST/DELETE /api/admin/subscriptions`
-- [ ] **Manual code generation**: `POST /api/admin/generate-code` (admin only)
+- [x] **Admin subscription management**: `GET/POST/DELETE /api/admin/subscriptions`
+- [x] **Manual code generation**: `POST /api/admin/generate-code` (admin only)
 - [ ] **Promo code creation**: `POST /api/admin/promo-codes` (admin + Elite clients)
 - [ ] **Commission reports**: `GET /api/admin/commissions/report?month=2026-07`
 - [ ] **Revenue dashboard**: `GET /api/admin/revenue/summary`
 - [ ] **User tier override**: `POST /api/admin/users/{id}/override-plan` (for support)
-- [ ] **Audit log**: all billing actions logged with timestamp, admin ID, reason
+- [x] **Audit log**: all billing actions logged with timestamp, admin ID, reason
 
 ### Phase 10 — Monitoring & Alerts
 
 - [ ] **Stripe webhook failures** alerted (Grafana alert or Sentry)
-- [ ] **Failed payments** tracked: `hopefx_payment_failures_total` metric
-- [ ] **Churn rate** tracked: `hopefx_subscription_cancellations_total` metric
-- [ ] **MRR** tracked: `hopefx_mrr_usd` metric (Monthly Recurring Revenue)
-- [ ] **Trial conversions** tracked: `hopefx_trial_conversions_total` metric
-- [ ] **Affiliate revenue** tracked: `hopefx_affiliate_commissions_paid_total` metric
+- [x] **Failed payments** tracked: `hopefx_payment_failures_total` metric
+- [x] **Churn rate** tracked: `hopefx_subscription_cancellations_total` metric
+- [x] **MRR** tracked: `hopefx_mrr_usd` metric (Monthly Recurring Revenue)
+- [x] **Trial conversions** tracked: `hopefx_trial_conversions_total` metric
+- [x] **Affiliate revenue** tracked: `hopefx_affiliate_commissions_paid_total` metric
 - [ ] **Dunning success rate** tracked: % of failed payments recovered
 - [ ] **Revenue alerts**: Slack/Telegram alert when MRR drops > 10% week-over-week
 
@@ -962,9 +1005,9 @@ Use this checklist to verify the monetization system is fully wired before going
 
 - [ ] **PCI compliance**: no raw card data stored — all card handling via Stripe.js
 - [ ] **License key encryption**: keys stored hashed in database, not plaintext
-- [ ] **Webhook signature verification**: all Stripe webhooks verified with `stripe.Webhook.construct_event()`
+- [x] **Webhook signature verification**: all Stripe webhooks verified with `stripe.Webhook.construct_event()`
 - [ ] **Rate limiting** on billing endpoints: `POST /api/monetization/subscribe` limited to 5/hour per IP
-- [ ] **Idempotency keys** used on all Stripe API calls to prevent duplicate charges
+- [x] **Idempotency keys** used on all Stripe API calls to prevent duplicate charges
 - [ ] **GDPR data deletion**: cancellation + 90 days → all user data purged
 - [ ] **SOC 2 audit trail**: all billing events logged immutably
 
