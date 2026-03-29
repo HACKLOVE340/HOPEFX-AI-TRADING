@@ -237,6 +237,10 @@ class GoldSentimentScorer:
             impact_score    = round(impact, 4),
         )
 
+    def score_article(self, article: NewsArticle) -> NewsArticle:
+        """Alias for score() — preferred public API name."""
+        return self.score(article)
+
     def score_batch(self, articles: List[NewsArticle]) -> List[NewsArticle]:
         """Score a list of articles. Returns scored articles only (relevance > 0)."""
         scored = []
