@@ -710,72 +710,70 @@ async def init_regime_router(s: Any) -> Any:
 
 async def init_macro_store(s: Any) -> Any:
     """
-    Bootstrap the MacroStore at startup and wire a daily refresh job.
+    Bootstrap the MacroStore at startup using FRED as the primary source.
 
-    Loads historical DXY/VIX/yield/SPX data from data/macro/ CSVs (fetched
-    via yfinance if not already present).  The store is attached to app_state
-    so the signal engine can call macro_store.align_to_hourly(ohlcv_df) at
-    inference time.
+    Strategy (in priority order):
+      1. MacroStoreBridge fetches all 9 FRED series concurrently and injects
+         them directly into ml.macro_store._series.  This replaces the old
+         yfinance-based macro_bootstrap CSV pipeline.
+      2. If FRED is unavailable (no network, rate-limited, key missing), the
+         bridge falls back to the CSV files in data/macro/ via the original
+         ml.macro_bootstrap.load_into_store() path.
 
-    The daily refresh job runs at 18:00 UTC (after US market close) so the
-    store always has yesterday's closing values before the London session.
+    The bridge also starts a daily refresh loop at 18:00 UTC so the store
+    always has fresh values before the London session.
+
+    The MacroStore singleton is attached to app_state so signal_engine can
+    call macro_store.align_to_hourly(ohlcv_df) exactly as before.
     """
     from api.admin import log_activity
-    from ml.macro_bootstrap import bootstrap, daily_refresh, load_into_store
     from ml.macro_store import macro_store
 
-    # Bootstrap: fetch CSVs if missing or stale (best-effort, non-blocking)
+    # ── Primary: FRED via MacroStoreBridge ───────────────────────────────────
+    fred_loaded = 0
     try:
-        n_written = await asyncio.get_event_loop().run_in_executor(
-            None,
-            bootstrap,
-            False,
+        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+
+        await macro_store_bridge.start()
+        fred_loaded = macro_store_bridge._series_loaded
+        s.macro_store_bridge = macro_store_bridge
+        logger.info(
+            "MacroStoreBridge: %d/%d FRED series loaded into MacroStore",
+            fred_loaded,
+            9,
         )
-        logger.info("MacroStore bootstrap: %d series available", n_written)
     except Exception as exc:
-        logger.warning("MacroStore bootstrap failed (non-fatal): %s", exc)
+        logger.warning(
+            "MacroStoreBridge unavailable (%s) — falling back to CSV bootstrap",
+            exc,
+        )
 
-    # Load CSVs into the in-memory store
-    try:
-        n_loaded = load_into_store(macro_store)
-        logger.info("MacroStore loaded: %d series in memory", n_loaded)
-    except Exception as exc:
-        logger.warning("MacroStore load failed (non-fatal): %s", exc)
-        n_loaded = 0
+    # ── Fallback: CSV bootstrap (original yfinance path) ────────────────────
+    # Runs if FRED loaded fewer than 3 series (partial failure) or errored.
+    if fred_loaded < 3:
+        try:
+            from ml.macro_bootstrap import bootstrap, load_into_store
 
-    # Attach to app_state so signal_engine can access it
+            n_written = await asyncio.get_event_loop().run_in_executor(
+                None, bootstrap, False
+            )
+            n_loaded = load_into_store(macro_store)
+            logger.info(
+                "MacroStore CSV fallback: %d series written, %d loaded",
+                n_written,
+                n_loaded,
+            )
+        except Exception as exc:
+            logger.warning("MacroStore CSV fallback also failed: %s", exc)
+
+    # Attach to app_state
     s.macro_store = macro_store
 
-    # Daily refresh background task (runs every 24 h)
-    async def _daily_refresh_loop() -> None:
-        import asyncio as _asyncio
-
-        while True:
-            # Wait until next 18:00 UTC
-            now = __import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc,
-            )
-            target = now.replace(hour=18, minute=0, second=0, microsecond=0)
-            if target <= now:
-                target = target + __import__("datetime").timedelta(days=1)
-            wait_secs = (target - now).total_seconds()
-            logger.debug("MacroStore daily refresh in %.0f s", wait_secs)
-            await _asyncio.sleep(wait_secs)
-            try:
-                await _asyncio.get_event_loop().run_in_executor(
-                    None,
-                    daily_refresh,
-                )
-                load_into_store(macro_store)
-                logger.info("MacroStore daily refresh complete")
-            except Exception as exc:
-                logger.warning("MacroStore daily refresh failed: %s", exc)
-
-    t = asyncio.create_task(_daily_refresh_loop())
-    s.background_tasks.append(t)
-
+    n_in_store = len(getattr(macro_store, "_series", {}))
     log_activity(
-        f"MacroStore initialised — {n_loaded} series loaded, daily refresh scheduled",
+        f"MacroStore initialised — {n_in_store} series loaded "
+        f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "
+        "daily refresh scheduled at 18:00 UTC",
     )
     return macro_store
 
