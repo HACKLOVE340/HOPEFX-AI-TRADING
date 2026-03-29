@@ -1,482 +1,332 @@
-# HOPEFX AI Trading - Frequently Asked Questions
+# FAQ
 
-> Your questions answered about the HOPEFX AI Trading Framework
+> Frequently asked questions about HOPEFX AI Trading.
+> Last updated: 2026-07-14
 
 ---
 
-## 📋 Table of Contents
+## Contents
 
-1. [Getting Started](#getting-started)
-2. [Installation & Setup](#installation--setup)
-3. [Trading & Strategies](#trading--strategies)
-4. [Broker Integration](#broker-integration)
-5. [Machine Learning](#machine-learning)
-6. [Security](#security)
-7. [Technical Issues](#technical-issues)
-8. [Pricing & Licensing](#pricing--licensing)
+1. [Pricing & Subscriptions](#pricing--subscriptions)
+2. [Getting Started](#getting-started)
+3. [Trading & Signals](#trading--signals)
+4. [ML & AI](#ml--ai)
+5. [Brokers](#brokers)
+6. [Risk Management](#risk-management)
+7. [Prop Firms](#prop-firms)
+8. [Technical](#technical)
+9. [Licensing](#licensing)
+
+---
+
+## Pricing & Subscriptions
+
+### How much does HOPEFX cost?
+
+| Plan | Price |
+|------|-------|
+| Starter | $49/month |
+| Pro | $149/month |
+| Elite | $349/month |
+| Enterprise | Custom |
+
+Annual billing saves 2 months (pay 10, get 12). See [MONETIZATION.md](MONETIZATION.md) for the full feature comparison.
+
+### Is there a free tier?
+
+No. HOPEFX is a professional paid platform. There is no free tier.
+
+If you want to evaluate the platform, request a trial access code via GitHub Issues (label: `trial-request`). Trial codes give 7 days of Pro access.
+
+### What payment methods are accepted?
+
+- Credit/debit card (Visa, Mastercard, Amex) via Stripe
+- Crypto: BTC, ETH, USDT
+- Flutterwave (Africa and emerging markets)
+
+### Can I cancel anytime?
+
+Yes. Cancel via `POST /api/monetization/subscription/{id}/cancel` or contact support. Cancellation takes effect at the end of the current billing period. No partial-month refunds.
+
+### What happens to my data if I cancel?
+
+Your trades, journal entries, and settings are retained for 90 days after cancellation. Resubscribe within 90 days to restore full access. After 90 days, data is permanently deleted.
+
+### Can I switch plans?
+
+Yes. Upgrading is immediate and prorated. Downgrading takes effect at the next billing cycle.
+
+### Do you offer refunds?
+
+No refunds for partial months. If the platform is unavailable for more than 24 hours due to our infrastructure (not your broker or internet connection), we credit the affected days.
+
+### Is there an affiliate program?
+
+Yes. Earn 30% recurring commission on every subscriber you refer. Sign up via `POST /api/monetization/affiliate/signup`. See [MONETIZATION.md](MONETIZATION.md) for details.
 
 ---
 
 ## Getting Started
 
-### What is HOPEFX AI Trading?
-
-HOPEFX AI Trading is an advanced, open-source AI-powered trading framework designed primarily for XAU/USD (Gold) trading. It combines machine learning, real-time market analysis, multi-broker integration, and intelligent trade execution to provide a complete automated trading solution.
-
-### Who is HOPEFX for?
-
-- **Retail traders** looking to automate their trading strategies
-- **Prop firm traders** who need compliant trading automation
-- **Algo developers** who want a Python-based framework
-- **Quantitative analysts** building ML-based trading systems
-- **Trading educators** teaching algorithmic trading
-
-### How does HOPEFX compare to TradingView/MetaTrader?
-
-| Feature | HOPEFX | TradingView | MetaTrader |
-|---------|--------|-------------|------------|
-| AI/ML Built-in | ✅ | ❌ | ❌ |
-| Open Source | ✅ | ❌ | ❌ |
-| Multi-Broker | ✅ | Limited | Limited |
-| Prop Firm Support | ✅ | ❌ | ⚡ |
-| Python-based | ✅ | ❌ | ❌ |
-| Self-hosted | ✅ | ❌ | ✅ |
-| Free | ✅ | Paid | Free |
-
-See [COMPETITIVE_ANALYSIS.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/docs/archive/COMPETITIVE_ANALYSIS.md) for detailed comparison.
-
-### Is HOPEFX really free?
-
-HOPEFX is open-source under the **AGPL-3.0** license. You can:
-- Use it for personal trading at no cost
-- Modify the code to suit your needs
-- Run it on your own servers
-- Contribute to the project (see [CLA](../CLA.md))
-
-Commercial use (proprietary products, SaaS, white-label) requires a separate Commercial License — see [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
-
----
-
-## Installation & Setup
-
 ### What are the system requirements?
 
-**Minimum:**
 - Python 3.10, 3.11, or 3.12
-- 4 GB RAM
-- 2 CPU cores
-- 10 GB disk space
-
-**Recommended:**
-- Python 3.12
-- 8 GB RAM
-- 4+ CPU cores
-- SSD with 20 GB space
-- Redis 7+ for caching
-- PostgreSQL 16+ for production
+- 4 GB RAM minimum (8 GB recommended)
+- 2 CPU cores minimum
+- 10 GB storage
+- Linux, macOS, or Windows
 
 ### How do I install HOPEFX?
 
+See [INSTALLATION.md](INSTALLATION.md) for the full guide. Quick version:
+
 ```bash
-# Clone the repository
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
 cd HOPEFX-AI-TRADING
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# Configure environment
 cp .env.example .env
-# Edit .env with your settings
-
-# Initialize
-python cli.py init
+# Edit .env with your secrets and subscription key
+alembic upgrade head
+uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-See [INSTALLATION.md](INSTALLATION.md) for detailed instructions.
+### How do I activate my subscription?
 
-### Why am I getting import errors?
-
-Common causes:
-1. **Virtual environment not activated** - Run `source venv/bin/activate`
-2. **Missing dependencies** - Run `pip install -r requirements.txt`
-3. **Wrong Python version** — Ensure Python 3.10+
-
-### How do I configure my broker API keys?
-
-1. Create/edit your `.env` file
-2. Add your API credentials:
-```bash
-# For OANDA
-OANDA_API_KEY=your_key_here
-OANDA_ACCOUNT_ID=your_account_id
-
-# For Binance
-BINANCE_API_KEY=your_key
-BINANCE_SECRET_KEY=your_secret
-```
-3. Never commit `.env` to version control
-
-### How do I run the API server?
+After subscribing, you receive a `HOPEFX_LICENSE_KEY`. Add it to `.env`:
 
 ```bash
-# Development mode (auto-reload)
-uvicorn app:app --reload --port 8000
-
-# Production mode
-uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4
-
-# With Docker (recommended)
-docker-compose up -d
+HOPEFX_LICENSE_KEY=your_license_key_here
 ```
 
-Access API docs at `http://localhost:8000/docs`
+The application validates the key at startup. Without a valid key, the API returns `403 Subscription Required` on all trading endpoints.
+
+### Do I need a broker account to start?
+
+No. Paper trading is active by default — no broker credentials needed. You can receive signals, run backtests, and simulate trades without connecting a real broker.
+
+To trade with real money, connect OANDA, IBKR, Alpaca, Binance, or MT5. See [SETUP_GUIDE.md](SETUP_GUIDE.md).
 
 ---
 
-## Trading & Strategies
+## Trading & Signals
 
-### What trading strategies are included?
+### What markets does HOPEFX trade?
 
-HOPEFX includes 12+ built-in strategies:
+| Symbol | Market | Available From |
+|--------|--------|---------------|
+| XAUUSD | Gold | Starter |
+| BTCUSD | Bitcoin | Pro |
+| ETHUSD | Ethereum | Pro |
+| EURUSD | EUR/USD Forex | Pro |
+| GBPUSD | GBP/USD Forex | Pro |
+| Silver | Silver | Elite |
+| Oil (WTI) | Crude Oil | Elite |
 
-| Strategy | Type | Description |
-|----------|------|-------------|
-| SMC/ICT | Institutional | Smart Money Concepts |
-| ITS 8 OS | Advanced | Institutional trading system |
-| EMA Crossover | Trend | Exponential MA crossover |
-| MA Crossover | Trend | Simple MA crossover |
-| MACD | Momentum | MACD-based signals |
-| RSI | Oscillator | RSI oversold/overbought |
-| Bollinger Bands | Volatility | Mean reversion |
-| Breakout | Momentum | Price breakout detection |
-| Mean Reversion | Statistical | Mean reversion trading |
-| Strategy Brain | AI | AI-powered strategy selection |
+### How often are signals generated?
 
-### How do I create a custom strategy?
+Signals are generated on every completed H1 (1-hour) bar. The ML model abstains on ~27.5% of bars (low confidence). Expect 3–8 actionable signals per day on XAUUSD.
 
-1. Create a new file in `strategies/`:
+### What is the win rate?
 
-```python
-from strategies.base import BaseStrategy
+The production model achieves 66.4% OOS accuracy on XAUUSD H1 (1,260 held-out bars, 7-year OOS period, p=0.0000). This translates to a win rate of approximately 57–62% in live trading after accounting for spread and slippage.
 
-class MyStrategy(BaseStrategy):
-    def __init__(self, config):
-        super().__init__(config)
-        self.name = "My Custom Strategy"
+### Can I use my own strategy?
 
-    def generate_signal(self, data):
-        # Your logic here
-        if should_buy:
-            return {'action': 'buy', 'symbol': 'XAUUSD'}
-        elif should_sell:
-            return {'action': 'sell', 'symbol': 'XAUUSD'}
-        return None
-```
+Yes, on Pro and above. Add your strategy to `strategies/` following the `BaseStrategy` interface. See [SAMPLE_STRATEGIES.md](SAMPLE_STRATEGIES.md) and [VIDEO_TUTORIALS.md](VIDEO_TUTORIALS.md) Episode 6.
 
-2. Register in `strategies/__init__.py`
-3. Configure and test with backtesting
+### What is the "abstain" signal?
 
-### How do I backtest a strategy?
+When the ML model's confidence is below the threshold (`ML_ABSTAIN_THRESHOLD`, default 0.55), it returns no signal. This is intentional — the model only acts when confident. Abstaining on uncertain bars is why the win rate exceeds 50%.
 
-```bash
-# Using CLI
-python cli.py backtest --strategy ma_crossover --symbol XAUUSD --start 2025-01-01 --end 2026-01-01
+### Can I copy other traders' signals?
 
-# Using Python
-from backtesting import BacktestEngine
-
-engine = BacktestEngine()
-results = engine.run(
-    strategy='ma_crossover',
-    symbol='XAUUSD',
-    start_date='2025-01-01',
-    end_date='2026-01-01'
-)
-print(results.summary())
-```
-
-### What is paper trading and how do I use it?
-
-Paper trading simulates real trading without risking real money.
-
-```bash
-# Start paper trading
-python cli.py paper-trade --strategy smc_ict --balance 10000
-
-# Or access the web dashboard
-# Navigate to http://localhost:8000/docs (paper trading controls in the API)
-```
-
-### How does risk management work?
-
-HOPEFX includes comprehensive risk management:
-
-- **Position sizing:** Fixed, percentage, or Kelly criterion
-- **Stop-loss:** Automatic or trailing
-- **Take-profit:** Fixed or scaled
-- **Daily loss limit:** Stop trading after X% loss
-- **Max drawdown:** Emergency stop
-- **Max positions:** Limit concurrent trades
-
-Configure in your strategy:
-```python
-risk_config = {
-    'risk_per_trade': 0.02,  # 2% per trade
-    'max_daily_loss': 0.05,  # 5% daily limit
-    'max_drawdown': 0.10,    # 10% max drawdown
-    'max_positions': 3
-}
-```
+Yes, on Pro and above. The social trading feed shows signals from opted-in traders. You can follow traders and optionally auto-copy their trades (scaled to your account size). See [MONETIZATION.md](MONETIZATION.md) for plan details.
 
 ---
 
-## Broker Integration
+## ML & AI
+
+### What ML model does HOPEFX use?
+
+A calibrated XGBoost stacking ensemble (XGBoost + LightGBM + RandomForest + isotonic calibration) trained on 50 years of XAUUSD data with 176 stationary features.
+
+OOS accuracy: **66.4%** (p=0.0000, N=1,260 bars, 7-year held-out period).
+
+### How is the model validated?
+
+Walk-forward validation with an expanding training window. The final 7-year period (2019–2026) is held out and never used during training or optimisation.
+
+### Can I retrain the model on my own data?
+
+Yes, on Elite and above:
+
+```bash
+python ml/train_advanced.py --years 50 --oos-years 3
+```
+
+See [ML_GUIDE.md](ML_GUIDE.md) for the full training guide.
+
+### What is online learning?
+
+The `SklearnOnlineLearner` (SGD + EWC) updates the model incrementally every hour using recent trade outcomes. Enable with `ML_HOURLY_ENABLED=true`. Available on Elite and above.
+
+### Does the model use macro data?
+
+Yes. DXY, VIX, US10Y, US2Y, SPX, and GLD are fetched daily from yfinance and wired into the ML inference pipeline as 22 macro cross-asset features.
+
+---
+
+## Brokers
 
 ### Which brokers are supported?
 
-| Broker | Asset Types | Status |
-|--------|-------------|--------|
-| OANDA | Forex | ✅ Integrated |
-| MetaTrader 5 | Multi-asset | ✅ Integrated |
-| Interactive Brokers | Stocks/Forex/Options | ✅ Integrated |
-| Alpaca | Stocks/Crypto | ✅ Integrated |
-| Binance | Crypto | ✅ Integrated |
-| Paper Trading | All | ✅ Built-in |
+| Broker | Type | Notes |
+|--------|------|-------|
+| OANDA | Forex/CFD | Practice + live, region routing (US/EU/SG) |
+| Interactive Brokers | Stocks/Forex/Futures | ib_insync + FIX 4.4 |
+| Alpaca | Stocks/Crypto | Paper + live |
+| Binance | Crypto | Spot + futures |
+| MetaTrader 5 | Forex/CFD | Windows only |
+| Paper | Simulated | Default, no credentials needed |
 
-### Can I use multiple brokers?
+### Do I need a funded broker account?
 
-Yes! HOPEFX supports multi-broker trading:
+No. Paper trading works without any broker account. For live trading, you need a funded account with one of the supported brokers.
 
-```python
-from brokers import BrokerFactory
+### Which broker do you recommend for beginners?
 
-# Create broker instances
-oanda = BrokerFactory.create('oanda', config)
-binance = BrokerFactory.create('binance', config)
+OANDA practice account. It's free, has no minimum deposit for practice, and supports XAUUSD (gold) which is the primary instrument. See [oanda_paper_trading_setup.md](oanda_paper_trading_setup.md).
 
-# Trade on both
-oanda.place_order(order1)
-binance.place_order(order2)
-```
+### Does HOPEFX support MT5?
 
-### How do I connect to a prop firm?
-
-HOPEFX supports major prop firms:
-
-```python
-from brokers.prop_firms import FTMOConnector
-
-ftmo = FTMOConnector(
-    api_key='your_key',
-    account_id='your_account',
-    challenge_type='100k'
-)
-
-# Prop-firm specific risk checks are automatic
-ftmo.place_order(order)
-```
-
-Supported prop firms: FTMO, MyForexFunds, The5ers, TopStep
-
-### Why is my broker connection failing?
-
-1. **Check credentials:** Verify API key and secret
-2. **Check network:** Ensure broker API is accessible
-3. **Check sandbox mode:** Development should use sandbox
-4. **Check permissions:** API key may need trading permissions
-5. **Check rate limits:** Reduce request frequency
+Yes, on Windows only. The MT5 Python API (`MetaTrader5` package) is Windows-exclusive. On Linux/macOS, use OANDA or IBKR instead.
 
 ---
 
-## Machine Learning
+## Risk Management
 
-### What ML models are included?
+### How does the kill switch work?
 
-The production model is `ml/saved_models/advanced_oos.pkl`:
+The kill switch immediately halts all trading and blocks new orders. It persists to `risk/halt_state.json` — it survives application restarts.
 
-- **Architecture:** XGBoost + isotonic calibration (CalibratedClassifierCV)
-- **Features:** 176 stationary-tested features (ADF + KPSS)
-- **OOS accuracy:** 66.4% (p=0.0000, N=1,260 bars, 2019–2026)
-- **Sharpe gate:** PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10
-- **Multi-symbol backtest:** N>919 trades (7 symbols: XAU/USD, BTC/USD, ETH/USD, EUR/USD, GBP/USD, Silver, Oil — SE≤0.10 gate satisfied)
-
-Additional models used as fallbacks: `rf_macro.pkl`, `xgb_macro.pkl`.
-
-### How do I retrain the production model?
-
+Activate:
 ```bash
-# Smoke test (~30 s)
-python ml/train_advanced.py --smoke
-
-# Full production retrain (50 years, 3-year OOS)
-python ml/train_advanced.py --years 50 --oos-years 3
-
-# Multi-symbol backtest (7 symbols, targets N>919)
-python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
+curl -X POST http://localhost:8000/api/trading/emergency-stop \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Kill-Switch-Token: $HOPEFX_KILL_SWITCH_TOKEN"
 ```
 
-### How does online learning work?
+### What is the CVaR gate?
 
-Set `ML_HOURLY_ENABLED=true` to activate:
+Before every order, the system computes Conditional Value at Risk (CVaR) for the proposed position. If adding the position would push portfolio CVaR above the configured limit, the order is blocked. This runs independently of all other risk checks — a CVaR breach always blocks.
 
-- **Hourly:** `SklearnOnlineLearner` (SGDClassifier) receives the last 24 bars via `HourlyTrainer._online_update()` and calls `partial_fit()`.
-- **Daily at 00:05 UTC:** EWC regime-adaptation loop detects the current market regime (volatile / ranging / trending) and adjusts model plasticity accordingly.
-- Learner state is persisted to `ml/saved_models/online_learner_{symbol}.pkl` and reloaded at startup.
-
-### How accurate are the ML predictions?
-
-The production model achieves **66.4% OOS accuracy** (p=0.0000) on 1,260 held-out bars spanning 2019–2026. The model abstains on low-confidence bars — only signals above the confidence threshold reach execution.
-
-Key points:
-- Cite OOS accuracy (66.4%, p=0.0000) as the credible performance number
-- Sharpe ratio is only reported after N ≥ 600 trades (gate PASSED at N=628)
-- Always backtest before live trading
-- Monitor live signal distribution against OOS backtest distribution
-
----
-
-## Security
-
-### How are my API keys stored?
-
-API keys are encrypted using Fernet encryption:
-- Keys stored in encrypted configuration
-- Environment variables recommended
-- Never stored in plain text
-- Never committed to version control
-
-### Is my trading data secure?
+### Can I set a daily loss limit?
 
 Yes:
-- All data stored locally (self-hosted)
-- Optional encryption at rest
-- SSL/TLS for API communications
-- No data shared with third parties
-
-### How do I enable 2FA?
-
-```python
-from config import SecurityConfig
-
-security = SecurityConfig()
-security.enable_2fa(method='totp')  # Google Authenticator compatible
+```bash
+DAILY_LOSS_LIMIT_PCT=2.0    # Halt if daily loss exceeds 2% of account
+MAX_DRAWDOWN_PCT=8.0        # Halt if drawdown exceeds 8%
 ```
 
-### Best practices for security?
+When either limit is hit, the kill switch fires automatically.
 
-1. Use environment variables for secrets
-2. Enable sandbox mode for development
-3. Use paper trading first
-4. Set conservative risk limits
-5. Monitor trades regularly
-6. Rotate API keys periodically
+### What is Kelly criterion?
+
+Kelly criterion calculates the optimal position size based on win rate and average win/loss ratio. HOPEFX uses a fractional Kelly with a safety cap:
+
+```bash
+KELLY_FRACTION=0.25    # Use 25% of full Kelly (conservative)
+MAX_POSITION_SIZE_PCT=1.0  # Hard cap: never more than 1% per trade
+```
 
 ---
 
-## Technical Issues
+## Prop Firms
 
-### Why is my strategy not generating signals?
+### Does HOPEFX support prop firm challenges?
 
-1. **Check data:** Ensure market data is loading
-2. **Check timeframe:** Strategy may need more historical data
-3. **Check parameters:** Verify strategy configuration
-4. **Check logs:** Review `logs/` for errors
-5. **Debug mode:** Enable verbose logging
+Yes. Enable prop firm mode:
+```bash
+PROP_FIRM_MODE=true
+PROP_FIRM_NAME=ftmo
+PROP_FIRM_DAILY_LOSS_LIMIT=5.0
+PROP_FIRM_MAX_DRAWDOWN=10.0
+PROP_FIRM_PROFIT_TARGET=10.0
+```
 
-### Why are orders not executing?
+Supported firms: FTMO, MyForexFunds, The5ers, TopStep, FundedNext. See [PROP_FIRM_GUIDE.md](PROP_FIRM_GUIDE.md).
 
-1. **Broker connection:** Verify broker is connected
-2. **Market hours:** Check if market is open
-3. **Margin:** Ensure sufficient margin
-4. **Position limits:** Check max positions
-5. **Risk limits:** Order may exceed risk parameters
+### Which plan do I need for prop firm mode?
 
-### How do I view logs?
+Pro and above. Prop firm mode is not available on Starter.
+
+### Has anyone passed a prop firm challenge with HOPEFX?
+
+The platform is in paper trading mode (started 2026-03-27). Live prop firm results will be published after the 30-day paper run completes and live trading is enabled.
+
+---
+
+## Technical
+
+### What database does HOPEFX use?
+
+SQLite for development (zero config), PostgreSQL for production. Switch by setting `DATABASE_URL` in `.env`.
+
+### Does HOPEFX require Redis?
+
+Redis is optional. Without it, the ML feature cache falls back to in-memory (slower), WebSocket pub/sub uses in-process channels, and rate limiting uses in-memory counters. For production, Redis is strongly recommended.
+
+### How do I run the tests?
 
 ```bash
-# View recent logs
-tail -f logs/hopefx.log
-
-# Filter by level
-grep ERROR logs/hopefx.log
-
-# Use CLI
-python cli.py logs --level ERROR --tail 100
+pytest tests/ -q
+# Expected: 2560 passed, 0 failed
 ```
+
+### What Python version is required?
+
+Python 3.10, 3.11, or 3.12. Python 3.9 and below are not supported.
+
+### Is there a Docker image?
+
+Yes. Use Docker Compose for the full stack:
+```bash
+docker compose up -d
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide.
 
 ### How do I report a bug?
 
-1. Check existing [GitHub Issues](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues)
-2. Create a new issue with:
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Error logs
-   - Environment details (Python version, OS)
+Open a GitHub Issue with: Python version, OS, full error traceback, and reproduction steps. For security vulnerabilities, use GitHub's private vulnerability reporting — do not open a public issue.
 
 ---
 
-## Pricing & Licensing
+## Licensing
 
-### Is HOPEFX free to use?
+### What license is HOPEFX under?
 
-HOPEFX is open-source under **AGPL-3.0**. You can:
-- Use for personal trading at no cost
+The source code is licensed under **AGPL-3.0**. The hosted service requires a paid subscription.
+
+Under AGPL-3.0 you can:
+- Self-host for personal trading at no cost
 - Modify the code
 - Distribute your modifications (source must be disclosed under AGPL-3.0)
 
-Commercial use without AGPL-3.0 source disclosure requires a [Commercial License](../LICENSE-COMMERCIAL.md).
+You **cannot** under AGPL-3.0 without a Commercial License:
+- Build a proprietary SaaS product on top of HOPEFX
+- White-label it without disclosing source
+- Sell it as part of a closed-source product
 
-### Are there any premium features?
+### What is the Commercial License?
 
-Currently, all features are free. Future premium features may include:
-- Cloud hosting
-- Premium support
-- Enterprise features
-- Advanced ML models
+The Commercial License allows proprietary use, white-labeling, and SaaS deployment without AGPL-3.0 source disclosure requirements. See [LICENSE-COMMERCIAL.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE-COMMERCIAL.md). Enterprise plan includes the Commercial License.
 
-### Can I sell strategies built with HOPEFX?
+### Do I need to sign a CLA to contribute?
 
-Under AGPL-3.0, you can sell services and consulting built on HOPEFX, but any
-derivative software distributed or offered as a network service must have its
-source code disclosed under AGPL-3.0.
+Yes. Before your first pull request is merged, include this statement in the PR description:
 
-If you need to keep your modifications proprietary (closed-source product, SaaS,
-white-label), obtain a [Commercial License](../LICENSE-COMMERCIAL.md).
+> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
 
-Always comply with local financial regulations when offering trading services.
-
-### How do I contribute?
-
-See [CONTRIBUTING.md](CONTRIBUTING.md):
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
----
-
-## Still Have Questions?
-
-### Community Support
-- **Discord:** [Join HOPEFX Community](https://discord.gg/hopefx)
-- **Telegram:** [HOPEFX Announcements](https://t.me/hopefx)
-- **GitHub Discussions:** [Ask Questions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions)
-
-### Documentation
-- [Installation Guide](../INSTALLATION.md)
-- [Security Guide](../SECURITY.md)
-- [Deployment Guide](../DEPLOYMENT.md)
-- [Contributing](../CONTRIBUTING.md)
-
-### Contact
-- **Email:** hacklove340@hopefx.io
-- **GitHub:** [@HACKLOVE340](https://github.com/HACKLOVE340)
-
----
-
-*This FAQ is regularly updated. Last update: 2026-03-29 (v1.16)*
+The CLA enables the dual-license model (AGPL-3.0 open source + commercial). See [CONTRIBUTING.md](CONTRIBUTING.md).

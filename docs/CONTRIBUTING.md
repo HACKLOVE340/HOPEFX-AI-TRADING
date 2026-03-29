@@ -149,3 +149,50 @@ with details. See [SECURITY.md](SECURITY.md) for the full disclosure policy.
 
 Contributions are licensed under AGPL-3.0 and may be included in commercial releases
 per the [CLA](./CLA.md) and [LICENSE-COMMERCIAL.md](./LICENSE-COMMERCIAL.md).
+
+---
+
+## Paid Platform Context
+
+HOPEFX is a **paid subscription platform**. The source code is open under AGPL-3.0,
+but the hosted service requires a subscription. When contributing:
+
+- Do not add features that bypass subscription checks
+- Do not remove or weaken the `require_plan` middleware
+- Do not add free-tier access to Pro/Elite features
+- Do not commit real API keys, license keys, or subscriber data
+
+If you are building on top of HOPEFX commercially (SaaS, white-label, proprietary),
+you need a Commercial License — see [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md).
+
+---
+
+## Contributor License Agreement
+
+Before your first pull request is merged, include this statement in the PR description:
+
+> "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
+
+The CLA enables the dual-license model (AGPL-3.0 open source + commercial).
+Without the CLA, your PR cannot be merged.
+
+---
+
+## What We Accept
+
+- Bug fixes with regression tests
+- New broker connectors (add to `brokers/`)
+- New trading strategies (add to `strategies/`)
+- ML feature engineering improvements (add to `ml/`)
+- Documentation improvements
+- Performance improvements with benchmarks
+
+## What Requires Discussion First
+
+Open a GitHub Issue before working on:
+- Changes to the risk engine or kill switch
+- Changes to the subscription/billing system
+- Changes to the ML training pipeline
+- New external dependencies
+- Breaking API changes
+- New pricing tiers or feature gates

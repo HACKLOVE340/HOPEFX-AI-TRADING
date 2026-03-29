@@ -248,3 +248,43 @@ python scripts/validate_oanda.py
 ```
 
 This tests API key validity, account reachability, and XAU_USD pricing availability.
+
+---
+
+## Subscription Validation
+
+After installing, activate your subscription license key:
+
+```bash
+# Add to .env
+HOPEFX_LICENSE_KEY=your_license_key_here
+```
+
+Validate at startup:
+```bash
+python scripts/manage_secrets.py validate
+```
+
+Without a valid license key, all trading endpoints return `403 Subscription Required`.
+The `/health` endpoint and `/docs` remain accessible without a key.
+
+To get a license key, subscribe at the pricing page or request a trial via GitHub Issues
+(label: `trial-request`).
+
+---
+
+## Subscription-Gated Features
+
+| Feature | Starter | Pro | Elite |
+|---------|---------|-----|-------|
+| Signals (XAUUSD) | ✅ | ✅ | ✅ |
+| Multi-symbol signals | — | ✅ | ✅ |
+| Backtesting (1 year) | ✅ | — | — |
+| Backtesting (10 years) | — | ✅ | — |
+| Backtesting (50 years) | — | — | ✅ |
+| Prop firm mode | — | ✅ | ✅ |
+| API access | — | ✅ | ✅ |
+| Online learning | — | — | ✅ |
+| Model retraining | — | — | ✅ |
+
+See [MONETIZATION.md](MONETIZATION.md) for the full feature matrix.
