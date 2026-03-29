@@ -170,8 +170,20 @@ class RiskManager:
         self._price_history: Dict[str, deque] = {}
         self._price_update_counts: Dict[str, int] = {}
 
-        # CVaR daily limit — 0 = disabled (Area 2)
-        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0"))
+        # CVaR (Expected Shortfall) daily limit as a fraction of portfolio value.
+        # When the rolling 95th-percentile tail loss exceeds this threshold,
+        # trading is halted for 24 hours.
+        #
+        # Default: 0.02 (2% of portfolio per day).  Set RISK_CVAR_DAILY_LIMIT=0
+        # explicitly to disable — the previous default of 0 left the gate
+        # permanently disabled in every deployment that did not set the env var.
+        #
+        # Recommended values:
+        #   Conservative: 0.01  (1%)
+        #   Standard:     0.02  (2%)  ← default
+        #   Aggressive:   0.05  (5%)
+        #   Disabled:     0     (not recommended for production)
+        self._cvar_daily_limit: float = float(os.getenv("RISK_CVAR_DAILY_LIMIT", "0.02"))
 
         # Path for persisting halt state across restarts.
         # Callers (e.g. tests) can supply a custom path via halt_state_file to
@@ -674,7 +686,8 @@ class RiskManager:
             return False, f"Trading halted: {self._halt_reason}"
 
         if self._cvar_daily_limit <= 0:
-            return True, "CVaR limit disabled"
+            # Explicitly disabled via RISK_CVAR_DAILY_LIMIT=0
+            return True, "CVaR limit disabled (RISK_CVAR_DAILY_LIMIT=0)"
 
         if len(self._returns_history) < 10:
             return True, "Insufficient history for CVaR (< 10 observations)"
