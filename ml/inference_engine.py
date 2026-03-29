@@ -391,70 +391,150 @@ class InferenceEngine:
         # Track signal direction for non-neutral rate
         self._signal_window.append(direction)
 
-        # Record signal to lineage store
+        # Record signal to lineage store (with features hash for audit trail)
         self._record_signal_lineage(
-            direction=direction,
-            confidence=float(confidence),
-            probability=float(cal_prob),
-            symbol=symbol,
-            model_version=model_version,
+            direction     = direction,
+            confidence    = float(confidence),
+            probability   = float(cal_prob),
+            symbol        = symbol,
+            model_version = model_version,
+            features_df   = X,
         )
 
+        # Data quality from orchestrator (for downstream gating)
+        data_quality = 1.0
+        try:
+            from data_layer.orchestrator import orchestrator
+            tick = orchestrator.get_latest_tick()
+            if tick is not None:
+                data_quality = tick.confidence
+        except Exception:
+            pass
+
         return {
-            "direction": direction,
-            "probability": round(raw_prob, 4),
-            "confidence": round(float(confidence), 4),
-            "model_version": model_version,
-            "bars_used": len(ohlcv),
-            "last_close": last_close,
-            "latency_ms": round(latency_ms, 2),
-            "fallback": model_version == "fallback",
-            "macro_active": macro_active,
-            "mtf_active": mtf_active,
-            "online_active": online_active,
-            "dl_nudge": round(dl_nudge, 4),
+            "direction":       direction,
+            "probability":     round(raw_prob, 4),
+            "confidence":      round(float(confidence), 4),
+            "model_version":   model_version,
+            "bars_used":       len(ohlcv),
+            "last_close":      last_close,
+            "latency_ms":      round(latency_ms, 2),
+            "fallback":        model_version == "fallback",
+            "macro_active":    macro_active,
+            "mtf_active":      mtf_active,
+            "online_active":   online_active,
+            "dl_nudge":        round(dl_nudge, 4),
             "sentiment_score": self._last_sentiment_score,
-            "macro_impact": self._last_macro_impact,
+            "macro_impact":    self._last_macro_impact,
+            "data_quality":    round(data_quality, 4),
+            "is_safe":         self.is_safe_to_trade(),
         }
 
     def _get_data_layer_nudge(self) -> float:
         """
         Compute a soft probability nudge from the data layer.
 
-        Uses news sentiment EMA and macro calendar impact score to
-        produce a nudge in [-0.02, +0.02]. This is intentionally small
-        to avoid overriding the trained model.
+        Combines three signals from the orchestrator:
+          1. News sentiment EMA       → ±0.010 max
+          2. Order flow imbalance     → ±0.008 max (microstructure direction)
+          3. Trade pressure           → ±0.004 max
+
+        Total nudge range: [-0.022, +0.022].
+        Intentionally small — does not override the trained model.
 
         Positive nudge = bullish for gold (long bias).
         Negative nudge = bearish for gold (short bias).
+
+        Suppressed entirely during macro blackout windows.
         """
         self._last_sentiment_score = 0.0
         self._last_macro_impact    = 0.0
         try:
             from data_layer.orchestrator import orchestrator
+
+            # Data quality gate — refuse to nudge on bad data
+            tick = orchestrator.get_latest_tick()
+            if tick is not None and tick.confidence < 0.30:
+                logger.debug(
+                    "InferenceEngine: data quality %.3f too low — suppressing nudge",
+                    tick.confidence,
+                )
+                return 0.0
+
             features = orchestrator.get_ml_features()
 
-            sentiment = features.get("news_sentiment_score", 0.0)
-            impact    = features.get("macro_impact_score_now", 0.0)
-            blackout  = features.get("macro_is_blackout", 0.0)
+            sentiment      = float(features.get("news_sentiment_score",    0.0))
+            impact         = float(features.get("macro_impact_score_now",  0.0))
+            blackout       = float(features.get("macro_is_blackout",       0.0))
+            ofi            = float(features.get("order_flow_imbalance",    0.0))
+            trade_pressure = float(features.get("trade_pressure",          0.0))
 
             self._last_sentiment_score = sentiment
             self._last_macro_impact    = impact
 
-            # During blackout windows, suppress the nudge entirely
+            # Hard suppress during blackout windows
             if blackout > 0.5:
                 return 0.0
 
-            # Sentiment nudge: ±0.01 max
-            sent_nudge = sentiment * 0.01
+            # Dampen all nudges proportional to macro impact uncertainty
+            # High impact = we don't know direction → reduce nudge magnitude
+            impact_dampen = max(0.0, 1.0 - impact * 1.5)
 
-            # Macro impact nudge: high impact → reduce confidence (push toward 0)
-            # We don't know direction of macro surprise, so we dampen rather than nudge
-            macro_nudge = 0.0
+            # 1. Sentiment nudge: ±0.010
+            sent_nudge = sentiment * 0.010
 
-            return float(sent_nudge + macro_nudge)
+            # 2. OFI nudge: ±0.008 (OFI is already normalised to [-1, +1])
+            ofi_nudge = ofi * 0.008
+
+            # 3. Trade pressure nudge: ±0.004
+            pressure_nudge = trade_pressure * 0.004
+
+            total = (sent_nudge + ofi_nudge + pressure_nudge) * impact_dampen
+            return float(max(-0.022, min(0.022, total)))
+
         except Exception:
             return 0.0
+
+    def get_data_layer_tick(self):
+        """
+        Return the latest validated GoldTick from the orchestrator.
+
+        Used by callers that need the current price alongside the signal.
+        Returns None if orchestrator is unavailable or no tick exists.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            return orchestrator.get_latest_tick()
+        except Exception:
+            return None
+
+    def get_data_layer_features(self) -> Dict[str, float]:
+        """
+        Return the full orchestrator ML feature set.
+
+        Includes microstructure, sentiment, macro calendar, and FRED features.
+        Returns empty dict if orchestrator is unavailable.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            return orchestrator.get_ml_features()
+        except Exception:
+            return {}
+
+    def is_safe_to_trade(self) -> bool:
+        """
+        Delegate to orchestrator.is_safe_to_trade().
+
+        Returns True if:
+          - At least one gold feed is alive
+          - Not in a macro event blackout window
+          - Data quality confidence > 0.3
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            return orchestrator.is_safe_to_trade()
+        except Exception:
+            return True  # fail-open: don't block trading on orchestrator error
 
     def _record_signal_lineage(
         self,
@@ -463,16 +543,39 @@ class InferenceEngine:
         probability: float,
         symbol: str,
         model_version: str,
+        features_df: Optional[pd.DataFrame] = None,
     ) -> None:
-        """Write signal to immutable lineage store (non-blocking)."""
+        """
+        Write signal to immutable lineage store (non-blocking).
+
+        features_hash: SHA-256 of the feature vector for deduplication
+        and audit trail. Computed from the last-bar feature values.
+        """
         try:
-            import hashlib, uuid
+            import hashlib
+            import json
+            import uuid
             from data_layer.lineage.store import lineage_store
+
+            # Compute features hash for audit trail
+            features_hash = ""
+            if features_df is not None and not features_df.empty:
+                try:
+                    feat_dict = features_df.iloc[-1].replace(
+                        [float("inf"), float("-inf")], 0.0
+                    ).fillna(0.0).to_dict()
+                    # Round to 4dp to avoid float noise in hash
+                    feat_dict = {k: round(float(v), 4) for k, v in feat_dict.items()}
+                    blob = json.dumps(feat_dict, sort_keys=True, separators=(",", ":"))
+                    features_hash = hashlib.sha256(blob.encode()).hexdigest()[:16]
+                except Exception:
+                    pass
+
             lineage_store.record_signal(
                 direction     = direction,
                 confidence    = confidence,
                 probability   = probability,
-                features_hash = "",   # populated by advanced_predictor when available
+                features_hash = features_hash,
                 model_version = model_version,
                 lineage_id    = str(uuid.uuid4()),
                 symbol        = symbol,
