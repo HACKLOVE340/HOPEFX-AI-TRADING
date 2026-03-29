@@ -408,7 +408,7 @@ def print_horizon_summary(args: argparse.Namespace, report: dict) -> None:
     print("=" * 65)
     print(f"  Training horizon : {args.horizon} bars  (was: 1 bar)")
     print(f"  Hold period      : {args.horizon} bars  (execution engine)")
-    print(f"  Horizon aligned  : YES — accuracy/P&L now measure same objective")
+    print("  Horizon aligned  : YES — accuracy/P&L now measure same objective")
     print()
     print(f"  Years of data    : {args.years}")
     print(f"  OOS period       : {args.oos_years:.1f} years")

@@ -562,7 +562,7 @@ def main() -> int:
     print("=" * 60)
     print("  Reconciled Backtest Summary")
     print("=" * 60)
-    print(f"  Model      : advanced_oos.pkl")
+    print("  Model      : advanced_oos.pkl")
     print(f"  Period     : {result['start']} to {result['end']}")
     print(f"  Bars       : {result['total_bars']:,}")
     print(f"  Trades     : {metrics['total_trades']}")

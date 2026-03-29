@@ -242,7 +242,7 @@ class SignalFilter:
             return FilterResult(
                 passed=False,
                 gate="confidence",
-                reason=f"HOLD signal — not forwarded",
+                reason="HOLD signal — not forwarded",
                 confidence=confidence,
             )
 
