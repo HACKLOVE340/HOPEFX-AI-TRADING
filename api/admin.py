@@ -663,9 +663,9 @@ def admin_strategies(user: TokenPayload = Depends(require_role("admin"))):
     return _html_page("Strategies", "<p>Strategies</p>")
 
 
-@router.get("/settings", response_class=HTMLResponse)
+@router.get("/settings-page", response_class=HTMLResponse)
 def admin_settings_page(user: TokenPayload = Depends(require_role("admin"))):
-    """Settings page. Requires: role >= 'admin'."""
+    """Settings HTML page. Requires: role >= 'admin'."""
     return _html_page("Settings", "<p>Settings</p>")
 
 
