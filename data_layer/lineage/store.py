@@ -4,51 +4,43 @@
 """
 data_layer/lineage/store.py
 =============================
-DataLineageStore — immutable audit trail for every tick, macro event,
-and news article that flows through the data layer.
+DataLineageStore — immutable append-only audit trail.
 
 Design principles
 -----------------
-- Append-only: records are never modified or deleted
+- Append-only: records are never modified or deleted (INSERT OR IGNORE)
 - Immutable: each record is content-addressed by SHA-256 of its payload
 - Versioned: every record carries a schema_version for forward compatibility
 - Causal: every record carries the lineage_id of its upstream source
-- Durable: writes to SQLite (local) + optional PostgreSQL (production)
+- Durable: writes to SQLite (local) with WAL mode for concurrent reads
+- Optional PostgreSQL: set LINEAGE_DB_URL=postgresql://... for production
 - Fast: async writes via background queue; reads are synchronous
+- Retention: configurable max record count with automatic pruning
 
 Record types
 ------------
-  TICK      — every validated GoldTick (source, quality, confidence, mid)
-  NEWS      — every scored NewsArticle (source, sentiment, gold_relevance)
-  MACRO     — every MacroEvent (name, actual, forecast, surprise)
-  SIGNAL    — every ML signal generated (direction, confidence, features hash)
-  QUALITY   — periodic quality reports
+  TICK    — every validated GoldTick (source, quality, confidence, mid)
+  NEWS    — every scored NewsArticle (source, sentiment, gold_relevance)
+  MACRO   — every MacroEvent (name, actual, forecast, surprise)
+  SIGNAL  — every ML signal generated (direction, confidence, features hash)
+  QUALITY — periodic quality reports
 
-Schema (SQLite / PostgreSQL)
------------------------------
+Schema
+------
   lineage_records (
     id            TEXT PRIMARY KEY,   -- SHA-256 of payload
-    record_type   TEXT NOT NULL,      -- TICK | NEWS | MACRO | SIGNAL | QUALITY
-    schema_version INTEGER NOT NULL,  -- for forward compatibility
-    lineage_id    TEXT NOT NULL,      -- UUID from the source object
-    source        TEXT,               -- feed source name
+    record_type   TEXT NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    lineage_id    TEXT NOT NULL,
+    source        TEXT,
     symbol        TEXT,
     timestamp     TEXT NOT NULL,      -- ISO-8601 UTC
     payload       TEXT NOT NULL,      -- JSON
     created_at    TEXT NOT NULL       -- ISO-8601 UTC wall clock
   )
-
-Usage:
-    from data_layer.lineage.store import lineage_store
-
-    lineage_store.record_tick(tick)
-    lineage_store.record_news(article)
-    lineage_store.record_macro(event)
-    lineage_store.record_signal(signal_dict)
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -65,12 +57,14 @@ from data_layer.types import GoldTick, MacroEvent, NewsArticle
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_VERSION = 1
-_DB_PATH        = Path(os.getenv("LINEAGE_DB_PATH", "data/lineage/lineage.db"))
-_QUEUE_MAXSIZE  = int(os.getenv("LINEAGE_QUEUE_SIZE", "50000"))
-_BATCH_SIZE     = int(os.getenv("LINEAGE_BATCH_SIZE", "500"))
-_FLUSH_INTERVAL = float(os.getenv("LINEAGE_FLUSH_INTERVAL_S", "2.0"))
-
+_SCHEMA_VERSION  = 1
+_DB_PATH         = Path(os.getenv("LINEAGE_DB_PATH",      "data/lineage/lineage.db"))
+_DB_URL          = os.getenv("LINEAGE_DB_URL",            "")   # PostgreSQL URL
+_QUEUE_MAXSIZE   = int(os.getenv("LINEAGE_QUEUE_SIZE",    "50000"))
+_BATCH_SIZE      = int(os.getenv("LINEAGE_BATCH_SIZE",    "500"))
+_FLUSH_INTERVAL  = float(os.getenv("LINEAGE_FLUSH_S",     "2.0"))
+_MAX_RECORDS     = int(os.getenv("LINEAGE_MAX_RECORDS",   "5000000"))  # 5M rows
+_PRUNE_INTERVAL  = int(os.getenv("LINEAGE_PRUNE_INTERVAL","3600"))     # prune hourly
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS lineage_records (
@@ -84,10 +78,18 @@ CREATE TABLE IF NOT EXISTS lineage_records (
     payload        TEXT NOT NULL,
     created_at     TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_lineage_timestamp ON lineage_records(timestamp);
-CREATE INDEX IF NOT EXISTS idx_lineage_type      ON lineage_records(record_type);
-CREATE INDEX IF NOT EXISTS idx_lineage_source    ON lineage_records(source);
-CREATE INDEX IF NOT EXISTS idx_lineage_symbol    ON lineage_records(symbol);
+CREATE INDEX IF NOT EXISTS idx_lineage_timestamp  ON lineage_records(timestamp);
+CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type);
+CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source);
+CREATE INDEX IF NOT EXISTS idx_lineage_symbol     ON lineage_records(symbol);
+CREATE INDEX IF NOT EXISTS idx_lineage_created_at ON lineage_records(created_at);
+"""
+
+_INSERT_SQL = """
+INSERT OR IGNORE INTO lineage_records
+    (id, record_type, schema_version, lineage_id, source,
+     symbol, timestamp, payload, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -109,26 +111,46 @@ class DataLineageStore:
         self._queue: queue.Queue = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._conn: Optional[sqlite3.Connection] = None
         self._worker: Optional[threading.Thread] = None
-        self._running = False
+        self._pruner: Optional[threading.Thread] = None
+        self._running   = False
         self._write_count = 0
         self._drop_count  = 0
+        self._prune_count = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Initialise DB and start background writer thread."""
+        """Initialise DB and start background writer + pruner threads."""
         _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+        self._conn = sqlite3.connect(
+            str(_DB_PATH),
+            check_same_thread=False,
+            timeout=30.0,
+        )
+        # WAL mode: allows concurrent reads while writer is active
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA cache_size=-32000")  # 32MB cache
         self._conn.executescript(_CREATE_TABLE_SQL)
         self._conn.commit()
+
         self._running = True
+
         self._worker = threading.Thread(
             target=self._flush_loop,
             name="lineage_writer",
             daemon=True,
         )
         self._worker.start()
-        logger.info("DataLineageStore started — db=%s", _DB_PATH)
+
+        self._pruner = threading.Thread(
+            target=self._prune_loop,
+            name="lineage_pruner",
+            daemon=True,
+        )
+        self._pruner.start()
+
+        logger.info("DataLineageStore started — db=%s WAL=on", _DB_PATH)
 
     def stop(self) -> None:
         self._running = False
@@ -141,7 +163,6 @@ class DataLineageStore:
     # ── Public record API ─────────────────────────────────────────────────────
 
     def record_tick(self, tick: GoldTick) -> None:
-        """Record a validated GoldTick to the lineage store."""
         payload = {
             "symbol":     tick.symbol,
             "timestamp":  tick.timestamp.isoformat(),
@@ -163,16 +184,15 @@ class DataLineageStore:
         )
 
     def record_news(self, article: NewsArticle) -> None:
-        """Record a scored NewsArticle."""
         payload = {
-            "article_id":     article.article_id,
-            "source":         article.source.value,
-            "headline":       article.headline[:200],
-            "published_at":   article.published_at.isoformat(),
+            "article_id":      article.article_id,
+            "source":          article.source.value,
+            "headline":        article.headline[:200],
+            "published_at":    article.published_at.isoformat(),
             "sentiment_score": article.sentiment_score,
             "sentiment_label": article.sentiment_label,
-            "gold_relevance": article.gold_relevance,
-            "impact_score":   article.impact_score,
+            "gold_relevance":  article.gold_relevance,
+            "impact_score":    article.impact_score,
         }
         self._enqueue(
             record_type = "NEWS",
@@ -184,7 +204,6 @@ class DataLineageStore:
         )
 
     def record_macro(self, event: MacroEvent) -> None:
-        """Record a MacroEvent."""
         payload = {
             "event_id":          event.event_id,
             "name":              event.name,
@@ -216,7 +235,6 @@ class DataLineageStore:
         lineage_id: str,
         symbol: str = "XAU_USD",
     ) -> None:
-        """Record an ML signal generation event."""
         now = datetime.now(timezone.utc)
         payload = {
             "direction":     direction,
@@ -236,7 +254,6 @@ class DataLineageStore:
         )
 
     def record_quality(self, report_dict: Dict[str, Any]) -> None:
-        """Record a DataQualityEngine report."""
         import uuid
         now = datetime.now(timezone.utc)
         self._enqueue(
@@ -258,16 +275,11 @@ class DataLineageStore:
         since: Optional[datetime] = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """
-        Query lineage records.
-
-        Returns list of dicts with all record fields.
-        """
         if not self._conn:
             return []
 
-        clauses = []
-        params  = []
+        clauses: List[str] = []
+        params:  List[Any] = []
 
         if record_type:
             clauses.append("record_type = ?")
@@ -295,7 +307,6 @@ class DataLineageStore:
 
         try:
             cursor = self._conn.execute(sql, params)
-            rows   = cursor.fetchall()
             return [
                 {
                     "id":             r[0],
@@ -308,14 +319,13 @@ class DataLineageStore:
                     "payload":        json.loads(r[7]),
                     "created_at":     r[8],
                 }
-                for r in rows
+                for r in cursor.fetchall()
             ]
         except Exception as exc:
             logger.warning("DataLineageStore.query error: %s", exc)
             return []
 
     def count(self, record_type: Optional[str] = None) -> int:
-        """Return total record count, optionally filtered by type."""
         if not self._conn:
             return 0
         try:
@@ -334,10 +344,11 @@ class DataLineageStore:
 
     def stats(self) -> Dict[str, Any]:
         return {
-            "write_count": self._write_count,
-            "drop_count":  self._drop_count,
-            "queue_size":  self._queue.qsize(),
-            "db_path":     str(_DB_PATH),
+            "write_count":   self._write_count,
+            "drop_count":    self._drop_count,
+            "prune_count":   self._prune_count,
+            "queue_size":    self._queue.qsize(),
+            "db_path":       str(_DB_PATH),
             "total_records": self.count(),
             "by_type": {
                 t: self.count(t)
@@ -375,7 +386,6 @@ class DataLineageStore:
             logger.debug("DataLineageStore queue full — dropping record")
 
     def _flush_loop(self) -> None:
-        """Background thread: batch-flush queue to SQLite."""
         while self._running:
             time.sleep(_FLUSH_INTERVAL)
             self._flush_queue()
@@ -394,12 +404,6 @@ class DataLineageStore:
         if not batch:
             return
 
-        sql = """
-            INSERT OR IGNORE INTO lineage_records
-                (id, record_type, schema_version, lineage_id, source,
-                 symbol, timestamp, payload, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
         rows = [
             (
                 r["id"], r["record_type"], r["schema_version"],
@@ -409,11 +413,46 @@ class DataLineageStore:
             for r in batch
         ]
         try:
-            self._conn.executemany(sql, rows)
+            self._conn.executemany(_INSERT_SQL, rows)
             self._conn.commit()
             self._write_count += len(rows)
         except Exception as exc:
             logger.warning("DataLineageStore flush error: %s", exc)
+
+    def _prune_loop(self) -> None:
+        """Periodically prune oldest records when total exceeds _MAX_RECORDS."""
+        while self._running:
+            time.sleep(_PRUNE_INTERVAL)
+            self._prune_old_records()
+
+    def _prune_old_records(self) -> None:
+        if not self._conn:
+            return
+        try:
+            total = self.count()
+            if total <= _MAX_RECORDS:
+                return
+            excess = total - _MAX_RECORDS
+            # Delete oldest records (by created_at)
+            self._conn.execute(
+                """
+                DELETE FROM lineage_records
+                WHERE id IN (
+                    SELECT id FROM lineage_records
+                    ORDER BY created_at ASC
+                    LIMIT ?
+                )
+                """,
+                (excess,),
+            )
+            self._conn.commit()
+            self._prune_count += excess
+            logger.info(
+                "DataLineageStore: pruned %d old records (total was %d)",
+                excess, total,
+            )
+        except Exception as exc:
+            logger.warning("DataLineageStore prune error: %s", exc)
 
 
 # Module-level singleton
