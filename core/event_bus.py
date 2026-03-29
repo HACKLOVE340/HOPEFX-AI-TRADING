@@ -285,9 +285,22 @@ class EventBus:
         """
         Publish a dict to a Redis channel.
 
+        Injects the current OpenTelemetry trace context (W3C traceparent/
+        tracestate) into the message payload so consumers can create child
+        spans linked to the publisher's trace.
+
         Retries MAX_RETRIES times with exponential back-off before falling
         back to the local in-process bus.
         """
+        # Inject trace context for cross-service propagation
+        try:
+            from tracing.setup import inject_trace_context
+            trace_headers = inject_trace_context()
+            if trace_headers:
+                message = {**message, "_trace": trace_headers}
+        except Exception:
+            pass
+
         payload = json.dumps(message)
         attempt = 0
         backoff = BASE_BACKOFF_S
@@ -354,6 +367,15 @@ class EventBus:
                         continue
                     try:
                         msg = json.loads(raw["data"])
+                        # Restore trace context from publisher so this consumer's
+                        # spans appear as children in the same distributed trace.
+                        try:
+                            from tracing.setup import extract_trace_context
+                            trace_carrier = msg.pop("_trace", {})
+                            if trace_carrier:
+                                msg["_trace_context"] = extract_trace_context(trace_carrier)
+                        except Exception:
+                            pass
                         self._metrics["delivered"] += 1
                         yield msg
                     except json.JSONDecodeError as exc:

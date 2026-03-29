@@ -200,6 +200,16 @@ except Exception as _prom_err:
         "Prometheus monitoring setup failed: %s", _prom_err
     )
 
+# OpenTelemetry distributed tracing — instruments FastAPI, SQLAlchemy, Redis,
+# aiohttp and enables W3C trace context propagation through Redis messages.
+# Configured via OTEL_* env vars; gracefully no-ops when SDK is not installed.
+try:
+    from tracing.setup import setup_tracing as _setup_tracing
+
+    _setup_tracing(app)
+except Exception as _otel_err:
+    logger.debug("OpenTelemetry setup skipped: %s", _otel_err)
+
 
 # AppState extracted to core/app_state.py
 from core.app_state import AppState, app_state  # noqa: E402
