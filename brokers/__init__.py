@@ -8,6 +8,7 @@ HOPEFX Broker Module - PRODUCTION VERSION
 Fixed: Thread safety, proper position tracking, realistic simulation, timeouts
 """
 
+import abc
 import asyncio
 import logging
 import random
@@ -154,8 +155,18 @@ class Position:
         }
 
 
-class BaseBroker:
-    """Abstract base class with proper interface and connection management"""
+class BaseBroker(abc.ABC):
+    """
+    Abstract base class for all broker integrations.
+
+    Concrete subclasses must implement every ``@abc.abstractmethod``.
+    Attempting to instantiate a subclass with unimplemented methods raises
+    ``TypeError`` at construction time — not silently at the first call.
+
+    ``close_all_positions`` and ``cancel_all_orders`` have default
+    implementations built on ``close_position`` / ``cancel_order`` and do
+    not need to be overridden unless the broker offers a native bulk API.
+    """
 
     def __init__(self):
         self.connected = False
@@ -163,37 +174,44 @@ class BaseBroker:
         self._session = None
         self._connection_lock = asyncio.Lock()
 
-    async def connect(self):
-        raise NotImplementedError
+    @abc.abstractmethod
+    async def connect(self) -> None:
+        """Open the broker connection / authenticate."""
 
-    async def disconnect(self):
-        raise NotImplementedError
+    @abc.abstractmethod
+    async def disconnect(self) -> None:
+        """Close the broker connection and release resources."""
 
+    @abc.abstractmethod
     async def get_account_info(self) -> Dict:
-        raise NotImplementedError
+        """Return account balance, margin, and metadata."""
 
+    @abc.abstractmethod
     async def place_market_order(
         self,
         symbol: str,
         side: str,
         quantity: float,
     ) -> Order:
-        raise NotImplementedError
+        """Submit a market order and return the filled Order object."""
 
+    @abc.abstractmethod
     async def cancel_order(self, order_id: str) -> bool:
-        raise NotImplementedError
+        """Cancel a pending order. Returns True on success."""
 
+    @abc.abstractmethod
     async def get_positions(self) -> List[Position]:
-        raise NotImplementedError
+        """Return all open positions."""
 
+    @abc.abstractmethod
     async def close_position(self, position_id: str) -> bool:
-        raise NotImplementedError
+        """Close a single position by ID. Returns True on success."""
 
     async def close_all_positions(self) -> List[str]:
-        """Close all positions with error tracking"""
+        """Close all open positions. Returns list of successfully closed IDs."""
         positions = await self.get_positions()
-        closed = []
-        failed = []
+        closed: List[str] = []
+        failed: List[str] = []
 
         for pos in positions:
             try:
@@ -201,23 +219,24 @@ class BaseBroker:
                     closed.append(pos.id)
                 else:
                     failed.append(pos.id)
-            except Exception as e:
-                logger.error(f"Failed to close position {pos.id}: {e}")
+            except Exception as exc:
+                logger.error("Failed to close position %s: %s", pos.id, exc)
                 failed.append(pos.id)
 
         if failed:
-            logger.warning(f"Failed to close {len(failed)} positions: {failed}")
+            logger.warning("Failed to close %d positions: %s", len(failed), failed)
 
         return closed
 
+    @abc.abstractmethod
     async def get_pending_orders(self) -> List[Order]:
-        raise NotImplementedError
+        """Return all pending (unfilled) orders."""
 
     async def cancel_all_orders(self) -> List[str]:
-        """Cancel all pending orders with error tracking"""
+        """Cancel all pending orders. Returns list of successfully cancelled IDs."""
         orders = await self.get_pending_orders()
-        cancelled = []
-        failed = []
+        cancelled: List[str] = []
+        failed: List[str] = []
 
         for order in orders:
             try:
@@ -225,8 +244,8 @@ class BaseBroker:
                     cancelled.append(order.id)
                 else:
                     failed.append(order.id)
-            except Exception as e:
-                logger.error(f"Failed to cancel order {order.id}: {e}")
+            except Exception as exc:
+                logger.error("Failed to cancel order %s: %s", order.id, exc)
                 failed.append(order.id)
 
         return cancelled
