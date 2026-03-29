@@ -1,6 +1,7 @@
 # Deployment Guide
 
-> Current version: **v1.16** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
+> Current version: **v1.17** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
+> Last updated: 2026-07-14
 
 ## Prerequisites
 
@@ -47,16 +48,30 @@ nano .env
 
 **Required environment variables:**
 ```bash
-# Security (CRITICAL - Generate unique values!)
+# Security — generate unique values for each deployment
+SECURITY_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
 CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-CONFIG_SALT=$(python -c "import secrets; print(secrets.token_hex(16))")
+HOPEFX_KILL_SWITCH_TOKEN=$(python -c "import secrets; print(secrets.token_hex(32))")
+
+# Subscription license key — required for all trading endpoints
+# Obtain from hopefx.com/pricing after subscribing
+# Without this, /api/trading/, /api/signals/, /api/ml/ return 403
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
 
 # Database
 POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_hex(16))")
 POSTGRES_USER=hopefx_admin
+DATABASE_URL=postgresql://hopefx_admin:${POSTGRES_PASSWORD}@postgres:5432/hopefx_db
 
 # Application
 APP_ENV=production
+LOG_LEVEL=INFO
+```
+
+Validate all secrets before starting:
+```bash
+python scripts/manage_secrets.py validate
+# Expected: All required secrets are valid.
 ```
 
 #### 4. Build and Start
@@ -523,16 +538,28 @@ curl -s https://your-domain.com/health | python3 -m json.tool | grep email
 
 ## Production Checklist
 
-- [ ] Set unique CONFIG_ENCRYPTION_KEY and CONFIG_SALT
-- [ ] Configure PostgreSQL with strong password
-- [ ] Set up SSL/TLS with Nginx
-- [ ] Configure firewall (UFW)
-- [ ] Set up automated backups
-- [ ] Configure log rotation
-- [ ] Enable monitoring
-- [ ] Test disaster recovery
-- [ ] Document custom configurations
-- [ ] Set up alerting (Discord/Telegram/Email)
+### Secrets & Subscription
+- [ ] `SECURITY_JWT_SECRET` generated (≥ 32 chars, not a placeholder)
+- [ ] `CONFIG_ENCRYPTION_KEY` generated (≥ 32 chars, not a placeholder)
+- [ ] `HOPEFX_KILL_SWITCH_TOKEN` generated (≥ 32 chars, not a placeholder)
+- [ ] `HOPEFX_LICENSE_KEY` set and validated (`python scripts/manage_secrets.py validate`)
+- [ ] `APP_ENV=production` set
+
+### Infrastructure
+- [ ] PostgreSQL configured with strong password
+- [ ] SSL/TLS configured with Nginx + Let's Encrypt
+- [ ] Firewall configured (UFW: allow 22, 80, 443 only)
+- [ ] Automated database backups scheduled (daily, 30-day retention)
+- [ ] Log rotation configured (`/etc/logrotate.d/hopefx`)
+- [ ] Monitoring enabled (Prometheus + Grafana)
+- [ ] Alerting configured (Telegram + email)
+
+### Validation
+- [ ] `python scripts/manage_secrets.py validate` — all green
+- [ ] `python deployment_guide.py` — all checks pass
+- [ ] `curl https://your-domain.com/health` — all components healthy
+- [ ] `curl https://your-domain.com/api/monetization/subscription/me` — plan active
+- [ ] Test disaster recovery procedure documented
 
 ---
 
@@ -595,6 +622,7 @@ kubectl create secret generic hopefx-secrets \
   --from-literal=SECURITY_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))") \
   --from-literal=CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") \
   --from-literal=HOPEFX_KILL_SWITCH_TOKEN=$(python -c "import secrets; print(secrets.token_hex(32))") \
+  --from-literal=HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX \
   --from-literal=DATABASE_URL=postgresql://hopefx:password@postgres:5432/hopefx_db \
   --from-literal=REDIS_URL=redis://redis:6379/0
 ```
@@ -660,8 +688,12 @@ python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with production values
+# Edit .env with production values — minimum required:
+#   SECURITY_JWT_SECRET, CONFIG_ENCRYPTION_KEY, HOPEFX_KILL_SWITCH_TOKEN
+#   HOPEFX_LICENSE_KEY, DATABASE_URL, APP_ENV=production
 nano .env
+# Validate all secrets before proceeding
+python scripts/manage_secrets.py validate
 alembic upgrade head
 exit
 ```
