@@ -552,3 +552,191 @@ class RLAgentTrainer:
     def predict(self, candles: List[Dict]) -> Tuple[int, float]:
         """Predict action from recent candles. 0=HOLD 1=BUY 2=SELL."""
         return self.agent.predict(candles)
+
+
+# ── Walk-forward evaluation ───────────────────────────────────────────────────
+
+
+@dataclass
+class WalkForwardFold:
+    """Results for a single walk-forward fold."""
+
+    fold: int
+    train_start: str
+    train_end: str
+    test_start: str
+    test_end: str
+    sharpe: float
+    total_return: float
+    max_drawdown: float
+    win_rate: float
+    trades: int
+    model_path: str
+
+
+@dataclass
+class WalkForwardResult:
+    """Aggregated walk-forward evaluation results."""
+
+    symbol: str
+    timeframe: str
+    n_folds: int
+    folds: List[WalkForwardFold]
+    avg_sharpe: float
+    avg_return: float
+    avg_drawdown: float
+    avg_win_rate: float
+    stability_score: float   # 0–100: 100 = perfectly consistent across folds
+    timesteps_per_fold: int
+    completed_at: str
+
+    def __str__(self) -> str:
+        return (
+            f"WalkForward({self.n_folds} folds)  "
+            f"AvgSharpe={self.avg_sharpe:.3f}  "
+            f"AvgReturn={self.avg_return * 100:.2f}%  "
+            f"Stability={self.stability_score:.1f}/100"
+        )
+
+
+def walk_forward_eval(
+    candles: List[Dict],
+    symbol: str = "XAU_USD",
+    timeframe: str = "H1",
+    n_folds: int = 5,
+    timesteps_per_fold: int = 50_000,
+    train_pct: float = 0.70,
+    model_name_prefix: str = "hopefx_ppo_wf",
+) -> WalkForwardResult:
+    """
+    Walk-forward evaluation of the PPO agent.
+
+    Splits ``candles`` into ``n_folds`` anchored windows:
+      - Each fold trains on the first ``train_pct`` of its window.
+      - Tests on the remaining ``1 - train_pct``.
+      - Windows are anchored (expanding train set) to avoid look-ahead bias.
+
+    Parameters
+    ----------
+    candles           : list of OHLCV dicts (sorted ascending by timestamp)
+    symbol            : instrument name (for logging)
+    timeframe         : bar timeframe (for logging)
+    n_folds           : number of walk-forward folds
+    timesteps_per_fold: PPO training steps per fold
+    train_pct         : fraction of each fold window used for training
+    model_name_prefix : prefix for saved model filenames
+
+    Returns
+    -------
+    WalkForwardResult with per-fold metrics and aggregate statistics.
+    """
+    import pandas as pd
+    from datetime import timezone
+
+    if len(candles) < 200:
+        raise ValueError(f"Need at least 200 candles, got {len(candles)}")
+
+    df = pd.DataFrame(candles)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    total = len(df)
+    fold_size = total // n_folds
+    folds_results: List[WalkForwardFold] = []
+
+    logger.info(
+        "Walk-forward eval: %d candles, %d folds, %d steps/fold",
+        total, n_folds, timesteps_per_fold,
+    )
+
+    for fold_idx in range(n_folds):
+        # Anchored expanding window: train on [0 .. fold_end * train_pct]
+        fold_end = fold_size * (fold_idx + 1)
+        fold_df = df.iloc[:fold_end].reset_index(drop=True)
+
+        split = int(len(fold_df) * train_pct)
+        if split < 100 or (len(fold_df) - split) < 50:
+            logger.warning("Fold %d: insufficient data (%d rows), skipping", fold_idx + 1, len(fold_df))
+            continue
+
+        train_rows = fold_df.iloc[:split]
+        test_rows  = fold_df.iloc[split:]
+
+        train_candles_fold = train_rows.to_dict("records")
+        test_candles_fold  = test_rows.to_dict("records")
+
+        model_name = f"{model_name_prefix}_fold{fold_idx + 1}"
+        agent = RLAgent(model_name=model_name)
+
+        try:
+            train_env = ForexTradingEnv(train_candles_fold)
+            test_env  = ForexTradingEnv(test_candles_fold)
+        except ValueError as exc:
+            logger.warning("Fold %d env creation failed: %s", fold_idx + 1, exc)
+            continue
+
+        logger.info("Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold)
+        agent.train(train_env, timesteps=timesteps_per_fold, verbose=0)
+
+        metrics = agent.evaluate(test_env)
+
+        fold_result = WalkForwardFold(
+            fold=fold_idx + 1,
+            train_start=str(train_rows["timestamp"].iloc[0]),
+            train_end=str(train_rows["timestamp"].iloc[-1]),
+            test_start=str(test_rows["timestamp"].iloc[0]),
+            test_end=str(test_rows["timestamp"].iloc[-1]),
+            sharpe=metrics["sharpe"],
+            total_return=metrics["total_return"],
+            max_drawdown=metrics["max_drawdown"],
+            win_rate=metrics["win_rate"],
+            trades=int(metrics["trades"]),
+            model_path=agent.model_path,
+        )
+        folds_results.append(fold_result)
+        logger.info(
+            "Fold %d: Sharpe=%.3f  Return=%.2f%%  MaxDD=%.2f%%  WinRate=%.1f%%",
+            fold_idx + 1,
+            metrics["sharpe"],
+            metrics["total_return"] * 100,
+            metrics["max_drawdown"] * 100,
+            metrics["win_rate"] * 100,
+        )
+
+    if not folds_results:
+        raise RuntimeError("All walk-forward folds failed — check candle data quality")
+
+    sharpes = [f.sharpe for f in folds_results]
+    returns = [f.total_return for f in folds_results]
+    drawdowns = [f.max_drawdown for f in folds_results]
+    win_rates = [f.win_rate for f in folds_results]
+
+    avg_sharpe   = float(np.mean(sharpes))
+    avg_return   = float(np.mean(returns))
+    avg_drawdown = float(np.mean(drawdowns))
+    avg_win_rate = float(np.mean(win_rates))
+
+    # Stability score: 100 - coefficient of variation of Sharpe ratios (capped 0–100)
+    sharpe_std  = float(np.std(sharpes)) if len(sharpes) > 1 else 0.0
+    sharpe_mean = abs(avg_sharpe) + 1e-9
+    cv = sharpe_std / sharpe_mean
+    stability = float(max(0.0, min(100.0, 100.0 * (1.0 - cv))))
+
+    from datetime import datetime, timezone as tz
+    completed_at = datetime.now(tz.utc).isoformat()
+
+    result = WalkForwardResult(
+        symbol=symbol,
+        timeframe=timeframe,
+        n_folds=len(folds_results),
+        folds=folds_results,
+        avg_sharpe=avg_sharpe,
+        avg_return=avg_return,
+        avg_drawdown=avg_drawdown,
+        avg_win_rate=avg_win_rate,
+        stability_score=stability,
+        timesteps_per_fold=timesteps_per_fold,
+        completed_at=completed_at,
+    )
+    logger.info("Walk-forward complete: %s", result)
+    return result
