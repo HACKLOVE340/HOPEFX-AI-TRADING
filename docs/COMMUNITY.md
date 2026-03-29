@@ -1,326 +1,185 @@
 # HOPEFX Community Guide
 
-> Building a thriving community of traders and developers
+> Building a community of traders and developers around open-source algorithmic trading.
 
 ---
 
-## 🌍 Welcome to the HOPEFX Community
+## Official Channels
 
-HOPEFX AI Trading is more than just software—it's a community of traders, developers, and enthusiasts working together to democratize algorithmic trading. Whether you're a beginner learning the ropes or an expert sharing knowledge, you're welcome here.
+### GitHub (Primary)
+All development, issues, and discussions happen on GitHub.
 
----
+**Repository:** [https://github.com/HACKLOVE340/HOPEFX-AI-TRADING](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
 
-## 📱 Official Channels
+- **Issues** — bug reports, feature requests
+- **Discussions** — questions, strategy ideas, general chat
+- **Pull Requests** — code contributions
+- **Releases** — version announcements
 
-### Discord Server 💬
-Our primary community hub for real-time discussions.
+### Discord
+Real-time community chat for traders and developers.
 
-**Join:** [discord.gg/hopefx](https://discord.gg/hopefx)
+**Invite:** Set up at [discord.com/developers](https://discord.com/developers) — configure your own server or use the GitHub Discussions tab until a server is live.
 
-**Channels:**
-- `#welcome` - Introduce yourself
-- `#general` - General discussions
-- `#trading-strategies` - Strategy discussions
-- `#ml-ai` - Machine learning topics
-- `#coding-help` - Technical support
-- `#prop-firm` - Prop firm trading
-- `#backtesting` - Backtest results and optimization
-- `#signals` - Signal sharing (paper trading only)
-- `#showcase` - Share your work
-- `#announcements` - Official updates
+Suggested channel structure when you set up your server:
+```
+#welcome          — onboarding and rules
+#announcements    — releases and updates (read-only)
+#general          — open discussion
+#trading-signals  — paper trading signal sharing
+#strategies       — strategy development and ideas
+#ml-ai            — machine learning discussion
+#backtesting      — backtest results and analysis
+#prop-firm        — prop firm challenge discussion
+#coding-help      — technical support
+#bugs             — bug reports (link to GitHub Issues)
+```
 
-### Telegram 📢
-Quick updates and announcements.
+### Telegram
+For quick announcements and alerts.
 
-**Join:** [t.me/hopefx](https://t.me/hopefx)
+Set up a channel at [telegram.org](https://telegram.org) and link it in your `.env`:
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_channel_id
+```
 
-- Announcements channel
-- Discussion group
-- Signal alerts (paper trading)
+The platform will post trade signals and alerts automatically once configured.
 
-### Twitter/X 🐦
-Follow for updates and trading insights.
+### YouTube
+Video tutorials covering installation, strategy development, ML training, and deployment.
 
-**Follow:** [@HOPEFX_Trading](https://twitter.com/HOPEFX_Trading)
-
-- Product updates
-- Trading tips
-- Community highlights
-- Industry news
-
-### YouTube 📺
-Video tutorials and educational content.
-
-**Subscribe:** [youtube.com/@hopefx](https://youtube.com/@hopefx)
-
-- Installation guides
-- Strategy tutorials
-- ML/AI deep dives
-- Live trading sessions
-- Community spotlights
-
-### GitHub 💻
-The home of our open-source project.
-
-**Star:** [github.com/HACKLOVE340/HOPEFX-AI-TRADING](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
-
-- Source code
-- Issue tracking
-- Feature requests
-- Pull requests
-- Discussions
+See [VIDEO_TUTORIALS.md](VIDEO_TUTORIALS.md) for the full episode list and scripts.
 
 ---
 
-## 🤝 How to Participate
+## Contributing Code
 
-### 1. Join the Conversation
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide.
 
-- **Introduce yourself** in Discord `#welcome`
-- **Share your trading background** and interests
-- **Ask questions** - there are no stupid questions
-- **Help others** when you can
+**Quick summary:**
 
-### 2. Share Your Work
+```bash
+# 1. Fork the repository on GitHub
+# 2. Clone your fork
+git clone https://github.com/YOUR_USERNAME/HOPEFX-AI-TRADING.git
+cd HOPEFX-AI-TRADING
 
-We love seeing what the community builds!
+# 3. Create a feature branch
+git checkout -b feature/your-feature-name
 
-- **Custom strategies** you've developed
-- **Backtest results** and analysis
-- **Visualizations** and charts
-- **Integration projects**
-- **Educational content**
+# 4. Install dev dependencies
+pip install -r requirements-dev.txt
+pre-commit install
 
-Post in `#showcase` or tag us on social media.
+# 5. Make your changes and run tests
+pytest tests/ -q
 
-### 3. Contribute to the Project
+# 6. Commit and push
+git add .
+git commit -m "feat: describe your change"
+git push origin feature/your-feature-name
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+# 7. Open a Pull Request on GitHub
+```
 
-**Ways to contribute:**
-- 🐛 Report bugs
-- 💡 Suggest features
-- 📖 Improve documentation
-- 🧪 Write tests
-- 🔧 Submit code fixes
-- 🌐 Translate documentation
-- 📹 Create tutorials
+**What we welcome:**
+- New trading strategies (add to `strategies/`)
+- Broker connectors (add to `brokers/`)
+- ML feature engineering improvements (add to `ml/`)
+- Bug fixes with regression tests
+- Documentation improvements
+- Translation of docs
 
-### 4. Participate in Events
-
-- **Weekly Trading Discussions** - Sundays on Discord
-- **Monthly Webinars** - Deep dives on specific topics
-- **Community Challenges** - Backtest competitions
-- **Q&A Sessions** - Ask the developers
-
----
-
-## 📰 Stay Updated
-
-### Newsletter
-
-Subscribe to our monthly newsletter for:
-- Feature updates
-- Trading insights
-- Community highlights
-- Tips and tutorials
-- Industry news
-
-**Subscribe:** [hopefx.com/newsletter](https://hopefx.com/newsletter)
-
-### Changelog
-
-Stay updated on releases:
-- [GitHub Releases](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/releases)
-- Discord `#announcements`
-- Twitter [@HOPEFX_Trading](https://twitter.com/HOPEFX_Trading)
+**What requires discussion first (open an Issue):**
+- Changes to the risk engine or kill switch
+- Changes to the ML training pipeline
+- New dependencies
+- Breaking API changes
 
 ---
 
-## 🏆 Recognition Programs
+## Reporting Bugs
 
-### Contributor Badges
+Use GitHub Issues: [github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues)
 
-Earn recognition for your contributions:
+Include:
+1. Python version (`python --version`)
+2. OS and version
+3. Full error traceback
+4. Minimal reproduction steps
+5. What you expected vs what happened
 
-| Badge | Criteria |
-|-------|----------|
-| 🥇 Gold Contributor | 50+ merged PRs |
-| 🥈 Silver Contributor | 25+ merged PRs |
-| 🥉 Bronze Contributor | 10+ merged PRs |
-| 🐛 Bug Hunter | 10+ bugs reported |
-| 📖 Documentarian | Significant docs contributions |
-| 🎓 Educator | Created educational content |
-| 🌟 Community Star | Outstanding community support |
-
-### Strategy Leaderboard
-
-Share your strategy performance:
-- Monthly backtest competitions
-- Paper trading challenges
-- Strategy optimization contests
-
-**Note:** Real money results are never required or encouraged for public sharing.
-
-### Featured Projects
-
-We regularly highlight community projects:
-- Custom strategies
-- Broker integrations
-- Visualization tools
-- Educational content
-
-Submit your project to `#showcase` on Discord.
+For security vulnerabilities, do **not** open a public issue. See [SECURITY.md](SECURITY.md) for the responsible disclosure process.
 
 ---
 
-## 📚 Learning Resources
+## Requesting Features
 
-### Documentation
+Open a GitHub Discussion or Issue with the label `enhancement`.
 
-- [Installation Guide](INSTALLATION.md)
-- [API Guide](./API_GUIDE.md)
-- [FAQ](./FAQ.md)
-- [Security Guide](SECURITY.md)
-
-### Video Tutorials
-
-See [VIDEO_TUTORIALS.md](./VIDEO_TUTORIALS.md) for our complete playlist.
-
-### Community Resources
-
-- **Strategy Templates:** Shared by community members
-- **Backtest Data:** Free historical data sources
-- **Code Snippets:** Reusable code examples
-- **Study Groups:** Learn together
+Describe:
+- The problem you're trying to solve
+- Your proposed solution
+- Any alternatives you considered
+- Whether you're willing to implement it
 
 ---
 
-## 🛡️ Community Guidelines
+## Community Standards
 
-### Our Values
+All community spaces follow the [Code of Conduct](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/CODE_OF_CONDUCT.md).
 
-1. **Respect** - Treat everyone with respect
-2. **Learning** - We're all here to learn
-3. **Sharing** - Knowledge grows when shared
-4. **Quality** - Strive for quality contributions
-5. **Safety** - Never risk more than you can afford
-
-### Rules
-
-1. **Be respectful** - No harassment, discrimination, or personal attacks
-2. **Stay on topic** - Use appropriate channels
-3. **No financial advice** - We share educational content, not financial advice
-4. **No promotion** - Don't spam or promote unrelated products
-5. **Protect privacy** - Don't share others' personal information
-6. **Verify information** - Don't spread misinformation
-7. **Paper trading only** - Don't encourage risky real-money trades
-
-### Moderation
-
-- Warnings for minor violations
-- Temporary mutes for repeated issues
-- Permanent bans for serious violations
-
-Report issues to moderators via DM.
+Key points:
+- Be respectful and constructive
+- No financial advice — share strategies as educational content only
+- No spam or self-promotion without context
+- No sharing of real API keys or credentials
+- Paper trading signals only in community channels — never real account signals
 
 ---
 
-## 🙋 Getting Help
+## Getting Help
 
-### Technical Support
+**Before asking:**
+1. Check [FAQ.md](FAQ.md)
+2. Check [DEBUGGING.md](DEBUGGING.md)
+3. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+4. Search existing GitHub Issues and Discussions
 
-1. **Check the FAQ:** [FAQ.md](./FAQ.md)
-2. **Search GitHub Issues:** Many questions already answered
-3. **Ask in Discord:** `#coding-help` channel
-4. **Create a GitHub Issue:** For bugs and feature requests
-
-### Trading Questions
-
-1. **Read the strategies documentation**
-2. **Join strategy discussions on Discord**
-3. **Attend weekly trading discussions**
-4. **Review community-shared backtests**
-
-### Emergency
-
-For security issues, see [SECURITY.md](SECURITY.md)
+**When asking:**
+- Include your Python version, OS, and error message
+- Share the relevant section of your `.env` (redact all secrets)
+- Describe what you tried already
 
 ---
 
-## 🎯 Roadmap Participation
+## Sharing Your Work
 
-We believe in community-driven development.
+We encourage sharing:
+- Backtest results (with methodology — walk-forward, OOS period, N trades)
+- Custom strategies (as code contributions or Discussions posts)
+- Deployment setups (VPS configs, Docker Compose variants)
+- Performance reports (paper trading only until you're comfortable)
 
-### Feature Voting
-
-Vote on upcoming features:
-- [GitHub Discussions](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/discussions)
-- Discord `#feature-requests`
-
-### Roadmap
-
-See our public roadmap:
-- [ROADMAP.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/ANALYSIS_AND_ROADMAP.md)
-- [GitHub Projects](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/projects)
-
-### RFC Process
-
-For major features, we use RFCs:
-1. Discuss idea in Discord/GitHub
-2. Write RFC document
-3. Community review period
-4. Implementation if approved
+When sharing backtest results, always include:
+- OOS period (not in-sample)
+- Number of trades (N)
+- Sharpe standard error (SE = 1/sqrt(N))
+- Whether walk-forward validation was used
 
 ---
 
-## 🌟 Success Stories
+## Sponsoring
 
-*Share your HOPEFX success story and get featured!*
+HOPEFX is open-source under AGPL-3.0. If you use it commercially, a commercial license is required — see [LICENSE-COMMERCIAL.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE-COMMERCIAL.md).
 
-### Community Testimonials
-
-> "HOPEFX helped me pass my FTMO challenge on the first try. The risk management features are incredible."
-> — Community Member
-
-> "As a Python developer, finally having a trading framework I can actually understand and modify has been game-changing."
-> — Community Member
-
-> "The community support is amazing. Every question I've had has been answered within hours."
-> — Community Member
-
-**Share your story:** Email stories@hopefx.com or post in `#success-stories`
+To support development:
+- Star the repository on GitHub
+- Contribute code or documentation
+- Report bugs with detailed reproduction steps
+- Share the project with other traders and developers
 
 ---
 
-## 📞 Contact
-
-### General Inquiries
-- **Email:** community@hopefx.com
-- **Discord:** Ask moderators
-
-### Partnership Inquiries
-- **Email:** partnerships@hopefx.com
-
-### Media Inquiries
-- **Email:** press@hopefx.com
-
----
-
-## 🙏 Acknowledgments
-
-Special thanks to:
-- All our contributors
-- Community moderators
-- Beta testers
-- Everyone who has shared feedback
-
-**You make HOPEFX better every day!**
-
----
-
-*Join us in building the future of algorithmic trading. Together, we're stronger.*
-
----
-
-[Discord](https://discord.gg/hopefx) • [Telegram](https://t.me/hopefx) • [Twitter](https://twitter.com/HOPEFX_Trading) • [YouTube](https://youtube.com/@hopefx) • [GitHub](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)
+*Last updated: 2026-07-14*
