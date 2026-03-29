@@ -476,3 +476,18 @@ class Gatekeeper:
             "kill_active":   self._kill_active,
             "paused":        time.monotonic() < self._paused_until,
         }
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+# Wired to the orchestrator singleton so all market-data checks use the
+# authoritative data layer rather than stale signal attributes.
+def _make_gatekeeper() -> Gatekeeper:
+    try:
+        from data_layer.orchestrator import orchestrator
+        from data_layer.lineage.store import lineage_store
+        return Gatekeeper(orchestrator=orchestrator, lineage_store=lineage_store)
+    except Exception:
+        return Gatekeeper()
+
+
+gatekeeper = _make_gatekeeper()
