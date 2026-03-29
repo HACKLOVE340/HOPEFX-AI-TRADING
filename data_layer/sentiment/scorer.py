@@ -241,6 +241,47 @@ class GoldSentimentScorer:
         """Alias for score() — preferred public API name."""
         return self.score(article)
 
+    def get_aggregate_signal(
+        self,
+        articles: Optional[List[NewsArticle]] = None,
+    ) -> Dict[str, float]:
+        """
+        Return an aggregate sentiment signal dict from a list of articles.
+
+        If articles is None, returns a neutral signal (used when no articles
+        have been scored yet — e.g. at startup before any feeds are live).
+
+        Keys match the orchestrator ML feature names so callers can merge
+        directly into the feature dict:
+          news_sentiment_score    : EMA of article sentiment scores [-1, 1]
+          news_sentiment_momentum : rate of change (0.0 when no history)
+          news_article_count_1h   : number of articles provided
+          news_bullish_ratio      : fraction of bullish articles [0, 1]
+        """
+        if not articles:
+            return {
+                "news_sentiment_score":    0.0,
+                "news_sentiment_momentum": 0.0,
+                "news_article_count_1h":   0.0,
+                "news_bullish_ratio":      0.5,
+            }
+
+        ema = 0.0
+        alpha = 0.15
+        bullish = 0
+        for a in articles:
+            ema = alpha * a.sentiment_score + (1.0 - alpha) * ema
+            if a.sentiment_label == "bullish":
+                bullish += 1
+
+        bull_ratio = bullish / len(articles) if articles else 0.5
+        return {
+            "news_sentiment_score":    round(ema, 4),
+            "news_sentiment_momentum": 0.0,
+            "news_article_count_1h":   float(len(articles)),
+            "news_bullish_ratio":      round(bull_ratio, 4),
+        }
+
     def score_batch(self, articles: List[NewsArticle]) -> List[NewsArticle]:
         """Score a list of articles. Returns scored articles only (relevance > 0)."""
         scored = []
