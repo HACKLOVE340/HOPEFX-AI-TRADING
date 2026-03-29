@@ -346,7 +346,13 @@ class SklearnOnlineLearner:
             )
 
     def _extract_features(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
-        """Extract a simple feature vector from OHLCV bars."""
+        """
+        Extract feature vector from OHLCV bars.
+
+        Appends 4 data layer features (sentiment, OFI, macro impact, blackout)
+        from the orchestrator when available. These are appended after the OHLCV
+        features and padded/truncated to n_features.
+        """
         try:
             import pandas as pd  # noqa: F401
 
@@ -354,11 +360,25 @@ class SklearnOnlineLearner:
             if not cols:
                 return None
             X = bars[cols].ffill().bfill().values.astype(float)
-            # Pad or truncate to n_features
-            n = X.shape[0] * X.shape[1]
             flat = X.flatten()
-            if n < self.n_features:
-                flat = np.pad(flat, (0, self.n_features - n))
+
+            # Append data layer features (4 scalars)
+            dl_extra = np.zeros(4, dtype=float)
+            try:
+                from data_layer.orchestrator import orchestrator
+                feats = orchestrator.get_ml_features()
+                dl_extra[0] = feats.get("news_sentiment_score",   0.0)
+                dl_extra[1] = feats.get("micro_ofi",              0.0)
+                dl_extra[2] = feats.get("macro_impact_score_now", 0.0)
+                dl_extra[3] = feats.get("macro_is_blackout",      0.0)
+            except Exception:
+                pass
+
+            flat = np.concatenate([flat, dl_extra])
+
+            # Pad or truncate to n_features
+            if len(flat) < self.n_features:
+                flat = np.pad(flat, (0, self.n_features - len(flat)))
             else:
                 flat = flat[: self.n_features]
             return flat.reshape(1, -1)

@@ -276,7 +276,7 @@ class AdvancedModelPredictor:
             # with 0 if it was not trained on them — safe degradation.
             try:
                 from data_layer.orchestrator import orchestrator
-                dl_features = orchestrator.get_ml_features(symbol=symbol)
+                dl_features = orchestrator.get_ml_features()
                 if dl_features:
                     import pandas as _pd
                     dl_row = _pd.DataFrame([dl_features], index=result.index)

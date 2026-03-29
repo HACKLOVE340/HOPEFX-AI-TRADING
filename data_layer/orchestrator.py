@@ -395,6 +395,33 @@ class MarketDataOrchestrator:
         except Exception:
             return False
 
+    def is_safe_to_trade(self) -> bool:
+        """
+        Return True if conditions are safe for live trading.
+
+        Checks:
+          1. At least one gold feed is alive and returning valid ticks
+          2. Not in a macro event blackout window
+          3. Latest tick confidence >= 0.30
+        """
+        # Check blackout
+        if self.is_blackout_window():
+            return False
+
+        # Check tick quality
+        tick = self.get_latest_tick()
+        if tick is not None and tick.confidence < 0.30:
+            return False
+
+        # Check at least one feed alive
+        if self._gold_feed and not self._gold_feed.active_sources():
+            # No active sources — but only block if we've been running > 30s
+            import time
+            if self._started and (time.time() - self._start_ts) > 30.0:
+                return False
+
+        return True
+
     def get_quality_report(self, symbol: str = "XAU_USD") -> Optional[QualityReport]:
         """Return the latest data quality report."""
         try:
