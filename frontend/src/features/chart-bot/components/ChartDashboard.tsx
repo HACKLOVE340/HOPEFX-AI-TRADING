@@ -35,7 +35,7 @@ import AIChartBot from './AIChartBot';
 import RiskHeatmap from './RiskHeatmap';
 import SignalFeed from './SignalFeed';
 import type { ChartClickContext } from '../types';
-import { IChartApi } from 'lightweight-charts';
+import { IChartApi, ISeriesApi, SeriesType } from 'lightweight-charts';
 
 // ─── Global CSS injection ─────────────────────────────────────────────────────
 
@@ -234,16 +234,25 @@ const LiveFeedActivator: React.FC = () => {
 
 // ─── Chart Container (chart + SVG overlays) ───────────────────────────────────
 
+const CHART_HEADER_HEIGHT = 68; // crosshair bar + header
+
 const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void }> = memo(({ onChartClick }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef  = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ width: 0, height: 0 });
-  const chartApiRef = useRef<IChartApi | null>(null);
+
+  // Refs populated by CoreChart's onChartReady callback
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesApiRef = useRef<ISeriesApi<SeriesType> | null>(null);
+
+  // Re-render trigger so AIOverlays gets the refs after chart init
+  const [chartReady, setChartReady] = useState(false);
 
   const signals    = useChartBotStore((s) => s.signals);
   const levels     = useChartBotStore((s) => s.levels);
   const trendlines = useChartBotStore((s) => s.trendlines);
   const patterns   = useChartBotStore((s) => s.patterns);
 
+  // Observe container size for SVG overlay dimensions
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
@@ -254,27 +263,39 @@ const ChartContainer: React.FC<{ onChartClick: (ctx: ChartClickContext) => void 
     return () => ro.disconnect();
   }, []);
 
+  // Called by CoreChart once the chart and candle series are ready
+  const handleChartReady = useCallback((chart: IChartApi, series: ISeriesApi<'Candlestick'>) => {
+    chartApiRef.current  = chart;
+    seriesApiRef.current = series;
+    setChartReady(true);
+  }, []);
+
   return (
     <div ref={containerRef} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
       <PanelErrorBoundary label="CORE CHART">
         <CoreChart
           onChartClick={onChartClick}
+          onChartReady={handleChartReady}
           signals={signals}
           levels={levels}
           height={540}
         />
       </PanelErrorBoundary>
-      {/* SVG overlays sit on top of the chart canvas */}
-      <div style={{ position: 'absolute', top: 68, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
-        <AIOverlays
-          chart={chartApiRef.current}
-          levels={levels}
-          trendlines={trendlines}
-          patterns={patterns}
-          containerWidth={dims.width}
-          containerHeight={Math.max(dims.height - 68, 0)}
-        />
-      </div>
+
+      {/* SVG overlays — only rendered once chart refs are available */}
+      {chartReady && (
+        <div style={{ position: 'absolute', top: CHART_HEADER_HEIGHT, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+          <AIOverlays
+            chart={chartApiRef.current}
+            series={seriesApiRef.current}
+            levels={levels}
+            trendlines={trendlines}
+            patterns={patterns}
+            containerWidth={dims.width}
+            containerHeight={Math.max(dims.height - CHART_HEADER_HEIGHT, 0)}
+          />
+        </div>
+      )}
     </div>
   );
 });
