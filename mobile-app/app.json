@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "HopeFX Trading",
+    "slug": "hopefx-trading",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0f1c"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.hopefx.trading",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Used for biometric authentication",
+        "NSCameraUsageDescription": "Used for KYC document scanning"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#0a0f1c"
+      },
+      "package": "io.hopefx.trading",
+      "versionCode": 1,
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./src/assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/notification-icon.png",
+          "color": "#00d4aa",
+          "sounds": []
+        }
+      ]
+    ],
+    "scheme": "hopefx",
+    "extra": {
+      "eas": {
+        "projectId": "hopefx-trading-app"
+      },
+      "apiBaseUrl": "https://api.hopefx.io",
+      "wsBaseUrl": "wss://api.hopefx.io"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/hopefx-trading-app"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
