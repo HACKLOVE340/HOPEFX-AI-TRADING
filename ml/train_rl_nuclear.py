@@ -330,10 +330,18 @@ def train(
         callback_on_new_best=stop_cb,
     )
 
+    # progress_bar requires tqdm+rich; degrade gracefully if absent
+    try:
+        import tqdm  # noqa: F401
+        import rich  # noqa: F401
+        _progress_bar = True
+    except ImportError:
+        _progress_bar = False
+
     model.learn(
         total_timesteps=total_timesteps,
         callback=[checkpoint_cb, eval_cb],
-        progress_bar=True,
+        progress_bar=_progress_bar,
     )
 
     # Save final model and VecNormalize stats

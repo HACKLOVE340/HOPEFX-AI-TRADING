@@ -84,8 +84,13 @@ def _get_kill_switch():
         try:
             from kill_switch import kill_switch as ks
             _kill_switch = ks
-        except Exception as exc:
-            logger.warning("kill_switch import failed: %s", exc)
+        except ImportError:
+            try:
+                # Fallback: import the class and instantiate
+                from kill_switch import KillSwitch
+                _kill_switch = KillSwitch()
+            except Exception as exc:
+                logger.warning("kill_switch import failed: %s", exc)
     return _kill_switch
 
 
@@ -425,9 +430,11 @@ class NuclearHopeFXSupervisor:
         ks = _get_kill_switch()
         if ks is not None:
             try:
-                await ks.trigger_nuclear_mode()
+                # KillSwitch.activate() is synchronous
+                ks.activate("RL nuclear supervisor: nuclear event detected")
+                logger.critical("☢️ KillSwitch activated")
             except Exception as exc:
-                logger.error("kill_switch.trigger_nuclear_mode failed: %s", exc)
+                logger.error("kill_switch.activate failed: %s", exc)
         else:
             logger.critical("☢️ NUCLEAR MODE — kill_switch unavailable, manual intervention required")
 

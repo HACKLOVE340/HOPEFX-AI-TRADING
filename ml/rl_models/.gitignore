@@ -1,0 +1,7 @@
+# Intermediate training artifacts — not committed
+checkpoints/
+best/
+logs/
+# Keep the production model and VecNormalize stats
+!nuclear_decision_ppo.zip
+!nuclear_decision_vecnorm.pkl

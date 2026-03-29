@@ -816,3 +816,18 @@ def create_kill_switch_router(ks: "KillSwitch"):
         return {"status": "deactivated"}
 
     return router
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+# Imported by nuclear_supervisor and connect_to_life as:
+#   from kill_switch import kill_switch
+#
+# trigger_nuclear_mode() is an async wrapper so callers can await it uniformly.
+
+kill_switch = KillSwitch()
+
+
+async def trigger_nuclear_mode(reason: str = "RL nuclear supervisor triggered") -> None:
+    """Activate the kill switch for a nuclear event. Async-safe wrapper."""
+    kill_switch.activate(reason)
+    logger.critical("☢️ trigger_nuclear_mode called: %s", reason)
