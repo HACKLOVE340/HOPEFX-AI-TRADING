@@ -1026,4 +1026,98 @@ def create_signals_router():
             "recent_engine_signal_count": len(engine_signals),
         }
 
+    # ── Signal distribution validation ───────────────────────────────────────
+
+    from pydantic import BaseModel as _BM  # noqa: PLC0415
+    from typing import List as _List, Optional as _Opt  # noqa: PLC0415
+
+    class OOSSignalItem(_BM):
+        direction: str
+        confidence: float
+        raw_score: float
+
+    class LiveSignalItem(_BM):
+        direction: str
+        confidence: float
+        raw_score: float
+
+    class SetOOSReferenceRequest(_BM):
+        signals: _List[OOSSignalItem]
+
+    class ValidateSignalsRequest(_BM):
+        live_signals: _Opt[_List[LiveSignalItem]] = None
+
+    @signals_router.post("/distribution/oos-reference")
+    async def set_oos_reference(body: SetOOSReferenceRequest):
+        """
+        Set the OOS backtest signal distribution as the reference baseline.
+        Call this once after completing an OOS backtest.
+        """
+        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        validator = get_validator()
+        records = [
+            SignalRecord(
+                direction=s.direction,
+                confidence=s.confidence,
+                raw_score=s.raw_score,
+            )
+            for s in body.signals
+        ]
+        validator.set_oos_reference(records)
+        return {"set": True, "oos_sample_size": len(records)}
+
+    @signals_router.post("/distribution/validate")
+    async def validate_signal_distribution(body: ValidateSignalsRequest):
+        """
+        Validate that live signal distribution matches the OOS reference.
+
+        Runs KS test, PSI, mean drift, directional bias, and confidence drift checks.
+        Returns status: passed | warning | failed | insufficient_data.
+
+        - warning: monitor closely, consider retraining
+        - failed: PSI > 0.25 or major drift — retrain required
+        """
+        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        validator = get_validator()
+
+        live_records = None
+        if body.live_signals is not None:
+            live_records = [
+                SignalRecord(
+                    direction=s.direction,
+                    confidence=s.confidence,
+                    raw_score=s.raw_score,
+                )
+                for s in body.live_signals
+            ]
+
+        report = validator.validate(live_records)
+        return report.to_dict()
+
+    @signals_router.post("/distribution/add-live")
+    async def add_live_signal(body: LiveSignalItem):
+        """Append a single live signal to the validation buffer."""
+        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        validator = get_validator()
+        validator.add_live_signal(SignalRecord(
+            direction=body.direction,
+            confidence=body.confidence,
+            raw_score=body.raw_score,
+        ))
+        return {"buffered": True, "buffer_size": len(validator._live_signals)}
+
+    @signals_router.get("/distribution/status")
+    async def signal_distribution_status():
+        """Return current validation buffer sizes and last validation result."""
+        from ml.signal_validator import get_validator  # noqa: PLC0415
+        validator = get_validator()
+        report = validator.validate() if (
+            len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30
+        ) else None
+        return {
+            "oos_sample_size": len(validator._oos_signals),
+            "live_buffer_size": len(validator._live_signals),
+            "validation": report.to_dict() if report else None,
+        }
+
     return signals_router
