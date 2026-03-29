@@ -1,6 +1,7 @@
 # Installation
 
-Full installation guide for Linux, macOS, and Windows.
+> Full installation guide for Linux, macOS, and Windows.
+> Last updated: 2026-07-14
 
 ---
 
@@ -72,16 +73,33 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
-Edit `.env` — at minimum set these three secrets:
+Edit `.env` — at minimum set these four values:
 ```bash
+# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
 SECURITY_JWT_SECRET=<48-char random hex>
 CONFIG_ENCRYPTION_KEY=<48-char random hex>
 HOPEFX_KILL_SWITCH_TOKEN=<48-char random hex>
+
+# Subscription license key — required for trading endpoints
+# Obtain from hopefx.com/pricing or request a trial via GitHub Issues (label: trial-request)
+# Without this, all /api/trading/, /api/signals/, and /api/ml/ endpoints return 403
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
 ```
 
-Generate secrets:
+Generate all secrets at once:
 ```bash
-python -c "import secrets; print(secrets.token_hex(32))"
+python -c "
+import secrets
+print('SECURITY_JWT_SECRET=' + secrets.token_hex(32))
+print('CONFIG_ENCRYPTION_KEY=' + secrets.token_hex(32))
+print('HOPEFX_KILL_SWITCH_TOKEN=' + secrets.token_hex(32))
+"
+```
+
+Validate all secrets before proceeding:
+```bash
+python scripts/manage_secrets.py validate
+# Expected: All required secrets are valid.
 ```
 
 ### 6. Initialize the Database
@@ -246,12 +264,27 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name
 
 ### WSL2 (Recommended for Windows)
 
-Running inside WSL2 (Windows Subsystem for Linux) gives the best compatibility:
+WSL2 gives the best compatibility on Windows. All Linux features work inside WSL2,
+including Redis, PostgreSQL, and Docker. MT5 is the only feature that requires
+native Windows (not WSL2).
+
 ```powershell
+# Install WSL2 with Ubuntu 22.04 (run as Administrator)
 wsl --install -d Ubuntu-22.04
+
+# After reboot, open Ubuntu from the Start menu
+# Then follow the Linux installation steps inside WSL2
 ```
 
-Then follow the Linux installation steps inside WSL2.
+Inside WSL2, access the app from Windows at `http://localhost:8000` — WSL2 forwards
+ports to Windows automatically.
+
+**WSL2 + Docker Desktop:** Enable "Use WSL2 based engine" in Docker Desktop settings.
+Then `docker compose up -d` works from inside WSL2.
+
+**File system performance:** Clone the repository inside WSL2 (`~/projects/HOPEFX-AI-TRADING`),
+not on the Windows file system (`/mnt/c/...`). The Windows file system is 10–50x slower
+for Python operations.
 
 ### Windows Firewall
 
@@ -275,6 +308,10 @@ python -c "import fastapi, sqlalchemy, pydantic; print('Core OK')"
 # Check ML imports
 python -c "import xgboost, sklearn, pandas, numpy; print('ML OK')"
 
+# Validate all secrets (including license key)
+python scripts/manage_secrets.py validate
+# Expected: All required secrets are valid.
+
 # Run the test suite
 pytest tests/ -q --tb=short
 # Expected: 2560 passed, 0 failed (some skips for optional deps)
@@ -283,8 +320,29 @@ pytest tests/ -q --tb=short
 uvicorn app:app --host 0.0.0.0 --port 8000 &
 sleep 3
 curl http://localhost:8000/health
+# Expected: {"status":"healthy","components":{"license":"valid",...}}
 kill %1
 ```
+
+### Subscription Verification
+
+After the server starts, confirm your license key is active:
+
+```bash
+# Get a token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your_pass"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Check subscription status
+curl http://localhost:8000/api/monetization/subscription/me \
+  -H "Authorization: Bearer $TOKEN"
+# Expected: {"plan":"professional","status":"active",...}
+```
+
+If you see `403 Subscription Required`, your `HOPEFX_LICENSE_KEY` is missing or invalid.
+Run `python scripts/manage_secrets.py validate` to diagnose.
 
 ---
 
