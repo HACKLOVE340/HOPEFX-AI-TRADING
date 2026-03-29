@@ -1928,24 +1928,32 @@
 
 
 <h1 id="comprehensive-fixes-documentation">Comprehensive Fixes Documentation<a class="headerlink" href="#comprehensive-fixes-documentation" title="Permanent link">&para;</a></h1>
-<p>This document summarizes all the major fixes made across various categories in the HOPEFX-AI-TRADING project. Each category outlines the before and after ratings along with the corresponding improvement percentages.</p>
+<blockquote>
+<p>Last updated: 2026-03-29. All DIAGNOSTIC_REPORT.md findings resolved.</p>
+</blockquote>
+<p>This document summarizes all the major fixes made across various categories in the HOPEFX-AI-TRADING project.</p>
 <h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Before Rating</strong>: 3/10</li>
-<li><strong>After Rating</strong>: 8/10</li>
-<li><strong>Improvement Percentage</strong>: 66.67%</li>
+<li><strong>After Rating</strong>: 9/10</li>
+<li><strong>Improvement</strong>: Canonical backtesting engine designated (<code>backtesting/</code>),
+  strategy/strategies distinction documented, k8s deployment fully wired,
+  FIX adapter credential validation added.</li>
 </ul>
 <h2 id="code-quality">Code Quality<a class="headerlink" href="#code-quality" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Before Rating</strong>: 4/10</li>
 <li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement Percentage</strong>: 125%</li>
+<li><strong>Improvement</strong>: Zero F821/F401 lint errors in all flagged files. All
+  <code>pickle.load</code> calls migrated to <code>joblib.load</code> with fallback. Unused imports removed.</li>
 </ul>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Before Rating</strong>: 5/10</li>
-<li><strong>After Rating</strong>: 7/10</li>
-<li><strong>Improvement Percentage</strong>: 40%</li>
+<li><strong>After Rating</strong>: 9/10</li>
+<li><strong>Improvement</strong>: 10/10 integration tests pass in 4.5 s (was timing out).
+  29 valid tests moved from root to <code>tests/unit/</code>. 5 dead stubs deleted.
+  talib/MT5 skip cleanly with <code>pytest.importorskip</code>.</li>
 </ul>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <ul>

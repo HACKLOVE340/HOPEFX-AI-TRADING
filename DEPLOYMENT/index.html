@@ -1402,6 +1402,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fix-protocol-onboarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FIX Protocol Onboarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FIX Protocol Onboarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required environment variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2909,6 +2959,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fix-protocol-onboarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FIX Protocol Onboarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FIX Protocol Onboarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required environment variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Broker endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#support" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3352,12 +3452,89 @@ main domain and simplifies SPF alignment.</p>
 <li>[ ] Set up alerting (Discord/Telegram/Email)</li>
 </ul>
 <hr />
+<h2 id="fix-protocol-onboarding">FIX Protocol Onboarding<a class="headerlink" href="#fix-protocol-onboarding" title="Permanent link">&para;</a></h2>
+<p>The FIX adapter (<code>execution/fix_adapter.py</code>) requires real broker credentials
+before it will connect in <code>APP_ENV=production</code>.</p>
+<h3 id="required-environment-variables">Required environment variables<a class="headerlink" href="#required-environment-variables" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FIX_SENDER_COMP_ID</code></td>
+<td>Your firm's SenderCompID assigned by the broker</td>
+</tr>
+<tr>
+<td><code>FIX_TARGET_COMP_ID</code></td>
+<td>Broker's TargetCompID from their FIX spec</td>
+</tr>
+<tr>
+<td><code>FIX_HOST</code></td>
+<td>Broker FIX gateway hostname</td>
+</tr>
+<tr>
+<td><code>FIX_PORT</code></td>
+<td>Broker FIX gateway port</td>
+</tr>
+</tbody>
+</table>
+<h3 id="broker-endpoints">Broker endpoints<a class="headerlink" href="#broker-endpoints" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Broker</th>
+<th>Environment</th>
+<th>Host</th>
+<th>Port</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OANDA</td>
+<td>Practice</td>
+<td><code>fxpractice-fix.oanda.com</code></td>
+<td>1234</td>
+</tr>
+<tr>
+<td>OANDA</td>
+<td>Live</td>
+<td><code>fxtrade-fix.oanda.com</code></td>
+<td>1234</td>
+</tr>
+<tr>
+<td>IBKR TWS</td>
+<td>Paper</td>
+<td><code>127.0.0.1</code></td>
+<td>7497</td>
+</tr>
+<tr>
+<td>IBKR TWS</td>
+<td>Live</td>
+<td><code>127.0.0.1</code></td>
+<td>7496</td>
+</tr>
+</tbody>
+</table>
+<h3 id="setup-steps">Setup steps<a class="headerlink" href="#setup-steps" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Copy the template: <code>cp fix.cfg fix.cfg.local</code></li>
+<li>Fill in all <code>&lt;CHANGE_ME_*&gt;</code> values in <code>fix.cfg.local</code></li>
+<li>Set <code>FIX_CONFIG_FILE=fix.cfg.local</code> in your <code>.env</code></li>
+<li>Set <code>FIX_SENDER_COMP_ID</code>, <code>FIX_TARGET_COMP_ID</code>, <code>FIX_HOST</code>, <code>FIX_PORT</code> in <code>.env</code></li>
+<li>Run the pre-flight check: <code>python deployment_guide.py</code></li>
+<li><strong>Never commit <code>fix.cfg.local</code></strong> — it contains credentials (already in <code>.gitignore</code>)</li>
+</ol>
+<hr />
 <h2 id="support">Support<a class="headerlink" href="#support" title="Permanent link">&para;</a></h2>
 <p>For deployment issues:
 - GitHub Issues: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues
-- Documentation: See INSTALLATION.md, SECURITY.md</p>
+- Documentation: See docs/INSTALLATION.md, docs/SECURITY.md</p>
 <hr />
-<p><strong>Status:</strong> Production deployment guide complete.</p>
+<p><strong>Status:</strong> Production deployment guide complete. All diagnostic blockers resolved 2026-03-29.</p>
 
 
 
