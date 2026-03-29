@@ -14,8 +14,10 @@
 5. [Brokers](#brokers)
 6. [Risk Management](#risk-management)
 7. [Prop Firms](#prop-firms)
-8. [Technical](#technical)
-9. [Licensing](#licensing)
+8. [Performance & Backtesting](#performance--backtesting)
+9. [Technical](#technical)
+10. [Security](#security)
+11. [Licensing](#licensing)
 
 ---
 
@@ -23,46 +25,71 @@
 
 ### How much does HOPEFX cost?
 
-| Plan | Price |
-|------|-------|
-| Starter | $49/month |
-| Pro | $149/month |
-| Elite | $349/month |
-| Enterprise | Custom |
+| Plan | Monthly | Annual | Annual Savings |
+|------|---------|--------|----------------|
+| Starter | $1,800 | $18,000 | $3,600 (2 months free) |
+| Professional | $4,500 | $45,000 | $9,000 (2 months free) |
+| Enterprise | $7,500 | $75,000 | $15,000 (2 months free) |
+| Elite | $10,000 | $100,000 | $20,000 (2 months free) |
 
-Annual billing saves 2 months (pay 10, get 12). See [MONETIZATION.md](MONETIZATION.md) for the full feature comparison.
+See [MONETIZATION.md](MONETIZATION.md) for the full feature comparison and add-on pricing.
 
 ### Is there a free tier?
 
 No. HOPEFX is a professional paid platform. There is no free tier.
 
-If you want to evaluate the platform, request a trial access code via GitHub Issues (label: `trial-request`). Trial codes give 7 days of Pro access.
+A 14-day trial is available for evaluation. The trial is limited to paper trading (50 trades maximum) and does not include ML models, live trading, or API access. After 14 days, a paid subscription is required.
+
+To request trial access, open a GitHub Issue with the label `trial-request`. Trial codes grant 14 days of Starter-equivalent access.
 
 ### What payment methods are accepted?
 
 - Credit/debit card (Visa, Mastercard, Amex) via Stripe
-- Crypto: BTC, ETH, USDT
+- Cryptocurrency: BTC, ETH, USDT
+- PayPal Business
+- Wire transfer (Enterprise and Elite — contact sales@hopefx.io)
 - Flutterwave (Africa and emerging markets)
 
 ### Can I cancel anytime?
 
-Yes. Cancel via `POST /api/monetization/subscription/{id}/cancel` or contact support. Cancellation takes effect at the end of the current billing period. No partial-month refunds.
+Yes. Cancel via `POST /api/monetization/subscription/{id}/cancel` or contact support. Cancellation takes effect at the end of the current billing period. Access remains active until the period ends. No partial-month refunds.
 
 ### What happens to my data if I cancel?
 
-Your trades, journal entries, and settings are retained for 90 days after cancellation. Resubscribe within 90 days to restore full access. After 90 days, data is permanently deleted.
+Trades, journal entries, and settings are retained for 90 days after cancellation. Resubscribe within 90 days to restore full access. After 90 days, all data is permanently deleted per our data retention policy.
 
 ### Can I switch plans?
 
-Yes. Upgrading is immediate and prorated. Downgrading takes effect at the next billing cycle.
+Yes. Upgrading is immediate and prorated — you are charged the difference for the remaining days in the current period. Downgrading takes effect at the next billing cycle.
 
 ### Do you offer refunds?
 
-No refunds for partial months. If the platform is unavailable for more than 24 hours due to our infrastructure (not your broker or internet connection), we credit the affected days.
+No refunds for partial months. If the platform is unavailable for more than 24 consecutive hours due to HOPEFX infrastructure failure (not your broker, internet connection, or third-party services), we credit the affected days to your account.
 
 ### Is there an affiliate program?
 
-Yes. Earn 30% recurring commission on every subscriber you refer. Sign up via `POST /api/monetization/affiliate/signup`. See [MONETIZATION.md](MONETIZATION.md) for details.
+Yes. Earn recurring commissions on every subscriber you refer:
+
+| Level | Commission | Requirement |
+|-------|------------|-------------|
+| Bronze | 10% | Starting level |
+| Silver | 15% | 10+ active referrals or $18,000 revenue |
+| Gold | 20% | 25+ active referrals or $50,000 revenue |
+| Platinum | 25% | 50+ active referrals or $100,000 revenue |
+
+Sign up: `POST /api/monetization/affiliate/signup`. See [MONETIZATION.md](MONETIZATION.md) for full details.
+
+### What is the commission rate per trade?
+
+| Plan | Commission Rate |
+|------|----------------|
+| Trial | 1.0% |
+| Starter | 0.5% |
+| Professional | 0.3% |
+| Enterprise | 0.2% |
+| Elite | 0.1% |
+
+Commission is charged on trade volume and billed monthly.
 
 ---
 
@@ -71,14 +98,14 @@ Yes. Earn 30% recurring commission on every subscriber you refer. Sign up via `P
 ### What are the system requirements?
 
 - Python 3.10, 3.11, or 3.12
-- 4 GB RAM minimum (8 GB recommended)
-- 2 CPU cores minimum
-- 10 GB storage
-- Linux, macOS, or Windows
+- 4 GB RAM minimum (8 GB recommended for ML features)
+- 2 CPU cores minimum (4 recommended)
+- 10 GB storage (50 GB recommended for full historical data)
+- Linux, macOS, or Windows (MT5 integration requires Windows)
 
 ### How do I install HOPEFX?
 
-See [INSTALLATION.md](INSTALLATION.md) for the full guide. Quick version:
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for the full guide. Quick version:
 
 ```bash
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
@@ -86,26 +113,42 @@ cd HOPEFX-AI-TRADING
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your secrets and subscription key
+# Edit .env — set SECURITY_JWT_SECRET and HOPEFX_LICENSE_KEY
 alembic upgrade head
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
 ### How do I activate my subscription?
 
-After subscribing, you receive a `HOPEFX_LICENSE_KEY`. Add it to `.env`:
+After subscribing, you receive a `HOPEFX_LICENSE_KEY` by email. Add it to `.env`:
 
 ```bash
-HOPEFX_LICENSE_KEY=your_license_key_here
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-A7B9C2D4-X8Y2
 ```
 
-The application validates the key at startup. Without a valid key, the API returns `403 Subscription Required` on all trading endpoints.
+The application validates the key at startup. Without a valid key, all trading endpoints return `403 Subscription Required`. The `/health` and `/docs` endpoints remain accessible.
+
+Validate your key:
+```bash
+python scripts/manage_secrets.py validate
+```
 
 ### Do I need a broker account to start?
 
 No. Paper trading is active by default — no broker credentials needed. You can receive signals, run backtests, and simulate trades without connecting a real broker.
 
 To trade with real money, connect OANDA, IBKR, Alpaca, Binance, or MT5. See [SETUP_GUIDE.md](SETUP_GUIDE.md).
+
+### How do I get support?
+
+| Plan | Support Channel | Response Time |
+|------|----------------|---------------|
+| Starter | Email | Business hours |
+| Professional | Email + chat | 24 hours |
+| Enterprise | Priority | 12 hours |
+| Elite | Dedicated manager | 4 hours, 24/7 |
+
+Email: support@hopefx.io. For security issues, use GitHub's private vulnerability reporting.
 
 ---
 
@@ -116,32 +159,42 @@ To trade with real money, connect OANDA, IBKR, Alpaca, Binance, or MT5. See [SET
 | Symbol | Market | Available From |
 |--------|--------|---------------|
 | XAUUSD | Gold | Starter |
-| BTCUSD | Bitcoin | Pro |
-| ETHUSD | Ethereum | Pro |
-| EURUSD | EUR/USD Forex | Pro |
-| GBPUSD | GBP/USD Forex | Pro |
-| Silver | Silver | Elite |
-| Oil (WTI) | Crude Oil | Elite |
+| EURUSD | EUR/USD Forex | Professional |
+| GBPUSD | GBP/USD Forex | Professional |
+| BTCUSD | Bitcoin | Professional |
+| ETHUSD | Ethereum | Professional |
+| Silver | Silver | Enterprise |
+| Oil (WTI) | Crude Oil | Enterprise |
 
 ### How often are signals generated?
 
-Signals are generated on every completed H1 (1-hour) bar. The ML model abstains on ~27.5% of bars (low confidence). Expect 3–8 actionable signals per day on XAUUSD.
+Signals are generated on every completed H1 (1-hour) bar. The ML model abstains on approximately 27.5% of bars when confidence is below the threshold. Expect 3–8 actionable signals per day on XAUUSD.
 
 ### What is the win rate?
 
-The production model achieves 66.4% OOS accuracy on XAUUSD H1 (1,260 held-out bars, 7-year OOS period, p=0.0000). This translates to a win rate of approximately 57–62% in live trading after accounting for spread and slippage.
+The production model achieves 66.4% OOS accuracy on XAUUSD H1 (1,260 held-out bars, 7-year OOS period, p=0.0000). In live trading, after accounting for spread and slippage, the realized win rate is approximately 57–62%.
+
+Past performance does not guarantee future results. Always use proper risk management.
 
 ### Can I use my own strategy?
 
-Yes, on Pro and above. Add your strategy to `strategies/` following the `BaseStrategy` interface. See [SAMPLE_STRATEGIES.md](SAMPLE_STRATEGIES.md) and [VIDEO_TUTORIALS.md](VIDEO_TUTORIALS.md) Episode 6.
+Yes, on Professional and above. Add your strategy to `strategies/` following the `BaseStrategy` interface. See [SAMPLE_STRATEGIES.md](SAMPLE_STRATEGIES.md) for examples and [VIDEO_TUTORIALS.md](VIDEO_TUTORIALS.md) Episode 6 for a walkthrough.
 
 ### What is the "abstain" signal?
 
-When the ML model's confidence is below the threshold (`ML_ABSTAIN_THRESHOLD`, default 0.55), it returns no signal. This is intentional — the model only acts when confident. Abstaining on uncertain bars is why the win rate exceeds 50%.
+When the ML model's confidence is below `ML_ABSTAIN_THRESHOLD` (default: 0.55), it returns no signal. This is intentional — the model only acts when confident. Abstaining on uncertain bars is a key reason the win rate exceeds 50%.
 
 ### Can I copy other traders' signals?
 
-Yes, on Pro and above. The social trading feed shows signals from opted-in traders. You can follow traders and optionally auto-copy their trades (scaled to your account size). See [MONETIZATION.md](MONETIZATION.md) for plan details.
+Yes, on Professional and above. The social trading feed shows signals from opted-in traders. You can follow traders and optionally auto-copy their trades, scaled to your account size. See [MONETIZATION.md](MONETIZATION.md) for plan details.
+
+### What timeframes are supported?
+
+The primary timeframe is H1 (1-hour). The ML model is trained and validated on H1 data. Additional timeframes (M15, H4, D1) are available for charting and indicator calculation but are not used for ML signal generation in the current production model.
+
+### How are stop loss and take profit calculated?
+
+Stop loss is placed at the nearest significant structure level (swing high/low, order block, or ATR-based). Take profit targets a minimum 1.5:1 risk-reward ratio. The exact calculation depends on the active strategy. See [SAMPLE_STRATEGIES.md](SAMPLE_STRATEGIES.md) for per-strategy details.
 
 ---
 
@@ -151,29 +204,59 @@ Yes, on Pro and above. The social trading feed shows signals from opted-in trade
 
 A calibrated XGBoost stacking ensemble (XGBoost + LightGBM + RandomForest + isotonic calibration) trained on 50 years of XAUUSD data with 176 stationary features.
 
-OOS accuracy: **66.4%** (p=0.0000, N=1,260 bars, 7-year held-out period).
+OOS accuracy: **66.4%** (p=0.0000, N=1,260 bars, 7-year held-out period, 2019–2026).
 
 ### How is the model validated?
 
-Walk-forward validation with an expanding training window. The final 7-year period (2019–2026) is held out and never used during training or optimisation.
+Walk-forward validation with an expanding training window. The final 7-year period (2019–2026) is held out and never used during training or optimisation. This prevents look-ahead bias and data leakage.
 
 ### Can I retrain the model on my own data?
 
-Yes, on Elite and above:
+Yes, on Elite only:
 
 ```bash
 python ml/train_advanced.py --years 50 --oos-years 3
 ```
 
-See [ML_GUIDE.md](ML_GUIDE.md) for the full training guide.
+See [ML_GUIDE.md](ML_GUIDE.md) for the full training guide including data requirements, feature engineering, and validation methodology.
 
 ### What is online learning?
 
-The `SklearnOnlineLearner` (SGD + EWC) updates the model incrementally every hour using recent trade outcomes. Enable with `ML_HOURLY_ENABLED=true`. Available on Elite and above.
+The `SklearnOnlineLearner` (SGD + EWC) updates the model incrementally every hour using recent trade outcomes. This keeps the model current without a full retrain. Enable with `ML_HOURLY_ENABLED=true`. Available on Elite only.
 
 ### Does the model use macro data?
 
-Yes. DXY, VIX, US10Y, US2Y, SPX, and GLD are fetched daily from yfinance and wired into the ML inference pipeline as 22 macro cross-asset features.
+Yes. DXY, VIX, US10Y, US2Y, SPX, and GLD are fetched daily from yfinance and wired into the ML inference pipeline as 22 macro cross-asset features. Macro data is refreshed daily at 00:05 UTC.
+
+### What happens if the ML model fails?
+
+A fallback model (`xgb_macro`) activates automatically if the primary model (`advanced_oos`) fails to load or produces invalid output. The fallback uses fewer features and has lower accuracy. The Grafana dashboard shows `hopefx_ml_fallback_active = 1` when the fallback is active.
+
+### What are the 176 features?
+
+The feature set includes:
+- **Price-derived**: OHLCV ratios, returns, log-returns (multiple lookbacks)
+- **Technical indicators**: RSI, MACD, Bollinger Bands, ATR, ADX, Stochastic, CCI, Williams %R
+- **Ichimoku components**: Tenkan, Kijun, Senkou A/B, Chikou
+- **Order flow**: Volume profile, VWAP, delta, imbalance
+- **Macro cross-asset**: DXY, VIX, US10Y, US2Y, SPX, GLD (22 features)
+- **Regime**: Market regime classification (ranging/trending/volatile)
+- **Calendar**: Day of week, hour of day, session (London/NY/Tokyo/Sydney)
+- **SMC/ICT**: Order blocks, fair value gaps, liquidity levels
+
+All features are stationary (differenced or normalised) to prevent non-stationarity issues.
+
+### How do I check model health?
+
+```bash
+curl http://localhost:8000/api/ml/health \
+  -H "Authorization: Bearer $TOKEN"
+# {"status":"ok","feature_count":176,"model_loaded":true,"model_id":"advanced_oos"}
+
+curl http://localhost:8000/api/ml/accuracy \
+  -H "Authorization: Bearer $TOKEN"
+# {"model_id":"advanced_oos","accuracy":0.664,"oos_n":1260,"gate_passed":true}
+```
 
 ---
 
@@ -196,11 +279,36 @@ No. Paper trading works without any broker account. For live trading, you need a
 
 ### Which broker do you recommend for beginners?
 
-OANDA practice account. It's free, has no minimum deposit for practice, and supports XAUUSD (gold) which is the primary instrument. See [oanda_paper_trading_setup.md](oanda_paper_trading_setup.md).
+OANDA practice account. It is free, requires no minimum deposit for practice, and supports XAUUSD (gold) — the primary instrument. See [oanda_paper_trading_setup.md](oanda_paper_trading_setup.md).
 
 ### Does HOPEFX support MT5?
 
 Yes, on Windows only. The MT5 Python API (`MetaTrader5` package) is Windows-exclusive. On Linux/macOS, use OANDA or IBKR instead.
+
+### How do I validate my broker connection?
+
+```bash
+# OANDA
+python scripts/validate_oanda.py
+
+# Generic broker test
+curl http://localhost:8000/api/broker/test-connection \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### What is the position reconciler?
+
+The `PositionReconciler` runs every 5 minutes and compares the OMS (Order Management System) position state against the broker's actual positions. If a mismatch is detected, it logs the discrepancy and triggers a reconciliation. This prevents ghost positions and ensures the risk engine has accurate data.
+
+Trigger manually:
+```bash
+curl -X POST http://localhost:8000/api/trading/reconcile \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Can I connect multiple brokers simultaneously?
+
+Yes, on Enterprise and Elite. Professional supports up to 3 broker accounts. Starter supports 1. Each broker account is managed by a separate `BrokerConnector` instance and can run different strategies.
 
 ---
 
@@ -208,7 +316,7 @@ Yes, on Windows only. The MT5 Python API (`MetaTrader5` package) is Windows-excl
 
 ### How does the kill switch work?
 
-The kill switch immediately halts all trading and blocks new orders. It persists to `risk/halt_state.json` — it survives application restarts.
+The kill switch immediately halts all trading and blocks new orders. It persists to `risk/halt_state.json` and survives application restarts.
 
 Activate:
 ```bash
@@ -217,9 +325,21 @@ curl -X POST http://localhost:8000/api/trading/emergency-stop \
   -H "X-Kill-Switch-Token: $HOPEFX_KILL_SWITCH_TOKEN"
 ```
 
+Deactivate (after investigating the cause):
+```bash
+curl -X DELETE http://localhost:8000/api/risk/halt \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Kill-Switch-Token: $HOPEFX_KILL_SWITCH_TOKEN"
+```
+
 ### What is the CVaR gate?
 
 Before every order, the system computes Conditional Value at Risk (CVaR) for the proposed position. If adding the position would push portfolio CVaR above the configured limit, the order is blocked. This runs independently of all other risk checks — a CVaR breach always blocks.
+
+Configure:
+```bash
+CVAR_LIMIT_PCT=2.0    # Block if portfolio CVaR exceeds 2%
+```
 
 ### Can I set a daily loss limit?
 
@@ -233,12 +353,25 @@ When either limit is hit, the kill switch fires automatically.
 
 ### What is Kelly criterion?
 
-Kelly criterion calculates the optimal position size based on win rate and average win/loss ratio. HOPEFX uses a fractional Kelly with a safety cap:
+Kelly criterion calculates the optimal position size based on win rate and average win/loss ratio. HOPEFX uses fractional Kelly with a hard cap:
 
 ```bash
-KELLY_FRACTION=0.25    # Use 25% of full Kelly (conservative)
+KELLY_FRACTION=0.25        # Use 25% of full Kelly (conservative)
 MAX_POSITION_SIZE_PCT=1.0  # Hard cap: never more than 1% per trade
 ```
+
+### What risk checks run before every order?
+
+In order:
+1. Kill switch check — blocked if active
+2. Daily loss limit check — blocked if limit reached
+3. Max drawdown check — blocked if limit reached
+4. CVaR gate — blocked if portfolio CVaR would exceed limit
+5. Position size check — capped at `MAX_POSITION_SIZE_PCT`
+6. Correlation check — blocked if new position is too correlated with existing positions
+7. Market hours check — blocked if market is closed (configurable)
+
+All checks must pass for an order to reach the broker.
 
 ---
 
@@ -259,11 +392,66 @@ Supported firms: FTMO, MyForexFunds, The5ers, TopStep, FundedNext. See [PROP_FIR
 
 ### Which plan do I need for prop firm mode?
 
-Pro and above. Prop firm mode is not available on Starter.
+Professional and above. Prop firm mode is not available on Starter or Trial.
 
-### Has anyone passed a prop firm challenge with HOPEFX?
+### What does prop firm mode change?
 
-The platform is in paper trading mode (started 2026-03-27). Live prop firm results will be published after the 30-day paper run completes and live trading is enabled.
+When `PROP_FIRM_MODE=true`:
+- Daily loss limit is enforced at the firm's threshold (not your personal setting)
+- Max drawdown is enforced at the firm's threshold
+- Profit target tracking is enabled
+- Conservative position sizing is applied (Kelly fraction reduced to 0.15)
+- Weekend holding is disabled by default (configurable per firm)
+- News event trading is disabled 30 minutes before/after high-impact events
+
+---
+
+## Performance & Backtesting
+
+### What backtesting data is available?
+
+| Plan | Data Range | Symbols |
+|------|-----------|---------|
+| Starter | 1 year | XAUUSD |
+| Professional | 10 years | All supported symbols |
+| Enterprise | 50 years | All supported symbols |
+| Elite | 50 years | All + custom data upload |
+
+### How do I run a backtest?
+
+```bash
+# Single symbol, 10 years
+python real_data_backtest.py --symbol XAU_USD --years 10
+
+# Multi-symbol, 7 symbols, 10 years
+python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
+
+# With specific strategy
+python real_data_backtest.py --symbol XAU_USD --years 10 --strategy smc_ict
+```
+
+See [BACKTESTING_GUIDE.md](BACKTESTING_GUIDE.md) for full documentation.
+
+### What backtest metrics are reported?
+
+- Total return (%)
+- Annualised return (%)
+- Sharpe ratio
+- Sortino ratio
+- Max drawdown (%)
+- Win rate (%)
+- Profit factor
+- Average win / average loss
+- Number of trades
+- OOS accuracy (for ML strategies)
+
+### Is the backtest walk-forward validated?
+
+Yes. The default backtest uses walk-forward validation with an expanding training window. The `--oos-frac` parameter controls the held-out fraction (default: 0.3 = 30% OOS).
+
+### What is the multi-symbol backtest result?
+
+The multi-symbol backtest across 7 symbols (XAUUSD, BTCUSD, ETHUSD, EURUSD, GBPUSD, Silver, Oil) over 10 years with 30% OOS shows N=919 OOS bars with statistically significant results (p < 0.01). Full results: `GET /api/backtest/results/latest`.
 
 ---
 
@@ -273,15 +461,38 @@ The platform is in paper trading mode (started 2026-03-27). Live prop firm resul
 
 SQLite for development (zero config), PostgreSQL for production. Switch by setting `DATABASE_URL` in `.env`.
 
+```bash
+# Development (automatic)
+# No DATABASE_URL needed — creates hopefx.db automatically
+
+# Production
+DATABASE_URL=postgresql://user:pass@localhost:5432/hopefx_db
+```
+
 ### Does HOPEFX require Redis?
 
-Redis is optional. Without it, the ML feature cache falls back to in-memory (slower), WebSocket pub/sub uses in-process channels, and rate limiting uses in-memory counters. For production, Redis is strongly recommended.
+Redis is optional. Without it:
+- ML feature cache falls back to in-memory (slower, ~200ms added per request)
+- WebSocket pub/sub uses in-process channels (no multi-process support)
+- Rate limiting uses in-memory counters (resets on restart)
+
+For production, Redis is strongly recommended:
+```bash
+REDIS_URL=redis://localhost:6379/0
+```
 
 ### How do I run the tests?
 
 ```bash
+# Fast suite (skips slow ML training tests)
+pytest tests/ -m "not slow" -q
+
+# Full suite
 pytest tests/ -q
-# Expected: 2560 passed, 0 failed
+# Expected: 2,560 passed, 0 failed
+
+# With coverage
+pytest tests/ --cov=. --cov-report=html -q
 ```
 
 ### What Python version is required?
@@ -290,16 +501,63 @@ Python 3.10, 3.11, or 3.12. Python 3.9 and below are not supported.
 
 ### Is there a Docker image?
 
-Yes. Use Docker Compose for the full stack:
+Yes. Use Docker Compose for the full stack (app + PostgreSQL + Redis + Prometheus + Grafana):
 ```bash
 docker compose up -d
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full deployment guide including Kubernetes/Helm.
 
 ### How do I report a bug?
 
 Open a GitHub Issue with: Python version, OS, full error traceback, and reproduction steps. For security vulnerabilities, use GitHub's private vulnerability reporting — do not open a public issue.
+
+### What is the API rate limit?
+
+| Plan | Requests/minute | WebSocket connections |
+|------|----------------|----------------------|
+| Starter | 60 | 2 |
+| Professional | 300 | 10 |
+| Enterprise | 1,000 | 50 |
+| Elite | Unlimited | Unlimited |
+
+Rate limit headers are included in every response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+### How do I access the API documentation?
+
+Interactive API docs (Swagger UI): `http://localhost:8000/docs`
+ReDoc: `http://localhost:8000/redoc`
+OpenAPI JSON: `http://localhost:8000/openapi.json`
+
+Full API reference: [API_REFERENCE.md](API_REFERENCE.md).
+
+---
+
+## Security
+
+### How are API keys stored?
+
+API keys (broker tokens, Stripe keys, etc.) are stored encrypted in the database using AES-256. The encryption key is derived from `CONFIG_ENCRYPTION_KEY` in `.env`. Keys are never logged or returned in API responses.
+
+### How are JWTs signed?
+
+JWTs are signed with HS256 using `SECURITY_JWT_SECRET`. Tokens expire after 24 hours by default (configurable via `JWT_EXPIRY_HOURS`). Refresh tokens are supported for mobile clients.
+
+### Is there two-factor authentication?
+
+TOTP-based 2FA is available on Professional and above. Enable via `POST /api/auth/2fa/enable`. Required for admin accounts.
+
+### How is the kill switch token protected?
+
+The kill switch token (`HOPEFX_KILL_SWITCH_TOKEN`) is required in the `X-Kill-Switch-Token` header for all kill switch operations. It is separate from the JWT to prevent a compromised user token from triggering an emergency stop.
+
+### What security scanning is in place?
+
+- **bandit**: Static analysis for Python security issues (runs in CI)
+- **pip-audit**: Dependency vulnerability scanning (runs in CI)
+- **Codacy**: Continuous code quality and security analysis
+- **Sentry**: Runtime error tracking and alerting
+- **Rate limiting**: All endpoints rate-limited per plan
 
 ---
 
@@ -310,7 +568,7 @@ Open a GitHub Issue with: Python version, OS, full error traceback, and reproduc
 The source code is licensed under **AGPL-3.0**. The hosted service requires a paid subscription.
 
 Under AGPL-3.0 you can:
-- Self-host for personal trading at no cost
+- Self-host for personal trading
 - Modify the code
 - Distribute your modifications (source must be disclosed under AGPL-3.0)
 
@@ -321,7 +579,7 @@ You **cannot** under AGPL-3.0 without a Commercial License:
 
 ### What is the Commercial License?
 
-The Commercial License allows proprietary use, white-labeling, and SaaS deployment without AGPL-3.0 source disclosure requirements. See [LICENSE-COMMERCIAL.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/LICENSE-COMMERCIAL.md). Enterprise plan includes the Commercial License.
+The Commercial License allows proprietary use, white-labeling, and SaaS deployment without AGPL-3.0 source disclosure requirements. See [LICENSE-COMMERCIAL.md](../LICENSE-COMMERCIAL.md). The Elite plan includes the Commercial License.
 
 ### Do I need to sign a CLA to contribute?
 
@@ -329,4 +587,14 @@ Yes. Before your first pull request is merged, include this statement in the PR 
 
 > "I have read and agree to the HOPEFX-AI-TRADING Contributor License Agreement."
 
-The CLA enables the dual-license model (AGPL-3.0 open source + commercial). See [CONTRIBUTING.md](CONTRIBUTING.md).
+The CLA enables the dual-license model (AGPL-3.0 open source + commercial). See [CONTRIBUTING.md](CONTRIBUTING.md) and [CLA.md](../CLA.md).
+
+### Can I self-host without a subscription?
+
+Under AGPL-3.0, you can self-host for personal trading without a subscription. However, the hosted service, support, ML model updates, and commercial features require a paid subscription.
+
+Self-hosting without a subscription key disables all trading endpoints. The application starts but returns `403 Subscription Required` on all `/api/trading/`, `/api/signals/`, and `/api/ml/` endpoints.
+
+---
+
+*Last updated: 2026-07-14*
