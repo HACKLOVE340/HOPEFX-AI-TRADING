@@ -188,6 +188,16 @@ def parse_args() -> argparse.Namespace:
         default="GC=F",
         help="Yahoo Finance symbol (default: GC=F for XAUUSD)",
     )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help=(
+            "Skip training — only verify that the expected output artifacts "
+            "exist and contain the correct horizon value. "
+            "Exits 0 if all artifacts are present, 1 if any are missing. "
+            "Use after a completed retrain to confirm the CI gate passes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -291,10 +301,27 @@ def dry_run(args: argparse.Namespace) -> None:
 
 def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
     """
-    Write horizon5_meta.json alongside the model so the inference engine
-    and monitoring tools can verify the training horizon at runtime.
+    Write horizon5_meta.json and horizon5_training_report.json alongside the
+    model so the inference engine and monitoring tools can verify the training
+    horizon at runtime.
+
+    Files written
+    -------------
+    ml/saved_models/horizon5_meta.json
+        Compact metadata: horizon, accuracy, feature count, trained_at.
+        Read by InferenceEngine.health() and /api/ml/health.
+
+    ml/saved_models/horizon5_training_report.json
+        Full training report (copy of advanced_training_report.json with
+        horizon field injected).  Used by reconcile_backtest.py and CI gates.
+
+    ml/saved_models/advanced_oos_meta.json
+        Updated in-place so the existing InferenceEngine picks up the new
+        horizon and accuracy values without a restart.
     """
     _MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     meta = {
         "horizon": args.horizon,
         "hold_period_bars": args.horizon,
@@ -303,7 +330,7 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         "symbol": args.symbol,
         "macro_features": not args.no_macro,
         "stacking": args.stacking,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": now_iso,
         "note": (
             f"Model trained with horizon={args.horizon} to match execution engine "
             f"hold period. Fixes accuracy/P&L disconnect from horizon=1 training."
@@ -319,12 +346,27 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         "cv_accuracy": report.get("walkforward", {}).get("mean_accuracy"),
     }
 
+    # ── horizon5_meta.json ────────────────────────────────────────────────────
     meta_path = _MODEL_DIR / "horizon5_meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
     logger.info("Horizon meta written → %s", meta_path)
 
-    # Also update advanced_oos_meta.json so InferenceEngine.health() picks
-    # up the new horizon and accuracy values without a restart.
+    # ── horizon5_training_report.json ─────────────────────────────────────────
+    # Full report: copy of advanced_training_report.json with horizon injected.
+    # This is the canonical artifact checked by CI and reconcile_backtest.py.
+    full_report = dict(report)
+    full_report["horizon"] = args.horizon
+    full_report["trained_at"] = now_iso
+    full_report["script"] = "scripts/retrain_horizon5.py"
+    full_report["note"] = meta["note"]
+
+    h5_report_path = _MODEL_DIR / "horizon5_training_report.json"
+    h5_report_path.write_text(json.dumps(full_report, indent=2, default=str))
+    logger.info("Horizon5 training report written → %s", h5_report_path)
+
+    # ── advanced_oos_meta.json ────────────────────────────────────────────────
+    # Update in-place so InferenceEngine.health() picks up the new horizon
+    # and accuracy values without a restart.
     oos_meta_path = _MODEL_DIR / "advanced_oos_meta.json"
     existing_meta: dict = {}
     if oos_meta_path.exists():
@@ -338,11 +380,94 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         "oos_accuracy": meta["oos_accuracy"],
         "oos_f1": meta["oos_f1"],
         "feature_count": meta["feature_count"],
-        "validated_at": meta["trained_at"],
+        "validated_at": now_iso,
         "note": meta["note"],
     })
     oos_meta_path.write_text(json.dumps(existing_meta, indent=2))
     logger.info("advanced_oos_meta.json updated with horizon=%d", args.horizon)
+
+
+def verify_output_artifacts(args: argparse.Namespace) -> bool:
+    """
+    CI gate: verify that all expected output artifacts were written.
+
+    Called after training completes.  Returns True if all artifacts exist
+    and are non-empty.  Logs a clear error for each missing file.
+
+    Expected artifacts
+    ------------------
+    ml/saved_models/advanced_oos.pkl          — production model
+    ml/saved_models/horizon5_meta.json        — horizon metadata
+    ml/saved_models/horizon5_training_report.json — full training report
+    ml/saved_models/advanced_oos_meta.json    — updated inference meta
+    """
+    required = [
+        _MODEL_DIR / "advanced_oos.pkl",
+        _MODEL_DIR / "horizon5_meta.json",
+        _MODEL_DIR / "horizon5_training_report.json",
+        _MODEL_DIR / "advanced_oos_meta.json",
+    ]
+
+    all_ok = True
+    for path in required:
+        if not path.exists():
+            logger.error("CI GATE FAILED: missing artifact %s", path)
+            all_ok = False
+        elif path.stat().st_size == 0:
+            logger.error("CI GATE FAILED: empty artifact %s", path)
+            all_ok = False
+        else:
+            logger.info("CI GATE OK: %s (%d bytes)", path.name, path.stat().st_size)
+
+    # Verify horizon5_meta.json has the correct horizon value
+    if all_ok:
+        try:
+            meta = json.loads((_MODEL_DIR / "horizon5_meta.json").read_text())
+            if meta.get("horizon") != args.horizon:
+                logger.error(
+                    "CI GATE FAILED: horizon5_meta.json has horizon=%s, expected %d",
+                    meta.get("horizon"), args.horizon,
+                )
+                all_ok = False
+            else:
+                logger.info(
+                    "CI GATE OK: horizon5_meta.json horizon=%d (correct)",
+                    meta["horizon"],
+                )
+        except Exception as exc:
+            logger.error("CI GATE FAILED: could not parse horizon5_meta.json: %s", exc)
+            all_ok = False
+
+    # Verify horizon5_training_report.json has the correct horizon value
+    if all_ok:
+        try:
+            rpt = json.loads((_MODEL_DIR / "horizon5_training_report.json").read_text())
+            if rpt.get("horizon") != args.horizon:
+                logger.error(
+                    "CI GATE FAILED: horizon5_training_report.json has horizon=%s, expected %d",
+                    rpt.get("horizon"), args.horizon,
+                )
+                all_ok = False
+            else:
+                logger.info(
+                    "CI GATE OK: horizon5_training_report.json horizon=%d (correct)",
+                    rpt["horizon"],
+                )
+        except Exception as exc:
+            logger.error(
+                "CI GATE FAILED: could not parse horizon5_training_report.json: %s", exc
+            )
+            all_ok = False
+
+    if all_ok:
+        logger.info("CI GATE PASSED: all artifacts present and valid")
+    else:
+        logger.error(
+            "CI GATE FAILED: one or more artifacts missing or invalid. "
+            "The retrain did not complete successfully."
+        )
+
+    return all_ok
 
 
 def run_training(args: argparse.Namespace) -> dict:
@@ -459,6 +584,12 @@ def main() -> None:
     # Validate horizon alignment
     validate_horizon_alignment(args.horizon)
 
+    # Verify-only mode — check artifacts without retraining
+    if args.verify_only:
+        logger.info("=== VERIFY-ONLY: checking output artifacts (no training) ===")
+        ok = verify_output_artifacts(args)
+        sys.exit(0 if ok else 1)
+
     # Dry run — validate pipeline without training
     if args.dry_run:
         dry_run(args)
@@ -472,8 +603,17 @@ def main() -> None:
     # Run training
     report = run_training(args)
 
-    # Write horizon metadata
+    # Write horizon metadata and full training report
     write_horizon_meta(args, report)
+
+    # CI gate: verify all expected artifacts were written
+    artifacts_ok = verify_output_artifacts(args)
+    if not artifacts_ok:
+        logger.error(
+            "Retrain completed but artifact verification failed. "
+            "Check the logs above for missing files."
+        )
+        sys.exit(1)
 
     # Print summary
     print_horizon_summary(args, report)
