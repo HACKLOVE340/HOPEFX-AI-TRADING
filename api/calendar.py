@@ -30,12 +30,45 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/calendar", tags=["Economic Calendar"])
 
-# Auto-pause config store (replace with DB in production)
-_auto_pause_config: Dict[str, Any] = {
+# Redis/DB config store key
+_AUTO_PAUSE_KEY = "calendar:auto_pause"
+
+# Default auto-pause config — used when no persisted value exists
+_AUTO_PAUSE_DEFAULTS: Dict[str, Any] = {
     "enabled": False,
     "minutes_before": 30,
     "min_importance": "high",
 }
+
+# In-process cache — refreshed from shared store on every read
+_auto_pause_config: Dict[str, Any] = dict(_AUTO_PAUSE_DEFAULTS)
+
+
+def _get_auto_pause() -> Dict[str, Any]:
+    """Read auto-pause config from the shared config store (Redis → DB → defaults)."""
+    global _auto_pause_config
+    try:
+        from core.config_store import config_store
+
+        stored = config_store.get(_AUTO_PAUSE_KEY)
+        if stored:
+            _auto_pause_config = {**_AUTO_PAUSE_DEFAULTS, **stored}
+            return dict(_auto_pause_config)
+    except Exception as exc:
+        logger.debug("_get_auto_pause: config_store read failed: %s", exc)
+    return dict(_auto_pause_config)
+
+
+def _save_auto_pause(config: Dict[str, Any], changed_by: str = "api") -> None:
+    """Persist auto-pause config to the shared config store (Redis + DB)."""
+    global _auto_pause_config
+    _auto_pause_config = dict(config)
+    try:
+        from core.config_store import config_store
+
+        config_store.set(_AUTO_PAUSE_KEY, config, changed_by=changed_by)
+    except Exception as exc:
+        logger.warning("_save_auto_pause: config_store write failed: %s", exc)
 
 
 # ── Seed data helper ──────────────────────────────────────────────────────────
@@ -260,15 +293,27 @@ async def get_high_impact() -> List[EventOut]:
 
 @router.post("/auto-pause", response_model=AutoPauseConfig)
 async def set_auto_pause(config: AutoPauseConfig) -> AutoPauseConfig:
-    """Configure auto-pause trading before high-impact events."""
-    _auto_pause_config.update(config.model_dump())
-    logger.info("Auto-pause config updated: %s", _auto_pause_config)
-    return AutoPauseConfig(**_auto_pause_config)
+    """
+    Configure auto-pause trading before high-impact events.
+
+    Persists to the shared config store (Redis + DB) so the setting
+    survives pod restarts and is shared across all replicas.
+    """
+    new_config = config.model_dump()
+    _save_auto_pause(new_config, changed_by="calendar_api")
+    logger.info("Auto-pause config updated: %s", new_config)
+    return AutoPauseConfig(**new_config)
 
 
 @router.get("/auto-pause", response_model=AutoPauseConfig)
 async def get_auto_pause() -> AutoPauseConfig:
-    return AutoPauseConfig(**_auto_pause_config)
+    """
+    Return the current auto-pause config.
+
+    Always reads from the shared config store so all pods return the
+    same value regardless of which pod last wrote it.
+    """
+    return AutoPauseConfig(**_get_auto_pause())
 
 
 # ── FOMC calendar + post-event regime adjustment ──────────────────────────────
@@ -413,11 +458,11 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
         expires.isoformat(),
     )
 
-    # Persist to DB so it survives restarts
+    # Persist to shared config store so it survives restarts and is pod-safe
     try:
-        from api.db_store import db_set
+        from core.config_store import config_store
 
-        db_set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
+        config_store.set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
     except Exception as exc:
         logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
 
@@ -432,16 +477,16 @@ async def get_fomc_regime() -> FomcRegimeStatus:
     If the override has expired, it is automatically cleared.
     The position_size_multiplier is used by the signal engine.
     """
-    # Load from DB on first call
+    # Load from shared config store on first call
     if not _fomc_regime_override.get("active"):
         try:
-            from api.db_store import db_get
+            from core.config_store import config_store
 
-            stored = db_get("fomc_regime_override")
+            stored = config_store.get("fomc_regime_override")
             if stored:
                 _fomc_regime_override.update(stored)
         except Exception as exc:
-            logger.warning("FOMC regime load from DB failed (non-fatal): %s", exc)
+            logger.warning("FOMC regime load from config_store failed (non-fatal): %s", exc)
 
     # Auto-expire
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):
@@ -472,9 +517,9 @@ async def clear_fomc_regime() -> dict:
         },
     )
     try:
-        from api.db_store import db_delete
+        from core.config_store import config_store
 
-        db_delete("fomc_regime_override")
+        config_store.delete("fomc_regime_override")
     except Exception as exc:
-        logger.warning("FOMC regime DB delete failed (non-fatal): %s", exc)
+        logger.warning("FOMC regime config_store delete failed (non-fatal): %s", exc)
     return {"cleared": True}
