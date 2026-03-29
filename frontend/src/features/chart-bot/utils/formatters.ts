@@ -3,6 +3,10 @@
  * Number, time, and label formatting utilities for trading data.
  */
 
+// Re-export color helpers from design-tokens so components can import
+// everything from a single utils location.
+export { confidenceColor, sentimentColor, riskColor, pnlColor } from './design-tokens';
+
 // ─── Price Formatting ─────────────────────────────────────────────────────────
 
 export function formatPrice(value: number, decimals = 2): string {

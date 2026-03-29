@@ -58,13 +58,13 @@ RiskRing.displayName = 'RiskRing';
 const KillSwitchBanner = memo(({ active, reason }: { active: boolean; reason: string | null }) => {
   if (!active) return (
     <div style={{ ...rh.ksBanner, ...rh.ksOk }}>
-      <span style={rh.ksDot(COLORS.profit.base)} />
+      <span style={rhDynamic.ksDot(COLORS.profit.base)} />
       <span style={{ ...rh.ksText, color: COLORS.profit.base }}>KILL SWITCH INACTIVE — TRADING ENABLED</span>
     </div>
   );
   return (
     <div style={{ ...rh.ksBanner, ...rh.ksActive }}>
-      <span style={rh.ksDot(COLORS.loss.strong)} />
+      <span style={rhDynamic.ksDot(COLORS.loss.strong)} />
       <div>
         <div style={{ ...rh.ksText, color: COLORS.loss.strong }}>⚠ KILL SWITCH ACTIVE — TRADING HALTED</div>
         {reason && <div style={rh.ksReason}>{reason}</div>}
@@ -257,9 +257,20 @@ const RiskHeatmap: React.FC = () => {
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Dynamic style helpers ────────────────────────────────────────────────────
 
-const rh: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CSSProperties)> = {
+const rhDynamic = {
+  ksDot: (color: string): React.CSSProperties => ({
+    width: 8, height: 8, borderRadius: '50%',
+    background: color,
+    boxShadow: `0 0 8px ${color}`,
+    flexShrink: 0, marginTop: 2,
+  }),
+};
+
+// ─── Static styles ────────────────────────────────────────────────────────────
+
+const rh: Record<string, React.CSSProperties> = {
   wrapper: {
     background: COLORS.bg.surface,
     border: `1px solid ${COLORS.bg.border}`,
@@ -295,12 +306,6 @@ const rh: Record<string, React.CSSProperties | ((...args: unknown[]) => React.CS
     border: `1px solid ${COLORS.loss.base}66`,
     animation: 'pulse 2s infinite',
   },
-  ksDot: (color: unknown) => ({
-    width: 8, height: 8, borderRadius: '50%',
-    background: color as string,
-    boxShadow: `0 0 8px ${color as string}`,
-    flexShrink: 0, marginTop: 2,
-  }),
   ksText: { fontFamily: '"JetBrains Mono", monospace', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em' },
   ksReason: { fontFamily: '"Inter", sans-serif', fontSize: 10, color: COLORS.text.secondary, marginTop: 2 },
 

@@ -40,7 +40,7 @@ import type {
 
 // ─── Event Bus ────────────────────────────────────────────────────────────────
 
-type EventMap = {
+export type EventMap = {
   price_tick:        PriceTick;
   microstructure:    MicrostructureSnapshot;
   volume_delta:      VolumeDeltaBar;

@@ -10,8 +10,10 @@ import React, {
 } from 'react';
 import {
   createChart,
+  createSeriesMarkers,
   IChartApi,
   ISeriesApi,
+  ISeriesMarkersPluginApi,
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
@@ -22,6 +24,8 @@ import {
   HistogramData,
   LineData,
   MouseEventParams,
+  SeriesMarker,
+  Time,
 } from 'lightweight-charts';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useOHLCV } from '../hooks/useChartData';
@@ -123,6 +127,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const bidRef       = useRef<ISeriesApi<'Line'> | null>(null);
   const askRef       = useRef<ISeriesApi<'Line'> | null>(null);
+  const markersRef   = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const barsRef      = useRef<OHLCVBar[]>([]);
   const rafRef       = useRef<number>(0);
 
@@ -222,6 +227,8 @@ const CoreChart: React.FC<CoreChartProps> = ({
     volRef.current    = vol;
     bidRef.current    = bid;
     askRef.current    = ask;
+    // v5: markers are a plugin, not a series method
+    markersRef.current = createSeriesMarkers(candle);
 
     // Crosshair move handler
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -280,11 +287,12 @@ const CoreChart: React.FC<CoreChartProps> = ({
       ro.disconnect();
       setReady(false);
       chart.remove();
-      chartRef.current  = null;
-      candleRef.current = null;
-      volRef.current    = null;
-      bidRef.current    = null;
-      askRef.current    = null;
+      chartRef.current   = null;
+      candleRef.current  = null;
+      volRef.current     = null;
+      bidRef.current     = null;
+      askRef.current     = null;
+      markersRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [height]);
@@ -336,11 +344,11 @@ const CoreChart: React.FC<CoreChartProps> = ({
     }
   }, [liveTick]);
 
-  // ── Signal markers ────────────────────────────────────────────────────────
+  // ── Signal markers (v5: createSeriesMarkers plugin) ──────────────────────
 
   useEffect(() => {
-    if (!candleRef.current || !signals.length) return;
-    const markers = signals
+    if (!markersRef.current) return;
+    const markers: SeriesMarker<Time>[] = signals
       .filter((s) => s.status === 'active')
       .map((s) => ({
         time:     toUTC(new Date(s.generated_at).getTime() / 1000),
@@ -350,7 +358,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
         text:     `${s.direction.toUpperCase()} ${(s.confidence * 100).toFixed(0)}%`,
         size:     2,
       }));
-    candleRef.current.setMarkers(markers);
+    markersRef.current.setMarkers(markers);
   }, [signals]);
 
   // ── S/R level price lines ─────────────────────────────────────────────────
