@@ -24,8 +24,6 @@ import {
   selectSignals,
   selectWsStatus,
 } from '../store';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { usePriceSimulator } from '../hooks/usePriceSimulator';
 import { tradingApi, mlApi } from '../hooks/useApi';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -354,8 +352,8 @@ const Dashboard: React.FC = () => {
   const account  = useStore(selectAccount);
   const wsStatus = useStore(selectWsStatus);
 
-  useWebSocket(true);
-  usePriceSimulator(wsStatus !== 'connected');
+  // WebSocket and price simulator are managed at the AppShell level (App.tsx).
+  // Dashboard only reads from the Zustand store — no duplicate connections.
 
   const poll = useCallback(async () => {
     try {
