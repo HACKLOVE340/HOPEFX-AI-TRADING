@@ -53,17 +53,11 @@ from core.event_bus import bus, CH_BREACH
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-FAILURE_THRESHOLD:    int   = int(os.environ.get("FAULT_FAILURE_THRESHOLD",   "3"))   if False else 3
-RECOVER_S:            float = 30.0    # seconds before OPEN → HALF_OPEN
-HEARTBEAT_TIMEOUT_S:  float = 60.0    # seconds of silence before unhealthy alert
-MONITOR_INTERVAL_S:   float = 5.0     # how often the background loop checks
-
-# Avoid importing os at module level just for one constant — inline it
-import os
-FAILURE_THRESHOLD = int(os.environ.get("FAULT_FAILURE_THRESHOLD", "3"))
-RECOVER_S         = float(os.environ.get("FAULT_RECOVER_S",        "30"))
-HEARTBEAT_TIMEOUT_S = float(os.environ.get("FAULT_HEARTBEAT_TIMEOUT_S", "60"))
-MONITOR_INTERVAL_S  = float(os.environ.get("FAULT_MONITOR_INTERVAL_S",  "5"))
+import os as _os
+FAILURE_THRESHOLD:   int   = int(_os.environ.get("FAULT_FAILURE_THRESHOLD",    "3"))
+RECOVER_S:           float = float(_os.environ.get("FAULT_RECOVER_S",          "30"))
+HEARTBEAT_TIMEOUT_S: float = float(_os.environ.get("FAULT_HEARTBEAT_TIMEOUT_S","60"))
+MONITOR_INTERVAL_S:  float = float(_os.environ.get("FAULT_MONITOR_INTERVAL_S", "5"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
