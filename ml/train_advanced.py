@@ -629,6 +629,151 @@ def sharpe_gate_check(n_trades: int, sharpe: float = 1.52, target_n: int = 600) 
     }
 
 
+class SharpeProgressTracker:
+    """
+    Tracks live Sharpe ratio progress toward the N=600 credibility gate.
+
+    Records per-trade returns and computes a rolling Sharpe ratio with its
+    standard error.  Emits a structured status dict on every update so the
+    caller can log progress, gate live trading, or surface metrics to a
+    dashboard.
+
+    Usage::
+
+        tracker = SharpeProgressTracker(target_n=600, target_sharpe=1.5)
+        for pnl in trade_pnls:
+            status = tracker.update(pnl)
+            if status["gate_passed"]:
+                enable_live_trading()
+
+    Parameters
+    ----------
+    target_n      : Trade count required for a credible Sharpe (default 600).
+    target_sharpe : Minimum Sharpe ratio required for live trading (default 1.5).
+    annualise     : Annualisation factor — 252 for daily, 8736 for hourly
+                    (default 252).
+    """
+
+    def __init__(
+        self,
+        target_n: int = 600,
+        target_sharpe: float = 1.5,
+        annualise: int = 252,
+    ) -> None:
+        if target_n < 2:
+            raise ValueError("target_n must be >= 2")
+        if annualise <= 0:
+            raise ValueError("annualise must be > 0")
+        self._target_n = target_n
+        self._target_sharpe = target_sharpe
+        self._annualise = annualise
+        self._returns: List[float] = []
+
+    # ── Core update ───────────────────────────────────────────────────────────
+
+    def update(self, trade_return: float) -> Dict:
+        """
+        Record one trade return and return the current status dict.
+
+        Parameters
+        ----------
+        trade_return : Fractional P&L for the trade (e.g. 0.012 = +1.2%).
+
+        Returns
+        -------
+        dict with keys:
+          n_trades, sharpe, sharpe_se, annualised_return, annualised_vol,
+          gate_passed, credible, target_n, target_sharpe, pct_to_gate,
+          message
+        """
+        self._returns.append(float(trade_return))
+        return self.status()
+
+    # ── Status snapshot ───────────────────────────────────────────────────────
+
+    def status(self) -> Dict:
+        """Return the current progress snapshot without recording a new trade."""
+        n = len(self._returns)
+        if n < 2:
+            return {
+                "n_trades": n,
+                "sharpe": 0.0,
+                "sharpe_se": float("inf"),
+                "annualised_return": 0.0,
+                "annualised_vol": 0.0,
+                "gate_passed": False,
+                "credible": False,
+                "target_n": self._target_n,
+                "target_sharpe": self._target_sharpe,
+                "pct_to_gate": round(n / self._target_n * 100, 1),
+                "message": f"Insufficient trades: {n} < 2 (need {self._target_n})",
+            }
+
+        arr = np.array(self._returns, dtype=np.float64)
+        mean_r = float(arr.mean())
+        std_r = float(arr.std(ddof=1))
+
+        ann_return = mean_r * self._annualise
+        ann_vol = std_r * np.sqrt(self._annualise)
+        sharpe = (ann_return / ann_vol) if ann_vol > 1e-12 else 0.0
+        se = _sharpe_se(n, sr_est=sharpe if sharpe > 0 else 1.52)
+
+        gate_passed = n >= self._target_n and sharpe >= self._target_sharpe
+        credible = se <= 0.10
+
+        pct = round(min(n / self._target_n * 100, 100.0), 1)
+
+        if gate_passed and credible:
+            msg = (
+                f"Gate PASSED: N={n}, Sharpe={sharpe:.3f} >= {self._target_sharpe}, "
+                f"SE={se:.3f} <= 0.10"
+            )
+        elif n < self._target_n:
+            msg = (
+                f"Progress: {n}/{self._target_n} trades ({pct}%), "
+                f"Sharpe={sharpe:.3f}, SE={se:.3f}"
+            )
+        else:
+            msg = (
+                f"N={n} reached but Sharpe={sharpe:.3f} < {self._target_sharpe} — "
+                f"gate blocked"
+            )
+
+        return {
+            "n_trades": n,
+            "sharpe": round(sharpe, 4),
+            "sharpe_se": round(se, 4),
+            "annualised_return": round(ann_return, 4),
+            "annualised_vol": round(ann_vol, 4),
+            "gate_passed": gate_passed,
+            "credible": credible,
+            "target_n": self._target_n,
+            "target_sharpe": self._target_sharpe,
+            "pct_to_gate": pct,
+            "message": msg,
+        }
+
+    # ── Convenience helpers ───────────────────────────────────────────────────
+
+    def reset(self) -> None:
+        """Clear all recorded returns."""
+        self._returns.clear()
+
+    @property
+    def n_trades(self) -> int:
+        """Number of trades recorded so far."""
+        return len(self._returns)
+
+    @property
+    def is_gate_passed(self) -> bool:
+        """True when both the trade-count and Sharpe targets are met."""
+        return self.status()["gate_passed"]
+
+    def to_dict(self) -> Dict:
+        """Alias for status() — for serialisation compatibility."""
+        return self.status()
+
+
 def oos_eval_advanced(
     X_train: pd.DataFrame,
     y_train: pd.Series,
