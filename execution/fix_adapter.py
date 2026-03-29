@@ -522,11 +522,90 @@ class FIXAdapter:
         self._running = False
 
     # ------------------------------------------------------------------
+    # Credential validation
+    # ------------------------------------------------------------------
+
+    _PLACEHOLDER_VALUES = frozenset({
+        "CLIENT", "BROKER", "HOPEFX", "CHANGE_ME",
+        "<CHANGE_ME_YOUR_SENDER_COMP_ID>", "<CHANGE_ME_BROKER_TARGET_COMP_ID>",
+        "<CHANGE_ME_BROKER_FIX_HOST>", "",
+    })
+
+    def validate_credentials(self, *, raise_on_error: bool = False) -> bool:
+        """Check that FIX session credentials are not placeholder values.
+
+        Reads FIX_SENDER_COMP_ID / FIX_TARGET_COMP_ID / FIX_HOST / FIX_PORT
+        from the environment and falls back to the constructor arguments.
+
+        Returns True when all required values look real.  Logs a CRITICAL
+        message for each placeholder found.  If *raise_on_error* is True,
+        raises RuntimeError instead of returning False.
+
+        Call this before start() in production to catch misconfiguration early:
+
+            router = FIXRouter(...)
+            router.validate_credentials(raise_on_error=True)
+            router.start()
+        """
+        import os
+
+        sender = os.environ.get("FIX_SENDER_COMP_ID", self.sender_comp_id)
+        target = os.environ.get("FIX_TARGET_COMP_ID", self.target_comp_id)
+        host   = os.environ.get("FIX_HOST", self.host)
+
+        errors: list[str] = []
+
+        if sender in self._PLACEHOLDER_VALUES:
+            errors.append(
+                f"FIX_SENDER_COMP_ID is a placeholder ('{sender}'). "
+                "Set FIX_SENDER_COMP_ID in your environment to the SenderCompID "
+                "assigned by your broker during FIX onboarding."
+            )
+        if target in self._PLACEHOLDER_VALUES:
+            errors.append(
+                f"FIX_TARGET_COMP_ID is a placeholder ('{target}'). "
+                "Set FIX_TARGET_COMP_ID to the TargetCompID from your broker's FIX spec."
+            )
+        if host in self._PLACEHOLDER_VALUES or host.startswith("<CHANGE_ME"):
+            errors.append(
+                f"FIX_HOST is a placeholder ('{host}'). "
+                "Set FIX_HOST to your broker's FIX gateway hostname."
+            )
+
+        for msg in errors:
+            logger.critical("fix_adapter credential error: %s", msg)
+
+        if errors:
+            if raise_on_error:
+                raise RuntimeError(
+                    "FIX session has placeholder credentials — cannot connect to broker. "
+                    "See DEPLOYMENT.md §FIX Onboarding for setup instructions.\n"
+                    + "\n".join(f"  • {e}" for e in errors)
+                )
+            return False
+
+        logger.info(
+            "fix_adapter credentials OK: sender=%s target=%s host=%s",
+            sender, target, host,
+        )
+        return True
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Start the FIX session."""
+        """Start the FIX session.
+
+        Validates credentials before connecting.  In APP_ENV=production the
+        check is enforced (raises RuntimeError on placeholder values).  In
+        other environments a WARNING is logged and startup continues so that
+        paper-trading and CI work without real broker credentials.
+        """
+        import os
+        _is_production = os.environ.get("APP_ENV", "production") == "production"
+        self.validate_credentials(raise_on_error=_is_production)
+
         if _FIX_BACKEND == "quickfix":
             self._start_quickfix()
         elif _FIX_BACKEND == "pyfixmsg":
