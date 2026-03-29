@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -258,6 +258,122 @@ class NormalizationPipeline:
             return False
         valid_count = int(df.get("ohlcv_valid", pd.Series([1] * len(df))).sum())
         return valid_count >= min_bars * 0.8  # 80% valid bars required
+
+    def normalize_bar(
+        self,
+        bar: Dict[str, float],
+        prev_close: Optional[float] = None,
+    ) -> Dict[str, float]:
+        """
+        Normalize a single OHLCV bar dict.
+
+        Applies the same cleaning rules as normalize_ohlcv() but for a
+        single bar — used in live inference where bars arrive one at a time.
+
+        Parameters
+        ----------
+        bar        : dict with keys open, high, low, close, volume
+        prev_close : Previous bar's close for log_return calculation.
+                     If None, log_return is set to 0.0.
+
+        Returns a new dict with the original fields plus:
+          log_return  : log(close / prev_close) or 0.0
+          log_volume  : log1p(volume)
+          ohlcv_valid : 1 if bar passes all sanity checks, 0 otherwise
+          gap_flag    : 1 if |log_return| > 0.005 (0.5% gap), else 0
+        """
+        out = dict(bar)
+
+        o = float(out.get("open",   0.0))
+        h = float(out.get("high",   0.0))
+        l = float(out.get("low",    0.0))
+        c = float(out.get("close",  0.0))
+        v = float(out.get("volume", 0.0))
+
+        # Sanity checks
+        valid = (
+            c > 0.0
+            and o > 0.0
+            and h >= max(o, c)
+            and l <= min(o, c)
+            and l > 0.0
+            and v >= 0.0
+        )
+        out["ohlcv_valid"] = 1 if valid else 0
+
+        # log_volume
+        out["log_volume"] = float(np.log1p(max(v, 0.0)))
+
+        # log_return
+        if prev_close and prev_close > 0.0 and c > 0.0:
+            lr = float(np.log(c / prev_close))
+        else:
+            lr = 0.0
+        out["log_return"] = lr
+
+        # gap_flag: absolute log return > 0.5%
+        out["gap_flag"] = 1 if abs(lr) > 0.005 else 0
+
+        return out
+
+    def normalize_tick_to_bar(
+        self,
+        ticks: List[Dict[str, float]],
+        prev_close: Optional[float] = None,
+    ) -> Optional[Dict[str, float]]:
+        """
+        Aggregate a list of tick dicts into a single normalized OHLCV bar.
+
+        Each tick dict must have at least a 'mid' key.
+        Optional keys: 'bid', 'ask', 'volume'.
+
+        Returns None if ticks is empty.
+        """
+        if not ticks:
+            return None
+
+        mids = [float(t.get("mid", t.get("close", 0.0))) for t in ticks]
+        mids = [m for m in mids if m > 0.0]
+        if not mids:
+            return None
+
+        volumes = [float(t.get("volume", 1.0)) for t in ticks]
+        bar = {
+            "open":   mids[0],
+            "high":   max(mids),
+            "low":    min(mids),
+            "close":  mids[-1],
+            "volume": sum(volumes),
+        }
+        return self.normalize_bar(bar, prev_close=prev_close)
+
+    def detect_gaps(
+        self,
+        df: pd.DataFrame,
+        threshold_pct: float = 0.5,
+    ) -> pd.Series:
+        """
+        Return a boolean Series marking bars with price gaps > threshold_pct%.
+
+        A gap is defined as |log(open_t / close_{t-1})| > threshold_pct/100.
+        Used to flag session opens and data feed interruptions.
+
+        Parameters
+        ----------
+        df            : OHLCV DataFrame with 'open' and 'close' columns
+        threshold_pct : Gap threshold in percent (default 0.5%)
+
+        Returns a boolean Series aligned to df.index (True = gap bar).
+        """
+        if df is None or df.empty or "open" not in df.columns or "close" not in df.columns:
+            return pd.Series(False, index=df.index if df is not None else [])
+
+        prev_close = df["close"].shift(1)
+        log_gap    = np.log(df["open"] / prev_close.replace(0, np.nan)).abs()
+        threshold  = threshold_pct / 100.0
+        gaps       = log_gap > threshold
+        gaps.iloc[0] = False  # first bar has no previous close
+        return gaps.fillna(False)
 
 
 # Module-level singleton
