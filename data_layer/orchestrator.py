@@ -4,77 +4,72 @@
 """
 data_layer/orchestrator.py
 ============================
-MarketDataOrchestrator — single source of truth for all market data.
-
-This is the ONLY entry point the rest of the system uses to access
-market data. No module should import from individual feed adapters directly.
+MarketDataOrchestrator — the ONLY entry point for all market data.
 
 Architecture
 ------------
-  MarketDataOrchestrator
-    ├── GoldFeedManager          → 5 gold price feeds, consensus tick
-    ├── DataQualityEngine        → validation, anomaly detection, failover
-    ├── MicrostructureEngine     → bid/ask, OFI, delta, Kyle's lambda
-    ├── NewsSentimentEngine      → 5 news feeds, VADER scoring, EMA signal
-    ├── MacroCalendarEngine      → Finnhub calendar, gold impact scoring
-    ├── MacroStoreBridge         → FRED → ml/macro_store.py population
-    ├── DataLayerRedisStore      → per-instrument TTL caching
-    ├── DataLineageStore         → immutable audit trail
-    ├── NormalizationPipeline    → tick + OHLCV cleaning
-    └── MarketReplayEngine       → Dukascopy historical replay
+No other module in this codebase is permitted to import directly from
+individual feed adapters, quality engines, or sentiment feeds.
+All data flows through this orchestrator.
 
-Downstream consumers (wired via get_ml_features())
----------------------------------------------------
-  ml/features_extended.py   → 230+ feature builder
-  ml/macro_store.py         → daily macro series alignment
-  ml/inference_engine.py    → live signal generation
-  ml/online_learner.py      → SGD adapter updates
-  ml/advanced_predictor.py  → ensemble prediction
-  ml/live_inference.py      → feature cache + prediction
-  risk/manager.py           → position sizing, drawdown
-  risk/gatekeeper.py        → news blackout, confidence floor
-  execution/smart_router.py → order routing (OANDA/IBKR execution only)
-
-Startup sequence
+Component wiring
 ----------------
-  1. Connect Redis
-  2. Start DataLineageStore (SQLite writer thread)
-  3. Start GoldFeedManager (5 feed polling loops)
-  4. Start NewsSentimentEngine (5 news polling loops)
-  5. Start MacroCalendarEngine (hourly Finnhub calendar refresh)
-  6. Start MacroStoreBridge (FRED load + daily refresh)
-  7. Begin publishing ticks to Redis pub/sub
+  GoldFeedManager        → polls 5 gold price APIs, consensus tick
+  DataQualityEngine      → validates every tick (anomaly, stale, jump)
+  MicrostructureEngine   → bid/ask spread, OFI, Kyle's lambda, VWAP
+  NewsSentimentEngine    → 5 news feeds, VADER scoring, EMA signal
+  MacroCalendarEngine    → Finnhub calendar, gold impact scoring
+  MacroStoreBridge       → FRED → MacroStore injection
+  DataLayerRedisStore    → per-instrument TTL caching
+  DataLineageStore       → immutable audit trail (SQLite WAL)
+  NormalizationPipeline  → tick + OHLCV cleaning
+  MarketReplayEngine     → Dukascopy historical replay
 
-Usage:
-    from data_layer import orchestrator
+Public API (the only interface the rest of the codebase uses)
+-------------------------------------------------------------
+  orchestrator.get_latest_tick()          → Optional[GoldTick]
+  orchestrator.get_ml_features(as_of)     → Dict[str, float]  (26+ features)
+  orchestrator.get_current_gold_price()   → Optional[float]
+  orchestrator.get_macro_impact_score()   → float
+  orchestrator.is_blackout_window()       → bool
+  orchestrator.get_quality_report()       → QualityReport
+  orchestrator.health()                   → Dict[str, Any]
+  orchestrator.start()                    → coroutine
+  orchestrator.stop()                     → coroutine
 
-    await orchestrator.start()
+ML features produced (26 total)
+---------------------------------
+  Microstructure (16):  micro_spread, micro_spread_pct, micro_spread_z,
+                        micro_spread_ema_fast, micro_spread_ema_slow,
+                        micro_volume_delta, micro_cumulative_delta,
+                        micro_buy_pressure, micro_sell_pressure, micro_ofi,
+                        micro_trade_pressure, micro_depth_imbalance,
+                        micro_vwap_dev, micro_kyles_lambda,
+                        micro_delta_divergence, micro_absorption
 
-    # Get latest validated tick
-    tick = orchestrator.get_latest_tick()
+  Sentiment (4):        news_sentiment_score, news_sentiment_momentum,
+                        news_article_count_1h, news_bullish_ratio
 
-    # Get all ML features (microstructure + sentiment + macro + calendar)
-    features = orchestrator.get_ml_features()
+  Macro calendar (6):   macro_impact_score_now, macro_hours_to_next_high,
+                        macro_hours_since_last_high, macro_surprise_last,
+                        macro_high_event_count_24h, macro_is_blackout
 
-    # Get OHLCV DataFrame for ML pipeline
-    df = await orchestrator.get_ohlcv_dataframe("XAU_USD", "1h", limit=200)
+  Tick quality (3):     tick_confidence, tick_spread_pct, tick_source_count
 
-    # Check if trading is safe right now
-    safe = orchestrator.is_safe_to_trade()
+  FRED macro (varies):  macro_dxy, macro_us10y, macro_us2y, macro_vix, ...
 """
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import pandas as pd
+logger = logging.getLogger(__name__)
 
+# ── Component imports ─────────────────────────────────────────────────────────
 from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
 from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engine
 from data_layer.feeds.gold.manager import GoldFeedManager
@@ -85,404 +80,347 @@ from data_layer.normalization.pipeline import NormalizationPipeline, normalizati
 from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
-from data_layer.types import FeedSource, GoldTick, TickQuality
+from data_layer.types import GoldTick, QualityReport, TickQuality
 
-logger = logging.getLogger(__name__)
-
-_OHLCV_BAR_LIMIT = int(os.getenv("ORCHESTRATOR_OHLCV_LIMIT", "500"))
+_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
 class MarketDataOrchestrator:
     """
-    Single source of truth for all market data in HOPEFX.
+    Central coordinator for all market data.
 
-    Instantiate once at application startup via the module-level
-    `orchestrator` singleton. All other modules import from here.
+    Lifecycle:
+        orch = MarketDataOrchestrator()
+        await orch.start()
+        tick = orch.get_latest_tick()
+        await orch.stop()
     """
 
     def __init__(self) -> None:
-        self._redis: Optional[Any] = None
-        self._gold_feeds: Optional[GoldFeedManager] = None
-        self._dqe:        DataQualityEngine          = dqe
-        self._micro:      MicrostructureEngine       = microstructure_engine
-        self._news:       NewsSentimentEngine        = news_sentiment_engine
-        self._calendar:   MacroCalendarEngine        = macro_calendar_engine
-        self._macro_bridge: MacroStoreBridge         = macro_store_bridge
-        self._cache:      DataLayerRedisStore        = dl_redis_store
-        self._lineage:    DataLineageStore           = lineage_store
-        self._norm:       NormalizationPipeline      = normalization_pipeline
-        self._replay:     MarketReplayEngine         = market_replay_engine
-        self._started     = False
-        self._tick_count  = 0
-        self._start_time: Optional[float] = None
+        # Redis client (shared across all components)
+        self._redis = None
+        self._redis_store: DataLayerRedisStore = dl_redis_store
+
+        # Core components
+        self._gold_feed:    Optional[GoldFeedManager]      = None
+        self._dqe:          DataQualityEngine               = dqe
+        self._micro:        MicrostructureEngine            = microstructure_engine
+        self._sentiment:    NewsSentimentEngine             = news_sentiment_engine
+        self._calendar:     MacroCalendarEngine             = macro_calendar_engine
+        self._macro_bridge: MacroStoreBridge                = macro_store_bridge
+        self._lineage:      DataLineageStore                = lineage_store
+        self._norm:         NormalizationPipeline           = normalization_pipeline
+        self._replay:       MarketReplayEngine              = market_replay_engine
+
+        self._started   = False
+        self._start_ts  = 0.0
+        self._tick_count = 0
+
+        # Prometheus
+        self._prom_uptime    = None
+        self._prom_tick_rate = None
+        self._init_prometheus()
+
+    def _init_prometheus(self) -> None:
+        try:
+            from prometheus_client import Counter, Gauge
+            self._prom_uptime = Gauge(
+                "hopefx_orchestrator_uptime_s",
+                "Orchestrator uptime in seconds",
+            )
+            self._prom_tick_rate = Counter(
+                "hopefx_orchestrator_ticks_total",
+                "Total ticks processed by orchestrator",
+            )
+        except Exception:
+            pass
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    async def start(self, redis_url: Optional[str] = None) -> None:
+    async def start(self) -> None:
         """
-        Start the full data layer.
+        Start all data layer components in dependency order.
 
-        redis_url: override REDIS_URL env var (useful for testing).
+        Order:
+          1. Redis connection
+          2. DataLineageStore (SQLite WAL)
+          3. GoldFeedManager (price feeds)
+          4. NewsSentimentEngine (news feeds)
+          5. MacroCalendarEngine (economic calendar)
+          6. MacroStoreBridge (FRED → MacroStore)
         """
         if self._started:
-            logger.warning("MarketDataOrchestrator already started")
+            logger.warning("MarketDataOrchestrator: already started")
             return
 
         logger.info("MarketDataOrchestrator: starting...")
-        self._start_time = time.time()
 
-        # 1. Connect Redis
-        await self._connect_redis(redis_url)
+        # 1. Redis
+        try:
+            import redis as redis_lib
+            r = redis_lib.from_url(_REDIS_URL, decode_responses=False)
+            r.ping()
+            self._redis = r
+            self._redis_store._r = r
+            self._calendar._redis = r
+            logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
+        except Exception as exc:
+            logger.warning(
+                "MarketDataOrchestrator: Redis unavailable (%s) — "
+                "caching disabled, continuing without Redis", exc
+            )
 
-        # 2. Start lineage store
-        self._lineage.start()
+        # 2. Lineage store
+        try:
+            self._lineage.start()
+            self._sentiment._lineage = self._lineage
+            logger.info("MarketDataOrchestrator: DataLineageStore started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: lineage store error: %s", exc)
 
-        # 3. Wire Redis into sub-components
-        self._cache._r = self._redis
-        self._news._redis = self._redis
-        self._calendar._redis = self._redis
-        self._news._lineage = self._lineage
+        # 3. Gold feed manager
+        try:
+            self._gold_feed = GoldFeedManager(redis_client=self._redis)
+            await self._gold_feed.start()
+            logger.info("MarketDataOrchestrator: GoldFeedManager started")
+        except Exception as exc:
+            logger.error("MarketDataOrchestrator: GoldFeedManager error: %s", exc)
 
-        # 4. Start gold feeds
-        self._gold_feeds = GoldFeedManager(redis_client=self._redis)
-        await self._gold_feeds.start()
+        # 4. News sentiment engine
+        try:
+            self._sentiment._redis = self._redis
+            await self._sentiment.start()
+            logger.info("MarketDataOrchestrator: NewsSentimentEngine started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: sentiment engine error: %s", exc)
 
-        # 5. Start news sentiment engine
-        await self._news.start()
+        # 5. Macro calendar
+        try:
+            self._calendar._redis = self._redis
+            await self._calendar.start()
+            logger.info("MarketDataOrchestrator: MacroCalendarEngine started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: calendar engine error: %s", exc)
 
-        # 6. Start macro calendar engine
-        await self._calendar.start()
+        # 6. FRED → MacroStore bridge
+        try:
+            await self._macro_bridge.start()
+            logger.info("MarketDataOrchestrator: MacroStoreBridge started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: macro bridge error: %s", exc)
 
-        # 7. Start macro store bridge (FRED → ml/macro_store.py)
-        await self._macro_bridge.start()
+        self._started  = True
+        self._start_ts = time.time()
 
-        # 8. Start tick processing loop
-        asyncio.create_task(
-            self._tick_processing_loop(),
-            name="orchestrator_tick_loop",
-        )
+        # Start uptime reporter
+        asyncio.create_task(self._uptime_loop(), name="orchestrator_uptime")
 
-        # 9. Start health reporting loop
-        asyncio.create_task(
-            self._health_loop(),
-            name="orchestrator_health_loop",
-        )
-
-        self._started = True
-        logger.info("MarketDataOrchestrator: fully started")
+        logger.info("MarketDataOrchestrator: all components started")
 
     async def stop(self) -> None:
         """Gracefully stop all components."""
-        if self._gold_feeds:
-            await self._gold_feeds.stop()
-        await self._news.stop()
+        if self._gold_feed:
+            await self._gold_feed.stop()
+        if self._sentiment:
+            await self._sentiment.stop()
         self._lineage.stop()
         self._started = False
         logger.info("MarketDataOrchestrator: stopped")
 
-    # ── Redis connection ──────────────────────────────────────────────────────
-
-    async def _connect_redis(self, redis_url: Optional[str] = None) -> None:
-        url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        try:
-            import redis as redis_lib
-            self._redis = redis_lib.from_url(url, decode_responses=False)
-            self._redis.ping()
-            logger.info("MarketDataOrchestrator: Redis connected at %s", url)
-        except Exception as exc:
-            logger.warning(
-                "MarketDataOrchestrator: Redis unavailable (%s) — "
-                "running without cache/pub-sub", exc
-            )
-            self._redis = None
-
-    # ── Tick processing loop ──────────────────────────────────────────────────
-
-    async def _tick_processing_loop(self) -> None:
-        """
-        Main loop: poll gold feeds → validate → microstructure → cache → lineage.
-        Runs every 1 second to pick up new ticks from GoldFeedManager.
-        """
+    async def _uptime_loop(self) -> None:
         while self._started:
-            try:
-                tick = self._gold_feeds.get_latest_tick() if self._gold_feeds else None
-                if tick and tick.quality != TickQuality.REJECTED:
-                    # Normalise
-                    tick = self._norm.normalize_tick(tick)
+            if self._prom_uptime:
+                try:
+                    self._prom_uptime.set(time.time() - self._start_ts)
+                except Exception:
+                    pass
+            await asyncio.sleep(10.0)
 
-                    # Microstructure
-                    self._micro.on_tick(tick)
-
-                    # Cache
-                    self._cache.set_tick("XAU_USD", self._tick_to_dict(tick))
-
-                    # Microstructure cache
-                    snap = self._micro.get_snapshot()
-                    if snap:
-                        self._cache.set_microstructure(
-                            "XAU_USD", self._snap_to_dict(snap)
-                        )
-
-                    # Lineage (sample 1 in 10 ticks to avoid DB saturation)
-                    self._tick_count += 1
-                    if self._tick_count % 10 == 0:
-                        self._lineage.record_tick(tick)
-
-            except Exception as exc:
-                logger.debug("Orchestrator tick loop error: %s", exc)
-
-            await asyncio.sleep(1.0)
-
-    # ── Health loop ───────────────────────────────────────────────────────────
-
-    async def _health_loop(self) -> None:
-        """Publish health + quality reports every 30 seconds."""
-        while self._started:
-            await asyncio.sleep(30.0)
-            try:
-                health = self.health()
-                self._cache.set_feed_health(health)
-
-                report = self._dqe.generate_report("XAU_USD")
-                self._cache.set_quality_report("XAU_USD", {
-                    "timestamp":      report.timestamp.isoformat(),
-                    "ticks_accepted": report.ticks_accepted,
-                    "ticks_rejected": report.ticks_rejected,
-                    "active_sources": report.active_sources,
-                    "primary_source": report.primary_source,
-                    "consensus_price": report.consensus_price,
-                })
-                self._lineage.record_quality({
-                    "symbol":         "XAU_USD",
-                    "ticks_accepted": report.ticks_accepted,
-                    "ticks_rejected": report.ticks_rejected,
-                    "active_sources": report.active_sources,
-                })
-
-                # Cache sentiment + macro features
-                sentiment = self._news.get_ml_features()
-                self._cache.set_sentiment(sentiment)
-
-                macro_feat = self._macro_bridge.get_ml_features()
-                macro_feat.update(self._calendar.get_ml_features())
-                self._cache.set_macro_features(macro_feat)
-                self._cache.set_calendar_impact(
-                    self._calendar.get_current_impact_score()
-                )
-
-            except Exception as exc:
-                logger.debug("Orchestrator health loop error: %s", exc)
-
-    # ── Public data access API ────────────────────────────────────────────────
+    # ── Primary data access ───────────────────────────────────────────────────
 
     def get_latest_tick(self, symbol: str = "XAU_USD") -> Optional[GoldTick]:
         """
-        Return the latest validated consensus tick.
+        Return the latest validated, normalised gold tick.
 
-        Checks Redis cache first, falls back to in-memory GoldFeedManager.
+        Checks Redis cache first, then falls back to in-memory GoldFeedManager.
         """
         # Try Redis cache
-        cached = self._cache.get_tick(symbol)
-        if cached:
-            return self._dict_to_tick(cached)
+        if self._redis_store._r:
+            cached = self._redis_store.get_tick(symbol)
+            if cached:
+                try:
+                    from data_layer.types import FeedSource
+                    return GoldTick(
+                        symbol     = cached["symbol"],
+                        timestamp  = datetime.fromisoformat(cached["timestamp"]),
+                        bid        = cached["bid"],
+                        ask        = cached["ask"],
+                        mid        = cached["mid"],
+                        source     = FeedSource(cached.get("source", "synthetic")),
+                        quality    = TickQuality(cached.get("quality", "good")),
+                        confidence = cached.get("confidence", 1.0),
+                        spread     = cached.get("spread", 0.0),
+                        lineage_id = cached.get("lineage_id", ""),
+                    )
+                except Exception:
+                    pass
 
         # Fall back to in-memory
-        if self._gold_feeds:
-            return self._gold_feeds.get_latest_tick()
+        if self._gold_feed:
+            tick = self._gold_feed.get_latest_tick()
+            if tick:
+                # Normalise and cache
+                tick = self._norm.normalize_tick(tick)
+                self._on_tick(tick)
+                return tick
+
         return None
 
+    def _on_tick(self, tick: GoldTick) -> None:
+        """Side-effects on every tick: microstructure, cache, lineage."""
+        # Microstructure
+        self._micro.on_tick(tick)
+
+        # Redis cache
+        if self._redis_store._r:
+            self._redis_store.set_tick(tick.symbol, {
+                "symbol":     tick.symbol,
+                "timestamp":  tick.timestamp.isoformat(),
+                "bid":        tick.bid,
+                "ask":        tick.ask,
+                "mid":        tick.mid,
+                "source":     tick.source.value,
+                "quality":    tick.quality.value,
+                "confidence": tick.confidence,
+                "spread":     tick.spread,
+                "lineage_id": tick.lineage_id,
+                "epoch":      tick.timestamp.timestamp(),
+            })
+
+        # Lineage
+        if tick.quality != TickQuality.REJECTED:
+            try:
+                self._lineage.record_tick(tick)
+            except Exception:
+                pass
+
+        self._tick_count += 1
+        if self._prom_tick_rate:
+            try:
+                self._prom_tick_rate.inc()
+            except Exception:
+                pass
+
+    # ── ML feature aggregation ────────────────────────────────────────────────
+
     def get_ml_features(
-        self,
-        symbol: str = "XAU_USD",
-        as_of: Optional[datetime] = None,
+        self, as_of: Optional[datetime] = None
     ) -> Dict[str, float]:
         """
-        Return the complete ML feature set from all data layer components.
+        Return all 26+ ML features from the data layer.
 
-        Includes:
-          - 16 microstructure features (spread, OFI, delta, pressure...)
-          - 4 sentiment features (EMA score, momentum, count, bullish ratio)
-          - 6 macro calendar features (impact score, hours to event...)
-          - N macro series features (DXY, yields, CPI, VIX...)
+        Causal guarantee: as_of parameter is passed to every sub-component
+        that supports it (sentiment, calendar). Microstructure features are
+        always computed from past ticks only.
 
-        as_of: enforce causal filter (for backtesting / replay).
+        Returns empty dict on error — never raises.
         """
         features: Dict[str, float] = {}
 
-        # Microstructure
-        features.update(self._micro.get_ml_features())
+        # 1. Microstructure (16 features)
+        try:
+            features.update(self._micro.get_ml_features())
+        except Exception as exc:
+            logger.debug("Orchestrator: micro features error: %s", exc)
 
-        # Sentiment
-        if as_of:
-            features.update(self._news.get_ml_features(as_of=as_of))
-        else:
-            # Try Redis cache first
-            cached_sent = self._cache.get_sentiment()
-            if cached_sent:
-                features.update(cached_sent)
-            else:
-                features.update(self._news.get_ml_features())
+        # 2. Sentiment (4 features)
+        try:
+            features.update(self._sentiment.get_ml_features(as_of=as_of))
+        except Exception as exc:
+            logger.debug("Orchestrator: sentiment features error: %s", exc)
 
-        # Macro calendar
-        if as_of:
+        # 3. Macro calendar (6 features)
+        try:
             features.update(self._calendar.get_ml_features(as_of=as_of))
-        else:
-            cached_macro = self._cache.get_macro_features()
-            if cached_macro:
-                features.update(cached_macro)
+        except Exception as exc:
+            logger.debug("Orchestrator: calendar features error: %s", exc)
+
+        # 4. FRED macro features (varies — typically 8-12)
+        try:
+            features.update(self._macro_bridge.get_ml_features())
+        except Exception as exc:
+            logger.debug("Orchestrator: macro bridge features error: %s", exc)
+
+        # 5. Tick quality features (3)
+        try:
+            tick = self.get_latest_tick()
+            if tick:
+                features["tick_confidence"]   = tick.confidence
+                features["tick_spread_pct"]   = (
+                    tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
+                )
             else:
-                features.update(self._calendar.get_ml_features())
-                features.update(self._macro_bridge.get_ml_features())
+                features["tick_confidence"]   = 0.0
+                features["tick_spread_pct"]   = 0.0
+
+            if self._gold_feed:
+                features["tick_source_count"] = float(
+                    len(self._gold_feed.active_sources())
+                )
+            else:
+                features["tick_source_count"] = 0.0
+        except Exception as exc:
+            logger.debug("Orchestrator: tick quality features error: %s", exc)
 
         return features
 
-    async def get_ohlcv_dataframe(
-        self,
-        symbol: str = "XAU_USD",
-        timeframe: str = "1h",
-        limit: int = 200,
-        use_dukascopy: bool = False,
-    ) -> pd.DataFrame:
-        """
-        Return a normalised OHLCV DataFrame for the ML pipeline.
+    # ── Convenience accessors ─────────────────────────────────────────────────
 
-        Checks Redis cache first. If cache miss and use_dukascopy=True,
-        fetches from Dukascopy (slow — use for backtesting only).
+    def get_current_gold_price(self) -> Optional[float]:
+        """Return current consensus gold mid price, or None if unavailable."""
+        tick = self.get_latest_tick()
+        return tick.mid if tick else None
 
-        Returns pd.DataFrame with columns: open, high, low, close, volume,
-        log_return, log_volume, gap_flag, ohlcv_valid
-        and DatetimeIndex (UTC).
-        """
-        # Try Redis cache
-        bars = self._cache.get_ohlcv_bars(symbol, timeframe, limit=limit)
-        if bars:
-            df = pd.DataFrame(bars)
-            if "open_time" in df.columns:
-                df["open_time"] = pd.to_datetime(df["open_time"], utc=True)
-                df = df.set_index("open_time").sort_index()
-            return self._norm.normalize_ohlcv(df)
-
-        # Dukascopy fallback (backtesting)
-        if use_dukascopy:
-            from datetime import timedelta
-            end   = datetime.now(timezone.utc)
-            tf_map = {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440}
-            tf_min = tf_map.get(timeframe, 60)
-            start = end - timedelta(minutes=tf_min * limit)
-            df = await self._replay.build_ohlcv_dataframe(
-                start=start, end=end,
-                symbol=symbol.replace("_", ""),
-                timeframe_minutes=tf_min,
-            )
-            return self._norm.normalize_ohlcv(df)
-
-        return pd.DataFrame()
-
-    def is_safe_to_trade(self) -> bool:
-        """
-        Return True if conditions are safe for automated trading.
-
-        Checks:
-          - At least one gold feed is alive
-          - Not in a macro event blackout window
-          - Data quality confidence > 0.3
-        """
-        if not self._gold_feeds:
-            return False
-        if not self._gold_feeds.active_sources():
-            return False
-        if self._calendar.is_blackout_window():
-            return False
-        best = self._dqe.best_source()
-        if best is None:
-            return False
-        return True
-
-    def get_current_impact_score(self) -> float:
-        """Return current macro impact score [0, 1]."""
-        cached = self._cache.get_calendar_impact()
-        if cached is not None:
-            return cached
-        return self._calendar.get_current_impact_score()
-
-    def get_replay_engine(self) -> MarketReplayEngine:
-        """Return the replay engine for backtesting."""
-        return self._replay
-
-    # ── Health & diagnostics ──────────────────────────────────────────────────
-
-    def health(self) -> Dict[str, Any]:
-        uptime = time.time() - self._start_time if self._start_time else 0
-        return {
-            "started":        self._started,
-            "uptime_s":       round(uptime, 1),
-            "tick_count":     self._tick_count,
-            "is_safe":        self.is_safe_to_trade(),
-            "impact_score":   self.get_current_impact_score(),
-            "is_blackout":    self._calendar.is_blackout_window(),
-            "gold_feeds":     self._gold_feeds.health() if self._gold_feeds else {},
-            "news":           self._news.health(),
-            "calendar":       self._calendar.health(),
-            "macro_bridge":   self._macro_bridge.health(),
-            "cache":          self._cache.stats(),
-            "lineage":        self._lineage.stats(),
-            "dqe":            self._dqe.get_source_health(),
-        }
-
-    # ── Serialisation helpers ─────────────────────────────────────────────────
-
-    @staticmethod
-    def _tick_to_dict(tick: GoldTick) -> Dict[str, Any]:
-        return {
-            "symbol":     tick.symbol,
-            "timestamp":  tick.timestamp.isoformat(),
-            "epoch":      tick.timestamp.timestamp(),
-            "bid":        tick.bid,
-            "ask":        tick.ask,
-            "mid":        tick.mid,
-            "source":     tick.source.value,
-            "quality":    tick.quality.value,
-            "confidence": tick.confidence,
-            "spread":     tick.spread,
-            "lineage_id": tick.lineage_id,
-        }
-
-    @staticmethod
-    def _dict_to_tick(d: Dict[str, Any]) -> Optional[GoldTick]:
+    def get_macro_impact_score(self) -> float:
+        """Return current macro calendar impact score [0, 1]."""
         try:
-            return GoldTick(
-                symbol     = d["symbol"],
-                timestamp  = datetime.fromisoformat(d["timestamp"]),
-                bid        = float(d["bid"]),
-                ask        = float(d["ask"]),
-                mid        = float(d["mid"]),
-                source     = FeedSource(d["source"]),
-                quality    = TickQuality(d.get("quality", "good")),
-                confidence = float(d.get("confidence", 1.0)),
-                spread     = float(d.get("spread", 0.0)),
-                lineage_id = d.get("lineage_id", ""),
-            )
+            return self._calendar.get_current_impact_score()
+        except Exception:
+            return 0.0
+
+    def is_blackout_window(self) -> bool:
+        """True if within a HIGH-impact event blackout window."""
+        try:
+            return self._calendar.is_blackout_window()
+        except Exception:
+            return False
+
+    def get_quality_report(self, symbol: str = "XAU_USD") -> Optional[QualityReport]:
+        """Return the latest data quality report."""
+        try:
+            return self._dqe.generate_report(symbol)
         except Exception:
             return None
 
-    @staticmethod
-    def _snap_to_dict(snap) -> Dict[str, Any]:
-        return {
-            "symbol":              snap.symbol,
-            "timestamp":           snap.timestamp.isoformat(),
-            "bid":                 snap.bid,
-            "ask":                 snap.ask,
-            "spread":              snap.spread,
-            "spread_pct":          snap.spread_pct,
-            "volume_delta":        snap.volume_delta,
-            "cumulative_delta":    snap.cumulative_delta,
-            "buy_pressure":        snap.buy_pressure,
-            "sell_pressure":       snap.sell_pressure,
-            "order_flow_imbalance": snap.order_flow_imbalance,
-            "trade_pressure":      snap.trade_pressure,
-            "vwap":                snap.vwap,
-            "tick_count":          snap.tick_count,
+    # ── Health ────────────────────────────────────────────────────────────────
+
+    def health(self) -> Dict[str, Any]:
+        h: Dict[str, Any] = {
+            "started":     self._started,
+            "uptime_s":    round(time.time() - self._start_ts, 1) if self._started else 0,
+            "tick_count":  self._tick_count,
+            "redis":       self._redis_store.stats(),
+            "lineage":     self._lineage.stats(),
         }
+        if self._gold_feed:
+            h["gold_feed"] = self._gold_feed.health()
+        h["dqe"]       = self._dqe.get_source_health()
+        h["micro"]     = self._micro.get_snapshot().__dict__ if self._micro.get_snapshot() else {}
+        h["sentiment"] = self._sentiment.health()
+        h["calendar"]  = self._calendar.health()
+        h["macro"]     = self._macro_bridge.health()
+        h["replay"]    = self._replay.health()
+        return h
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
