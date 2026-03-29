@@ -1,6 +1,8 @@
 # Quick Start
 
-Get HOPEFX running and producing your first signal in under 15 minutes.
+> Get HOPEFX running and producing your first signal in under 15 minutes.
+> A valid subscription license key is required for trading endpoints.
+> Last updated: 2026-07-14
 
 ---
 
@@ -48,6 +50,11 @@ SECURITY_JWT_SECRET=your_48_char_random_secret_here
 CONFIG_ENCRYPTION_KEY=another_48_char_random_secret_here
 HOPEFX_KILL_SWITCH_TOKEN=yet_another_48_char_random_secret_here
 
+# Subscription license key — required for all trading, signal, and ML endpoints
+# Obtain from hopefx.com/pricing or request a 14-day trial via GitHub Issues (label: trial-request)
+# Without this, /api/trading/, /api/signals/, and /api/ml/ return 403 Subscription Required
+HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
+
 # Database — SQLite works for local dev, PostgreSQL for production
 DATABASE_URL=sqlite:///./hopefx.db
 
@@ -55,7 +62,40 @@ DATABASE_URL=sqlite:///./hopefx.db
 APP_ENV=development
 ```
 
+Generate all three security secrets at once:
+```bash
+python -c "
+import secrets
+print('SECURITY_JWT_SECRET=' + secrets.token_hex(32))
+print('CONFIG_ENCRYPTION_KEY=' + secrets.token_hex(32))
+print('HOPEFX_KILL_SWITCH_TOKEN=' + secrets.token_hex(32))
+"
+```
+
 All other settings have safe defaults. See `.env.example` for the full list with descriptions.
+
+---
+
+## Step 2b — Activate Your License Key
+
+After adding `HOPEFX_LICENSE_KEY` to `.env`, validate it before starting:
+
+```bash
+python scripts/manage_secrets.py validate
+```
+
+Expected output:
+```
+✓ SECURITY_JWT_SECRET: set (64 chars)
+✓ CONFIG_ENCRYPTION_KEY: set (64 chars)
+✓ HOPEFX_KILL_SWITCH_TOKEN: set (64 chars)
+✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
+All required secrets are valid.
+```
+
+If you do not yet have a license key, the app will still start — but all trading,
+signal, and ML endpoints will return `403 Subscription Required`. The `/health`,
+`/docs`, and `/metrics` endpoints remain accessible without a key.
 
 ---
 
@@ -114,8 +154,20 @@ Expected response:
 
 ## Step 6 — Get Your First Signal
 
+First, get a JWT token:
+
 ```bash
-curl http://localhost:8000/api/signals/latest?symbol=XAUUSD
+TOKEN=$(curl -s -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your_password"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+```
+
+Then fetch the latest signal (requires Starter+ subscription):
+
+```bash
+curl "http://localhost:8000/api/signals/latest?symbol=XAUUSD" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Response:
@@ -134,6 +186,9 @@ Response:
 }
 ```
 
+If you see `403 Subscription Required`, your `HOPEFX_LICENSE_KEY` is missing or invalid.
+If you see `401 Unauthorized`, your token is missing or expired — re-run the login command.
+
 ---
 
 ## Step 7 — Run a Backtest
@@ -146,9 +201,10 @@ python ml/train_advanced.py --smoke
 python real_data_backtest.py --symbol XAUUSD --years 5
 ```
 
-Or via the API:
+Or via the API (requires Starter+ subscription):
 ```bash
 curl -X POST http://localhost:8000/api/backtest/run \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"symbol": "XAUUSD", "strategy": "ma_crossover", "years": 1}'
 ```
@@ -207,15 +263,10 @@ This takes 10–30 minutes depending on your hardware. See [ML Guide](ML_GUIDE.m
 
 ## Step 10 — Set Up Alerts
 
-Configure Discord alerts in `.env`:
+Configure Telegram alerts in `.env`:
 ```bash
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
-```
-
-Configure Telegram alerts:
-```bash
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_channel_id
+TELEGRAM_BOT_TOKEN=your_bot_token        # From @BotFather on Telegram
+TELEGRAM_CHAT_ID=your_channel_id         # Your chat or channel ID
 ```
 
 Configure email alerts (SendGrid):
@@ -225,12 +276,21 @@ ALERT_EMAIL_FROM=alerts@yourdomain.com
 ALERT_EMAIL_TO=you@yourdomain.com
 ```
 
+Test alerts after configuring:
+```bash
+curl -X POST http://localhost:8000/api/notifications/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ---
 
 ## Common First-Run Issues
 
 | Error | Fix |
 |-------|-----|
+| `403 Subscription Required` | Set `HOPEFX_LICENSE_KEY` in `.env` — see Step 2b |
+| `403 Plan Limit Exceeded` | Feature requires a higher plan — check [MONETIZATION.md](MONETIZATION.md) |
+| `401 Unauthorized` | JWT token missing or expired — re-run the login command |
 | `ModuleNotFoundError: No module named 'fastapi'` | Run `pip install -r requirements.txt` |
 | `alembic: command not found` | Run `pip install alembic` |
 | `SECURITY_JWT_SECRET must be at least 32 characters` | Generate a proper secret (see Step 2) |
