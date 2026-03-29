@@ -13,6 +13,13 @@ spec:
       labels:
         app: hopefx-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: api
         image: hopefx/ai-trading:latest
@@ -23,6 +30,17 @@ spec:
             name: hopefx-config
         - secretRef:
             name: hopefx-secrets
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             memory: "512Mi"
