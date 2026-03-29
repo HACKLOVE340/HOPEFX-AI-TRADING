@@ -153,6 +153,57 @@ class MacroStoreBridge:
             logger.debug("MacroStoreBridge.get_ml_features error: %s", exc)
             return {}
 
+    def snapshot(self) -> Dict[str, object]:
+        """
+        Return a full macro snapshot for caching and health endpoints.
+
+        Includes health info, ML features, and per-series latest values
+        with their observation dates.  Safe to call before start() —
+        returns empty features when FRED data has not yet loaded.
+        """
+        try:
+            from ml.macro_store import macro_store
+            raw_snap = macro_store.snapshot()
+        except Exception:
+            raw_snap = {}
+
+        series_detail: Dict[str, object] = {}
+        for name, info in raw_snap.items():
+            if info:
+                series_detail[name] = {
+                    "value": info.get("value"),
+                    "date":  info.get("date"),
+                }
+
+        return {
+            "health":         self.health(),
+            "ml_features":    self.get_ml_features(),
+            "series":         series_detail,
+            "series_count":   len(series_detail),
+            "loaded":         self._loaded,
+            "last_refresh":   self._last_refresh.isoformat()
+                              if self._last_refresh else None,
+        }
+
+    def force_refresh(self) -> None:
+        """
+        Schedule an immediate FRED refresh outside the daily cycle.
+
+        Creates a fire-and-forget asyncio task.  Safe to call from sync
+        code — does nothing if no event loop is running.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.ensure_future(
+                    self._load_fred_into_store(),
+                    loop=loop,
+                )
+            else:
+                loop.run_until_complete(self._load_fred_into_store())
+        except RuntimeError:
+            logger.warning("MacroStoreBridge.force_refresh: no event loop available")
+
     @property
     def is_loaded(self) -> bool:
         return self._loaded
