@@ -11,7 +11,10 @@ import base64
 import hashlib
 import json
 import os
-from typing import Self
+try:
+    from typing import Self  # Python 3.11+
+except ImportError:
+    from typing_extensions import Self  # Python 3.10 backport
 
 import keyring
 from cryptography.fernet import Fernet, InvalidToken
