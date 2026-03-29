@@ -8,6 +8,7 @@ HOPEFX Notification Manager
 Multi-channel alerts with rate limiting, batching, and templating
 """
 
+import abc
 import asyncio
 import logging
 import os
@@ -89,10 +90,18 @@ class Notification:
         }
 
 
-class NotificationChannel:
-    """Base notification channel — also used as an enum-like namespace."""
+class NotificationChannel(abc.ABC):
+    """Abstract base class for notification channels.
 
-    # Enum-style constants used by tests
+    Concrete subclasses must implement ``send``.  Attempting to instantiate
+    a subclass with ``send`` unimplemented raises ``TypeError`` at
+    construction time.
+
+    Class-level constants (CONSOLE, DISCORD, …) are kept for backward
+    compatibility with code that uses ``NotificationChannel.DISCORD`` etc.
+    """
+
+    # Enum-style constants used by tests and channel factory
     CONSOLE = "console"
     DISCORD = "discord"
     TELEGRAM = "telegram"
@@ -106,9 +115,9 @@ class NotificationChannel:
         self._last_send_time: Dict[str, float] = {}
         self._lock = asyncio.Lock()
 
+    @abc.abstractmethod
     async def send(self, notification: Notification) -> bool:
-        """Send notification - implement in subclass"""
-        raise NotImplementedError
+        """Deliver *notification* to the channel. Returns True on success."""
 
     def _check_rate_limit(self, key: str = "default") -> bool:
         """Check if rate limit allows sending"""

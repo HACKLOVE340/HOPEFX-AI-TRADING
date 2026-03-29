@@ -8,6 +8,7 @@ HOPEFX Strategy Manager
 Multi-strategy system with regime detection and performance tracking
 """
 
+import abc
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -59,8 +60,8 @@ class Signal:
         }
 
 
-class BaseStrategy:
-    """Base strategy class"""
+class BaseStrategy(abc.ABC):
+    """Abstract base class for all trading strategies."""
 
     def __init__(self, name: str, config: Dict[str, Any] = None):
         self.name = name
@@ -73,14 +74,14 @@ class BaseStrategy:
             "profit_factor": 0.0,
         }
 
+    @abc.abstractmethod
     async def generate_signals(
         self,
         symbol: str,
         price_data: Any,
         market_regime: str,
     ) -> List[Signal]:
-        """Generate trading signals - implement in subclass"""
-        raise NotImplementedError
+        """Generate trading signals for *symbol* given current *price_data* and *market_regime*."""
 
     def update_performance(self, trade_result: Dict):
         """Update strategy performance metrics"""

@@ -17,10 +17,12 @@ Providers:
 Author: HOPEFX Development Team
 """
 
+import abc
 import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
 import requests
 
 try:
@@ -69,20 +71,20 @@ class NewsArticle:
         }
 
 
-class NewsProvider:
-    """Base class for news providers"""
+class NewsProvider(abc.ABC):
+    """Abstract base class for news data providers."""
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
         self.logger = logging.getLogger(self.__class__.__name__)
 
+    @abc.abstractmethod
     def get_news(self, **kwargs) -> List[NewsArticle]:
-        """Get news articles - to be implemented by subclasses"""
-        raise NotImplementedError("Subclasses must implement get_news()")
+        """Fetch and return a list of NewsArticle objects."""
 
+    @abc.abstractmethod
     def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
-        """Format raw article data - to be implemented by subclasses"""
-        raise NotImplementedError("Subclasses must implement format_article()")
+        """Convert a raw provider response dict into a NewsArticle."""
 
 
 class NewsAPIProvider(NewsProvider):
