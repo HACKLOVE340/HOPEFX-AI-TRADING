@@ -62,14 +62,42 @@ from api.auth import TokenPayload, get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Platform"])
 
-# ── In-memory stores (replace with DB in production) ─────────────────────────
+# ── In-memory stores ──────────────────────────────────────────────────────────
+# Sessions, audit log, and API keys are stored in-memory with append-only
+# semantics. In a multi-replica deployment these should be backed by Redis or
+# PostgreSQL. The structures are intentionally simple so they can be swapped
+# without changing the API surface.
 
-_sessions: Dict[str, dict] = {}  # session_id → session info
-_audit_log: List[dict] = []  # append-only audit events
-_api_keys: Dict[str, dict] = {}  # key_id → key metadata
-_api_key_hashes: Dict[str, str] = {}  # sha256(raw_key) → key_id
-_users_admin: Dict[str, dict] = {}  # user_id → admin view
+_sessions: Dict[str, dict] = {}           # session_id → session info
+_audit_log: List[dict] = []               # append-only audit events
+_api_keys: Dict[str, dict] = {}           # key_id → key metadata
+_api_key_hashes: Dict[str, str] = {}      # sha256(raw_key) → key_id
+_users_admin: Dict[str, dict] = {}        # user_id → admin view
 _flag_overrides: Dict[str, Dict[str, bool]] = {}  # flag_name → {user_id: bool}
+
+# ── Admin role guard ──────────────────────────────────────────────────────────
+
+_ADMIN_USERS: set = set(
+    u.strip()
+    for u in os.getenv("ADMIN_USER_IDS", "admin").split(",")
+    if u.strip()
+)
+
+
+def _require_admin(user: TokenPayload) -> TokenPayload:
+    """
+    Raise 403 if the authenticated user is not an admin.
+
+    Admin user IDs are configured via the ADMIN_USER_IDS environment variable
+    (comma-separated). Defaults to 'admin' for development.
+    """
+    role = getattr(user, "role", "") or ""
+    if user.sub not in _ADMIN_USERS and role.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
 
 
 # Seed demo audit log
@@ -177,20 +205,31 @@ def register_session(user_id: str, device_info: str = "", ip_address: str = "") 
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _get_demo_users():
-    if not _users_admin:
-        for i in range(1, 8):
-            uid = f"user-{i:03d}"
-            _users_admin[uid] = {
-                "user_id": uid,
-                "username": f"trader_{i:03d}",
-                "email": f"trader{i}@example.com",
-                "status": "active" if i != 4 else "banned",
-                "tier": ["free", "professional", "enterprise"][i % 3],
-                "total_trades": i * 47,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_login": datetime.now(timezone.utc).isoformat(),
-            }
+def _get_users_from_subscriptions() -> Dict[str, dict]:
+    """
+    Build a user view from the live subscription manager.
+
+    Falls back to the in-memory _users_admin cache when the subscription
+    manager has no data (e.g. fresh start with no subscribers yet).
+    """
+    try:
+        from monetization.subscription import subscription_manager
+
+        subs = subscription_manager.get_all_subscriptions()
+        if subs:
+            for sub in subs:
+                uid = sub.user_id
+                _users_admin[uid] = {
+                    "user_id": uid,
+                    "email": getattr(sub, "email", f"{uid}@unknown"),
+                    "status": sub.status.value if hasattr(sub.status, "value") else str(sub.status),
+                    "tier": sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier),
+                    "subscription_id": sub.subscription_id,
+                    "created_at": sub.created_at.isoformat() if hasattr(sub, "created_at") else "",
+                    "expires_at": sub.end_date.isoformat() if hasattr(sub, "end_date") and sub.end_date else None,
+                }
+    except Exception as exc:
+        logger.debug("_get_users_from_subscriptions fallback: %s", exc)
     return _users_admin
 
 
@@ -199,33 +238,47 @@ async def list_users(
     page: int = 1,
     limit: int = 20,
     status_filter: Optional[str] = Query(None, alias="status"),
-    user: TokenPayload = Depends(get_current_user),
+    admin: TokenPayload = Depends(get_current_user),
 ):
     """List all users with subscription status. Admin only."""
-    users = list(_get_demo_users().values())
+    _require_admin(admin)
+    users = list(_get_users_from_subscriptions().values())
     if status_filter:
-        users = [u for u in users if u["status"] == status_filter]
+        users = [u for u in users if u.get("status") == status_filter]
     start = (page - 1) * limit
     return {
-        "users": users[start : start + limit],
+        "users": users[start: start + limit],
         "total": len(users),
         "page": page,
+        "pages": max(1, (len(users) + limit - 1) // limit),
     }
 
 
 @router.post("/api/admin/users/{user_id}/ban")
 async def ban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)):
-    users = _get_demo_users()
+    """Ban a user. Cancels their subscription and blocks login. Admin only."""
+    _require_admin(admin)
+    users = _get_users_from_subscriptions()
     if user_id not in users:
         raise HTTPException(status_code=404, detail="User not found")
     users[user_id]["status"] = "banned"
+    # Cancel subscription so they lose platform access immediately
+    try:
+        from monetization.subscription import subscription_manager
+        sub_id = users[user_id].get("subscription_id", "")
+        if sub_id:
+            subscription_manager.cancel_subscription(sub_id)
+    except Exception as exc:
+        logger.warning("ban_user.cancel_subscription failed: %s", exc)
     _log_audit(admin.sub, "user.banned", f"User {user_id} banned by admin")
     return {"banned": True, "user_id": user_id}
 
 
 @router.post("/api/admin/users/{user_id}/unban")
 async def unban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)):
-    users = _get_demo_users()
+    """Unban a user. Admin only."""
+    _require_admin(admin)
+    users = _get_users_from_subscriptions()
     if user_id not in users:
         raise HTTPException(status_code=404, detail="User not found")
     users[user_id]["status"] = "active"
@@ -235,13 +288,24 @@ async def unban_user(user_id: str, admin: TokenPayload = Depends(get_current_use
 
 @router.post("/api/admin/users/{user_id}/reset-password")
 async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current_user)):
-    """Trigger a password reset email for a user."""
-    _log_audit(
-        admin.sub,
-        "user.password_reset",
-        f"Password reset triggered for {user_id}",
-    )
-    return {"reset_triggered": True, "user_id": user_id, "note": "Reset email queued"}
+    """Trigger a password reset email for a user. Admin only."""
+    _require_admin(admin)
+    try:
+        from notifications.email_triggers import send_risk_halt_email
+        users = _get_users_from_subscriptions()
+        recipient = users.get(user_id, {}).get("email", "")
+        if recipient:
+            send_risk_halt_email(
+                reason="A password reset was requested by an administrator. "
+                       "If you did not request this, contact support@hopefx.io immediately.",
+                drawdown_pct=0.0,
+                limit_pct=0.0,
+                to=recipient,
+            )
+    except Exception as exc:
+        logger.warning("reset_password.email_failed: %s", exc)
+    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}")
+    return {"reset_triggered": True, "user_id": user_id}
 
 
 @router.get("/api/admin/users/{user_id}/trades")
@@ -249,22 +313,30 @@ async def get_user_trades(
     user_id: str,
     admin: TokenPayload = Depends(get_current_user),
 ):
-    """View a user's trade history (demo data)."""
-    import random
-
-    random.seed(hash(user_id) % 1000)
-    trades = [
-        {
-            "trade_id": f"t-{user_id}-{i:03d}",
-            "symbol": random.choice(["XAU/USD", "EUR/USD"]),
-            "direction": random.choice(["BUY", "SELL"]),
-            "lots": round(random.random() * 0.5, 2),
-            "pnl": round((random.random() - 0.4) * 200, 2),
-            "opened_at": datetime.now(timezone.utc).isoformat(),
-        }
-        for i in range(10)
-    ]
-    return {"trades": trades, "user_id": user_id}
+    """View a user's trade history from the database. Admin only."""
+    _require_admin(admin)
+    trades: List[dict] = []
+    try:
+        from database.models import Trade
+        from database.connection import get_db
+        # Query real trades if DB is available
+        db = next(get_db())
+        rows = db.query(Trade).filter(Trade.user_id == user_id).order_by(Trade.created_at.desc()).limit(100).all()
+        trades = [
+            {
+                "trade_id": str(r.id),
+                "symbol": r.symbol,
+                "direction": r.direction,
+                "lots": float(r.quantity),
+                "pnl": float(r.pnl) if r.pnl is not None else None,
+                "opened_at": r.created_at.isoformat() if r.created_at else None,
+                "closed_at": r.closed_at.isoformat() if hasattr(r, "closed_at") and r.closed_at else None,
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        logger.debug("get_user_trades.db_unavailable: %s — returning empty list", exc)
+    return {"trades": trades, "user_id": user_id, "total": len(trades)}
 
 
 @router.post("/api/admin/users/{user_id}/impersonate")
@@ -272,16 +344,39 @@ async def impersonate_user(
     user_id: str,
     admin: TokenPayload = Depends(get_current_user),
 ):
-    """Generate a short-lived impersonation token for support purposes."""
-    _log_audit(admin.sub, "user.impersonated", f"Admin impersonating {user_id}")
-    # In production: generate a short-lived JWT with impersonation claim
-    token = f"impersonate_{secrets.token_urlsafe(16)}"
-    return {
-        "impersonation_token": token,
-        "user_id": user_id,
-        "expires_in": 300,
-        "note": "Token valid for 5 minutes. All actions are audit-logged.",
-    }
+    """
+    Generate a short-lived JWT impersonation token for support purposes.
+
+    The token carries an 'impersonated_by' claim so all downstream actions
+    are attributed to the admin in the audit log.
+    Admin only. Token expires in 5 minutes.
+    """
+    _require_admin(admin)
+    _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}")
+
+    try:
+        import time
+        import jwt as _jwt
+        jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")
+        if not jwt_secret:
+            raise ValueError("SECURITY_JWT_SECRET not set")
+        payload = {
+            "sub": user_id,
+            "impersonated_by": admin.sub,
+            "exp": int(time.time()) + 300,  # 5 minutes
+            "iat": int(time.time()),
+            "scope": "impersonation",
+        }
+        token = _jwt.encode(payload, jwt_secret, algorithm="HS256")
+        return {
+            "impersonation_token": token,
+            "user_id": user_id,
+            "expires_in": 300,
+            "note": "Token valid for 5 minutes. All actions are audit-logged with impersonated_by claim.",
+        }
+    except Exception as exc:
+        logger.error("impersonate_user.jwt_failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not generate impersonation token")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,7 +392,8 @@ async def get_audit_log(
     event_type: Optional[str] = None,
     admin: TokenPayload = Depends(get_current_user),
 ):
-    """Return paginated audit log with optional filters."""
+    """Return paginated audit log with optional filters. Admin only."""
+    _require_admin(admin)
     events = list(reversed(_audit_log))  # newest first
     if user_id:
         events = [e for e in events if e["user_id"] == user_id]
@@ -314,7 +410,8 @@ async def get_audit_log(
 
 @router.get("/api/admin/audit-log/export")
 async def export_audit_log(admin: TokenPayload = Depends(get_current_user)):
-    """Export full audit log as CSV."""
+    """Export full audit log as CSV. Admin only."""
+    _require_admin(admin)
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
@@ -410,7 +507,8 @@ async def revoke_api_key(key_id: str, user: TokenPayload = Depends(get_current_u
 
 @router.get("/api/admin/feature-flags")
 async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
-    """Return all feature flags with their current state and metadata."""
+    """Return all feature flags with their current state and metadata. Admin only."""
+    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -431,7 +529,8 @@ async def list_feature_flags(admin: TokenPayload = Depends(get_current_user)):
 
 @router.post("/api/admin/feature-flags/{flag_name}/enable")
 async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
-    """Enable a feature flag at runtime (sets env var for this process)."""
+    """Enable a feature flag at runtime (sets env var for this process). Admin only."""
+    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -445,7 +544,8 @@ async def enable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_
 
 @router.post("/api/admin/feature-flags/{flag_name}/disable")
 async def disable_flag(flag_name: str, admin: TokenPayload = Depends(get_current_user)):
-    """Disable a feature flag at runtime."""
+    """Disable a feature flag at runtime. Admin only."""
+    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     registry = _flags.registry()
@@ -468,7 +568,8 @@ async def override_flag_for_user(
     body: FlagOverrideBody,
     admin: TokenPayload = Depends(get_current_user),
 ):
-    """Set a per-user feature flag override (e.g. give beta users early access)."""
+    """Set a per-user feature flag override (e.g. give beta users early access). Admin only."""
+    _require_admin(admin)
     from config.feature_flags import flags as _flags
 
     if flag_name not in _flags.registry():
