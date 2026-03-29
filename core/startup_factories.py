@@ -1204,7 +1204,6 @@ async def init_daily_online_learner(s: Any) -> Any:
         OnlineLearner.adapt_to_regime() to adjust EWC lambda and learning
         rate.  Best-effort — failures are logged but never propagate.
         """
-        import math
         from datetime import datetime as _dt, timezone as _tz
 
         while True:

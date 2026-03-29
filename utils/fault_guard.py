@@ -46,9 +46,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import AsyncIterator, Dict, Optional
+from typing import Dict
 
-from core.event_bus import bus, CH_BREACH
+from core.event_bus import bus
 
 logger = logging.getLogger(__name__)
 
