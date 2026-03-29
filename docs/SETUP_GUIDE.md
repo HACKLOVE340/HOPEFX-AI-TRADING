@@ -1,360 +1,400 @@
-# Setup Guide
+# HOPEFX Data Layer & Execution System — Setup Guide
 
-## Requirements
-
-- Python 3.10, 3.11, or 3.12
-- Git
-- PostgreSQL 16 (production) or SQLite (development — zero config)
-- Redis 7 (optional — rate limiting and caching fall back to in-memory without it)
+This guide covers setting up the full data layer and execution pipeline from scratch, including all API keys, environment variables, Redis, and the startup sequence.
 
 ---
 
-## 1. Clone and install
+## Architecture Overview
+
+```
+MarketDataOrchestrator  ← SINGLE SOURCE OF TRUTH for all market data
+    ├── GoldFeedManager          (5 gold price APIs → consensus tick)
+    ├── DataQualityEngine        (validation, anomaly detection, failover)
+    ├── MicrostructureEngine     (OFI, spread, delta, Kyle's lambda)
+    ├── NewsSentimentEngine      (5 news feeds, VADER scoring, EMA signal)
+    ├── MacroCalendarEngine      (Finnhub calendar, gold impact scoring)
+    ├── MacroStoreBridge         (FRED → macro feature store)
+    ├── DataLayerRedisStore      (per-instrument TTL caching)
+    ├── DataLineageStore         (immutable audit trail, SQLite/PostgreSQL)
+    ├── NormalizationPipeline    (tick + OHLCV cleaning)
+    └── MarketReplayEngine       (Dukascopy historical replay)
+
+Execution Pipeline (all data from orchestrator only)
+    HopeFXEngine
+        ├── orchestrator.get_latest_tick()    → price, spread, quality
+        ├── orchestrator.get_ml_features()    → microstructure + sentiment + macro
+        ├── Gatekeeper.evaluate()             → 11-check pre-trade gate
+        ├── RiskManager.size_order()          → Kelly sizing with quality scaling
+        ├── SmartRouter.route_and_execute()   → OFI-aligned broker selection
+        └── orchestrator.notify_fill()        → replay + cache update on fill
+
+Brokers (order execution ONLY — no market data)
+    OANDABroker   → place_order, cancel_order, get_account_info
+    IBKRBroker    → place_order, cancel_order, get_account_info
+```
+
+**Invariant**: No broker connector may return price data. `get_market_data()`, `stream_prices()`, and all equivalent methods raise `MarketDataForbidden` at runtime.
+
+---
+
+## Prerequisites
+
+- Python 3.10+
+- Redis 6+ (local or remote)
+- PostgreSQL 14+ (production) or SQLite (development)
+- At least one gold price API key
+- OANDA practice account (for paper trading) or live broker credentials
+
+---
+
+## Step 1 — Clone and Install
 
 ```bash
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
 cd HOPEFX-AI-TRADING
 
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-```
 
-For CI or lightweight environments (no C extensions, no GPU deps):
-
-```bash
-pip install -r requirements-ci.txt
+# Optional: IBKR support
+pip install ib_insync==0.9.86
 ```
 
 ---
 
-## 2. Environment configuration
+## Step 2 — Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-Minimum required variables (app will not start without these):
+### Required: Redis
 
 ```env
-# JWT signing key — generate with:
-# python -c "import secrets; print(secrets.token_urlsafe(48))"
-SECURITY_JWT_SECRET=<48-char random string>
-
-# Subscription license key — obtain from hopefx.com/pricing or trial-request issue
-# Without this, all trading endpoints return 403 Subscription Required
-HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
-
-# Application mode: development | production | test
-APP_ENV=development
-```
-
-Additional variables for full functionality:
-
-```env
-# Broker (default: paper trading — no credentials needed)
-BROKER_TYPE=paper                  # paper | oanda | ibkr | ccxt | fix
-
-# OANDA paper trading (free practice account at oanda.com)
-OANDA_API_KEY=your_practice_token
-OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
-OANDA_ENVIRONMENT=practice
-
-# Database (SQLite used automatically in development if unset)
-DATABASE_URL=postgresql://user:pass@localhost:5432/hopefx
-
-# Redis (in-memory fallback used if unset)
 REDIS_URL=redis://localhost:6379/0
-
-# Monitoring (optional but recommended in production)
-SENTRY_DSN=https://...@sentry.io/...
 ```
 
-Generate and validate all production secrets at once:
-
+Start Redis locally:
 ```bash
-python scripts/manage_secrets.py generate
-python scripts/manage_secrets.py validate
+# macOS
+brew install redis && brew services start redis
+
+# Ubuntu/Debian
+sudo apt install redis-server && sudo systemctl start redis
+
+# Docker
+docker run -d -p 6379:6379 redis:7-alpine
 ```
 
-The `validate` command checks every required secret and reports exactly what is missing
-or invalid. Fix all reported issues before proceeding to step 3.
+### Required: At Least One Gold Price API
+
+| API | Free Tier | Sign Up |
+|-----|-----------|---------|
+| GoldAPI.io | 100 req/month | https://www.goldapi.io/ |
+| Metals.dev | 100 req/month | https://metals.dev/ |
+| Metals-API | 100 req/month | https://metals-api.com/ |
+| MetalpriceAPI | 100 req/month | https://metalpriceapi.com/ |
+| CommodityPriceAPI | 100 req/month | https://commoditypriceapi.com/ |
+
+```env
+GOLDAPI_IO_KEY=your_key_here
+METALS_DEV_KEY=your_key_here
+METALS_API_KEY=your_key_here
+METALPRICEAPI_KEY=your_key_here
+COMMODITY_PRICE_API_KEY=your_key_here
+```
+
+### Recommended: News & Sentiment APIs
+
+| API | Free Tier | Sign Up |
+|-----|-----------|---------|
+| Finnhub | 60 req/min | https://finnhub.io/ |
+| FMP | 250 req/day | https://financialmodelingprep.com/ |
+| NewsData.io | 200 credits/day | https://newsdata.io/ |
+| Alpha Vantage | 25 req/day | https://www.alphavantage.co/ |
+| NewsAPI | 100 req/day | https://newsapi.org/ |
+
+```env
+FINNHUB_API_KEY=your_key_here
+FMP_API_KEY=your_key_here
+NEWSDATA_IO_KEY=your_key_here
+ALPHA_VANTAGE_KEY=your_key_here
+NEWSAPI_KEY=your_key_here
+```
+
+### Optional: FRED Macro Data
+
+```env
+FRED_API_KEY=your_key_here   # https://fred.stlouisfed.org/docs/api/api_key.html
+```
+
+### Broker Credentials
+
+**OANDA (paper trading — recommended for initial setup):**
+
+1. Create a free practice account at https://www.oanda.com/
+2. Go to Manage Funds → API Access → Generate token
+
+```env
+OANDA_ACCOUNT_ID=101-123-4567890-001
+OANDA_API_TOKEN=your_token_here
+OANDA_ENVIRONMENT=practice
+```
+
+**IBKR (optional):**
+
+1. Install TWS or IB Gateway
+2. Enable API: File → Global Configuration → API → Settings → Enable ActiveX and Socket Clients
+
+```env
+IBKR_HOST=127.0.0.1
+IBKR_PORT=7497          # 7497=paper TWS, 7496=live TWS, 4002=paper gateway
+IBKR_ENV=paper
+IBKR_CLIENT_ID=1
+```
+
+### Execution Tuning
+
+```env
+# Engine
+ENGINE_MIN_CONFIDENCE=0.55
+ENGINE_MIN_DATA_QUALITY=0.40
+ENGINE_MAX_SPREAD_USD=2.00
+ENGINE_TICK_LOOP_HZ=1.0
+ENGINE_SIGNAL_COOLDOWN_S=30.0
+
+# Risk
+RISK_ACCOUNT_EQUITY=100000
+RISK_MAX_POSITION_PCT=0.05
+RISK_KELLY_FRACTION=0.25
+RISK_MAX_DAILY_LOSS_PCT=0.05
+RISK_MAX_DRAWDOWN_PCT=0.10
+RISK_MAX_OPEN_POSITIONS=3
+
+# Gatekeeper
+GATEKEEPER_MIN_CONF=0.55
+GATEKEEPER_MAX_DAILY_TRADES=20
+GATEKEEPER_PAUSE_S=60
+GATEKEEPER_SENT_BLACKOUT=0.85
+GATEKEEPER_IMPACT_BLACKOUT=0.75
+
+# Router
+ROUTER_CB_ERRORS=3
+ROUTER_CB_RESET_S=120
+ROUTER_ORDER_TIMEOUT_S=5.0
+ROUTER_MAX_SPREAD_BPS=50.0
+
+# Lineage
+LINEAGE_DB_PATH=data/lineage/lineage.db
+```
 
 ---
 
-## 3. Database setup
+## Step 3 — Database Setup
 
-**Development (SQLite — zero config):**
+### Development (SQLite — zero config)
 
-The app creates `hopefx.db` automatically on first start. No setup needed.
+The lineage store defaults to `data/lineage/lineage.db`. No setup needed.
 
-**Production (PostgreSQL):**
+### Production (PostgreSQL)
 
 ```bash
-# Run Alembic migrations
+docker run -d \
+  -e POSTGRES_USER=hopefx \
+  -e POSTGRES_PASSWORD=your_password \
+  -e POSTGRES_DB=hopefx \
+  -p 5432:5432 \
+  postgres:14-alpine
+
+# .env
+DATABASE_URL=postgresql+asyncpg://hopefx:your_password@localhost:5432/hopefx
+
 alembic upgrade head
 ```
 
-This applies all 6 migrations (initial schema through watchlists table).
-
 ---
 
-## 4. Start the application
+## Step 4 — Verify Data Layer
 
 ```bash
-# Development (auto-reload on file changes)
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python -c "
+import asyncio
+from data_layer.orchestrator import orchestrator
 
-# Or via the CLI
-python cli.py serve
+async def test():
+    await orchestrator.start()
+    await asyncio.sleep(5)
+    tick = orchestrator.get_latest_tick()
+    if tick:
+        print(f'Tick OK: {tick.symbol} mid={tick.mid:.2f} quality={tick.quality.value} conf={tick.confidence:.3f}')
+    else:
+        print('No tick — check API keys')
+    features = orchestrator.get_ml_features()
+    print(f'Features: {len(features)} keys')
+    print(f'Safe to trade: {orchestrator.is_safe_to_trade()}')
+    health = orchestrator.health()
+    print(f'Active feeds: {list(health[\"gold_feeds\"].keys())}')
+    await orchestrator.stop()
+
+asyncio.run(test())
+"
 ```
 
-Verify it started:
-
-```bash
-curl http://localhost:8000/health
-# {"status":"healthy","version":"2.0.0","environment":"development",...}
+Expected output:
 ```
-
-- **Dashboard**: http://localhost:8000/
-- **API explorer**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Metrics**: http://localhost:8000/metrics (Prometheus format)
-
----
-
-## 5. Run the test suite
-
-```bash
-# Smoke tests (fast, no external deps)
-python -m pytest tests/test_smoke_critical.py -q
-
-# Unit tests
-python -m pytest tests/unit/ -q
-
-# Integration tests (needs app importable)
-python -m pytest tests/integration/ -q
-
-# Full suite
-python -m pytest tests/ -q
+Tick OK: XAU_USD mid=1923.45 quality=good conf=0.987
+Features: 26 keys
+Safe to trade: True
+Active feeds: ['goldapi', 'metals_dev']
 ```
 
 ---
 
-## 6. Docker Compose (full stack)
+## Step 5 — Start the Full System
 
-Starts app + PostgreSQL 16 + Redis 7 + Prometheus + Grafana:
+### Standalone process
 
 ```bash
-# Copy and fill in required secrets first
-cp .env.example .env
-# Edit .env — set SECURITY_JWT_SECRET, DB_PASSWORD, etc.
-
-docker compose up -d
+python -m execution.execution
 ```
 
-Services:
-| Service | URL |
-|---------|-----|
-| API + Dashboard | http://localhost:8000 |
-| Grafana | http://localhost:3000 (admin / see GRAFANA_ADMIN_PASSWORD) |
-| Prometheus | http://localhost:9090 |
+### Programmatic
+
+```python
+import asyncio
+from execution.execution import ExecutionSystem
+
+async def main():
+    def my_inference(features: dict) -> tuple:
+        # returns (direction, confidence, probability)
+        return "neutral", 0.0, 0.5
+
+    system = ExecutionSystem(ml_inference_fn=my_inference)
+    await system.start()
+
+    try:
+        while True:
+            await asyncio.sleep(60)
+    except KeyboardInterrupt:
+        await system.stop()
+
+asyncio.run(main())
+```
+
+### FastAPI integration
+
+```python
+from fastapi import FastAPI
+from execution.execution import ExecutionSystem
+
+app = FastAPI()
+system = ExecutionSystem()
+
+@app.on_event("startup")
+async def startup():
+    await system.start()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await system.stop()
+
+@app.get("/health")
+def health():
+    return system.health()
+```
 
 ---
 
-## 7. Kubernetes (Helm)
+## Step 6 — Wiring Your ML Model
 
-```bash
-helm install hopefx helm/hopefx/ \
-  --set secrets.jwtSecret="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
-  --set secrets.dbPassword="your-db-password"
+```python
+from execution.execution import ExecutionSystem
+
+def my_model(features: dict) -> tuple:
+    """
+    features keys (from orchestrator):
+      Microstructure: order_flow_imbalance, trade_pressure, spread,
+                      buy_pressure, sell_pressure, cumulative_delta, vwap
+      Sentiment:      news_sentiment_score, news_sentiment_momentum,
+                      news_article_count_1h, news_bullish_ratio
+      Macro/Calendar: macro_impact_score, hours_to_next_event
+      FRED:           dxy_level, us10y_yield, vix_level, cpi_yoy, ...
+    """
+    ofi  = features.get("order_flow_imbalance", 0.0)
+    sent = features.get("news_sentiment_score", 0.0)
+    # ... your model logic ...
+    return "long", 0.72, 0.68   # direction, confidence, probability
+
+system = ExecutionSystem(ml_inference_fn=my_model)
 ```
-
-See `helm/hopefx/values.yaml` for all configurable parameters.
 
 ---
 
-## 8. ML model
+## Data Flow Reference
 
-The production model (`ml/saved_models/advanced_oos.pkl`) is included in the repository — 176 features, 66.4% OOS accuracy (p=0.0000, N=1,260 bars), validated 2026-03-28.
+| Component | Data Access | Method |
+|-----------|-------------|--------|
+| HopeFXEngine | Tick price, spread, quality | `orchestrator.get_latest_tick()` |
+| HopeFXEngine | ML features | `orchestrator.get_ml_features()` |
+| HopeFXEngine | Safety gate | `orchestrator.is_safe_to_trade()` |
+| RiskManager | Data quality | `orchestrator.get_latest_tick().confidence` |
+| RiskManager | Sentiment, macro | `orchestrator.get_ml_features()` |
+| Gatekeeper | Data quality | `orchestrator.get_latest_tick().confidence` |
+| Gatekeeper | News blackout | `orchestrator.is_safe_to_trade()` |
+| Gatekeeper | Impact score | `orchestrator.get_current_impact_score()` |
+| Gatekeeper | Sentiment | `orchestrator.get_ml_features()` |
+| SmartRouter | OFI, sentiment | From order_request (populated by engine from orchestrator) |
+| OANDABroker | **NONE** — raises `MarketDataForbidden` | — |
+| IBKRBroker | **NONE** — raises `MarketDataForbidden` | — |
 
-To retrain from scratch:
+---
 
-```bash
-# Smoke test (~30 s)
-python ml/train_advanced.py --smoke
+## Lineage Audit Trail
 
-# Full production retrain (50 years, 3-year OOS)
-python ml/train_advanced.py --years 50 --oos-years 3
+Every event written to `DataLineageStore`:
 
-# Multi-symbol backtest (7 symbols — XAU, BTC, ETH, EUR/USD, GBP/USD, Silver, Oil)
-python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
-```
-
-To verify the model is loaded correctly:
-
-```bash
-curl http://localhost:8000/api/ml/accuracy
-# {"model_id":"advanced_oos","accuracy":0.664,"oos_n":1260,"gate_passed":true,...}
-
-curl http://localhost:8000/api/ml/health
-# {"status":"ok","feature_count":176,"model_loaded":true,...}
-```
-
-## 9. Online learning (optional)
-
-Enable incremental model updates that keep the model current without a full retrain:
-
-```env
-# In .env
-ML_HOURLY_ENABLED=true
-ML_SYMBOLS=XAU_USD
-ONLINE_LEARNER_PERSIST=true
-ONLINE_LEARNER_DIR=ml/saved_models
-```
-
-When enabled:
-- **Every hour:** `SklearnOnlineLearner` receives the last 24 bars and calls `partial_fit()`.
-- **Daily at 00:05 UTC:** EWC regime-adaptation loop adjusts model plasticity based on detected market regime (volatile / ranging / trending).
-- Learner state is persisted to `ml/saved_models/online_learner_{symbol}.pkl` and reloaded at startup.
+| Event | Record Type | Written By |
+|-------|-------------|------------|
+| Validated tick | `TICK` | Orchestrator tick loop |
+| News article | `NEWS` | NewsSentimentEngine |
+| Macro event | `MACRO` | MacroCalendarEngine |
+| ML signal generated | `SIGNAL` | HopeFXEngine |
+| Gate rejection | `SIGNAL` (GATE_BLOCK) | Gatekeeper |
+| Position sizing | `SIGNAL` (SIZE) | RiskManager |
+| Routing decision | `SIGNAL` (ROUTE) | SmartRouter |
+| Fill confirmed | `SIGNAL` (FILL) | HopeFXEngine |
+| Fill rejected | `SIGNAL` (REJECT) | HopeFXEngine |
 
 ---
 
 ## Troubleshooting
 
-**App exits immediately with validation errors:**
+**No tick from orchestrator:**
+- Check at least one gold API key is set in `.env`
+- Verify Redis: `redis-cli ping` → `PONG`
+- Check logs: `grep "GoldFeedManager" hopefx.log`
 
-The startup validator prints exactly what is missing. Common causes:
-- `SECURITY_JWT_SECRET` not set or shorter than 32 characters
-- `SECURITY_JWT_SECRET` still contains `CHANGE_ME`
+**Data quality below threshold:**
+- Multiple feeds improve consensus confidence
+- Temporarily set `DQE_MIN_CONFIDENCE=0.20` to diagnose
+- Check `orchestrator.health()["dqe"]` for per-source scores
 
-**`ModuleNotFoundError` on startup:**
+**Gatekeeper blocking all trades:**
+- Check `system.health()["gatekeeper"]` for block reasons
+- Common: `news_blackout`, `data_quality_low`, `low_confidence`
+- Verify `GATEKEEPER_MIN_CONF` matches your model's output range
 
-```bash
-pip install -r requirements.txt
-```
+**OANDA connection refused:**
+- Verify `OANDA_ACCOUNT_ID` and `OANDA_API_TOKEN` are set
+- Test: `curl -H "Authorization: Bearer $OANDA_API_TOKEN" https://api-fxpractice.oanda.com/v3/accounts`
 
-If using CI requirements: `pip install -r requirements-ci.txt` — this excludes heavy deps (ta-lib, TensorFlow, MetaTrader5).
+**IBKR not connecting:**
+- TWS/Gateway must be running before the system starts
+- API connections must be enabled in TWS settings
 
-**Database migration errors:**
-
-```bash
-alembic current    # show current revision
-alembic upgrade head  # apply all pending migrations
-```
-
-**Redis connection refused:**
-
-Redis is optional. The app falls back to in-memory rate limiting and caching automatically. Set `REDIS_URL` only if you have Redis running.
-
-**OANDA connection errors:**
-
-```bash
-python scripts/validate_oanda.py
-```
-
-This tests API key validity, account reachability, and XAU_USD pricing availability.
-
----
-
-## Subscription Validation
-
-HOPEFX requires a valid license key to access trading endpoints. Without one, the
-application starts but all `/api/trading/`, `/api/signals/`, and `/api/ml/` endpoints
-return `403 Subscription Required`. The `/health`, `/docs`, and `/metrics` endpoints
-remain accessible without a key.
-
-### Step 1 — Obtain a license key
-
-Subscribe at [hopefx.com/pricing](https://hopefx.com/pricing) or request a 14-day
-trial via GitHub Issues (label: `trial-request`). Your license key is emailed on
-successful payment in the format:
-
-```
-HOPEFX-PRO-A7B9C2D4-X8Y2
-```
-
-### Step 2 — Add the key to `.env`
-
-```bash
-HOPEFX_LICENSE_KEY=HOPEFX-PRO-A7B9C2D4-X8Y2
-```
-
-### Step 3 — Validate before starting
-
-```bash
-python scripts/manage_secrets.py validate
-```
-
-Expected output:
-```
-✓ SECURITY_JWT_SECRET: set (48 chars)
-✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
-✓ CONFIG_ENCRYPTION_KEY: set
-✓ HOPEFX_KILL_SWITCH_TOKEN: set
-All required secrets are valid.
-```
-
-If validation fails, the output shows exactly which key is missing or invalid.
-
-### Step 4 — Confirm at runtime
-
-After starting the app, confirm the license is active:
-
-```bash
-curl http://localhost:8000/api/monetization/subscription/me \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-```json
-{
-  "plan": "professional",
-  "status": "active",
-  "expires_at": "2026-08-14T00:00:00Z",
-  "features": ["signals", "ml_predict", "backtesting_10yr", "api_access", "social_trading"]
-}
-```
-
-### License Key Renewal
-
-Keys are valid for 30 days (monthly billing) or 365 days (annual billing). The app
-checks key validity on startup and every 24 hours at runtime. When a key is within
-7 days of expiry, a warning is logged:
-
-```
-WARNING: License key expires in 5 days. Renew at hopefx.com/billing
-```
-
-After expiry, trading endpoints return `403 Subscription Required` until a new key
-is activated. Update `.env` with the new key and restart the app.
-
----
-
-## Subscription-Gated Features
-
-| Feature | Trial | Starter | Professional | Enterprise | Elite |
-|---------|-------|---------|-------------|------------|-------|
-| Paper trading | Limited (50 trades) | Yes | Yes | Yes | Yes |
-| Live trading | No | 1 broker | 3 brokers | Unlimited | Unlimited |
-| Signals (XAUUSD) | No | Yes | Yes | Yes | Yes |
-| Multi-symbol signals | No | No | Yes | Yes | Yes |
-| ML predictions | No | No | Yes | Yes | Yes |
-| Backtesting (1 year) | No | Yes | Yes | Yes | Yes |
-| Backtesting (10 years) | No | No | Yes | Yes | Yes |
-| Backtesting (50 years) | No | No | No | Yes | Yes |
-| Prop firm mode | No | No | Yes | Yes | Yes |
-| Full API access (108 endpoints) | No | No | Yes | Yes | Yes |
-| Social trading | No | No | Yes | Yes | Yes |
-| Grafana dashboards | No | No | Yes | Yes | Yes |
-| News RAG integration | No | No | No | Yes | Yes |
-| Online learning | No | No | No | No | Yes |
-| Model retraining | No | No | No | No | Yes |
-| White-label | No | No | No | No | Yes |
-
-Attempting to use a feature above your plan returns:
-```json
-{"error": "PLAN_LIMIT_EXCEEDED", "required_plan": "professional", "current_plan": "starter"}
-```
-
-See [MONETIZATION.md](MONETIZATION.md) for the full feature matrix and pricing.
+**MarketDataForbidden raised:**
+- A broker method that returns price data was called
+- Replace the call with `orchestrator.get_latest_tick()` or `orchestrator.get_ml_features()`
+- This is an architectural violation — fix it, do not suppress it
