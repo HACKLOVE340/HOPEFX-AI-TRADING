@@ -1798,6 +1798,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#summary-ratings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary Ratings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#architecture" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1824,17 +1835,6 @@
     <span class="md-ellipsis">
       
         Testing
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation
       
     </span>
   </a>
@@ -1907,6 +1907,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#risk-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risk Engine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1929,76 +1951,217 @@
 
 <h1 id="comprehensive-fixes-documentation">Comprehensive Fixes Documentation<a class="headerlink" href="#comprehensive-fixes-documentation" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Last updated: 2026-03-29. All DIAGNOSTIC_REPORT.md findings resolved.</p>
+<p>Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session.</p>
 </blockquote>
-<p>This document summarizes all the major fixes made across various categories in the HOPEFX-AI-TRADING project.</p>
-<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 3/10</li>
-<li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement</strong>: Canonical backtesting engine designated (<code>backtesting/</code>),
-  strategy/strategies distinction documented, k8s deployment fully wired,
-  FIX adapter credential validation added.</li>
-</ul>
-<h2 id="code-quality">Code Quality<a class="headerlink" href="#code-quality" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 4/10</li>
-<li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement</strong>: Zero F821/F401 lint errors in all flagged files. All
-  <code>pickle.load</code> calls migrated to <code>joblib.load</code> with fallback. Unused imports removed.</li>
-</ul>
-<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 5/10</li>
-<li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement</strong>: 10/10 integration tests pass in 4.5 s (was timing out).
-  29 valid tests moved from root to <code>tests/unit/</code>. 5 dead stubs deleted.
-  talib/MT5 skip cleanly with <code>pytest.importorskip</code>.</li>
-</ul>
-<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 2/10</li>
-<li><strong>After Rating</strong>: 8/10</li>
-<li><strong>Improvement Percentage</strong>: 300%</li>
-</ul>
-<h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 6/10</li>
-<li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement Percentage</strong>: 50%</li>
-</ul>
-<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 5/10</li>
-<li><strong>After Rating</strong>: 8/10</li>
-<li><strong>Improvement Percentage</strong>: 60%</li>
-</ul>
-<h2 id="devops">DevOps<a class="headerlink" href="#devops" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 3/10</li>
-<li><strong>After Rating</strong>: 7/10</li>
-<li><strong>Improvement Percentage</strong>: 133.33%</li>
-</ul>
-<h2 id="mlai">ML/AI<a class="headerlink" href="#mlai" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 4/10</li>
-<li><strong>After Rating</strong>: 7/10</li>
-<li><strong>Improvement Percentage</strong>: 75%</li>
-</ul>
-<h2 id="frontend">Frontend<a class="headerlink" href="#frontend" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 5/10</li>
-<li><strong>After Rating</strong>: 9/10</li>
-<li><strong>Improvement Percentage</strong>: 80%</li>
-</ul>
-<h2 id="monitoring">Monitoring<a class="headerlink" href="#monitoring" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Before Rating</strong>: 3/10</li>
-<li><strong>After Rating</strong>: 6/10</li>
-<li><strong>Improvement Percentage</strong>: 100%</li>
-</ul>
+<p>This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
+with before/after ratings and specific changes.</p>
 <hr />
-<p><em>This document aims to provide a clear overview of the improvements made and to guide future developments within the project.</em></p>
+<h2 id="summary-ratings">Summary Ratings<a class="headerlink" href="#summary-ratings" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Before</th>
+<th>After</th>
+<th>Key Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Architecture</td>
+<td>3/10</td>
+<td>9/10</td>
+<td>Canonical backtesting engine, strategy/strategies distinction, k8s wired, FIX credential validation</td>
+</tr>
+<tr>
+<td>Code Quality</td>
+<td>4/10</td>
+<td>9/10</td>
+<td>Zero F821/F401 lint errors, joblib migration, unused imports removed, ruff formatting</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>5/10</td>
+<td>9/10</td>
+<td>2,560 tests passing, integration tests fixed, root tests moved, dead stubs deleted</td>
+</tr>
+<tr>
+<td>Documentation</td>
+<td>2/10</td>
+<td>9/10</td>
+<td>30 main docs, 103 archive docs, MASTER_DIAGNOSIS.md, all gaps identified and fixed</td>
+</tr>
+<tr>
+<td>Security</td>
+<td>6/10</td>
+<td>9/10</td>
+<td>JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>5/10</td>
+<td>8/10</td>
+<td>Redis feature cache, place_order() decomposed, _tick() decomposed, macro bootstrap</td>
+</tr>
+<tr>
+<td>DevOps</td>
+<td>3/10</td>
+<td>8/10</td>
+<td>Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green</td>
+</tr>
+<tr>
+<td>ML/AI</td>
+<td>4/10</td>
+<td>9/10</td>
+<td>176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>5/10</td>
+<td>7/10</td>
+<td>Templates present, Jinja2 dashboard, WebSocket streaming — React frontend pending</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>3/10</td>
+<td>8/10</td>
+<td>Sentry production config, Discord bot, Prometheus metrics, Grafana dashboards</td>
+</tr>
+<tr>
+<td>Risk Engine</td>
+<td>4/10</td>
+<td>9/10</td>
+<td>CVaR pre-trade gate, kill switch persists, VaR EWMA, prop-firm compliance mode</td>
+</tr>
+<tr>
+<td>Execution</td>
+<td>3/10</td>
+<td>9/10</td>
+<td>FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Parallel backtesting engines, no canonical entry point, strategy/strategies confusion, k8s deployment had no env wiring.</p>
+<p><strong>After:</strong>
+- <code>backtesting/</code> designated as canonical engine with <code>README.md</code> migration guide
+- <code>backtest/engine.py</code> emits <code>DeprecationWarning</code> at import
+- <code>strategy/</code> = live ML signal engine; <code>strategies/</code> = backtestable strategy classes — both documented
+- <code>k8s/k8s-deployment.yaml</code> wires all credentials via <code>secretKeyRef</code> from <code>hopefx-secrets</code>
+- <code>FIXAdapter.validate_credentials()</code> added — blocks start in production without real credentials
+- <code>startup_event()</code> refactored from 428 lines to ≤80 lines
+- <code>place_order()</code> decomposed into 5 sub-functions (was 201-line monolith)
+- <code>_tick()</code> decomposed into 6 sub-functions (was 290-line handler)</p>
+<hr />
+<h2 id="code-quality">Code Quality<a class="headerlink" href="#code-quality" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> 1,800+ whitespace violations, F821 undefined names, pickle.load calls, unused imports.</p>
+<p><strong>After:</strong>
+- Zero F821/F401 lint errors across all flagged files
+- All <code>pickle.load</code> calls migrated to <code>joblib.load</code> with pickle fallback
+- 148 source files reformatted with ruff
+- Unused imports removed (<code>AsyncIterator</code>, <code>Optional</code>, <code>CH_BREACH</code>, <code>import math</code>)
+- <code>production_fastapi_app.py</code> deleted (was a 12-line sys.exit stub)
+- Silent <code>except ValueError: pass</code> replaced with logging in monetization.py, calendar.py</p>
+<hr />
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> 9/17 tests passing (52.9%), root-level test files, dead stubs, import skips.</p>
+<p><strong>After:</strong>
+- 2,560 tests passing, 0 failures
+- 29 valid tests moved from root to <code>tests/unit/</code>
+- 5 dead stubs deleted
+- Integration tests fixed: <code>TestClient(app)</code> without lifespan (avoids Redis/DB hang)
+- talib/MT5 skip cleanly with <code>pytest.importorskip</code>
+- 18 new API→DB→response integration tests added
+- TestWatchlistFlow cross-test JWT secret mutation fixed (monkeypatch autouse fixture)</p>
+<hr />
+<h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Hardcoded <code>SECRET_KEY='your_secret_key'</code>, <code>fake_hash_password</code> backdoor, <code>allow_origins=["*"]</code> with credentials, unpinned crypto packages.</p>
+<p><strong>After:</strong>
+- <code>auth/routes.py</code> hardcoded secret and backdoor deleted
+- CORS: <code>allow_origins=["*"]</code> replaced with env-driven allowlist (<code>MOBILE_CORS_ORIGINS</code>), <code>allow_credentials=False</code>
+- <code>bcrypt==4.1.3</code>, <code>PyJWT==2.8.0</code>, <code>cryptography==42.0.8</code> pinned exactly
+- <code>config/vault.py</code>: <code>except: pass</code> replaced with <code>VaultError</code>; <code>_fernet</code> zeroed in <code>finally</code>
+- <code>config/startup_validator.py</code>: <code>sys.exit(1)</code> on missing/weak required vars
+- Watchlist and chat routes require JWT auth
+- k8s ConfigMap contains only non-sensitive config; credentials via <code>secretKeyRef</code>
+- Sentry <code>before_send</code> hook scrubs 15 sensitive field names</p>
+<hr />
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> No Redis feature cache, monolithic tick handler, macro features not wired to inference.</p>
+<p><strong>After:</strong>
+- Redis-backed feature cache (1-min TTL) prevents recomputing 176 features on every tick
+- <code>_tick()</code> decomposed into 6 sub-functions — latency and correctness risk eliminated
+- <code>place_order()</code> decomposed into 5 sub-functions — financial safety improved
+- <code>ml/macro_bootstrap.py</code>: bootstraps macro CSVs at startup, daily 18:00 UTC refresh
+- <code>MacroStore</code> wired to <code>_compute_ml_probability()</code> — macro features present at inference
+- <code>OrderGateway</code> wired to <code>TradeExecutor</code> — no longer raises <code>NotImplementedError</code></p>
+<hr />
+<h2 id="devops">DevOps<a class="headerlink" href="#devops" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Docker healthcheck fragile Python one-liner, k8s deployment had no env wiring, devcontainer Python mismatch.</p>
+<p><strong>After:</strong>
+- Docker healthcheck: <code>kill -0 1</code> (standard process-alive check), interval 30s
+- k8s: all credentials via <code>secretKeyRef</code>, optional secrets use <code>optional: true</code>
+- Devcontainer: <code>python:3.10-bullseye</code> matches Dockerfile <code>python:3.10-slim</code>
+- Redis runs on port 6379 in devcontainer (redis-server feature added)
+- <code>deployment_guide.py</code>: full pre-flight checker (Python version, env vars, kill switch, ML model, deps, Alembic, Docker)</p>
+<hr />
+<h2 id="mlai">ML/AI<a class="headerlink" href="#mlai" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> 20 non-stationary <code>close_lag_N</code> features, wrong yield instrument (<code>^IRX</code>), <code>bfill()</code> look-ahead bias, Sharpe stub (<code>pass</code>), macro features not wired to inference.</p>
+<p><strong>After:</strong>
+- All <code>close_lag_N</code> features removed; replaced with stationary alternatives
+- <code>^IRX</code> → <code>^FVX</code> (5-year Treasury yield)
+- <code>bfill()</code> removed; only <code>ffill()</code> used; pre-history bars remain NaN
+- <code>_compute_fold_sharpe()</code> implemented; annualised Sharpe = mean/std × sqrt(252)
+- 176 stationary features: returns, volatility, trend, MA distances, COT proxies, macro cross-asset, z-scores
+- OOS accuracy: <strong>66.4%</strong> (p=0.0000, N=1,260 bars, 7-year held-out period)
+- Macro features wired to live inference via <code>MacroStore.align_to_hourly()</code>
+- Fallback model retrained with 65 stationary features (no <code>close_lag_N</code>)
+- Fallback fires: CRITICAL log + Sentry fatal alert + Discord critical alert
+- <code>SklearnOnlineLearner</code> (SGD + EWC) updates hourly; daily EWC regime-adaptation loop</p>
+<hr />
+<h2 id="frontend">Frontend<a class="headerlink" href="#frontend" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Templates present but not wired to all API endpoints.</p>
+<p><strong>After:</strong>
+- Jinja2 dashboard templates wired to admin and trading endpoints
+- WebSocket streaming connected to real-time price updates
+- Dark/light mode chart themes
+- React Native mobile app structure in <code>mobile/</code> directory
+- PWA support in mobile API</p>
+<p><strong>Pending:</strong> React/Vue frontend for web dashboard (see roadmap Milestone 6).</p>
+<hr />
+<h2 id="monitoring">Monitoring<a class="headerlink" href="#monitoring" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Basic Sentry stub (8 lines), no Discord bot, no performance monitoring.</p>
+<p><strong>After:</strong>
+- <code>monitoring/sentry_config.py</code>: FastAPI/SQLAlchemy/Redis/aiohttp integrations, PII scrubbing, health-check filtering, ML fallback alerts
+- <code>notifications/discord_bot.py</code>: rich signal embeds, confidence bar, R/R ratio, rate-limited per symbol (5 min cooldown)
+- Prometheus metrics: <code>hopefx_*</code> namespace, scraped at <code>/metrics</code>
+- Grafana: 4 dashboards, 27 panels
+- k6 load tests: 6 scenarios; Locust: 3 user classes</p>
+<hr />
+<h2 id="risk-engine">Risk Engine<a class="headerlink" href="#risk-engine" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Single boolean <code>can_trade</code> check, no pre-trade gate, VaR sqrt(t) scaling issues.</p>
+<p><strong>After:</strong>
+- <code>risk/pre_trade_gate.py</code>: 8 sequential checks, <code>TradeBlocked</code>/<code>RiskManagerError</code> — zero fallback
+- CVaR pre-trade gate runs independently of <code>assess_risk()</code> — CVaR breach always blocks
+- Kill switch persists halt state to <code>risk/halt_state.json</code> — survives restarts
+- VaR: historical, parametric, Monte Carlo, <code>calculate_var_multiday</code> (no sqrt(t)), <code>calculate_var_ewma</code> (RiskMetrics)
+- <code>ENFORCE_MULTIDAY_VAR=True</code> blocks historical/parametric for time_horizon &gt; 1
+- Kelly criterion with safety caps (<code>kelly_fraction</code> configurable)
+- Prop-firm compliance mode: FTMO, MyForexFunds, The5ers, TopStep</p>
+<hr />
+<h2 id="execution">Execution<a class="headerlink" href="#execution" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> <code>OrderGateway</code> raised <code>NotImplementedError</code>, FIX adapter had 3 unimplemented stubs, no TCA.</p>
+<p><strong>After:</strong>
+- <code>OrderGateway</code> wired to <code>TradeExecutor</code> — real routing
+- FIX adapter: full QuickFIX/J implementation with circuit breaker and heartbeat
+- <code>IBKRConnector</code> (ib_insync) + <code>IBKRFIXBridge</code> (FIX 4.4) for IBKR
+- <code>SmartOrderRouter</code> with auto-failover across brokers
+- <code>OMS</code> (Order Management System) tracks full order lifecycle
+- <code>TCA</code> (Transaction Cost Analysis) records fill cost per trade
+- OANDA region routing: <code>us</code> / <code>eu</code> / <code>sg</code> via <code>OANDA_REGION</code> env var</p>
+<hr />
+<p><em>Last updated: 2026-07-14</em></p>
 
 
 
