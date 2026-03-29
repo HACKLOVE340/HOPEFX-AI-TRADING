@@ -61,6 +61,7 @@ def register_routers(
     from api.whitelabel_admin import router as whitelabel_router
     from api.platform import router as platform_router
     from api.ml import router as ml_router
+    from api.accounts import router as accounts_router
 
     for _router in [
         auth_router, trading_router, admin_router, monetization_router,
@@ -69,7 +70,7 @@ def register_routers(
         landing_router, payments_router, settings_router, status_router,
         brain_router, calendar_router, profiles_router, social_feed_router,
         social_leaderboard_router, mobile_router, whitelabel_router,
-        platform_router, ml_router,
+        platform_router, ml_router, accounts_router,
     ]:
         app.include_router(_router)
 

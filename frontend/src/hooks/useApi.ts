@@ -69,3 +69,48 @@ export const mlApi = {
   accuracy: ()                     => api.get('/ml/accuracy'),
   models:   ()                     => api.get('/ml/models'),
 };
+
+export const accountsApi = {
+  listSubAccounts:  ()                          => api.get('/accounts/sub-accounts'),
+  createSubAccount: (payload: object)           => api.post('/accounts/sub-accounts', payload),
+  updateSubAccount: (id: string, p: object)     => api.patch(`/accounts/sub-accounts/${id}`, p),
+  deleteSubAccount: (id: string)                => api.delete(`/accounts/sub-accounts/${id}`),
+  listTeams:        ()                          => api.get('/accounts/teams'),
+  createTeam:       (payload: object)           => api.post('/accounts/teams', payload),
+  inviteMember:     (teamId: string, p: object) => api.post(`/accounts/teams/${teamId}/members`, p),
+  updateMember:     (teamId: string, uid: string, p: object) => api.patch(`/accounts/teams/${teamId}/members/${uid}`, p),
+  removeMember:     (teamId: string, uid: string) => api.delete(`/accounts/teams/${teamId}/members/${uid}`),
+};
+
+export const auditApi = {
+  list:   (params?: Record<string, string>) => api.get('/admin/audit-log', { params }),
+  export: ()                                => api.get('/admin/audit-log/export', { responseType: 'blob' }),
+};
+
+export const walkForwardApi = {
+  list:   ()           => api.get('/backtesting/walk-forward'),
+  get:    (id: string) => api.get(`/backtesting/walk-forward/${id}`),
+  run:    (p: object)  => api.post('/backtesting/walk-forward/run', p),
+};
+
+export const correlationApi = {
+  matrix: (window?: number) => api.get('/advanced/correlation', { params: window ? { window } : {} }),
+  cot:    ()                => api.get('/advanced/cot-sentiment'),
+};
+
+export const abTestingApi = {
+  list:   ()           => api.get('/advanced/ab-tests'),
+  get:    (id: string) => api.get(`/advanced/ab-tests/${id}`),
+  run:    (p: object)  => api.post('/advanced/ab-tests/run', p),
+};
+
+export const leaderboardApi = {
+  list:   (period?: string) => api.get('/leaderboard', { params: period ? { period } : {} }),
+};
+
+export const performanceApi = {
+  summary:   ()           => api.get('/performance/summary'),
+  equity:    ()           => api.get('/performance/equity-curve'),
+  trades:    ()           => api.get('/performance/trades'),
+  weekly:    ()           => api.get('/performance/weekly-report'),
+};

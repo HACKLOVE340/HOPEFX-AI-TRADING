@@ -46,8 +46,13 @@ import Onboarding           from './pages/Onboarding';
 import TwoFactorSetup       from './pages/TwoFactorSetup';
 import Wallet               from './pages/Wallet';
 
+// ── New pages (Audit, SubAccounts) ────────────────────────────────────────────
+import AuditLog     from './pages/AuditLog';
+import SubAccounts  from './pages/SubAccounts';
+
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
+import { ThemeToggle } from './components/ThemeToggle';
 import { useStore, selectIsAuth, selectUser, selectWsStatus } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePriceSimulator } from './hooks/usePriceSimulator';
@@ -109,6 +114,8 @@ const NAV_ITEMS = [
   { path: '/checkout',      label: 'Upgrade',         icon: '💳', auth: false },
   { path: '/whitelabel',    label: 'Whitelabel',      icon: '🏷️', auth: true  },
   { path: '/admin',         label: 'Admin',           icon: '🔧', auth: true  },
+  { path: '/audit',         label: 'Audit Log',       icon: '🔍', auth: true  },
+  { path: '/sub-accounts',  label: 'Sub-Accounts',    icon: '👥', auth: true  },
   { path: '/status',        label: 'Status',          icon: '🟢', auth: false },
   { path: '/settings',      label: 'Settings',        icon: '⚙️', auth: true  },
 ];
@@ -191,7 +198,10 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ colla
           ) : (
             <NavLink to="/login" style={{ ...s.footerLink, color: '#60a5fa' }}>Sign in →</NavLink>
           )}
-          <a href="/" style={s.footerLink}>← Landing</a>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+            <a href="/" style={s.footerLink}>← Landing</a>
+            <ThemeToggle />
+          </div>
         </div>
       )}
     </aside>
@@ -255,8 +265,10 @@ const AppShell: React.FC = () => {
           <Route path="/copy-trading" element={wrap(<AuthGuard><CopyTrading /></AuthGuard>)} />
           <Route path="/leaderboard"  element={wrap(<Leaderboard />)} />
           <Route path="/ai-strategy"  element={wrap(<AuthGuard><AIStrategyGenerator /></AuthGuard>)} />
-          <Route path="/wallet"       element={wrap(<AuthGuard><Wallet /></AuthGuard>)} />
+          <Route path="/wallet"        element={wrap(<AuthGuard><Wallet /></AuthGuard>)} />
           <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
+          <Route path="/audit"        element={wrap(<AuthGuard requiredRole="admin"><AuditLog /></AuthGuard>)} />
+          <Route path="/sub-accounts" element={wrap(<AuthGuard><SubAccounts /></AuthGuard>)} />
 
           {/* Fallback — redirect unknown shell paths to dashboard */}
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />
@@ -289,18 +301,20 @@ const App: React.FC = () => (
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
   shell: {
-    display: 'flex', height: '100vh', overflow: 'hidden', background: '#0f172a',
-    color: '#f1f5f9', fontFamily: 'system-ui, -apple-system, sans-serif',
+    display: 'flex', height: '100vh', overflow: 'hidden',
+    background: 'var(--bg, #0f172a)',
+    color: 'var(--text, #f1f5f9)', fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   sidebar: {
-    background: '#1e293b', borderRight: '1px solid #334155',
+    background: 'var(--surface, #1e293b)',
+    borderRight: '1px solid var(--border, #334155)',
     display: 'flex', flexDirection: 'column', flexShrink: 0,
     transition: 'width 0.2s ease', overflow: 'hidden',
     height: '100vh',
   },
   sidebarLogo: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '18px 14px 14px', borderBottom: '1px solid #334155', minHeight: 60,
+    padding: '18px 14px 14px', borderBottom: '1px solid var(--border, #334155)', minHeight: 60,
   },
   logoMark:    { fontSize: 20, fontWeight: 800, color: '#3b82f6' },
   logoFull:    { fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
@@ -318,7 +332,7 @@ const s: Record<string, React.CSSProperties> = {
   navIcon:  { fontSize: 16, flexShrink: 0, width: 20, textAlign: 'center' },
   navLabel: { whiteSpace: 'nowrap', overflow: 'hidden' },
   sidebarFooter: {
-    borderTop: '1px solid #334155', padding: '12px 14px',
+    borderTop: '1px solid var(--border, #334155)', padding: '12px 14px',
     display: 'flex', flexDirection: 'column', gap: 6,
   },
   footerLink: { fontSize: 12, color: '#475569', textDecoration: 'none' },
@@ -326,7 +340,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent', border: '1px solid #334155', borderRadius: 6,
     color: '#64748b', fontSize: 12, cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
   },
-  main: { flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#0f172a', height: '100vh' },
+  main: { flex: 1, overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg, #0f172a)', height: '100vh' },
 };
 
 export default App;
