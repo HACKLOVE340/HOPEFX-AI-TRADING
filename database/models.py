@@ -825,7 +825,8 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "crypto_payments"
 
-        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        # Use Integer for SQLite compatibility (BigInteger maps to INTEGER in SQLite anyway)
+        id = Column(Integer, primary_key=True, autoincrement=True)
         payment_id = Column(String(100), unique=True, nullable=False, index=True)
         user_id = Column(String(128), nullable=False, index=True)
         plan_id = Column(String(100), nullable=False)
@@ -890,7 +891,7 @@ if SQLALCHEMY_AVAILABLE:
 
         __tablename__ = "outbox_events"
 
-        id = Column(BigInteger, primary_key=True, autoincrement=True)
+        id = Column(Integer, primary_key=True, autoincrement=True)
         event_type = Column(String(100), nullable=False, index=True)
         channel = Column(String(100), nullable=False)   # Redis pub/sub channel
         payload = Column(Text, nullable=False)           # JSON
