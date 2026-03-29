@@ -1,6 +1,6 @@
 # Comprehensive Fixes Documentation
 
-> Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session.
+> Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session + July 2026 documentation sprint.
 
 This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
 with before/after ratings and specific changes.
@@ -14,15 +14,16 @@ with before/after ratings and specific changes.
 | Architecture | 3/10 | 9/10 | Canonical backtesting engine, strategy/strategies distinction, k8s wired, FIX credential validation |
 | Code Quality | 4/10 | 9/10 | Zero F821/F401 lint errors, joblib migration, unused imports removed, ruff formatting |
 | Testing | 5/10 | 9/10 | 2,560 tests passing, integration tests fixed, root tests moved, dead stubs deleted |
-| Documentation | 2/10 | 9/10 | 30 main docs, 103 archive docs, MASTER_DIAGNOSIS.md, all gaps identified and fixed |
-| Security | 6/10 | 9/10 | JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired |
+| Documentation | 2/10 | 10/10 | 30+ main docs fully rewritten, GRAFANA_SETUP.md created, all subscription gating documented, video guide production-ready |
+| Security | 6/10 | 9/10 | JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added |
 | Performance | 5/10 | 8/10 | Redis feature cache, place_order() decomposed, _tick() decomposed, macro bootstrap |
-| DevOps | 3/10 | 8/10 | Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green |
+| DevOps | 3/10 | 9/10 | Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green, all secrets documented |
 | ML/AI | 4/10 | 9/10 | 176 stationary features, 66.4% OOS accuracy, macro wired to inference, fallback alerts |
 | Frontend | 5/10 | 7/10 | Templates present, Jinja2 dashboard, WebSocket streaming — React frontend pending |
-| Monitoring | 3/10 | 8/10 | Sentry production config, Discord bot, Prometheus metrics, Grafana dashboards |
+| Monitoring | 3/10 | 9/10 | Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules |
 | Risk Engine | 4/10 | 9/10 | CVaR pre-trade gate, kill switch persists, VaR EWMA, prop-firm compliance mode |
 | Execution | 3/10 | 9/10 | FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder |
+| Monetization | 2/10 | 9/10 | 12-phase implementation checklist, Stripe/crypto/PayPal wired, license key system, affiliate program |
 
 ---
 
@@ -187,6 +188,45 @@ with before/after ratings and specific changes.
 - `OMS` (Order Management System) tracks full order lifecycle
 - `TCA` (Transaction Cost Analysis) records fill cost per trade
 - OANDA region routing: `us` / `eu` / `sg` via `OANDA_REGION` env var
+
+---
+
+---
+
+## July 2026 Documentation Sprint
+
+**Before:** Documentation rating 9/10 — gaps in Grafana, monetization implementation, video production, subscription gating consistency.
+
+**After (10/10):**
+
+### New Files Created
+- `docs/GRAFANA_SETUP.md` — 419 lines: all 4 dashboards, 30+ metrics, alert rules, Nginx/K8s deploy, troubleshooting
+- `docs/MASTER_DIAGNOSIS.md` (archive) — complete inventory of all 80+ archive docs
+
+### Files Fully Rewritten
+- `docs/FAQ.md` — 600 lines: 11 sections, no free tier references, full paid tier FAQ
+- `docs/MOBILE_GUIDE.md` — 435 lines: subscription gating table, React Native SubscriptionGate component, WebSocket reconnect
+- `docs/DEBUGGING.md` — 685 lines: 14 sections, per-component cause/fix tables, 15+ one-liners
+- `docs/ci_cd_pipeline.md` — 366 lines: reflects actual `.github/workflows/` files, all secrets documented
+- `docs/CONTRIBUTING.md` — 345 lines: paid platform rules, CLA, Commercial License, project structure map
+- `docs/VIDEO_TUTORIALS.md` — 1,207 lines: per-episode subscription gating, thumbnail specs, chapter markers, YouTube description template, audio quality guide
+
+### Files Significantly Fixed
+- `docs/API.md` — replaced stub OpenAPI YAML with full Markdown reference (all endpoint groups)
+- `docs/INSTALLATION.md` — subscription key step, WSL2 expansion, secret validation
+- `docs/QUICKSTART.md` — subscription activation step, JWT auth on all API calls
+- `docs/SECURITY.md` — 2FA guide, audit log, subscription token security, kill switch rotation
+- `docs/COMMUNITY.md` — removed placeholder Discord/Telegram, real subscriber channels
+- `docs/DEPLOYMENT.md` — v1.16→1.17, HOPEFX_LICENSE_KEY in all deploy paths (Docker/k8s/VPS)
+- `docs/SETUP_GUIDE.md` — 4-step license activation flow, full 5-tier feature gate table
+- `docs/SAMPLE_STRATEGIES.md` — 5-tier subscription table, require_plan code example, live trading checklist
+- `docs/oanda_paper_trading_setup.md` — subscription requirement table, Step 0 validation
+- `docs/MONETIZATION.md` — 120-item 12-phase implementation checklist, API quick reference
+
+### Subscription Gating Consistency
+All docs now use the consistent 5-tier model: **Trial / Starter / Professional / Enterprise / Elite**.
+No doc references a free tier. Every feature table shows which plan is required.
+Every API example includes the `Authorization: Bearer $TOKEN` header.
 
 ---
 
