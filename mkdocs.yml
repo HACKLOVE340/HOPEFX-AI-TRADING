@@ -71,9 +71,14 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: INSTALLATION.md
+    - Setup Guide: SETUP_GUIDE.md
     - Quick Start: QUICKSTART.md
     - OANDA Paper Trading: oanda_paper_trading_setup.md
     - Live Trading Gate (30-day): live_trading_gate.md
+  - Deployment:
+    - Deployment Guide: DEPLOYMENT.md
+    - Deployment Checklist: DEPLOYMENT_CHECKLIST.md
+    - Infrastructure: DEPLOYMENT_INFRASTRUCTURE.md
   - Guides:
     - API Guide: API_GUIDE.md
     - Order Flow: ORDER_FLOW_GUIDE.md
@@ -82,6 +87,13 @@ nav:
     - Asset Diversification: ASSET_DIVERSIFICATION.md
     - Monetization: MONETIZATION.md
     - Community: COMMUNITY.md
+  - Architecture:
+    - Overview: architecture.md
+    - Enterprise Architecture: ENTERPRISE_ARCHITECTURE.md
+    - Feature Registry: FEATURES.md
+    - Wordmap (Module Index): WORDMAP.md
+    - Analysis & Roadmap: ANALYSIS_AND_ROADMAP.md
+    - Enhancement Plan: ENHANCEMENT_PLAN.md
   - Model Performance: model_performance.md
   - API Reference: API_REFERENCE.md
   - CI/CD Pipeline: ci_cd_pipeline.md
@@ -89,4 +101,9 @@ nav:
   - Contributing: CONTRIBUTING.md
   - Security: SECURITY.md
   - Debugging: DEBUGGING.md
-  - Deployment: DEPLOYMENT.md
+  - Reference:
+    - Secure Env Template: SECURE_ENV_TEMPLATE.md
+    - Implementation Summary: IMPLEMENTATION_SUMMARY.md
+    - Production Fixes: PRODUCTION_FIXES.md
+    - Diagnostic Report: DIAGNOSTIC_REPORT.md
+    - Critical Flaws Audit: CRITICAL_FLAWS.md
