@@ -130,7 +130,7 @@ def mock_brain():
 
 
 @pytest.fixture()
-def app(mock_broker, mock_brain):
+def app(mock_broker, mock_brain, tmp_path):
     # Re-pin the secret at fixture time (not just module level) so it stays
     # correct even when other test modules change SECURITY_JWT_SECRET between
     # collection and execution.
@@ -146,9 +146,20 @@ def app(mock_broker, mock_brain):
     state.prop_firm_manager = None
     trading_module.set_state(state)
 
+    # Inject a fresh, inactive KillSwitch so that any kill switch activated by
+    # a previous test module (e.g. test_risk.py triggering a drawdown halt)
+    # does not bleed into these auth tests via the cached singleton.
+    from kill_switch import KillSwitch
+    fresh_ks = KillSwitch(flag_file=tmp_path / "ks_auth_test.flag")
+    trading_module._set_kill_switch(fresh_ks)
+
     application = FastAPI()
     application.include_router(router)
-    return application
+
+    yield application
+
+    # Restore to None so other test modules get a clean slate.
+    trading_module._set_kill_switch(None)
 
 
 @pytest.fixture()
