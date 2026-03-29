@@ -327,6 +327,133 @@ class DataLayerRedisStore:
         except Exception:
             return False
 
+    # ── Batch / pipeline operations ───────────────────────────────────────────
+
+    def set_many(self, items: Dict[str, Any], ttl: int = 300) -> int:
+        """
+        Write multiple key→value pairs in a single Redis pipeline.
+
+        Parameters
+        ----------
+        items : dict mapping cache key suffixes to JSON-serialisable values.
+                Keys are namespaced automatically under hopefx:.
+        ttl   : TTL in seconds applied to every key (default 5 min)
+
+        Returns the number of keys successfully written.
+        """
+        if not self._r or not items:
+            return 0
+        try:
+            import json
+            pipe = self._r.pipeline(transaction=False)
+            for suffix, value in items.items():
+                full_key = self._key(suffix)
+                pipe.setex(full_key, ttl, json.dumps(value, default=str))
+            results = pipe.execute()
+            written = sum(1 for r in results if r)
+            self._writes += written
+            if self._prom_writes:
+                self._prom_writes.inc(written)
+            return written
+        except Exception as exc:
+            self._errors += 1
+            logger.debug("DataLayerRedisStore.set_many error: %s", exc)
+            return 0
+
+    def get_many(self, keys: List[str]) -> Dict[str, Any]:
+        """
+        Fetch multiple keys in a single Redis pipeline.
+
+        Parameters
+        ----------
+        keys : list of key suffixes (same namespace as set_many)
+
+        Returns a dict of {suffix: value} for keys that exist.
+        Missing keys are omitted from the result.
+        """
+        if not self._r or not keys:
+            return {}
+        try:
+            import json
+            full_keys = [self._key(k) for k in keys]
+            pipe = self._r.pipeline(transaction=False)
+            for fk in full_keys:
+                pipe.get(fk)
+            results = pipe.execute()
+            out: Dict[str, Any] = {}
+            for suffix, raw in zip(keys, results):
+                if raw is not None:
+                    try:
+                        out[suffix] = json.loads(raw)
+                        self._hits += 1
+                    except Exception:
+                        self._misses += 1
+                else:
+                    self._misses += 1
+            return out
+        except Exception as exc:
+            self._errors += 1
+            logger.debug("DataLayerRedisStore.get_many error: %s", exc)
+            return {}
+
+    def flush_all(self, pattern: str = "hopefx:*") -> int:
+        """
+        Delete all keys matching `pattern` (default: all hopefx: keys).
+
+        Returns the number of keys deleted.
+        Used in testing and emergency cache invalidation.
+        WARNING: in production, prefer targeted key deletion over flush_all.
+        """
+        if not self._r:
+            return 0
+        try:
+            keys = self._r.keys(pattern)
+            if not keys:
+                return 0
+            deleted = self._r.delete(*keys)
+            logger.warning(
+                "DataLayerRedisStore.flush_all: deleted %d keys matching '%s'",
+                deleted, pattern,
+            )
+            return int(deleted)
+        except Exception as exc:
+            self._errors += 1
+            logger.debug("DataLayerRedisStore.flush_all error: %s", exc)
+            return 0
+
+    def get_memory_info(self) -> Dict[str, Any]:
+        """
+        Return detailed Redis memory diagnostics.
+
+        Includes used_memory, used_memory_rss, mem_fragmentation_ratio,
+        maxmemory, and maxmemory_policy.  Returns empty dict when Redis
+        is unavailable.
+        """
+        if not self._r:
+            return {}
+        try:
+            info = self._r.info("memory")
+            return {
+                "used_memory_mb":       round(info.get("used_memory", 0) / 1024 / 1024, 2),
+                "used_memory_rss_mb":   round(info.get("used_memory_rss", 0) / 1024 / 1024, 2),
+                "mem_fragmentation":    info.get("mem_fragmentation_ratio", 0.0),
+                "maxmemory_mb":         round(info.get("maxmemory", 0) / 1024 / 1024, 2),
+                "maxmemory_policy":     info.get("maxmemory_policy", "unknown"),
+                "peak_used_memory_mb":  round(info.get("used_memory_peak", 0) / 1024 / 1024, 2),
+            }
+        except Exception as exc:
+            logger.debug("DataLayerRedisStore.get_memory_info error: %s", exc)
+            return {}
+
+    def key_count(self, pattern: str = "hopefx:*") -> int:
+        """Return the number of keys matching `pattern`."""
+        if not self._r:
+            return 0
+        try:
+            return len(self._r.keys(pattern))
+        except Exception:
+            return 0
+
 
 # Module-level singleton (redis_client injected by orchestrator at startup)
 dl_redis_store = DataLayerRedisStore()
