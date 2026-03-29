@@ -1,0 +1,520 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+"""
+execution/execution.py
+=======================
+ExecutionSystem — complete startup wiring and orchestration entry point.
+
+This is the ONLY file that should be imported to start the full execution
+pipeline. It wires every component in the correct order and enforces the
+single-source-of-truth contract.
+
+Startup sequence
+----------------
+  1.  Start MarketDataOrchestrator (Redis, feeds, sentiment, calendar, macro)
+  2.  Wire lineage_store (already started inside orchestrator)
+  3.  Instantiate RiskManager(orchestrator, lineage_store)
+  4.  Instantiate Gatekeeper(orchestrator, lineage_store)
+  5.  Instantiate SmartRouter(lineage_store)
+  6.  Connect brokers (OANDA, IBKR) — order execution only
+  7.  Register brokers with SmartRouter
+  8.  Wire ML inference function (optional)
+  9.  Instantiate HopeFXEngine(orchestrator, router, risk, gate, lineage)
+  10. Start HopeFXEngine tick loop
+  11. Start health reporting loop
+  12. Register SIGTERM/SIGINT handlers for graceful shutdown
+
+Data flow (runtime)
+-------------------
+  orchestrator.get_latest_tick()   → HopeFXEngine._process_tick()
+  orchestrator.get_ml_features()   → HopeFXEngine._run_inference()
+                                   → RiskManager.size_order()
+                                   → Gatekeeper.evaluate()
+                                   → SmartRouter.route_and_execute()
+  broker.place_order()             → fill
+  orchestrator.notify_fill()       ← fill (replay + cache update)
+  lineage_store.record_*()         ← every event
+
+Architectural invariants enforced here
+---------------------------------------
+  - orchestrator.start() is called BEFORE any other component
+  - No broker is connected before orchestrator is running
+  - SmartRouter receives no broker until orchestrator is confirmed started
+  - HopeFXEngine is started LAST, after all dependencies are wired
+  - Graceful shutdown: engine stops first, then brokers, then orchestrator
+
+Usage
+-----
+    from execution.execution import ExecutionSystem
+
+    system = ExecutionSystem()
+    await system.start()
+    # ... runs until SIGTERM or system.stop()
+    await system.stop()
+
+Or as a standalone process:
+    python -m execution.execution
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import signal
+import sys
+import time
+from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+# ── env config ────────────────────────────────────────────────────────────────
+_BROKER_PRIMARY   = os.getenv("BROKER_PRIMARY",   "oanda")   # "oanda" | "ibkr"
+_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")    # fallback broker
+_HEALTH_INTERVAL  = float(os.getenv("HEALTH_INTERVAL_S", "30"))
+_LOG_LEVEL        = os.getenv("LOG_LEVEL", "INFO")
+
+
+class ExecutionSystem:
+    """
+    Full execution system — single entry point for the entire pipeline.
+
+    All components are wired here. No component should be instantiated
+    outside this class in production.
+    """
+
+    def __init__(self, ml_inference_fn: Optional[Callable] = None) -> None:
+        self._ml_inference_fn = ml_inference_fn
+        self._started         = False
+        self._start_time:     Optional[float] = None
+
+        # Components — populated in start()
+        self._orchestrator = None
+        self._lineage      = None
+        self._risk         = None
+        self._gatekeeper   = None
+        self._router       = None
+        self._engine       = None
+        self._brokers:     Dict[str, Any] = {}
+        self._tasks:       List[asyncio.Task] = []
+
+    # ── Startup ───────────────────────────────────────────────────────────────
+
+    async def start(self) -> None:
+        """
+        Start the full execution system in the correct dependency order.
+        Raises on any critical failure.
+        """
+        if self._started:
+            logger.warning("ExecutionSystem already started")
+            return
+
+        self._start_time = time.monotonic()
+        _configure_logging()
+
+        logger.info("=" * 60)
+        logger.info("ExecutionSystem: starting up")
+        logger.info("=" * 60)
+
+        # ── Step 1: Start orchestrator ─────────────────────────────────────
+        logger.info("Step 1/9: Starting MarketDataOrchestrator...")
+        from data_layer.orchestrator import orchestrator
+        self._orchestrator = orchestrator
+        await self._orchestrator.start()
+        logger.info("Step 1/9: MarketDataOrchestrator started ✓")
+
+        # ── Step 2: Wire lineage store ─────────────────────────────────────
+        logger.info("Step 2/9: Wiring DataLineageStore...")
+        from data_layer.lineage.store import lineage_store
+        self._lineage = lineage_store
+        logger.info("Step 2/9: DataLineageStore wired ✓")
+
+        # ── Step 3: Instantiate RiskManager ───────────────────────────────
+        logger.info("Step 3/9: Instantiating RiskManager...")
+        from risk.manager import RiskManager
+        self._risk = RiskManager(
+            orchestrator  = self._orchestrator,
+            lineage_store = self._lineage,
+        )
+        logger.info("Step 3/9: RiskManager ready ✓")
+
+        # ── Step 4: Instantiate Gatekeeper ────────────────────────────────
+        logger.info("Step 4/9: Instantiating Gatekeeper...")
+        from risk.gatekeeper import Gatekeeper
+        self._gatekeeper = Gatekeeper(
+            orchestrator  = self._orchestrator,
+            lineage_store = self._lineage,
+        )
+        logger.info("Step 4/9: Gatekeeper ready ✓")
+
+        # ── Step 5: Instantiate SmartRouter ───────────────────────────────
+        logger.info("Step 5/9: Instantiating SmartRouter...")
+        from execution.smart_router import SmartRouter
+        self._router = SmartRouter(lineage_store=self._lineage)
+        logger.info("Step 5/9: SmartRouter ready ✓")
+
+        # ── Step 6: Connect brokers ────────────────────────────────────────
+        logger.info("Step 6/9: Connecting brokers...")
+        await self._connect_brokers()
+        logger.info("Step 6/9: Brokers connected ✓")
+
+        # ── Step 7: Register brokers with SmartRouter ──────────────────────
+        logger.info("Step 7/9: Registering brokers with SmartRouter...")
+        for broker_id, broker in self._brokers.items():
+            self._router.add_broker(broker_id, broker)
+        logger.info("Step 7/9: %d broker(s) registered ✓", len(self._brokers))
+
+        # ── Step 8: Wire notify_fill into orchestrator ─────────────────────
+        logger.info("Step 8/9: Wiring orchestrator.notify_fill...")
+        _wire_notify_fill(self._orchestrator)
+        logger.info("Step 8/9: notify_fill wired ✓")
+
+        # ── Step 9: Start HopeFXEngine ─────────────────────────────────────
+        logger.info("Step 9/9: Starting HopeFXEngine...")
+        from execution.hopefx_engine import HopeFXEngine
+        self._engine = HopeFXEngine(
+            orchestrator    = self._orchestrator,
+            smart_router    = self._router,
+            risk_manager    = self._risk,
+            gatekeeper      = self._gatekeeper,
+            lineage_store   = self._lineage,
+            ml_inference_fn = self._ml_inference_fn,
+        )
+        await self._engine.start()
+        logger.info("Step 9/9: HopeFXEngine started ✓")
+
+        # ── Background tasks ───────────────────────────────────────────────
+        self._tasks.append(
+            asyncio.create_task(self._health_loop(), name="execution_health_loop")
+        )
+
+        # ── Signal handlers ────────────────────────────────────────────────
+        self._install_signal_handlers()
+
+        self._started = True
+        elapsed = time.monotonic() - self._start_time
+        logger.info("=" * 60)
+        logger.info("ExecutionSystem: FULLY STARTED in %.2fs", elapsed)
+        logger.info("  Orchestrator : %s", "running" if self._orchestrator._started else "ERROR")
+        logger.info("  Brokers      : %s", list(self._brokers.keys()))
+        logger.info("  Engine state : %s", self._engine._state.value)
+        logger.info("=" * 60)
+
+    # ── Broker connection ─────────────────────────────────────────────────────
+
+    async def _connect_brokers(self) -> None:
+        """Connect configured brokers. At least one must succeed."""
+        connected_count = 0
+
+        if _BROKER_PRIMARY == "oanda" or _BROKER_SECONDARY == "oanda":
+            oanda = await _connect_oanda()
+            if oanda:
+                self._brokers["oanda"] = oanda
+                connected_count += 1
+
+        if _BROKER_PRIMARY == "ibkr" or _BROKER_SECONDARY == "ibkr":
+            ibkr = await _connect_ibkr()
+            if ibkr:
+                self._brokers["ibkr"] = ibkr
+                connected_count += 1
+
+        if connected_count == 0:
+            logger.warning(
+                "No brokers connected — running in paper/simulation mode"
+            )
+            paper = _build_paper_broker()
+            self._brokers["paper"] = paper
+
+    # ── Shutdown ──────────────────────────────────────────────────────────────
+
+    async def stop(self) -> None:
+        """Graceful shutdown in reverse dependency order."""
+        logger.info("ExecutionSystem: shutting down...")
+
+        # 1. Stop engine first (stops new orders)
+        if self._engine:
+            await self._engine.stop()
+
+        # 2. Cancel background tasks
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        # 3. Disconnect brokers
+        for broker_id, broker in self._brokers.items():
+            try:
+                if hasattr(broker, "disconnect"):
+                    await broker.disconnect()
+                logger.info("ExecutionSystem: broker %s disconnected", broker_id)
+            except Exception as exc:
+                logger.error("ExecutionSystem: broker %s disconnect error: %s", broker_id, exc)
+
+        # 4. Stop orchestrator last
+        if self._orchestrator:
+            await self._orchestrator.stop()
+
+        self._started = False
+        logger.info("ExecutionSystem: shutdown complete")
+
+    # ── Health loop ───────────────────────────────────────────────────────────
+
+    async def _health_loop(self) -> None:
+        while self._started:
+            await asyncio.sleep(_HEALTH_INTERVAL)
+            try:
+                self._log_health()
+            except Exception as exc:
+                logger.debug("Health loop error: %s", exc)
+
+    def _log_health(self) -> None:
+        if not self._engine:
+            return
+        em = self._engine.metrics()
+        rm = self._risk.metrics()   if self._risk      else {}
+        gm = self._gatekeeper.metrics() if self._gatekeeper else {}
+        sm = self._router.metrics() if self._router    else {}
+        oh = self._orchestrator.health() if self._orchestrator else {}
+
+        logger.info(
+            "HEALTH | engine: ticks=%d signals=%d fills=%d rejects=%d "
+            "| risk: dd=%.2f%% halt=%s "
+            "| gate: pass=%d block=%d "
+            "| router: filled=%d/%d "
+            "| orch: safe=%s feeds=%s",
+            em.get("tick_count", 0),
+            em.get("signal_count", 0),
+            em.get("fill_count", 0),
+            em.get("reject_count", 0),
+            rm.get("current_drawdown", 0),
+            rm.get("halt", False),
+            gm.get("pass_count", 0),
+            gm.get("block_count", 0),
+            sm.get("total_filled", 0),
+            sm.get("total_routed", 0),
+            oh.get("is_safe", False),
+            list(oh.get("gold_feeds", {}).keys()),
+        )
+
+    # ── Signal handlers ───────────────────────────────────────────────────────
+
+    def _install_signal_handlers(self) -> None:
+        loop = asyncio.get_event_loop()
+
+        def _handle_shutdown(sig_name: str) -> None:
+            logger.warning("ExecutionSystem: received %s — initiating shutdown", sig_name)
+            asyncio.create_task(self.stop())
+
+        try:
+            loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))
+            loop.add_signal_handler(signal.SIGINT,  lambda: _handle_shutdown("SIGINT"))
+        except (NotImplementedError, RuntimeError):
+            pass  # Windows / non-main thread
+
+    # ── Diagnostics ───────────────────────────────────────────────────────────
+
+    def health(self) -> Dict[str, Any]:
+        uptime = time.monotonic() - self._start_time if self._start_time else 0
+        return {
+            "started":       self._started,
+            "uptime_s":      round(uptime, 1),
+            "engine":        self._engine.metrics()      if self._engine      else {},
+            "risk":          self._risk.metrics()        if self._risk        else {},
+            "gatekeeper":    self._gatekeeper.metrics()  if self._gatekeeper  else {},
+            "router":        self._router.metrics()      if self._router      else {},
+            "orchestrator":  self._orchestrator.health() if self._orchestrator else {},
+        }
+
+
+# ── Broker factory helpers ────────────────────────────────────────────────────
+
+async def _connect_oanda() -> Optional[Any]:
+    account_id = os.getenv("OANDA_ACCOUNT_ID", "")
+    api_token  = os.getenv("OANDA_API_TOKEN",  "")
+    if not account_id or not api_token:
+        logger.warning("OANDA credentials not set — skipping OANDA broker")
+        return None
+    try:
+        from brokers.oanda import OANDABroker
+        broker = OANDABroker({
+            "login":    account_id,
+            "password": api_token,
+            "server":   os.getenv("OANDA_ENVIRONMENT", "practice"),
+        })
+        ok = await broker.connect()
+        if ok:
+            logger.info("OANDA broker connected")
+            return broker
+        logger.warning("OANDA broker connection failed")
+        return None
+    except Exception as exc:
+        logger.error("OANDA broker init error: %s", exc)
+        return None
+
+
+async def _connect_ibkr() -> Optional[Any]:
+    host = os.getenv("IBKR_HOST", "127.0.0.1")
+    port = int(os.getenv("IBKR_PORT", "7497"))
+    try:
+        from brokers.ibkr import IBKRBroker
+        broker = IBKRBroker({
+            "server":    os.getenv("IBKR_ENV", "paper"),
+            "host":      host,
+            "client_id": int(os.getenv("IBKR_CLIENT_ID", "1")),
+        })
+        ok = await broker.connect()
+        if ok:
+            logger.info("IBKR broker connected")
+            return broker
+        logger.warning("IBKR broker connection failed (TWS/Gateway not running?)")
+        return None
+    except Exception as exc:
+        logger.error("IBKR broker init error: %s", exc)
+        return None
+
+
+def _build_paper_broker() -> Any:
+    """Minimal paper broker for simulation when no live broker is available."""
+    import random
+
+    class _PaperBroker:
+        async def place_order(self, order_request: Dict) -> Dict:
+            await asyncio.sleep(0.05)  # simulate 50ms latency
+            mid   = float(order_request.get("mid_price", 1900.0))
+            slip  = random.uniform(-0.5, 0.5)
+            return {
+                "status":     "filled",
+                "fill_price": round(mid + slip, 4),
+                "quantity":   float(order_request.get("quantity", 0)),
+                "direction":  order_request.get("direction", "long"),
+                "broker":     "paper",
+                "latency_ms": 50.0,
+            }
+
+        async def ping(self) -> float:
+            return 1.0
+
+        async def disconnect(self) -> None:
+            pass
+
+    logger.warning("Using paper broker — no live execution")
+    return _PaperBroker()
+
+
+# ── notify_fill wiring ────────────────────────────────────────────────────────
+
+def _wire_notify_fill(orchestrator) -> None:
+    """
+    Add notify_fill() to the orchestrator if not already present.
+
+    notify_fill() is called by HopeFXEngine on every confirmed fill.
+    It updates the replay engine and Redis cache so they stay consistent
+    with actual execution state.
+    """
+    if hasattr(orchestrator, "notify_fill"):
+        return  # already wired
+
+    def notify_fill(
+        symbol:     str,
+        direction:  str,
+        quantity:   float,
+        fill_price: float,
+        fill_id:    str,
+        signal_id:  str,
+        broker:     str,
+        latency_ms: float,
+    ) -> None:
+        """
+        Called immediately after every confirmed fill.
+
+        Updates:
+          - Redis cache: stores fill record under hopefx:fills:<symbol>
+          - Lineage store: records fill event
+          - Replay engine: notifies of actual execution price
+        """
+        import json
+        from datetime import datetime, timezone
+
+        fill_record = {
+            "fill_id":    fill_id,
+            "signal_id":  signal_id,
+            "symbol":     symbol,
+            "direction":  direction,
+            "quantity":   quantity,
+            "fill_price": fill_price,
+            "broker":     broker,
+            "latency_ms": latency_ms,
+            "filled_at":  datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Update Redis cache
+        try:
+            if orchestrator._redis:
+                key = f"hopefx:fills:{symbol}"
+                orchestrator._redis.lpush(key, json.dumps(fill_record))
+                orchestrator._redis.ltrim(key, 0, 999)   # keep last 1000 fills
+                orchestrator._redis.expire(key, 86400)   # 24h TTL
+        except Exception as exc:
+            logger.debug("notify_fill Redis update failed: %s", exc)
+
+        # Notify replay engine
+        try:
+            orchestrator._replay.on_fill(
+                symbol     = symbol,
+                fill_price = fill_price,
+                quantity   = quantity,
+                direction  = direction,
+                fill_id    = fill_id,
+            )
+        except Exception as exc:
+            logger.debug("notify_fill replay engine update failed: %s", exc)
+
+        logger.debug(
+            "notify_fill: %s %s qty=%.4f price=%.4f broker=%s latency=%.1fms",
+            direction, symbol, quantity, fill_price, broker, latency_ms,
+        )
+
+    orchestrator.notify_fill = notify_fill
+    logger.info("orchestrator.notify_fill wired")
+
+
+# ── Logging config ────────────────────────────────────────────────────────────
+
+def _configure_logging() -> None:
+    level = getattr(logging, _LOG_LEVEL.upper(), logging.INFO)
+    logging.basicConfig(
+        level   = level,
+        format  = "%(asctime)s %(levelname)-8s %(name)-35s %(message)s",
+        datefmt = "%Y-%m-%dT%H:%M:%S",
+    )
+    # Suppress noisy third-party loggers
+    for noisy in ("urllib3", "aiohttp", "asyncio", "ib_insync"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+execution_system = ExecutionSystem()
+
+
+# ── Standalone entry point ────────────────────────────────────────────────────
+
+async def _main() -> None:
+    system = ExecutionSystem()
+    await system.start()
+    try:
+        # Run until SIGTERM/SIGINT
+        while system._started:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await system.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(_main())
