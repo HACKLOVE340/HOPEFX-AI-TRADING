@@ -27,6 +27,19 @@ Scheduling
 Run via APScheduler (wired into api/server.py lifespan) every Monday 08:00 UTC.
 Can also be triggered manually:
     python -m reports.weekly_report
+
+Data source labelling
+---------------------
+Every report carries a ``data_source`` field so Sharpe and P&L numbers are
+never published without context:
+
+  "paper_oanda"      — fills from a real OANDA practice account (API-connected)
+  "paper_simulation" — fills from the internal paper broker simulation
+  "live"             — fills from a live/funded broker account
+  "seeded"           — test/seed data; not from any real or simulated fills
+
+The source is determined automatically from the broker state at report time
+and can be overridden by passing ``data_source=`` to WeeklyReportGenerator.generate().
 """
 
 from __future__ import annotations
@@ -47,6 +60,13 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ── Data source constants ─────────────────────────────────────────────────────
+
+DATA_SOURCE_PAPER_OANDA      = "paper_oanda"       # real OANDA practice account
+DATA_SOURCE_PAPER_SIMULATION = "paper_simulation"  # internal paper broker sim
+DATA_SOURCE_LIVE             = "live"              # funded live account
+DATA_SOURCE_SEEDED           = "seeded"            # test / seed data
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,6 +122,10 @@ class WeeklyReport:
     ending_equity: float
     symbols_traded: List[str]
     note: str = ""
+
+    # Data provenance — REQUIRED.  Never publish a Sharpe without labelling source.
+    # One of: "paper_oanda" | "paper_simulation" | "live" | "seeded"
+    data_source: str = DATA_SOURCE_PAPER_SIMULATION
 
     def to_dict(self) -> Dict:
         d = asdict(self)
@@ -180,6 +204,7 @@ class WeeklyReportGenerator:
         starting_equity: float = 10_000.0,
         week_start: Optional[datetime] = None,
         week_end: Optional[datetime] = None,
+        data_source: Optional[str] = None,
     ) -> WeeklyReport:
         now = datetime.now(timezone.utc)
         if week_end is None:
@@ -211,6 +236,9 @@ class WeeklyReportGenerator:
 
         symbols = list({t.symbol for t in week_trades})
 
+        # Resolve data_source: explicit override > auto-detect > default
+        resolved_source = data_source or _detect_data_source()
+
         return WeeklyReport(
             report_id=str(uuid.uuid4()),
             week_start=week_start,
@@ -234,6 +262,7 @@ class WeeklyReportGenerator:
             starting_equity=round(starting_equity, 2),
             ending_equity=round(ending_equity, 2),
             symbols_traded=symbols,
+            data_source=resolved_source,
             note=(
                 "Insufficient trades for statistical significance (< 10)."
                 if total < 10 else ""
@@ -311,6 +340,42 @@ class WeeklyReportGenerator:
             return False
 
 
+# ── Data source detection ─────────────────────────────────────────────────────
+
+
+def _detect_data_source() -> str:
+    """
+    Auto-detect the data source for the current report.
+
+    Priority:
+      1. OANDA practice account with a real (non-PENDING) account_id → paper_oanda
+      2. Live trading gate open → live
+      3. Internal paper broker simulation → paper_simulation
+      4. Fallback → paper_simulation
+    """
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+
+        oanda_stamp = _Path("data/oanda_paper_start.json")
+        if oanda_stamp.exists():
+            info = _json.loads(oanda_stamp.read_text())
+            account_id = info.get("account_id", "PENDING")
+            if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
+                return DATA_SOURCE_PAPER_OANDA
+    except Exception:
+        pass
+
+    try:
+        from core.live_trading_gate import live_gate  # type: ignore[import]
+        if getattr(live_gate, "is_live", False):
+            return DATA_SOURCE_LIVE
+    except Exception:
+        pass
+
+    return DATA_SOURCE_PAPER_SIMULATION
+
+
 # ── Templates ─────────────────────────────────────────────────────────────────
 
 
@@ -320,10 +385,23 @@ def _fmt(val: Optional[float], suffix: str = "", decimals: int = 2) -> str:
     return f"{val:.{decimals}f}{suffix}"
 
 
+_DATA_SOURCE_LABELS: Dict[str, str] = {
+    DATA_SOURCE_PAPER_OANDA:      "Paper — OANDA practice account (API-connected)",
+    DATA_SOURCE_PAPER_SIMULATION: "Paper — internal simulation (no real fills)",
+    DATA_SOURCE_LIVE:             "LIVE — funded account",
+    DATA_SOURCE_SEEDED:           "TEST/SEEDED — not from real or simulated fills",
+}
+
+
+def _source_label(source: str) -> str:
+    return _DATA_SOURCE_LABELS.get(source, source)
+
+
 def _render_text(r: WeeklyReport) -> str:
     return f"""HopeFX Weekly Performance Report
 Week ending: {r.week_end.strftime('%d %b %Y')}
 Generated:   {r.generated_at.strftime('%Y-%m-%d %H:%M UTC')}
+Data source: {_source_label(r.data_source)}
 
 TRADE SUMMARY
   Total trades:    {r.total_trades}
@@ -355,6 +433,17 @@ Symbols traded: {', '.join(r.symbols_traded) or '—'}
 def _render_html(r: WeeklyReport) -> str:
     pnl_color = "#22c55e" if r.net_pnl >= 0 else "#ef4444"
     pnl_sign = "+" if r.net_pnl >= 0 else ""
+
+    # Data source badge colour
+    _source_colors: Dict[str, str] = {
+        DATA_SOURCE_LIVE:             "#22c55e",
+        DATA_SOURCE_PAPER_OANDA:      "#3b82f6",
+        DATA_SOURCE_PAPER_SIMULATION: "#f59e0b",
+        DATA_SOURCE_SEEDED:           "#ef4444",
+    }
+    source_color = _source_colors.get(r.data_source, "#94a3b8")
+    source_label = _source_label(r.data_source)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -366,7 +455,12 @@ def _render_html(r: WeeklyReport) -> str:
   .card {{ background: #1e293b; border-radius: 12px; padding: 24px;
            max-width: 680px; margin: 0 auto; }}
   h1 {{ color: #3b82f6; font-size: 22px; margin: 0 0 4px; }}
-  .sub {{ color: #94a3b8; font-size: 13px; margin-bottom: 24px; }}
+  .sub {{ color: #94a3b8; font-size: 13px; margin-bottom: 12px; }}
+  .source-badge {{ display: inline-block; padding: 4px 10px; border-radius: 6px;
+                   font-size: 11px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: 0.5px; margin-bottom: 20px;
+                   background: {source_color}22; color: {source_color};
+                   border: 1px solid {source_color}55; }}
   table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
   th {{ text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;
         padding: 6px 0; border-bottom: 1px solid #334155; }}
@@ -384,6 +478,7 @@ def _render_html(r: WeeklyReport) -> str:
   <h1>HopeFX Weekly Report</h1>
   <div class="sub">Week ending {r.week_end.strftime('%d %b %Y')} &nbsp;·&nbsp;
     Generated {r.generated_at.strftime('%Y-%m-%d %H:%M UTC')}</div>
+  <div class="source-badge">Data source: {source_label}</div>
 
   <div class="pnl">{pnl_sign}${r.net_pnl:,.2f}</div>
   <div style="color:#94a3b8;font-size:13px;margin-bottom:20px;">
@@ -458,31 +553,45 @@ async def _run_weekly_report_job() -> None:
     """APScheduler job: pull trade data, generate report, save + email."""
     logger.info("Running weekly performance report job...")
     try:
-        trades, equity_curve, starting_equity = await _load_trade_data()
+        trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(trades, equity_curve, starting_equity)
+        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
         gen.save_json(report)
         gen.save_html(report)
         gen.send_email(report)
         logger.info(
-            "Weekly report complete: trades=%d pnl=%.2f sharpe=%s",
-            report.total_trades, report.net_pnl, report.sharpe_ratio,
+            "Weekly report complete: trades=%d pnl=%.2f sharpe=%s source=%s",
+            report.total_trades, report.net_pnl, report.sharpe_ratio, report.data_source,
         )
     except Exception as exc:
         logger.error("Weekly report job failed: %s", exc, exc_info=True)
 
 
 async def _load_trade_data() -> tuple:
-    """Load trade records and equity curve from the paper trading broker."""
+    """
+    Load trade records, equity curve, and data source from the active broker.
+
+    Returns (trades, equity_curve, starting_equity, data_source).
+    """
     trades: List[TradeRecord] = []
     equity_curve: List[Tuple[datetime, float]] = []
     starting_equity = 10_000.0
+    data_source = _detect_data_source()
 
     try:
         from app import app_state  # type: ignore[import]
         broker = getattr(app_state, "broker", None)
         if broker is None:
-            return trades, equity_curve, starting_equity
+            return trades, equity_curve, starting_equity, data_source
+
+        # Refine source from broker type if available
+        broker_type = type(broker).__name__.lower()
+        if "oanda" in broker_type:
+            data_source = DATA_SOURCE_PAPER_OANDA
+        elif "live" in broker_type:
+            data_source = DATA_SOURCE_LIVE
+        else:
+            data_source = DATA_SOURCE_PAPER_SIMULATION
 
         # Load closed trades
         if hasattr(broker, "get_closed_trades"):
@@ -514,7 +623,7 @@ async def _load_trade_data() -> tuple:
     except Exception as exc:
         logger.debug("Trade data load failed: %s", exc)
 
-    return trades, equity_curve, starting_equity
+    return trades, equity_curve, starting_equity, data_source
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
@@ -525,9 +634,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     async def _main() -> None:
-        trades, equity_curve, starting_equity = await _load_trade_data()
+        trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(trades, equity_curve, starting_equity)
+        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
         json_path = gen.save_json(report)
         html_path = gen.save_html(report)
         print(_render_text(report))
