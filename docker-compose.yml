@@ -29,6 +29,16 @@ services:
     volumes:
       - ./ml/saved_models:/app/ml/saved_models
       - trading_state:/app/state
+    # Resource limits — prevent API from starving the trading engine on a 2-core VPS.
+    # Adjust mem_limit upward if running full ML retraining inside the container.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -65,6 +75,16 @@ services:
       - trading_state:/app/state
       - fix_store:/app/fix_store
       - fix_logs:/app/fix_logs
+    # Trading engine gets more CPU than the API — it runs the ML inference loop.
+    # Reserve 0.5 cores minimum so tick processing is never starved by the API.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
       # Liveness: verify the trading process is alive by checking its pid file.
       # The checkpoint file only exists after a clean shutdown, so using it
