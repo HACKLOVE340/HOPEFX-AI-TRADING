@@ -307,6 +307,76 @@ class NewsSentimentEngine:
             if a.published_at >= cutoff and a.gold_relevance >= min_relevance
         ]
 
+    def get_articles_since(
+        self,
+        since: datetime,
+        min_relevance: float = 0.0,
+        source: Optional[Any] = None,
+    ) -> List[NewsArticle]:
+        """
+        Return all articles published at or after `since`.
+
+        Parameters
+        ----------
+        since         : UTC datetime lower bound (inclusive)
+        min_relevance : Minimum gold_relevance score to include
+        source        : Optional NewsSource filter
+
+        Returns articles in chronological order (oldest first).
+        """
+        results = [
+            a for a in self._articles
+            if a.published_at >= since
+            and a.gold_relevance >= min_relevance
+            and (source is None or a.source == source)
+        ]
+        return sorted(results, key=lambda a: a.published_at)
+
+    def get_sentiment_snapshot(self) -> Dict[str, Any]:
+        """
+        Return a point-in-time sentiment snapshot for caching and health checks.
+
+        Includes the current EMA, momentum, article counts, and per-source
+        article counts over the last hour.
+        """
+        now = datetime.now(timezone.utc)
+        cutoff_1h = now - timedelta(hours=1.0)
+        recent_1h = [a for a in self._articles if a.published_at >= cutoff_1h]
+
+        per_source: Dict[str, int] = {}
+        for a in recent_1h:
+            per_source[a.source.value] = per_source.get(a.source.value, 0) + 1
+
+        bullish = sum(1 for a in recent_1h if a.sentiment_label == "bullish")
+        bearish = sum(1 for a in recent_1h if a.sentiment_label == "bearish")
+
+        return {
+            "sentiment_ema":       round(self._sentiment_ema, 4),
+            "sentiment_momentum":  round(self._sentiment_ema - self._prev_ema, 4),
+            "article_count_1h":    len(recent_1h),
+            "bullish_count_1h":    bullish,
+            "bearish_count_1h":    bearish,
+            "bullish_ratio_1h":    round(bullish / max(len(recent_1h), 1), 4),
+            "per_source_1h":       per_source,
+            "total_articles":      self._article_count,
+            "timestamp":           now.isoformat(),
+        }
+
+    def flush_cache(self) -> None:
+        """
+        Clear the in-memory article deque and reset EMA state.
+
+        Used in testing and when a feed produces a large batch of
+        back-dated articles that would corrupt the rolling EMA.
+        Does NOT affect the lineage store — articles already written
+        there are permanent.
+        """
+        self._articles.clear()
+        self._sentiment_ema = 0.0
+        self._prev_ema      = 0.0
+        self._article_count = 0
+        logger.info("NewsSentimentEngine: in-memory cache flushed")
+
     def health(self) -> Dict[str, Any]:
         return {
             "running":         self._running,
