@@ -928,26 +928,24 @@ def add_data_layer_features(
     except Exception as exc:
         logger.debug("add_data_layer_features: orchestrator unavailable: %s", exc)
 
-    # ── Microstructure features ───────────────────────────────────────────────
-    spread          = features.get("spread",               0.0)
-    spread_pct      = features.get("spread_pct",           0.0)
-    ofi             = features.get("order_flow_imbalance", 0.0)
-    trade_pressure  = features.get("trade_pressure",       0.0)
-    buy_pressure    = features.get("buy_pressure",         0.5)
-    sell_pressure   = features.get("sell_pressure",        0.5)
-    cum_delta       = features.get("cumulative_delta",     0.0)
-    vol_delta       = features.get("volume_delta",         0.0)
-    vwap            = features.get("vwap",                 0.0)
-    bid_depth       = features.get("bid_depth",            0.0)
-    ask_depth       = features.get("ask_depth",            0.0)
-    depth_imbalance = features.get("depth_imbalance",      0.0)
-    tick_count      = features.get("tick_count",           0.0)
+    # ── Microstructure features (keys match orchestrator.get_ml_features()) ──
+    spread          = features.get("micro_spread",           0.0)
+    spread_pct      = features.get("micro_spread_pct",       0.0)
+    ofi             = features.get("micro_ofi",              0.0)
+    trade_pressure  = features.get("micro_trade_pressure",   0.0)
+    buy_pressure    = features.get("micro_buy_pressure",     0.5)
+    sell_pressure   = features.get("micro_sell_pressure",    0.5)
+    cum_delta       = features.get("micro_cumulative_delta", 0.0)
+    vol_delta       = features.get("micro_volume_delta",     0.0)
+    vwap            = features.get("micro_vwap_dev",         0.0)
+    bid_depth       = 0.0   # populated when L2 data available
+    ask_depth       = 0.0
+    depth_imbalance = features.get("micro_depth_imbalance",  0.0)
+    tick_count      = 0.0
 
     # Derived microstructure
-    # Spread z-score proxy: current spread vs rolling mean (use scalar broadcast)
-    spread_z20 = features.get("spread_z20", 0.0)
-    ofi_ema5   = features.get("ofi_ema5",   ofi)
-    # Pressure divergence: buy_pressure - sell_pressure (signed)
+    spread_z20   = features.get("micro_spread_z",          0.0)
+    ofi_ema5     = features.get("micro_ofi",               ofi)   # EMA already in engine
     pressure_div = buy_pressure - sell_pressure
 
     # ── Sentiment features ────────────────────────────────────────────────────

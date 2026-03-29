@@ -375,9 +375,15 @@ class AdvancedPredictor:
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
+        as_of: Optional["pd.Timestamp"] = None,
     ) -> Optional[pd.DataFrame]:
         """
-        Build the 176-feature matrix from a rolling OHLCV window.
+        Build the feature matrix from a rolling OHLCV window.
+
+        Appends 26 data layer features from the orchestrator after the
+        base OHLCV features. The as_of parameter enforces causal filtering
+        for backtesting — only data available at as_of is used.
+
         Returns the last row as a single-row DataFrame, or None on failure.
         """
         try:
@@ -392,6 +398,17 @@ class AdvancedPredictor:
             )
             if X is None or X.empty:
                 return None
+
+            # Inject data layer features (microstructure, sentiment, macro calendar)
+            try:
+                from ml.features_extended import add_data_layer_features
+                X = add_data_layer_features(X, as_of=as_of)
+            except Exception as exc:
+                logger.debug(
+                    "AdvancedPredictor: data layer feature injection failed "
+                    "(non-fatal): %s", exc
+                )
+
             return X.iloc[[-1]]
         except Exception as exc:
             logger.warning("Feature build failed for %s: %s", symbol, exc)
@@ -420,6 +437,7 @@ class AdvancedPredictor:
         macro_df: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
         mtf_df: Optional[pd.DataFrame] = None,
+        as_of: Optional["pd.Timestamp"] = None,
     ) -> Dict[str, Any]:
         """
         Full inference pipeline. Returns a signal dict.
@@ -461,7 +479,7 @@ class AdvancedPredictor:
             )
 
         # ── Build features ────────────────────────────────────────────────────
-        X = self._build_features(ohlcv, macro_df=macro_df, symbol=symbol)
+        X = self._build_features(ohlcv, macro_df=macro_df, symbol=symbol, as_of=as_of)
         if X is None or X.empty:
             return self._neutral(ohlcv, reason="feature_build_failed", t0=t0)
 

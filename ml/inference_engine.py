@@ -466,8 +466,8 @@ class InferenceEngine:
             sentiment      = float(features.get("news_sentiment_score",    0.0))
             impact         = float(features.get("macro_impact_score_now",  0.0))
             blackout       = float(features.get("macro_is_blackout",       0.0))
-            ofi            = float(features.get("order_flow_imbalance",    0.0))
-            trade_pressure = float(features.get("trade_pressure",          0.0))
+            ofi            = float(features.get("micro_ofi",               0.0))
+            trade_pressure = float(features.get("micro_trade_pressure",    0.0))
 
             self._last_sentiment_score = sentiment
             self._last_macro_impact    = impact
