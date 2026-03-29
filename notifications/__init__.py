@@ -207,3 +207,86 @@ async def send_alert(level: str, message: str, **kwargs):
 AlertEngine = NotificationManager
 
 __version__ = "1.0.0"
+
+
+# ── Module-level singleton used by NuclearHopeFXSupervisor ───────────────────
+
+class _NotificationsSingleton:
+    """
+    Lightweight singleton that wraps NotificationManager and exposes
+    send_critical_alert() for use by the nuclear supervisor and kill switch.
+
+    Reads Telegram / Discord credentials from environment variables so it
+    works with zero configuration (silently no-ops when creds are absent).
+
+    Environment variables
+    ---------------------
+    TELEGRAM_BOT_TOKEN   Telegram bot token
+    TELEGRAM_CHAT_ID     Telegram chat ID
+    DISCORD_WEBHOOK_URL  Discord webhook URL
+    NOTIFICATION_WEBHOOK_URL  Generic webhook URL
+    """
+
+    def __init__(self) -> None:
+        import os
+        config = {
+            "telegram_bot_token": os.environ.get("TELEGRAM_BOT_TOKEN", ""),
+            "telegram_chat_id": os.environ.get("TELEGRAM_CHAT_ID", ""),
+            "discord_webhook": os.environ.get("DISCORD_WEBHOOK_URL", ""),
+            "webhook_url": os.environ.get("NOTIFICATION_WEBHOOK_URL", ""),
+        }
+        self._manager = NotificationManager(config)
+        self._started = False
+
+    async def _ensure_started(self) -> None:
+        if not self._started:
+            await self._manager.start()
+            self._started = True
+
+    async def send_critical_alert(self, message: str, data: dict = None) -> None:
+        """Send a CRITICAL-level alert to all configured channels."""
+        await self._ensure_started()
+        notification = Notification(
+            level=NotificationLevel.CRITICAL,
+            message=message,
+            data=data,
+        )
+        await self._manager.send(notification)
+        logger.critical("CRITICAL ALERT: %s", message)
+
+    async def send_warning(self, message: str, data: dict = None) -> None:
+        """Send a WARNING-level alert to all configured channels."""
+        await self._ensure_started()
+        notification = Notification(
+            level=NotificationLevel.WARNING,
+            message=message,
+            data=data,
+        )
+        await self._manager.send(notification)
+        logger.warning("WARNING ALERT: %s", message)
+
+    async def send_info(self, message: str, data: dict = None) -> None:
+        """Send an INFO-level alert to all configured channels."""
+        await self._ensure_started()
+        notification = Notification(
+            level=NotificationLevel.INFO,
+            message=message,
+            data=data,
+        )
+        await self._manager.send(notification)
+        logger.info("INFO ALERT: %s", message)
+
+    async def send(self, notification: Notification) -> None:
+        """Pass-through to underlying NotificationManager."""
+        await self._ensure_started()
+        await self._manager.send(notification)
+
+    async def stop(self) -> None:
+        """Stop the underlying manager."""
+        if self._started:
+            await self._manager.stop()
+            self._started = False
+
+
+# Singleton instance — imported by nuclear_supervisor and kill_switch
+notifications = _NotificationsSingleton()
