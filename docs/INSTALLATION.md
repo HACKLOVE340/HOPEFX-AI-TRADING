@@ -1,178 +1,329 @@
-# Installation Guide
+# Installation
 
-## Prerequisites
-
-- **Python 3.10, 3.11, or 3.12** (3.10 minimum — f-strings with `=` specifier required)
-- Git
-- Redis 7+ (optional — rate limiting and caching fall back to in-memory without it)
-- PostgreSQL 16+ (optional — SQLite is used automatically in development)
+Full installation guide for Linux, macOS, and Windows.
 
 ---
 
-## Quick Start
+## System Requirements
 
-### 1. Clone
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Python | 3.10 | 3.12 |
+| RAM | 4 GB | 8 GB |
+| CPU | 2 cores | 4+ cores |
+| Storage | 10 GB | 20 GB |
+| OS | Ubuntu 20.04 / macOS 12 / Windows 10 | Ubuntu 22.04 / macOS 14 |
+
+---
+
+## Option A — Local Python Install (Development)
+
+### 1. Install Python
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install python3.12 python3.12-venv python3.12-dev git -y
+```
+
+**macOS (Homebrew):**
+```bash
+brew install python@3.12 git
+```
+
+**Windows:**
+Download Python 3.12 from [python.org](https://www.python.org/downloads/).
+During install, check "Add Python to PATH".
+
+### 2. Clone the Repository
 
 ```bash
 git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
 cd HOPEFX-AI-TRADING
 ```
 
-### 2. Create virtual environment
+### 3. Create a Virtual Environment
 
 ```bash
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+python3.12 -m venv venv
+
+# Activate
+source venv/bin/activate          # Linux/macOS
+venv\Scripts\activate             # Windows (Command Prompt)
+venv\Scripts\Activate.ps1         # Windows (PowerShell)
 ```
 
-### 3. Install dependencies
+### 4. Install Dependencies
 
 ```bash
-# Standard install (all features)
+# Core dependencies
 pip install -r requirements.txt
 
-# CI / lightweight (no C extensions, no GPU deps)
-pip install -r requirements-ci.txt
+# Optional: ML extras (TensorFlow, PyTorch, TA-Lib)
+pip install -r requirements-optional.txt
 
-# Development (editable install + dev tools)
-pip install -e ".[dev]"
+# Development tools (testing, linting)
+pip install -r requirements-dev.txt
 ```
 
-### 4. Configure environment
+### 5. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Minimum required variables — the app will not start without these:
-
+Edit `.env` — at minimum set these three secrets:
 ```bash
-SECURITY_JWT_SECRET=<48-char random string>
-CONFIG_ENCRYPTION_KEY=<48-char random string>
+SECURITY_JWT_SECRET=<48-char random hex>
+CONFIG_ENCRYPTION_KEY=<48-char random hex>
+HOPEFX_KILL_SWITCH_TOKEN=<48-char random hex>
 ```
 
-Generate them:
-
+Generate secrets:
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### 5. Start the server
+### 6. Initialize the Database
 
 ```bash
-# Development (auto-reload)
-uvicorn app:app --reload --port 8000
-
-# Swagger UI: http://localhost:8000/docs
+alembic upgrade head
 ```
 
-### 6. Paper trading quickstart
+### 7. Start the Server
 
 ```bash
-python quickstart.py
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
-## Docker (recommended for production)
+## Option B — Docker Compose (Recommended for Production)
+
+### Prerequisites
 
 ```bash
-docker-compose up -d
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Install Docker Compose
+sudo apt install docker-compose-plugin -y
 ```
 
-This starts the full stack: FastAPI app + PostgreSQL 16 + Redis 7 + Prometheus + Grafana.
-See [`DEPLOYMENT.md`](DEPLOYMENT.md) for production hardening steps.
+### Start All Services
 
----
-
-## Optional broker packages
-
-These are not included in `requirements.txt` to avoid pulling platform-specific binaries:
-
-| Broker | Package | Install |
-|---|---|---|
-| MetaTrader 5 | `MetaTrader5` | `pip install MetaTrader5` |
-| Interactive Brokers | `ib_insync` | `pip install ib_insync` |
-| Binance / CCXT | `ccxt` | `pip install ccxt` |
-
----
-
-## Redis (optional)
-
-Without Redis, rate limiting and caching use in-memory fallbacks. For production, install Redis:
-
-**Ubuntu/Debian:**
 ```bash
-sudo apt-get install redis-server
-sudo systemctl enable --now redis-server
+git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
+cd HOPEFX-AI-TRADING
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your secrets and broker credentials
+
+# Start everything (app + PostgreSQL + Redis)
+docker compose up -d
+
+# Check logs
+docker compose logs -f app
 ```
 
-**macOS:**
-```bash
-brew install redis && brew services start redis
-```
+Services started:
+- `app` — FastAPI server on port 8000
+- `trading` — background trading engine
+- `postgres` — PostgreSQL 16 on port 5432
+- `redis` — Redis 7 on port 6379
+- `prometheus` — metrics on port 9090
+- `grafana` — dashboards on port 3000
 
----
-
-## PostgreSQL (optional)
-
-SQLite is used automatically when `DATABASE_URL` is not set. For production:
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install postgresql postgresql-contrib
-sudo systemctl enable --now postgresql
-```
-
-**macOS:**
-```bash
-brew install postgresql && brew services start postgresql
-```
-
-Set `DATABASE_URL=postgresql://user:pass@localhost:5432/hopefx` in `.env`.
-
----
-
-## Verification
+### Health Check
 
 ```bash
-# Check Python version (must be 3.10+)
-python --version
-
-# Verify core imports
-python -c "import fastapi, sqlalchemy, sklearn; print('OK')"
-
-# Health check (server must be running)
 curl http://localhost:8000/health
 ```
 
----
+### Stop Services
 
-## Troubleshooting
-
-**`CONFIG_ENCRYPTION_KEY not set`**
 ```bash
-export CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-```
-
-**`Redis connection failed`**
-The app falls back to in-memory automatically. To use Redis: `redis-cli ping` to verify it is running.
-
-**`ImportError: No module named X`**
-```bash
-pip install -r requirements.txt
-```
-
-**`Permission denied` on logs/ or data/**
-```bash
-chmod 755 logs data credentials
+docker compose down
+# To also remove volumes (wipes database):
+docker compose down -v
 ```
 
 ---
 
-## Next steps
+## Option C — Docker Single Container
 
-- [SETUP_GUIDE.md](SETUP_GUIDE.md) — detailed environment configuration
-- [DEPLOYMENT.md](DEPLOYMENT.md) — production deployment (Docker, Kubernetes, systemd)
-- [SECURITY.md](SECURITY.md) — security hardening checklist
-- [CONTRIBUTING.md](CONTRIBUTING.md) — development workflow
+For minimal setups without PostgreSQL/Redis:
+
+```bash
+docker build -t hopefx .
+docker run -d \
+  --name hopefx \
+  -p 8000:8000 \
+  -e SECURITY_JWT_SECRET=your_secret \
+  -e CONFIG_ENCRYPTION_KEY=your_key \
+  -e HOPEFX_KILL_SWITCH_TOKEN=your_token \
+  -e DATABASE_URL=sqlite:///./hopefx.db \
+  -v $(pwd)/data:/app/data \
+  hopefx
+```
+
+---
+
+## Optional Dependencies
+
+### Redis (Recommended)
+
+Redis enables the ML feature cache (1-min TTL), WebSocket pub/sub, and rate limiting.
+
+```bash
+# Ubuntu
+sudo apt install redis-server -y
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+
+# macOS
+brew install redis
+brew services start redis
+
+# Add to .env
+REDIS_URL=redis://localhost:6379/0
+```
+
+### PostgreSQL (Recommended for Production)
+
+SQLite works for development. Use PostgreSQL for production.
+
+```bash
+# Ubuntu
+sudo apt install postgresql postgresql-contrib -y
+sudo -u postgres createuser hopefx
+sudo -u postgres createdb hopefx_db -O hopefx
+sudo -u postgres psql -c "ALTER USER hopefx PASSWORD 'your_password';"
+
+# Add to .env
+DATABASE_URL=postgresql://hopefx:your_password@localhost:5432/hopefx_db
+```
+
+### TA-Lib (Optional — for advanced technical indicators)
+
+TA-Lib requires a system library:
+
+```bash
+# Ubuntu
+sudo apt install libta-lib-dev -y
+pip install TA-Lib
+
+# macOS
+brew install ta-lib
+pip install TA-Lib
+
+# Windows — download the wheel from:
+# https://github.com/cgohlke/talib-build/releases
+pip install TA_Lib-0.4.28-cp312-cp312-win_amd64.whl
+```
+
+### MetaTrader 5 (Windows only)
+
+MT5 Python API only works on Windows:
+```bash
+pip install MetaTrader5
+```
+
+---
+
+## Windows-Specific Notes
+
+### Long Path Support
+
+Enable long paths in Windows (required for some dependencies):
+```powershell
+# Run as Administrator
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1
+```
+
+### WSL2 (Recommended for Windows)
+
+Running inside WSL2 (Windows Subsystem for Linux) gives the best compatibility:
+```powershell
+wsl --install -d Ubuntu-22.04
+```
+
+Then follow the Linux installation steps inside WSL2.
+
+### Windows Firewall
+
+If the server is not reachable from other machines, allow port 8000:
+```powershell
+netsh advfirewall firewall add rule name="HOPEFX" dir=in action=allow protocol=TCP localport=8000
+```
+
+---
+
+## Verifying the Installation
+
+```bash
+# Check Python version
+python --version
+# Expected: Python 3.10.x, 3.11.x, or 3.12.x
+
+# Check core imports
+python -c "import fastapi, sqlalchemy, pydantic; print('Core OK')"
+
+# Check ML imports
+python -c "import xgboost, sklearn, pandas, numpy; print('ML OK')"
+
+# Run the test suite
+pytest tests/ -q --tb=short
+# Expected: 2560 passed, 0 failed (some skips for optional deps)
+
+# Check the server starts
+uvicorn app:app --host 0.0.0.0 --port 8000 &
+sleep 3
+curl http://localhost:8000/health
+kill %1
+```
+
+---
+
+## Upgrading
+
+```bash
+git pull origin main
+pip install -r requirements.txt --upgrade
+alembic upgrade head
+```
+
+If there are breaking changes, check [CHANGELOG.md](https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/blob/main/CHANGELOG.md) first.
+
+---
+
+## Uninstalling
+
+```bash
+# Stop the server
+pkill -f "uvicorn app:app"
+
+# Remove the virtual environment
+deactivate
+rm -rf venv/
+
+# Remove Docker containers and volumes
+docker compose down -v
+docker rmi hopefx
+
+# Remove the repository
+cd ..
+rm -rf HOPEFX-AI-TRADING/
+```
+
+---
+
+## Next Steps
+
+- [Quick Start](QUICKSTART.md) — get your first signal in 15 minutes
+- [Setup Guide](SETUP_GUIDE.md) — broker configuration
+- [Deployment](DEPLOYMENT.md) — production deployment
+- [Troubleshooting](TROUBLESHOOTING.md) — common installation errors
