@@ -22,6 +22,11 @@ The platform is live in paper trading mode on OANDA practice.
 | REST + WebSocket API (108 endpoints) | ✅ Stable |
 | Test suite (2,560+ tests) | ✅ CI green |
 | Documentation (30 main docs + 103 archive) | ✅ Complete |
+| Stripe payment processing (real SDK) | ✅ Production |
+| Subscription plan gating (require_plan) | ✅ Production |
+| Dunning / failed payment recovery | ✅ Production |
+| Prometheus monetization metrics | ✅ Production |
+| Admin role guard on all /api/admin/* | ✅ Production |
 
 ---
 
@@ -43,7 +48,35 @@ N=1,260 bars, 176 features.
 
 ---
 
-## Milestone 2 — Live OANDA Run
+## Milestone 2 — Monetization ✅ DONE (v1.17)
+
+**Result:** Full subscription platform live. Stripe SDK integrated, plan gating enforced on all
+trading and ML endpoints, dunning active, Prometheus metrics wired.
+
+- [x] Real Stripe PaymentIntent creation (not simulated) with idempotency keys
+- [x] Stripe Refund API with partial-refund support
+- [x] Dunning: 3x retry at 24h / 72h / 168h, then subscription suspended
+- [x] `require_plan` FastAPI dependency — raises `403 PLAN_LIMIT_EXCEEDED`
+- [x] `plan_gate()` boolean helper for non-FastAPI contexts
+- [x] ML `/predict` endpoint gated at Professional plan
+- [x] Trading `/order` endpoint gated at Starter plan
+- [x] Strategy subscription gating in `strategies/manager.py`
+- [x] Prometheus: `hopefx_mrr_usd`, `hopefx_arr_usd`, `hopefx_churn_rate_pct`
+- [x] Prometheus: `hopefx_payment_failures_total`, `hopefx_trial_conversions_total`
+- [x] Payment confirmation email (plan, amount, invoice_id, access_code)
+- [x] Subscription cancelled email (access_until, data_deleted_at)
+- [x] Subscription renewal email (next_renewal date)
+- [x] Trial expiry warning email (7d + 1d before expiry)
+- [x] Admin role guard on all `/api/admin/*` endpoints (ADMIN_USER_IDS env var)
+- [x] Admin impersonation JWT (5 min, `impersonated_by` claim, audit-logged)
+- [ ] Switch Stripe from test mode to live (`sk_test_` → `sk_live_`)
+- [ ] Publish pricing page at `hopefx.com/pricing`
+- [ ] Enable Stripe Radar fraud rules
+- [ ] Multi-currency support (EUR, GBP, AED, NGN)
+
+---
+
+## Milestone 3 — Live OANDA Run
 
 **Target:** First real-money trade on OANDA live account.
 
@@ -53,7 +86,7 @@ Prerequisites:
 - [ ] Security audit: rotate all API keys, review JWT config
 - [ ] Set `OANDA_ENVIRONMENT=live` and `FEATURE_LIVE_TRADING=true`
 - [ ] Start with 0.01 lot size, scale up after 50 live trades
-- [ ] Monitor daily drawdown gate — halt if −2% daily DD hit
+- [ ] Monitor daily drawdown gate — halt if -2% daily DD hit
 
 Check gate status:
 ```bash
@@ -62,7 +95,7 @@ python scripts/enable_live_trading.py --check-only
 
 ---
 
-## Milestone 3 — MT5 Export
+## Milestone 4 — MT5 Export
 
 **Target:** Export signals to MetaTrader 5 via ZeroMQ bridge.
 
@@ -73,7 +106,7 @@ python scripts/enable_live_trading.py --check-only
 
 ---
 
-## Milestone 4 — Multi-Symbol Expansion ✅ BACKTEST DONE
+## Milestone 5 — Multi-Symbol Expansion ✅ BACKTEST DONE
 
 **Target:** Trade BTC/USD and ETH/USD alongside XAUUSD, plus forex and commodities.
 
@@ -85,43 +118,46 @@ python scripts/enable_live_trading.py --check-only
 
 ---
 
-## Milestone 5 — Reinforcement Learning
+## Milestone 6 — Strategy Marketplace
+
+**Target:** Allow Professional+ subscribers to submit, review, and purchase strategies.
+
+- [ ] `POST /api/marketplace/strategies` — strategy submission with code upload
+- [ ] Automated quality audit: bandit + ruff on submitted code
+- [ ] Performance validation: minimum 55% win rate, Sharpe > 1.0, drawdown < 20%
+- [ ] `GET /api/marketplace/strategies` — listing with filters (tier, symbol, Sharpe)
+- [ ] `POST /api/marketplace/strategies/{id}/purchase` — purchase flow
+- [ ] Revenue split: 70% to seller, 30% to platform
+- [ ] Monthly seller payout (minimum $500 threshold)
+
+---
+
+## Milestone 7 — Reinforcement Learning
 
 **Target:** Replace or augment XGBoost ensemble with a trained RL agent.
 
 - [ ] Implement `ml/rl_agent.py` using Stable-Baselines3 (PPO)
 - [ ] Custom gym environment: XAUUSD H1 with realistic slippage + spread
 - [ ] Walk-forward evaluation: RL agent vs XGBoost ensemble
-- [ ] Deploy only if RL OOS accuracy ≥ 65% with p < 0.05
+- [ ] Deploy only if RL OOS accuracy >= 65% with p < 0.05
 
 ---
 
-## Milestone 6 — Web Frontend
+## Milestone 8 — Web Frontend
 
-**Target:** React/Vue dashboard connected to the REST + WebSocket API.
+**Target:** React dashboard connected to the REST + WebSocket API.
 
-- [ ] React or Vue.js project scaffold in `frontend/`
+- [ ] React project scaffold in `frontend/`
 - [ ] Real-time WebSocket chart (price + signals)
-- [ ] Live P&L dashboard
+- [ ] Live P&L dashboard with subscription tier badge
 - [ ] Strategy control panel (start/stop/configure)
 - [ ] Risk monitor (drawdown, CVaR, kill switch status)
+- [ ] Subscription management UI (upgrade/downgrade/cancel)
 - [ ] Social trading feed (copy trading, leaderboards)
 
 ---
 
-## Milestone 7 — White-Label API
-
-**Target:** Expose HOPEFX as a signal API for third-party consumers.
-
-- [ ] `/api/v1/signals` endpoint with API key auth
-- [ ] Rate limiting per tier (free: 10 req/min, pro: 100 req/min)
-- [ ] Stripe billing integration for pro tier
-- [ ] SLA: 99.9% uptime, < 200ms p99 latency
-- [ ] White-label branding config in `whitelabel/`
-
----
-
-## Milestone 8 — Mobile App
+## Milestone 9 — Mobile App
 
 **Target:** iOS and Android apps via React Native.
 
@@ -129,8 +165,20 @@ python scripts/enable_live_trading.py --check-only
 - [ ] Core screens: Dashboard, Chart, Positions, Alerts
 - [ ] Push notifications via FCM/APNs
 - [ ] Biometric authentication
+- [ ] Subscription gate on all premium screens
 - [ ] Offline mode with cached signals
 - [ ] App Store + Google Play submission
+
+---
+
+## Milestone 10 — White-Label API
+
+**Target:** Expose HOPEFX as a signal API for third-party consumers.
+
+- [ ] `/api/v1/signals` endpoint with API key auth
+- [ ] Rate limiting per tier (Starter: 10 req/min, Professional: 100 req/min)
+- [ ] White-label branding config in `whitelabel/`
+- [ ] SLA: 99.9% uptime, < 200ms p99 latency
 
 ---
 
@@ -144,7 +192,7 @@ after their respective paper trading gates are met.
 | 1 | MTFFusionStore | `FEATURE_MTF_FUSION` | On by default |
 | 2 | AnomalyWeightStore | `FEATURE_ANOMALY_WEIGHTING` | After 30-day paper run |
 | 3 | OnlineLearnerStore | `FEATURE_ONLINE_LEARNING` | After 90-day paper run + 500 fills |
-| 4 | DeepEnsembleStore | `FEATURE_DEEP_ENSEMBLE` | After LSTM OOS ≥ 70% |
+| 4 | DeepEnsembleStore | `FEATURE_DEEP_ENSEMBLE` | After LSTM OOS >= 70% |
 
 See `research/README.md` for gate conditions and enable instructions.
 
@@ -162,7 +210,7 @@ See `research/README.md` for gate conditions and enable instructions.
 
 `calculate_var_historical` and `calculate_var_parametric` still use sqrt(t) for
 multi-day scaling. Use `calculate_var_multiday` or `calculate_var_ewma` for
-production risk limits on XAUUSD. This is documented but not yet enforced.
+production risk limits on XAUUSD.
 
 - [ ] Replace sqrt(t) in all remaining VaR paths
 - [ ] Add GARCH(1,1) volatility model for VaR
@@ -184,6 +232,8 @@ python backtest/multi_symbol_backtest.py --years 10 --oos-frac 0.3
 # Fetch latest XAUUSD H1 bars
 python -m data.scheduler
 ```
+
+---
 
 ## Running Tests
 
