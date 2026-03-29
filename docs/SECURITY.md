@@ -300,22 +300,166 @@ We will acknowledge receipt within 48 hours and provide a fix timeline.
 
 ---
 
+## Two-Factor Authentication (2FA)
+
+TOTP-based 2FA is available on Professional and above. It is **required** for all
+admin accounts.
+
+### Enable 2FA
+
+```bash
+# Step 1 — generate TOTP secret
+POST /api/auth/2fa/enable
+Authorization: Bearer <token>
+
+# Response includes a QR code URL and backup codes
+# {"qr_url": "otpauth://totp/HOPEFX:user@...", "backup_codes": [...]}
+
+# Step 2 — verify with your authenticator app
+POST /api/auth/2fa/verify
+Authorization: Bearer <token>
+{"code": "123456"}
+```
+
+### Login with 2FA
+
+```bash
+# Step 1 — password login returns a partial token
+POST /api/auth/login
+{"username": "user", "password": "pass"}
+# {"requires_2fa": true, "partial_token": "..."}
+
+# Step 2 — complete with TOTP code
+POST /api/auth/2fa/complete
+{"partial_token": "...", "code": "123456"}
+# {"access_token": "...", "token_type": "bearer"}
+```
+
+### Backup Codes
+
+Backup codes are generated when 2FA is enabled. Each code is single-use.
+Store them securely — they cannot be retrieved after initial generation.
+
+```bash
+# Regenerate backup codes (invalidates old ones)
+POST /api/auth/2fa/backup-codes/regenerate
+Authorization: Bearer <token>
+```
+
+---
+
+## Audit Log
+
+All security-relevant actions are logged to the audit log (`audit/logger.py`).
+
+### What is logged
+
+| Event | Fields |
+|-------|--------|
+| Login (success/failure) | user_id, IP, timestamp, user_agent |
+| 2FA enable/disable | user_id, timestamp |
+| Password change | user_id, timestamp |
+| Kill switch activate/deactivate | user_id, reason, timestamp |
+| Subscription change | user_id, old_plan, new_plan, timestamp |
+| License key activation | user_id, key_hash, plan, timestamp |
+| Admin action | admin_id, action, target_user_id, timestamp |
+| API key creation/revocation | user_id, key_id, timestamp |
+
+### Query the audit log
+
+```bash
+# Via API (admin only)
+curl http://localhost:8000/api/admin/audit-log?user_id=123&limit=50 \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Direct (PostgreSQL)
+psql hopefx_db -c "
+SELECT timestamp, user_id, action, details
+FROM audit_log
+WHERE timestamp > NOW() - INTERVAL '24 hours'
+ORDER BY timestamp DESC
+LIMIT 50;"
+```
+
+### Audit log retention
+
+Audit logs are retained for 1 year in production. They are append-only —
+no audit log entry can be modified or deleted via the API.
+
+---
+
+## Subscription Token Security
+
+The `HOPEFX_LICENSE_KEY` is a subscription token that gates all trading endpoints.
+It must be protected like any other secret.
+
+### Storage
+
+- **Development:** `.env` file (never commit to git — `.gitignore` covers `.env`)
+- **Production:** Environment variable injected by your secrets manager (Vault, AWS Secrets Manager, k8s Secret)
+- **Never:** hardcoded in source code, logged, or returned in API responses
+
+### Validation
+
+The license key is validated:
+1. At application startup (blocks start if invalid in production)
+2. Every 24 hours at runtime (logs warning if expiring within 7 days)
+3. On every request to a gated endpoint (cached for 60 seconds)
+
+### Key format
+
+```
+HOPEFX-{TIER}-{RANDOM_8}-{CHECKSUM_4}
+Example: HOPEFX-PRO-A7B9C2D4-X8Y2
+```
+
+The checksum prevents typos. The tier is embedded so the server can verify
+the plan without a database lookup on every request.
+
+### Kill Switch Token
+
+The `HOPEFX_KILL_SWITCH_TOKEN` is separate from the JWT to prevent a compromised
+user token from triggering an emergency stop. It must be:
+- At least 32 characters
+- Stored separately from the JWT secret
+- Rotated if you suspect compromise (restart required after rotation)
+
+```bash
+# Rotate the kill switch token
+python -c "import secrets; print(secrets.token_hex(32))"
+# Update HOPEFX_KILL_SWITCH_TOKEN in .env and restart
+```
+
+---
+
 ## Security Checklist (Pre-Production)
 
+### Secrets
 - [ ] `SECURITY_JWT_SECRET` is ≥ 32 chars and not a placeholder
 - [ ] `CONFIG_ENCRYPTION_KEY` is ≥ 32 chars and not a placeholder
 - [ ] `HOPEFX_KILL_SWITCH_TOKEN` is ≥ 32 chars and not a placeholder
+- [ ] `HOPEFX_LICENSE_KEY` is set and valid (`python scripts/manage_secrets.py validate`)
+- [ ] No secrets in git history (`trufflehog git file://. --only-verified`)
+
+### Infrastructure
 - [ ] `DATABASE_URL` points to PostgreSQL (not SQLite)
 - [ ] `ALLOWED_ORIGINS` is set to explicit `https://` domains (not `*`)
 - [ ] `APP_ENV=production`
 - [ ] `SENTRY_DSN` is set
-- [ ] TLS is terminated at the reverse proxy
+- [ ] TLS is terminated at the reverse proxy (Nginx + Let's Encrypt)
 - [ ] `TRUSTED_PROXY_IPS` is set to your load balancer IPs
-- [ ] No secrets in git history (`trufflehog` clean)
+- [ ] Alembic migrations applied: `alembic upgrade head`
+
+### Access Control
+- [ ] Admin accounts have 2FA enabled
+- [ ] Kill switch token stored in secrets manager (not `.env` on disk)
+- [ ] API rate limiting active (check `X-RateLimit-Remaining` header)
+- [ ] Audit log enabled and queryable
+
+### Scanning
 - [ ] `bandit` reports no HIGH severity issues
 - [ ] `pip-audit` reports no known CVEs
-- [ ] Alembic migrations applied: `alembic upgrade head`
-- [ ] Kill switch token stored securely (not in `.env` on disk in production)
+- [ ] Codacy grade A (check repository Security tab)
 
 Run the full pre-deploy validation:
 ```bash
