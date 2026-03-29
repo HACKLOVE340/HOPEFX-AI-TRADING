@@ -236,7 +236,7 @@ def send_risk_halt_email(
     to           : Recipient email (defaults to SMTP_TO env var)
     """
     recipient = to or _DEFAULT_TO
-    subject = f"⚠ HOPEFX RISK HALT — {reason}"
+    subject = f"HOPEFX RISK HALT — {reason}"
     return _send(
         to=recipient,
         subject=subject,
@@ -245,4 +245,129 @@ def send_risk_halt_email(
         drawdown_pct=f"{drawdown_pct:.2f}%",
         limit_pct=f"{limit_pct:.2f}%",
         halted_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
+def send_payment_confirmation_email(
+    plan: str,
+    amount: float,
+    currency: str = "USD",
+    invoice_id: str = "",
+    access_code: str = "",
+    expires_at: str = "",
+    to: str = "",
+) -> bool:
+    """
+    Send a payment confirmation email after a successful subscription payment.
+
+    Parameters
+    ----------
+    plan        : Subscription tier name (e.g. "Professional")
+    amount      : Amount charged
+    currency    : Currency code (default: USD)
+    invoice_id  : Invoice reference number
+    access_code : License key issued (HOPEFX-PRO-XXXXXXXX-XXXX)
+    expires_at  : Subscription expiry date string
+    to          : Recipient email (defaults to SMTP_TO env var)
+    """
+    recipient = to or _DEFAULT_TO
+    subject = f"HOPEFX Payment Confirmed — {plan} Plan — {currency} {amount:,.2f}"
+    return _send(
+        to=recipient,
+        subject=subject,
+        template="payment_confirmation.html",
+        plan=plan,
+        amount=f"{amount:,.2f}",
+        currency=currency,
+        invoice_id=invoice_id,
+        access_code=access_code,
+        expires_at=expires_at,
+        confirmed_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
+def send_subscription_cancelled_email(
+    plan: str,
+    access_until: str,
+    data_deleted_at: str = "",
+    to: str = "",
+) -> bool:
+    """
+    Send a subscription cancellation confirmation email.
+
+    Parameters
+    ----------
+    plan            : Subscription tier that was cancelled
+    access_until    : Date until which access remains active
+    data_deleted_at : Date when user data will be purged (90 days after cancellation)
+    to              : Recipient email (defaults to SMTP_TO env var)
+    """
+    recipient = to or _DEFAULT_TO
+    subject = f"HOPEFX Subscription Cancelled — {plan} Plan"
+    return _send(
+        to=recipient,
+        subject=subject,
+        template="subscription_cancelled.html",
+        plan=plan,
+        access_until=access_until,
+        data_deleted_at=data_deleted_at,
+        cancelled_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
+def send_subscription_renewal_email(
+    plan: str,
+    amount: float,
+    currency: str = "USD",
+    next_renewal: str = "",
+    to: str = "",
+) -> bool:
+    """
+    Send a subscription renewal receipt email.
+
+    Parameters
+    ----------
+    plan         : Subscription tier name
+    amount       : Amount charged for renewal
+    currency     : Currency code
+    next_renewal : Next renewal date string
+    to           : Recipient email (defaults to SMTP_TO env var)
+    """
+    recipient = to or _DEFAULT_TO
+    subject = f"HOPEFX Subscription Renewed — {plan} Plan"
+    return _send(
+        to=recipient,
+        subject=subject,
+        template="subscription_renewal.html",
+        plan=plan,
+        amount=f"{amount:,.2f}",
+        currency=currency,
+        next_renewal=next_renewal,
+        renewed_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    )
+
+
+def send_trial_expiry_warning_email(
+    days_remaining: int,
+    upgrade_url: str = "https://hopefx.com/pricing",
+    to: str = "",
+) -> bool:
+    """
+    Send a trial expiry warning email (sent at 7 days and 1 day before expiry).
+
+    Parameters
+    ----------
+    days_remaining : Number of days left in the trial
+    upgrade_url    : URL to the pricing/upgrade page
+    to             : Recipient email (defaults to SMTP_TO env var)
+    """
+    recipient = to or _DEFAULT_TO
+    subject = f"HOPEFX Trial Expires in {days_remaining} Day{'s' if days_remaining != 1 else ''}"
+    return _send(
+        to=recipient,
+        subject=subject,
+        template="trial_expiry_warning.html",
+        days_remaining=days_remaining,
+        upgrade_url=upgrade_url,
+        sent_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     )
