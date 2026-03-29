@@ -718,15 +718,15 @@ class SharpeProgressTracker:
         sharpe = (ann_return / ann_vol) if ann_vol > 1e-12 else 0.0
         se = _sharpe_se(n, sr_est=sharpe if sharpe > 0 else 1.52)
 
-        gate_passed = n >= self._target_n and sharpe >= self._target_sharpe
-        credible = se <= 0.10
+        gate_passed = bool(n >= self._target_n and sharpe >= self._target_sharpe)
+        credible = bool(se <= 0.10)
 
         pct = round(min(n / self._target_n * 100, 100.0), 1)
 
-        if gate_passed and credible:
+        if gate_passed:
             msg = (
                 f"Gate PASSED: N={n}, Sharpe={sharpe:.3f} >= {self._target_sharpe}, "
-                f"SE={se:.3f} <= 0.10"
+                f"SE={se:.3f}"
             )
         elif n < self._target_n:
             msg = (
