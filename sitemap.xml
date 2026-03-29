@@ -5,10 +5,6 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.hopefx.io/ANALYSIS_AND_ROADMAP/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
          <loc>https://docs.hopefx.io/API/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
@@ -37,10 +33,6 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.hopefx.io/CRITICAL_FLAWS/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
          <loc>https://docs.hopefx.io/DEBUGGING/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
@@ -49,35 +41,11 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.hopefx.io/DEPLOYMENT_CHECKLIST/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/DEPLOYMENT_INFRASTRUCTURE/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
          <loc>https://docs.hopefx.io/DIAGNOSTIC_REPORT/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.hopefx.io/ENHANCEMENT_PLAN/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/ENTERPRISE_ARCHITECTURE/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
          <loc>https://docs.hopefx.io/FAQ/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/FEATURES/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/IMPLEMENTATION_SUMMARY/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -97,19 +65,11 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.hopefx.io/PRODUCTION_FIXES/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
          <loc>https://docs.hopefx.io/QUICKSTART/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
          <loc>https://docs.hopefx.io/SAMPLE_STRATEGIES/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/SECURE_ENV_TEMPLATE/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -122,10 +82,6 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/VIDEO_TUTORIALS/</loc>
-         <lastmod>2026-03-29</lastmod>
-    </url>
-    <url>
-         <loc>https://docs.hopefx.io/WORDMAP/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -158,6 +114,10 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/ALL_TEST_FIXES_COMPLETE/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/ANALYSIS_AND_ROADMAP/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -217,11 +177,19 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.hopefx.io/archive/CRITICAL_FLAWS/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.hopefx.io/archive/CURRENT_STATUS/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/CURRENT_STATUS_FINAL/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/DEBUGGING/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -233,7 +201,23 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.hopefx.io/archive/DEPLOYMENT_CHECKLIST/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/DEPLOYMENT_INFRASTRUCTURE/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.hopefx.io/archive/ENHANCED_MONETIZATION_IMPLEMENTATION/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/ENHANCEMENT_PLAN/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/ENTERPRISE_ARCHITECTURE/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -246,6 +230,10 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/EXIT_CODE_1_FIX_SUMMARY/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/FEATURES/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -298,6 +286,10 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/IMPLEMENTATION_STATUS/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/IMPLEMENTATION_SUMMARY/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -385,6 +377,14 @@
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
+         <loc>https://docs.hopefx.io/archive/PRODUCTION_FIXES/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/PULL_REQUEST/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
          <loc>https://docs.hopefx.io/archive/PYTHON_311_FIX_SUMMARY/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
@@ -394,6 +394,10 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/ROADMAP/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/SECURE_ENV_TEMPLATE/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
     <url>
@@ -450,6 +454,14 @@
     </url>
     <url>
          <loc>https://docs.hopefx.io/archive/WHATS_NEXT_ROADMAP/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/WORDMAP/</loc>
+         <lastmod>2026-03-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.hopefx.io/archive/banner/</loc>
          <lastmod>2026-03-29</lastmod>
     </url>
 </urlset>
