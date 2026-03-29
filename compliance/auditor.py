@@ -12,10 +12,13 @@ Meets regulatory requirements for financial trading
 import asyncio
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     import aiofiles
@@ -60,19 +63,27 @@ class ImmutableAuditLog:
     def append(
         self, level: AuditLevel, category: str, actor: str, action: str, data: Dict
     ):
-        """Append immutable audit record"""
+        """Append immutable audit record."""
         self.sequence += 1
 
-        # Create record
+        # Capture timestamp once and reuse it in both the record and the hash.
+        # Previously _calculate_hash() called datetime.now() independently,
+        # producing a different timestamp than the one stored in the record,
+        # which caused verify_integrity() to always return False.
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        # Compute hash using the same timestamp that will be stored
+        chain_hash = self._calculate_hash(data, timestamp)
+
         record = AuditRecord(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=timestamp,
             sequence_number=self.sequence,
             level=level,
             category=category,
             actor=actor,
             action=action,
             data=data,
-            hash_chain=self._calculate_hash(data),
+            hash_chain=chain_hash,
         )
 
         # Update hash chain
@@ -84,31 +95,58 @@ class ImmutableAuditLog:
 
         return record
 
-    def _calculate_hash(self, data: Dict) -> str:
-        """Calculate cryptographic hash of record"""
+    def _calculate_hash(self, data: Dict, timestamp: str) -> str:
+        """
+        Calculate the hash for a new record being appended.
+
+        Uses the caller-supplied *timestamp* (captured once in append()) so
+        the value baked into the hash is identical to the value stored in the
+        AuditRecord — making verify_integrity() / _recalculate_hash() agree.
+        """
         record_str = json.dumps(
             {
                 "seq": self.sequence,
                 "prev_hash": self.last_hash,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": timestamp,
                 "data_hash": hashlib.sha256(
                     json.dumps(data, sort_keys=True).encode()
                 ).hexdigest(),
             },
             sort_keys=True,
         )
-
         return hashlib.sha256(record_str.encode()).hexdigest()
 
     def _persist_record(self, record: AuditRecord):
-        """Write to append-only log"""
-
+        """Write to append-only log (async when a loop is running, sync otherwise)."""
+        import os as _os
+        _os.makedirs(self.log_path, exist_ok=True)
         filename = (
             f"{self.log_path}audit_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
         )
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._async_write(filename, record))
+        except RuntimeError:
+            # No running event loop (e.g. called from sync context / tests)
+            self._sync_write(filename, record)
 
-        # Async write
-        asyncio.create_task(self._async_write(filename, record))
+    def _sync_write(self, filename: str, record: AuditRecord) -> None:
+        """Synchronous fallback write used when no event loop is running."""
+        line = json.dumps({
+            "timestamp": record.timestamp,
+            "seq": record.sequence_number,
+            "level": record.level.name,
+            "category": record.category,
+            "actor": record.actor,
+            "action": record.action,
+            "data": record.data,
+            "hash": record.hash_chain,
+        }) + "\n"
+        try:
+            with open(filename, "a") as fh:
+                fh.write(line)
+        except Exception as exc:
+            logger.error("Audit sync write failed: %s", exc)
 
     async def _async_write(self, filename: str, record: AuditRecord):
         if aiofiles is None:
