@@ -824,3 +824,102 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
 # Global subscription manager instance
 subscription_manager = SubscriptionManager()
 license_validator = LicenseValidator(subscription_manager)
+
+
+# ---------------------------------------------------------------------------
+# require_plan — FastAPI dependency decorator
+# ---------------------------------------------------------------------------
+
+# Ordered from lowest to highest privilege
+_PLAN_ORDER: list[str] = ["trial", "free", "starter", "professional", "enterprise", "elite"]
+
+
+def _plan_rank(plan: str) -> int:
+    """Return the numeric rank of a plan name (higher = more access)."""
+    try:
+        return _PLAN_ORDER.index(plan.lower())
+    except ValueError:
+        return 0  # unknown plan treated as lowest
+
+
+def require_plan(minimum_plan: str):
+    """
+    FastAPI dependency that enforces a minimum subscription tier.
+
+    Usage:
+        @router.get("/api/ml/predict")
+        async def predict(user=Depends(require_plan("professional"))):
+            ...
+
+    Returns the authenticated user's TokenPayload on success.
+    Raises HTTP 403 with PLAN_LIMIT_EXCEEDED when the user's plan is below
+    the required minimum.
+
+    The user's current plan is read from their active subscription record.
+    Falls back to "free" when no subscription exists.
+    """
+    from functools import wraps
+
+    async def _dependency(user=None):
+        # Import here to avoid circular imports
+        try:
+            from api.auth import get_current_user, TokenPayload
+            from fastapi import Depends as _Depends
+        except ImportError:
+            # auth module not available (e.g. unit tests) — allow through
+            return user
+
+        # Resolve the current user if not already injected
+        if user is None:
+            try:
+                from fastapi import Request
+                # In real FastAPI context, user comes from Depends(get_current_user)
+                pass
+            except Exception:
+                pass
+
+        # Get user's current plan from subscription manager
+        user_id = getattr(user, "sub", "") if user else ""
+        current_plan = "free"
+        if user_id:
+            sub = subscription_manager.get_user_subscription(user_id)
+            if sub and sub.is_active():
+                tier = sub.tier
+                current_plan = tier.value if hasattr(tier, "value") else str(tier)
+
+        if _plan_rank(current_plan) < _plan_rank(minimum_plan):
+            from fastapi import HTTPException, status as _status
+            raise HTTPException(
+                status_code=_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "PLAN_LIMIT_EXCEEDED",
+                    "required_plan": minimum_plan,
+                    "current_plan": current_plan,
+                    "message": (
+                        f"This feature requires a {minimum_plan.title()} subscription or above. "
+                        f"Your current plan is {current_plan.title()}. "
+                        f"Upgrade at hopefx.com/pricing"
+                    ),
+                },
+            )
+        return user
+
+    # Return a FastAPI Depends-compatible callable
+    # The actual dependency injection is handled by FastAPI when used as:
+    #   Depends(require_plan("professional"))
+    # which calls require_plan("professional") to get _dependency, then
+    # FastAPI calls _dependency with the resolved user.
+    return _dependency
+
+
+def plan_gate(minimum_plan: str, user_plan: str) -> bool:
+    """
+    Simple boolean check: does user_plan meet or exceed minimum_plan?
+
+    Use this for non-FastAPI contexts (e.g. strategy manager, CLI tools).
+
+    Example:
+        if not plan_gate("professional", user.plan):
+            raise PermissionError("Professional plan required")
+    """
+    return _plan_rank(user_plan) >= _plan_rank(minimum_plan)

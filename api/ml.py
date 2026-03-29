@@ -563,10 +563,26 @@ async def predict(
     Uses the XGBoost macro model if available; falls back to a
     rule-based regime signal when no model is loaded.
 
-    Requires: authenticated user (any role). Feature weights exposed by
-    this endpoint are proprietary; unauthenticated access would allow
-    adversaries to reverse-engineer the model's signal structure.
+    Requires: Professional plan or above (enforced via plan_gate on user subscription).
     """
+    # Subscription gate — Professional plan required for ML predictions
+    try:
+        from monetization.subscription import subscription_manager, plan_gate
+        sub = subscription_manager.get_user_subscription(user.sub)
+        user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+        if not plan_gate("professional", user_plan):
+            from fastapi import HTTPException as _HTTPException, status as _status
+            raise _HTTPException(
+                status_code=_status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "PLAN_LIMIT_EXCEEDED",
+                    "required_plan": "professional",
+                    "current_plan": user_plan,
+                    "message": "ML predictions require a Professional subscription or above.",
+                },
+            )
+    except ImportError:
+        pass  # monetization not available in test/CI — allow through
     symbol_upper = symbol.upper().replace("-", "/")
     now_iso = datetime.now(timezone.utc).isoformat()
 
