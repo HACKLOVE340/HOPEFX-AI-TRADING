@@ -4,10 +4,11 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 
-# MetaTrader5 is Windows-only and not available on Linux/macOS CI runners.
-# Skip gracefully when absent rather than failing collection.
-import pytest
-mt5 = pytest.importorskip("MetaTrader5", reason="MetaTrader5 is Windows-only")
+# MetaTrader5 is Windows-only. Run this script on a Windows machine with MT5 installed.
+try:
+    import MetaTrader5 as mt5
+except ImportError as e:
+    raise SystemExit(f"MetaTrader5 not available (Windows-only): {e}") from e
 
 import time
 import logging
