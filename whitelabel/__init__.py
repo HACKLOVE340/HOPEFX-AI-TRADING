@@ -622,4 +622,10 @@ __all__ = [
     "Reseller",
     "WhiteLabelManager",
     "white_label_manager",
+    # Sub-modules (imported on demand to avoid circular imports)
+    # whitelabel.config       — TierConfig, TierName, TIER_CONFIGS
+    # whitelabel.branding     — BrandTheme (extended), DEFAULT_THEMES
+    # whitelabel.api_auth     — verify_api_key, require_api_key, require_feature,
+    #                           register_api_key, revoke_api_key, TenantContext
+    # whitelabel.rate_limiting — WhitelabelRateLimitMiddleware
 ]
