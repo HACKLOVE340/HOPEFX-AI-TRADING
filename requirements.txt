@@ -162,3 +162,18 @@ scipy>=1.12.0
 
 # ── Property-based testing ────────────────────────────────────────────────────
 hypothesis>=6.100.0
+
+# ── OpenTelemetry distributed tracing ─────────────────────────────────────────
+# Core SDK
+opentelemetry-sdk>=1.24.0
+opentelemetry-api>=1.24.0
+# OTLP exporters (gRPC primary, HTTP fallback)
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0
+opentelemetry-exporter-otlp-proto-http>=1.24.0
+# Auto-instrumentation
+opentelemetry-instrumentation-fastapi>=0.45b0
+opentelemetry-instrumentation-sqlalchemy>=0.45b0
+opentelemetry-instrumentation-redis>=0.45b0
+opentelemetry-instrumentation-aiohttp-client>=0.45b0
+# W3C trace context propagation
+opentelemetry-propagator-b3>=1.24.0
