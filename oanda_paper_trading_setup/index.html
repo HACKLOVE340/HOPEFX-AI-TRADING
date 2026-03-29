@@ -763,6 +763,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#subscription-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Requirement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-0-verify-your-subscription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 0 — Verify your subscription
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#step-1-create-a-free-oanda-practice-account" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1942,6 +1964,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#subscription-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Requirement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-0-verify-your-subscription" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 0 — Verify your subscription
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#step-1-create-a-free-oanda-practice-account" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2052,11 +2096,76 @@
 <h1 id="oanda-paper-trading-setup">OANDA Paper Trading Setup<a class="headerlink" href="#oanda-paper-trading-setup" title="Permanent link">&para;</a></h1>
 <p>Get HOPEFX running against a real broker API in paper (practice) mode.
 No real money involved — OANDA practice accounts are free and instant.</p>
-<blockquote>
-<p><strong>Subscription required:</strong> OANDA broker integration requires a HOPEFX Starter subscription or above.
-Paper trading mode (no broker) is available to all subscribers.
-See <a href="../MONETIZATION/">MONETIZATION.md</a> for plan details.</p>
-</blockquote>
+<hr />
+<h2 id="subscription-requirement">Subscription Requirement<a class="headerlink" href="#subscription-requirement" title="Permanent link">&para;</a></h2>
+<p>OANDA broker integration requires a <strong>HOPEFX Starter subscription or above</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Trial</th>
+<th>Starter</th>
+<th>Professional</th>
+<th>Enterprise</th>
+<th>Elite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paper trading (no broker)</td>
+<td>Limited</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>OANDA practice account</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>OANDA live account</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Multi-broker (OANDA + others)</td>
+<td>No</td>
+<td>No</td>
+<td>Yes (3)</td>
+<td>Yes (unlimited)</td>
+<td>Yes (unlimited)</td>
+</tr>
+</tbody>
+</table>
+<p>Without a valid Starter+ subscription, the <code>BROKER_TYPE=oanda</code> setting is ignored and
+the app falls back to the internal paper broker. All OANDA API endpoints return
+<code>403 Subscription Required</code>.</p>
+<p>To subscribe: <a href="https://hopefx.com/pricing">hopefx.com/pricing</a>
+To request a trial: open a GitHub Issue with label <code>trial-request</code></p>
+<hr />
+<hr />
+<h2 id="step-0-verify-your-subscription">Step 0 — Verify your subscription<a class="headerlink" href="#step-0-verify-your-subscription" title="Permanent link">&para;</a></h2>
+<p>Before connecting OANDA, confirm your HOPEFX license key is valid and your plan
+includes broker access:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Expected: ✓ HOPEFX_LICENSE_KEY: valid (plan=starter, expires=2026-08-14)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>curl<span class="w"> </span>http://localhost:8000/api/monetization/subscription/me<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Expected: {&quot;plan&quot;: &quot;starter&quot;, &quot;status&quot;: &quot;active&quot;, ...}</span>
+</code></pre></div>
+<p>If the license key is missing or expired, set it in <code>.env</code>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">HOPEFX_LICENSE_KEY</span><span class="o">=</span>HOPEFX-START-XXXXXXXX-XXXX
+</code></pre></div></p>
+<p>Then restart the app before proceeding.</p>
 <hr />
 <h2 id="step-1-create-a-free-oanda-practice-account">Step 1 — Create a free OANDA practice account<a class="headerlink" href="#step-1-create-a-free-oanda-practice-account" title="Permanent link">&para;</a></h2>
 <ol>
@@ -2076,37 +2185,37 @@ See <a href="../MONETIZATION/">MONETIZATION.md</a> for plan details.</p>
 <hr />
 <h2 id="step-3-configure-hopefx">Step 3 — Configure HOPEFX<a class="headerlink" href="#step-3-configure-hopefx" title="Permanent link">&para;</a></h2>
 <p>Copy <code>.env.example</code> to <code>.env</code> if you haven't already:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
 </code></pre></div>
 <p>Set these values in <code>.env</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># Broker
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>BROKER_TYPE=oanda
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>OANDA_PRACTICE=true
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># OANDA credentials (practice)
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>OANDA_API_KEY=your_practice_api_token_here
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a># Optional: instruments to trade (comma-separated OANDA codes)
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>OANDA_INSTRUMENTS=XAU_USD,EUR_USD
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># Broker
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>BROKER_TYPE=oanda
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>OANDA_PRACTICE=true
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a># OANDA credentials (practice)
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>OANDA_API_KEY=your_practice_api_token_here
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>OANDA_ACCOUNT_ID=001-001-XXXXXXX-001
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a># Optional: instruments to trade (comma-separated OANDA codes)
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>OANDA_INSTRUMENTS=XAU_USD,EUR_USD
 </code></pre></div>
 <p>Leave <code>OANDA_PRACTICE=true</code> — this ensures all orders go to the practice
 environment, not live markets.</p>
 <hr />
 <h2 id="step-4-validate-the-connection">Step 4 — Validate the connection<a class="headerlink" href="#step-4-validate-the-connection" title="Permanent link">&para;</a></h2>
 <p>Run the built-in connection test:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>scripts/validate_oanda.py
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python<span class="w"> </span>scripts/validate_oanda.py
 </code></pre></div>
 <p>Expected output:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>✓ OANDA practice API reachable
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>✓ Account ID valid: 001-001-XXXXXXX-001
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>✓ Balance: $100,000.00 (practice)
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>✓ XAU_USD pricing: bid=2345.12 ask=2345.34
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>✓ Order placement test: PASSED (order placed and cancelled)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>✓ OANDA practice API reachable
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>✓ Account ID valid: 001-001-XXXXXXX-001
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>✓ Balance: $100,000.00 (practice)
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>✓ XAU_USD pricing: bid=2345.12 ask=2345.34
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>✓ Order placement test: PASSED (order placed and cancelled)
 </code></pre></div></p>
 <hr />
 <h2 id="step-5-start-paper-trading">Step 5 — Start paper trading<a class="headerlink" href="#step-5-start-paper-trading" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>python<span class="w"> </span>app.py
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>python<span class="w"> </span>app.py
 </code></pre></div>
 <p>The app will:
 - Connect to OANDA practice API on startup
@@ -2154,17 +2263,56 @@ environment, not live markets.</p>
 you can enable live trading (Task 22).</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong><code>401 Unauthorized</code></strong> — API token is wrong or expired. Regenerate in OANDA portal.</p>
-<p><strong><code>Account not found</code></strong> — Account ID format must be <code>001-001-XXXXXXX-001</code>.
-Copy it exactly from the OANDA dashboard.</p>
-<p><strong><code>Instrument not tradeable</code></strong> — Use OANDA instrument codes: <code>XAU_USD</code> not <code>XAUUSD</code>.
-Full list: <a href="https://developer.oanda.com/rest-live-v20/instrument-ep/">https://developer.oanda.com/rest-live-v20/instrument-ep/</a></p>
-<p><strong>No prices updating</strong> — Check <code>BROKER_OANDA_TOKEN</code> and <code>BROKER_OANDA_ACCOUNT</code>
-are set (the app also reads these aliases). Both env var names work.</p>
+<table>
+<thead>
+<tr>
+<th>Error</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>403 Subscription Required</code></td>
+<td>No valid license key</td>
+<td>Set <code>HOPEFX_LICENSE_KEY</code> in <code>.env</code> and restart</td>
+</tr>
+<tr>
+<td><code>403 Plan Limit Exceeded</code></td>
+<td>Trial plan cannot use OANDA</td>
+<td>Upgrade to Starter or above</td>
+</tr>
+<tr>
+<td><code>401 Unauthorized</code> (OANDA)</td>
+<td>API token wrong or expired</td>
+<td>Regenerate token in OANDA portal</td>
+</tr>
+<tr>
+<td><code>Account not found</code></td>
+<td>Wrong account ID format</td>
+<td>Must be <code>001-001-XXXXXXX-001</code> — copy exactly from OANDA dashboard</td>
+</tr>
+<tr>
+<td><code>Instrument not tradeable</code></td>
+<td>Wrong instrument code</td>
+<td>Use <code>XAU_USD</code> not <code>XAUUSD</code> — see <a href="https://developer.oanda.com/rest-live-v20/instrument-ep/">OANDA instrument list</a></td>
+</tr>
+<tr>
+<td>No prices updating</td>
+<td>Wrong env var name</td>
+<td>Check both <code>OANDA_API_KEY</code> and <code>BROKER_OANDA_TOKEN</code> — both aliases work</td>
+</tr>
+<tr>
+<td>App uses paper broker despite OANDA config</td>
+<td>Subscription not active</td>
+<td>Run <code>python scripts/manage_secrets.py validate</code></td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="data-backfill-optional-but-recommended">Data backfill (optional but recommended)<a class="headerlink" href="#data-backfill-optional-but-recommended" title="Permanent link">&para;</a></h2>
 <p>While paper trading runs, backfill 8 years of H1 data for better ML training:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python<span class="w"> </span>-m<span class="w"> </span>data.scheduler<span class="w"> </span>--backfill<span class="w"> </span>--symbol<span class="w"> </span>XAU_USD<span class="w"> </span>--from<span class="w"> </span><span class="m">2015</span>-01-01
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>python<span class="w"> </span>-m<span class="w"> </span>data.scheduler<span class="w"> </span>--backfill<span class="w"> </span>--symbol<span class="w"> </span>XAU_USD<span class="w"> </span>--from<span class="w"> </span><span class="m">2015</span>-01-01
 </code></pre></div>
 <p>This takes ~30 minutes and downloads ~70,000 H1 bars from OANDA's free
 historical data API.</p>
