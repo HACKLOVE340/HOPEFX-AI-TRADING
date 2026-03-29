@@ -44,6 +44,23 @@ def _get_macro_store() -> Optional[Any]:
         return None
 
 
+def _get_macro_store_bridge() -> Optional[Any]:
+    """
+    Return the MacroStoreBridge singleton from data_layer, or None.
+
+    The bridge is the primary FRED-backed macro source.  It is started by
+    init_macro_store() in startup_factories.py and populates the MacroStore
+    singleton automatically.  This accessor is used here to pull the latest
+    real-time snapshot values for feature augmentation at inference time.
+    """
+    try:
+        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+
+        return macro_store_bridge if macro_store_bridge.is_loaded else None
+    except Exception:
+        return None
+
+
 # ── Advanced ML predictor (122-feature, 68% OOS accuracy) ────────────────────
 try:
     from ml import get_active_model, get_advanced_predictor, get_model_version
@@ -317,11 +334,17 @@ def _fetch_macro_df(
     symbol: str,
 ) -> Optional["pd.DataFrame"]:
     """
-    Align MacroStore series to the OHLCV hourly index.
+    Build a macro feature DataFrame for the given OHLCV window.
 
-    Returns a DataFrame of macro features or None if the store is empty /
-    alignment fails. None is safe — the predictor falls back to OHLCV-only
-    features with a logged warning.
+    Two-stage pipeline:
+      1. Align MacroStore time-series to the OHLCV hourly index (historical
+         context — the same path as before).
+      2. Overlay the latest real-time FRED snapshot values from
+         MacroStoreBridge onto the last row so the model always sees the
+         most current macro state at inference time.
+
+    Returns a DataFrame of macro features or None if both stages fail.
+    None is safe — the predictor falls back to OHLCV-only features.
     """
     import pandas as pd
 
@@ -356,6 +379,37 @@ def _fetch_macro_df(
             return None
 
         logger.debug("MacroStore aligned %d series for %s", macro_df.shape[1], symbol)
+
+        # ── Stage 2: overlay real-time FRED snapshot on the last row ─────────
+        # MacroStoreBridge.get_ml_features() returns the most recent FRED
+        # observation for each series (prefixed macro_*).  We overwrite the
+        # last row of macro_df so the model sees today's values rather than
+        # yesterday's close-of-day values from the CSV/align path.
+        bridge = _get_macro_store_bridge()
+        if bridge is not None:
+            try:
+                rt_features = bridge.get_ml_features()
+                if rt_features:
+                    for col_key, val in rt_features.items():
+                        # col_key is "macro_dxy", "macro_us10y", etc.
+                        # macro_df columns may be "dxy", "us10y", etc. — strip prefix.
+                        bare = col_key.replace("macro_", "")
+                        if bare in macro_df.columns:
+                            macro_df.iloc[-1, macro_df.columns.get_loc(bare)] = val
+                        elif col_key in macro_df.columns:
+                            macro_df.iloc[-1, macro_df.columns.get_loc(col_key)] = val
+                    logger.debug(
+                        "FRED real-time overlay applied to last row for %s (%d features)",
+                        symbol,
+                        len(rt_features),
+                    )
+            except Exception as rt_exc:
+                logger.debug(
+                    "FRED real-time overlay failed (non-fatal) for %s: %s",
+                    symbol,
+                    rt_exc,
+                )
+
         return macro_df
 
     except Exception as exc:
