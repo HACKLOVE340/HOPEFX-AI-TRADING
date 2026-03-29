@@ -95,10 +95,52 @@ class AMLGate:
                 if decision:
                     return decision
             except Exception as exc:
-                logger.warning(
-                    "AML DB check failed for user %s: %s — allowing (fail open)",
+                # Fail CLOSED on DB outage — a regulatory violation is worse
+                # than a delayed withdrawal. The operator must restore DB
+                # connectivity before withdrawals can proceed.
+                logger.error(
+                    "AML DB check failed for user %s: %s — BLOCKING withdrawal "
+                    "(fail-closed; restore DB connectivity to resume withdrawals)",
                     user_id,
                     exc,
+                )
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_exception(exc, extras={
+                        "user_id": user_id[:8] + "…",
+                        "amount": str(amount),
+                        "aml_action": "fail_closed",
+                    })
+                except Exception:
+                    pass
+                return AMLDecision(
+                    allowed=False,
+                    reason=(
+                        "Withdrawal temporarily unavailable: compliance database "
+                        "is unreachable. Please try again later or contact support."
+                    ),
+                    risk_score=1.0,
+                    flags=["DB_UNAVAILABLE"],
+                )
+        else:
+            # No session factory configured — block all DB-dependent withdrawals
+            # above the KYC threshold (rules 3-5 cannot be evaluated).
+            if amount > KYC_THRESHOLD:
+                logger.error(
+                    "AML: no DB session factory configured — blocking withdrawal "
+                    "of %s for user %s (cannot evaluate velocity/daily rules). "
+                    "Call init_aml_gate(session_factory) at startup.",
+                    amount,
+                    user_id,
+                )
+                return AMLDecision(
+                    allowed=False,
+                    reason=(
+                        "Withdrawal temporarily unavailable: compliance checks "
+                        "require database connectivity. Contact support."
+                    ),
+                    risk_score=1.0,
+                    flags=["NO_DB_SESSION"],
                 )
 
         # ── Approved ──────────────────────────────────────────────────────────
@@ -200,13 +242,28 @@ _aml_gate: Optional[AMLGate] = None
 
 
 def get_aml_gate() -> AMLGate:
+    """
+    Return the module-level AMLGate singleton.
+
+    ⚠️  If init_aml_gate() has not been called, the gate has no DB session
+    factory and will BLOCK all withdrawals above the KYC threshold (fail-closed).
+    Always call init_aml_gate(session_factory) during application startup.
+    """
     global _aml_gate
     if _aml_gate is None:
-        _aml_gate = AMLGate()  # no DB — fail-open
+        logger.error(
+            "AMLGate singleton accessed before init_aml_gate() was called. "
+            "Withdrawals above KYC threshold will be blocked until a DB "
+            "session factory is provided. Call init_aml_gate(session_factory) "
+            "during application startup."
+        )
+        _aml_gate = AMLGate()  # no DB — fail-closed for DB-dependent rules
     return _aml_gate
 
 
 def init_aml_gate(session_factory) -> AMLGate:
+    """Wire the AML gate with a DB session factory. Call once at startup."""
     global _aml_gate
     _aml_gate = AMLGate(session_factory=session_factory)
+    logger.info("AMLGate initialised with DB session factory")
     return _aml_gate
