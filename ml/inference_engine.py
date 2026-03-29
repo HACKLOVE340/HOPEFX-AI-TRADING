@@ -188,23 +188,55 @@ class InferenceEngine:
         mtf_df: Optional[pd.DataFrame],
         symbol: str,
     ) -> Optional[pd.DataFrame]:
-        """Build 200+ feature matrix, appending MTF columns."""
-        try:
-            from ml.features_extended import build_extended_features
+        """
+        Build 200+ feature matrix with real-time data layer injection.
 
+        Uses build_extended_features_with_data_layer() which injects
+        microstructure, sentiment, and macro calendar features from the
+        orchestrator at the last bar's timestamp (causal, no look-ahead).
+
+        Falls back to build_extended_features() if the data layer is
+        unavailable (e.g. during backtesting without a live orchestrator).
+        """
+        try:
             # Deduplicate OHLCV index before feature building — duplicate
             # timestamps cause reindex failures inside advanced_features.py
             if ohlcv.index.duplicated().any():
                 ohlcv = ohlcv[~ohlcv.index.duplicated(keep="last")]
 
-            X, _ = build_extended_features(
-                ohlcv,
-                macro_df=macro_df,
-                horizon=1,
-                use_filtered_target=False,
-                min_move_atr=0.0,
-            )
-            if X.empty:
+            # Prefer the data-layer-aware builder (live inference path)
+            try:
+                from ml.features_extended import build_extended_features_with_data_layer
+
+                X, _ = build_extended_features_with_data_layer(
+                    ohlcv=ohlcv,
+                    macro_df=macro_df,
+                    horizon=1,
+                    use_filtered_target=False,
+                    min_move_atr=0.0,
+                )
+                logger.debug(
+                    "InferenceEngine: built %d features via data_layer path for %s",
+                    len(X.columns) if X is not None and not X.empty else 0,
+                    symbol,
+                )
+            except Exception as dl_exc:
+                logger.debug(
+                    "build_extended_features_with_data_layer failed (%s) — "
+                    "falling back to build_extended_features",
+                    dl_exc,
+                )
+                from ml.features_extended import build_extended_features
+
+                X, _ = build_extended_features(
+                    ohlcv,
+                    macro_df=macro_df,
+                    horizon=1,
+                    use_filtered_target=False,
+                    min_move_atr=0.0,
+                )
+
+            if X is None or X.empty:
                 return None
 
             # Append MTF regime columns
