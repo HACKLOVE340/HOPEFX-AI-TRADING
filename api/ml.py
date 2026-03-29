@@ -1081,3 +1081,147 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                 error=str(exc),
             ).model_dump(),
         )
+
+
+# ── RL Agent endpoints ────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+
+
+class RLTrainRequest(_BaseModel):
+    symbol: str = "XAU_USD"
+    timeframe: str = "H1"
+    candles: int = 2000
+    timesteps: int = 100_000
+    train_split: float = 0.8
+
+
+class RLWalkForwardRequest(_BaseModel):
+    symbol: str = "XAU_USD"
+    timeframe: str = "H1"
+    candles: int = 3000
+    n_folds: int = 5
+    timesteps_per_fold: int = 50_000
+    train_pct: float = 0.70
+
+
+@router.post("/rl/train", tags=["ML Models"])
+async def rl_train(
+    req: RLTrainRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """
+    Trigger PPO RL agent training on OANDA candles.
+    Runs synchronously (use a background task queue for production).
+    Requires: admin role.
+    """
+    try:
+        from ml.rl_agent import RLAgent, ForexTradingEnv, RLMetrics
+        import asyncio
+
+        # Load candles from the data layer
+        df = _load_ohlcv_for_symbol(req.symbol, req.candles)
+        candles_list = df.to_dict("records")
+
+        split = int(len(candles_list) * req.train_split)
+        train_c = candles_list[:split]
+        test_c  = candles_list[split:]
+
+        agent = RLAgent(model_name=f"hopefx_ppo_{req.symbol.lower()}")
+
+        train_env = ForexTradingEnv(train_c)
+        test_env  = ForexTradingEnv(test_c)
+
+        # Run in thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: agent.train(train_env, timesteps=req.timesteps, verbose=0),
+        )
+        metrics = await loop.run_in_executor(None, lambda: agent.evaluate(test_env))
+
+        return {
+            "status": "trained",
+            "symbol": req.symbol,
+            "timeframe": req.timeframe,
+            "train_candles": len(train_c),
+            "test_candles": len(test_c),
+            "timesteps": req.timesteps,
+            "model_path": agent.model_path,
+            "metrics": metrics,
+        }
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"RL dependencies not installed: {exc}",
+        )
+    except Exception as exc:
+        logger.error("rl_train failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/rl/walk-forward", tags=["ML Models"])
+async def rl_walk_forward(
+    req: RLWalkForwardRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """
+    Run walk-forward evaluation of the PPO agent.
+    Returns per-fold metrics and aggregate stability score.
+    Requires: admin role.
+    """
+    try:
+        from ml.rl_agent import walk_forward_eval
+        import asyncio
+        from dataclasses import asdict
+
+        df = _load_ohlcv_for_symbol(req.symbol, req.candles)
+        candles_list = df.to_dict("records")
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: walk_forward_eval(
+                candles=candles_list,
+                symbol=req.symbol,
+                timeframe=req.timeframe,
+                n_folds=req.n_folds,
+                timesteps_per_fold=req.timesteps_per_fold,
+                train_pct=req.train_pct,
+            ),
+        )
+
+        return asdict(result)
+
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"RL dependencies not installed: {exc}",
+        )
+    except Exception as exc:
+        logger.error("rl_walk_forward failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/rl/status", tags=["ML Models"])
+async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
+    """Return saved RL model files and their sizes."""
+    import os
+    from ml.rl_agent import _MODEL_DIR
+
+    models = []
+    if os.path.isdir(_MODEL_DIR):
+        for fname in sorted(os.listdir(_MODEL_DIR)):
+            if fname.endswith(".zip"):
+                fpath = os.path.join(_MODEL_DIR, fname)
+                models.append({
+                    "name": fname,
+                    "size_kb": round(os.path.getsize(fpath) / 1024, 1),
+                    "modified": os.path.getmtime(fpath),
+                })
+
+    return {
+        "model_dir": _MODEL_DIR,
+        "models": models,
+        "count": len(models),
+    }
