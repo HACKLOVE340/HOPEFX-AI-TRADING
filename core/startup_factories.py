@@ -1292,3 +1292,167 @@ async def init_daily_online_learner(s: Any) -> Any:
         f"daily EWC loop scheduled at 00:05 UTC"
     )
     return s.daily_online_learners
+
+
+# ── Registry builder ──────────────────────────────────────────────────────────
+# Extracted from app.py startup_event() to keep app.py under 300 lines.
+
+
+def build_component_registry(app, feature_flags):
+    """
+    Build and return a fully-configured ComponentRegistry.
+
+    Accepts the FastAPI *app* instance and *feature_flags* so factories that
+    need them can receive them via functools.partial.  The registry is NOT
+    started here — call ``await registry.start_all(app_state)`` in the
+    lifespan handler.
+    """
+    from functools import partial
+    from core.component_registry import ComponentRegistry
+    import core.startup_factories as F
+
+    registry = ComponentRegistry()
+
+    def _app(fn):
+        return partial(fn, app=app)
+
+    def _app_flags(fn):
+        return partial(fn, app=app, flags=feature_flags)
+
+    (
+        registry.register("env_check", F.init_env, required=False)
+        .register("config", F.init_config, required=True, deps=["env_check"])
+        .register("database", F.init_database, required=True, deps=["config"])
+        .register("cache", F.init_cache, required=False, deps=["config"])
+        # ── Background services ───────────────────────────────────────────────
+        .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
+        .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
+        .register("alert_engine", _app(F.init_alert_engine), required=False, deps=["config"])
+        # ── Analysis / data routers ───────────────────────────────────────────
+        .register("order_flow", _app(F.init_order_flow), required=False, deps=["config"])
+        .register("time_and_sales", _app(F.init_time_and_sales), required=False, deps=["config"])
+        .register("market_scanner", _app(F.init_market_scanner), required=False, deps=["config"])
+        .register("dom", _app(F.init_dom), required=False, deps=["config"])
+        .register("signals_router", _app(F.init_signals_router), required=False, deps=["config"])
+        .register("news_router", _app(F.init_news_router), required=False, deps=["config"])
+        # ── Auth / risk / trading ─────────────────────────────────────────────
+        .register("auth_service", F.init_auth, required=False, deps=["database"])
+        .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
+        .register("broker", F.init_broker, required=False, deps=["database"])
+        .register("price_engine", F.init_price_engine, required=False, deps=["broker"])
+        .register("compliance_manager", F.init_compliance, required=False, deps=["database"])
+        .register("prop_enforcer", F.init_prop_enforcer, required=False, deps=["compliance_manager"])
+        .register("aml", F.init_aml, required=False, deps=["database"])
+        .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
+        .register("event_store", F.init_event_store, required=False, deps=["config"])
+        .register("position_tracker", F.init_position_tracker, required=False, deps=["config"])
+        .register(
+            "trade_executor",
+            F.init_trade_executor,
+            required=False,
+            deps=["broker", "risk_manager", "position_tracker"],
+        )
+        .register(
+            "brain",
+            F.init_hopefx_brain,
+            required=False,
+            deps=[
+                "price_engine", "risk_manager", "broker", "strategy_brain",
+                "alert_engine", "position_tracker", "trade_executor",
+            ],
+        )
+        # ── Payments / social ─────────────────────────────────────────────────
+        .register("wallet_manager", F.init_wallet, required=False, deps=["database"])
+        .register("social", F.init_social, required=False, deps=["config"])
+        .register("regime_router", F.init_regime_router, required=False, deps=["strategy_brain"])
+        # ── Macro / MTF / ML pipeline ─────────────────────────────────────────
+        .register("macro_store", F.init_macro_store, required=False, deps=["config"])
+        .register("mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"])
+        .register(
+            "inference_engine",
+            F.init_inference_engine,
+            required=False,
+            deps=["macro_store", "mtf_store"],
+        )
+        .register(
+            "signal_engine",
+            F.init_signal_engine,
+            required=False,
+            deps=["risk_manager", "broker", "macro_store", "mtf_store"],
+        )
+        .register("hourly_trainer", F.init_hourly_trainer, required=False, deps=["data_scheduler"])
+        .register(
+            "online_learner_store",
+            F.init_online_learner_store,
+            required=False,
+            deps=["signal_engine", "hourly_trainer"],
+        )
+        .register(
+            "daily_online_learner",
+            F.init_daily_online_learner,
+            required=False,
+            deps=["hourly_trainer"],
+        )
+        .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
+        .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
+        .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
+        .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
+        # ── Feature-flagged ───────────────────────────────────────────────────
+        .register("research_engine", _app_flags(F.init_research), required=False, deps=["config"])
+        .register("explainer", _app_flags(F.init_explainability), required=False, deps=["config"])
+        .register("transparency_engine", _app_flags(F.init_transparency), required=False, deps=["config"])
+        .register("teams_manager", _app_flags(F.init_teams), required=False, deps=["config"])
+        .register("nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"])
+        .register("replay_engine", _app_flags(F.init_replay), required=False, deps=["config"])
+        .register(
+            "ml_feature_engineer",
+            _app_flags(F.init_ml_predictions),
+            required=False,
+            deps=["config"],
+        )
+    )
+
+    return registry
+
+
+def run_startup_stress_tests(risk_manager) -> None:
+    """
+    Run standard stress scenarios against the risk manager at startup.
+    Logs a WARNING for any scenario that projects >20% portfolio loss.
+    """
+    try:
+        from risk.advanced_analytics import AdvancedRiskAnalytics
+
+        AdvancedRiskAnalytics()
+
+        scenarios = [
+            {"name": "2008 Financial Crisis", "equity_shock": -0.38, "vol_multiplier": 3.5},
+            {"name": "COVID-19 March 2020", "equity_shock": -0.34, "vol_multiplier": 4.0},
+            {"name": "Gold Flash Crash", "equity_shock": -0.15, "vol_multiplier": 2.5},
+            {"name": "USD Spike +10%", "equity_shock": -0.12, "vol_multiplier": 2.0},
+            {"name": "Liquidity Crunch", "equity_shock": -0.20, "vol_multiplier": 3.0},
+        ]
+
+        portfolio_value = risk_manager.current_balance or 100_000.0
+        threshold = 0.20
+
+        for scenario in scenarios:
+            projected_loss_pct = abs(scenario["equity_shock"])
+            projected_loss = portfolio_value * projected_loss_pct
+            if projected_loss_pct > threshold:
+                logger.warning(
+                    "Startup stress test — scenario '%s' projects %.1f%% portfolio loss "
+                    "(%.2f on %.2f balance) — review risk limits",
+                    scenario["name"],
+                    projected_loss_pct * 100,
+                    projected_loss,
+                    portfolio_value,
+                )
+            else:
+                logger.info(
+                    "Startup stress test — scenario '%s': projected loss %.1f%% — within threshold",
+                    scenario["name"],
+                    projected_loss_pct * 100,
+                )
+    except Exception as exc:
+        logger.warning("Startup stress tests could not run: %s", exc)
