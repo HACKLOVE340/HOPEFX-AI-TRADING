@@ -1,8 +1,17 @@
 {
-	"name": "Ona",
-	"image": "mcr.microsoft.com/devcontainers/universal:4.0.1-noble",
-	"postCreateCommand": "pip install -r requirements-ci.txt -q",
-	"forwardPorts": [5173, 8000],
+	"name": "HOPEFX AI Trading",
+	// Python 3.10 matches the production Dockerfile (python:3.10-slim).
+	// Using the same version prevents pickle protocol mismatches for ML models
+	// and ensures behaviour parity between local dev and Docker.
+	"image": "mcr.microsoft.com/devcontainers/python:3.10-bullseye",
+	"features": {
+		// Redis — required for EventBus pub/sub between strategy engine,
+		// gatekeeper, and FIX router. Without it all tests fall back to
+		// in-memory mode and pub/sub integration is untested locally.
+		"ghcr.io/itsmechlark/features/redis-server:1": {}
+	},
+	"postCreateCommand": "pip install -q -r requirements-ci.txt",
+	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
 		"5173": {
 			"label": "Frontend (Vite)",
@@ -11,6 +20,13 @@
 		"8000": {
 			"label": "Backend (FastAPI)",
 			"onAutoForward": "silent"
+		},
+		"6379": {
+			"label": "Redis",
+			"onAutoForward": "silent"
 		}
+	},
+	"remoteEnv": {
+		"APP_ENV": "development"
 	}
 }
