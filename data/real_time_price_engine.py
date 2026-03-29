@@ -461,16 +461,35 @@ class RESTPriceFeed(PriceFeedBase):
 
 class RealTimePriceEngine:
     """
-    Hybrid price engine with WebSocket primary and REST fallback
+    Hybrid price engine with WebSocket primary and REST fallback.
 
     Features:
     - Automatic failover between WebSocket and REST
     - OHLCV aggregation from ticks
     - Spread monitoring
     - Latency tracking
+    - Persistent tick storage via SQLAlchemy (batch-flushed to tick_data table)
+
+    Tick persistence
+    ----------------
+    Pass a SQLAlchemy ``session_factory`` (e.g. the app's ``SessionLocal``) to
+    enable durable tick storage.  Ticks are buffered in memory and flushed to
+    the database in batches every ``tick_flush_interval`` seconds (default 5 s)
+    or when the buffer reaches ``tick_batch_size`` entries (default 500).
+
+    Without a session_factory the engine runs in memory-only mode — ticks are
+    still available via the in-process deque buffers and Redis cache, but are
+    lost on restart.
+
+    Environment overrides
+    ---------------------
+    TICK_FLUSH_INTERVAL_SEC  — flush period in seconds (default 5)
+    TICK_BATCH_SIZE          — max ticks per flush (default 500)
+    TICK_PERSIST_ENABLED     — set to "0" to disable persistence even when a
+                               session_factory is provided (useful in tests)
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], session_factory=None):
         self.config = config
         self.symbols = config.get("symbols", ["EURUSD", "XAUUSD"])
 
@@ -494,6 +513,24 @@ class RealTimePriceEngine:
         # Tasks
         self._tasks: List[asyncio.Task] = []
         self._monitor_task: Optional[asyncio.Task] = None
+        self._tick_flush_task: Optional[asyncio.Task] = None
+
+        # ── Tick persistence ──────────────────────────────────────────────────
+        import os as _os
+        self._session_factory = session_factory
+        self._tick_persist_enabled: bool = (
+            session_factory is not None
+            and _os.getenv("TICK_PERSIST_ENABLED", "1") != "0"
+        )
+        self._tick_flush_interval: float = float(
+            _os.getenv("TICK_FLUSH_INTERVAL_SEC", "5")
+        )
+        self._tick_batch_size: int = int(_os.getenv("TICK_BATCH_SIZE", "500"))
+        # Pending ticks waiting to be flushed; bounded to avoid unbounded growth
+        # if the DB is slow.  Oldest ticks are dropped when the buffer is full
+        # (same behaviour as the existing deque(maxlen=1000) OHLCV buffers).
+        self._tick_buffer: deque = deque(maxlen=self._tick_batch_size * 4)
+        self._tick_buffer_lock = asyncio.Lock()
 
     async def start(self):
         """Start price engine"""
@@ -530,6 +567,21 @@ class RealTimePriceEngine:
         # Start monitoring
         self._monitor_task = asyncio.create_task(self._monitor_loop())
 
+        # Start tick persistence flush loop if a session factory was provided
+        if self._tick_persist_enabled:
+            self._tick_flush_task = asyncio.create_task(
+                self._tick_flush_loop(), name="tick_flush"
+            )
+            logger.info(
+                "Tick persistence enabled: flush every %.0fs, batch size %d",
+                self._tick_flush_interval,
+                self._tick_batch_size,
+            )
+        else:
+            logger.info(
+                "Tick persistence disabled (no session_factory or TICK_PERSIST_ENABLED=0)"
+            )
+
         logger.info("Price engine started")
 
     async def stop(self):
@@ -543,6 +595,16 @@ class RealTimePriceEngine:
         if self._monitor_task:
             self._monitor_task.cancel()
 
+        # Stop tick flush loop and drain any remaining buffered ticks
+        if self._tick_flush_task and not self._tick_flush_task.done():
+            self._tick_flush_task.cancel()
+            try:
+                await self._tick_flush_task
+            except asyncio.CancelledError:
+                pass
+        if self._tick_persist_enabled and self._tick_buffer:
+            await self._flush_ticks()
+
         # Disconnect feeds
         await self._ws_feed.disconnect()
         await self._rest_feed.disconnect()
@@ -551,9 +613,13 @@ class RealTimePriceEngine:
         logger.info("Price engine stopped")
 
     def _on_price_update(self, tick: Tick):
-        """Handle price update from WebSocket"""
+        """Handle price update from WebSocket."""
         # Record metrics
         self._spread_metrics[tick.symbol].append(tick.spread)
+
+        # Buffer tick for DB persistence (non-blocking — flush loop drains async)
+        if self._tick_persist_enabled:
+            self._tick_buffer.append(tick)
 
         # Notify callbacks
         for callback in self._price_callbacks:
@@ -561,6 +627,80 @@ class RealTimePriceEngine:
                 callback(tick)
             except Exception as e:
                 logger.error(f"Price callback error: {e}")
+
+    async def _tick_flush_loop(self) -> None:
+        """Periodically flush buffered ticks to the tick_data table."""
+        while True:
+            try:
+                await asyncio.sleep(self._tick_flush_interval)
+                if self._tick_buffer:
+                    await self._flush_ticks()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error("Tick flush loop error: %s", exc)
+
+    async def _flush_ticks(self) -> None:
+        """
+        Drain the tick buffer and batch-insert into the tick_data table.
+
+        Runs in a thread-pool executor so the SQLAlchemy synchronous session
+        does not block the event loop.
+        """
+        if not self._tick_buffer:
+            return
+
+        # Drain up to _tick_batch_size ticks atomically
+        async with self._tick_buffer_lock:
+            batch = []
+            for _ in range(min(self._tick_batch_size, len(self._tick_buffer))):
+                if self._tick_buffer:
+                    batch.append(self._tick_buffer.popleft())
+
+        if not batch:
+            return
+
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(None, self._persist_tick_batch, batch)
+            logger.debug("Tick flush: persisted %d ticks to DB", len(batch))
+        except Exception as exc:
+            logger.error("Tick flush: DB write failed (%s) — %d ticks lost", exc, len(batch))
+
+    def _persist_tick_batch(self, batch: list) -> None:
+        """
+        Synchronous DB write — called from a thread-pool executor.
+
+        Inserts a batch of Tick objects into the tick_data table using the
+        SQLAlchemy TickData model.  A single transaction covers the whole batch
+        so a partial failure rolls back cleanly.
+        """
+        try:
+            from database.models import TickData  # noqa: PLC0415
+            from datetime import datetime, timezone  # noqa: PLC0415
+        except ImportError as exc:
+            logger.error("Tick persistence: could not import TickData model: %s", exc)
+            return
+
+        try:
+            with self._session_factory() as session:
+                rows = [
+                    TickData(
+                        symbol=tick.symbol,
+                        bid=tick.bid,
+                        ask=tick.ask,
+                        last_price=tick.mid,
+                        volume=tick.volume,
+                        timestamp=datetime.fromtimestamp(tick.timestamp, tz=timezone.utc),
+                        source="websocket",
+                    )
+                    for tick in batch
+                ]
+                session.bulk_save_objects(rows)
+                session.commit()
+        except Exception as exc:
+            logger.error("Tick persistence: session write failed: %s", exc)
+            raise
 
     def register_price_callback(self, callback: Callable[[Tick], None]):
         """Register for price updates"""
