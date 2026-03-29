@@ -836,6 +836,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Subscription Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-obtain-a-license-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Obtain a license key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-add-the-key-to-env" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Add the key to .env
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-validate-before-starting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Validate before starting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-confirm-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Confirm at runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license-key-renewal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License Key Renewal
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2126,6 +2187,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Subscription Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-obtain-a-license-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — Obtain a license key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-add-the-key-to-env" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — Add the key to .env
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-validate-before-starting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — Validate before starting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-confirm-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4 — Confirm at runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#license-key-renewal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License Key Renewal
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2189,8 +2311,12 @@
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a># python -c &quot;import secrets; print(secrets.token_urlsafe(48))&quot;
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>SECURITY_JWT_SECRET=&lt;48-char random string&gt;
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a># Application mode: development | production | test
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>APP_ENV=development
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a># Subscription license key — obtain from hopefx.com/pricing or trial-request issue
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a># Without this, all trading endpoints return 403 Subscription Required
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>HOPEFX_LICENSE_KEY=HOPEFX-PRO-XXXXXXXX-XXXX
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a># Application mode: development | production | test
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>APP_ENV=development
 </code></pre></div>
 <p>Additional variables for full functionality:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># Broker (default: paper trading — no credentials needed)
@@ -2214,6 +2340,8 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>generate
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
 </code></pre></div>
+<p>The <code>validate</code> command checks every required secret and reports exactly what is missing
+or invalid. Fix all reported issues before proceeding to step 3.</p>
 <hr />
 <h2 id="3-database-setup">3. Database setup<a class="headerlink" href="#3-database-setup" title="Permanent link">&para;</a></h2>
 <p><strong>Development (SQLite — zero config):</strong></p>
@@ -2331,86 +2459,198 @@
 <p>This tests API key validity, account reachability, and XAU_USD pricing availability.</p>
 <hr />
 <h2 id="subscription-validation">Subscription Validation<a class="headerlink" href="#subscription-validation" title="Permanent link">&para;</a></h2>
-<p>After installing, activate your subscription license key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Add to .env</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nv">HOPEFX_LICENSE_KEY</span><span class="o">=</span>your_license_key_here
+<p>HOPEFX requires a valid license key to access trading endpoints. Without one, the
+application starts but all <code>/api/trading/</code>, <code>/api/signals/</code>, and <code>/api/ml/</code> endpoints
+return <code>403 Subscription Required</code>. The <code>/health</code>, <code>/docs</code>, and <code>/metrics</code> endpoints
+remain accessible without a key.</p>
+<h3 id="step-1-obtain-a-license-key">Step 1 — Obtain a license key<a class="headerlink" href="#step-1-obtain-a-license-key" title="Permanent link">&para;</a></h3>
+<p>Subscribe at <a href="https://hopefx.com/pricing">hopefx.com/pricing</a> or request a 14-day
+trial via GitHub Issues (label: <code>trial-request</code>). Your license key is emailed on
+successful payment in the format:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>HOPEFX-PRO-A7B9C2D4-X8Y2
 </code></pre></div>
-<p>Validate at startup:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+<h3 id="step-2-add-the-key-to-env">Step 2 — Add the key to <code>.env</code><a class="headerlink" href="#step-2-add-the-key-to-env" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nv">HOPEFX_LICENSE_KEY</span><span class="o">=</span>HOPEFX-PRO-A7B9C2D4-X8Y2
+</code></pre></div>
+<h3 id="step-3-validate-before-starting">Step 3 — Validate before starting<a class="headerlink" href="#step-3-validate-before-starting" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>python<span class="w"> </span>scripts/manage_secrets.py<span class="w"> </span>validate
+</code></pre></div>
+<p>Expected output:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>✓ SECURITY_JWT_SECRET: set (48 chars)
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>✓ HOPEFX_LICENSE_KEY: valid (plan=professional, expires=2026-08-14)
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>✓ CONFIG_ENCRYPTION_KEY: set
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>✓ HOPEFX_KILL_SWITCH_TOKEN: set
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>All required secrets are valid.
 </code></pre></div></p>
-<p>Without a valid license key, all trading endpoints return <code>403 Subscription Required</code>.
-The <code>/health</code> endpoint and <code>/docs</code> remain accessible without a key.</p>
-<p>To get a license key, subscribe at the pricing page or request a trial via GitHub Issues
-(label: <code>trial-request</code>).</p>
+<p>If validation fails, the output shows exactly which key is missing or invalid.</p>
+<h3 id="step-4-confirm-at-runtime">Step 4 — Confirm at runtime<a class="headerlink" href="#step-4-confirm-at-runtime" title="Permanent link">&para;</a></h3>
+<p>After starting the app, confirm the license is active:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>curl<span class="w"> </span>http://localhost:8000/api/monetization/subscription/me<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="p">{</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span><span class="nt">&quot;plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;professional&quot;</span><span class="p">,</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span><span class="nt">&quot;expires_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-08-14T00:00:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">  </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;signals&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;ml_predict&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;backtesting_10yr&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;api_access&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;social_trading&quot;</span><span class="p">]</span>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="license-key-renewal">License Key Renewal<a class="headerlink" href="#license-key-renewal" title="Permanent link">&para;</a></h3>
+<p>Keys are valid for 30 days (monthly billing) or 365 days (annual billing). The app
+checks key validity on startup and every 24 hours at runtime. When a key is within
+7 days of expiry, a warning is logged:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>WARNING: License key expires in 5 days. Renew at hopefx.com/billing
+</code></pre></div>
+<p>After expiry, trading endpoints return <code>403 Subscription Required</code> until a new key
+is activated. Update <code>.env</code> with the new key and restart the app.</p>
 <hr />
 <h2 id="subscription-gated-features">Subscription-Gated Features<a class="headerlink" href="#subscription-gated-features" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>Feature</th>
+<th>Trial</th>
 <th>Starter</th>
-<th>Pro</th>
+<th>Professional</th>
+<th>Enterprise</th>
 <th>Elite</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>Paper trading</td>
+<td>Limited (50 trades)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Live trading</td>
+<td>No</td>
+<td>1 broker</td>
+<td>3 brokers</td>
+<td>Unlimited</td>
+<td>Unlimited</td>
+</tr>
+<tr>
 <td>Signals (XAUUSD)</td>
-<td>✅</td>
-<td>✅</td>
-<td>✅</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Multi-symbol signals</td>
-<td>—</td>
-<td>✅</td>
-<td>✅</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>ML predictions</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Backtesting (1 year)</td>
-<td>✅</td>
-<td>—</td>
-<td>—</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Backtesting (10 years)</td>
-<td>—</td>
-<td>✅</td>
-<td>—</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Backtesting (50 years)</td>
-<td>—</td>
-<td>—</td>
-<td>✅</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Prop firm mode</td>
-<td>—</td>
-<td>✅</td>
-<td>✅</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
-<td>API access</td>
-<td>—</td>
-<td>✅</td>
-<td>✅</td>
+<td>Full API access (108 endpoints)</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Social trading</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Grafana dashboards</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>News RAG integration</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Online learning</td>
-<td>—</td>
-<td>—</td>
-<td>✅</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
 </tr>
 <tr>
 <td>Model retraining</td>
-<td>—</td>
-<td>—</td>
-<td>✅</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>White-label</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
 </tr>
 </tbody>
 </table>
-<p>See <a href="../MONETIZATION/">MONETIZATION.md</a> for the full feature matrix.</p>
+<p>Attempting to use a feature above your plan returns:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="p">{</span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PLAN_LIMIT_EXCEEDED&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;required_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;professional&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;current_plan&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;starter&quot;</span><span class="p">}</span>
+</code></pre></div></p>
+<p>See <a href="../MONETIZATION/">MONETIZATION.md</a> for the full feature matrix and pricing.</p>
 
 
 
