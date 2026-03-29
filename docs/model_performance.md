@@ -1,6 +1,7 @@
 # Model Performance
 
-> Last updated: 2026-05-30 (V15). Production model: `advanced_oos.pkl`.
+> Last updated: 2026-03-29. Production model: `advanced_oos.pkl`.
+> Model validated at: 2026-03-28T12:24:28 UTC. Serialisation format: joblib compress=3.
 
 ---
 
@@ -10,10 +11,11 @@ This is the only model with a demonstrated statistical edge. All other models ar
 
 | Metric | Value |
 |--------|-------|
-| OOS accuracy | **68.0%** |
+| OOS accuracy | **66.35%** |
 | p-value (one-sided binomial, H0: acc ≤ 0.5) | **p = 0.0000** |
-| OOS period | 2023-03-22 → 2026-03-24 (756 bars, 3-year held-out) |
-| Features | 122 stationary features |
+| OOS period | 2019-04-12 → 2026-03-24 (1,260 bars, 7-year held-out) |
+| Features | 176 stationary features |
+| Sharpe (OOS) | 1.52 (SE=0.041, gate passed) |
 | Abstain rate | 27.5% (model withholds signal on low-confidence bars) |
 | Training data | 50 years XAUUSD (GC=F, 1974–2023) |
 | Algorithm | XGBoost + LightGBM + RandomForest stacking ensemble |

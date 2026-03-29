@@ -536,12 +536,46 @@ curl -s https://your-domain.com/health | python3 -m json.tool | grep email
 
 ---
 
+## FIX Protocol Onboarding
+
+The FIX adapter (`execution/fix_adapter.py`) requires real broker credentials
+before it will connect in `APP_ENV=production`.
+
+### Required environment variables
+
+| Variable | Description |
+|---|---|
+| `FIX_SENDER_COMP_ID` | Your firm's SenderCompID assigned by the broker |
+| `FIX_TARGET_COMP_ID` | Broker's TargetCompID from their FIX spec |
+| `FIX_HOST` | Broker FIX gateway hostname |
+| `FIX_PORT` | Broker FIX gateway port |
+
+### Broker endpoints
+
+| Broker | Environment | Host | Port |
+|---|---|---|---|
+| OANDA | Practice | `fxpractice-fix.oanda.com` | 1234 |
+| OANDA | Live | `fxtrade-fix.oanda.com` | 1234 |
+| IBKR TWS | Paper | `127.0.0.1` | 7497 |
+| IBKR TWS | Live | `127.0.0.1` | 7496 |
+
+### Setup steps
+
+1. Copy the template: `cp fix.cfg fix.cfg.local`
+2. Fill in all `<CHANGE_ME_*>` values in `fix.cfg.local`
+3. Set `FIX_CONFIG_FILE=fix.cfg.local` in your `.env`
+4. Set `FIX_SENDER_COMP_ID`, `FIX_TARGET_COMP_ID`, `FIX_HOST`, `FIX_PORT` in `.env`
+5. Run the pre-flight check: `python deployment_guide.py`
+6. **Never commit `fix.cfg.local`** — it contains credentials (already in `.gitignore`)
+
+---
+
 ## Support
 
 For deployment issues:
 - GitHub Issues: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues
-- Documentation: See INSTALLATION.md, SECURITY.md
+- Documentation: See docs/INSTALLATION.md, docs/SECURITY.md
 
 ---
 
-**Status:** Production deployment guide complete.
+**Status:** Production deployment guide complete. All diagnostic blockers resolved 2026-03-29.
