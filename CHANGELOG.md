@@ -7,6 +7,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (2026-03-29 — Diagnostic Report Resolution)
+- **Kill switch**: stale-flag guard added — flags >24h old no longer auto-restore
+  in non-production (`APP_ENV != production`). Prevents test-run drawdown events
+  from permanently blocking restarts.
+- **ML models**: all `ml/saved_models/*.pkl` re-serialised with joblib on
+  Python 3.10/sklearn 1.7.2. Eliminates `UnpicklingError` and
+  `InconsistentVersionWarning`. `advanced_oos.pkl` loads cleanly (66.35% OOS).
+- **FIX adapter**: `validate_credentials()` added — blocks startup on placeholder
+  `SenderCompID`/`TargetCompID` in production. `DEPLOYMENT.md` has full
+  broker onboarding steps.
+- **Integration tests**: 10/10 pass in ~4.5 s. Fixed lifespan hang on Redis/DB
+  by using `TestClient(app)` without context manager.
+- **Lint**: zero F821/F401 errors across all 6 previously flagged files.
+- **k8s deployment**: all credentials now wired via `secretKeyRef` from
+  `hopefx-secrets` Secret. Container previously had no env wiring.
+- **Docker healthcheck**: trading service `kill -0 1` replaces fragile Python
+  one-liner that always failed on first start.
+- **Tests**: 29 valid tests moved from root to `tests/unit/`. 5 dead stubs deleted.
+- **Docs**: 14 iterative fix/meta docs moved to `docs/archive/`. Root has 12
+  essential files only.
+- **research/pipeline**: `models_ensemble`, `regime_models`, `online_learning`,
+  `anomaly` — all save/load migrated from `pickle` to `joblib` with fallback.
+
 ### Added
 - **Expanded multi-symbol backtest** (`backtest/multi_symbol_backtest.py`):
   - Added EUR/USD (EURUSD=X), GBP/USD (GBPUSD=X), Silver (SI=F), Crude Oil (CL=F).
