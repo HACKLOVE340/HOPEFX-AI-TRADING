@@ -168,7 +168,8 @@ class HOPEFXBrain:
         self._risk_manager = None
         self._broker = None
         self._strategy_manager = None
-        self._ml_predictor = None   # lazy-loaded
+        self._ml_predictor = None   # lazy-loaded (XGBoost, primary signal)
+        self._lstm_layer = None     # lazy-loaded (LSTM, optional secondary signal)
 
         # Regime state per symbol
         self._regimes: Dict[str, Regime] = {}
@@ -206,8 +207,19 @@ class HOPEFXBrain:
         broker=None,
         strategy_manager=None,
         ml_predictor=None,
+        lstm_layer=None,
     ) -> None:
-        """Inject live components. Call once after construction."""
+        """
+        Inject live components. Call once after construction.
+
+        Parameters
+        ----------
+        lstm_layer : LSTMSignalLayer | None
+            Optional LSTM signal layer. When provided (and
+            LSTM_SIGNAL_WEIGHT > 0), its probability is blended with the
+            XGBoost probability before direction is determined.
+            Pass None to keep the layer disabled (default).
+        """
         with self._lock:
             if risk_manager is not None:
                 self._risk_manager = risk_manager
@@ -217,12 +229,15 @@ class HOPEFXBrain:
                 self._strategy_manager = strategy_manager
             if ml_predictor is not None:
                 self._ml_predictor = ml_predictor
+            if lstm_layer is not None:
+                self._lstm_layer = lstm_layer
         logger.info(
-            "HOPEFXBrain.inject: risk=%s broker=%s strategies=%s ml=%s",
+            "HOPEFXBrain.inject: risk=%s broker=%s strategies=%s ml=%s lstm=%s",
             risk_manager is not None,
             broker is not None,
             strategy_manager is not None,
             ml_predictor is not None,
+            lstm_layer is not None,
         )
 
     def _get_predictor(self):
@@ -235,6 +250,30 @@ class HOPEFXBrain:
             return self._ml_predictor
         except Exception as exc:
             logger.debug("ML predictor load failed: %s", exc)
+            return None
+
+    def _get_lstm_layer(self):
+        """
+        Lazy-load the LSTM signal layer singleton.
+
+        Returns None when:
+        - LSTM_SIGNAL_ENABLED feature flag is off (default)
+        - LSTM_SIGNAL_WEIGHT == 0.0 (default)
+        - Model file does not exist at LSTM_MODEL_PATH
+        """
+        if self._lstm_layer is not None:
+            return self._lstm_layer
+        try:
+            from config.feature_flags import flags
+            if not getattr(flags, "LSTM_SIGNAL_ENABLED", False):
+                return None
+            from ml.lstm_signal_layer import get_lstm_signal_layer, LSTM_SIGNAL_WEIGHT
+            if LSTM_SIGNAL_WEIGHT <= 0.0:
+                return None
+            self._lstm_layer = get_lstm_signal_layer()
+            return self._lstm_layer
+        except Exception as exc:
+            logger.debug("LSTM signal layer load failed: %s", exc)
             return None
 
     # ── Kill switch ───────────────────────────────────────────────────────────
@@ -561,6 +600,44 @@ class HOPEFXBrain:
                 ml_direction = str(ml_result.get("direction", "neutral"))
             except Exception as exc:
                 logger.warning("ML predictor failed for %s: %s", symbol, exc)
+
+        # ── LSTM signal blend (optional) ──────────────────────────────────────
+        # When LSTM_SIGNAL_ENABLED=true and LSTM_SIGNAL_WEIGHT > 0, blend the
+        # LSTM probability with the XGBoost probability before direction is set.
+        # Formula: blended = (1 - w) * xgb_prob + w * lstm_prob
+        # The blended probability then re-derives direction, confidence, abstain.
+        lstm_layer = self._get_lstm_layer()
+        if lstm_layer is not None and lstm_layer.is_available():
+            try:
+                from ml.lstm_signal_layer import LSTM_SIGNAL_WEIGHT, LSTM_ABSTAIN_LOW, LSTM_ABSTAIN_HIGH
+                lstm_result = lstm_layer.predict(ohlcv, macro_df=macro_df, symbol=symbol)
+                lstm_prob = float(lstm_result.get("probability", 0.5))
+                lstm_abstain = bool(lstm_result.get("abstain", True))
+
+                if not lstm_abstain:
+                    # Blend probabilities
+                    w = float(LSTM_SIGNAL_WEIGHT)
+                    blended_prob = (1.0 - w) * ml_prob + w * lstm_prob
+                    blended_conf = abs(blended_prob - 0.5) * 2.0
+                    blended_abstain = LSTM_ABSTAIN_LOW <= blended_prob <= LSTM_ABSTAIN_HIGH
+
+                    if not blended_abstain:
+                        ml_prob = blended_prob
+                        ml_conf = blended_conf
+                        ml_abstain = False
+                        if blended_prob > LSTM_ABSTAIN_HIGH:
+                            ml_direction = "long"
+                        elif blended_prob < LSTM_ABSTAIN_LOW:
+                            ml_direction = "short"
+                        else:
+                            ml_direction = "neutral"
+                            ml_abstain = True
+                        logger.debug(
+                            "LSTM blend [%s]: xgb=%.3f lstm=%.3f blended=%.3f dir=%s",
+                            symbol, ml_prob, lstm_prob, blended_prob, ml_direction,
+                        )
+            except Exception as exc:
+                logger.debug("LSTM blend failed for %s: %s", symbol, exc)
 
         # ── Strategy routing ──────────────────────────────────────────────────
         strategy_name = self._route_strategy(regime)
