@@ -152,6 +152,14 @@ class TradeLogger:
         # Fill count
         self._fill_count: int = 0
 
+        # Sharpe progress tracking toward N=250 (SE ≤ ±0.3)
+        # Only closed fills with non-zero PnL count as "trades" for Sharpe SE.
+        # SE formula: 1 / sqrt(2 * (N - 1))  — valid for iid trade returns.
+        # At N=250: SE = 1/sqrt(498) ≈ ±0.045 (robust).
+        # At N=48:  SE = 1/sqrt(94)  ≈ ±0.103 (current state).
+        self._trade_pnls: list[float] = []   # net PnL per closed trade
+        self._sharpe_target_n: int = 250     # target sample size
+
         logger.info("TradeLogger initialised — log_dir=%s", self._log_dir)
 
     # ── Fill logging ──────────────────────────────────────────────────────────
@@ -233,6 +241,10 @@ class TradeLogger:
         with self._lock:
             _append_csv(csv_path, _FILL_HEADERS, row)
             self._fill_count += 1
+
+            # Track closed trades (non-zero PnL) for Sharpe SE progress
+            if pnl != 0.0:
+                self._trade_pnls.append(pnl)
 
             # Update rolling slippage
             self._slippage_history.append(slippage_pips)
@@ -359,6 +371,61 @@ class TradeLogger:
         t.start()
         return t
 
+    # ── Sharpe SE progress ────────────────────────────────────────────────────
+
+    def sharpe_progress(self) -> dict:
+        """
+        Return Sharpe standard-error progress toward N=250.
+
+        SE formula: 1 / sqrt(2 * (N - 1))  — valid for iid trade returns.
+
+        Milestones
+        ----------
+        N=48  (current) → SE ≈ ±0.103
+        N=100           → SE ≈ ±0.071
+        N=250 (target)  → SE ≈ ±0.045  (robust threshold)
+
+        Returns
+        -------
+        dict with keys:
+          trade_count   : int   — closed trades with non-zero PnL
+          n_needed      : int   — trades still needed to reach target
+          sharpe_se     : float — current SE (lower = more reliable)
+          target_n      : int   — target sample size (250)
+          target_se     : float — SE at target N
+          pct_complete  : float — progress toward target (0–100)
+          sharpe        : float — current trade-level Sharpe (0 if N < 2)
+        """
+        import math
+        with self._lock:
+            pnls = list(self._trade_pnls)
+            target_n = self._sharpe_target_n
+
+        n = len(pnls)
+        se = 1.0 / math.sqrt(2.0 * max(n - 1, 1)) if n >= 2 else float("inf")
+        target_se = 1.0 / math.sqrt(2.0 * (target_n - 1))
+        n_needed = max(0, target_n - n)
+        pct_complete = min(100.0, n / target_n * 100.0)
+
+        # Trade-level Sharpe: mean(pnl) / std(pnl) * sqrt(252)
+        sharpe = 0.0
+        if n >= 2:
+            import statistics
+            mean_pnl = statistics.mean(pnls)
+            std_pnl = statistics.stdev(pnls)
+            if std_pnl > 0:
+                sharpe = round(mean_pnl / std_pnl * (252 ** 0.5), 3)
+
+        return {
+            "trade_count": n,
+            "n_needed": n_needed,
+            "sharpe_se": round(se, 4) if se != float("inf") else None,
+            "target_n": target_n,
+            "target_se": round(target_se, 4),
+            "pct_complete": round(pct_complete, 1),
+            "sharpe": sharpe,
+        }
+
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     @property
@@ -368,17 +435,24 @@ class TradeLogger:
                 sum(self._slippage_history) / len(self._slippage_history)
                 if self._slippage_history else 0.0
             )
-            return {
-                "fill_count": self._fill_count,
-                "avg_slippage_pips": round(avg_slip, 4),
-                "equity": self._equity,
-                "balance": self._balance,
-                "daily_pnl": self._daily_pnl,
-                "open_positions": self._open_positions,
-                "drawdown_pct": round(self._drawdown_pct, 4),
-                "hwm": self._hwm,
-                "log_dir": str(self._log_dir),
-            }
+        sp = self.sharpe_progress()
+        return {
+            "fill_count": self._fill_count,
+            "avg_slippage_pips": round(avg_slip, 4),
+            "equity": self._equity,
+            "balance": self._balance,
+            "daily_pnl": self._daily_pnl,
+            "open_positions": self._open_positions,
+            "drawdown_pct": round(self._drawdown_pct, 4),
+            "hwm": self._hwm,
+            "log_dir": str(self._log_dir),
+            # Sharpe SE progress
+            "trade_count": sp["trade_count"],
+            "sharpe_se": sp["sharpe_se"],
+            "sharpe": sp["sharpe"],
+            "n_needed_for_robust_sharpe": sp["n_needed"],
+            "sharpe_pct_complete": sp["pct_complete"],
+        }
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
