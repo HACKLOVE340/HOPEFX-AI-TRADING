@@ -57,7 +57,7 @@ const ABTesting: React.FC = () => {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/api/ab-test');
+      const res = await api.get('/ab-test');
       setTests(res.data.tests || []);
     } catch { setTests([]); }
   }, []);
@@ -67,7 +67,7 @@ const ABTesting: React.FC = () => {
   const run = async () => {
     setRunning(true);
     try {
-      const res = await api.post('/api/ab-test/start', {
+      const res = await api.post('/ab-test/start', {
         strategy_a: stratA, strategy_b: stratB,
         symbol, duration_days: parseInt(days) || 30,
       });

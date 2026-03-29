@@ -90,8 +90,8 @@ const PriceAlerts: React.FC = () => {
   const fetchAlerts = useCallback(async () => {
     try {
       const [alertsRes, histRes] = await Promise.allSettled([
-        api.get<Alert[]>('/api/alerts/'),
-        api.get<AlertTrigger[]>('/api/alerts/history/triggers'),
+        api.get<Alert[]>('/alerts/'),
+        api.get<AlertTrigger[]>('/alerts/history/triggers'),
       ]);
       if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data ?? []);
       if (histRes.status === 'fulfilled')   setHistory(histRes.value.data ?? []);
@@ -106,7 +106,7 @@ const PriceAlerts: React.FC = () => {
     setSaving(true);
     setError('');
     try {
-      await api.post('/api/alerts/', {
+      await api.post('/alerts/', {
         name: form.name,
         symbol: form.symbol,
         conditions: [{ type: form.condition_type, threshold: parseFloat(form.threshold) }],
@@ -123,14 +123,14 @@ const PriceAlerts: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/api/alerts/${id}`); } catch { /* silent */ }
+    try { await api.delete(`/alerts/${id}`); } catch { /* silent */ }
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
   const handleToggle = async (alert: Alert) => {
     const action = alert.status === 'paused' ? 'resume' : 'pause';
     try {
-      await api.post(`/api/alerts/${alert.id}/${action}`);
+      await api.post(`/alerts/${alert.id}/${action}`);
       await fetchAlerts();
     } catch { /* silent */ }
   };

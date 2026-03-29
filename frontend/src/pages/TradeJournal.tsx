@@ -89,9 +89,9 @@ const TradeJournal: React.FC = () => {
 
   const fetchAll = useCallback(async () => {
     const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
-      api.get<JournalEntry[]>(`/api/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
-      api.get<JournalStats>('/api/journal/stats'),
-      api.get<JournalEntry[]>('/api/journal/mistakes'),
+      api.get<JournalEntry[]>(`/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
+      api.get<JournalStats>('/journal/stats'),
+      api.get<JournalEntry[]>('/journal/mistakes'),
     ]);
     if (tradesRes.status === 'fulfilled')   setTrades(tradesRes.value.data ?? []);
     if (statsRes.status === 'fulfilled')    setStats(statsRes.value.data);
@@ -110,7 +110,7 @@ const TradeJournal: React.FC = () => {
     if (!editing) return;
     setSaving(true);
     try {
-      await api.patch(`/api/journal/trades/${editing}`, editForm);
+      await api.patch(`/journal/trades/${editing}`, editForm);
       setEditing(null);
       await fetchAll();
     } catch { /* silent */ }

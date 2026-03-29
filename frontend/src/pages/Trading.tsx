@@ -233,8 +233,7 @@ const Trading: React.FC = () => {
 
     // Encode symbol so 'XAU/USD' becomes 'XAU%2FUSD' in the URL
     type OHLCVCandle = { timestamp: number | string; open: number; high: number; low: number; close: number };
-    api.get<OHLCVCandle[] | { data?: OHLCVCandle[] }>(
-      `/api/trading/ohlcv/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=200`
+    api.get<OHLCVCandle[] | { data?: OHLCVCandle[] }>(`/trading/ohlcv/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=200`
     )
       .then((r) => {
         const raw = r.data;

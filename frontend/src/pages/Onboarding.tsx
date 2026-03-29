@@ -168,8 +168,7 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
   const runBacktest = async () => {
     setRunning(true);
     try {
-      const res = await api.post<{ total_return?: number; total_trades?: number; win_rate?: number; metrics?: { total_return?: number; total_trades?: number; win_rate?: number } }>(
-        '/api/backtesting/run',
+      const res = await api.post<{ total_return?: number; total_trades?: number; win_rate?: number; metrics?: { total_return?: number; total_trades?: number; win_rate?: number } }>('/backtesting/run',
         { symbol: 'XAUUSD', strategy: 'ml_ensemble', period_days: 30 }
       );
       const data = res.data;
@@ -224,7 +223,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
 
   const startPaper = async () => {
     setStarting(true);
-    try { await api.post('/api/trading/paper/start'); } catch { /* ignore */ }
+    try { await api.post('/trading/paper/start'); } catch { /* ignore */ }
     setState({ ...state, paperStarted: true });
     setStarting(false);
   };

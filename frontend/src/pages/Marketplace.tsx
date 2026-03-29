@@ -305,8 +305,7 @@ const Marketplace: React.FC = () => {
       const params: Record<string, string> = { sort_by: sortBy, limit: '50' };
       if (category !== 'all') params.category = category;
       if (search) params.query = search;
-      const res = await api.get<{ strategies: Strategy[]; total: number }>(
-        '/api/monetization/marketplace/strategies',
+      const res = await api.get<{ strategies: Strategy[]; total: number }>('/monetization/marketplace/strategies',
         { params }
       );
       setStrategies(res.data.strategies ?? []);
@@ -321,8 +320,7 @@ const Marketplace: React.FC = () => {
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
 
   useEffect(() => {
-    api.get<{ total_strategies: number; total_subscribers: number }>(
-      '/api/monetization/marketplace/stats'
+    api.get<{ total_strategies: number; total_subscribers: number }>('/monetization/marketplace/stats'
     )
       .then(r => setStats(r.data))
       .catch(() => setStats({ total_strategies: MOCK_STRATEGIES.length, total_subscribers: 1209 }));
@@ -331,8 +329,7 @@ const Marketplace: React.FC = () => {
   const handleSelect = async (s: Strategy) => {
     setSelected(s);
     try {
-      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(
-        `/api/monetization/marketplace/strategies/${s.strategy_id}`
+      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(`/monetization/marketplace/strategies/${s.strategy_id}`
       );
       setSelectedReviews(res.data.reviews ?? []);
     } catch (_) {

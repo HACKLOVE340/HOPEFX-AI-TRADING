@@ -143,7 +143,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
 
   // Detect region via IP geolocation to decide whether to show Flutterwave
   useEffect(() => {
-    api.get<{ enabled: boolean }>('/api/payments/flutterwave/status')
+    api.get<{ enabled: boolean }>('/payments/flutterwave/status')
       .then(r => setFlwEnabled(r.data.enabled))
       .catch(() => {});
     // Use a free IP geo API to detect Africa
@@ -162,7 +162,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
     setLoadingAddress(true);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
-      const res = await api.post<DepositAddress>('/api/payments/crypto/address', {
+      const res = await api.post<DepositAddress>('/payments/crypto/address', {
         currency: selectedCrypto,
         network,
         plan_id: selectedPlan.id,
@@ -192,8 +192,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const handleFlutterwavePay = async () => {
     setFlwLoading(true);
     try {
-      const res = await api.post<{ payment_link: string; tx_ref: string }>(
-        '/api/payments/flutterwave/init',
+      const res = await api.post<{ payment_link: string; tx_ref: string }>('/payments/flutterwave/init',
         { amount: selectedPlan.price_usd, currency: 'USD', plan: selectedPlan.id }
       );
       // Redirect to Flutterwave hosted checkout

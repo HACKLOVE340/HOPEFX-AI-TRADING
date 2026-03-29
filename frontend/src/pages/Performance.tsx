@@ -81,8 +81,8 @@ const Performance: React.FC = () => {
     setError(null);
     try {
       const [perfRes, eqRes] = await Promise.allSettled([
-        api.get<PublicPerformance>('/api/performance/public'),
-        api.get<EquityPoint[]>('/api/performance/equity-curve'),
+        api.get<PublicPerformance>('/performance/public'),
+        api.get<EquityPoint[]>('/performance/equity-curve'),
       ]);
       if (perfRes.status === 'fulfilled') {
         setData(perfRes.value.data);
