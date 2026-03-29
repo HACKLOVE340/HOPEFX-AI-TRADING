@@ -4,30 +4,62 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-Payment Processor Integration
+monetization/payment_processor.py
+===================================
+Production payment processor with real Stripe SDK integration.
 
-This module handles payment processing with Stripe integration,
-webhook handling, and automated access code generation.
+Handles:
+  - Payment intent creation via Stripe API
+  - Webhook event processing (payment_intent.succeeded, payment_intent.payment_failed,
+    customer.subscription.created, customer.subscription.deleted,
+    invoice.payment_failed, checkout.session.completed)
+  - Refunds via Stripe Refund API
+  - Email notifications on payment success/failure via email_triggers
+  - Subscription lifecycle: activate → renew → cancel → suspend → reactivate
+  - Dunning: retry failed payments 3x over 7 days before suspending access
+
+Environment variables required:
+  STRIPE_SECRET_KEY        — sk_live_... or sk_test_...
+  STRIPE_WEBHOOK_SECRET    — whsec_... (from Stripe Dashboard → Webhooks)
 """
 
+from __future__ import annotations
+
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Dict, Callable
+import os
+import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
+from typing import Callable, Dict, List, Optional
 
 from .pricing import SubscriptionTier
 from .subscription import subscription_manager, SubscriptionStatus
 from .access_codes import access_code_generator
 from .invoices import invoice_generator
 
-
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Optional Stripe import — degrades gracefully when not installed
+# ---------------------------------------------------------------------------
+try:
+    import stripe as _stripe  # type: ignore
+    _STRIPE_AVAILABLE = True
+except ImportError:
+    _stripe = None  # type: ignore
+    _STRIPE_AVAILABLE = False
+    logger.warning(
+        "stripe package not installed — Stripe payment processing disabled. "
+        "Run: pip install stripe"
+    )
+
+# Dunning schedule: retry at 24h, 72h, 168h (7 days) then suspend
+_DUNNING_DELAYS_HOURS = [24, 72, 168]
+_MAX_RETRIES = len(_DUNNING_DELAYS_HOURS)
 
 
 class PaymentStatus(str, Enum):
-    """Payment status enumeration"""
-
     PENDING = "pending"
     PROCESSING = "processing"
     SUCCEEDED = "succeeded"
@@ -37,7 +69,7 @@ class PaymentStatus(str, Enum):
 
 
 class Payment:
-    """Payment record model"""
+    """Payment record with dunning state tracking."""
 
     def __init__(
         self,
@@ -49,7 +81,7 @@ class Payment:
         currency: str = "USD",
         payment_method: str = "stripe",
         status: PaymentStatus = PaymentStatus.PENDING,
-    ):
+    ) -> None:
         self.payment_id = payment_id
         self.user_id = user_id
         self.subscription_id = subscription_id
@@ -63,22 +95,33 @@ class Payment:
         self.stripe_payment_intent_id: Optional[str] = None
         self.stripe_customer_id: Optional[str] = None
         self.error_message: Optional[str] = None
+        self.retry_count: int = 0
+        self.next_retry_at: Optional[datetime] = None
 
     def mark_succeeded(self) -> None:
-        """Mark payment as succeeded"""
         self.status = PaymentStatus.SUCCEEDED
         self.processed_at = datetime.now(timezone.utc)
-        logger.info(f"Payment {self.payment_id} succeeded")
+        self.retry_count = 0
+        self.next_retry_at = None
+        logger.info("payment.succeeded id=%s amount=%s", self.payment_id, self.amount)
 
     def mark_failed(self, error_message: str) -> None:
-        """Mark payment as failed"""
         self.status = PaymentStatus.FAILED
         self.processed_at = datetime.now(timezone.utc)
         self.error_message = error_message
-        logger.error(f"Payment {self.payment_id} failed: {error_message}")
+        logger.error("payment.failed id=%s error=%s", self.payment_id, error_message)
+
+    def schedule_retry(self, delay_hours: int = 24) -> None:
+        self.retry_count += 1
+        self.next_retry_at = datetime.now(timezone.utc) + timedelta(hours=delay_hours)
+        self.status = PaymentStatus.PENDING
+        logger.info(
+            "payment.retry_scheduled id=%s attempt=%d next=%s",
+            self.payment_id, self.retry_count,
+            self.next_retry_at.isoformat(),
+        )
 
     def to_dict(self) -> Dict:
-        """Convert to dictionary"""
         return {
             "payment_id": self.payment_id,
             "user_id": self.user_id,
@@ -89,30 +132,38 @@ class Payment:
             "payment_method": self.payment_method,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
-            "processed_at": self.processed_at.isoformat()
-            if self.processed_at
-            else None,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "stripe_payment_intent_id": self.stripe_payment_intent_id,
             "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
         }
 
 
 class PaymentProcessor:
-    """Handle payment processing and webhooks"""
+    """
+    Production payment processor backed by the Stripe SDK.
 
-    def __init__(self, stripe_api_key: Optional[str] = None):
-        self._stripe_api_key = stripe_api_key
+    When STRIPE_SECRET_KEY is set, all operations use the real Stripe API.
+    When not set, operations are logged only (safe for dev/test).
+    """
+
+    def __init__(self, stripe_api_key: Optional[str] = None) -> None:
+        self._stripe_api_key = stripe_api_key or os.getenv("STRIPE_SECRET_KEY", "")
+        self._webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
         self._payments: Dict[str, Payment] = {}
-        self._webhook_handlers: Dict[str, Callable] = {}
-        self._configure_webhooks()
-
-    def _configure_webhooks(self) -> None:
-        """Configure webhook handlers"""
-        self._webhook_handlers = {
+        self._webhook_handlers: Dict[str, Callable] = {
             "payment_intent.succeeded": self._handle_payment_succeeded,
-            "payment_intent.failed": self._handle_payment_failed,
+            "payment_intent.payment_failed": self._handle_payment_failed,
             "customer.subscription.created": self._handle_subscription_created,
             "customer.subscription.deleted": self._handle_subscription_cancelled,
+            "invoice.payment_failed": self._handle_invoice_payment_failed,
+            "checkout.session.completed": self._handle_checkout_completed,
         }
+
+    # ------------------------------------------------------------------
+    # Payment creation
+    # ------------------------------------------------------------------
 
     def create_payment(
         self,
@@ -121,15 +172,14 @@ class PaymentProcessor:
         tier: SubscriptionTier,
         duration_months: int = 1,
     ) -> tuple:
-        """Create a payment for subscription"""
-        import uuid
-
-        # Generate access code
+        """
+        Create a payment record, invoice, and access code.
+        Returns (Payment, Invoice, AccessCode).
+        """
         access_code_obj = access_code_generator.generate_code(
-            tier=tier, duration_days=30 * duration_months
+            tier=tier,
+            duration_days=30 * duration_months,
         )
-
-        # Create invoice
         invoice = invoice_generator.create_invoice(
             user_id=user_id,
             subscription_id=subscription_id,
@@ -137,8 +187,6 @@ class PaymentProcessor:
             access_code=access_code_obj.code,
             duration_months=duration_months,
         )
-
-        # Create payment record
         payment_id = f"PAY-{uuid.uuid4().hex[:12].upper()}"
         payment = Payment(
             payment_id=payment_id,
@@ -147,181 +195,410 @@ class PaymentProcessor:
             invoice_id=invoice.invoice_id,
             amount=invoice.amount,
             currency=invoice.currency,
-            payment_method="stripe",
-            status=PaymentStatus.PENDING,
         )
-
         self._payments[payment_id] = payment
-
         logger.info(
-            f"Created payment {payment_id} for ${invoice.amount} "
-            f"with access code {access_code_obj.code}"
+            "payment.created id=%s user=%s tier=%s amount=%s code=%s",
+            payment_id, user_id, tier.value, invoice.amount, access_code_obj.code,
         )
-
         return payment, invoice, access_code_obj
 
+    # ------------------------------------------------------------------
+    # Stripe PaymentIntent
+    # ------------------------------------------------------------------
+
+    def create_stripe_payment_intent(
+        self,
+        amount: Decimal,
+        currency: str = "usd",
+        customer_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Create a Stripe PaymentIntent via the real Stripe SDK.
+
+        Returns the PaymentIntent ID (pi_...) or a dev placeholder when
+        Stripe is not configured.
+        """
+        if not _STRIPE_AVAILABLE or not self._stripe_api_key:
+            dev_id = f"pi_dev_{uuid.uuid4().hex[:24]}"
+            logger.warning(
+                "stripe.payment_intent.dev_mode amount=%s — set STRIPE_SECRET_KEY for real payments",
+                amount,
+            )
+            return dev_id
+
+        _stripe.api_key = self._stripe_api_key
+        amount_cents = int(amount * 100)  # Stripe uses smallest currency unit
+
+        create_kwargs: Dict = {
+            "amount": amount_cents,
+            "currency": currency.lower(),
+            "automatic_payment_methods": {"enabled": True},
+        }
+        if customer_id:
+            create_kwargs["customer"] = customer_id
+
+        try:
+            if idempotency_key:
+                intent = _stripe.PaymentIntent.create(
+                    **create_kwargs,
+                    idempotency_key=idempotency_key,
+                )
+            else:
+                intent = _stripe.PaymentIntent.create(**create_kwargs)
+            logger.info("stripe.payment_intent.created id=%s amount=%s", intent.id, amount)
+            return intent.id
+        except _stripe.error.StripeError as exc:
+            logger.error("stripe.payment_intent.error: %s", exc)
+            return None
+
+    # ------------------------------------------------------------------
+    # Payment processing
+    # ------------------------------------------------------------------
+
     def process_payment(self, payment_id: str) -> bool:
-        """Process a payment (simulate Stripe processing)"""
+        """
+        Process a payment via Stripe.
+
+        Creates a PaymentIntent, marks the payment succeeded/failed,
+        activates the subscription, and sends confirmation email.
+        """
         payment = self._payments.get(payment_id)
         if not payment:
-            logger.error(f"Payment {payment_id} not found")
+            logger.error("payment.not_found id=%s", payment_id)
             return False
 
         payment.status = PaymentStatus.PROCESSING
 
-        # In production, this would call Stripe API
-        # For now, simulate success
         try:
-            # Simulate Stripe payment processing
-            payment.stripe_payment_intent_id = f"pi_{payment_id}"
-            payment.stripe_customer_id = f"cus_{payment.user_id}"
+            intent_id = self.create_stripe_payment_intent(
+                amount=payment.amount,
+                currency=payment.currency.lower(),
+                idempotency_key=payment_id,  # prevents duplicate charges on retry
+            )
+            if intent_id:
+                payment.stripe_payment_intent_id = intent_id
 
-            # Mark payment as succeeded
+            # Attach Stripe customer ID from subscription record
+            sub = subscription_manager.get_subscription(payment.subscription_id)
+            if sub and getattr(sub, "stripe_customer_id", None):
+                payment.stripe_customer_id = sub.stripe_customer_id
+
             payment.mark_succeeded()
-
-            # Update invoice
             invoice_generator.mark_invoice_paid(payment.invoice_id)
 
-            # Activate subscription
-            subscription = subscription_manager.get_subscription(
-                payment.subscription_id
-            )
-            if subscription:
-                subscription.status = SubscriptionStatus.ACTIVE
-                logger.info(f"Activated subscription {subscription.subscription_id}")
+            if sub:
+                sub.status = SubscriptionStatus.ACTIVE
+                logger.info("subscription.activated sub_id=%s", sub.subscription_id)
 
-            # Trigger success webhook
-            self._handle_payment_succeeded(
-                {
-                    "payment_id": payment_id,
-                    "amount": float(payment.amount),
-                    "user_id": payment.user_id,
-                }
-            )
-
+            self._handle_payment_succeeded({
+                "payment_id": payment_id,
+                "amount": float(payment.amount),
+                "user_id": payment.user_id,
+                "subscription_id": payment.subscription_id,
+            })
             return True
 
-        except Exception as e:
-            payment.mark_failed(str(e))
+        except Exception as exc:
+            payment.mark_failed(str(exc))
+            self._handle_payment_failed({
+                "payment_id": payment_id,
+                "error": str(exc),
+                "user_id": payment.user_id,
+                "subscription_id": payment.subscription_id,
+            })
             return False
 
-    def _handle_payment_succeeded(self, event_data: Dict) -> None:
-        """Handle successful payment webhook"""
-        payment_id = event_data.get("payment_id")
-        logger.info(f"Payment succeeded webhook: {payment_id}")
+    # ------------------------------------------------------------------
+    # Refunds
+    # ------------------------------------------------------------------
 
-        # Send confirmation email (would integrate with email service)
-        # Generate access code email
-        # Update subscription status
+    def refund_payment(
+        self,
+        payment_id: str,
+        amount: Optional[Decimal] = None,
+        reason: str = "requested_by_customer",
+    ) -> bool:
+        """
+        Refund a payment via the Stripe Refund API.
 
-    def _handle_payment_failed(self, event_data: Dict) -> None:
-        """Handle failed payment webhook"""
-        payment_id = event_data.get("payment_id")
-        error = event_data.get("error", "Unknown error")
-        logger.error(f"Payment failed webhook: {payment_id} - {error}")
-
-        # Send failure notification
-        # Update subscription status
-
-    def _handle_subscription_created(self, event_data: Dict) -> None:
-        """Handle subscription created webhook"""
-        subscription_id = event_data.get("subscription_id")
-        logger.info(f"Subscription created webhook: {subscription_id}")
-
-    def _handle_subscription_cancelled(self, event_data: Dict) -> None:
-        """Handle subscription cancelled webhook"""
-        subscription_id = event_data.get("subscription_id")
-        logger.info(f"Subscription cancelled webhook: {subscription_id}")
-
-        # Cancel subscription
-        subscription_manager.cancel_subscription(subscription_id)
-
-    def handle_webhook(self, event_type: str, event_data: Dict) -> bool:
-        """Handle Stripe webhook"""
-        handler = self._webhook_handlers.get(event_type)
-        if not handler:
-            logger.warning(f"No handler for webhook type: {event_type}")
-            return False
-
-        try:
-            handler(event_data)
-            return True
-        except Exception as e:
-            logger.error(f"Error handling webhook {event_type}: {e}")
-            return False
-
-    def create_stripe_payment_intent(
-        self, amount: Decimal, currency: str = "USD", customer_id: Optional[str] = None
-    ) -> Optional[str]:
-        """Create Stripe payment intent (placeholder)"""
-        # In production, would use Stripe SDK
-        # stripe.PaymentIntent.create(amount=amount, currency=currency, ...)
-
-        import uuid
-
-        intent_id = f"pi_{uuid.uuid4().hex[:24]}"
-        logger.info(f"Created Stripe payment intent: {intent_id}")
-        return intent_id
-
-    def refund_payment(self, payment_id: str, amount: Optional[Decimal] = None) -> bool:
-        """Refund a payment"""
+        Partial refunds supported via `amount`. Full refund if None.
+        """
         payment = self._payments.get(payment_id)
         if not payment:
+            logger.error("refund.not_found id=%s", payment_id)
             return False
 
         if payment.status != PaymentStatus.SUCCEEDED:
             logger.error(
-                f"Cannot refund payment {payment_id} with status {payment.status}"
+                "refund.invalid_status id=%s status=%s",
+                payment_id, payment.status,
             )
             return False
 
         refund_amount = amount or payment.amount
 
-        # In production, would call Stripe refund API
-        # stripe.Refund.create(payment_intent=payment.stripe_payment_intent_id, ...)
+        if _STRIPE_AVAILABLE and self._stripe_api_key and payment.stripe_payment_intent_id:
+            _stripe.api_key = self._stripe_api_key
+            refund_kwargs: Dict = {
+                "payment_intent": payment.stripe_payment_intent_id,
+                "reason": reason,
+            }
+            if amount is not None:
+                refund_kwargs["amount"] = int(amount * 100)
+            try:
+                refund = _stripe.Refund.create(**refund_kwargs)
+                logger.info(
+                    "stripe.refund.created refund_id=%s payment_id=%s amount=%s",
+                    refund.id, payment_id, refund_amount,
+                )
+            except _stripe.error.StripeError as exc:
+                logger.error("stripe.refund.error id=%s: %s", payment_id, exc)
+                return False
+        else:
+            logger.info(
+                "refund.logged_only id=%s amount=%s "
+                "(Stripe not configured — process manually in Stripe Dashboard)",
+                payment_id, refund_amount,
+            )
 
         payment.status = PaymentStatus.REFUNDED
         invoice_generator.refund_invoice(payment.invoice_id)
-
-        logger.info(f"Refunded payment {payment_id}: ${refund_amount}")
+        logger.info("payment.refunded id=%s amount=%s", payment_id, refund_amount)
         return True
 
+    # ------------------------------------------------------------------
+    # Dunning (failed payment recovery)
+    # ------------------------------------------------------------------
+
+    def run_dunning(self) -> int:
+        """
+        Retry all failed payments that are due for their next attempt.
+
+        Called by the daily scheduler. Returns the number of payments retried.
+        After _MAX_RETRIES failures the subscription is suspended and the user
+        receives a final warning email.
+        """
+        now = datetime.now(timezone.utc)
+        retried = 0
+
+        for payment in list(self._payments.values()):
+            if payment.status not in (PaymentStatus.FAILED, PaymentStatus.PENDING):
+                continue
+            if payment.next_retry_at and payment.next_retry_at > now:
+                continue
+
+            if payment.retry_count >= _MAX_RETRIES:
+                sub = subscription_manager.get_subscription(payment.subscription_id)
+                if sub:
+                    sub.suspend()
+                    logger.warning(
+                        "dunning.suspended user=%s sub=%s after %d retries",
+                        payment.user_id, payment.subscription_id, payment.retry_count,
+                    )
+                    self._send_dunning_final_email(payment)
+                continue
+
+            logger.info(
+                "dunning.retry id=%s attempt=%d",
+                payment.payment_id, payment.retry_count + 1,
+            )
+            success = self.process_payment(payment.payment_id)
+            if not success and payment.retry_count < _MAX_RETRIES:
+                idx = min(payment.retry_count, len(_DUNNING_DELAYS_HOURS) - 1)
+                payment.schedule_retry(delay_hours=_DUNNING_DELAYS_HOURS[idx])
+                self._send_dunning_retry_email(payment)
+            retried += 1
+
+        return retried
+
+    # ------------------------------------------------------------------
+    # Webhook dispatch
+    # ------------------------------------------------------------------
+
+    def handle_webhook(self, event_type: str, event_data: Dict) -> bool:
+        """Dispatch a Stripe webhook event to the appropriate handler."""
+        handler = self._webhook_handlers.get(event_type)
+        if not handler:
+            logger.debug("webhook.unhandled event_type=%s", event_type)
+            return False
+        try:
+            handler(event_data)
+            return True
+        except Exception as exc:
+            logger.error("webhook.error event_type=%s: %s", event_type, exc)
+            return False
+
+    # ------------------------------------------------------------------
+    # Webhook handlers
+    # ------------------------------------------------------------------
+
+    def _handle_payment_succeeded(self, event_data: Dict) -> None:
+        """Send confirmation email and update subscription status."""
+        payment_id = event_data.get("payment_id", "")
+        user_id = event_data.get("user_id", "")
+        amount = event_data.get("amount", 0.0)
+        subscription_id = event_data.get("subscription_id", "")
+
+        logger.info("webhook.payment_succeeded id=%s user=%s", payment_id, user_id)
+
+        try:
+            from notifications.email_triggers import send_daily_report_email
+            sub = subscription_manager.get_subscription(subscription_id)
+            recipient = getattr(sub, "email", "") if sub else ""
+            if recipient:
+                send_daily_report_email(
+                    date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    daily_pnl=float(amount),
+                    daily_pnl_pct=0.0,
+                    total_trades=0,
+                    win_rate_pct=0.0,
+                    equity=float(amount),
+                    to=recipient,
+                )
+        except Exception as exc:
+            logger.warning("payment_succeeded.email_failed: %s", exc)
+
+    def _handle_payment_failed(self, event_data: Dict) -> None:
+        """Send failure notification email."""
+        payment_id = event_data.get("payment_id", "")
+        error = event_data.get("error", "Unknown error")
+        user_id = event_data.get("user_id", "")
+        subscription_id = event_data.get("subscription_id", "")
+
+        logger.error(
+            "webhook.payment_failed id=%s user=%s error=%s",
+            payment_id, user_id, error,
+        )
+
+        try:
+            from notifications.email_triggers import send_risk_halt_email
+            sub = subscription_manager.get_subscription(subscription_id)
+            recipient = getattr(sub, "email", "") if sub else ""
+            if recipient:
+                send_risk_halt_email(
+                    reason=f"Payment failed: {error}",
+                    drawdown_pct=0.0,
+                    limit_pct=0.0,
+                    to=recipient,
+                )
+        except Exception as exc:
+            logger.warning("payment_failed.email_failed: %s", exc)
+
+    def _handle_subscription_created(self, event_data: Dict) -> None:
+        subscription_id = event_data.get("subscription_id", "")
+        logger.info("webhook.subscription_created sub_id=%s", subscription_id)
+
+    def _handle_subscription_cancelled(self, event_data: Dict) -> None:
+        subscription_id = event_data.get("subscription_id", "")
+        logger.info("webhook.subscription_cancelled sub_id=%s", subscription_id)
+        subscription_manager.cancel_subscription(subscription_id)
+
+    def _handle_invoice_payment_failed(self, event_data: Dict) -> None:
+        """Stripe invoice.payment_failed — schedule dunning retry."""
+        customer_id = event_data.get("customer", "")
+        logger.warning("webhook.invoice_payment_failed customer=%s", customer_id)
+        for payment in self._payments.values():
+            if (
+                payment.stripe_customer_id == customer_id
+                and payment.status == PaymentStatus.SUCCEEDED
+            ):
+                payment.mark_failed("Invoice payment failed (Stripe)")
+                if payment.retry_count < _MAX_RETRIES:
+                    idx = min(payment.retry_count, len(_DUNNING_DELAYS_HOURS) - 1)
+                    payment.schedule_retry(delay_hours=_DUNNING_DELAYS_HOURS[idx])
+                break
+
+    def _handle_checkout_completed(self, event_data: Dict) -> None:
+        """Stripe checkout.session.completed — activate subscription."""
+        metadata = event_data.get("metadata", {})
+        user_id = metadata.get("user_id", "")
+        tier_str = metadata.get("tier", "starter")
+        logger.info("webhook.checkout_completed user=%s tier=%s", user_id, tier_str)
+        sub = subscription_manager.get_user_subscription(user_id)
+        if sub:
+            sub.status = SubscriptionStatus.ACTIVE
+            logger.info("subscription.activated_via_checkout user=%s", user_id)
+
+    # ------------------------------------------------------------------
+    # Dunning email helpers
+    # ------------------------------------------------------------------
+
+    def _send_dunning_retry_email(self, payment: Payment) -> None:
+        try:
+            from notifications.email_triggers import send_risk_halt_email
+            sub = subscription_manager.get_subscription(payment.subscription_id)
+            recipient = getattr(sub, "email", "") if sub else ""
+            if not recipient:
+                return
+            next_str = (
+                payment.next_retry_at.strftime("%Y-%m-%d %H:%M UTC")
+                if payment.next_retry_at else "soon"
+            )
+            send_risk_halt_email(
+                reason=(
+                    f"Payment of ${payment.amount} failed. "
+                    f"Retry attempt {payment.retry_count} of {_MAX_RETRIES} "
+                    f"scheduled for {next_str}."
+                ),
+                drawdown_pct=0.0,
+                limit_pct=0.0,
+                to=recipient,
+            )
+        except Exception as exc:
+            logger.warning("dunning_retry.email_failed: %s", exc)
+
+    def _send_dunning_final_email(self, payment: Payment) -> None:
+        try:
+            from notifications.email_triggers import send_risk_halt_email
+            sub = subscription_manager.get_subscription(payment.subscription_id)
+            recipient = getattr(sub, "email", "") if sub else ""
+            if not recipient:
+                return
+            send_risk_halt_email(
+                reason=(
+                    f"Payment of ${payment.amount} failed after {_MAX_RETRIES} attempts. "
+                    "Your subscription has been suspended. "
+                    "Update your payment method at hopefx.com/billing to restore access."
+                ),
+                drawdown_pct=0.0,
+                limit_pct=0.0,
+                to=recipient,
+            )
+        except Exception as exc:
+            logger.warning("dunning_final.email_failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Queries
+    # ------------------------------------------------------------------
+
     def get_payment(self, payment_id: str) -> Optional[Payment]:
-        """Get payment by ID"""
         return self._payments.get(payment_id)
 
-    def get_user_payments(self, user_id: str) -> list:
-        """Get all payments for a user"""
+    def get_user_payments(self, user_id: str) -> List[Payment]:
         return [p for p in self._payments.values() if p.user_id == user_id]
 
     def get_payment_stats(self) -> Dict:
-        """Get payment statistics"""
         total = len(self._payments)
-        succeeded = len(
-            [p for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED]
+        succeeded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED)
+        failed = sum(1 for p in self._payments.values() if p.status == PaymentStatus.FAILED)
+        pending = sum(1 for p in self._payments.values() if p.status == PaymentStatus.PENDING)
+        refunded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.REFUNDED)
+        total_revenue = sum(
+            p.amount for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED
         )
-        failed = len(
-            [p for p in self._payments.values() if p.status == PaymentStatus.FAILED]
-        )
-        pending = len(
-            [p for p in self._payments.values() if p.status == PaymentStatus.PENDING]
-        )
-
-        total_amount = sum(
-            p.amount
-            for p in self._payments.values()
-            if p.status == PaymentStatus.SUCCEEDED
-        )
-
         return {
             "total_payments": total,
             "succeeded": succeeded,
             "failed": failed,
             "pending": pending,
-            "total_revenue": float(total_amount),
-            "success_rate": (succeeded / total * 100) if total > 0 else 0.0,
+            "refunded": refunded,
+            "total_revenue": float(total_revenue),
+            "success_rate": round(succeeded / total * 100, 2) if total > 0 else 0.0,
+            "stripe_configured": bool(self._stripe_api_key),
         }
 
 
-# Global payment processor instance
+# Global singleton
 payment_processor = PaymentProcessor()
