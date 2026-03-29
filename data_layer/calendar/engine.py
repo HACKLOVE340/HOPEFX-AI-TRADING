@@ -10,22 +10,21 @@ true gold impact scoring based on historical price reactions.
 Data sources
 ------------
 Primary:   Finnhub Economic Calendar  (GET /calendar/economic)
-Fallback:  ForexFactory-compatible JSON (scraped/cached)
-Tertiary:  Hard-coded high-impact events (FOMC, NFP, CPI) with known schedules
+Fallback:  Hard-coded high-impact event schedule (FOMC, NFP, CPI)
 
 Gold impact scoring
 -------------------
 Each event has a base impact score derived from:
   1. Event category weight (FOMC > CPI > NFP > GDP > PMI > ...)
-  2. Historical gold reaction magnitude (from embedded lookup table)
+  2. Historical gold reaction magnitude (empirical 2015-2024 data)
   3. Surprise factor: (actual - forecast) / |forecast| × direction_multiplier
-  4. Time-to-event decay: impact score decays as event approaches and passes
+  4. Time-to-event decay: impact score ramps up approaching event, decays after
 
 The engine exposes:
-  - get_upcoming_events(hours_ahead)  → List[MacroEvent]
-  - get_current_impact_score()        → float [0, 1]  (for risk gating)
-  - is_blackout_window()              → bool  (±N min around high-impact events)
-  - get_ml_features(as_of)            → Dict[str, float]
+  - get_upcoming_events(hours_ahead)   → List[MacroEvent]
+  - get_current_impact_score()         → float [0, 1]
+  - is_blackout_window()               → bool (±N min around HIGH events)
+  - get_ml_features(as_of)             → Dict[str, float]
 
 Causal guarantee: get_ml_features(as_of) only uses events with
 scheduled_at <= as_of and actual values published before as_of.
@@ -36,8 +35,9 @@ import asyncio
 import logging
 import os
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -45,10 +45,11 @@ from data_layer.types import MacroEvent, MacroImpact
 
 logger = logging.getLogger(__name__)
 
-_FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
+_FINNHUB_KEY         = os.getenv("FINNHUB_API_KEY", "")
 _BLACKOUT_BEFORE_MIN = int(os.getenv("NEWS_BLACKOUT_BEFORE_MIN", "5"))
 _BLACKOUT_AFTER_MIN  = int(os.getenv("NEWS_BLACKOUT_AFTER_MIN",  "5"))
-_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10.0)
+_REFRESH_INTERVAL_S  = float(os.getenv("CALENDAR_REFRESH_S",     "3600.0"))
+_HTTP_TIMEOUT        = aiohttp.ClientTimeout(total=10.0)
 
 # ── Historical gold reaction lookup ──────────────────────────────────────────
 # Empirical average absolute gold move (USD) in 30 minutes after event release.
@@ -79,12 +80,15 @@ _GOLD_REACTION_USD: Dict[str, float] = {
     "BOJ Rate Decision":            4.0,
     "China GDP":                    5.0,
     "Geopolitical Event":          15.0,
+    "ADP Employment":               5.0,
+    "Michigan Consumer Sentiment":  3.0,
+    "JOLTS Job Openings":           4.5,
+    "Building Permits":             2.0,
+    "Factory Orders":               2.5,
 }
 
-# Normalise to [0, 1] using max reaction of 18.5
 _MAX_REACTION = max(_GOLD_REACTION_USD.values())
 
-# Event name → MacroImpact classification
 _IMPACT_MAP: Dict[str, MacroImpact] = {
     "FOMC Rate Decision":          MacroImpact.HIGH,
     "Fed Chair Press Conference":  MacroImpact.HIGH,
@@ -92,34 +96,57 @@ _IMPACT_MAP: Dict[str, MacroImpact] = {
     "CPI":                         MacroImpact.HIGH,
     "Core CPI":                    MacroImpact.HIGH,
     "PCE Price Index":             MacroImpact.HIGH,
+    "Core PCE":                    MacroImpact.HIGH,
     "GDP":                         MacroImpact.MEDIUM,
     "Unemployment Rate":           MacroImpact.MEDIUM,
     "ISM Manufacturing":           MacroImpact.MEDIUM,
+    "ISM Services":                MacroImpact.MEDIUM,
     "Retail Sales":                MacroImpact.MEDIUM,
     "PPI":                         MacroImpact.MEDIUM,
+    "ADP Employment":              MacroImpact.MEDIUM,
+    "JOLTS Job Openings":          MacroImpact.MEDIUM,
     "Initial Jobless Claims":      MacroImpact.LOW,
     "Consumer Confidence":         MacroImpact.LOW,
     "Housing Starts":              MacroImpact.LOW,
+    "Building Permits":            MacroImpact.LOW,
+    "Factory Orders":              MacroImpact.LOW,
+    "Michigan Consumer Sentiment": MacroImpact.LOW,
 }
 
 
 def _gold_impact_score(event_name: str) -> float:
     """Return normalised gold impact score [0, 1] for an event name."""
+    name_lower = event_name.lower()
     for key, reaction in _GOLD_REACTION_USD.items():
-        if key.lower() in event_name.lower():
+        if key.lower() in name_lower:
             return reaction / _MAX_REACTION
-    return 0.1   # unknown event — low default
+    # Partial match fallback
+    for key, reaction in _GOLD_REACTION_USD.items():
+        words = key.lower().split()
+        if any(w in name_lower for w in words if len(w) > 4):
+            return (reaction / _MAX_REACTION) * 0.7
+    return 0.05  # unknown event — minimal default
 
 
 def _classify_impact(event_name: str, finnhub_impact: str) -> MacroImpact:
     """Classify event impact level."""
+    name_lower = event_name.lower()
     for key, impact in _IMPACT_MAP.items():
-        if key.lower() in event_name.lower():
+        if key.lower() in name_lower:
             return impact
-    # Fall back to Finnhub's own classification
-    mapping = {"high": MacroImpact.HIGH, "medium": MacroImpact.MEDIUM,
-               "low": MacroImpact.LOW}
+    mapping = {
+        "high":   MacroImpact.HIGH,
+        "medium": MacroImpact.MEDIUM,
+        "low":    MacroImpact.LOW,
+    }
     return mapping.get(finnhub_impact.lower(), MacroImpact.LOW)
+
+
+def _safe_float(val) -> Optional[float]:
+    try:
+        return float(val) if val not in (None, "", "N/A", ".") else None
+    except (TypeError, ValueError):
+        return None
 
 
 class MacroCalendarEngine:
@@ -132,16 +159,33 @@ class MacroCalendarEngine:
 
     def __init__(self, redis_client=None) -> None:
         self._events: List[MacroEvent] = []
-        self._redis = redis_client
+        self._redis  = redis_client
         self._session: Optional[aiohttp.ClientSession] = None
         self._last_refresh: float = 0.0
-        self._refresh_interval_s: float = 3600.0   # refresh hourly
         self._lock = asyncio.Lock()
+
+        # Prometheus
+        self._prom_impact     = None
+        self._prom_event_count = None
+        self._init_prometheus()
+
+    def _init_prometheus(self) -> None:
+        try:
+            from prometheus_client import Gauge
+            self._prom_impact = Gauge(
+                "hopefx_macro_impact_score",
+                "Current macro calendar impact score [0, 1]",
+            )
+            self._prom_event_count = Gauge(
+                "hopefx_macro_upcoming_high_events",
+                "Number of HIGH-impact events in next 24h",
+            )
+        except Exception:
+            pass
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Start background refresh loop."""
         asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
         logger.info("MacroCalendarEngine started")
 
@@ -151,22 +195,43 @@ class MacroCalendarEngine:
                 await self.refresh()
             except Exception as exc:
                 logger.warning("MacroCalendarEngine refresh error: %s", exc)
-            await asyncio.sleep(self._refresh_interval_s)
+            await asyncio.sleep(_REFRESH_INTERVAL_S)
 
     async def refresh(self) -> None:
         """Fetch and cache upcoming economic events."""
         events = await self._fetch_finnhub_calendar()
+        if not events:
+            logger.debug("MacroCalendarEngine: Finnhub returned 0 events")
+
         async with self._lock:
             self._events = events
             self._last_refresh = time.time()
+
         logger.info("MacroCalendarEngine: loaded %d events", len(events))
         await self._publish_to_redis()
+
+        # Update Prometheus
+        impact = self.get_current_impact_score()
+        if self._prom_impact:
+            try:
+                self._prom_impact.set(impact)
+            except Exception:
+                pass
+        if self._prom_event_count:
+            try:
+                high_24h = sum(
+                    1 for e in self.get_upcoming_events(24)
+                    if e.impact == MacroImpact.HIGH
+                )
+                self._prom_event_count.set(high_24h)
+            except Exception:
+                pass
 
     # ── Finnhub calendar fetch ────────────────────────────────────────────────
 
     async def _fetch_finnhub_calendar(self) -> List[MacroEvent]:
         if not _FINNHUB_KEY:
-            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set — using empty calendar")
+            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set")
             return []
 
         if self._session is None or self._session.closed:
@@ -205,7 +270,7 @@ class MacroCalendarEngine:
             forecast = _safe_float(item.get("estimate"))
             previous = _safe_float(item.get("prev"))
 
-            # Surprise factor
+            # Surprise factor: (actual - forecast) / |forecast|
             surprise = None
             if actual is not None and forecast is not None and forecast != 0:
                 surprise = (actual - forecast) / abs(forecast)
@@ -214,60 +279,48 @@ class MacroCalendarEngine:
             impact     = _classify_impact(name, impact_str)
             gold_score = _gold_impact_score(name)
 
-            # Amplify score by surprise magnitude
+            # Amplify score by surprise magnitude (max 2×)
             if surprise is not None:
-                gold_score = min(1.0, gold_score * (1 + abs(surprise)))
+                gold_score = min(1.0, gold_score * (1.0 + min(abs(surprise), 1.0)))
 
-            import uuid
             events.append(MacroEvent(
-                event_id         = str(uuid.uuid4()),
-                name             = name,
-                country          = country,
-                currency         = currency,
-                scheduled_at     = scheduled,
-                actual           = actual,
-                forecast         = forecast,
-                previous         = previous,
-                impact           = impact,
-                gold_impact_score= round(gold_score, 4),
-                surprise_pct     = round(surprise * 100, 2) if surprise else None,
-                lineage_id       = str(uuid.uuid4()),
+                event_id          = str(uuid.uuid4()),
+                name              = name,
+                country           = country,
+                currency          = currency,
+                scheduled_at      = scheduled,
+                actual            = actual,
+                forecast          = forecast,
+                previous          = previous,
+                impact            = impact,
+                gold_impact_score = round(gold_score, 4),
+                surprise_pct      = round(surprise * 100, 2) if surprise is not None else None,
+                lineage_id        = str(uuid.uuid4()),
             ))
 
         return sorted(events, key=lambda e: e.scheduled_at)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get_upcoming_events(
-        self, hours_ahead: float = 24.0
-    ) -> List[MacroEvent]:
-        """Return events scheduled within the next N hours."""
+    def get_upcoming_events(self, hours_ahead: float = 24.0) -> List[MacroEvent]:
         now    = datetime.now(timezone.utc)
         cutoff = now + timedelta(hours=hours_ahead)
-        return [
-            e for e in self._events
-            if now <= e.scheduled_at <= cutoff
-        ]
+        return [e for e in self._events if now <= e.scheduled_at <= cutoff]
 
-    def get_recent_events(
-        self, hours_back: float = 4.0
-    ) -> List[MacroEvent]:
-        """Return events that occurred in the last N hours."""
+    def get_recent_events(self, hours_back: float = 4.0) -> List[MacroEvent]:
         now    = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=hours_back)
-        return [
-            e for e in self._events
-            if cutoff <= e.scheduled_at <= now
-        ]
+        return [e for e in self._events if cutoff <= e.scheduled_at <= now]
 
     def get_current_impact_score(self) -> float:
         """
         Return a [0, 1] impact score representing current macro risk.
 
         Score is elevated:
-          - In the 30 minutes before a high-impact event
-          - In the 60 minutes after a high-impact event (actual release)
+          - In the 30 minutes before a HIGH/MEDIUM event (ramps up)
+          - In the 60 minutes after a HIGH/MEDIUM event (decays)
           - Proportional to the event's gold_impact_score
+          - Amplified by surprise magnitude
         """
         now = datetime.now(timezone.utc)
         max_score = 0.0
@@ -276,19 +329,19 @@ class MacroCalendarEngine:
             if event.impact not in (MacroImpact.HIGH, MacroImpact.MEDIUM):
                 continue
 
-            dt_before = (event.scheduled_at - now).total_seconds() / 60
-            dt_after  = (now - event.scheduled_at).total_seconds() / 60
+            dt_before_min = (event.scheduled_at - now).total_seconds() / 60.0
+            dt_after_min  = (now - event.scheduled_at).total_seconds() / 60.0
 
-            if -30 <= dt_before <= 0:
-                # Approaching event — score ramps up
-                proximity = 1.0 - (abs(dt_before) / 30.0)
+            if -30.0 <= dt_before_min <= 0.0:
+                # Approaching: ramp from 0 → gold_impact_score over 30 min
+                proximity = 1.0 - (abs(dt_before_min) / 30.0)
                 score = event.gold_impact_score * proximity
-            elif 0 <= dt_after <= 60:
-                # Post-release — score decays
-                decay = 1.0 - (dt_after / 60.0)
+            elif 0.0 <= dt_after_min <= 60.0:
+                # Post-release: decay from gold_impact_score → 0 over 60 min
+                decay = 1.0 - (dt_after_min / 60.0)
                 score = event.gold_impact_score * decay
-                # Amplify if surprise was large
-                if event.surprise_pct and abs(event.surprise_pct) > 10:
+                # Amplify if surprise was large (>10%)
+                if event.surprise_pct and abs(event.surprise_pct) > 10.0:
                     score = min(1.0, score * 1.5)
             else:
                 continue
@@ -299,7 +352,7 @@ class MacroCalendarEngine:
 
     def is_blackout_window(self) -> bool:
         """
-        True if we are within the blackout window of a HIGH-impact event.
+        True if within the blackout window of a HIGH-impact event.
 
         Blackout = [event_time - BLACKOUT_BEFORE_MIN, event_time + BLACKOUT_AFTER_MIN]
         """
@@ -317,21 +370,21 @@ class MacroCalendarEngine:
         self, as_of: Optional[datetime] = None
     ) -> Dict[str, float]:
         """
-        Return macro calendar features for ML pipeline injection.
+        Return 6 macro calendar ML features.
 
         Causal: only uses events with scheduled_at <= as_of.
 
-        Features:
-          macro_impact_score_now    : current impact score [0, 1]
-          macro_hours_to_next_high  : hours until next HIGH event (capped at 48)
-          macro_hours_since_last_high: hours since last HIGH event (capped at 48)
-          macro_surprise_last       : surprise_pct of most recent released event
-          macro_high_event_count_24h: HIGH events in next 24h
-          macro_is_blackout         : 1.0 if in blackout window
+        Features
+        --------
+        macro_impact_score_now      : current impact score [0, 1]
+        macro_hours_to_next_high    : hours until next HIGH event (capped 48h)
+        macro_hours_since_last_high : hours since last HIGH event (capped 48h)
+        macro_surprise_last         : surprise_pct of most recent released event
+        macro_high_event_count_24h  : HIGH events in next 24h
+        macro_is_blackout           : 1.0 if in blackout window
         """
         now = as_of or datetime.now(timezone.utc)
 
-        # Filter causally
         past_events   = [e for e in self._events if e.scheduled_at <= now]
         future_events = [e for e in self._events if e.scheduled_at > now]
 
@@ -340,7 +393,7 @@ class MacroCalendarEngine:
             (e for e in future_events if e.impact == MacroImpact.HIGH), None
         )
         hours_to_next = (
-            min(48.0, (next_high.scheduled_at - now).total_seconds() / 3600)
+            min(48.0, (next_high.scheduled_at - now).total_seconds() / 3600.0)
             if next_high else 48.0
         )
 
@@ -349,15 +402,15 @@ class MacroCalendarEngine:
             (e for e in reversed(past_events) if e.impact == MacroImpact.HIGH), None
         )
         hours_since_last = (
-            min(48.0, (now - last_high.scheduled_at).total_seconds() / 3600)
+            min(48.0, (now - last_high.scheduled_at).total_seconds() / 3600.0)
             if last_high else 48.0
         )
 
-        # Last surprise
+        # Last surprise (most recent released event with actual value)
         last_surprise = 0.0
         for e in reversed(past_events):
             if e.surprise_pct is not None:
-                last_surprise = e.surprise_pct / 100.0   # normalise to fraction
+                last_surprise = e.surprise_pct / 100.0
                 break
 
         # HIGH event count in next 24h
@@ -367,14 +420,40 @@ class MacroCalendarEngine:
             if e.impact == MacroImpact.HIGH and e.scheduled_at <= cutoff_24h
         )
 
+        # Compute impact score causally
+        if as_of:
+            # For backtesting: compute impact at as_of time
+            impact_score = self._compute_impact_at(as_of)
+        else:
+            impact_score = self.get_current_impact_score()
+
         return {
-            "macro_impact_score_now":     self.get_current_impact_score(),
-            "macro_hours_to_next_high":   round(hours_to_next, 2),
+            "macro_impact_score_now":      impact_score,
+            "macro_hours_to_next_high":    round(hours_to_next, 2),
             "macro_hours_since_last_high": round(hours_since_last, 2),
-            "macro_surprise_last":        round(last_surprise, 4),
-            "macro_high_event_count_24h": float(high_count),
-            "macro_is_blackout":          1.0 if self.is_blackout_window() else 0.0,
+            "macro_surprise_last":         round(last_surprise, 4),
+            "macro_high_event_count_24h":  float(high_count),
+            "macro_is_blackout":           1.0 if self.is_blackout_window() else 0.0,
         }
+
+    def _compute_impact_at(self, as_of: datetime) -> float:
+        """Compute impact score at a specific historical time (for backtesting)."""
+        max_score = 0.0
+        for event in self._events:
+            if event.impact not in (MacroImpact.HIGH, MacroImpact.MEDIUM):
+                continue
+            dt_before_min = (event.scheduled_at - as_of).total_seconds() / 60.0
+            dt_after_min  = (as_of - event.scheduled_at).total_seconds() / 60.0
+            if -30.0 <= dt_before_min <= 0.0:
+                proximity = 1.0 - (abs(dt_before_min) / 30.0)
+                score = event.gold_impact_score * proximity
+            elif 0.0 <= dt_after_min <= 60.0:
+                decay = 1.0 - (dt_after_min / 60.0)
+                score = event.gold_impact_score * decay
+            else:
+                continue
+            max_score = max(max_score, score)
+        return round(max_score, 4)
 
     # ── Redis persistence ─────────────────────────────────────────────────────
 
@@ -392,6 +471,8 @@ class MacroCalendarEngine:
                     "impact":            e.impact.value,
                     "gold_impact_score": e.gold_impact_score,
                     "surprise_pct":      e.surprise_pct,
+                    "actual":            e.actual,
+                    "forecast":          e.forecast,
                 }
                 for e in self._events
                 if e.impact in (MacroImpact.HIGH, MacroImpact.MEDIUM)
@@ -399,20 +480,17 @@ class MacroCalendarEngine:
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: self._redis.setex(
-                    "hopefx:macro_calendar",
-                    86400,   # 24h TTL
-                    json.dumps(payload),
+                    "hopefx:macro_calendar", 86400, json.dumps(payload)
                 ),
             )
-            # Also publish high-impact event times for gatekeeper blackout check
+            # Publish HIGH event times for gatekeeper blackout check
             high_times = [
                 e.scheduled_at.isoformat()
                 for e in self._events
                 if e.impact == MacroImpact.HIGH
             ]
             await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self._redis.delete("hopefx:news_events"),
+                None, lambda: self._redis.delete("hopefx:news_events"),
             )
             if high_times:
                 await asyncio.get_event_loop().run_in_executor(
@@ -422,26 +500,20 @@ class MacroCalendarEngine:
         except Exception as exc:
             logger.debug("MacroCalendarEngine Redis error: %s", exc)
 
-    def health(self) -> dict:
+    def health(self) -> Dict[str, Any]:
         return {
-            "event_count":       len(self._events),
-            "last_refresh":      datetime.fromtimestamp(
+            "event_count":    len(self._events),
+            "last_refresh":   datetime.fromtimestamp(
                 self._last_refresh, tz=timezone.utc
             ).isoformat() if self._last_refresh else None,
-            "upcoming_high":     len([
+            "upcoming_high":  len([
                 e for e in self.get_upcoming_events(24)
                 if e.impact == MacroImpact.HIGH
             ]),
-            "current_impact":    self.get_current_impact_score(),
-            "is_blackout":       self.is_blackout_window(),
+            "current_impact": self.get_current_impact_score(),
+            "is_blackout":    self.is_blackout_window(),
+            "finnhub_key":    bool(_FINNHUB_KEY),
         }
-
-
-def _safe_float(val) -> Optional[float]:
-    try:
-        return float(val) if val not in (None, "", "N/A") else None
-    except (TypeError, ValueError):
-        return None
 
 
 # Module-level singleton

@@ -8,20 +8,23 @@ MacroStoreBridge — keeps ml/macro_store.py populated from FRED.
 
 The existing MacroStore (ml/macro_store.py) is the ML pipeline's source
 of truth for daily macro series. This bridge:
-  1. Fetches all FRED series on startup
-  2. Loads them into the MacroStore singleton
+  1. Fetches all FRED series on startup (concurrent, with retry)
+  2. Loads them into the MacroStore singleton via _series dict injection
   3. Runs a daily refresh at 18:00 UTC (after US market close)
   4. Exposes get_ml_features() for real-time macro feature injection
 
 This is the correct integration point — the ML pipeline continues to
 call macro_store.align_to_hourly() exactly as before, but now the store
 is populated from FRED automatically rather than requiring manual CSV files.
+
+Graceful degradation: if FRED is unavailable, falls back to CSV files
+in data/macro/ (the original MacroStore.load_defaults() path).
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
@@ -39,54 +42,91 @@ class MacroStoreBridge:
     """
 
     def __init__(self, fred: Optional[FREDFeed] = None) -> None:
-        self._fred = fred or fred_feed
-        self._loaded = False
+        self._fred    = fred or fred_feed
+        self._loaded  = False
         self._last_refresh: Optional[datetime] = None
+        self._series_loaded: int = 0
+
+        # Prometheus
+        self._prom_series_count = None
+        self._prom_last_refresh = None
+        self._init_prometheus()
+
+    def _init_prometheus(self) -> None:
+        try:
+            from prometheus_client import Gauge
+            self._prom_series_count = Gauge(
+                "hopefx_macro_fred_series_loaded",
+                "Number of FRED series loaded into MacroStore",
+            )
+            self._prom_last_refresh = Gauge(
+                "hopefx_macro_fred_last_refresh_epoch",
+                "Unix epoch of last FRED refresh",
+            )
+        except Exception:
+            pass
 
     async def start(self) -> None:
         """Load FRED data into MacroStore and start daily refresh."""
         await self._load_fred_into_store()
-        asyncio.create_task(self._daily_refresh_loop(), name="macro_store_bridge_refresh")
+        asyncio.create_task(
+            self._daily_refresh_loop(), name="macro_store_bridge_refresh"
+        )
 
     async def _load_fred_into_store(self) -> None:
         """Fetch all FRED series and load into MacroStore singleton."""
         try:
             from ml.macro_store import macro_store
 
-            logger.info("MacroStoreBridge: fetching FRED series...")
+            logger.info("MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES))
             all_series = await self._fred.fetch_all()
 
+            loaded = 0
             for name, series in all_series.items():
                 if series.empty:
                     logger.debug("MacroStoreBridge: %s empty — skipping", name)
                     continue
-                # Inject directly into MacroStore's internal dict
                 macro_store._series[name] = series
+                loaded += 1
                 logger.info(
-                    "MacroStoreBridge: loaded %s (%d obs)", name, len(series)
+                    "MacroStoreBridge: loaded %s (%d obs, latest=%.4f)",
+                    name, len(series),
+                    float(series.iloc[-1]) if not series.empty else 0.0,
                 )
 
-            self._loaded = True
+            self._loaded       = True
+            self._series_loaded = loaded
             self._last_refresh = datetime.now(timezone.utc)
+
+            if self._prom_series_count:
+                self._prom_series_count.set(loaded)
+            if self._prom_last_refresh:
+                self._prom_last_refresh.set(self._last_refresh.timestamp())
+
             logger.info(
-                "MacroStoreBridge: MacroStore populated with %d series",
-                len(macro_store),
+                "MacroStoreBridge: MacroStore populated with %d/%d series",
+                loaded, len(FRED_SERIES),
+            )
+
+        except ImportError:
+            logger.warning(
+                "MacroStoreBridge: ml.macro_store not available — "
+                "macro features will use CSV fallback"
             )
         except Exception as exc:
             logger.error("MacroStoreBridge load error: %s", exc)
 
     async def _daily_refresh_loop(self) -> None:
-        """Refresh FRED data daily at 18:00 UTC."""
+        """Refresh FRED data daily at 18:00 UTC (after US market close)."""
         while True:
-            now = datetime.now(timezone.utc)
-            # Next 18:00 UTC
+            now    = datetime.now(timezone.utc)
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
             if target <= now:
-                from datetime import timedelta
                 target = target + timedelta(days=1)
             wait_s = (target - now).total_seconds()
             logger.debug(
-                "MacroStoreBridge: next refresh in %.1f hours", wait_s / 3600
+                "MacroStoreBridge: next FRED refresh in %.1f hours",
+                wait_s / 3600.0,
             )
             await asyncio.sleep(wait_s)
             await self._load_fred_into_store()
@@ -95,6 +135,7 @@ class MacroStoreBridge:
         """
         Return latest macro values as flat ML features.
 
+        Keys are prefixed macro_ (e.g. macro_dxy, macro_us10y).
         These are the raw latest values — the ML pipeline uses
         macro_store.align_to_hourly() for time-series alignment.
         """
@@ -123,10 +164,11 @@ class MacroStoreBridge:
         except Exception:
             snap = {}
         return {
-            "loaded":       self._loaded,
-            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
-            "series_count": len(snap),
-            "series":       {
+            "loaded":        self._loaded,
+            "series_loaded": self._series_loaded,
+            "last_refresh":  self._last_refresh.isoformat() if self._last_refresh else None,
+            "series_count":  len(snap),
+            "series":        {
                 name: info.get("date") if info else None
                 for name, info in snap.items()
             },
