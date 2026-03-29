@@ -1820,10 +1820,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-2-live-oanda-run" class="md-nav__link">
+  <a href="#milestone-2-monetization-done-v117" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 2 — Live OANDA Run
+        Milestone 2 — Monetization ✅ DONE (v1.17)
       
     </span>
   </a>
@@ -1831,10 +1831,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-3-mt5-export" class="md-nav__link">
+  <a href="#milestone-3-live-oanda-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 3 — MT5 Export
+        Milestone 3 — Live OANDA Run
       
     </span>
   </a>
@@ -1842,10 +1842,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-4-multi-symbol-expansion-backtest-done" class="md-nav__link">
+  <a href="#milestone-4-mt5-export" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 4 — Multi-Symbol Expansion ✅ BACKTEST DONE
+        Milestone 4 — MT5 Export
       
     </span>
   </a>
@@ -1853,10 +1853,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-5-reinforcement-learning" class="md-nav__link">
+  <a href="#milestone-5-multi-symbol-expansion-backtest-done" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 5 — Reinforcement Learning
+        Milestone 5 — Multi-Symbol Expansion ✅ BACKTEST DONE
       
     </span>
   </a>
@@ -1864,10 +1864,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-6-web-frontend" class="md-nav__link">
+  <a href="#milestone-6-strategy-marketplace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 6 — Web Frontend
+        Milestone 6 — Strategy Marketplace
       
     </span>
   </a>
@@ -1875,10 +1875,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-7-white-label-api" class="md-nav__link">
+  <a href="#milestone-7-reinforcement-learning" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 7 — White-Label API
+        Milestone 7 — Reinforcement Learning
       
     </span>
   </a>
@@ -1886,10 +1886,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#milestone-8-mobile-app" class="md-nav__link">
+  <a href="#milestone-8-web-frontend" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Milestone 8 — Mobile App
+        Milestone 8 — Web Frontend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-9-mobile-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 9 — Mobile App
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestone-10-white-label-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestone 10 — White-Label API
       
     </span>
   </a>
@@ -2034,6 +2056,26 @@
 <td>Documentation (30 main docs + 103 archive)</td>
 <td>✅ Complete</td>
 </tr>
+<tr>
+<td>Stripe payment processing (real SDK)</td>
+<td>✅ Production</td>
+</tr>
+<tr>
+<td>Subscription plan gating (require_plan)</td>
+<td>✅ Production</td>
+</tr>
+<tr>
+<td>Dunning / failed payment recovery</td>
+<td>✅ Production</td>
+</tr>
+<tr>
+<td>Prometheus monetization metrics</td>
+<td>✅ Production</td>
+</tr>
+<tr>
+<td>Admin role guard on all /api/admin/*</td>
+<td>✅ Production</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -2053,7 +2095,33 @@ N=1,260 bars, 176 features.</p>
 <li>[ ] Validate live signal distribution matches OOS backtest distribution</li>
 </ul>
 <hr />
-<h2 id="milestone-2-live-oanda-run">Milestone 2 — Live OANDA Run<a class="headerlink" href="#milestone-2-live-oanda-run" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-2-monetization-done-v117">Milestone 2 — Monetization ✅ DONE (v1.17)<a class="headerlink" href="#milestone-2-monetization-done-v117" title="Permanent link">&para;</a></h2>
+<p><strong>Result:</strong> Full subscription platform live. Stripe SDK integrated, plan gating enforced on all
+trading and ML endpoints, dunning active, Prometheus metrics wired.</p>
+<ul>
+<li>[x] Real Stripe PaymentIntent creation (not simulated) with idempotency keys</li>
+<li>[x] Stripe Refund API with partial-refund support</li>
+<li>[x] Dunning: 3x retry at 24h / 72h / 168h, then subscription suspended</li>
+<li>[x] <code>require_plan</code> FastAPI dependency — raises <code>403 PLAN_LIMIT_EXCEEDED</code></li>
+<li>[x] <code>plan_gate()</code> boolean helper for non-FastAPI contexts</li>
+<li>[x] ML <code>/predict</code> endpoint gated at Professional plan</li>
+<li>[x] Trading <code>/order</code> endpoint gated at Starter plan</li>
+<li>[x] Strategy subscription gating in <code>strategies/manager.py</code></li>
+<li>[x] Prometheus: <code>hopefx_mrr_usd</code>, <code>hopefx_arr_usd</code>, <code>hopefx_churn_rate_pct</code></li>
+<li>[x] Prometheus: <code>hopefx_payment_failures_total</code>, <code>hopefx_trial_conversions_total</code></li>
+<li>[x] Payment confirmation email (plan, amount, invoice_id, access_code)</li>
+<li>[x] Subscription cancelled email (access_until, data_deleted_at)</li>
+<li>[x] Subscription renewal email (next_renewal date)</li>
+<li>[x] Trial expiry warning email (7d + 1d before expiry)</li>
+<li>[x] Admin role guard on all <code>/api/admin/*</code> endpoints (ADMIN_USER_IDS env var)</li>
+<li>[x] Admin impersonation JWT (5 min, <code>impersonated_by</code> claim, audit-logged)</li>
+<li>[ ] Switch Stripe from test mode to live (<code>sk_test_</code> → <code>sk_live_</code>)</li>
+<li>[ ] Publish pricing page at <code>hopefx.com/pricing</code></li>
+<li>[ ] Enable Stripe Radar fraud rules</li>
+<li>[ ] Multi-currency support (EUR, GBP, AED, NGN)</li>
+</ul>
+<hr />
+<h2 id="milestone-3-live-oanda-run">Milestone 3 — Live OANDA Run<a class="headerlink" href="#milestone-3-live-oanda-run" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> First real-money trade on OANDA live account.</p>
 <p>Prerequisites:
 - [ ] Complete 30-day paper trading run (gate: <code>data/oanda_paper_start.json</code>)
@@ -2061,12 +2129,12 @@ N=1,260 bars, 176 features.</p>
 - [ ] Security audit: rotate all API keys, review JWT config
 - [ ] Set <code>OANDA_ENVIRONMENT=live</code> and <code>FEATURE_LIVE_TRADING=true</code>
 - [ ] Start with 0.01 lot size, scale up after 50 live trades
-- [ ] Monitor daily drawdown gate — halt if −2% daily DD hit</p>
+- [ ] Monitor daily drawdown gate — halt if -2% daily DD hit</p>
 <p>Check gate status:
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/enable_live_trading.py<span class="w"> </span>--check-only
 </code></pre></div></p>
 <hr />
-<h2 id="milestone-3-mt5-export">Milestone 3 — MT5 Export<a class="headerlink" href="#milestone-3-mt5-export" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-4-mt5-export">Milestone 4 — MT5 Export<a class="headerlink" href="#milestone-4-mt5-export" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Export signals to MetaTrader 5 via ZeroMQ bridge.</p>
 <ul>
 <li>[ ] Implement <code>brokers/mt5_zmq_bridge.py</code> signal publisher</li>
@@ -2075,7 +2143,7 @@ N=1,260 bars, 176 features.</p>
 <li>[ ] Paper test on MT5 demo for 2 weeks before live</li>
 </ul>
 <hr />
-<h2 id="milestone-4-multi-symbol-expansion-backtest-done">Milestone 4 — Multi-Symbol Expansion ✅ BACKTEST DONE<a class="headerlink" href="#milestone-4-multi-symbol-expansion-backtest-done" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-5-multi-symbol-expansion-backtest-done">Milestone 5 — Multi-Symbol Expansion ✅ BACKTEST DONE<a class="headerlink" href="#milestone-5-multi-symbol-expansion-backtest-done" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Trade BTC/USD and ETH/USD alongside XAUUSD, plus forex and commodities.</p>
 <ul>
 <li>[x] Multi-symbol backtest: N=628 trades (XAU+BTC+ETH), Sharpe gate PASSED</li>
@@ -2085,45 +2153,58 @@ N=1,260 bars, 176 features.</p>
 <li>[ ] Validate live multi-symbol signal distribution before deployment</li>
 </ul>
 <hr />
-<h2 id="milestone-5-reinforcement-learning">Milestone 5 — Reinforcement Learning<a class="headerlink" href="#milestone-5-reinforcement-learning" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-6-strategy-marketplace">Milestone 6 — Strategy Marketplace<a class="headerlink" href="#milestone-6-strategy-marketplace" title="Permanent link">&para;</a></h2>
+<p><strong>Target:</strong> Allow Professional+ subscribers to submit, review, and purchase strategies.</p>
+<ul>
+<li>[ ] <code>POST /api/marketplace/strategies</code> — strategy submission with code upload</li>
+<li>[ ] Automated quality audit: bandit + ruff on submitted code</li>
+<li>[ ] Performance validation: minimum 55% win rate, Sharpe &gt; 1.0, drawdown &lt; 20%</li>
+<li>[ ] <code>GET /api/marketplace/strategies</code> — listing with filters (tier, symbol, Sharpe)</li>
+<li>[ ] <code>POST /api/marketplace/strategies/{id}/purchase</code> — purchase flow</li>
+<li>[ ] Revenue split: 70% to seller, 30% to platform</li>
+<li>[ ] Monthly seller payout (minimum $500 threshold)</li>
+</ul>
+<hr />
+<h2 id="milestone-7-reinforcement-learning">Milestone 7 — Reinforcement Learning<a class="headerlink" href="#milestone-7-reinforcement-learning" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> Replace or augment XGBoost ensemble with a trained RL agent.</p>
 <ul>
 <li>[ ] Implement <code>ml/rl_agent.py</code> using Stable-Baselines3 (PPO)</li>
 <li>[ ] Custom gym environment: XAUUSD H1 with realistic slippage + spread</li>
 <li>[ ] Walk-forward evaluation: RL agent vs XGBoost ensemble</li>
-<li>[ ] Deploy only if RL OOS accuracy ≥ 65% with p &lt; 0.05</li>
+<li>[ ] Deploy only if RL OOS accuracy &gt;= 65% with p &lt; 0.05</li>
 </ul>
 <hr />
-<h2 id="milestone-6-web-frontend">Milestone 6 — Web Frontend<a class="headerlink" href="#milestone-6-web-frontend" title="Permanent link">&para;</a></h2>
-<p><strong>Target:</strong> React/Vue dashboard connected to the REST + WebSocket API.</p>
+<h2 id="milestone-8-web-frontend">Milestone 8 — Web Frontend<a class="headerlink" href="#milestone-8-web-frontend" title="Permanent link">&para;</a></h2>
+<p><strong>Target:</strong> React dashboard connected to the REST + WebSocket API.</p>
 <ul>
-<li>[ ] React or Vue.js project scaffold in <code>frontend/</code></li>
+<li>[ ] React project scaffold in <code>frontend/</code></li>
 <li>[ ] Real-time WebSocket chart (price + signals)</li>
-<li>[ ] Live P&amp;L dashboard</li>
+<li>[ ] Live P&amp;L dashboard with subscription tier badge</li>
 <li>[ ] Strategy control panel (start/stop/configure)</li>
 <li>[ ] Risk monitor (drawdown, CVaR, kill switch status)</li>
+<li>[ ] Subscription management UI (upgrade/downgrade/cancel)</li>
 <li>[ ] Social trading feed (copy trading, leaderboards)</li>
 </ul>
 <hr />
-<h2 id="milestone-7-white-label-api">Milestone 7 — White-Label API<a class="headerlink" href="#milestone-7-white-label-api" title="Permanent link">&para;</a></h2>
-<p><strong>Target:</strong> Expose HOPEFX as a signal API for third-party consumers.</p>
-<ul>
-<li>[ ] <code>/api/v1/signals</code> endpoint with API key auth</li>
-<li>[ ] Rate limiting per tier (free: 10 req/min, pro: 100 req/min)</li>
-<li>[ ] Stripe billing integration for pro tier</li>
-<li>[ ] SLA: 99.9% uptime, &lt; 200ms p99 latency</li>
-<li>[ ] White-label branding config in <code>whitelabel/</code></li>
-</ul>
-<hr />
-<h2 id="milestone-8-mobile-app">Milestone 8 — Mobile App<a class="headerlink" href="#milestone-8-mobile-app" title="Permanent link">&para;</a></h2>
+<h2 id="milestone-9-mobile-app">Milestone 9 — Mobile App<a class="headerlink" href="#milestone-9-mobile-app" title="Permanent link">&para;</a></h2>
 <p><strong>Target:</strong> iOS and Android apps via React Native.</p>
 <ul>
 <li>[ ] React Native project scaffold</li>
 <li>[ ] Core screens: Dashboard, Chart, Positions, Alerts</li>
 <li>[ ] Push notifications via FCM/APNs</li>
 <li>[ ] Biometric authentication</li>
+<li>[ ] Subscription gate on all premium screens</li>
 <li>[ ] Offline mode with cached signals</li>
 <li>[ ] App Store + Google Play submission</li>
+</ul>
+<hr />
+<h2 id="milestone-10-white-label-api">Milestone 10 — White-Label API<a class="headerlink" href="#milestone-10-white-label-api" title="Permanent link">&para;</a></h2>
+<p><strong>Target:</strong> Expose HOPEFX as a signal API for third-party consumers.</p>
+<ul>
+<li>[ ] <code>/api/v1/signals</code> endpoint with API key auth</li>
+<li>[ ] Rate limiting per tier (Starter: 10 req/min, Professional: 100 req/min)</li>
+<li>[ ] White-label branding config in <code>whitelabel/</code></li>
+<li>[ ] SLA: 99.9% uptime, &lt; 200ms p99 latency</li>
 </ul>
 <hr />
 <h2 id="research-pipeline-feature-flagged">Research Pipeline (Feature-Flagged)<a class="headerlink" href="#research-pipeline-feature-flagged" title="Permanent link">&para;</a></h2>
@@ -2161,7 +2242,7 @@ after their respective paper trading gates are met.</p>
 <td>4</td>
 <td>DeepEnsembleStore</td>
 <td><code>FEATURE_DEEP_ENSEMBLE</code></td>
-<td>After LSTM OOS ≥ 70%</td>
+<td>After LSTM OOS &gt;= 70%</td>
 </tr>
 </tbody>
 </table>
@@ -2177,7 +2258,7 @@ after their respective paper trading gates are met.</p>
 <h2 id="var-remaining-work">VaR Remaining Work<a class="headerlink" href="#var-remaining-work" title="Permanent link">&para;</a></h2>
 <p><code>calculate_var_historical</code> and <code>calculate_var_parametric</code> still use sqrt(t) for
 multi-day scaling. Use <code>calculate_var_multiday</code> or <code>calculate_var_ewma</code> for
-production risk limits on XAUUSD. This is documented but not yet enforced.</p>
+production risk limits on XAUUSD.</p>
 <ul>
 <li>[ ] Replace sqrt(t) in all remaining VaR paths</li>
 <li>[ ] Add GARCH(1,1) volatility model for VaR</li>
@@ -2196,6 +2277,7 @@ production risk limits on XAUUSD. This is documented but not yet enforced.</p>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Fetch latest XAUUSD H1 bars</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>python<span class="w"> </span>-m<span class="w"> </span>data.scheduler
 </code></pre></div>
+<hr />
 <h2 id="running-tests">Running Tests<a class="headerlink" href="#running-tests" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Full suite</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pytest<span class="w"> </span>tests/<span class="w"> </span>--ignore<span class="o">=</span>tests/integration/test_redis.py<span class="w"> </span>-q
