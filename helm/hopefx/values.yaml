@@ -115,3 +115,13 @@ autoscaling:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# ── Pod / container security ─────────────────────────────────────────────────
+# Applied to both the main API deployment and the trading-engine deployment.
+# readOnlyRootFilesystem: true — containers write only to explicitly mounted
+# volumes (emptyDir or PVC).  If your image writes to /tmp at startup, add an
+# emptyDir volume mounted at /tmp.
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000

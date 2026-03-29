@@ -26,6 +26,13 @@ spec:
         {{- include "hopefx.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: trading-engine
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup | default 1000 }}
+        fsGroup: {{ .Values.securityContext.fsGroup | default 1000 }}
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: trading-engine
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -65,6 +72,17 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 60
             failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}
+            runAsGroup: {{ .Values.securityContext.runAsGroup | default 1000 }}
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             {{- toYaml .Values.trading.resources | nindent 12 }}
 
