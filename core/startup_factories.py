@@ -552,6 +552,23 @@ async def init_strategy_brain(s: Any) -> Any:
     return brain
 
 
+async def init_performance_monitor(s: Any) -> Any:
+    """
+    Start the ML model performance monitor background task.
+
+    Compares the rolling P&L of the newly promoted model against the previous
+    version over a configurable window.  Auto-reverts if the new model
+    underperforms by more than ML_MONITOR_ROLLBACK_THRESH (default 20%).
+    """
+    from ml.performance_monitor import get_monitor
+
+    monitor = get_monitor()
+    task = asyncio.create_task(monitor.run(), name="ml_performance_monitor")
+    s.background_tasks.append(task)
+    logger.info("ML ModelPerformanceMonitor started (background task)")
+    return monitor
+
+
 async def init_outbox_relay(s: Any) -> Any:
     """
     Start the OutboxRelay background task.
@@ -1412,6 +1429,7 @@ def build_component_registry(app, feature_flags):
             deps=["hourly_trainer"],
         )
         .register("outbox_relay", F.init_outbox_relay, required=False, deps=["database"])
+        .register("ml_performance_monitor", F.init_performance_monitor, required=False, deps=["hourly_trainer"])
         .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
         .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])

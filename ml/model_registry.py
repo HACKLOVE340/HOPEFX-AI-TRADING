@@ -359,6 +359,18 @@ class ModelRegistry:
             name,
             entry["sha256"][:12],
         )
+
+        # Notify the live performance monitor so it starts tracking the new version
+        try:
+            from ml.performance_monitor import get_monitor
+
+            get_monitor().on_model_promoted(
+                new_version=name,
+                previous_version=prev_active,
+            )
+        except Exception as _mon_exc:
+            logger.debug("ModelRegistry: performance monitor notify failed: %s", _mon_exc)
+
         return entry
 
     def _update_symlink(self, target: Path) -> None:
