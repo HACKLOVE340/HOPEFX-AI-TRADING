@@ -408,6 +408,55 @@ class DataQualityEngine:
             return None
         return max(candidates, key=lambda x: x[1].confidence)[0]
 
+    def latency_report(self) -> Dict[str, Dict[str, float]]:
+        """
+        Return per-source latency percentiles (p50/p95/p99) in milliseconds.
+
+        Used by monitoring dashboards and the health endpoint.
+        Returns empty dict for sources with no latency observations.
+        """
+        report: Dict[str, Dict[str, float]] = {}
+        for src, state in self._sources.items():
+            if not state.latencies_ms:
+                continue
+            report[src.value] = {
+                "p50_ms": round(state.p50_latency(), 2),
+                "p95_ms": round(state.p95_latency(), 2),
+                "p99_ms": round(state.p99_latency(), 2),
+                "n":      len(state.latencies_ms),
+            }
+        return report
+
+    def reset_source(self, source: FeedSource) -> None:
+        """
+        Reset a source's state (confidence, error counts, latency history).
+
+        Called when a feed is restarted after a prolonged outage to prevent
+        stale confidence scores from penalising a recovered feed.
+        """
+        if source in self._sources:
+            state = self._sources[source]
+            with state._lock:
+                state.confidence     = 1.0
+                state.error_count    = 0
+                state.accept_count   = 0
+                state.reject_count   = 0
+                state.stale_count    = 0
+                state.jump_count     = 0
+                state.anomaly_count  = 0
+                state.latencies_ms.clear()
+                state.mids.clear()
+                state.spreads.clear()
+                state.last_tick_ts   = 0.0
+                state.last_mid       = 0.0
+            logger.info("DQE: source %s reset", source.value)
+
+    def mark_source_stale(self, source: FeedSource) -> None:
+        """Force-mark a source as stale (e.g. after a known outage)."""
+        if source in self._sources:
+            self._sources[source].last_tick_ts = 0.0
+            logger.info("DQE: source %s force-marked stale", source.value)
+
     def generate_report(self, symbol: str) -> QualityReport:
         now    = datetime.now(timezone.utc)
         recent = list(self._report_window)
