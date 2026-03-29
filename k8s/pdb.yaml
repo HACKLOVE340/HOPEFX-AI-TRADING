@@ -1,0 +1,33 @@
+# ── PodDisruptionBudgets ──────────────────────────────────────────────────────
+# Ensures at least 2 API pods remain available during voluntary disruptions
+# (node drains, cluster upgrades, rolling deploys).
+# With minReplicas=3 in HPA, this guarantees 2/3 pods always up.
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hopefx-api-pdb
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx-api
+    app.kubernetes.io/part-of: hopefx-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-api
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hopefx-frontend-pdb
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx-frontend
+    app.kubernetes.io/part-of: hopefx-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hopefx-frontend

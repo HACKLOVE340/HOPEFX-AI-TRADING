@@ -1,23 +1,51 @@
+# ── HopeFX ConfigMap — non-sensitive runtime config ───────────────────────────
+# Credentials and secrets belong in k8s-secrets.yaml (or an external
+# secrets manager: AWS Secrets Manager / HashiCorp Vault / Sealed Secrets).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: hopefx-config
-  namespace: trading
-# Non-sensitive runtime configuration only.
-# Credentials and secrets belong in k8s-secrets.yaml (or an external
-# secrets manager such as AWS Secrets Manager / HashiCorp Vault).
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx
+    app.kubernetes.io/part-of: hopefx-platform
 data:
-  REDIS_HOST: "redis"
+  # Infrastructure
+  REDIS_HOST: "redis-master.hopefx.svc.cluster.local"
   REDIS_PORT: "6379"
   APP_ENV: "production"
+
+  # API server
   API_HOST: "0.0.0.0"
   API_PORT: "8000"
-  OANDA_PRACTICE: "true"
-  BROKER_TYPE: "paper"
+  API_WORKERS: "4"
+
+  # Broker
+  OANDA_PRACTICE: "false"
+  BROKER_TYPE: "oanda"
   INITIAL_BALANCE: "100000"
+
+  # ML thresholds
   ML_MIN_TRADE_PROB: "0.58"
+
+  # Risk limits
   RISK_MAX_DRAWDOWN_PCT: "0.10"
   RISK_MAX_DAILY_LOSS_PCT: "0.05"
   RISK_MAX_POSITION_SIZE_PCT: "0.02"
+
+  # News blackout
   NEWS_BLACKOUT_BEFORE_MIN: "5"
   NEWS_BLACKOUT_AFTER_MIN: "5"
+
+  # Observability
+  LOG_LEVEL: "INFO"
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "8000"
+
+  # Feature flags
+  FEATURE_TWO_FACTOR_AUTH: "true"
+  FEATURE_WATCHLIST: "true"
+  FEATURE_TRADE_JOURNAL: "true"
+  FEATURE_BILLING_SUBSCRIPTION: "true"
+  FEATURE_ADVANCED_TRADING: "true"
+  FEATURE_PRICE_ALERTS: "true"

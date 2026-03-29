@@ -1,0 +1,111 @@
+# ── Ingress — TLS termination + routing ──────────────────────────────────────
+# Requires: ingress-nginx controller + cert-manager with a ClusterIssuer
+# named "letsencrypt-prod".
+#
+# Routes:
+#   /api/*   → hopefx-api:80
+#   /ws/*    → hopefx-api:80  (WebSocket upgrade)
+#   /*       → hopefx-frontend:80
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hopefx-ingress
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/name: hopefx
+    app.kubernetes.io/part-of: hopefx-platform
+  annotations:
+    # TLS via cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # nginx-ingress settings
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # WebSocket support for /ws/live
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+
+    # Security headers
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options "DENY" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+    # Rate limiting (requires nginx-ingress rate-limit module)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+
+    # Body size limit (prevent large payload attacks)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - hopefx.com
+        - www.hopefx.com
+        - api.hopefx.com
+      secretName: hopefx-tls
+  rules:
+    # API subdomain
+    - host: api.hopefx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-api
+                port:
+                  name: http
+
+    # Main domain — split /api and /ws to backend, rest to frontend
+    - host: hopefx.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-api
+                port:
+                  name: http
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-api
+                port:
+                  name: http
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-frontend
+                port:
+                  name: http
+
+    - host: www.hopefx.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hopefx-frontend
+                port:
+                  name: http
