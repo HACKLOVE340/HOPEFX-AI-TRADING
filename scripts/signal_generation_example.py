@@ -4,10 +4,12 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 
-# TA-Lib requires a compiled C library not available in all environments.
-# Skip gracefully when it is absent rather than failing collection.
-import pytest
-talib = pytest.importorskip("talib", reason="TA-Lib C library not installed")
+# TA-Lib requires a compiled C library. Install with:
+#   pip install TA-Lib  (requires libta-lib-dev on Linux)
+try:
+    import talib
+except ImportError as e:
+    raise SystemExit(f"TA-Lib not installed: {e}") from e
 
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier

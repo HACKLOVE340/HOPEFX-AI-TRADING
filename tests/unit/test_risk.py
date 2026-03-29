@@ -83,3 +83,56 @@ def test_risk_manager_signal_validation(tmp_path):
     manager.update_equity(93_000.0)  # 7% drawdown > 5% limit
 
     assert manager.kill_switch_active
+
+
+# ---------------------------------------------------------------------------
+# Merged from root test_risk_calculations.py (P4.3)
+# Pure arithmetic tests — no external dependencies
+# ---------------------------------------------------------------------------
+
+import unittest
+
+
+class TestRiskCalculations(unittest.TestCase):
+    """Arithmetic correctness of core risk formulas."""
+
+    def test_position_sizing(self):
+        # 2% risk on $1000 equity → $20 position size
+        equity = 1000
+        risk_percent = 0.02
+        position_size = equity * risk_percent
+        self.assertEqual(position_size, 20)
+
+    def test_atr_stop_loss(self):
+        # 1.5× ATR stop: ATR=$2 → stop=$3
+        atr = 2
+        stop_loss = atr * 1.5
+        self.assertEqual(stop_loss, 3)
+
+    def test_trailing_stop_logic(self):
+        # Trailing stop = entry + distance
+        entry_price = 100
+        trailing_stop_distance = 5
+        trailing_stop = entry_price + trailing_stop_distance
+        self.assertEqual(trailing_stop, 105)
+
+    def test_max_drawdown_pause(self):
+        # 10% drawdown must meet or exceed the 10% threshold
+        peak_equity = 1000
+        current_equity = 900
+        drawdown = (peak_equity - current_equity) / peak_equity
+        self.assertGreaterEqual(drawdown, 0.10)
+
+    def test_low_capital_mode(self):
+        # <$50 equity → 0.5% risk → $0.15 position size on $30
+        equity = 30
+        risk_percent = 0.005
+        position_size = equity * risk_percent
+        self.assertEqual(position_size, 0.15)
+
+    def test_edge_cases_zero_equity(self):
+        # 0 / inf == 0.0 in IEEE 754 — position size collapses to zero, no crash
+        equity = 0
+        atr = float("inf")
+        result = equity / atr
+        self.assertEqual(result, 0.0)
