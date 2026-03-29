@@ -93,6 +93,54 @@ class HopeFXEngine:
         self._running = False
         self._bar_count = 0
 
+        # ── Nuclear supervisor integration ────────────────────────────────────
+        # News events are pushed here by _on_news_event() and drained by the
+        # nuclear supervisor via register_news_callback() or poll mode.
+        self._news_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
+        self._news_callbacks: List = []  # coroutine functions registered externally
+
+    # ── nuclear supervisor hooks ──────────────────────────────────────────────
+
+    def register_news_callback(self, coro_fn) -> None:
+        """
+        Register an async callback invoked on every news event.
+
+        The callback receives a single dict argument with keys:
+            text, volatility, sentiment, current_exposure (optional)
+
+        Used by LifeSupervisor to wire NuclearHopeFXSupervisor without
+        requiring any changes to the engine's internal loop.
+
+        Example::
+            engine.register_news_callback(supervisor.on_new_event)
+        """
+        self._news_callbacks.append(coro_fn)
+        logger.info(
+            "News callback registered: %s (total=%d)",
+            getattr(coro_fn, "__qualname__", repr(coro_fn)),
+            len(self._news_callbacks),
+        )
+
+    async def _on_news_event(self, event: dict) -> None:
+        """
+        Dispatch a news event to all registered callbacks and the queue.
+
+        Called internally whenever the engine receives a news item from
+        the broker stream, economic calendar, or sentiment feed.
+        """
+        # Push to queue for poll-mode consumers (non-blocking; drop if full)
+        try:
+            self._news_queue.put_nowait(event)
+        except asyncio.QueueFull:
+            pass  # supervisor will catch up on next poll cycle
+
+        # Fire all registered async callbacks concurrently
+        if self._news_callbacks:
+            await asyncio.gather(
+                *(cb(event) for cb in self._news_callbacks),
+                return_exceptions=True,
+            )
+
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
@@ -143,6 +191,14 @@ class HopeFXEngine:
 
         # 6. Broker
         await self._init_broker()
+
+        # 6a. Inject broker into RiskOrchestrator so hedge orders can be placed
+        try:
+            from risk.orchestrator import risk_orchestrator
+            risk_orchestrator.inject_broker(self._broker)
+            logger.info("RiskOrchestrator: broker injected (%s)", self.broker_name)
+        except Exception as exc:
+            logger.warning("RiskOrchestrator broker injection failed: %s", exc)
 
         # 7. Equity snapshotter (background thread)
         self._trade_logger.start_equity_snapshotter(
@@ -330,12 +386,94 @@ class HopeFXEngine:
         )
 
         # ── Execute if signal is strong enough ────────────────────────────────
+        # Block execution if kill switch or risk orchestrator has halted trading
+        trading_blocked = False
+        try:
+            from kill_switch import kill_switch as _ks
+            if _ks.is_active():
+                logger.warning("Kill switch active — order blocked for %s", sym_key)
+                trading_blocked = True
+        except Exception:
+            pass
+
+        if not trading_blocked:
+            try:
+                from risk.orchestrator import risk_orchestrator as _ro
+                if not _ro.is_trading_allowed():
+                    logger.warning("RiskOrchestrator: trading halted — order blocked for %s", sym_key)
+                    trading_blocked = True
+            except Exception:
+                pass
+
         min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
-        if decision.action in ("long", "short") and decision.confidence >= min_conf:
+        if (
+            not trading_blocked
+            and decision.action in ("long", "short")
+            and decision.confidence >= min_conf
+        ):
             await self._execute_decision(decision, mid, sym_key)
+
+        # ── Dispatch news/sentiment event to nuclear supervisor ───────────────
+        # Extract sentiment from brain decision metadata if available
+        if self._news_callbacks or not self._news_queue.empty() or self._bar_count % 60 == 0:
+            await self._maybe_dispatch_news_event(ohlcv_df, decision, mid)
 
         # ── Equity snapshot ───────────────────────────────────────────────────
         await self._update_equity()
+
+    async def _maybe_dispatch_news_event(self, ohlcv_df, decision, mid: float) -> None:
+        """
+        Build a news event from available signals and dispatch to nuclear supervisor.
+
+        Pulls sentiment from the brain decision, volatility from recent price
+        action, and current exposure from the risk orchestrator.  Only fires
+        when there is something meaningful to report (sentiment != 0 or
+        volatility is elevated).
+        """
+        try:
+            # Sentiment: from brain decision metadata or ML features
+            sentiment = 0.0
+            if hasattr(decision, "metadata") and isinstance(decision.metadata, dict):
+                sentiment = float(decision.metadata.get("sentiment", 0.0))
+            elif hasattr(decision, "ml_probability"):
+                # Proxy: ml_probability > 0.5 = bullish, < 0.5 = bearish
+                sentiment = float(decision.ml_probability) * 2 - 1.0
+
+            # Volatility: std of last 20 closes normalised to 1.0 = normal
+            vol = 1.0
+            if len(ohlcv_df) >= 20:
+                closes = ohlcv_df["close"].tail(20).values
+                std = float(closes.std())
+                mean = float(abs(closes.mean()))
+                if mean > 0:
+                    vol = max(0.1, (std / mean) * 100)  # % vol, 1.0 = 1% = normal
+
+            # Current exposure from orchestrator
+            exposure = 0.5
+            try:
+                from risk.orchestrator import risk_orchestrator as _ro
+                exposure = await _ro.get_current_exposure()
+            except Exception:
+                pass
+
+            # Only dispatch if there's an elevated signal worth checking
+            if abs(sentiment) < 0.1 and vol < 1.5:
+                return
+
+            # Build a synthetic news text from the decision reason
+            text = getattr(decision, "reason", "") or ""
+            if not text:
+                return
+
+            event = {
+                "text": text,
+                "volatility": vol,
+                "sentiment": sentiment,
+                "current_exposure": exposure,
+            }
+            await self._on_news_event(event)
+        except Exception as exc:
+            logger.debug("_maybe_dispatch_news_event error: %s", exc)
 
     async def _execute_decision(self, decision, price: float, symbol: str) -> None:
         """Execute a brain decision through the broker."""
