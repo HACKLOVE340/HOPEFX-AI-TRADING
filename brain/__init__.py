@@ -9,12 +9,23 @@ brain/ — centralized intelligence hub.
 Primary entry point:
     from brain.hopefx_brain import HOPEFXBrain, get_brain
 
+Nuclear event response:
+    from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_supervisor
+
 Legacy components:
-    brain.brain          — original HOPEFXBrain (kept for backward compat)
+    brain.brain            — original HOPEFXBrain (kept for backward compat)
     brain.cognitive_engine — CognitiveEngine (analytical building blocks)
-    brain.llm_agent      — LLMAgent (GPT-4 strategy generation)
+    brain.llm_agent        — LLMAgent (GPT-4 strategy generation)
 """
 
 from brain.hopefx_brain import HOPEFXBrain, get_brain, Regime, BrainDecision
+from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_supervisor
 
-__all__ = ["HOPEFXBrain", "get_brain", "Regime", "BrainDecision"]
+__all__ = [
+    "HOPEFXBrain",
+    "get_brain",
+    "Regime",
+    "BrainDecision",
+    "NuclearHopeFXSupervisor",
+    "get_nuclear_supervisor",
+]

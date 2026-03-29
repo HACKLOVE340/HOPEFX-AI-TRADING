@@ -21,6 +21,7 @@ from .manager import (
     RiskLevel,
     RiskManager,
 )
+from .orchestrator import RiskOrchestrator, risk_orchestrator
 
 # Backwards-compat aliases expected by old callers
 PositionSize = PositionSizingResult
@@ -48,6 +49,8 @@ __all__ = [
     "MonteCarloResult",
     "StressTestResult",
     "DrawdownAnalysis",
+    "RiskOrchestrator",
+    "risk_orchestrator",
 ]
 
 __version__ = "1.0.0"

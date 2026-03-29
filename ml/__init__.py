@@ -24,6 +24,10 @@ Components:
 from .features import TechnicalFeatureEngineer
 from .models import BaseMLModel, LSTMPricePredictor, RandomForestTradingClassifier
 
+# RL nuclear decision agent path constant — used by NuclearHopeFXSupervisor
+RL_NUCLEAR_MODEL_PATH: str = "ml/rl_models/nuclear_decision_ppo.zip"
+RL_NUCLEAR_VECNORM_PATH: str = "ml/rl_models/nuclear_decision_vecnorm.pkl"
+
 __all__ = [
     "BaseMLModel",
     "LSTMPricePredictor",
@@ -33,6 +37,8 @@ __all__ = [
     "get_active_model",
     "get_model_version",
     "get_advanced_predictor",
+    "RL_NUCLEAR_MODEL_PATH",
+    "RL_NUCLEAR_VECNORM_PATH",
 ]
 
 # Module metadata
