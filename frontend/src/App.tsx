@@ -49,6 +49,8 @@ import Wallet               from './pages/Wallet';
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
 import { useStore, selectIsAuth, selectUser, selectWsStatus } from './store';
+import { useWebSocket } from './hooks/useWebSocket';
+import { usePriceSimulator } from './hooks/usePriceSimulator';
 
 // ─── React Query client ───────────────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -199,6 +201,16 @@ const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ colla
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const isAuth   = useStore(selectIsAuth);
+  const wsStatus = useStore(selectWsStatus);
+
+  // Live WebSocket — connects when authenticated, handles JWT auth handshake,
+  // auto-reconnects with exponential back-off, dispatches ticks into Zustand.
+  useWebSocket(isAuth);
+
+  // Price simulator — only active when WS is not connected (dev/demo fallback).
+  // Disabled in production once a live broker feed is streaming real ticks.
+  usePriceSimulator(wsStatus !== 'connected');
 
   // Wrap each page in ErrorBoundary so one broken page can't crash the whole shell
   const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
