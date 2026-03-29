@@ -12,6 +12,17 @@ Comprehensive backtesting framework for trading strategies.
 from backtesting.data_handler import DataHandler
 from backtesting.data_sources import YahooFinanceSource, CSVDataSource
 from backtesting.engine import BacktestEngine
+from backtesting.engine_config import (
+    BacktestConfig,
+    BacktestResult,
+    SimulatedBroker,
+    HistoricalDataLoader,
+    run_backtest,
+)
+try:
+    from backtesting.enhanced_engine import EnhancedBacktestEngine
+except Exception:  # optional heavy deps (numba, cupy)
+    EnhancedBacktestEngine = None  # type: ignore[assignment,misc]
 from backtesting.events import MarketEvent, SignalEvent, OrderEvent, FillEvent
 from backtesting.execution import SimulatedExecutionHandler
 from backtesting.metrics import PerformanceMetrics
@@ -22,10 +33,11 @@ from backtesting.reports import ReportGenerator
 from backtesting.plots import PerformancePlotter
 
 __all__ = [
+    # Event-driven engine (tick/bar level)
+    "BacktestEngine",
     "DataHandler",
     "YahooFinanceSource",
     "CSVDataSource",
-    "BacktestEngine",
     "MarketEvent",
     "SignalEvent",
     "OrderEvent",
@@ -37,11 +49,14 @@ __all__ = [
     "WalkForwardAnalysis",
     "ReportGenerator",
     "PerformancePlotter",
+    # Config-driven engine (OHLCV bar level, Kelly sizing, Monte Carlo)
+    "BacktestConfig",
+    "BacktestResult",
+    "SimulatedBroker",
+    "HistoricalDataLoader",
+    "run_backtest",
+    # Institutional engine (tick-level, Almgren-Chriss, GPU-optional)
+    "EnhancedBacktestEngine",
 ]
 
-# Module metadata
 __version__ = "1.0.0"
-__author__ = "HOPEFX Development Team"
-__description__ = (
-    "Comprehensive backtesting engine with optimization and walk-forward analysis"
-)
