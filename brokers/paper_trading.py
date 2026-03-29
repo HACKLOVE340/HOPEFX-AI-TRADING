@@ -10,6 +10,9 @@ Simulated broker for testing strategies without real money.
 """
 
 import logging
+import math
+import os
+import random
 import time
 import uuid
 from collections import deque
@@ -27,6 +30,142 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Per-symbol spread table (bid-ask half-spread in price units) ──────────────
+# Sources: typical retail broker spreads during liquid hours.
+# Used as the base spread; actual slippage adds a random component on top.
+_DEFAULT_SPREADS: Dict[str, float] = {
+    "XAUUSD": 0.30,   # Gold: ~$0.30 half-spread
+    "XAGUSD": 0.02,
+    "XPTUSD": 0.50,
+    "EURUSD": 0.00010,  # 1 pip
+    "GBPUSD": 0.00012,
+    "USDJPY": 0.012,
+    "USDCHF": 0.00012,
+    "AUDUSD": 0.00012,
+    "USDCAD": 0.00015,
+    "NZDUSD": 0.00015,
+    "EURGBP": 0.00012,
+    "EURJPY": 0.015,
+    "GBPJPY": 0.020,
+    "BTC/USD": 5.0,
+    "ETH/USD": 0.50,
+    "SOL/USD": 0.05,
+    "XRP/USD": 0.0005,
+    "SPY": 0.01,
+    "QQQ": 0.01,
+    "AAPL": 0.01,
+    "MSFT": 0.01,
+    "TSLA": 0.02,
+    "NVDA": 0.02,
+    "US30": 2.0,
+    "US500": 0.25,
+    "NAS100": 1.0,
+}
+_FALLBACK_SPREAD_PCT = float(os.getenv("PAPER_FALLBACK_SPREAD_PCT", "0.0002"))  # 2 bps
+
+
+class SlippageModel:
+    """
+    Realistic fill-price model for paper trading.
+
+    Three components are applied on every fill:
+      1. Half-spread  — always paid (bid-ask crossing cost).
+      2. Market impact — proportional to order size relative to a notional
+                         ADV (average daily volume); larger orders move price more.
+      3. Random noise  — Gaussian jitter representing intra-bar price uncertainty.
+
+    All three are directional: buys pay more, sells receive less.
+
+    Models
+    ------
+    "gaussian"  — Gaussian noise (default, calibrated to retail FX/metals).
+    "fixed"     — Fixed fractional slippage (PAPER_FIXED_SLIPPAGE_PCT env).
+    "zero"      — No slippage (useful for unit tests only).
+
+    Environment overrides
+    ---------------------
+    PAPER_SLIPPAGE_MODEL        — "gaussian" | "fixed" | "zero"
+    PAPER_FIXED_SLIPPAGE_PCT    — fractional slippage for "fixed" model (default 0.0005)
+    PAPER_IMPACT_FACTOR         — market-impact coefficient (default 0.1)
+    PAPER_NOISE_SIGMA_PCT       — Gaussian noise std as fraction of price (default 0.0001)
+    """
+
+    def __init__(self, model: str = "gaussian") -> None:
+        self._model = os.getenv("PAPER_SLIPPAGE_MODEL", model).lower()
+        self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
+        self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
+        self._noise_sigma_pct = float(os.getenv("PAPER_NOISE_SIGMA_PCT", "0.0001"))
+        self._rng = random.Random()  # not seeded — intentionally non-deterministic
+
+    def fill_price(
+        self,
+        symbol: str,
+        mid_price: float,
+        side: "OrderSide",
+        quantity: float,
+        notional_adv: float = 1_000_000.0,
+    ) -> float:
+        """
+        Return the simulated fill price for a market order.
+
+        Parameters
+        ----------
+        symbol       : Instrument symbol (used for spread lookup).
+        mid_price    : Current mid-market price.
+        side         : OrderSide.BUY or OrderSide.SELL.
+        quantity     : Order size in base units.
+        notional_adv : Assumed average daily volume in base units (for impact).
+
+        Returns
+        -------
+        Simulated fill price (always > 0).
+        """
+        if mid_price <= 0:
+            return mid_price
+
+        if self._model == "zero":
+            return mid_price
+
+        # Direction: +1 for buys (price goes up), -1 for sells (price goes down)
+        direction = 1.0 if str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG") else -1.0
+
+        if self._model == "fixed":
+            slippage = mid_price * self._fixed_pct * direction
+            fill = mid_price + slippage
+            logger.debug(
+                "SlippageModel[fixed] %s %s qty=%.4f mid=%.5f fill=%.5f slip=%.5f",
+                side, symbol, quantity, mid_price, fill, slippage,
+            )
+            return max(fill, 1e-8)
+
+        # ── Gaussian model ────────────────────────────────────────────────────
+        # 1. Half-spread (always paid)
+        half_spread = _DEFAULT_SPREADS.get(symbol, mid_price * _FALLBACK_SPREAD_PCT)
+        spread_cost = half_spread * direction
+
+        # 2. Market impact: sqrt-law approximation
+        #    impact = factor * mid * sqrt(qty / adv)
+        impact = (
+            self._impact_factor
+            * mid_price
+            * math.sqrt(max(quantity, 0.0) / max(notional_adv, 1.0))
+            * direction
+        )
+
+        # 3. Gaussian noise
+        noise = self._rng.gauss(0.0, mid_price * self._noise_sigma_pct)
+
+        slippage = spread_cost + impact + noise
+        fill = mid_price + slippage
+
+        logger.debug(
+            "SlippageModel[gaussian] %s %s qty=%.4f mid=%.5f "
+            "spread=%.5f impact=%.5f noise=%.5f fill=%.5f",
+            side, symbol, quantity, mid_price,
+            spread_cost, impact, noise, fill,
+        )
+        return max(fill, 1e-8)
 
 
 class PaperTradingBroker(BrokerConnector):
@@ -67,6 +206,9 @@ class PaperTradingBroker(BrokerConnector):
         self.equity = self.initial_balance
         self._session_factory = session_factory
         self._user_id = user_id
+        self._slippage = SlippageModel(
+            model=config.get("slippage_model", slippage_model)
+        )
 
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
@@ -179,19 +321,27 @@ class PaperTradingBroker(BrokerConnector):
 
         # Process order
         if order_type == OrderType.MARKET:
-            # Execute immediately
+            # Apply slippage model — fills at a realistic price, not mid
+            fill_price = self._slippage.fill_price(
+                symbol=symbol,
+                mid_price=current_price,
+                side=side,
+                quantity=quantity,
+            )
             order.status = OrderStatus.FILLED
             order.filled_quantity = quantity
-            order.average_price = current_price
+            order.average_price = fill_price
 
-            # Update position
-            self._update_position(symbol, side, quantity, current_price)
+            # Update position at the slippage-adjusted fill price
+            self._update_position(symbol, side, quantity, fill_price)
 
             # Record equity snapshot after every fill
             self._snapshot_equity()
 
             logger.info(
-                f"Market order filled: {side.value} {quantity} {symbol} @ ${current_price}",
+                "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f",
+                side.value, quantity, symbol,
+                current_price, fill_price, fill_price - current_price,
             )
         else:
             # For limit/stop orders, just mark as open
@@ -261,20 +411,31 @@ class PaperTradingBroker(BrokerConnector):
             return False
 
         position = self.positions[symbol]
-        current_price = self.market_prices.get(symbol, position.entry_price)
+        mid_price = self.market_prices.get(symbol, position.entry_price)
 
-        # Calculate P&L
+        # Closing a LONG = selling; closing a SHORT = buying
+        close_side = OrderSide.SELL if str(position.side).upper() in (
+            "LONG", "ORDERSIDE.BUY", "BUY"
+        ) else OrderSide.BUY
+        exit_price = self._slippage.fill_price(
+            symbol=symbol,
+            mid_price=mid_price,
+            side=close_side,
+            quantity=position.quantity,
+        )
+
+        # Calculate P&L at slippage-adjusted exit price
         if position.side == "LONG":
-            pnl = (current_price - position.entry_price) * position.quantity
+            pnl = (exit_price - position.entry_price) * position.quantity
         else:
-            pnl = (position.entry_price - current_price) * position.quantity
+            pnl = (position.entry_price - exit_price) * position.quantity
 
         # Update balance
         self.balance += pnl
         self.equity = self.balance
 
         # Persist closed trade to DB
-        self._persist_trade(position, current_price, pnl)
+        self._persist_trade(position, exit_price, pnl)
 
         # Remove position
         del self.positions[symbol]
