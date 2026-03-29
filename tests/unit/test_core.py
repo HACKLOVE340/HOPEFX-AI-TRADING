@@ -17,40 +17,57 @@ from core.event_bus import EventBus, MemoryMappedEventStore, DomainEvent
 
 @pytest.mark.asyncio
 async def test_event_bus(tmp_path):
-    """Test event bus publish/subscribe."""
-    # Use a small max_file_size (1 MB) to avoid pre-allocating the 1 GB default
-    # which exhausts /tmp in CI environments.
+    """Test EventBus local-fallback pub/sub (no Redis required).
+
+    The current EventBus uses Redis pub/sub with an in-process fallback when
+    Redis is unavailable.  In CI Redis is not running, so we exercise the
+    local-fallback path: subscribe_local() + publish() routes through
+    _local_bus when Redis is unreachable.
+    """
+    from core.event_bus import CH_TICK, EventBus
+
+    bus = EventBus()
+    # Force degraded mode so publish() routes through the local fallback
+    # without attempting Redis (which is not available in CI).
+    bus._degraded = True
+
+    received: list = []
+
+    def handler(msg: dict) -> None:
+        received.append(msg)
+
+    bus.subscribe_local(CH_TICK, handler)
+
+    await bus.publish(CH_TICK, {"type": "tick", "symbol": "XAUUSD",
+                                 "bid": 1800.0, "ask": 1800.1})
+
+    # Local fallback is synchronous — no sleep needed, but yield once to let
+    # any pending coroutines complete.
+    await asyncio.sleep(0)
+
+    assert len(received) == 1
+    assert received[0]["symbol"] == "XAUUSD"
+    assert received[0]["bid"] == 1800.0
+
+
+@pytest.mark.asyncio
+async def test_memory_mapped_event_store(tmp_path):
+    """Test MemoryMappedEventStore append and query."""
     store = MemoryMappedEventStore(
         base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576
     )
-    bus = EventBus(store=store)
-
-    received = []
-
-    def handler(event: DomainEvent):
-        received.append(event)
-
-    bus.subscribe("PRICE_UPDATE", handler)
 
     event = DomainEvent.create(
         "PRICE_UPDATE",
         "test",
         {"symbol": "XAUUSD", "bid": 1800.0, "ask": 1800.1},
     )
+    seq = store.append(event)
+    assert seq == 1
 
-    # Start the bus, publish, let it process, then stop
-    run_task = asyncio.create_task(bus.run())
-    await bus.publish(event)
-    await asyncio.sleep(0.2)
-    bus._running = False
-    run_task.cancel()
-    try:
-        await run_task
-    except asyncio.CancelledError:
-        pass
-
-    assert len(received) == 1
-    data = received[0].decode()
+    results = store.query(source="test")
+    assert len(results) == 1
+    data = results[0].decode()
     assert data["symbol"] == "XAUUSD"
 
 

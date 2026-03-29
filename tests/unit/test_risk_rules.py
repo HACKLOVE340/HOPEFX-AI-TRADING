@@ -220,8 +220,14 @@ class TestMlRouter:
             from fastapi import FastAPI
             from fastapi.testclient import TestClient
             from api.ml import router
+            from api.auth import get_current_user, require_role, TokenPayload
+
+            # Stub user so all auth-gated endpoints pass without a real JWT.
+            _stub_user = TokenPayload(sub="test-user", role="admin")
 
             app = FastAPI()
+            app.dependency_overrides[get_current_user] = lambda: _stub_user
+            app.dependency_overrides[require_role("admin")] = lambda: _stub_user
             app.include_router(router)
             return TestClient(app, raise_server_exceptions=False)
         except Exception:

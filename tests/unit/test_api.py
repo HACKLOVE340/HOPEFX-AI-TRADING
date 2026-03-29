@@ -1301,12 +1301,30 @@ class TestWebSocketManager:
         assert resp["action"] == "pong"
 
     async def test_handle_message_auth(self):
+        import os
+        import time
+        import jwt as _jwt_mod
+
+        # Build a valid signed JWT using the same secret _decode_token reads.
+        secret = os.environ.get(
+            "SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!"
+        )
+        os.environ.setdefault("SECURITY_JWT_SECRET", secret)
+        now = int(time.time())
+        token = _jwt_mod.encode(
+            {"sub": "ws-test-user", "role": "trader",
+             "iat": now, "exp": now + 3600},
+            secret,
+            algorithm="HS256",
+        )
+
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
         resp = await self.manager.handle_message(
-            conn_id, json.dumps({"action": "auth", "token": "mytoken123"})
+            conn_id, json.dumps({"action": "auth", "token": token})
         )
         assert resp["status"] == "authenticated"
+        assert resp["user_id"] == "ws-test-user"
 
     async def test_handle_message_invalid_json(self):
         ws = _MockWebSocket()
