@@ -6,12 +6,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store/authStore';
 import { apiClient } from '../../services/apiClient';
 import { pushNotifications } from '../../services/pushNotifications';
 import { Card } from '../../components/Card';
 import { COLORS, SPACING, RADIUS } from '../../utils/theme';
-import { NotificationPrefs } from '../../types';
+import { NotificationPrefs, SettingsStackParamList } from '../../types';
+
+type SettingsNav = NativeStackNavigationProp<SettingsStackParamList>;
 
 const DEFAULT_PREFS: NotificationPrefs = {
   signals: true,
@@ -22,6 +26,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
 };
 
 export function SettingsScreen() {
+  const navigation = useNavigation<SettingsNav>();
   const { user, logout } = useAuthStore();
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [saving, setSaving] = useState(false);
@@ -103,6 +108,21 @@ export function SettingsScreen() {
           <Text style={styles.testBtnText}>Send Test Notification</Text>
         </TouchableOpacity>
 
+        {/* Quick links */}
+        <Text style={styles.sectionTitle}>More</Text>
+        <Card style={styles.accountCard}>
+          <NavRow
+            icon="notifications-outline"
+            label="Notification Preferences"
+            onPress={() => navigation.navigate('Notifications')}
+          />
+          <NavRow
+            icon="alarm-outline"
+            label="Price Alerts"
+            onPress={() => navigation.navigate('Alerts')}
+          />
+        </Card>
+
         {/* Account */}
         <Text style={styles.sectionTitle}>Account</Text>
         <Card style={styles.accountCard}>
@@ -128,6 +148,16 @@ function SettingRow({ icon, label, value }: { icon: string; label: string; value
       <Text style={rowStyles.label}>{label}</Text>
       <Text style={rowStyles.value}>{value}</Text>
     </View>
+  );
+}
+
+function NavRow({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={rowStyles.row} onPress={onPress}>
+      <Ionicons name={icon as any} size={18} color={COLORS.textMuted} />
+      <Text style={[rowStyles.label, { color: COLORS.text }]}>{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+    </TouchableOpacity>
   );
 }
 
