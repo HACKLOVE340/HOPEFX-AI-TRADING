@@ -188,6 +188,16 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
+# Data layer REST endpoints
+try:
+    from api.data_layer import router as _dl_router
+    app.include_router(_dl_router)
+except Exception as _dl_router_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Data layer router failed to register: %s", _dl_router_err
+    )
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring
@@ -332,6 +342,23 @@ async def startup_event():
             app.state.alert_engine = app_state.alert_engine
 
         apply_persisted_risk_settings()
+
+        # ── Start data layer orchestrator ─────────────────────────────────────
+        # The orchestrator is the single source of truth for all market data.
+        # It starts all gold feeds, news engines, macro calendar, and FRED bridge.
+        # Non-blocking: if it fails, the rest of the app continues normally.
+        try:
+            from data_layer.orchestrator import orchestrator
+            asyncio.create_task(
+                orchestrator.start(),
+                name="data_layer_orchestrator",
+            )
+            logger.info("Data layer orchestrator starting in background")
+        except Exception as _dl_exc:
+            logger.warning(
+                "Data layer orchestrator failed to start (non-fatal): %s", _dl_exc
+            )
+
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)
@@ -379,6 +406,15 @@ async def shutdown_event():
     if app_state.cache:
         app_state.cache.close()
         logger.info("✓ Cache connection closed")
+
+    # Stop data layer orchestrator
+    try:
+        from data_layer.orchestrator import orchestrator
+        if orchestrator._started:
+            await orchestrator.stop()
+            logger.info("✓ Data layer orchestrator stopped")
+    except Exception as _dl_stop_exc:
+        logger.warning("Data layer orchestrator stop error: %s", _dl_stop_exc)
 
     logger.info("Shutdown complete.")
 

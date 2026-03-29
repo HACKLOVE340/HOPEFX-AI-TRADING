@@ -270,6 +270,27 @@ class AdvancedModelPredictor:
             if X.empty:
                 return None
             result = X.iloc[[-1]]  # last bar only
+
+            # ── Inject data layer features (microstructure + sentiment + macro) ──
+            # These are appended as extra columns. The model fills missing columns
+            # with 0 if it was not trained on them — safe degradation.
+            try:
+                from data_layer.orchestrator import orchestrator
+                dl_features = orchestrator.get_ml_features(symbol=symbol)
+                if dl_features:
+                    import pandas as _pd
+                    dl_row = _pd.DataFrame([dl_features], index=result.index)
+                    # Only add columns not already present
+                    new_cols = [c for c in dl_row.columns if c not in result.columns]
+                    if new_cols:
+                        result = _pd.concat([result, dl_row[new_cols]], axis=1)
+                        logger.debug(
+                            "Data layer injected %d features for %s",
+                            len(new_cols), symbol,
+                        )
+            except Exception as dl_exc:
+                logger.debug("Data layer feature injection skipped: %s", dl_exc)
+
             self._cache.set(symbol, last_ts, result)
             logger.debug(
                 "Feature cache MISS for %s @ %s — computed and cached", symbol, last_ts

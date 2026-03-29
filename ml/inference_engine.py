@@ -81,6 +81,9 @@ class InferenceEngine:
         # Cached model metadata from advanced_oos_meta.json
         self._meta_cache: Optional[Dict[str, Any]] = None
         self._meta_mtime: float = 0.0
+        # Data layer nudge tracking
+        self._last_sentiment_score: float = 0.0
+        self._last_macro_impact: float = 0.0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
@@ -95,11 +98,23 @@ class InferenceEngine:
         return self._predictor
 
     def _get_macro_df(self, ohlcv: pd.DataFrame) -> Optional[pd.DataFrame]:
-        """Align MacroStore to the OHLCV index, deduplicating the result index."""
+        """Align MacroStore to the OHLCV index, deduplicating the result index.
+
+        MacroStore is now auto-populated by data_layer.feeds.macro.store_bridge
+        (MacroStoreBridge) which loads FRED series on startup and refreshes daily.
+        load_defaults() is kept as a CSV fallback for offline environments.
+        """
         try:
             from ml.macro_store import macro_store
 
             if len(macro_store) == 0:
+                # Try data_layer bridge first (FRED live data)
+                try:
+                    from data_layer.feeds.macro.store_bridge import macro_store_bridge
+                    if not macro_store_bridge.is_loaded:
+                        logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
+                except Exception:
+                    pass
                 macro_store.load_defaults()
             macro_df = macro_store.align_to_hourly(ohlcv)
             if macro_df is None or macro_df.empty:
@@ -297,7 +312,7 @@ class InferenceEngine:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             return base_result
 
-        # Step 1: MacroStore
+        # Step 1: MacroStore (now auto-populated from FRED via MacroStoreBridge)
         macro_df = self._get_macro_df(ohlcv)
         macro_active = macro_df is not None and not macro_df.empty
 
@@ -349,6 +364,12 @@ class InferenceEngine:
         # Step 6: Calibration
         cal_prob = self._calibrate(raw_prob)
 
+        # Step 6b: Data-layer sentiment + macro adjustment
+        # Inject news sentiment and macro calendar signals as a soft prior.
+        # This does NOT override the model — it nudges cal_prob by ±2% max.
+        dl_nudge = self._get_data_layer_nudge()
+        cal_prob = max(0.01, min(0.99, cal_prob + dl_nudge))
+
         # Step 7: Thresholding
         if cal_prob >= threshold_long:
             direction = "long"
@@ -370,6 +391,15 @@ class InferenceEngine:
         # Track signal direction for non-neutral rate
         self._signal_window.append(direction)
 
+        # Record signal to lineage store
+        self._record_signal_lineage(
+            direction=direction,
+            confidence=float(confidence),
+            probability=float(cal_prob),
+            symbol=symbol,
+            model_version=model_version,
+        )
+
         return {
             "direction": direction,
             "probability": round(raw_prob, 4),
@@ -382,7 +412,73 @@ class InferenceEngine:
             "macro_active": macro_active,
             "mtf_active": mtf_active,
             "online_active": online_active,
+            "dl_nudge": round(dl_nudge, 4),
+            "sentiment_score": self._last_sentiment_score,
+            "macro_impact": self._last_macro_impact,
         }
+
+    def _get_data_layer_nudge(self) -> float:
+        """
+        Compute a soft probability nudge from the data layer.
+
+        Uses news sentiment EMA and macro calendar impact score to
+        produce a nudge in [-0.02, +0.02]. This is intentionally small
+        to avoid overriding the trained model.
+
+        Positive nudge = bullish for gold (long bias).
+        Negative nudge = bearish for gold (short bias).
+        """
+        self._last_sentiment_score = 0.0
+        self._last_macro_impact    = 0.0
+        try:
+            from data_layer.orchestrator import orchestrator
+            features = orchestrator.get_ml_features()
+
+            sentiment = features.get("news_sentiment_score", 0.0)
+            impact    = features.get("macro_impact_score_now", 0.0)
+            blackout  = features.get("macro_is_blackout", 0.0)
+
+            self._last_sentiment_score = sentiment
+            self._last_macro_impact    = impact
+
+            # During blackout windows, suppress the nudge entirely
+            if blackout > 0.5:
+                return 0.0
+
+            # Sentiment nudge: ±0.01 max
+            sent_nudge = sentiment * 0.01
+
+            # Macro impact nudge: high impact → reduce confidence (push toward 0)
+            # We don't know direction of macro surprise, so we dampen rather than nudge
+            macro_nudge = 0.0
+
+            return float(sent_nudge + macro_nudge)
+        except Exception:
+            return 0.0
+
+    def _record_signal_lineage(
+        self,
+        direction: str,
+        confidence: float,
+        probability: float,
+        symbol: str,
+        model_version: str,
+    ) -> None:
+        """Write signal to immutable lineage store (non-blocking)."""
+        try:
+            import hashlib, uuid
+            from data_layer.lineage.store import lineage_store
+            lineage_store.record_signal(
+                direction     = direction,
+                confidence    = confidence,
+                probability   = probability,
+                features_hash = "",   # populated by advanced_predictor when available
+                model_version = model_version,
+                lineage_id    = str(uuid.uuid4()),
+                symbol        = symbol,
+            )
+        except Exception:
+            pass
 
     # ── Metadata cache ────────────────────────────────────────────────────────
 

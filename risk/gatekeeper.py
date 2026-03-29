@@ -95,8 +95,23 @@ class _NewsCalendar:
             logger.warning("NewsCalendar refresh failed: %s — blackout disabled.", exc)
 
     def is_blackout(self, now: Optional[datetime] = None) -> bool:
-        """Return True when now falls within any news blackout window."""
+        """
+        Return True when now falls within any news blackout window.
+
+        Checks the data_layer MacroCalendarEngine first (authoritative source
+        with gold-specific impact scoring). Falls back to Redis event list.
+        """
         now = now or datetime.now(timezone.utc)
+
+        # Primary: data_layer MacroCalendarEngine
+        try:
+            from data_layer.calendar.engine import macro_calendar_engine
+            if macro_calendar_engine.is_blackout_window():
+                return True
+        except Exception:
+            pass
+
+        # Fallback: Redis-loaded event list
         before = timedelta(minutes=NEWS_BLACKOUT_BEFORE_MIN)
         after  = timedelta(minutes=NEWS_BLACKOUT_AFTER_MIN)
         for event_time in self._events:
