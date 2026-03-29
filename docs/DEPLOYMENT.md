@@ -570,12 +570,233 @@ before it will connect in `APP_ENV=production`.
 
 ---
 
+---
+
+## Option 3: Kubernetes / Helm
+
+### Prerequisites
+
+```bash
+# Install kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+# Install Helm
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
+### Create Secrets
+
+```bash
+kubectl create namespace hopefx
+
+kubectl create secret generic hopefx-secrets \
+  --namespace hopefx \
+  --from-literal=SECURITY_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))") \
+  --from-literal=CONFIG_ENCRYPTION_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") \
+  --from-literal=HOPEFX_KILL_SWITCH_TOKEN=$(python -c "import secrets; print(secrets.token_hex(32))") \
+  --from-literal=DATABASE_URL=postgresql://hopefx:password@postgres:5432/hopefx_db \
+  --from-literal=REDIS_URL=redis://redis:6379/0
+```
+
+### Deploy with Helm
+
+```bash
+helm upgrade --install hopefx helm/hopefx/ \
+  --namespace hopefx \
+  --set image.tag=latest \
+  --set app.env=production \
+  --atomic \
+  --timeout 5m
+
+kubectl rollout status deployment/hopefx --namespace hopefx
+```
+
+### Check Status
+
+```bash
+kubectl get pods --namespace hopefx
+kubectl logs -f deployment/hopefx --namespace hopefx
+kubectl exec -it deployment/hopefx --namespace hopefx -- curl localhost:8000/health
+```
+
+### Rollback
+
+```bash
+helm rollback hopefx --namespace hopefx
+```
+
+---
+
+## Option 4: VPS with systemd (Minimal)
+
+For a single VPS without Docker:
+
+### 1. Provision the VPS
+
+Minimum: 2 vCPU, 4 GB RAM, 20 GB SSD (Ubuntu 22.04).
+
+```bash
+# Update and install system deps
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3.12 python3.12-venv python3.12-dev \
+  git nginx certbot python3-certbot-nginx \
+  postgresql postgresql-contrib redis-server
+```
+
+### 2. Create Application User
+
+```bash
+sudo useradd -m -s /bin/bash hopefx
+sudo su - hopefx
+```
+
+### 3. Clone and Install
+
+```bash
+git clone https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
+cd HOPEFX-AI-TRADING
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with production values
+nano .env
+alembic upgrade head
+exit
+```
+
+### 4. Install the systemd Service
+
+```bash
+sudo cp hopefx-trading.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable hopefx-trading
+sudo systemctl start hopefx-trading
+sudo systemctl status hopefx-trading
+```
+
+### 5. Configure Nginx
+
+```bash
+sudo nano /etc/nginx/sites-available/hopefx
+```
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/hopefx /etc/nginx/sites-enabled/
+sudo certbot --nginx -d yourdomain.com
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 6. Configure Firewall
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+sudo ufw status
+```
+
+### 7. Verify
+
+```bash
+curl https://yourdomain.com/health
+```
+
+---
+
+## Updating a Running Deployment
+
+### Docker Compose
+
+```bash
+git pull origin main
+docker compose pull
+docker compose up -d --no-deps --build app
+docker compose logs -f app
+```
+
+### Kubernetes
+
+```bash
+git pull origin main
+docker build -t hopefx:$(git rev-parse --short HEAD) .
+docker push your-registry/hopefx:$(git rev-parse --short HEAD)
+helm upgrade hopefx helm/hopefx/ \
+  --namespace hopefx \
+  --set image.tag=$(git rev-parse --short HEAD) \
+  --atomic
+```
+
+### VPS systemd
+
+```bash
+sudo su - hopefx
+cd HOPEFX-AI-TRADING
+git pull origin main
+source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+exit
+sudo systemctl restart hopefx-trading
+sudo systemctl status hopefx-trading
+```
+
+---
+
+## Database Migrations
+
+Always run migrations before restarting the application:
+
+```bash
+# Check current revision
+alembic current
+
+# Apply all pending migrations
+alembic upgrade head
+
+# Rollback one migration (if needed)
+alembic downgrade -1
+```
+
+The latest migration is `f1a2b3c4d5e6` (watchlists table).
+
+---
+
 ## Support
 
 For deployment issues:
 - GitHub Issues: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING/issues
-- Documentation: See docs/INSTALLATION.md, docs/SECURITY.md
+- Documentation: See [INSTALLATION.md](INSTALLATION.md), [SECURITY.md](SECURITY.md), [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ---
 
-**Status:** Production deployment guide complete. All diagnostic blockers resolved 2026-03-29.
+*Last updated: 2026-07-14 (v1.17)*
