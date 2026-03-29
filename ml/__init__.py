@@ -130,6 +130,9 @@ def _try_load(path: _Path) -> _Optional[_Any]:
     Uses joblib (not raw pickle) — joblib handles numpy arrays more safely
     and is the standard for sklearn/XGBoost pipelines.  Raw pickle is kept
     as a fallback for files that joblib cannot read.
+
+    On load failure a CRITICAL log is emitted with the exact remediation
+    command so operators can detect silent model degradation in log aggregators.
     """
     if not path.exists():
         return None
@@ -150,7 +153,21 @@ def _try_load(path: _Path) -> _Optional[_Any]:
             with open(path, "rb") as f:
                 return _pickle.load(f)
         except Exception as exc:
-            _ml_logger.debug("Could not load %s: %s", path.name, exc)
+            import sys as _sys
+            _ml_logger.critical(
+                "CANNOT LOAD MODEL %s: %s\n"
+                "  Python version: %s\n"
+                "  This is usually a pickle protocol mismatch between the Python\n"
+                "  version used to train the model and the current runtime.\n"
+                "  Remediation (run inside Docker on Python 3.10):\n"
+                "    docker compose run --rm app python scripts/resave_models.py\n"
+                "  Or retrain from scratch:\n"
+                "    docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3\n"
+                "  The engine will fall back to a weaker model — live trading is NOT recommended.",
+                path.name,
+                exc,
+                _sys.version,
+            )
             return None
 
 
