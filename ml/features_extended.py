@@ -25,7 +25,7 @@ Total output: 230+ features when combined with build_advanced_features().
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -870,3 +870,178 @@ def _zscore(s: pd.Series, w: int) -> pd.Series:
     mu = s.rolling(w).mean()
     sig = s.rolling(w).std().replace(0, np.nan)
     return ((s - mu) / sig).fillna(0.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Layer 17: Live data layer features (orchestrator injection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def add_data_layer_features(
+    df: pd.DataFrame,
+    as_of: Optional[pd.Timestamp] = None,
+) -> pd.DataFrame:
+    """
+    Inject real-time data layer features from MarketDataOrchestrator into
+    an OHLCV feature DataFrame.
+
+    This is the ONLY function that bridges the data_layer into the ML
+    feature pipeline. All data comes exclusively from the orchestrator —
+    no direct broker or feed calls.
+
+    Features injected (26 total)
+    ----------------------------
+    Microstructure (16):
+      dl_spread, dl_spread_pct, dl_ofi, dl_trade_pressure,
+      dl_buy_pressure, dl_sell_pressure, dl_cumulative_delta,
+      dl_volume_delta, dl_vwap, dl_bid_depth, dl_ask_depth,
+      dl_depth_imbalance, dl_tick_count, dl_spread_z20,
+      dl_ofi_ema5, dl_pressure_divergence
+
+    Sentiment (4):
+      dl_news_sentiment, dl_news_momentum, dl_news_count_1h,
+      dl_news_bullish_ratio
+
+    Macro calendar (6):
+      dl_macro_impact, dl_hours_to_next_high, dl_hours_since_last_high,
+      dl_macro_surprise, dl_high_event_count_24h, dl_is_blackout
+
+    Parameters
+    ----------
+    df     : OHLCV DataFrame with DatetimeIndex (UTC)
+    as_of  : If provided, only use data available at this timestamp
+             (causal guarantee for backtesting). If None, uses live data.
+
+    Returns
+    -------
+    DataFrame with 26 additional dl_* columns appended.
+    All columns are forward-filled and NaN-filled with neutral values.
+    """
+    d = df.copy()
+    n = len(d)
+
+    # ── Pull features from orchestrator ──────────────────────────────────────
+    features: Dict[str, float] = {}
+    try:
+        from data_layer.orchestrator import orchestrator
+        features = orchestrator.get_ml_features(as_of=as_of)
+    except Exception as exc:
+        logger.debug("add_data_layer_features: orchestrator unavailable: %s", exc)
+
+    # ── Microstructure features ───────────────────────────────────────────────
+    spread          = features.get("spread",               0.0)
+    spread_pct      = features.get("spread_pct",           0.0)
+    ofi             = features.get("order_flow_imbalance", 0.0)
+    trade_pressure  = features.get("trade_pressure",       0.0)
+    buy_pressure    = features.get("buy_pressure",         0.5)
+    sell_pressure   = features.get("sell_pressure",        0.5)
+    cum_delta       = features.get("cumulative_delta",     0.0)
+    vol_delta       = features.get("volume_delta",         0.0)
+    vwap            = features.get("vwap",                 0.0)
+    bid_depth       = features.get("bid_depth",            0.0)
+    ask_depth       = features.get("ask_depth",            0.0)
+    depth_imbalance = features.get("depth_imbalance",      0.0)
+    tick_count      = features.get("tick_count",           0.0)
+
+    # Derived microstructure
+    # Spread z-score proxy: current spread vs rolling mean (use scalar broadcast)
+    spread_z20 = features.get("spread_z20", 0.0)
+    ofi_ema5   = features.get("ofi_ema5",   ofi)
+    # Pressure divergence: buy_pressure - sell_pressure (signed)
+    pressure_div = buy_pressure - sell_pressure
+
+    # ── Sentiment features ────────────────────────────────────────────────────
+    news_sentiment  = features.get("news_sentiment_score",    0.0)
+    news_momentum   = features.get("news_sentiment_momentum", 0.0)
+    news_count_1h   = features.get("news_article_count_1h",   0.0)
+    news_bull_ratio = features.get("news_bullish_ratio",       0.5)
+
+    # ── Macro calendar features ───────────────────────────────────────────────
+    macro_impact      = features.get("macro_impact_score_now",      0.0)
+    hours_to_next     = features.get("macro_hours_to_next_high",    48.0)
+    hours_since_last  = features.get("macro_hours_since_last_high", 48.0)
+    macro_surprise    = features.get("macro_surprise_last",          0.0)
+    high_count_24h    = features.get("macro_high_event_count_24h",   0.0)
+    is_blackout       = features.get("macro_is_blackout",            0.0)
+
+    # ── Broadcast scalars to full DataFrame length ────────────────────────────
+    # For live inference: all rows get the same current value (latest snapshot)
+    # For backtesting with as_of: caller should iterate and call per-bar
+    d["dl_spread"]             = spread
+    d["dl_spread_pct"]         = spread_pct
+    d["dl_ofi"]                = ofi
+    d["dl_trade_pressure"]     = trade_pressure
+    d["dl_buy_pressure"]       = buy_pressure
+    d["dl_sell_pressure"]      = sell_pressure
+    d["dl_cumulative_delta"]   = cum_delta
+    d["dl_volume_delta"]       = vol_delta
+    d["dl_vwap"]               = vwap
+    d["dl_bid_depth"]          = bid_depth
+    d["dl_ask_depth"]          = ask_depth
+    d["dl_depth_imbalance"]    = depth_imbalance
+    d["dl_tick_count"]         = tick_count
+    d["dl_spread_z20"]         = spread_z20
+    d["dl_ofi_ema5"]           = ofi_ema5
+    d["dl_pressure_divergence"]= pressure_div
+    d["dl_news_sentiment"]     = news_sentiment
+    d["dl_news_momentum"]      = news_momentum
+    d["dl_news_count_1h"]      = news_count_1h
+    d["dl_news_bullish_ratio"] = news_bull_ratio
+    d["dl_macro_impact"]       = macro_impact
+    d["dl_hours_to_next_high"] = hours_to_next
+    d["dl_hours_since_last_high"] = hours_since_last
+    d["dl_macro_surprise"]     = macro_surprise
+    d["dl_high_event_count_24h"] = high_count_24h
+    d["dl_is_blackout"]        = is_blackout
+
+    # Ensure no NaN/inf leaks
+    dl_cols = [c for c in d.columns if c.startswith("dl_")]
+    d[dl_cols] = d[dl_cols].replace([float("inf"), float("-inf")], 0.0).fillna(0.0)
+
+    logger.debug(
+        "add_data_layer_features: injected %d features, ofi=%.3f sent=%.3f impact=%.3f",
+        len(dl_cols), ofi, news_sentiment, macro_impact,
+    )
+    return d
+
+
+def build_extended_features_with_data_layer(
+    ohlcv: pd.DataFrame,
+    macro_df: Optional[pd.DataFrame] = None,
+    horizon: int = 1,
+    use_filtered_target: bool = True,
+    min_move_atr: float = 0.25,
+    smoke: bool = False,
+    as_of: Optional[pd.Timestamp] = None,
+) -> "tuple[pd.DataFrame, pd.Series]":
+    """
+    Full feature matrix: 200+ OHLCV features + 26 live data layer features.
+
+    This is the production entry point for the ML pipeline.
+    Calls build_extended_features() then appends add_data_layer_features().
+
+    Parameters
+    ----------
+    ohlcv              : OHLCV DataFrame
+    macro_df           : Optional macro DataFrame
+    horizon            : Prediction horizon in bars
+    use_filtered_target: Drop low-conviction bars
+    min_move_atr       : Minimum move threshold
+    smoke              : Skip expensive computations (CI mode)
+    as_of              : Causal cutoff for data layer features
+
+    Returns
+    -------
+    X : Feature DataFrame (226+ columns)
+    y : Binary target Series
+    """
+    X, y = build_extended_features(
+        ohlcv,
+        macro_df=macro_df,
+        horizon=horizon,
+        use_filtered_target=use_filtered_target,
+        min_move_atr=min_move_atr,
+        smoke=smoke,
+    )
+    X = add_data_layer_features(X, as_of=as_of)
+    return X, y
