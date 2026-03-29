@@ -4,13 +4,13 @@
 """
 data_layer/cache/redis_store.py
 =================================
-DataLayerRedisStore — ultra-high-performance Redis caching for the data layer.
+DataLayerRedisStore — high-performance Redis caching for the data layer.
 
 Key schema (all prefixed hopefx:dl:)
 --------------------------------------
   hopefx:dl:tick:{symbol}              STRING  latest validated tick JSON       TTL: 30s
   hopefx:dl:tick_history:{symbol}      ZSET    score=epoch, member=tick_json    TTL: 1h (trimmed to 10k)
-  hopefx:dl:ohlcv:{symbol}:{tf}        ZSET    score=bar_open_epoch, member=bar_json  TTL: 24h
+  hopefx:dl:ohlcv:{symbol}:{tf}        ZSET    score=bar_open_epoch, member=bar_json  TTL: per-tf
   hopefx:dl:ohlcv_latest:{symbol}:{tf} STRING  latest bar JSON                  TTL: per-tf
   hopefx:dl:micro:{symbol}             STRING  microstructure snapshot JSON      TTL: 5s
   hopefx:dl:sentiment                  STRING  sentiment signal JSON             TTL: 60s
@@ -28,14 +28,14 @@ Per-instrument TTL strategy
   4h OHLCV:        8h
   1d OHLCV:        48h
 
-Invalidation
-------------
-  - Tick cache: overwritten on every new validated tick (no explicit invalidation needed)
-  - OHLCV: invalidated when a new bar closes (set_ohlcv_bar triggers ltrim + setex)
-  - Sentiment: invalidated when new articles are scored
-  - Macro: invalidated when FRED refresh completes
+Memory pressure handling
+-------------------------
+  - OHLCV sorted sets trimmed to DL_OHLCV_MAX_BARS (default 2000)
+  - Tick history trimmed to DL_TICK_HISTORY_MAX (default 10000)
+  - On Redis ENOMEM error: evict oldest OHLCV bars and retry once
+  - Memory usage reported in stats()
 
-All operations degrade gracefully — Redis unavailability never raises to callers.
+All operations degrade gracefully — Redis unavailability never raises.
 """
 from __future__ import annotations
 
@@ -43,12 +43,10 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Per-timeframe TTL in seconds
 _OHLCV_TTL: Dict[str, int] = {
     "1m":  300,
     "5m":  900,
@@ -58,15 +56,15 @@ _OHLCV_TTL: Dict[str, int] = {
     "1d":  172800,
 }
 
-_TICK_TTL          = int(os.getenv("DL_TICK_TTL_S",       "30"))
-_MICRO_TTL         = int(os.getenv("DL_MICRO_TTL_S",       "5"))
-_SENTIMENT_TTL     = int(os.getenv("DL_SENTIMENT_TTL_S",  "60"))
-_MACRO_TTL         = int(os.getenv("DL_MACRO_TTL_S",     "300"))
-_CALENDAR_TTL      = int(os.getenv("DL_CALENDAR_TTL_S",   "60"))
-_QUALITY_TTL       = int(os.getenv("DL_QUALITY_TTL_S",    "30"))
-_HEALTH_TTL        = int(os.getenv("DL_HEALTH_TTL_S",     "10"))
-_TICK_HISTORY_MAX  = int(os.getenv("DL_TICK_HISTORY_MAX", "10000"))
-_OHLCV_MAX_BARS    = int(os.getenv("DL_OHLCV_MAX_BARS",   "2000"))
+_TICK_TTL         = int(os.getenv("DL_TICK_TTL_S",        "30"))
+_MICRO_TTL        = int(os.getenv("DL_MICRO_TTL_S",        "5"))
+_SENTIMENT_TTL    = int(os.getenv("DL_SENTIMENT_TTL_S",   "60"))
+_MACRO_TTL        = int(os.getenv("DL_MACRO_TTL_S",      "300"))
+_CALENDAR_TTL     = int(os.getenv("DL_CALENDAR_TTL_S",    "60"))
+_QUALITY_TTL      = int(os.getenv("DL_QUALITY_TTL_S",     "30"))
+_HEALTH_TTL       = int(os.getenv("DL_HEALTH_TTL_S",      "10"))
+_TICK_HISTORY_MAX = int(os.getenv("DL_TICK_HISTORY_MAX", "10000"))
+_OHLCV_MAX_BARS   = int(os.getenv("DL_OHLCV_MAX_BARS",   "2000"))
 
 _PREFIX = "hopefx:dl:"
 
@@ -78,15 +76,16 @@ class DataLayerRedisStore:
     All methods are synchronous (redis-py). Async wrappers use
     run_in_executor for use inside asyncio event loops.
 
-    Zero silent failures: every Redis exception is caught, logged,
+    Zero silent failures: every Redis exception is caught, logged at DEBUG,
     and returns None/[] to the caller.
     """
 
     def __init__(self, redis_client=None) -> None:
-        self._r = redis_client
+        self._r      = redis_client
         self._hits   = 0
         self._misses = 0
         self._errors = 0
+        self._writes = 0
 
     def _key(self, *parts: str) -> str:
         return _PREFIX + ":".join(parts)
@@ -96,9 +95,20 @@ class DataLayerRedisStore:
             return False
         try:
             self._r.setex(key, ttl, value)
+            self._writes += 1
             return True
         except Exception as exc:
             self._errors += 1
+            # Memory pressure: try to free space and retry once
+            if "ENOMEM" in str(exc) or "OOM" in str(exc):
+                logger.warning("Redis OOM — attempting eviction and retry")
+                self._evict_oldest_ohlcv()
+                try:
+                    self._r.setex(key, ttl, value)
+                    self._writes += 1
+                    return True
+                except Exception:
+                    pass
             logger.debug("Redis set error key=%s: %s", key, exc)
             return False
 
@@ -117,27 +127,47 @@ class DataLayerRedisStore:
             logger.debug("Redis get error key=%s: %s", key, exc)
             return None
 
+    def _evict_oldest_ohlcv(self) -> None:
+        """Evict oldest 20% of OHLCV bars across all timeframes to free memory."""
+        if not self._r:
+            return
+        try:
+            pattern = self._key("ohlcv", "*")
+            keys = self._r.keys(pattern)
+            for key in keys:
+                count = self._r.zcard(key)
+                if count > 100:
+                    evict_count = max(1, count // 5)
+                    self._r.zremrangebyrank(key, 0, evict_count - 1)
+                    logger.debug(
+                        "Redis eviction: removed %d bars from %s",
+                        evict_count, key,
+                    )
+        except Exception as exc:
+            logger.debug("Redis eviction error: %s", exc)
+
     # ── Tick cache ────────────────────────────────────────────────────────────
 
     def set_tick(self, symbol: str, tick_dict: Dict[str, Any]) -> None:
-        """Cache the latest validated tick."""
+        """Cache the latest validated tick and push to history."""
         key = self._key("tick", symbol)
-        self._safe_set(key, json.dumps(tick_dict), _TICK_TTL)
+        payload = json.dumps(tick_dict)
+        self._safe_set(key, payload, _TICK_TTL)
 
-        # Also push to sorted set for history
+        # Push to sorted set history (score = epoch)
         if self._r:
             try:
-                score = tick_dict.get("epoch", time.time())
+                score    = tick_dict.get("epoch", time.time())
                 hist_key = self._key("tick_history", symbol)
-                self._r.zadd(hist_key, {json.dumps(tick_dict): score})
-                # Trim to max size
-                self._r.zremrangebyrank(hist_key, 0, -(_TICK_HISTORY_MAX + 1))
-                self._r.expire(hist_key, 3600)
+                pipe = self._r.pipeline(transaction=False)
+                pipe.zadd(hist_key, {payload: score})
+                pipe.zremrangebyrank(hist_key, 0, -(_TICK_HISTORY_MAX + 1))
+                pipe.expire(hist_key, 3600)
+                pipe.execute()
             except Exception as exc:
                 logger.debug("Redis tick_history error: %s", exc)
 
     def get_tick(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Return the latest cached tick or None."""
         raw = self._safe_get(self._key("tick", symbol))
         if raw:
             try:
@@ -153,7 +183,7 @@ class DataLayerRedisStore:
         if not self._r:
             return []
         try:
-            key = self._key("tick_history", symbol)
+            key      = self._key("tick_history", symbol)
             raw_list = self._r.zrange(key, -limit, -1)
             return [json.loads(r) for r in raw_list if r]
         except Exception as exc:
@@ -163,32 +193,32 @@ class DataLayerRedisStore:
     # ── OHLCV cache ───────────────────────────────────────────────────────────
 
     def set_ohlcv_bar(self, symbol: str, timeframe: str, bar: Dict[str, Any]) -> None:
-        """Cache a single OHLCV bar."""
         ttl = _OHLCV_TTL.get(timeframe, 3600)
 
         # Latest bar string
         latest_key = self._key("ohlcv_latest", symbol, timeframe)
         self._safe_set(latest_key, json.dumps(bar), ttl)
 
-        # Sorted set for history
+        # Sorted set history
         if self._r:
             try:
-                score = bar.get("open_epoch", time.time())
+                score    = bar.get("open_epoch", time.time())
                 hist_key = self._key("ohlcv", symbol, timeframe)
-                self._r.zadd(hist_key, {json.dumps(bar): score})
-                self._r.zremrangebyrank(hist_key, 0, -(_OHLCV_MAX_BARS + 1))
-                self._r.expire(hist_key, ttl * 2)
+                pipe = self._r.pipeline(transaction=False)
+                pipe.zadd(hist_key, {json.dumps(bar): score})
+                pipe.zremrangebyrank(hist_key, 0, -(_OHLCV_MAX_BARS + 1))
+                pipe.expire(hist_key, ttl * 2)
+                pipe.execute()
             except Exception as exc:
                 logger.debug("Redis ohlcv set error: %s", exc)
 
     def get_ohlcv_bars(
         self, symbol: str, timeframe: str, limit: int = 200
     ) -> List[Dict[str, Any]]:
-        """Return the last N OHLCV bars (oldest first)."""
         if not self._r:
             return []
         try:
-            key = self._key("ohlcv", symbol, timeframe)
+            key      = self._key("ohlcv", symbol, timeframe)
             raw_list = self._r.zrange(key, -limit, -1)
             return [json.loads(r) for r in raw_list if r]
         except Exception as exc:
@@ -198,7 +228,6 @@ class DataLayerRedisStore:
     def get_latest_bar(
         self, symbol: str, timeframe: str
     ) -> Optional[Dict[str, Any]]:
-        """Return the most recent cached bar."""
         raw = self._safe_get(self._key("ohlcv_latest", symbol, timeframe))
         if raw:
             try:
@@ -266,23 +295,35 @@ class DataLayerRedisStore:
         raw = self._safe_get(self._key("feed_health"))
         return json.loads(raw) if raw else None
 
-    # ── Stats ─────────────────────────────────────────────────────────────────
+    # ── Memory stats ──────────────────────────────────────────────────────────
+
+    def memory_usage_mb(self) -> Optional[float]:
+        """Return Redis used_memory_rss in MB, or None if unavailable."""
+        if not self._r:
+            return None
+        try:
+            info = self._r.info("memory")
+            return round(info.get("used_memory_rss", 0) / 1024 / 1024, 2)
+        except Exception:
+            return None
 
     def stats(self) -> Dict[str, Any]:
         total = self._hits + self._misses
         return {
-            "hits":      self._hits,
-            "misses":    self._misses,
-            "errors":    self._errors,
-            "hit_rate":  round(self._hits / max(total, 1), 4),
-            "connected": self._r is not None,
+            "hits":         self._hits,
+            "misses":       self._misses,
+            "writes":       self._writes,
+            "errors":       self._errors,
+            "hit_rate":     round(self._hits / max(total, 1), 4),
+            "connected":    self._r is not None,
+            "memory_mb":    self.memory_usage_mb(),
         }
 
     def ping(self) -> bool:
         if not self._r:
             return False
         try:
-            return self._r.ping()
+            return bool(self._r.ping())
         except Exception:
             return False
 
