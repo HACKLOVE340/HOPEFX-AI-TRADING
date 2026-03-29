@@ -295,10 +295,78 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
 
 def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
     """
-    Safe formula evaluator using a restricted namespace.
-    Supports: EMA, SMA, RSI, close, open, high, low, volume.
-    Uses real OHLCV data — raises ValueError when data is unavailable.
+    Safe formula evaluator using AST-based parsing — no eval() or exec().
+
+    Allowed syntax
+    --------------
+    - Numeric literals (int, float)
+    - Names: close, open, high, low, volume, EMA, SMA, RSI
+    - Arithmetic operators: +, -, *, /, ** (unary -, unary +)
+    - Function calls to EMA, SMA, RSI only
+    - Parentheses for grouping
+
+    Any other construct (attribute access, subscript, import, lambda,
+    comprehension, comparison, boolean op, etc.) raises ValueError before
+    any computation occurs.
     """
+    import ast
+
+    # ── AST whitelist ─────────────────────────────────────────────────────────
+    _ALLOWED_NAMES = frozenset(
+        {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
+    )
+    _ALLOWED_NODES = (
+        ast.Module, ast.Expr, ast.Expression,
+        # Literals
+        ast.Constant,
+        # Arithmetic
+        ast.BinOp, ast.UnaryOp,
+        ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.FloorDiv, ast.Mod,
+        ast.UAdd, ast.USub,
+        # Names and calls (validated separately)
+        ast.Name, ast.Load,
+        ast.Call,
+        # Needed for multi-arg calls
+        ast.arguments,
+    )
+
+    def _check_node(node: ast.AST) -> None:
+        if not isinstance(node, _ALLOWED_NODES):
+            raise ValueError(
+                f"Disallowed expression type '{type(node).__name__}' in formula. "
+                "Only arithmetic and EMA/SMA/RSI calls are permitted."
+            )
+        if isinstance(node, ast.Name) and node.id not in _ALLOWED_NAMES:
+            raise ValueError(
+                f"Unknown name '{node.id}'. "
+                f"Allowed: {', '.join(sorted(_ALLOWED_NAMES))}"
+            )
+        if isinstance(node, ast.Call):
+            # Function must be a bare Name, not an attribute or subscript
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
+            if node.func.id not in {"EMA", "SMA", "RSI"}:
+                raise ValueError(
+                    f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI"
+                )
+            if node.keywords or node.starargs if hasattr(node, "starargs") else node.keywords:
+                raise ValueError("Keyword arguments are not allowed in indicator formulas")
+        for child in ast.iter_child_nodes(node):
+            _check_node(child)
+
+    # ── Parse and validate ────────────────────────────────────────────────────
+    formula_stripped = formula.strip()
+    if len(formula_stripped) > 200:
+        raise ValueError("Formula too long (max 200 characters)")
+
+    try:
+        tree = ast.parse(formula_stripped, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Formula syntax error: {exc}") from exc
+
+    _check_node(tree)
+
+    # ── Build data namespace ──────────────────────────────────────────────────
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
     closes  = ohlcv["close"]
     opens   = ohlcv["open"]
@@ -307,14 +375,14 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
     volumes = ohlcv["volume"]
 
     def sma(data: List[float], n: int) -> List[float]:
-        result = [None] * (n - 1)
+        result: List = [None] * (n - 1)
         for i in range(n - 1, len(data)):
             result.append(sum(data[i - n + 1 : i + 1]) / n)
         return result
 
     def ema(data: List[float], n: int) -> List[float]:
         k = 2 / (n + 1)
-        result = [None] * (n - 1)
+        result: List = [None] * (n - 1)
         ema_val = sum(data[:n]) / n
         result.append(ema_val)
         for price in data[n:]:
@@ -323,7 +391,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
         return result
 
     def rsi(data: List[float], n: int = 14) -> List[float]:
-        result = [None] * n
+        result: List = [None] * n
         gains, losses = [], []
         for i in range(1, len(data)):
             diff = data[i] - data[i - 1]
@@ -336,33 +404,67 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
             result.append(100 - 100 / (1 + rs))
         return result
 
-    namespace = {
-        "EMA": ema,
-        "SMA": sma,
-        "RSI": rsi,
-        "close":  closes,
-        "open":   opens,
-        "high":   highs,
-        "low":    lows,
-        "volume": volumes,
+    # ── AST interpreter (no eval/exec) ────────────────────────────────────────
+    _fn_map = {"EMA": ema, "SMA": sma, "RSI": rsi}
+    _name_map = {
+        "close": closes, "open": opens, "high": highs,
+        "low": lows, "volume": volumes,
+        **_fn_map,
     }
 
+    def _interp(node: ast.expr):  # type: ignore[name-defined]
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            return _name_map[node.id]
+        if isinstance(node, ast.UnaryOp):
+            operand = _interp(node.operand)
+            if isinstance(node.op, ast.USub):
+                return [-v if v is not None else None for v in operand] \
+                    if isinstance(operand, list) else -operand
+            return operand
+        if isinstance(node, ast.BinOp):
+            left = _interp(node.left)
+            right = _interp(node.right)
+            op = node.op
+            # Scalar × list or list × scalar
+            def _apply(a, b):
+                if isinstance(op, ast.Add):      return a + b
+                if isinstance(op, ast.Sub):      return a - b
+                if isinstance(op, ast.Mult):     return a * b
+                if isinstance(op, ast.Div):      return a / b if b != 0 else None
+                if isinstance(op, ast.Pow):      return a ** b
+                if isinstance(op, ast.FloorDiv): return a // b
+                if isinstance(op, ast.Mod):      return a % b
+                raise ValueError(f"Unsupported operator {type(op).__name__}")
+
+            if isinstance(left, list) and isinstance(right, list):
+                return [_apply(a, b) if a is not None and b is not None else None
+                        for a, b in zip(left, right)]
+            if isinstance(left, list):
+                return [_apply(a, right) if a is not None else None for a in left]
+            if isinstance(right, list):
+                return [_apply(left, b) if b is not None else None for b in right]
+            return _apply(left, right)
+        if isinstance(node, ast.Call):
+            fn = _fn_map[node.func.id]  # type: ignore[attr-defined]
+            args = [_interp(a) for a in node.args]
+            return fn(*args)
+        raise ValueError(f"Unexpected node {type(node).__name__}")
+
     try:
-        # Replace function calls to work with our list-based functions
-        safe_formula = formula.strip()
-        result = eval(safe_formula, {"__builtins__": {}}, namespace)  # noqa: S307
-
-        if isinstance(result, (int, float)):
-            result = [result] * len(closes)
-
-        # Zip with timestamps
-        output = []
-        for i, val in enumerate(result[-periods:]):
-            if val is not None:
-                output.append({"index": i, "value": round(float(val), 5)})
-        return output
+        result = _interp(tree.body)
     except Exception as exc:
-        raise ValueError(f"Formula error: {exc}")
+        raise ValueError(f"Formula evaluation error: {exc}") from exc
+
+    if isinstance(result, (int, float)):
+        result = [result] * len(closes)
+
+    output = []
+    for i, val in enumerate(result[-periods:]):
+        if val is not None:
+            output.append({"index": i, "value": round(float(val), 5)})
+    return output
 
 
 @router.post("/api/indicators/preview")
