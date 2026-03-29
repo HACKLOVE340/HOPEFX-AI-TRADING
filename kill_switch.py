@@ -343,8 +343,27 @@ class KillSwitch:
         If the state file records an active kill switch, the switch is
         re-activated immediately so that a restart does not bypass the halt.
         The flag file is also checked as a secondary signal.
+
+        Stale-flag guard: if the persisted activation is older than 24 hours
+        and APP_ENV is not 'production', a WARNING is emitted and the flag is
+        NOT automatically restored — the operator must manually confirm by
+        keeping the file or re-activating programmatically.  In production
+        mode the flag is always restored regardless of age.
         """
         import json as _json
+        from datetime import timedelta
+
+        _STALE_THRESHOLD = timedelta(hours=24)
+        _is_production = os.environ.get("APP_ENV", "production") == "production"
+
+        def _is_stale(activated_at: Optional[datetime]) -> bool:
+            if activated_at is None:
+                return False
+            now = datetime.now(timezone.utc)
+            # Make activated_at timezone-aware if it isn't already
+            if activated_at.tzinfo is None:
+                activated_at = activated_at.replace(tzinfo=timezone.utc)
+            return (now - activated_at) > _STALE_THRESHOLD
 
         # Primary: JSON state file (written by _persist_state)
         if self._state_file.exists():
@@ -353,13 +372,27 @@ class KillSwitch:
                 if data.get("active"):
                     reason = data.get("reason", "persisted state from previous session")
                     activated_at_str = data.get("activated_at")
-                    self._active = True
-                    self._reason = reason
-                    self._activated_at = (
+                    activated_at = (
                         datetime.fromisoformat(activated_at_str)
                         if activated_at_str
-                        else datetime.now(timezone.utc)
+                        else None
                     )
+
+                    if not _is_production and _is_stale(activated_at):
+                        logger.warning(
+                            "Kill switch state file is STALE (activated >24 h ago: %s). "
+                            "Reason: %s. "
+                            "Not auto-restoring in non-production mode. "
+                            "Delete kill_switch.state.json to clear, or set APP_ENV=production "
+                            "to always restore.",
+                            activated_at_str,
+                            reason,
+                        )
+                        return
+
+                    self._active = True
+                    self._reason = reason
+                    self._activated_at = activated_at or datetime.now(timezone.utc)
                     logger.critical(
                         "Kill switch restored from persisted state — reason: %s | "
                         "originally activated: %s",
@@ -375,13 +408,33 @@ class KillSwitch:
             try:
                 content = self._flag_file.read_text()
                 reason = "flag file present at startup"
+                activated_at: Optional[datetime] = None
                 for line in content.splitlines():
                     if line.startswith("reason="):
                         reason = line.split("=", 1)[1].strip()
-                        break
+                    if line.startswith("activated_at="):
+                        try:
+                            activated_at = datetime.fromisoformat(
+                                line.split("=", 1)[1].strip()
+                            )
+                        except ValueError:
+                            pass
+
+                if not _is_production and _is_stale(activated_at):
+                    logger.warning(
+                        "kill_switch.flag is STALE (activated >24 h ago: %s). "
+                        "Reason: %s. "
+                        "Not auto-restoring in non-production mode. "
+                        "Delete kill_switch.flag to clear, or set APP_ENV=production "
+                        "to always restore.",
+                        activated_at.isoformat() if activated_at else "unknown",
+                        reason,
+                    )
+                    return
+
                 self._active = True
                 self._reason = reason
-                self._activated_at = datetime.now(timezone.utc)
+                self._activated_at = activated_at or datetime.now(timezone.utc)
                 logger.critical(
                     "Kill switch activated from flag file at startup — reason: %s",
                     reason,
