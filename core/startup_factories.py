@@ -552,6 +552,58 @@ async def init_strategy_brain(s: Any) -> Any:
     return brain
 
 
+async def init_secrets_manager(s: Any) -> Any:
+    """
+    Start the secrets refresh background task.
+
+    Polls Vault or AWS Secrets Manager every SECRETS_REFRESH_INTERVAL_SECONDS
+    (default 300 s) and updates in-memory values without a pod restart.
+    Falls back to environment variables when no backend is configured.
+    """
+    from core.secrets_manager import secrets
+
+    # Register JWT rotation callback — updates the auth module's signing key
+    @secrets.on_rotation
+    async def _on_jwt_rotation(changed_keys: set) -> None:
+        if "jwt_secret_key" not in changed_keys:
+            return
+        new_key = secrets.get("jwt_secret_key")
+        if not new_key:
+            return
+        try:
+            import api.auth as _auth
+            if hasattr(_auth, "reload_jwt_secret"):
+                _auth.reload_jwt_secret(new_key)
+                logger.info("SecretsManager: JWT secret rotated and reloaded")
+        except Exception as exc:
+            logger.warning("SecretsManager: JWT rotation callback failed: %s", exc)
+
+    # Register DB URL rotation callback
+    @secrets.on_rotation
+    async def _on_db_rotation(changed_keys: set) -> None:
+        if "database_url" not in changed_keys and "db_password" not in changed_keys:
+            return
+        logger.warning(
+            "SecretsManager: DB credentials rotated — "
+            "existing connections will be recycled on next checkout"
+        )
+        try:
+            if s.db_engine:
+                s.db_engine.dispose()
+                logger.info("SecretsManager: DB engine disposed for credential rotation")
+        except Exception as exc:
+            logger.warning("SecretsManager: DB engine dispose failed: %s", exc)
+
+    task = asyncio.create_task(secrets.refresh_loop(), name="secrets_refresh")
+    s.background_tasks.append(task)
+    logger.info(
+        "SecretsManager started (backend=%s interval=%.0fs)",
+        os.getenv("SECRETS_BACKEND", "env"),
+        float(os.getenv("SECRETS_REFRESH_INTERVAL_SECONDS", "300")),
+    )
+    return secrets
+
+
 async def init_performance_monitor(s: Any) -> Any:
     """
     Start the ML model performance monitor background task.
@@ -1357,6 +1409,7 @@ def build_component_registry(app, feature_flags):
     (
         registry.register("env_check", F.init_env, required=False)
         .register("config", F.init_config, required=True, deps=["env_check"])
+        .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         # ── Background services ───────────────────────────────────────────────
