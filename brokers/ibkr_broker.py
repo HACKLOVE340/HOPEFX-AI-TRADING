@@ -57,7 +57,7 @@ _PORT_LIVE = 7496
 _CONNECT_TIMEOUT = 30
 
 
-def _resolve_env(value: Any) -> str:
+def _resolve_env(value: object) -> str:
     """Expand ``${ENV_VAR:default}`` placeholders."""
     if not isinstance(value, str):
         return str(value) if value is not None else ""
@@ -82,7 +82,7 @@ class IBKRBroker:
     def __init__(self, config: Dict) -> None:
         self._config = config
         self.connected: bool = False
-        self._ib: Optional[Any] = IB() if _IB_AVAILABLE else None
+        self._ib: Optional[object] = IB() if _IB_AVAILABLE else None
         self._server_type: Optional[str] = None
         self._host: Optional[str] = None
         self._port: Optional[int] = None
@@ -386,7 +386,7 @@ class IBKRBroker:
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 
-def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) -> Any:
+def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) -> object:
     """Build an ib_insync Contract from basic parameters."""
     if not _IB_AVAILABLE:
         raise RuntimeError("ib_insync not installed")
@@ -398,7 +398,7 @@ def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) ->
     return contract
 
 
-def _safe_float(value: Any) -> Optional[float]:
+def _safe_float(value: object) -> Optional[float]:
     """Convert a value to float, returning None on failure."""
     try:
         return float(value)
