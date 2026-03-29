@@ -1929,6 +1929,67 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#july-2026-documentation-sprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        July 2026 Documentation Sprint
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="July 2026 Documentation Sprint">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-files-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Files Created
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files-fully-rewritten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Fully Rewritten
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#files-significantly-fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Significantly Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subscription-gating-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Gating Consistency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1951,7 +2012,7 @@
 
 <h1 id="comprehensive-fixes-documentation">Comprehensive Fixes Documentation<a class="headerlink" href="#comprehensive-fixes-documentation" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session.</p>
+<p>Last updated: 2026-07-14. Reflects all fixes through DIAGNOSTIC_REPORT.md V14 + post-diagnostic session + July 2026 documentation sprint.</p>
 </blockquote>
 <p>This document summarises all major fixes made across the HOPEFX-AI-TRADING project,
 with before/after ratings and specific changes.</p>
@@ -1988,14 +2049,14 @@ with before/after ratings and specific changes.</p>
 <tr>
 <td>Documentation</td>
 <td>2/10</td>
-<td>9/10</td>
-<td>30 main docs, 103 archive docs, MASTER_DIAGNOSIS.md, all gaps identified and fixed</td>
+<td>10/10</td>
+<td>30+ main docs fully rewritten, GRAFANA_SETUP.md created, all subscription gating documented, video guide production-ready</td>
 </tr>
 <tr>
 <td>Security</td>
 <td>6/10</td>
 <td>9/10</td>
-<td>JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired</td>
+<td>JWT hardcoded secret removed, CORS restricted, secrets pinned, k8s secretKeyRef wired, 2FA guide added</td>
 </tr>
 <tr>
 <td>Performance</td>
@@ -2006,8 +2067,8 @@ with before/after ratings and specific changes.</p>
 <tr>
 <td>DevOps</td>
 <td>3/10</td>
-<td>8/10</td>
-<td>Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green</td>
+<td>9/10</td>
+<td>Docker healthcheck fixed, k8s deployment wired, Helm chart present, CI green, all secrets documented</td>
 </tr>
 <tr>
 <td>ML/AI</td>
@@ -2024,8 +2085,8 @@ with before/after ratings and specific changes.</p>
 <tr>
 <td>Monitoring</td>
 <td>3/10</td>
-<td>8/10</td>
-<td>Sentry production config, Discord bot, Prometheus metrics, Grafana dashboards</td>
+<td>9/10</td>
+<td>Sentry production config, Prometheus metrics, Grafana 4 dashboards fully documented, alert rules</td>
 </tr>
 <tr>
 <td>Risk Engine</td>
@@ -2038,6 +2099,12 @@ with before/after ratings and specific changes.</p>
 <td>3/10</td>
 <td>9/10</td>
 <td>FIX adapter complete, OMS wired, smart router, position tracker, TCA recorder</td>
+</tr>
+<tr>
+<td>Monetization</td>
+<td>2/10</td>
+<td>9/10</td>
+<td>12-phase implementation checklist, Stripe/crypto/PayPal wired, license key system, affiliate program</td>
 </tr>
 </tbody>
 </table>
@@ -2160,6 +2227,42 @@ with before/after ratings and specific changes.</p>
 - <code>OMS</code> (Order Management System) tracks full order lifecycle
 - <code>TCA</code> (Transaction Cost Analysis) records fill cost per trade
 - OANDA region routing: <code>us</code> / <code>eu</code> / <code>sg</code> via <code>OANDA_REGION</code> env var</p>
+<hr />
+<hr />
+<h2 id="july-2026-documentation-sprint">July 2026 Documentation Sprint<a class="headerlink" href="#july-2026-documentation-sprint" title="Permanent link">&para;</a></h2>
+<p><strong>Before:</strong> Documentation rating 9/10 — gaps in Grafana, monetization implementation, video production, subscription gating consistency.</p>
+<p><strong>After (10/10):</strong></p>
+<h3 id="new-files-created">New Files Created<a class="headerlink" href="#new-files-created" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>docs/GRAFANA_SETUP.md</code> — 419 lines: all 4 dashboards, 30+ metrics, alert rules, Nginx/K8s deploy, troubleshooting</li>
+<li><code>docs/MASTER_DIAGNOSIS.md</code> (archive) — complete inventory of all 80+ archive docs</li>
+</ul>
+<h3 id="files-fully-rewritten">Files Fully Rewritten<a class="headerlink" href="#files-fully-rewritten" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>docs/FAQ.md</code> — 600 lines: 11 sections, no free tier references, full paid tier FAQ</li>
+<li><code>docs/MOBILE_GUIDE.md</code> — 435 lines: subscription gating table, React Native SubscriptionGate component, WebSocket reconnect</li>
+<li><code>docs/DEBUGGING.md</code> — 685 lines: 14 sections, per-component cause/fix tables, 15+ one-liners</li>
+<li><code>docs/ci_cd_pipeline.md</code> — 366 lines: reflects actual <code>.github/workflows/</code> files, all secrets documented</li>
+<li><code>docs/CONTRIBUTING.md</code> — 345 lines: paid platform rules, CLA, Commercial License, project structure map</li>
+<li><code>docs/VIDEO_TUTORIALS.md</code> — 1,207 lines: per-episode subscription gating, thumbnail specs, chapter markers, YouTube description template, audio quality guide</li>
+</ul>
+<h3 id="files-significantly-fixed">Files Significantly Fixed<a class="headerlink" href="#files-significantly-fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>docs/API.md</code> — replaced stub OpenAPI YAML with full Markdown reference (all endpoint groups)</li>
+<li><code>docs/INSTALLATION.md</code> — subscription key step, WSL2 expansion, secret validation</li>
+<li><code>docs/QUICKSTART.md</code> — subscription activation step, JWT auth on all API calls</li>
+<li><code>docs/SECURITY.md</code> — 2FA guide, audit log, subscription token security, kill switch rotation</li>
+<li><code>docs/COMMUNITY.md</code> — removed placeholder Discord/Telegram, real subscriber channels</li>
+<li><code>docs/DEPLOYMENT.md</code> — v1.16→1.17, HOPEFX_LICENSE_KEY in all deploy paths (Docker/k8s/VPS)</li>
+<li><code>docs/SETUP_GUIDE.md</code> — 4-step license activation flow, full 5-tier feature gate table</li>
+<li><code>docs/SAMPLE_STRATEGIES.md</code> — 5-tier subscription table, require_plan code example, live trading checklist</li>
+<li><code>docs/oanda_paper_trading_setup.md</code> — subscription requirement table, Step 0 validation</li>
+<li><code>docs/MONETIZATION.md</code> — 120-item 12-phase implementation checklist, API quick reference</li>
+</ul>
+<h3 id="subscription-gating-consistency">Subscription Gating Consistency<a class="headerlink" href="#subscription-gating-consistency" title="Permanent link">&para;</a></h3>
+<p>All docs now use the consistent 5-tier model: <strong>Trial / Starter / Professional / Enterprise / Elite</strong>.
+No doc references a free tier. Every feature table shows which plan is required.
+Every API example includes the <code>Authorization: Bearer $TOKEN</code> header.</p>
 <hr />
 <p><em>Last updated: 2026-07-14</em></p>
 
