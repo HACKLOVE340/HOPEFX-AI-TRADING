@@ -353,7 +353,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
         result = eval(safe_formula, {"__builtins__": {}}, namespace)  # noqa: S307
 
         if isinstance(result, (int, float)):
-            result = [result] * len(prices)
+            result = [result] * len(closes)
 
         # Zip with timestamps
         output = []

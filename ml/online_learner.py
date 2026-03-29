@@ -34,6 +34,7 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd  # noqa: F401 — used in type annotations below
 
 
 class EWCRegularizer:
