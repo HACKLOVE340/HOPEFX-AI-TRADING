@@ -102,6 +102,9 @@ class Trade(Base):
 
     id = Column(Integer, primary_key=True)
     trade_id = Column(String(50), unique=True, nullable=True, index=True)
+    # Idempotency key — set before broker submission; UNIQUE prevents duplicate fills
+    # on network retry.  See Alembic migration b2c3d4e5f6a7.
+    client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     side = Column(String(20), nullable=True)
@@ -180,6 +183,9 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True)
     order_id = Column(String(50), unique=True, nullable=False, index=True)
+    # Idempotency key — UNIQUE constraint prevents duplicate broker submissions.
+    # Set by the trading engine before the first submission attempt.
+    client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     account_id = Column(Integer, nullable=True, index=True)
     trade_id = Column(String(50), ForeignKey("trades.trade_id"), nullable=True)
     symbol = Column(String(20), nullable=False, index=True)
