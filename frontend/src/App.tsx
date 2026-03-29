@@ -31,6 +31,9 @@ import ABTesting            from './pages/ABTesting';
 import CorrelationDashboard from './pages/CorrelationDashboard';
 import CustomIndicators     from './pages/CustomIndicators';
 
+// ── AI Chart Bot ──────────────────────────────────────────────────────────────
+import { ChartDashboard }   from './features/chart-bot';
+
 // ── Ported pages (dashboard → frontend) ──────────────────────────────────────
 import Trading              from './pages/Trading';
 import TradeJournal         from './pages/TradeJournal';
@@ -91,7 +94,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { path: '/dashboard',     label: 'Dashboard',       icon: '📊', auth: true  },
-  { path: '/trading',       label: 'Trading',         icon: '📉', auth: true  },
+  { path: '/trading',       label: 'AI Chart Bot',    icon: '🧠', auth: true  },
   { path: '/journal',       label: 'Trade Journal',   icon: '📓', auth: true  },
   { path: '/performance',   label: 'Performance',     icon: '🏆', auth: true  },
   { path: '/watchlist',     label: 'Watchlist',       icon: '👁️', auth: true  },
@@ -254,8 +257,9 @@ const AppShell: React.FC = () => {
           <Route path="/correlation"  element={wrap(<AuthGuard><CorrelationDashboard /></AuthGuard>)} />
           <Route path="/indicators"   element={wrap(<AuthGuard><CustomIndicators /></AuthGuard>)} />
 
-          {/* Ported pages */}
-          <Route path="/trading"      element={wrap(<AuthGuard><Trading /></AuthGuard>)} />
+          {/* AI Chart Bot — replaces the old basic Trading page */}
+          <Route path="/trading"      element={wrap(<AuthGuard><ChartDashboard /></AuthGuard>)} />
+          <Route path="/trading/legacy" element={wrap(<AuthGuard><Trading /></AuthGuard>)} />
           <Route path="/journal"      element={wrap(<AuthGuard><TradeJournal /></AuthGuard>)} />
           <Route path="/performance"  element={wrap(<Performance />)} />
           <Route path="/watchlist"    element={wrap(<AuthGuard><WatchlistPage /></AuthGuard>)} />
