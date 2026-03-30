@@ -524,6 +524,10 @@ class MT5ZmqBridge:
     ) -> FillResult:
         """Convert a raw MT5 response dict into a FillResult."""
         if resp.get("type") == "ERROR":
+            # fill_price=0.0 signals no fill occurred — callers MUST check
+            # error_code (or error_msg) before using fill_price for any
+            # calculation. A zero fill_price on a successful trade would be
+            # a data error; here it is only valid when error_code is set.
             return FillResult(
                 command_id=cmd_id,
                 ticket=0,
