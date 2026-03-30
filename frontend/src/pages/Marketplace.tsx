@@ -35,107 +35,6 @@ interface Review {
 
 type SortOption = 'popular' | 'rating' | 'newest' | 'price_low' | 'price_high';
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_STRATEGIES: Strategy[] = [
-  {
-    strategy_id: 'STR_001',
-    name: 'Gold Momentum Pro',
-    description: 'Trend-following strategy for XAUUSD using EMA crossovers and ATR-based stops. Optimised for the London/NY overlap session.',
-    creator_id: 'trader_alpha',
-    category: 'trend_following',
-    price: 49,
-    license_type: 'subscription',
-    rating: 4.7,
-    review_count: 38,
-    subscriber_count: 124,
-    status: 'active',
-    tags: ['gold', 'trend', 'ema'],
-    performance: { total_return_pct: 34.2, sharpe_ratio: 1.8, max_drawdown_pct: 8.4, win_rate_pct: 61 },
-  },
-  {
-    strategy_id: 'STR_002',
-    name: 'SMC Liquidity Hunter',
-    description: 'Smart Money Concepts strategy targeting liquidity sweeps and order blocks on H1/H4 timeframes.',
-    creator_id: 'smc_master',
-    category: 'smart_money',
-    price: 79,
-    license_type: 'subscription',
-    rating: 4.5,
-    review_count: 22,
-    subscriber_count: 87,
-    status: 'active',
-    tags: ['smc', 'ict', 'liquidity'],
-    performance: { total_return_pct: 28.6, sharpe_ratio: 1.5, max_drawdown_pct: 11.2, win_rate_pct: 55 },
-  },
-  {
-    strategy_id: 'STR_003',
-    name: 'Mean Reversion Scalper',
-    description: 'High-frequency mean reversion on EUR/USD and GBP/USD using Bollinger Bands and RSI divergence.',
-    creator_id: 'quant_fx',
-    category: 'mean_reversion',
-    price: 0,
-    license_type: 'free',
-    rating: 4.1,
-    review_count: 61,
-    subscriber_count: 312,
-    status: 'active',
-    tags: ['scalping', 'eurusd', 'free'],
-    performance: { total_return_pct: 18.9, sharpe_ratio: 1.2, max_drawdown_pct: 6.1, win_rate_pct: 68 },
-  },
-  {
-    strategy_id: 'STR_004',
-    name: 'Macro Yield Trader',
-    description: 'Trades gold and USD pairs based on DXY momentum and US 10Y yield spread signals.',
-    creator_id: 'macro_desk',
-    category: 'macro',
-    price: 99,
-    license_type: 'subscription',
-    rating: 4.9,
-    review_count: 14,
-    subscriber_count: 43,
-    status: 'active',
-    tags: ['macro', 'dxy', 'yields', 'gold'],
-    performance: { total_return_pct: 52.1, sharpe_ratio: 2.3, max_drawdown_pct: 9.8, win_rate_pct: 58 },
-  },
-  {
-    strategy_id: 'STR_005',
-    name: 'Breakout Momentum',
-    description: 'Captures breakouts from consolidation zones using volume confirmation and ATR expansion filters.',
-    creator_id: 'breakout_pro',
-    category: 'breakout',
-    price: 29,
-    license_type: 'one_time',
-    rating: 3.9,
-    review_count: 45,
-    subscriber_count: 198,
-    status: 'active',
-    tags: ['breakout', 'volume', 'momentum'],
-    performance: { total_return_pct: 22.4, sharpe_ratio: 1.1, max_drawdown_pct: 14.3, win_rate_pct: 49 },
-  },
-  {
-    strategy_id: 'STR_006',
-    name: 'MACD Swing Trader',
-    description: 'Swing trading strategy using MACD histogram divergence on daily charts across major forex pairs.',
-    creator_id: 'swing_fx',
-    category: 'swing',
-    price: 0,
-    license_type: 'free',
-    rating: 4.3,
-    review_count: 89,
-    subscriber_count: 445,
-    status: 'active',
-    tags: ['macd', 'swing', 'free', 'forex'],
-    performance: { total_return_pct: 15.7, sharpe_ratio: 0.9, max_drawdown_pct: 12.0, win_rate_pct: 52 },
-  },
-];
-
-const MOCK_REVIEWS: Review[] = [
-  { review_id: 'R1', user_id: 'user_abc', rating: 5, title: 'Excellent results', content: 'Running this for 3 months, consistent 4-6% monthly returns on my paper account.', created_at: '2024-11-15T10:00:00Z' },
-  { review_id: 'R2', user_id: 'user_def', rating: 4, title: 'Solid strategy', content: 'Good documentation, easy to configure. Drawdown is well controlled.', created_at: '2024-12-01T14:30:00Z' },
-  { review_id: 'R3', user_id: 'user_ghi', rating: 5, title: 'Best on the marketplace', content: 'The macro context integration is what sets this apart from other gold strategies.', created_at: '2024-12-10T09:00:00Z' },
-];
-
 const CATEGORIES = ['all', 'trend_following', 'mean_reversion', 'smart_money', 'macro', 'breakout', 'swing'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -310,8 +209,7 @@ const Marketplace: React.FC = () => {
       );
       setStrategies(res.data.strategies ?? []);
     } catch (_) {
-      // Backend unavailable — show seeded demo data
-      setStrategies(MOCK_STRATEGIES);
+      setStrategies([]);
     } finally {
       setLoading(false);
     }
@@ -320,20 +218,18 @@ const Marketplace: React.FC = () => {
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
 
   useEffect(() => {
-    api.get<{ total_strategies: number; total_subscribers: number }>('/monetization/marketplace/stats'
-    )
+    api.get<{ total_strategies: number; total_subscribers: number }>('/monetization/marketplace/stats')
       .then(r => setStats(r.data))
-      .catch(() => setStats({ total_strategies: MOCK_STRATEGIES.length, total_subscribers: 1209 }));
+      .catch(() => setStats(null));
   }, []);
 
   const handleSelect = async (s: Strategy) => {
     setSelected(s);
     try {
-      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(`/monetization/marketplace/strategies/${s.strategy_id}`
-      );
+      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(`/monetization/marketplace/strategies/${s.strategy_id}`);
       setSelectedReviews(res.data.reviews ?? []);
     } catch (_) {
-      setSelectedReviews(MOCK_REVIEWS);
+      setSelectedReviews([]);
     }
   };
 
