@@ -88,14 +88,15 @@ const TradeJournal: React.FC = () => {
   const [filterTag, setFilterTag] = useState('');
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
     const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
       api.get<JournalEntry[]>(`/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
       api.get<JournalStats>('/journal/stats'),
       api.get<JournalEntry[]>('/journal/mistakes'),
     ]);
-    if (tradesRes.status === 'fulfilled')   setTrades(tradesRes.value.data ?? []);
-    if (statsRes.status === 'fulfilled')    setStats(statsRes.value.data);
-    if (mistakesRes.status === 'fulfilled') setMistakes(mistakesRes.value.data ?? []);
+    setTrades(tradesRes.status === 'fulfilled' ? (tradesRes.value.data ?? []) : []);
+    setStats(statsRes.status === 'fulfilled' ? statsRes.value.data : null);
+    setMistakes(mistakesRes.status === 'fulfilled' ? (mistakesRes.value.data ?? []) : []);
     setLoading(false);
   }, [filterTag]);
 
