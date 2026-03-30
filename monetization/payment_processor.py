@@ -217,16 +217,20 @@ class PaymentProcessor:
         """
         Create a Stripe PaymentIntent via the real Stripe SDK.
 
-        Returns the PaymentIntent ID (pi_...) or a dev placeholder when
-        Stripe is not configured.
+        Returns the PaymentIntent ID (pi_...).
+        Raises RuntimeError if the Stripe SDK is not installed or
+        STRIPE_SECRET_KEY is not configured.
         """
-        if not _STRIPE_AVAILABLE or not self._stripe_api_key:
-            dev_id = f"pi_dev_{uuid.uuid4().hex[:24]}"
-            logger.warning(
-                "stripe.payment_intent.dev_mode amount=%s — set STRIPE_SECRET_KEY for real payments",
-                amount,
+        if not _STRIPE_AVAILABLE:
+            raise RuntimeError(
+                "stripe SDK not installed — run: pip install stripe"
             )
-            return dev_id
+        if not self._stripe_api_key:
+            raise RuntimeError(
+                "STRIPE_SECRET_KEY is not set. "
+                "Configure it before processing payments. "
+                "Use sk_test_... for Stripe test mode."
+            )
 
         _stripe.api_key = self._stripe_api_key
         amount_cents = int(amount * 100)  # Stripe uses smallest currency unit
