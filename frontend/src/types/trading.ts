@@ -72,6 +72,9 @@ export interface MicrostructureSnapshot {
   readonly trade_pressure:        number;
   readonly vwap:                  number;
   readonly tick_count:            number;
+  readonly bid_depth?:            number;
+  readonly ask_depth?:            number;
+  readonly depth_imbalance?:      number;
 }
 
 export interface MicrostructureFeatures {
