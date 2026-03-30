@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../hooks/useApi';
+import { useStore, selectUser } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -188,6 +189,7 @@ const StrategyDetail: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Marketplace: React.FC = () => {
+  const currentUser = useStore(selectUser);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -236,7 +238,7 @@ const Marketplace: React.FC = () => {
   const handleSubscribe = async (s: Strategy) => {
     try {
       await api.post('/monetization/marketplace/purchase', {
-        buyer_id: 'demo_user',
+        buyer_id: currentUser?.id ?? '',
         strategy_id: s.strategy_id,
       });
     } catch (_) {}
