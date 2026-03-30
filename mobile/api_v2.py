@@ -788,10 +788,11 @@ def _build_module_app() -> "FastAPI":
         _os.getenv("SECURITY_JWT_SECRET", "").strip()
         or _os.getenv("JWT_SECRET", "").strip()
     )
-    # Use a 32-char placeholder so the class __init__ doesn't raise during
-    # import-time validation checks.  Real requests always read from env.
     if not _secret or len(_secret) < 32:
-        _secret = "hopefx-dev-placeholder-secret-32c"
+        raise RuntimeError(
+            "SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters. "
+            "Set it in your .env file or environment before starting the server."
+        )
     return MobileAPIServer(jwt_secret=_secret).app
 
 
