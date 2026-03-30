@@ -255,7 +255,8 @@ class ReplayBacktestRunner:
         Returns PerformanceMetrics from BacktestEngine.
         """
         from backtesting.engine import BacktestEngine, TransactionCostModel
-        from data_layer.replay.engine import MarketReplayEngine
+        from data_layer.orchestrator import orchestrator as _orch
+        MarketReplayEngine = type(_orch._replay)
 
         replay = self._replay_engine or MarketReplayEngine()
         handler = ReplayDataHandler(replay_engine=replay, symbol=symbol)

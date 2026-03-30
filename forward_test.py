@@ -298,9 +298,9 @@ class ForwardTestHarness:
         }
 
     async def _fetch_ohlcv(self) -> pd.DataFrame:
-        """Fetch real OHLCV data from Dukascopy via the replay engine."""
-        from data_layer.replay.engine import MarketReplayEngine
-        engine = MarketReplayEngine()
+        """Fetch real OHLCV data from Dukascopy via the replay engine (via orchestrator)."""
+        from data_layer.orchestrator import orchestrator as _orch
+        engine = _orch._replay
         logger.info(
             "Fetching Dukascopy XAUUSD %s bars %s → %s …",
             self._timeframe,
