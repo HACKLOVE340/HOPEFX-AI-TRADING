@@ -25,7 +25,6 @@ Persistence strategy (in priority order):
 from __future__ import annotations
 
 import logging
-import random
 import time
 from typing import Dict, List, Optional
 
@@ -51,19 +50,6 @@ def set_state(state) -> None:
 _watchlists: Dict[str, List[str]] = {}
 
 DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
-
-_BASE_PRICES: Dict[str, float] = {
-    "XAUUSD": 2050.0,
-    "EURUSD": 1.0850,
-    "GBPUSD": 1.2650,
-    "USDJPY": 149.50,
-    "BTCUSD": 67000.0,
-    "ETHUSD": 3500.0,
-    "USDCAD": 1.3600,
-    "AUDUSD": 0.6550,
-    "USDCHF": 0.8950,
-    "NZDUSD": 0.6050,
-}
 
 
 def _reset_watchlists() -> None:
@@ -209,14 +195,16 @@ def _mem_remove(user_id: str, symbol: str) -> None:
 # ── Price helper ──────────────────────────────────────────────────────────────
 
 
-def _get_price(symbol: str) -> dict:
+def _get_price(symbol: str) -> Optional[dict]:
     """
-    Return a price dict for *symbol*.
+    Return a live price dict for *symbol*, or None if no feed is available.
 
     Priority:
     1. Live price from app_state.price_engine (real-time feed)
     2. Live price from app_state.broker.market_prices (paper broker cache)
-    3. Seeded random walk from _BASE_PRICES (dev / offline fallback)
+
+    Returns None when both sources are unavailable — callers must handle
+    the missing-price case and must not substitute synthetic data.
     """
     # 1. Price engine
     try:
@@ -259,19 +247,9 @@ def _get_price(symbol: str) -> dict:
     except Exception as exc:
         logger.debug("watchlist broker price miss for %s: %s", symbol, exc)
 
-    # 3. Seeded random walk fallback
-    base = _BASE_PRICES.get(symbol, 1.0)
-    noise = random.uniform(-0.002, 0.002)
-    mid = base * (1 + noise)
-    spread = base * 0.0002
-    return {
-        "symbol": symbol,
-        "bid": round(mid - spread / 2, 5),
-        "ask": round(mid + spread / 2, 5),
-        "mid": round(mid, 5),
-        "change_pct": round(random.uniform(-1.5, 1.5), 2),
-        "timestamp": int(time.time() * 1000),
-    }
+    # No live price available
+    logger.debug("watchlist: no live price for %s — omitting from response", symbol)
+    return None
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -301,7 +279,11 @@ async def get_watchlist(
 ) -> WatchlistResponse:
     """Return the authenticated user's watchlist with live prices."""
     symbols = _load_watchlist(user.sub)
-    items = [WatchlistItem(**_get_price(s)) for s in symbols]
+    items = [
+        WatchlistItem(**p)
+        for s in symbols
+        if (p := _get_price(s)) is not None
+    ]
     return WatchlistResponse(user_id=user.sub, symbols=symbols, items=items)
 
 
@@ -344,4 +326,8 @@ async def get_prices(
 ) -> List[WatchlistItem]:
     """Return live prices for all symbols in the authenticated user's watchlist."""
     symbols = _load_watchlist(user.sub)
-    return [WatchlistItem(**_get_price(s)) for s in symbols]
+    return [
+        WatchlistItem(**p)
+        for s in symbols
+        if (p := _get_price(s)) is not None
+    ]
