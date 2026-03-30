@@ -172,6 +172,8 @@ class DataLayerRedisStore:
                     "DataLayerRedisStore: connected via Sentinel master=%s hosts=%s",
                     sentinel_master, sentinel_hosts_raw,
                 )
+                # Emit startup warning if maxmemory is unlimited
+                self.get_memory_info()
                 return
             except Exception as exc:
                 logger.warning(
@@ -194,6 +196,8 @@ class DataLayerRedisStore:
             client.ping()
             self._r = client
             logger.debug("DataLayerRedisStore: auto-connected to %s", url)
+            # Emit startup warning if maxmemory is unlimited
+            self.get_memory_info()
         except Exception as exc:
             logger.debug(
                 "DataLayerRedisStore: auto-connect failed (%s) — "
@@ -579,18 +583,30 @@ class DataLayerRedisStore:
         Includes used_memory, used_memory_rss, mem_fragmentation_ratio,
         maxmemory, and maxmemory_policy.  Returns empty dict when Redis
         is unavailable.
+
+        Emits a WARNING when maxmemory=0 (unlimited) — on a VPS this means
+        Redis will consume all available RAM before the OOM killer fires.
+        Set maxmemory in redis.conf or via REDIS_MAXMEMORY env var.
         """
         if not self._r:
             return {}
         try:
             info = self._r.info("memory")
+            maxmemory = info.get("maxmemory", 0)
+            if maxmemory == 0:
+                logger.warning(
+                    "Redis maxmemory is UNLIMITED (0). "
+                    "Set maxmemory in redis.conf to prevent OOM on VPS/K8s. "
+                    "Recommended: maxmemory 512mb maxmemory-policy allkeys-lru"
+                )
             return {
                 "used_memory_mb":       round(info.get("used_memory", 0) / 1024 / 1024, 2),
                 "used_memory_rss_mb":   round(info.get("used_memory_rss", 0) / 1024 / 1024, 2),
                 "mem_fragmentation":    info.get("mem_fragmentation_ratio", 0.0),
-                "maxmemory_mb":         round(info.get("maxmemory", 0) / 1024 / 1024, 2),
+                "maxmemory_mb":         round(maxmemory / 1024 / 1024, 2),
                 "maxmemory_policy":     info.get("maxmemory_policy", "unknown"),
                 "peak_used_memory_mb":  round(info.get("used_memory_peak", 0) / 1024 / 1024, 2),
+                "maxmemory_unlimited":  maxmemory == 0,
             }
         except Exception as exc:
             logger.debug("DataLayerRedisStore.get_memory_info error: %s", exc)
