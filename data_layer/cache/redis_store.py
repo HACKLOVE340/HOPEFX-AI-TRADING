@@ -86,6 +86,30 @@ class DataLayerRedisStore:
         self._misses = 0
         self._errors = 0
         self._writes = 0
+        # Auto-connect if no client provided and REDIS_URL is set
+        if self._r is None:
+            self._try_auto_connect()
+
+    def _try_auto_connect(self) -> None:
+        """Attempt to connect to Redis using REDIS_URL env var."""
+        import os
+        url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        try:
+            import redis as _redis_lib
+            client = _redis_lib.from_url(
+                url,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+                decode_responses=False,
+            )
+            client.ping()
+            self._r = client
+            logger.debug("DataLayerRedisStore: auto-connected to %s", url)
+        except Exception as exc:
+            logger.debug(
+                "DataLayerRedisStore: auto-connect failed (%s) — "
+                "caching disabled until orchestrator injects client", exc
+            )
 
     def _key(self, *parts: str) -> str:
         return _PREFIX + ":".join(parts)
