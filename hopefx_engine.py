@@ -53,6 +53,121 @@ def _optional(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
+# ── startup environment validation ────────────────────────────────────────────
+
+def validate_startup_environment() -> list[str]:
+    """
+    Validate that required environment variables and runtime conditions are
+    present before the engine starts.
+
+    Returns a list of warning strings (non-fatal) and raises RuntimeError
+    for any fatal misconfiguration when APP_ENV=production.
+
+    Checks
+    ------
+    - SECURITY_JWT_SECRET is set and meets minimum length (32 chars)
+    - BROKER=oanda requires OANDA_API_KEY + OANDA_ACCOUNT_ID
+    - BROKER=mt5 requires MT5_LOGIN + MT5_PASSWORD + MT5_SERVER
+    - TRADING_MODE=live requires a non-paper broker
+    - INITIAL_BALANCE is a positive number when set
+    - Kill switch is NOT already active at startup (warns if it is)
+    - Python version >= 3.10
+    """
+    import sys as _sys
+    warnings: list[str] = []
+    errors: list[str] = []
+    is_production = os.environ.get("APP_ENV", "production") == "production"
+    is_test = os.environ.get("APP_ENV", "") == "test"
+
+    # Python version
+    if _sys.version_info < (3, 10):
+        errors.append(
+            f"Python {_sys.version_info.major}.{_sys.version_info.minor} detected; "
+            "HOPEFX requires Python >= 3.10"
+        )
+
+    # JWT secret
+    jwt_secret = os.environ.get("SECURITY_JWT_SECRET", "")
+    if not jwt_secret:
+        if is_production:
+            errors.append("SECURITY_JWT_SECRET is not set (required in production)")
+        else:
+            warnings.append("SECURITY_JWT_SECRET is not set — using insecure default")
+    elif len(jwt_secret) < 32:
+        errors.append(
+            f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars); "
+            "minimum 32 characters required"
+        )
+
+    # Broker-specific credentials
+    broker = os.environ.get("BROKER", "").lower()
+    if not broker:
+        broker = "oanda" if os.environ.get("OANDA_API_KEY") else "paper"
+
+    if broker == "oanda":
+        if not os.environ.get("OANDA_API_KEY"):
+            errors.append("BROKER=oanda but OANDA_API_KEY is not set")
+        if not os.environ.get("OANDA_ACCOUNT_ID"):
+            errors.append("BROKER=oanda but OANDA_ACCOUNT_ID is not set")
+    elif broker == "mt5":
+        for var in ("MT5_LOGIN", "MT5_PASSWORD", "MT5_SERVER"):
+            if not os.environ.get(var):
+                errors.append(f"BROKER=mt5 but {var} is not set")
+
+    # Live trading safety check
+    trading_mode = os.environ.get("TRADING_MODE", "paper").lower()
+    if trading_mode == "live" and broker == "paper":
+        errors.append(
+            "TRADING_MODE=live but BROKER=paper — live mode requires a real broker"
+        )
+
+    # INITIAL_BALANCE sanity
+    initial_balance_str = os.environ.get("INITIAL_BALANCE", "")
+    if initial_balance_str:
+        try:
+            bal = float(initial_balance_str)
+            if bal <= 0:
+                errors.append(f"INITIAL_BALANCE={bal} must be positive")
+        except ValueError:
+            errors.append(f"INITIAL_BALANCE={initial_balance_str!r} is not a valid number")
+
+    # Kill switch pre-check
+    try:
+        from kill_switch import kill_switch as _ks
+        if _ks.is_active():
+            msg = (
+                f"Kill switch is ACTIVE at startup (reason={_ks.reason!r}). "
+                "Trading will be blocked until it is deactivated."
+            )
+            if is_production:
+                errors.append(msg)
+            else:
+                warnings.append(msg)
+    except Exception as _ks_exc:
+        warnings.append(f"Could not check kill switch at startup: {_ks_exc}")
+
+    # Report
+    for w in warnings:
+        logger.warning("⚠️  Startup validation: %s", w)
+
+    if errors:
+        for e in errors:
+            logger.critical("❌  Startup validation FAILED: %s", e)
+        if is_production and not is_test:
+            raise RuntimeError(
+                f"Engine startup aborted — {len(errors)} validation error(s). "
+                "See logs above."
+            )
+        else:
+            # Non-production: log errors but continue (allows CI/dev to run)
+            logger.warning(
+                "Startup validation errors present but APP_ENV=%s — continuing anyway",
+                os.environ.get("APP_ENV", "production"),
+            )
+
+    return warnings + [f"ERROR: {e}" for e in errors]
+
+
 # ── engine ────────────────────────────────────────────────────────────────────
 
 
@@ -150,6 +265,9 @@ class HopeFXEngine:
             self.broker_name, self.trading_mode,
             self.primary_symbol, self.timeframe,
         )
+
+        # 0. Startup environment validation — aborts in production on fatal errors
+        validate_startup_environment()
 
         # 1. Risk manager
         from risk.manager import RiskManager
