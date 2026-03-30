@@ -1,12 +1,10 @@
 /**
- * Hook tests — useWebSocket, usePriceSimulator, useApi
- * ~80 tests
+ * Hook tests — useWebSocket, useApi
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useStore } from '../store';
-import { usePriceSimulator } from '../hooks/usePriceSimulator';
 
 beforeEach(() => {
   useStore.setState({
@@ -22,116 +20,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-});
-
-// ─── usePriceSimulator ────────────────────────────────────────────────────────
-
-describe('usePriceSimulator', () => {
-  it('does not run when active=false', () => {
-    renderHook(() => usePriceSimulator(false));
-    act(() => { vi.advanceTimersByTime(5000); });
-    expect(Object.keys(useStore.getState().prices)).toHaveLength(0);
-  });
-
-  it('generates prices for all 5 symbols when active', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const prices = useStore.getState().prices;
-    expect(Object.keys(prices)).toContain('XAU/USD');
-    expect(Object.keys(prices)).toContain('EUR/USD');
-    expect(Object.keys(prices)).toContain('GBP/USD');
-    expect(Object.keys(prices)).toContain('USD/JPY');
-    expect(Object.keys(prices)).toContain('BTC/USD');
-  });
-
-  it('XAU/USD price is in realistic range', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const mid = useStore.getState().prices['XAU/USD']?.mid ?? 0;
-    expect(mid).toBeGreaterThan(1000);
-    expect(mid).toBeLessThan(5000);
-  });
-
-  it('EUR/USD price is in realistic range', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const mid = useStore.getState().prices['EUR/USD']?.mid ?? 0;
-    expect(mid).toBeGreaterThan(0.5);
-    expect(mid).toBeLessThan(2.0);
-  });
-
-  it('BTC/USD price is in realistic range', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const mid = useStore.getState().prices['BTC/USD']?.mid ?? 0;
-    expect(mid).toBeGreaterThan(10_000);
-    expect(mid).toBeLessThan(200_000);
-  });
-
-  it('tick has bid < mid < ask', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const tick = useStore.getState().prices['XAU/USD']!;
-    expect(tick.bid).toBeLessThan(tick.mid);
-    expect(tick.mid).toBeLessThan(tick.ask);
-  });
-
-  it('tick has positive spread', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const tick = useStore.getState().prices['XAU/USD']!;
-    expect(tick.spread).toBeGreaterThan(0);
-  });
-
-  it('tick has timestamp', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const tick = useStore.getState().prices['XAU/USD']!;
-    expect(tick.timestamp).toBeGreaterThan(0);
-  });
-
-  it('accumulates price history over multiple ticks', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(500); });
-    const history = useStore.getState().priceHistory['XAU/USD'] ?? [];
-    expect(history.length).toBeGreaterThanOrEqual(4);
-  });
-
-  it('stops generating prices after unmount', () => {
-    const { unmount } = renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const countBefore = useStore.getState().priceHistory['XAU/USD']?.length ?? 0;
-    unmount();
-    act(() => { vi.advanceTimersByTime(500); });
-    const countAfter = useStore.getState().priceHistory['XAU/USD']?.length ?? 0;
-    expect(countAfter).toBe(countBefore);
-  });
-
-  it('respects custom interval', () => {
-    renderHook(() => usePriceSimulator(true, 500));
-    act(() => { vi.advanceTimersByTime(600); });
-    const history = useStore.getState().priceHistory['XAU/USD'] ?? [];
-    expect(history.length).toBe(1);
-  });
-
-  it('change_pct is a number', () => {
-    renderHook(() => usePriceSimulator(true, 100));
-    act(() => { vi.advanceTimersByTime(200); });
-    const tick = useStore.getState().prices['XAU/USD']!;
-    expect(typeof tick.change_pct).toBe('number');
-  });
-
-  it('switching active from false to true starts simulation', () => {
-    const { rerender } = renderHook(({ active }: { active: boolean }) => usePriceSimulator(active, 100), {
-      initialProps: { active: false },
-    });
-    act(() => { vi.advanceTimersByTime(200); });
-    expect(Object.keys(useStore.getState().prices)).toHaveLength(0);
-
-    rerender({ active: true });
-    act(() => { vi.advanceTimersByTime(200); });
-    expect(Object.keys(useStore.getState().prices).length).toBeGreaterThan(0);
-  });
 });
 
 // ─── useApi (axios instance) ──────────────────────────────────────────────────
@@ -177,11 +65,6 @@ describe('useApi', () => {
     expect(typeof tradingApi.positions).toBe('function');
   });
 
-  it('tradingApi.signals is a function', async () => {
-    const { tradingApi } = await import('../hooks/useApi');
-    expect(typeof tradingApi.signals).toBe('function');
-  });
-
   it('tradingApi.account is a function', async () => {
     const { tradingApi } = await import('../hooks/useApi');
     expect(typeof tradingApi.account).toBe('function');
@@ -217,20 +100,19 @@ describe('useApi', () => {
     expect(typeof backtestApi.run).toBe('function');
   });
 
-  it('backtestApi.results is a function', async () => {
-    const { backtestApi } = await import('../hooks/useApi');
-    expect(typeof backtestApi.results).toBe('function');
+  it('signalsApi.active is a function', async () => {
+    const { signalsApi } = await import('../hooks/useApi');
+    expect(typeof signalsApi.active).toBe('function');
   });
 
-  it('backtestApi.list is a function', async () => {
-    const { backtestApi } = await import('../hooks/useApi');
-    expect(typeof backtestApi.list).toBe('function');
+  it('signalsApi.history is a function', async () => {
+    const { signalsApi } = await import('../hooks/useApi');
+    expect(typeof signalsApi.history).toBe('function');
   });
 
   it('injects Authorization header when token is set', async () => {
     useStore.getState().setAuth('test-token', { id: '1', email: 'a@b.com', username: 'u', role: 'user' });
     const { api } = await import('../hooks/useApi');
-    // Verify interceptor is registered (has request interceptors)
     expect((api.interceptors.request as unknown as { handlers: unknown[] }).handlers.length).toBeGreaterThan(0);
   });
 });
@@ -265,11 +147,5 @@ describe('useWebSocket', () => {
     const { result } = renderHook(() => useWebSocket(true));
     await act(async () => { vi.advanceTimersByTime(50); });
     expect(() => result.current.send({ type: 'ping' })).not.toThrow();
-  });
-
-  it('handles price_tick message', async () => {
-    renderHook(() => useWebSocket(true));
-    await act(async () => { vi.advanceTimersByTime(50); });
-    expect(useStore.getState().wsStatus).toBe('connected');
   });
 });

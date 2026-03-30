@@ -25,9 +25,6 @@ function makeMockJwt(overrides: Record<string, unknown> = {}): string {
 vi.mock('../hooks/useWebSocket', () => ({
   useWebSocket: vi.fn(() => ({ send: vi.fn() })),
 }));
-vi.mock('../hooks/usePriceSimulator', () => ({
-  usePriceSimulator: vi.fn(),
-}));
 vi.mock('../hooks/useApi', () => ({
   tradingApi: {
     positions: vi.fn().mockResolvedValue({ data: { positions: [] } }),
