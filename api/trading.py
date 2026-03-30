@@ -168,6 +168,12 @@ _ORDER_RATE_WINDOW = int(os.getenv("ORDER_RATE_WINDOW", "60"))  # seconds
 _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 
+def _reset_order_rl_cache() -> None:
+    """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
+    global _order_rl_cache
+    _order_rl_cache.clear()
+
+
 def _check_order_rate_limit(user_id: str) -> None:
     """Raise HTTP 429 if the user has exceeded the order rate limit."""
     try:

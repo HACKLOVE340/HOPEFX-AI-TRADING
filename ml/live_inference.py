@@ -445,3 +445,208 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
     if _predictor is None:
         _predictor = AdvancedModelPredictor()
     return _predictor
+
+
+# ── LiveInferenceLoop ─────────────────────────────────────────────────────────
+
+import asyncio
+import threading
+from typing import Callable, List
+
+
+class LiveInferenceLoop:
+    """
+    Orchestrator-wired live prediction loop.
+
+    Runs an async tick loop that:
+    1. Pulls the latest OHLCV window from the data_layer orchestrator
+    2. Calls AdvancedModelPredictor.predict_signal()
+    3. Applies SignalFilter gates (confidence, EV, regime, MTF)
+    4. Publishes the filtered signal to registered callbacks
+
+    The loop runs at `interval_seconds` cadence (default: 60s = 1 bar).
+    It is designed to be started once per process and run indefinitely.
+
+    Usage
+    -----
+        loop = LiveInferenceLoop(symbol="XAU_USD", interval_seconds=60)
+        loop.add_callback(my_signal_handler)
+        asyncio.run(loop.run())
+
+    Callbacks receive a dict:
+        {
+          "symbol": "XAU_USD",
+          "direction": "long" | "short" | "neutral",
+          "probability": 0.72,
+          "confidence": 0.44,
+          "filtered": True | False,
+          "filter_reason": "...",
+          "model_version": "advanced_oos_v1",
+          "ts": "2025-01-01T12:00:00+00:00",
+        }
+    """
+
+    def __init__(
+        self,
+        symbol: str = "XAU_USD",
+        interval_seconds: float = 60.0,
+        min_bars: int = 100,
+        threshold_long: float = 0.58,
+        threshold_short: float = 0.42,
+    ) -> None:
+        self.symbol = symbol
+        self.interval_seconds = interval_seconds
+        self.min_bars = min_bars
+        self.threshold_long = threshold_long
+        self.threshold_short = threshold_short
+
+        self._predictor = get_advanced_predictor()
+        self._callbacks: List[Callable[[Dict[str, Any]], None]] = []
+        self._running: bool = False
+        self._tick_count: int = 0
+        self._error_count: int = 0
+        self._last_signal: Optional[Dict[str, Any]] = None
+        self._lock = threading.Lock()
+
+    def add_callback(self, fn: Callable[[Dict[str, Any]], None]) -> None:
+        """Register a callback invoked on every filtered signal."""
+        with self._lock:
+            self._callbacks.append(fn)
+
+    def remove_callback(self, fn: Callable[[Dict[str, Any]], None]) -> None:
+        with self._lock:
+            self._callbacks = [c for c in self._callbacks if c is not fn]
+
+    async def _fetch_ohlcv(self) -> Optional[pd.DataFrame]:
+        """Pull latest OHLCV from the data_layer orchestrator."""
+        try:
+            from data_layer.orchestrator import orchestrator
+            ohlcv = await asyncio.get_event_loop().run_in_executor(
+                None, orchestrator.get_ohlcv, self.symbol, self.min_bars
+            )
+            return ohlcv
+        except Exception as exc:
+            logger.debug("LiveInferenceLoop: orchestrator OHLCV fetch failed: %s", exc)
+            return None
+
+    async def _fetch_macro(self) -> Optional[pd.DataFrame]:
+        """Pull latest macro features from the orchestrator."""
+        try:
+            from data_layer.orchestrator import orchestrator
+            macro = await asyncio.get_event_loop().run_in_executor(
+                None, orchestrator.get_macro_features
+            )
+            return macro
+        except Exception:
+            return None
+
+    def _apply_signal_filter(
+        self, signal: Dict[str, Any], ohlcv: pd.DataFrame
+    ) -> Dict[str, Any]:
+        """Run SignalFilter gates and annotate the signal dict."""
+        try:
+            from ml.signal_filter import get_signal_filter
+            sf = get_signal_filter()
+            result = sf.filter(
+                symbol=self.symbol,
+                direction=signal.get("direction", "neutral"),
+                confidence=signal.get("confidence", 0.0),
+                ohlcv=ohlcv,
+            )
+            signal["filtered"] = result.passed
+            signal["filter_reason"] = result.reason
+            signal["filter_gate"] = result.gate
+        except Exception as exc:
+            logger.debug("LiveInferenceLoop: signal filter failed: %s", exc)
+            signal["filtered"] = True  # pass-through on filter error
+            signal["filter_reason"] = "filter_unavailable"
+            signal["filter_gate"] = ""
+        return signal
+
+    async def _tick(self) -> None:
+        """Single inference tick: fetch → predict → filter → publish."""
+        from datetime import datetime, timezone
+
+        ohlcv = await self._fetch_ohlcv()
+        if ohlcv is None or len(ohlcv) < self.min_bars:
+            logger.debug(
+                "LiveInferenceLoop: insufficient bars (%s) for %s",
+                len(ohlcv) if ohlcv is not None else 0,
+                self.symbol,
+            )
+            return
+
+        macro = await self._fetch_macro()
+
+        try:
+            signal = self._predictor.predict_signal(
+                ohlcv,
+                macro_df=macro,
+                symbol=self.symbol,
+                threshold_long=self.threshold_long,
+                threshold_short=self.threshold_short,
+            )
+        except Exception as exc:
+            logger.warning("LiveInferenceLoop: predict_signal failed: %s", exc)
+            self._error_count += 1
+            return
+
+        signal["symbol"] = self.symbol
+        signal["ts"] = datetime.now(timezone.utc).isoformat()
+        signal = self._apply_signal_filter(signal, ohlcv)
+
+        with self._lock:
+            self._last_signal = signal
+            self._tick_count += 1
+            callbacks = list(self._callbacks)
+
+        for cb in callbacks:
+            try:
+                cb(signal)
+            except Exception as exc:
+                logger.warning("LiveInferenceLoop: callback error: %s", exc)
+
+        logger.info(
+            "LiveInferenceLoop tick #%d: %s dir=%s prob=%.3f conf=%.3f filtered=%s",
+            self._tick_count,
+            self.symbol,
+            signal.get("direction"),
+            signal.get("probability", 0.5),
+            signal.get("confidence", 0.0),
+            signal.get("filtered"),
+        )
+
+    async def run(self) -> None:
+        """Run the inference loop indefinitely until stop() is called."""
+        self._running = True
+        logger.info(
+            "LiveInferenceLoop started: symbol=%s interval=%.0fs",
+            self.symbol, self.interval_seconds,
+        )
+        while self._running:
+            start = time.monotonic()
+            try:
+                await self._tick()
+            except Exception as exc:
+                logger.error("LiveInferenceLoop: unhandled tick error: %s", exc)
+                self._error_count += 1
+            elapsed = time.monotonic() - start
+            sleep_for = max(0.0, self.interval_seconds - elapsed)
+            await asyncio.sleep(sleep_for)
+        logger.info("LiveInferenceLoop stopped: symbol=%s", self.symbol)
+
+    def stop(self) -> None:
+        """Signal the loop to stop after the current tick completes."""
+        self._running = False
+
+    @property
+    def status(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "symbol": self.symbol,
+                "running": self._running,
+                "tick_count": self._tick_count,
+                "error_count": self._error_count,
+                "interval_seconds": self.interval_seconds,
+                "last_signal": self._last_signal,
+            }
