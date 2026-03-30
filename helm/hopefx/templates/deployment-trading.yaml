@@ -51,6 +51,11 @@ spec:
                   key: {{ $key }}
                   optional: true
             {{- end }}
+            # Unique pod identity for hot-standby leader election heartbeat keys.
+            - name: STANDBY_POD_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
