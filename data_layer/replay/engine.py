@@ -47,7 +47,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import pandas as pd
 
 from data_layer.normalization.pipeline import normalization_pipeline
-from data_layer.replay.dukascopy import DukascopyFetcher, dukascopy_fetcher
+from data_layer.replay.dukascopy import DukascopyFetcher, dukascopy_fetcher, _parse_timeframe
 from data_layer.types import FeedSource, GoldTick, TickQuality
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,8 @@ class MarketReplayEngine:
         start: datetime,
         end: datetime,
         symbol: str = _DEFAULT_SYMBOL,
-        timeframe_minutes: int = _DEFAULT_TF_MIN,
+        timeframe_minutes=_DEFAULT_TF_MIN,
+        timeframe: str = None,
         normalize: bool = True,
     ) -> pd.DataFrame:
         """
@@ -92,7 +93,9 @@ class MarketReplayEngine:
         start             : Start datetime (UTC)
         end               : End datetime (UTC)
         symbol            : Dukascopy symbol (e.g. "XAUUSD")
-        timeframe_minutes : Bar size in minutes
+        timeframe_minutes : Bar size — int (minutes) or string ("H1", "M5", etc.)
+        timeframe         : Alias for timeframe_minutes (broker-style string).
+                            When both are provided, timeframe takes precedence.
         normalize         : Apply NormalizationPipeline (log_return, gap_flag, etc.)
 
         Returns
@@ -100,6 +103,10 @@ class MarketReplayEngine:
         pd.DataFrame with UTC DatetimeIndex and columns:
           open, high, low, close, volume, [log_return, log_volume, gap_flag, ohlcv_valid]
         """
+        # Resolve timeframe — accept both parameter names
+        tf_spec = timeframe if timeframe is not None else timeframe_minutes
+        tf_min  = _parse_timeframe(tf_spec)
+
         # Enforce max range
         max_end = start + timedelta(days=_MAX_REPLAY_DAYS)
         if end > max_end:
@@ -111,7 +118,7 @@ class MarketReplayEngine:
 
         logger.info(
             "MarketReplayEngine: fetching %s %dmin bars %s → %s",
-            symbol, timeframe_minutes,
+            symbol, tf_min,
             start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"),
         )
 
@@ -119,7 +126,7 @@ class MarketReplayEngine:
             symbol=symbol,
             start=start,
             end=end,
-            timeframe_minutes=timeframe_minutes,
+            timeframe_minutes=tf_min,
         )
 
         if df.empty:
