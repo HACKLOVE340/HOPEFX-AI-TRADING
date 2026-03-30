@@ -262,14 +262,21 @@ const SignalsPanel: React.FC = () => {
 interface MlAccuracy { model: string; accuracy: number; auc: number; f1: number }
 
 const MlAccuracyCard: React.FC = () => {
-  const [models, setModels] = useState<MlAccuracy[]>([]);
+  const [models, setModels]   = useState<MlAccuracy[]>([]);
+  const [mlErr, setMlErr]     = useState<string | null>(null);
 
   useEffect(() => {
     mlApi.accuracy()
       .then((r) => setModels((r.data as { models: MlAccuracy[] })?.models ?? []))
-      .catch(() => { setModels([]); });
+      .catch((err: unknown) => {
+        setModels([]);
+        setMlErr(err instanceof Error ? err.message : 'Failed to load model metrics.');
+      });
   }, []);
 
+  if (mlErr) {
+    return <p style={{ color: '#f87171', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
+  }
   if (models.length === 0) {
     return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No model metrics available yet.</p>;
   }
@@ -359,7 +366,10 @@ const Dashboard: React.FC = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         store.setAccount(accRes.value.data as any);
       }
-    } catch (_) { /* keep existing state */ }
+    } catch (err: unknown) {
+      // Promise.allSettled should not throw; log if it does
+      console.error('[Dashboard] poll error:', err);
+    }
   }, []);
 
   useEffect(() => {
