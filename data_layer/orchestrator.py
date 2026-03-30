@@ -250,20 +250,31 @@ class MarketDataOrchestrator:
             if cached:
                 try:
                     from data_layer.types import FeedSource
+                    # Require source to be present and a known FeedSource value.
+                    # Missing or unrecognised source → fall through to live feed
+                    # rather than labelling the tick with a fabricated origin.
+                    raw_source = cached.get("source")
+                    if not raw_source:
+                        raise ValueError(
+                            f"Cached tick for {symbol} has no 'source' field"
+                        )
                     return GoldTick(
                         symbol     = cached["symbol"],
                         timestamp  = datetime.fromisoformat(cached["timestamp"]),
                         bid        = cached["bid"],
                         ask        = cached["ask"],
                         mid        = cached["mid"],
-                        source     = FeedSource(cached.get("source", "synthetic")),
+                        source     = FeedSource(raw_source),
                         quality    = TickQuality(cached.get("quality", "good")),
                         confidence = cached.get("confidence", 1.0),
                         spread     = cached.get("spread", 0.0),
                         lineage_id = cached.get("lineage_id", ""),
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Orchestrator: discarding cached tick for %s: %s",
+                        symbol, exc,
+                    )
 
         # Fall back to in-memory
         if self._gold_feed:
