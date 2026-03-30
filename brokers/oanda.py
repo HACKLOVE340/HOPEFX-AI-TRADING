@@ -137,21 +137,46 @@ class OANDABroker:
               server ("practice" | "live"), timeout_seconds (optional).
     """
 
-    def __init__(self, config: Dict) -> None:
-        self._account_id = _resolve_env(config.get("login", os.getenv("OANDA_ACCOUNT_ID", "")))
-        self._token      = _resolve_env(config.get("password", os.getenv("OANDA_API_TOKEN", "")))
-        server           = _resolve_env(config.get("server", os.getenv("OANDA_ENVIRONMENT", "practice")))
-        self._base_url   = _LIVE_BASE if server == "live" else _PRACTICE_BASE
-        self._timeout    = float(config.get("timeout_seconds", _DEFAULT_TIMEOUT))
+    def __init__(
+        self,
+        config: Optional[Dict] = None,
+        *,
+        api_key: Optional[str] = None,
+        account_id: Optional[str] = None,
+        server: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        # Accept both dict-style config and keyword-argument style.
+        cfg = config or {}
+        self._account_id = _resolve_env(
+            account_id or cfg.get("login", os.getenv("OANDA_ACCOUNT_ID", ""))
+        )
+        self._token = _resolve_env(
+            api_key or cfg.get("password", os.getenv("OANDA_API_TOKEN", ""))
+        )
+        _server = _resolve_env(
+            server or cfg.get("server", os.getenv("OANDA_ENVIRONMENT", "practice"))
+        )
+        self._base_url   = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
+        self._timeout    = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
         self._session:   Optional[aiohttp.ClientSession] = None
         self.connected:  bool = False
         self._total_orders: int = 0
         self._total_fills:  int = 0
+        # Optional injected API object (used by tests to bypass HTTP calls)
+        self.api = None
+        # Optional injected risk manager (used by tests)
+        self.risk_manager = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def connect(self) -> bool:
         if self.connected:
+            return True
+        # When a test injects self.api, skip the real HTTP handshake.
+        if self.api is not None:
+            self.connected = True
+            logger.debug("OANDABroker: using injected api object — skipping HTTP connect")
             return True
         if not self._account_id or not self._token:
             logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")
@@ -225,6 +250,21 @@ class OANDABroker:
 
         Returns dict with: status, fill_price, quantity, broker, latency_ms
         """
+        # Risk manager gate — checked before any broker call.
+        if self.risk_manager is not None:
+            try:
+                risk_result = self.risk_manager.check_order(order_request)
+                if not risk_result.passed:
+                    raise RuntimeError(
+                        f"Position limit exceeded: {risk_result.message}"
+                        if "limit" in str(risk_result.message).lower()
+                        else f"Risk check failed: {risk_result.message}"
+                    )
+            except RuntimeError:
+                raise
+            except Exception as exc:
+                raise RuntimeError(f"Risk check error: {exc}") from exc
+
         if not self.connected or not self._session:
             return {"status": "rejected", "reason": "not_connected", "broker": "oanda"}
 
