@@ -599,7 +599,16 @@ class BinanceProvider(DataProvider):
 
 
 class MockProvider(DataProvider):
-    """High-performance synthetic data generator for testing"""
+    """
+    Synthetic GBM tick generator — FOR TESTING AND DEVELOPMENT ONLY.
+
+    This provider generates statistically plausible but entirely fabricated
+    price data.  It MUST NOT be added to a production ConsensusAggregator.
+    Production deployments must use PolygonProvider, OandaProvider, or
+    BinanceProvider with real credentials.
+
+    Raises RuntimeError if instantiated when APP_ENV=production.
+    """
 
     def __init__(
         self,
@@ -607,6 +616,13 @@ class MockProvider(DataProvider):
         drift: float = 0.0,
         tick_interval_ms: float = 100,
     ):
+        import os as _os
+        if _os.getenv("APP_ENV", "production").lower() == "production":
+            raise RuntimeError(
+                "MockProvider cannot be used in production (APP_ENV=production). "
+                "Configure a real data provider: PolygonProvider, OandaProvider, "
+                "or BinanceProvider."
+            )
         super().__init__("mock", priority=10, weight=0.1)
         self.volatility = volatility
         self.drift = drift
@@ -968,9 +984,22 @@ class ConsensusAggregator:
 
 
 async def run_realtime_test():
-    """Comprehensive realtime engine test"""
+    """
+    Smoke-test for the realtime engine using MockProvider.
+
+    FOR DEVELOPMENT / CI USE ONLY.  This function uses MockProvider which
+    generates synthetic GBM ticks — not real market data.  It will raise
+    RuntimeError if called in APP_ENV=production.
+    """
+    import os as _os
+    if _os.getenv("APP_ENV", "production").lower() == "production":
+        raise RuntimeError(
+            "run_realtime_test() uses MockProvider and cannot run in production. "
+            "Set APP_ENV=development or APP_ENV=test to use this function."
+        )
+
     print("=" * 80)
-    print("HOPEFX REAL-TIME ENGINE v4.0 - COMPREHENSIVE TEST")
+    print("HOPEFX REAL-TIME ENGINE v4.0 - DEVELOPMENT SMOKE TEST")
     print("=" * 80)
 
     # Create aggregator
@@ -979,10 +1008,9 @@ async def run_realtime_test():
         consensus_threshold=0.5, max_sources=5, outlier_threshold=0.001
     )
 
-    # Add providers
-    print("[2] Adding data providers...")
-
-    # Mock providers with different characteristics
+    # Add synthetic providers for smoke-testing only.
+    # In production, replace with PolygonProvider, OandaProvider, or BinanceProvider.
+    print("[2] Adding synthetic test providers (MockProvider)...")
     aggregator.add_provider(
         MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100)
     )
@@ -991,9 +1019,10 @@ async def run_realtime_test():
         MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150)
     )
 
-    # Real providers would be added here with actual credentials
-    # aggregator.add_provider(PolygonProvider("YOUR_API_KEY"))
-    # aggregator.add_provider(OandaProvider("account", "token"))
+    # Production providers — configure via env vars:
+    # aggregator.add_provider(PolygonProvider(os.getenv("POLYGON_API_KEY")))
+    # aggregator.add_provider(OandaProvider(os.getenv("OANDA_ACCOUNT_ID"), os.getenv("OANDA_API_KEY")))
+    # aggregator.add_provider(BinanceProvider(os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_SECRET")))
 
     print(f"    Added {len(aggregator.providers)} providers")
 
