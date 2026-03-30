@@ -86,9 +86,43 @@ class DataLayerRedisStore:
         self._misses = 0
         self._errors = 0
         self._writes = 0
+        # Prometheus metrics (initialised before auto-connect so they exist
+        # even when Redis is unavailable)
+        self._prom_hits    = None
+        self._prom_misses  = None
+        self._prom_writes  = None
+        self._prom_errors  = None
+        self._prom_hit_rate = None
+        self._prom_mem_mb  = None
+        self._init_prometheus()
         # Auto-connect if no client provided and REDIS_URL is set
         if self._r is None:
             self._try_auto_connect()
+
+    def _init_prometheus(self) -> None:
+        try:
+            from prometheus_client import Counter, Gauge, REGISTRY
+
+            def _counter(name: str, doc: str) -> Counter:
+                try:
+                    return Counter(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)  # type: ignore[return-value]
+
+            def _gauge(name: str, doc: str) -> Gauge:
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)  # type: ignore[return-value]
+
+            self._prom_hits     = _counter("hopefx_redis_cache_hits_total",   "Total Redis cache hits")
+            self._prom_misses   = _counter("hopefx_redis_cache_misses_total", "Total Redis cache misses")
+            self._prom_writes   = _counter("hopefx_redis_cache_writes_total", "Total Redis cache writes")
+            self._prom_errors   = _counter("hopefx_redis_cache_errors_total", "Total Redis cache errors")
+            self._prom_hit_rate = _gauge("hopefx_redis_cache_hit_rate",       "Rolling Redis cache hit rate [0, 1]")
+            self._prom_mem_mb   = _gauge("hopefx_redis_memory_rss_mb",        "Redis used_memory_rss in MB")
+        except Exception as _exc:
+            logger.debug("DataLayerRedisStore: Prometheus init skipped: %s", _exc)
 
     def _try_auto_connect(self) -> None:
         """Attempt to connect to Redis using REDIS_URL env var."""
@@ -120,9 +154,13 @@ class DataLayerRedisStore:
         try:
             self._r.setex(key, ttl, value)
             self._writes += 1
+            if self._prom_writes:
+                self._prom_writes.inc()
             return True
         except Exception as exc:
             self._errors += 1
+            if self._prom_errors:
+                self._prom_errors.inc()
             # Memory pressure: try to free space and retry once
             if "ENOMEM" in str(exc) or "OOM" in str(exc):
                 logger.warning("Redis OOM — attempting eviction and retry")
@@ -130,9 +168,11 @@ class DataLayerRedisStore:
                 try:
                     self._r.setex(key, ttl, value)
                     self._writes += 1
+                    if self._prom_writes:
+                        self._prom_writes.inc()
                     return True
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Redis OOM retry failed: %s", _exc)
             logger.debug("Redis set error key=%s: %s", key, exc)
             return False
 
@@ -143,11 +183,21 @@ class DataLayerRedisStore:
             val = self._r.get(key)
             if val:
                 self._hits += 1
+                if self._prom_hits:
+                    self._prom_hits.inc()
+                # Update hit rate gauge
+                total = self._hits + self._misses
+                if self._prom_hit_rate and total > 0:
+                    self._prom_hit_rate.set(self._hits / total)
                 return val.decode() if isinstance(val, bytes) else val
             self._misses += 1
+            if self._prom_misses:
+                self._prom_misses.inc()
             return None
         except Exception as exc:
             self._errors += 1
+            if self._prom_errors:
+                self._prom_errors.inc()
             logger.debug("Redis get error key=%s: %s", key, exc)
             return None
 
@@ -327,7 +377,10 @@ class DataLayerRedisStore:
             return None
         try:
             info = self._r.info("memory")
-            return round(info.get("used_memory_rss", 0) / 1024 / 1024, 2)
+            mb = round(info.get("used_memory_rss", 0) / 1024 / 1024, 2)
+            if self._prom_mem_mb:
+                self._prom_mem_mb.set(mb)
+            return mb
         except Exception:
             return None
 
