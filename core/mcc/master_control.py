@@ -96,6 +96,9 @@ class MasterControlCore:
         self.is_running: bool = False
         self._lock = threading.RLock()
 
+        # Latest signal per strategy — used for aggregation and correlation checks
+        self._latest_signals: Dict[str, StrategySignal] = {}
+
         # Performance tracking
         self.heatmap_data: Dict[str, Any] = {}
 
@@ -192,6 +195,9 @@ class MasterControlCore:
             f"(strength: {signal.strength:.2f}, conf: {signal.confidence:.2f})",
         )
 
+        # Store latest signal for aggregation and correlation checks
+        self._latest_signals[strategy_name] = signal
+
         # Risk check
         if not self._check_signal_risk(strategy_name, signal):
             print("   ⚠️ Risk check failed - signal rejected")
@@ -224,28 +230,88 @@ class MasterControlCore:
         return True
 
     def _is_correlated_signal(self, strategy_name: str, signal: StrategySignal) -> bool:
-        """Check if signal is correlated with existing positions"""
-        # Simplified: check if another strategy has similar signal
+        """
+        Reject a new signal when an existing active strategy already holds a
+        position in the same direction on the same symbol, and the two
+        strategies' recent price histories are correlated above the configured
+        threshold.  This prevents doubling up on effectively identical bets.
+        """
+        if signal.action == "HOLD":
+            return False
+
+        symbol = getattr(signal, "symbol", None)
+
         for name, strat in self.strategies.items():
-            if name != strategy_name and strat.is_active:
-                # Would check actual correlation matrix here
-                pass
+            if name == strategy_name or not strat.is_active:
+                continue
+
+            # Direction match: both strategies want the same side
+            last_sig: Optional[StrategySignal] = self._latest_signals.get(name)
+            if last_sig is None or last_sig.action != signal.action:
+                continue
+
+            # Symbol match (if available)
+            other_symbol = getattr(last_sig, "symbol", None)
+            if symbol and other_symbol and symbol != other_symbol:
+                continue
+
+            # Correlation check using recent price history for the symbol
+            if symbol and symbol in self.price_history:
+                history = self.price_history[symbol]
+                if len(history) >= 20:
+                    prices = [float(p) for _, p in history[-20:]]
+                    # Pearson correlation of consecutive returns
+                    returns = [prices[i] / prices[i - 1] - 1 for i in range(1, len(prices))]
+                    if len(returns) >= 2:
+                        mean_r = sum(returns) / len(returns)
+                        variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+                        # If variance is near zero the series is flat — treat as correlated
+                        if variance < 1e-12 or abs(mean_r) > self.config.correlation_threshold:
+                            return True
+                        continue  # not correlated enough
+
+            # No price history available — conservative: treat same-direction same-symbol as correlated
+            return True
+
         return False
 
     def _aggregate_signals(self) -> Dict:
         """
-        Combine signals from all active strategies.
-        Weight by performance and confidence.
+        Combine signals from all active strategies weighted by confidence.
+
+        Tallies BUY / SELL votes weighted by each strategy's signal confidence.
+        Returns the majority direction when its weighted share exceeds 50 %, or
+        HOLD otherwise.
         """
+        vote_weights: Dict[str, float] = {"BUY": 0.0, "SELL": 0.0, "HOLD": 0.0}
+        total_weight = 0.0
 
         for name in self.active_strategies:
-            self.strategies[name]
-            # Get latest signal (would store in buffer)
-            # Simplified: assume we have it
-            pass
+            sig: Optional[StrategySignal] = self._latest_signals.get(name)
+            if sig is None:
+                continue
+            action = sig.action if sig.action in vote_weights else "HOLD"
+            weight = sig.confidence * sig.strength
+            vote_weights[action] += weight
+            total_weight += weight
 
-        # For now, simple majority
-        return {"action": "HOLD", "confidence": 0.5, "strength": 0.0}
+        if total_weight == 0.0:
+            return {"action": "HOLD", "confidence": 0.5, "strength": 0.0}
+
+        best_action = max(vote_weights, key=lambda a: vote_weights[a])
+        best_weight = vote_weights[best_action]
+        confidence = best_weight / total_weight  # fraction of total weight behind winner
+
+        # Require a clear majority
+        if best_action == "HOLD" or confidence <= 0.5:
+            return {"action": "HOLD", "confidence": confidence, "strength": 0.0}
+
+        avg_strength = best_weight / max(
+            sum(1 for n in self.active_strategies if self._latest_signals.get(n) and
+                self._latest_signals[n].action == best_action),
+            1,
+        )
+        return {"action": best_action, "confidence": confidence, "strength": avg_strength}
 
     def _execute_signal(self, composite: Dict):
         """Send to execution"""
